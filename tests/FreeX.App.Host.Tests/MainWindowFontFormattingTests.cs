@@ -6,6 +6,7 @@ using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using static FreeX.App.Host.Tests.DispatcherTestPump;
 
 namespace FreeX.App.Host.Tests;
 
@@ -57,15 +58,6 @@ public sealed class MainWindowFontFormattingTests
                 PumpDispatcher();
             }
         });
-    }
-
-    private static void PumpDispatcher()
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
 
     private sealed class TestCommandContext(Workbook workbook) : ICommandContext

@@ -4,10 +4,10 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using static FreeX.App.Host.Tests.DispatcherTestPump;
 
 namespace FreeX.App.Host.Tests;
 
@@ -199,12 +199,4 @@ public sealed class ReviewDialogFocusAccessibilityTests
         return property!.GetValue(item).Should().BeOfType<string>().Subject;
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(
-            DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        Dispatcher.PushFrame(frame);
-    }
 }

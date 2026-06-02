@@ -9,6 +9,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using Microsoft.Extensions.Logging.Abstractions;
+using static FreeX.App.Host.Tests.DispatcherTestPump;
 
 namespace FreeX.App.Host.Tests;
 
@@ -308,15 +309,6 @@ public sealed class StatusBarLayoutTests
 
     private static Rect BoundsRelativeToWindow(FrameworkElement element, Window window) =>
         element.TransformToAncestor(window).TransformBounds(new Rect(new Size(element.ActualWidth, element.ActualHeight)));
-
-    private static void PumpDispatcher()
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-    }
 
     private sealed class TestCommandContext(Workbook workbook) : ICommandContext
     {
