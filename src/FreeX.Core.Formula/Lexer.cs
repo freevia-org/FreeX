@@ -203,6 +203,36 @@ public sealed class Lexer
     {
         var start = _pos;
         _pos++; // skip opening bracket
+        var selectorStart = _pos;
+
+        while (_pos < _text.Length)
+        {
+            var c = _text[_pos];
+            if (c == '[')
+                break;
+
+            if (c == ']')
+            {
+                if (_pos + 1 < _text.Length && _text[_pos + 1] == ']')
+                    break;
+
+                var token = new Token(
+                    TokenType.StructuredReferenceSelector,
+                    _text.AsSpan(selectorStart, _pos - selectorStart).ToString(),
+                    start);
+                _pos++;
+                return token;
+            }
+
+            _pos++;
+        }
+
+        _pos = selectorStart;
+        return ReadStructuredReferenceSelectorSlow(start);
+    }
+
+    private Token ReadStructuredReferenceSelectorSlow(int start)
+    {
         var depth = 1;
         var sb = new StringBuilder();
 
@@ -261,13 +291,12 @@ public sealed class Lexer
             }
         }
 
-        var value = _text[start.._pos];
-        var valueSpan = value.AsSpan();
+        var valueSpan = _text.AsSpan(start, _pos - start);
 
         if (_pos < _text.Length && _text[_pos] == '!')
         {
             _pos++;
-            return new Token(TokenType.SheetQualifier, value, start);
+            return new Token(TokenType.SheetQualifier, valueSpan.ToString(), start);
         }
 
         // Check if it's a function name (followed by open paren) — must come before boolean check
@@ -277,7 +306,7 @@ public sealed class Lexer
             lookAhead++;
 
         if (lookAhead < _text.Length && _text[lookAhead] == '(')
-            return new Token(TokenType.FunctionName, NormalizeFunctionName(ToUpperInvariantIfNeeded(value)), start);
+            return new Token(TokenType.FunctionName, NormalizeFunctionName(ToUpperInvariantIfNeeded(valueSpan)), start);
 
         // Check for boolean literals
         if (valueSpan.Equals("TRUE", StringComparison.OrdinalIgnoreCase))
@@ -286,11 +315,11 @@ public sealed class Lexer
             return new Token(TokenType.Boolean, "FALSE", start);
 
         // Otherwise it's a cell reference
-        if (IsCellReference(value))
-            return new Token(TokenType.CellRef, ToUpperInvariantIfNeeded(value), start);
+        if (IsCellReference(valueSpan))
+            return new Token(TokenType.CellRef, ToUpperInvariantIfNeeded(valueSpan), start);
 
         // Named range (identifier that is not a cell reference, function, or boolean)
-        return new Token(TokenType.NamedRange, ToUpperInvariantIfNeeded(value), start);
+        return new Token(TokenType.NamedRange, ToUpperInvariantIfNeeded(valueSpan), start);
     }
 
     private Token ReadQuotedSheetQualifier()
@@ -344,7 +373,7 @@ public sealed class Lexer
         throw new FormulaParseException($"Unknown error literal at position {start}");
     }
 
-    private static bool IsCellReference(string value)
+    private static bool IsCellReference(ReadOnlySpan<char> value)
     {
         int i = 0;
         if (i < value.Length && value[i] == '$')
@@ -372,15 +401,22 @@ public sealed class Lexer
         return i == value.Length && digitStart < value.Length;
     }
 
-    private static string ToUpperInvariantIfNeeded(string value)
+    private static string ToUpperInvariantIfNeeded(ReadOnlySpan<char> value)
     {
-        foreach (var c in value)
+        for (var i = 0; i < value.Length; i++)
         {
+            var c = value[i];
             if (char.IsLower(c))
-                return value.ToUpperInvariant();
+            {
+                return string.Create(value.Length, value, static (destination, source) =>
+                {
+                    for (var index = 0; index < source.Length; index++)
+                        destination[index] = char.ToUpperInvariant(source[index]);
+                });
+            }
         }
 
-        return value;
+        return value.ToString();
     }
 
     private static string NormalizeFunctionName(string name)
