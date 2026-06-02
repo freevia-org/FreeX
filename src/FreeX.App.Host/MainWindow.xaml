@@ -3662,7 +3662,7 @@
         <Border Grid.Row="5" Panel.ZIndex="5" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="{StaticResource FreeXBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
-                  MinHeight="34"
+                  MinHeight="38"
                   Background="{StaticResource FreeXSheetSurfaceBrush}"
                   SizeChanged="SheetTabsRowGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
@@ -3677,7 +3677,7 @@
                 <Border x:Name="SheetTabsLeadingSpacer" Grid.Column="0"
                         Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"
                         Height="32"
-                        Margin="0,2,0,0"
+                        Margin="0,4,0,0"
                         VerticalAlignment="Top"
                         Panel.ZIndex="4"
                         Background="{StaticResource FreeXSheetSurfaceBrush}"
@@ -3689,7 +3689,7 @@
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
                         Height="32"
-                        Margin="0,2,0,0"
+                        Margin="0,4,0,0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
                         Panel.ZIndex="1"
@@ -3697,10 +3697,10 @@
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="32" Padding="0"
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="26" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,6,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
@@ -3715,9 +3715,6 @@
                                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                                   RecognizesAccessKey="True">
-                                    <ContentPresenter.RenderTransform>
-                                        <TranslateTransform Y="-2"/>
-                                    </ContentPresenter.RenderTransform>
                                 </ContentPresenter>
                             </Border>
                             <ControlTemplate.Triggers>
@@ -3737,7 +3734,7 @@
                               Grid.ColumnSpan="4"
                               Height="32"
                               MinHeight="32"
-                              Margin="0,2,0,0"
+                              Margin="0,4,0,0"
                               Panel.ZIndex="3"
                               ClipToBounds="True"
                               HorizontalAlignment="Left"
@@ -4009,7 +4006,7 @@
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
                         Height="32"
-                        Margin="0,2,0,0"
+                        Margin="0,4,0,0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
                         Panel.ZIndex="6"
@@ -4018,10 +4015,10 @@
                         IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;"
-                        Width="18" Height="32" Padding="0"
+                        Width="18" Height="26" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,6,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
@@ -4036,9 +4033,6 @@
                                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                                   RecognizesAccessKey="True">
-                                    <ContentPresenter.RenderTransform>
-                                        <TranslateTransform Y="-2"/>
-                                    </ContentPresenter.RenderTransform>
                                 </ContentPresenter>
                             </Border>
                             <ControlTemplate.Triggers>

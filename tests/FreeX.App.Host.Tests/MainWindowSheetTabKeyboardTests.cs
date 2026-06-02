@@ -5,6 +5,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FluentAssertions;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -117,8 +118,8 @@ public sealed class MainWindowSheetTabKeyboardTests
             var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
             var focusedTabBounds = BoundsRelativeToWindow(focusedTab, window);
 
-            scrollerBounds.Top.Should().BeGreaterThan(rowBounds.Top + 1.5, "the clipped viewport needs enough breathing room above tab text and focus visuals for the rounded stroke to render");
-            chromeBounds.Top.Should().BeGreaterThan(rowBounds.Top + 1.5, "the drawn tab chrome stroke should not start on the row's clipping edge");
+            scrollerBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the clipped viewport needs enough breathing room above tab text and focus visuals for the rounded stroke to render");
+            chromeBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the drawn tab chrome stroke should not start on the row's clipping edge");
             overlayBounds.Top.Should().BeApproximately(chromeBounds.Top, 0.25);
             scroller.ActualHeight.Should().BeGreaterThanOrEqualTo(32);
             rowBounds.Height.Should().BeGreaterThan(scroller.ActualHeight);
@@ -126,6 +127,46 @@ public sealed class MainWindowSheetTabKeyboardTests
             focusedTabBounds.Bottom.Should().BeLessThanOrEqualTo(scrollerBounds.Bottom + 0.5, "the focused sheet tab chrome must fit inside the clipped viewport");
             chromeBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5);
             overlayBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5);
+        });
+    }
+
+    [Fact]
+    public void SheetTabNavigationButtons_StayBelowGridRule()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 140);
+            var window = harness.Window;
+
+            harness.UpdateSheetTabNavigation();
+            window.UpdateLayout();
+            PumpDispatcher();
+            window.UpdateLayout();
+
+            var row = (FrameworkElement)window.FindName("SheetTabsRowGrid");
+            var overlayLayer = (FrameworkElement)window.FindName("SheetTabsOverlayLayer");
+            var visibleNavButtons = new[]
+                {
+                    (FrameworkElement)window.FindName("SheetNavLeftBtn"),
+                    (FrameworkElement)window.FindName("SheetNavRightBtn")
+                }
+                .Where(button => button.Visibility == Visibility.Visible)
+                .ToList();
+
+            visibleNavButtons.Should().NotBeEmpty("the many-sheet viewport should expose at least one sheet-tab navigation button");
+
+            var rowBounds = BoundsRelativeToWindow(row, window);
+            var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
+            overlayBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the blue sheet-tab rule should not sit on the row's clipping edge");
+
+            foreach (var button in visibleNavButtons)
+            {
+                var buttonBounds = BoundsRelativeToWindow(button, window);
+                buttonBounds.Top.Should().BeGreaterThan(overlayBounds.Top + 1.0, "sheet-tab nav buttons should not cover or overlap the blue rule");
+                buttonBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5, "sheet-tab nav buttons should stay inside the sheet-tab row");
+            }
+
+            CaptureSheetTabLowerBandIfRequested(window, row);
         });
     }
 
@@ -622,6 +663,40 @@ public sealed class MainWindowSheetTabKeyboardTests
 
     private static Rect BoundsRelativeToWindow(FrameworkElement element, Window window) =>
         element.TransformToAncestor(window).TransformBounds(new Rect(new Size(element.ActualWidth, element.ActualHeight)));
+
+    private static void CaptureSheetTabLowerBandIfRequested(Window window, FrameworkElement row)
+    {
+        var outputPath = Environment.GetEnvironmentVariable("FREEX_SHEET_TAB_LOWER_BAND_CAPTURE");
+        if (string.IsNullOrWhiteSpace(outputPath))
+            return;
+
+        if (window.FindName("RootGrid") is not FrameworkElement root)
+            return;
+
+        root.UpdateLayout();
+        var source = PresentationSource.FromVisual(root);
+        var dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
+        var dpiY = source?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
+        var pixelWidth = Math.Max(1, (int)Math.Ceiling(root.ActualWidth * dpiX));
+        var pixelHeight = Math.Max(1, (int)Math.Ceiling(root.ActualHeight * dpiY));
+
+        var bitmap = new RenderTargetBitmap(pixelWidth, pixelHeight, 96 * dpiX, 96 * dpiY, PixelFormats.Pbgra32);
+        bitmap.Render(root);
+
+        var rowTop = row.TransformToAncestor(root).Transform(new Point(0, 0)).Y;
+        var cropTop = Math.Max(0, (int)Math.Floor((rowTop - 28) * dpiY));
+        var cropHeight = Math.Min(pixelHeight - cropTop, Math.Max(1, (int)Math.Ceiling(120 * dpiY)));
+        var cropped = new CroppedBitmap(bitmap, new Int32Rect(0, cropTop, pixelWidth, cropHeight));
+
+        var directory = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(cropped));
+        using var stream = File.Create(outputPath);
+        encoder.Save(stream);
+    }
 
     private sealed class TestCommandContext(Workbook workbook) : ICommandContext
     {
