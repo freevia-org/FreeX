@@ -94,13 +94,19 @@ public static class LocalAccountPlanner
         string? currentFilePath,
         Func<string, bool> fileExists)
     {
-        if (string.IsNullOrWhiteSpace(currentFilePath))
-            return $"{workbookDisplayName} (not saved yet)";
+        var sharePlan = ShareWorkbookPlanner.CreatePlan(currentFilePath, fileExists);
+        if (sharePlan.Kind == ShareWorkbookPlanKind.ShareExistingFile)
+            return $"{workbookDisplayName} ({sharePlan.Path})";
 
-        var path = currentFilePath.Trim();
-        return fileExists(path)
-            ? $"{workbookDisplayName} ({path})"
-            : $"{workbookDisplayName} (saved path missing: {path})";
+        return sharePlan.SaveAsReason switch
+        {
+            ShareWorkbookSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
+                $"{workbookDisplayName} (saved path missing: {sharePlan.CandidatePath})",
+            ShareWorkbookSaveAsReason.InvalidPath when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
+                $"{workbookDisplayName} (saved path is not a valid local file path: {sharePlan.CandidatePath})",
+            _ =>
+                $"{workbookDisplayName} (not saved yet)"
+        };
     }
 
     private static string FormatSharingStatus(ShareWorkbookPlan plan) =>

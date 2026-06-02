@@ -76,6 +76,24 @@ public sealed class LocalAccountPlannerTests
     }
 
     [Fact]
+    public void Create_ReportsInvalidWorkbookPathsWithoutProbingTheFileSystem()
+    {
+        var plan = LocalAccountPlanner.Create(
+            new FreeXOptions { UserName = "Analyst" },
+            "bad\0path.xlsx",
+            "Book1",
+            userNameProvider: () => "quinn",
+            userDomainProvider: () => "",
+            machineNameProvider: () => "FREEX-PC",
+            optionsPathProvider: () => "options.json",
+            fileExists: _ => throw new InvalidOperationException("invalid paths must not be probed"));
+
+        plan.WorkbookStatus.Should().Be("Book1 (saved path is not a valid local file path: bad\0path.xlsx)");
+        plan.SharingStatus.Should().Be("Save As is required before Windows Share can send the workbook because the saved path is not a valid local file path.");
+        plan.ExportStatus.Should().Contain("Ready for local PDF/XPS export");
+    }
+
+    [Fact]
     public void FormatMessageBody_IncludesTheNoMicrosoftAccountBoundaryAndLocalDetails()
     {
         var plan = LocalAccountPlanner.Create(
