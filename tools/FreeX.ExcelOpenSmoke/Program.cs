@@ -61,6 +61,17 @@ internal static class ExcelOpenSmoke
                     "FreeX non-chart fixture"));
             }
 
+            if (options.GenerateFreexFeatureFixtures)
+            {
+                foreach (var generatedFile in GenerateFreeXFeatureFixtures(Path.Combine(runDirectory, "generated")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        generatedFile,
+                        WorkbookValidationWorkflow.DirectExcel,
+                        "FreeX feature fixture"));
+                }
+            }
+
             var inputFiles = ResolveInputFiles(options.Inputs, options.Pattern);
             var inputWorkflow = options.FreeXResaveBeforeExcel
                 ? WorkbookValidationWorkflow.FreeXSaveThenExcel

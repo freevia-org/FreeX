@@ -92,6 +92,7 @@ internal static partial class XlsxChartXmlWriter
         }
 
         return new XElement(chartNs + "txPr",
+            ToTextBodyProperties(0, drawingNs),
             new XElement(drawingNs + "p",
                 new XElement(drawingNs + "pPr",
                     new XElement(drawingNs + "defRPr",
@@ -256,6 +257,7 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         return new XElement(chartNs + "txPr",
+            ToTextBodyProperties(0, drawingNs),
             new XElement(drawingNs + "p",
                 new XElement(drawingNs + "pPr",
                     new XElement(drawingNs + "defRPr",
@@ -269,7 +271,6 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         return new XElement(chartNs + "dLbls",
-            new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(chart.DataLabelPosition))),
             new XElement(chartNs + "numFmt",
                 new XAttribute("formatCode", ToXlsxNumberFormatCode(chart.DataLabelNumberFormat, chart.DataLabelNumberFormatCode)),
                 new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(chart.DataLabelNumberFormat, chart.DataLabelNumberFormatSourceLinked))),
@@ -282,6 +283,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.DataLabelBorderColor,
                 chart.DataLabelBorderThickness),
             ToDataLabelTextProperties(chart, chartNs, drawingNs),
+            new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(chart.DataLabelPosition))),
             new XElement(chartNs + "showLegendKey", new XAttribute("val", chart.ShowDataLabelLegendKey ? "1" : "0")),
             new XElement(chartNs + "showVal", new XAttribute("val", chart.ShowDataLabelValue ? "1" : "0")),
             new XElement(chartNs + "showCatName", new XAttribute("val", chart.ShowDataLabelCategoryName ? "1" : "0")),
@@ -327,11 +329,13 @@ internal static partial class XlsxChartXmlWriter
                         textFill))));
     }
 
-    private static XElement? ToTextBodyProperties(double angle, XNamespace drawingNs) =>
-        angle == 0
-            ? null
-            : new XElement(drawingNs + "bodyPr",
-                new XAttribute("rot", Math.Clamp((int)Math.Round(angle * 60000), -5400000, 5400000)));
+    private static XElement ToTextBodyProperties(double angle, XNamespace drawingNs)
+    {
+        var element = new XElement(drawingNs + "bodyPr");
+        if (angle != 0 && double.IsFinite(angle))
+            element.SetAttributeValue("rot", Math.Clamp((int)Math.Round(angle * 60000), -5400000, 5400000));
+        return element;
+    }
 
     private static string ToXlsxDataLabelPosition(ChartDataLabelPosition position) =>
         position switch

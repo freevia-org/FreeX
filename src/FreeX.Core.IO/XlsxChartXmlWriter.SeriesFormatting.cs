@@ -30,8 +30,8 @@ internal static partial class XlsxChartXmlWriter
         return labels.Length == 0 && seriesDefaults is null
             ? null
             : new XElement(chartNs + "dLbls",
-                seriesDefaults is null ? null : ToSeriesDataLabelDefaultsXml(seriesDefaults, chartNs, drawingNs),
-                labels);
+                labels,
+                seriesDefaults is null ? null : ToSeriesDataLabelDefaultsXml(seriesDefaults, chartNs, drawingNs));
     }
 
     private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
@@ -80,19 +80,7 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        yield return format.Position is { } position
-            ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
-            : null;
         yield return ToSeriesDataLabelNumberFormatXml(format, chartNs);
-        yield return ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs);
-        yield return ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs);
-        yield return ToPointDataLabelBoolXml("showCatName", format.ShowCategoryName, chartNs);
-        yield return ToPointDataLabelBoolXml("showSerName", format.ShowSeriesName, chartNs);
-        yield return ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs);
-        yield return ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs);
-        yield return format.SeparatorText is { } separator
-            ? new XElement(chartNs + "separator", new XAttribute("val", separator))
-            : null;
         yield return ToShapeProperties(
             chartNs,
             drawingNs,
@@ -102,6 +90,18 @@ internal static partial class XlsxChartXmlWriter
             format.BorderColor,
             format.BorderThickness);
         yield return ToSeriesDataLabelTextProperties(format, chartNs, drawingNs);
+        yield return format.Position is { } position
+            ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
+            : null;
+        yield return ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs);
+        yield return ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs);
+        yield return ToPointDataLabelBoolXml("showCatName", format.ShowCategoryName, chartNs);
+        yield return ToPointDataLabelBoolXml("showSerName", format.ShowSeriesName, chartNs);
+        yield return ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs);
+        yield return ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs);
+        yield return format.SeparatorText is { } separator
+            ? new XElement(chartNs + "separator", new XAttribute("val", separator))
+            : null;
     }
 
     private static XElement ToPointDataLabelXml(
@@ -113,19 +113,7 @@ internal static partial class XlsxChartXmlWriter
             format.IsDeleted is { } isDeleted
                 ? new XElement(chartNs + "delete", new XAttribute("val", isDeleted ? "1" : "0"))
                 : null,
-            format.Position is { } position
-                ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
-                : null,
             ToPointDataLabelNumberFormatXml(format, chartNs),
-            ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs),
-            ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs),
-            ToPointDataLabelBoolXml("showCatName", format.ShowCategoryName, chartNs),
-            ToPointDataLabelBoolXml("showSerName", format.ShowSeriesName, chartNs),
-            ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs),
-            ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs),
-            format.SeparatorText is { } separator
-                ? new XElement(chartNs + "separator", separator)
-                : null,
             ToShapeProperties(
                 chartNs,
                 drawingNs,
@@ -134,7 +122,19 @@ internal static partial class XlsxChartXmlWriter
                 format.BorderThemeColor,
                 format.BorderColor,
                 format.BorderThickness),
-            ToPointDataLabelTextProperties(format, chartNs, drawingNs));
+            ToPointDataLabelTextProperties(format, chartNs, drawingNs),
+            format.Position is { } position
+                ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
+                : null,
+            ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs),
+            ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs),
+            ToPointDataLabelBoolXml("showCatName", format.ShowCategoryName, chartNs),
+            ToPointDataLabelBoolXml("showSerName", format.ShowSeriesName, chartNs),
+            ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs),
+            ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs),
+            format.SeparatorText is { } separator
+                ? new XElement(chartNs + "separator", separator)
+                : null);
 
     private static XElement? ToPointDataLabelBoolXml(string name, bool? value, XNamespace chartNs) =>
         value is { } flag
@@ -173,6 +173,7 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         return new XElement(chartNs + "txPr",
+            ToTextBodyProperties(0, drawingNs),
             new XElement(drawingNs + "p",
                 new XElement(drawingNs + "pPr",
                     new XElement(drawingNs + "defRPr",
@@ -195,6 +196,7 @@ internal static partial class XlsxChartXmlWriter
             string.IsNullOrWhiteSpace(chart.TrendlineName)
                 ? null
                 : new XElement(chartNs + "name", chart.TrendlineName),
+            ToTrendlineShapeProperties(chart, chartNs, drawingNs),
             new XElement(chartNs + "trendlineType",
                 new XAttribute("val", ToXlsxTrendlineType(chart.TrendlineType))),
             chart.TrendlineType == ChartTrendlineType.Polynomial
@@ -206,9 +208,8 @@ internal static partial class XlsxChartXmlWriter
             ToOptionalTrendlineDoubleXml("forward", chart.TrendlineForward, chartNs),
             ToOptionalTrendlineDoubleXml("backward", chart.TrendlineBackward, chartNs),
             ToOptionalTrendlineDoubleXml("intercept", chart.TrendlineIntercept, chartNs),
-            ToTrendlineShapeProperties(chart, chartNs, drawingNs),
-            new XElement(chartNs + "dispEq", new XAttribute("val", chart.ShowTrendlineEquation ? "1" : "0")),
             new XElement(chartNs + "dispRSqr", new XAttribute("val", chart.ShowTrendlineRSquared ? "1" : "0")),
+            new XElement(chartNs + "dispEq", new XAttribute("val", chart.ShowTrendlineEquation ? "1" : "0")),
             ToTrendlineLabelXml(chart, chartNs, drawingNs));
     }
 
@@ -257,7 +258,7 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         return new XElement(chartNs + "txPr",
-            chart.TrendlineLabelAngle is { } angle ? ToTextBodyProperties(angle, drawingNs) : null,
+            ToTextBodyProperties(chart.TrendlineLabelAngle ?? 0, drawingNs),
             new XElement(drawingNs + "p",
                 new XElement(drawingNs + "pPr",
                     new XElement(drawingNs + "defRPr",
@@ -277,6 +278,7 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         return new XElement(chartNs + "txPr",
+            ToTextBodyProperties(0, drawingNs),
             new XElement(drawingNs + "p",
                 new XElement(drawingNs + "pPr",
                     new XElement(drawingNs + "defRPr",

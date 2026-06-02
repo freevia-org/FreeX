@@ -43,6 +43,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             {
                 if (attribute.Name.LocalName == "ref" ||
                     attribute.Name == relNs + "id" ||
+                    IsOfficeRevisionAttribute(attribute) ||
                     targetHyperlink.Attribute(attribute.Name) is not null)
                 {
                     continue;
@@ -84,8 +85,11 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
             foreach (var attribute in sourceColumn.Attributes())
             {
-                if (targetColumn.Attribute(attribute.Name) is not null)
+                if (IsOfficeRevisionAttribute(attribute) ||
+                    targetColumn.Attribute(attribute.Name) is not null)
+                {
                     continue;
+                }
 
                 targetColumn.SetAttributeValue(attribute.Name, attribute.Value);
                 changed = true;
@@ -133,8 +137,11 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
             foreach (var attribute in sourceRow.Attributes())
             {
-                if (targetRow.Attribute(attribute.Name) is not null)
+                if (IsOfficeRevisionAttribute(attribute) ||
+                    targetRow.Attribute(attribute.Name) is not null)
+                {
                     continue;
+                }
 
                 targetRow.SetAttributeValue(attribute.Name, attribute.Value);
                 changed = true;
@@ -181,8 +188,11 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
             foreach (var attribute in sourceCell.Attributes())
             {
-                if (targetCell.Attribute(attribute.Name) is not null)
+                if (IsOfficeRevisionAttribute(attribute) ||
+                    targetCell.Attribute(attribute.Name) is not null)
+                {
                     continue;
+                }
 
                 targetCell.SetAttributeValue(attribute.Name, attribute.Value);
                 changed = true;
@@ -340,8 +350,11 @@ internal static partial class XlsxWorksheetMetadataPreserver
             {
                 foreach (var attribute in sourceCell.Attributes())
                 {
-                    if (targetCell.Attribute(attribute.Name) is not null)
+                    if (IsOfficeRevisionAttribute(attribute) ||
+                        targetCell.Attribute(attribute.Name) is not null)
+                    {
                         continue;
+                    }
 
                     targetCell.SetAttributeValue(attribute.Name, attribute.Value);
                     changed = true;

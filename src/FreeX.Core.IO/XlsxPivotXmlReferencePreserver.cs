@@ -5,6 +5,7 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxPivotXmlReferencePreserver
 {
+    private const string PivotCacheDefinitionRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
     private const string PivotTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
 
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
@@ -13,7 +14,7 @@ internal static class XlsxPivotXmlReferencePreserver
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        PreserveWorkbookPivotCaches(sourceArchive, targetArchive, workbookNs);
+        PreserveWorkbookPivotCaches(sourceArchive, targetArchive, workbookNs, relNs, packageRelNs);
         PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, workbookNs, relNs, packageRelNs);
     }
 
@@ -32,14 +33,16 @@ internal static class XlsxPivotXmlReferencePreserver
         if (pivotWorksheetPaths.Count == 0)
             return;
 
-        PreserveWorkbookPivotCaches(targetArchive, context);
+        PreserveWorkbookPivotCaches(sourceArchive, targetArchive, context);
         PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths);
     }
 
     private static void PreserveWorkbookPivotCaches(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
-        XNamespace workbookNs)
+        XNamespace workbookNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
     {
         var sourceEntry = sourceArchive.GetEntry("xl/workbook.xml");
         var targetEntry = targetArchive.GetEntry("xl/workbook.xml");
@@ -56,15 +59,23 @@ internal static class XlsxPivotXmlReferencePreserver
         if (targetRoot is null || targetRoot.Element(workbookNs + "pivotCaches") is not null)
             return;
 
+        var remappedPivotCaches = RemapWorkbookPivotCaches(
+            sourcePivotCaches,
+            sourceArchive,
+            targetArchive,
+            relNs,
+            packageRelNs);
+
         // Per CT_Workbook, <pivotCaches> must come after <sheets> (and customWorkbookViews) and before
         // smartTagPr/webPublishing/extLst. Inserting it before <sheets> is schema-invalid and makes
         // Excel reject the workbook and drop every PivotTable.
-        XlsxPivotTableWriter.InsertWorkbookPivotCaches(targetRoot, workbookNs, new XElement(sourcePivotCaches));
+        XlsxPivotTableWriter.InsertWorkbookPivotCaches(targetRoot, workbookNs, remappedPivotCaches);
 
         XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", targetXml);
     }
 
     private static void PreserveWorkbookPivotCaches(
+        ZipArchive sourceArchive,
         ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext context)
     {
@@ -76,12 +87,86 @@ internal static class XlsxPivotXmlReferencePreserver
         if (targetRoot is null || targetRoot.Element(context.WorkbookNs + "pivotCaches") is not null)
             return;
 
+        var remappedPivotCaches = RemapWorkbookPivotCaches(
+            sourcePivotCaches,
+            sourceArchive,
+            targetArchive,
+            context.RelNs,
+            context.PackageRelNs);
+
         // Per CT_Workbook, <pivotCaches> must come after <sheets> (and customWorkbookViews) and before
         // smartTagPr/webPublishing/extLst. Inserting it before <sheets> is schema-invalid and makes
         // Excel reject the workbook and drop every PivotTable.
-        XlsxPivotTableWriter.InsertWorkbookPivotCaches(targetRoot, context.WorkbookNs, new XElement(sourcePivotCaches));
+        XlsxPivotTableWriter.InsertWorkbookPivotCaches(targetRoot, context.WorkbookNs, remappedPivotCaches);
 
         XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", context.TargetWorkbookXml);
+    }
+
+    private static XElement RemapWorkbookPivotCaches(
+        XElement sourcePivotCaches,
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var pivotCaches = new XElement(sourcePivotCaches);
+        var sourceWorkbookRels = LoadRelationshipElements(sourceArchive, "xl/_rels/workbook.xml.rels", packageRelNs);
+        var targetWorkbookRels = LoadRelationshipElements(targetArchive, "xl/_rels/workbook.xml.rels", packageRelNs);
+        if (sourceWorkbookRels.Count == 0)
+            return pivotCaches;
+
+        foreach (var pivotCache in pivotCaches.Elements(sourcePivotCaches.Name.Namespace + "pivotCache"))
+        {
+            var sourceRelId = pivotCache.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(sourceRelId))
+                continue;
+
+            var sourceTarget = sourceWorkbookRels
+                .Where(relationship => IsRelationshipType(relationship, PivotCacheDefinitionRelationshipType))
+                .Where(relationship => string.Equals(relationship.Attribute("Id")?.Value, sourceRelId, StringComparison.Ordinal))
+                .Select(relationship => ResolveRelationshipTarget("xl/workbook.xml", relationship))
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(sourceTarget))
+                continue;
+
+            var targetRelId = targetWorkbookRels
+                .Where(relationship => IsRelationshipType(relationship, PivotCacheDefinitionRelationshipType))
+                .Where(relationship => string.Equals(
+                    ResolveRelationshipTarget("xl/workbook.xml", relationship),
+                    sourceTarget,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(relationship => relationship.Attribute("Id")?.Value)
+                .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id));
+            if (!string.IsNullOrWhiteSpace(targetRelId))
+                pivotCache.SetAttributeValue(relNs + "id", targetRelId);
+        }
+
+        return pivotCaches;
+    }
+
+    private static List<XElement> LoadRelationshipElements(
+        ZipArchive archive,
+        string relationshipsPath,
+        XNamespace packageRelNs)
+    {
+        var entry = archive.GetEntry(relationshipsPath);
+        if (entry is null)
+            return [];
+
+        var xml = XlsxPackageXmlEditor.LoadXml(entry);
+        return xml.Root?.Elements(packageRelNs + "Relationship").ToList() ?? [];
+    }
+
+    private static bool IsRelationshipType(XElement relationship, string relationshipType) =>
+        string.Equals(relationship.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase);
+
+    private static string ResolveRelationshipTarget(string sourcePart, XElement relationship)
+    {
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+            return "";
+
+        return XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target.Trim().Replace('\\', '/'));
     }
 
     private static void PreserveWorksheetPivotTableDefinitions(

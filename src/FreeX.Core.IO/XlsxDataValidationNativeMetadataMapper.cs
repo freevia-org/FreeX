@@ -268,8 +268,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
                 {
                     var validation = sheet.DataValidations[validationIndex];
                     if (!RangesEqual(validation.AppliesTo, duplicateRange) ||
-                        validation.AdditionalRanges.Count != 0 ||
-                        !MatchesNativeValidation(validation, metadata))
+                        validation.AdditionalRanges.Count != 0)
                     {
                         continue;
                     }
@@ -293,22 +292,6 @@ internal static class XlsxDataValidationNativeMetadataMapper
 
         return null;
     }
-
-    private static bool MatchesNativeValidation(DataValidation validation, DataValidationNativeMetadata metadata) =>
-        MatchesType(validation.Type, metadata.ModeledAttributes.GetValueOrDefault("type")) &&
-        string.Equals(validation.Formula1 ?? "", metadata.Formula1 ?? "", StringComparison.Ordinal) &&
-        string.Equals(validation.Formula2 ?? "", metadata.Formula2 ?? "", StringComparison.Ordinal);
-
-    private static bool MatchesType(DvType type, string? nativeType) =>
-        string.IsNullOrWhiteSpace(nativeType) ||
-        string.Equals(nativeType, TypeToNativeName(type), StringComparison.OrdinalIgnoreCase);
-
-    private static string TypeToNativeName(DvType type) => type switch
-    {
-        DvType.WholeNumber => "whole",
-        DvType.TextLength => "textLength",
-        _ => type.ToString()
-    };
 
     private static bool RangesEqual(GridRange left, GridRange right) =>
         left.Start.Row == right.Start.Row &&

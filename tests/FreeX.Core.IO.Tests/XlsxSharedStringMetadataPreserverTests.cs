@@ -56,6 +56,46 @@ public sealed class XlsxSharedStringMetadataPreserverTests
     }
 
     [Fact]
+    public void PreserveRichTextAndPhonetics_SanitizesCssFontFamilyRunNames()
+    {
+        using var sourcePackage = CreatePackage(("xl/sharedStrings.xml", """
+            <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <si>
+                <r>
+                  <rPr><rFont val="&quot;Google Sans&quot;, Roboto, sans-serif"/></rPr>
+                  <t>Rich font</t>
+                </r>
+              </si>
+            </sst>
+            """));
+        using var targetPackage = CreatePackage(("xl/sharedStrings.xml", """
+            <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <si><t>Rich font</t></si>
+            </sst>
+            """));
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using (var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics(sourceArchive, targetArchive);
+        }
+
+        targetPackage.Position = 0;
+        using var verifyArchive = new ZipArchive(targetPackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var entryStream = verifyArchive.GetEntry("xl/sharedStrings.xml")!.Open();
+        var xml = XDocument.Load(entryStream);
+
+        xml.Root!
+            .Element(WorkbookNs + "si")!
+            .Element(WorkbookNs + "r")!
+            .Element(WorkbookNs + "rPr")!
+            .Element(WorkbookNs + "rFont")!
+            .Attribute("val")!
+            .Value
+            .Should()
+            .Be("Google Sans");
+    }
+
+    [Fact]
     public void UniqueSharedStringLookup_AvoidsLinqGroupingAllocations()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
