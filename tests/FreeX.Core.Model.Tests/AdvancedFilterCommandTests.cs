@@ -275,6 +275,34 @@ public sealed class AdvancedFilterCommandTests
     }
 
     [Fact]
+    public void AdvancedFilter_CopyUnique_DeduplicatesFormattedRowText()
+    {
+        var (wb, sheet, ctx) = Setup();
+        Set(sheet, 1, 1, "Value");
+        Set(sheet, 1, 2, "Group");
+        Set(sheet, 2, 1, 1);
+        Set(sheet, 2, 2, "Keep");
+        Set(sheet, 3, 1, "1");
+        Set(sheet, 3, 2, "Keep");
+        Set(sheet, 4, 1, 2);
+        Set(sheet, 4, 2, "Keep");
+        Set(sheet, 1, 4, "Group");
+        Set(sheet, 2, 4, "Keep");
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 4, 2),
+            CriteriaRange: ListRange(sheet, 1, 4, 2, 4),
+            CopyTo: Addr(sheet, 6, 1),
+            UniqueRecordsOnly: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(7, 1).Should().Be(new NumberValue(1));
+        sheet.GetValue(8, 1).Should().Be(new NumberValue(2));
+        sheet.GetCell(9, 1).Should().BeNull();
+    }
+
+    [Fact]
     public void AdvancedFilter_CopyToLocation_ClearsStaleRowsFromPriorLargerOutput()
     {
         var (wb, sheet, ctx) = Setup();
