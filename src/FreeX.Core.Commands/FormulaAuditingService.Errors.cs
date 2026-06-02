@@ -116,6 +116,7 @@ public static partial class FormulaAuditingService
         (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
         IsFormulaStoredAsText(cell) ||
         FormulaRefersToBlankCells(workbook, sheetId, cell) ||
+        IsInconsistentCalculatedColumnFormula(workbook, sheetId, address, cell) ||
         IsInconsistentFormula(workbook, sheetId, address) ||
         FormulaOmitsAdjacentCells(workbook, sheetId, cell) ||
         IsUnlockedFormulaCell(workbook, cell);
@@ -175,10 +176,12 @@ public static partial class FormulaAuditingService
     private static IEnumerable<FormulaErrorIssue> FindFormulaCellIssues(Workbook workbook, SheetId? sheetId)
     {
         var checkBlankReferences = !workbook.DisabledFormulaErrorCodes.Contains(FormulaRefersToBlankCellsErrorCode);
+        var checkInconsistentCalculatedColumnFormulas = !workbook.DisabledFormulaErrorCodes.Contains(InconsistentCalculatedColumnFormulaErrorCode);
         var checkInconsistentFormulas = !workbook.DisabledFormulaErrorCodes.Contains(InconsistentFormulaErrorCode);
         var checkOmittedAdjacentCells = !workbook.DisabledFormulaErrorCodes.Contains(FormulaOmitsAdjacentCellsErrorCode);
         var checkUnlockedFormulaCells = !workbook.DisabledFormulaErrorCodes.Contains(UnlockedFormulaCellsErrorCode);
         if (!checkBlankReferences &&
+            !checkInconsistentCalculatedColumnFormulas &&
             !checkInconsistentFormulas &&
             !checkOmittedAdjacentCells &&
             !checkUnlockedFormulaCells)
@@ -187,6 +190,7 @@ public static partial class FormulaAuditingService
         }
 
         var flaggedInconsistentFormulas = checkInconsistentFormulas ? new HashSet<CellAddress>() : null;
+        var flaggedCalculatedColumnFormulas = checkInconsistentCalculatedColumnFormulas ? new HashSet<CellAddress>() : null;
         foreach (var sheet in workbook.Sheets)
         {
             if (sheetId.HasValue && sheet.Id != sheetId.Value)
@@ -204,6 +208,20 @@ public static partial class FormulaAuditingService
                 if (cell.IgnoreFormulaError)
                     continue;
 
+                if (checkInconsistentCalculatedColumnFormulas &&
+                    IsInconsistentCalculatedColumnFormula(sheet, address, cell))
+                {
+                    flaggedCalculatedColumnFormulas?.Add(address);
+                    yield return new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        InconsistentCalculatedColumnFormulaErrorCode,
+                        cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                        "The formula is inconsistent with the table calculated column formula.");
+                }
+
                 if (checkBlankReferences && FormulaRefersToBlankCells(workbook, sheet.Id, cell))
                 {
                     yield return new FormulaErrorIssue(
@@ -216,8 +234,12 @@ public static partial class FormulaAuditingService
                         "The formula refers to one or more blank cells.");
                 }
 
-                if (formulas is not null && !string.IsNullOrWhiteSpace(cell.FormulaText))
+                if (formulas is not null &&
+                    flaggedCalculatedColumnFormulas?.Contains(address) != true &&
+                    !string.IsNullOrWhiteSpace(cell.FormulaText))
+                {
                     formulas.Add(new FormulaPattern(address, cell.FormulaText!, NormalizeFormulaPattern(address, cell.FormulaText!)));
+                }
 
                 if (checkOmittedAdjacentCells && FormulaOmitsAdjacentCells(workbook, sheet.Id, cell))
                 {
@@ -395,6 +417,84 @@ public static partial class FormulaAuditingService
     private static bool IsInconsistentFormula(Workbook workbook, SheetId sheetId, CellAddress address) =>
         FindInconsistentFormulaIssues(workbook, sheetId)
             .Any(issue => issue.Address == address);
+
+    private static bool IsInconsistentCalculatedColumnFormula(Workbook workbook, SheetId sheetId, CellAddress address, Cell cell) =>
+        workbook.GetSheet(sheetId) is { } sheet &&
+        IsInconsistentCalculatedColumnFormula(sheet, address, cell);
+
+    private static bool IsInconsistentCalculatedColumnFormula(Sheet sheet, CellAddress address, Cell cell)
+    {
+        if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
+            return false;
+
+        return TryGetCalculatedColumnFormula(sheet, address, out var calculatedColumnFormula) &&
+               !FormulaTextsMatch(cell.FormulaText, calculatedColumnFormula);
+    }
+
+    private static bool TryGetCalculatedColumnFormula(
+        Sheet sheet,
+        CellAddress address,
+        out string calculatedColumnFormula)
+    {
+        calculatedColumnFormula = string.Empty;
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (!TryGetTableDataBodyRows(table, out var startRow, out var endRow) ||
+                address.Row < startRow ||
+                address.Row > endRow ||
+                address.Col < table.Range.Start.Col ||
+                address.Col > table.Range.End.Col)
+            {
+                continue;
+            }
+
+            var columnIndex = (int)(address.Col - table.Range.Start.Col);
+            if (columnIndex < 0 || columnIndex >= table.Columns.Count)
+                continue;
+
+            calculatedColumnFormula = table.Columns[columnIndex].CalculatedColumnFormula ?? string.Empty;
+            return !string.IsNullOrWhiteSpace(calculatedColumnFormula);
+        }
+
+        return false;
+    }
+
+    private static bool TryGetTableDataBodyRows(StructuredTableModel table, out uint startRow, out uint endRow)
+    {
+        startRow = 0;
+        endRow = 0;
+        if (table.Range.End.Row < table.Range.Start.Row || table.Range.End.Col < table.Range.Start.Col)
+            return false;
+
+        var rowCount = (int)(table.Range.End.Row - table.Range.Start.Row + 1);
+        var headerRows = Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
+        var remainingRows = rowCount - headerRows;
+        var totalsRows = table.TotalsRowShown
+            ? Math.Clamp(table.TotalsRowCount ?? 1, 0, remainingRows)
+            : 0;
+        var dataRows = rowCount - headerRows - totalsRows;
+        if (dataRows <= 0)
+            return false;
+
+        startRow = table.Range.Start.Row + (uint)headerRows;
+        endRow = startRow + (uint)dataRows - 1;
+        return true;
+    }
+
+    private static bool FormulaTextsMatch(string actualFormula, string expectedFormula) =>
+        string.Equals(
+            NormalizeFormulaTextForComparison(actualFormula),
+            NormalizeFormulaTextForComparison(expectedFormula),
+            StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeFormulaTextForComparison(string formulaText)
+    {
+        var normalized = formulaText.Trim();
+        if (normalized.StartsWith("=", StringComparison.Ordinal))
+            normalized = normalized[1..].TrimStart();
+
+        return normalized.TrimEnd();
+    }
 
     private sealed record FormulaPattern(CellAddress Address, string FormulaText, string Pattern);
 
