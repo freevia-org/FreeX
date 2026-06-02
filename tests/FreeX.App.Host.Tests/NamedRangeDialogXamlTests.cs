@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Commands;
@@ -70,11 +71,40 @@ public sealed class NamedRangeDialogXamlTests
             .Single(element => element.Attribute(x + "Name")?.Value == "NamesList")
             .Attribute("MouseDoubleClick")?.Value.Should().Be("NamesList_MouseDoubleClick");
         source.Should().Contain("private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+        source.Should().Contain("if (NamesList.SelectedItem is not NamedRangeViewModel)");
         source.Should().Contain("EditButton_Click(sender, e);");
         source.Should().Contain("e.Handled = true;");
+        source.IndexOf("if (NamesList.SelectedItem is not NamedRangeViewModel)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(source.IndexOf("EditButton_Click(sender, e);", StringComparison.Ordinal));
         source.IndexOf("EditButton_Click(sender, e);", StringComparison.Ordinal)
             .Should()
             .BeLessThan(source.IndexOf("e.Handled = true;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DefinedNamesList_DoubleClickWithoutSelectionDoesNotOpenEditNameDialog()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
+            var namesList = GetControl<ListView>(dialog, "NamesList");
+
+            namesList.SelectedItem = null;
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+
+            namesList.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeFalse();
+            typeof(NamedRangeDialog)
+                .GetField("_activeDefinitionDialog", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)
+                .Should().BeNull();
+        });
     }
 
     [Fact]

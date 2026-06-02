@@ -139,6 +139,7 @@ public sealed class FilterCommandPerformanceTests
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
 
         checksum.Should().Be(expectedHiddenRows * steps);
+        allocatedBytes.Should().BeLessThan(1_250_000);
         Console.WriteLine(
             "PERF AVERAGE_FILTER_DENSE " +
             $"rows={rows} steps={steps} hidden_rows={expectedHiddenRows} " +
@@ -201,6 +202,7 @@ public sealed class FilterCommandPerformanceTests
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
 
         checksum.Should().Be(expectedHiddenRows * steps);
+        allocatedBytes.Should().BeLessThan(1_000_000);
         Console.WriteLine(
             "PERF TOPBOTTOM_FILTER_DENSE " +
             $"rows={rows} steps={steps} hidden_rows={expectedHiddenRows} " +
