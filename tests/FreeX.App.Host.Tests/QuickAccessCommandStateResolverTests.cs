@@ -90,6 +90,24 @@ public sealed class QuickAccessCommandStateResolverTests
         QuickAccessCommandStateResolver.CanExecute(commandId, state).Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(QuickAccessToolbarCommandIds.Print)]
+    [InlineData(QuickAccessToolbarCommandIds.CheckAccessibility)]
+    [InlineData(QuickAccessToolbarCommandIds.ShareWorkbook)]
+    [InlineData(QuickAccessToolbarCommandIds.SelectionPane)]
+    public void CanExecute_RequiresActiveWorksheetForWorksheetCommands(string commandId)
+    {
+        var noWorksheet = new QuickAccessCommandState(
+            CanUndo: false,
+            CanRedo: false,
+            HasActiveWorksheet: false,
+            HasSelection: true);
+        var activeWorksheet = noWorksheet.WithSelectionContext(hasActiveWorksheet: true, hasSelection: false);
+
+        QuickAccessCommandStateResolver.CanExecute(commandId, noWorksheet).Should().BeFalse();
+        QuickAccessCommandStateResolver.CanExecute(commandId, activeWorksheet).Should().BeTrue();
+    }
+
     [Fact]
     public void CanExecute_DisablesUnknownCommandsConservatively()
     {
@@ -107,6 +125,9 @@ public sealed class QuickAccessCommandStateResolverTests
     [InlineData(QuickAccessToolbarCommandIds.Undo, (int)QuickAccessCommandAvailability.Undo)]
     [InlineData(QuickAccessToolbarCommandIds.Redo, (int)QuickAccessCommandAvailability.Redo)]
     [InlineData(QuickAccessToolbarCommandIds.Print, (int)QuickAccessCommandAvailability.Worksheet)]
+    [InlineData(QuickAccessToolbarCommandIds.CheckAccessibility, (int)QuickAccessCommandAvailability.Worksheet)]
+    [InlineData(QuickAccessToolbarCommandIds.ShareWorkbook, (int)QuickAccessCommandAvailability.Worksheet)]
+    [InlineData(QuickAccessToolbarCommandIds.SelectionPane, (int)QuickAccessCommandAvailability.Worksheet)]
     [InlineData(QuickAccessToolbarCommandIds.Bold, (int)QuickAccessCommandAvailability.Selection)]
     [InlineData("MissingCommand", (int)QuickAccessCommandAvailability.Never)]
     public void GetAvailability_ClassifiesCommandsForCachedToolbarState(

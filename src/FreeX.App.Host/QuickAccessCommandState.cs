@@ -55,8 +55,11 @@ internal static class QuickAccessCommandStateResolver
             QuickAccessToolbarCommandIds.ExportPdfXps or
             QuickAccessToolbarCommandIds.CalculateSheet or
             QuickAccessToolbarCommandIds.Spelling or
+            QuickAccessToolbarCommandIds.CheckAccessibility or
+            QuickAccessToolbarCommandIds.ShareWorkbook or
             QuickAccessToolbarCommandIds.Zoom100 or
-            QuickAccessToolbarCommandIds.FindSelect => QuickAccessCommandAvailability.Worksheet,
+            QuickAccessToolbarCommandIds.FindSelect or
+            QuickAccessToolbarCommandIds.SelectionPane => QuickAccessCommandAvailability.Worksheet,
 
             QuickAccessToolbarCommandIds.Cut or
             QuickAccessToolbarCommandIds.Copy or

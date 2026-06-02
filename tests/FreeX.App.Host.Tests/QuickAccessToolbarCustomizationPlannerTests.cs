@@ -72,6 +72,15 @@ public sealed class QuickAccessToolbarCustomizationPlannerTests
         QuickAccessToolbarCatalog.TryGetByCommandName("Bold", out var boldCommand).Should().BeTrue();
         boldCommand.Id.Should().Be(QuickAccessToolbarCommandIds.Bold);
 
+        QuickAccessToolbarCatalog.TryGetByCommandName("Check Accessibility", out var accessibilityCommand).Should().BeTrue();
+        accessibilityCommand.Id.Should().Be(QuickAccessToolbarCommandIds.CheckAccessibility);
+
+        QuickAccessToolbarCatalog.TryGetByCommandName("Selection Pane", out var selectionPaneCommand).Should().BeTrue();
+        selectionPaneCommand.Id.Should().Be(QuickAccessToolbarCommandIds.SelectionPane);
+
+        QuickAccessToolbarCatalog.TryGetByCommandName("Share Workbook", out var shareCommand).Should().BeTrue();
+        shareCommand.Id.Should().Be(QuickAccessToolbarCommandIds.ShareWorkbook);
+
         QuickAccessToolbarCatalog.TryGetByCommandName("Not a QAT command", out _).Should().BeFalse();
     }
 
@@ -84,5 +93,11 @@ public sealed class QuickAccessToolbarCustomizationPlannerTests
         source.Should().Contain("TryFindQuickAccessToolbarCatalogCommand");
         source.Should().Contain("CreateQuickAccessToolbarCustomizationContextMenu(command.Id)");
         source.Should().Contain("QuickAccessToolbarCustomizationPlanner.Apply");
+        source.Should().Contain("case QuickAccessToolbarCommandIds.CheckAccessibility:");
+        source.Should().Contain("AccessibilityCheckerBtn_Click(sender, args);");
+        source.Should().Contain("case QuickAccessToolbarCommandIds.ShareWorkbook:");
+        source.Should().Contain("ShareWorkbookBtn_Click(sender, args);");
+        source.Should().Contain("case QuickAccessToolbarCommandIds.SelectionPane:");
+        source.Should().Contain("SelectionPaneBtn_Click(sender, args);");
     }
 }

@@ -364,6 +364,12 @@ public partial class MainWindow
             case QuickAccessToolbarCommandIds.Spelling:
                 SpellCheckBtn_Click(sender, args);
                 break;
+            case QuickAccessToolbarCommandIds.CheckAccessibility:
+                AccessibilityCheckerBtn_Click(sender, args);
+                break;
+            case QuickAccessToolbarCommandIds.ShareWorkbook:
+                ShareWorkbookBtn_Click(sender, args);
+                break;
             case QuickAccessToolbarCommandIds.Zoom100:
                 Zoom100Btn_Click(sender, args);
                 break;
@@ -378,6 +384,9 @@ public partial class MainWindow
                 break;
             case QuickAccessToolbarCommandIds.FindSelect:
                 FindButton_Click(sender, args);
+                break;
+            case QuickAccessToolbarCommandIds.SelectionPane:
+                SelectionPaneBtn_Click(sender, args);
                 break;
         }
     }
