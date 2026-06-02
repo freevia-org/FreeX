@@ -787,6 +787,24 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonPivotTableEntries()
+    {
+        var workbook = new Workbook("NullPivotTableEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        sheet.PivotTables.Add(null!);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("PivotTables").EnumerateArray()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void Save_DropsNullNativeJsonChartListEntries()
     {
         var workbook = new Workbook("NullChartListEntries");
