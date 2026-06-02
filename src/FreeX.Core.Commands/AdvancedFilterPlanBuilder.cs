@@ -1,5 +1,5 @@
 using FreeX.Core.Model;
-using System.Text;
+using System.Globalization;
 
 namespace FreeX.Core.Commands;
 
@@ -66,15 +66,14 @@ internal static class AdvancedFilterPlanBuilder
         bool uniqueRecordsOnly = false)
     {
         var result = new List<uint>(GetRowResultCapacity(listRange));
-        var seen = uniqueRecordsOnly ? new HashSet<string>(StringComparer.Ordinal) : null;
-        var keyBuilder = uniqueRecordsOnly ? CreateUniqueRowKeyBuilder(listRange) : null;
+        var seen = uniqueRecordsOnly ? new UniqueRowSet(sheet, listRange) : null;
 
         for (var row = listRange.Start.Row + 1; row <= listRange.End.Row; row++)
         {
             if (!MatchesAnyCriteriaRow(sheet, row, criteriaRows))
                 continue;
 
-            if (seen is null || AddUniqueRowKey(sheet, listRange, row, seen, keyBuilder!))
+            if (seen is null || seen.Add(row))
                 result.Add(row);
         }
 
@@ -84,11 +83,10 @@ internal static class AdvancedFilterPlanBuilder
     public static List<uint> UniqueRows(Sheet sheet, GridRange listRange, IReadOnlyList<uint> rows)
     {
         var result = new List<uint>(rows.Count);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var keyBuilder = CreateUniqueRowKeyBuilder(listRange);
+        var seen = new UniqueRowSet(sheet, listRange);
         foreach (var row in rows)
         {
-            if (AddUniqueRowKey(sheet, listRange, row, seen, keyBuilder))
+            if (seen.Add(row))
                 result.Add(row);
         }
 
@@ -134,28 +132,113 @@ internal static class AdvancedFilterPlanBuilder
         return new TextEqualsFilterCriterion(criteriaText);
     }
 
-    private static bool AddUniqueRowKey(
-        Sheet sheet,
-        GridRange listRange,
-        uint row,
-        HashSet<string> seen,
-        StringBuilder keyBuilder)
+    private sealed class UniqueRowSet
     {
-        keyBuilder.Clear();
-        for (var col = listRange.Start.Col; col <= listRange.End.Col; col++)
-        {
-            if (col != listRange.Start.Col)
-                keyBuilder.Append('\u001f');
+        private readonly HashSet<UniqueRowKey> _seen;
 
-            FilterValueFormatter.AppendText(keyBuilder, sheet.GetValue(row, col));
+        public UniqueRowSet(Sheet sheet, GridRange listRange)
+        {
+            _seen = new HashSet<UniqueRowKey>(
+                GetRowResultCapacity(listRange),
+                new RowKeyComparer(sheet, listRange));
         }
 
-        return seen.Add(keyBuilder.ToString());
+        public bool Add(uint row)
+        {
+            return _seen.Add(new UniqueRowKey(row));
+        }
     }
 
-    private static StringBuilder CreateUniqueRowKeyBuilder(GridRange listRange)
+    private readonly record struct UniqueRowKey(uint Row);
+
+    private sealed class RowKeyComparer(Sheet sheet, GridRange listRange) : IEqualityComparer<UniqueRowKey>
     {
-        var capacity = (int)Math.Min((ulong)listRange.ColCount * 16, 4096UL);
-        return new StringBuilder(capacity);
+        private const int FnvOffsetBasis = unchecked((int)2166136261);
+        private const int FnvPrime = 16777619;
+
+        public bool Equals(UniqueRowKey left, UniqueRowKey right)
+        {
+            if (left.Row == right.Row)
+                return true;
+
+            for (var col = listRange.Start.Col; col <= listRange.End.Col; col++)
+            {
+                if (!FormattedTextEquals(sheet.GetValue(left.Row, col), sheet.GetValue(right.Row, col)))
+                    return false;
+            }
+
+            return true;
+        }
+
+        public int GetHashCode(UniqueRowKey key)
+        {
+            var hash = FnvOffsetBasis;
+            for (var col = listRange.Start.Col; col <= listRange.End.Col; col++)
+            {
+                if (col != listRange.Start.Col)
+                    AddChar(ref hash, '\u001f');
+
+                AddValueTextHash(ref hash, sheet.GetValue(key.Row, col));
+            }
+
+            return hash;
+        }
+
+        private static bool FormattedTextEquals(ScalarValue left, ScalarValue right)
+        {
+            Span<char> leftBuffer = stackalloc char[32];
+            Span<char> rightBuffer = stackalloc char[32];
+            var leftText = GetFormattedText(left, leftBuffer, out _);
+            var rightText = GetFormattedText(right, rightBuffer, out _);
+            return leftText.SequenceEqual(rightText);
+        }
+
+        private static void AddValueTextHash(ref int hash, ScalarValue value)
+        {
+            Span<char> buffer = stackalloc char[32];
+            var text = GetFormattedText(value, buffer, out _);
+            foreach (var ch in text)
+                AddChar(ref hash, ch);
+        }
+
+        private static ReadOnlySpan<char> GetFormattedText(
+            ScalarValue value,
+            Span<char> buffer,
+            out string? fallback)
+        {
+            fallback = null;
+            switch (value)
+            {
+                case TextValue text:
+                    return text.Value.AsSpan();
+                case NumberValue number:
+                    if (number.Value.TryFormat(buffer, out var numberChars, provider: CultureInfo.InvariantCulture))
+                        return buffer[..numberChars];
+
+                    fallback = number.Value.ToString(CultureInfo.InvariantCulture);
+                    return fallback.AsSpan();
+                case BoolValue boolean:
+                    return boolean.Value ? "TRUE".AsSpan() : "FALSE".AsSpan();
+                case DateTimeValue dateTime:
+                    var date = dateTime.ToDateTime();
+                    if (date.TryFormat(buffer, out var dateChars, "yyyy-MM-dd", CultureInfo.InvariantCulture))
+                        return buffer[..dateChars];
+
+                    fallback = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    return fallback.AsSpan();
+                case ErrorValue error:
+                    return error.Code.AsSpan();
+                default:
+                    return [];
+            }
+        }
+
+        private static void AddChar(ref int hash, char ch)
+        {
+            unchecked
+            {
+                hash = (hash ^ ch) * FnvPrime;
+            }
+        }
     }
 }
