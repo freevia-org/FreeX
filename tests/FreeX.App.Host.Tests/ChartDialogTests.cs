@@ -1,7 +1,9 @@
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -163,11 +165,55 @@ public sealed class ChartDialogTests
     {
         var source = ReadChartTypeDialogSource();
 
-        source.Should().Contain("_recommendedGallery.MouseDoubleClick += (_, _) => Accept();");
-        source.Should().Contain("_subtypeGallery.MouseDoubleClick += (_, _) => Accept();");
+        source.Should().Contain("_recommendedGallery.MouseDoubleClick += Gallery_MouseDoubleClick;");
+        source.Should().Contain("_subtypeGallery.MouseDoubleClick += Gallery_MouseDoubleClick;");
         source.Should().Contain("private void Accept()");
-        source.Should().Contain("_subtypeGallery.MouseDoubleClick += (_, _) => AcceptSelectedChartType();");
+        source.Should().Contain("private void Gallery_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+        source.Should().Contain("e.Handled = true;");
+        source.Should().Contain("_subtypeGallery.MouseDoubleClick += SubtypeGallery_MouseDoubleClick;");
         source.Should().Contain("private void AcceptSelectedChartType()");
+        source.Should().Contain("private void SubtypeGallery_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+    }
+
+    [Fact]
+    public void InsertChartDialogGalleryDoubleClickAcceptsAndHandlesMouseEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new InsertChartDialog();
+            var recommendedGallery = GetPrivateField<ListBox>(dialog, "_recommendedGallery");
+            var doubleClick = CreateMouseDoubleClickEvent();
+
+            dialog.Dispatcher.BeginInvoke(() => recommendedGallery.RaiseEvent(doubleClick));
+            var accepted = dialog.ShowDialog();
+
+            accepted.Should().BeTrue();
+            doubleClick.Handled.Should().BeTrue();
+            dialog.Result.ChartType.Should().Be(ChartType.Column);
+            dialog.Result.UseRecommendedLayout.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void ChangeChartTypeDialogSubtypeDoubleClickAcceptsAndHandlesMouseEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ChangeChartTypeDialog(ChartType.Bar);
+            var subtypeGallery = GetPrivateField<ListBox>(dialog, "_subtypeGallery");
+            var selectedChoice = subtypeGallery.Items
+                .OfType<ChartTypeGalleryChoice>()
+                .First();
+            subtypeGallery.SelectedItem = selectedChoice;
+            var doubleClick = CreateMouseDoubleClickEvent();
+
+            dialog.Dispatcher.BeginInvoke(() => subtypeGallery.RaiseEvent(doubleClick));
+            var accepted = dialog.ShowDialog();
+
+            accepted.Should().BeTrue();
+            doubleClick.Handled.Should().BeTrue();
+            dialog.Result.ChartType.Should().Be(selectedChoice.Type);
+        });
     }
 
     [Fact]
@@ -1417,4 +1463,18 @@ public sealed class ChartDialogTests
             "ChartTypeDialogs.PickerUi.cs",
             "ChartTypeDialogs.Change.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", file))));
+
+    private static T GetPrivateField<T>(object instance, string name)
+        where T : class
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
+    }
+
+    private static MouseButtonEventArgs CreateMouseDoubleClickEvent() =>
+        new(Mouse.PrimaryDevice, 0, MouseButton.Left)
+        {
+            RoutedEvent = Control.MouseDoubleClickEvent
+        };
 }

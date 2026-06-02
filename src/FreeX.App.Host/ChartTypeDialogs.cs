@@ -31,8 +31,8 @@ public sealed partial class InsertChartDialog : Window
         _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
         _recommendedGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
         _recommendedGallery.SelectedIndex = 0;
-        _recommendedGallery.MouseDoubleClick += (_, _) => Accept();
-        _subtypeGallery.MouseDoubleClick += (_, _) => Accept();
+        _recommendedGallery.MouseDoubleClick += Gallery_MouseDoubleClick;
+        _subtypeGallery.MouseDoubleClick += Gallery_MouseDoubleClick;
         tabs.Items.Add(new TabItem
         {
             Header = UiText.Get("InsertChart_RecommendedChartsTab"),
@@ -67,6 +67,12 @@ public sealed partial class InsertChartDialog : Window
         var selected = SelectedGalleryChoice(_recommendedGallery, _subtypeGallery)?.Type ?? ChartType.Column;
         Result = new InsertChartDialogResult(selected, _recommendedBox.IsChecked == true);
         DialogResult = true;
+    }
+
+    private void Gallery_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        Accept();
+        e.Handled = true;
     }
 
     private void FocusInitialKeyboardTarget()

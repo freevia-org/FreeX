@@ -37,7 +37,7 @@ public sealed class ChangeChartTypeDialog : Window
         root.Children.Add(heading);
         var panel = InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery, currentType);
         panel.Height = 290;
-        _subtypeGallery.MouseDoubleClick += (_, _) => AcceptSelectedChartType();
+        _subtypeGallery.MouseDoubleClick += SubtypeGallery_MouseDoubleClick;
         DockPanel.SetDock(panel, Dock.Top);
         root.Children.Add(panel);
         var buttons = CreateButtonRow();
@@ -57,6 +57,12 @@ public sealed class ChangeChartTypeDialog : Window
             SelectedChartType = option.Type;
         Result = CreateResult(SelectedChartType);
         DialogResult = true;
+    }
+
+    private void SubtypeGallery_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        AcceptSelectedChartType();
+        e.Handled = true;
     }
 
     private void FocusInitialKeyboardTarget()
