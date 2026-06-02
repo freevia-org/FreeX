@@ -60,6 +60,7 @@ public sealed partial class TextToColumnsDialog
         if (_fixedWidthButton.IsChecked != true)
             return;
 
+        CancelFixedWidthRulerDrag();
         var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);
         var nearest = FindNearestBreakIndex(positions, e.GetPosition(_fixedWidthRuler).X, tolerance: 10);
         if (nearest >= 0)
