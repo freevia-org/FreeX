@@ -499,6 +499,60 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsNullNativeJsonWorkbookReferenceEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullWorkbookReferenceEntries",
+              "Sheets": [
+                { "Name": "Sheet1" }
+              ],
+              "NamedRanges": [
+                null,
+                { "Name": "Input", "SheetName": "Sheet1", "Range": "A1:B2" },
+                { "Name": "MissingSheet", "SheetName": "Missing", "Range": "A1" }
+              ],
+              "WatchedCells": [
+                null,
+                { "SheetName": "Sheet1", "Address": "C3" },
+                { "SheetName": "Sheet1" }
+              ],
+              "Scenarios": [
+                null,
+                {
+                  "Name": "Scenario 1",
+                  "ChangingCells": [
+                    null,
+                    { "SheetName": "Missing", "Address": "A1", "Value": "drop" },
+                    { "SheetName": "Sheet1", "Address": "D4", "Value": "keep", "ValueType": "Text" }
+                  ]
+                },
+                { "Name": "NoValidChanges", "ChangingCells": [ null ] }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+        var sheet = workbook.GetSheetAt(0);
+
+        workbook.NamedRanges.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<string, GridRange>(
+                "Input",
+                new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2))));
+        workbook.WatchedCells.Should().ContainSingle()
+            .Which.Should().Be(new CellAddress(sheet.Id, 3, 3));
+
+        var scenario = workbook.Scenarios.Should().ContainSingle().Subject;
+        scenario.Name.Should().Be("Scenario 1");
+        scenario.ChangingCells.Should().ContainSingle()
+            .Which.Should().Be(new ScenarioCellValue(new CellAddress(sheet.Id, 4, 4), new TextValue("keep")));
+    }
+
+    [Fact]
     public void Load_DropsUnresolvableNativeJsonCustomViewSheetReferences()
     {
         const string json = """
@@ -866,6 +920,29 @@ public sealed class NativeJsonSchemaTests
         root.GetProperty("FunctionGroups").GetProperty("Groups").EnumerateArray().Should().BeEmpty();
         root.GetProperty("SmartTags").GetProperty("Types").EnumerateArray().Should().BeEmpty();
         root.GetProperty("AdditionalViews").GetProperty("Views").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_DropsNullNativeJsonWorkbookFileRecoveryEntries()
+    {
+        var workbook = new Workbook("NullWorkbookFileRecoveryEntries");
+        workbook.FileRecoveryProperties.Add(null!);
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel());
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
+        {
+            AutoRecover = true
+        });
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var propertyJson = document.RootElement
+            .GetProperty("FileRecoveryProperties").EnumerateArray()
+            .Should().ContainSingle().Subject;
+
+        propertyJson.GetProperty("AutoRecover").GetBoolean().Should().BeTrue();
     }
 
     [Fact]
