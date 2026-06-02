@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -164,10 +165,10 @@ public static class SelectionRangeService
     {
         private const long MinimumUsedCells = 4_096;
         private const int SparseAreaPerStoredCell = 4;
-        private readonly Dictionary<uint, List<uint>> _colsByRow;
-        private readonly Dictionary<uint, List<uint>> _rowsByCol;
+        private readonly Dictionary<uint, AxisValues> _colsByRow;
+        private readonly Dictionary<uint, AxisValues> _rowsByCol;
 
-        private ContentIndex(Dictionary<uint, List<uint>> colsByRow, Dictionary<uint, List<uint>> rowsByCol)
+        private ContentIndex(Dictionary<uint, AxisValues> colsByRow, Dictionary<uint, AxisValues> rowsByCol)
         {
             _colsByRow = colsByRow;
             _rowsByCol = rowsByCol;
@@ -183,8 +184,8 @@ public static class SelectionRangeService
 
             var rowCapacity = GetDictionaryCapacity(sheet.CellCount, usedRange.RowCount);
             var colCapacity = GetDictionaryCapacity(sheet.CellCount, usedRange.ColCount);
-            var colsByRow = new Dictionary<uint, List<uint>>(rowCapacity);
-            var rowsByCol = new Dictionary<uint, List<uint>>(colCapacity);
+            var colsByRow = new Dictionary<uint, AxisValues>(rowCapacity);
+            var rowsByCol = new Dictionary<uint, AxisValues>(colCapacity);
             foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
             {
                 if (!HasCellContent(cell))
@@ -211,33 +212,80 @@ public static class SelectionRangeService
         private static int GetDictionaryCapacity(int cellCount, uint axisLength) =>
             (int)Math.Min((uint)cellCount, axisLength);
 
-        private static void Add(Dictionary<uint, List<uint>> valuesByKey, uint key, uint value)
+        private static void Add(Dictionary<uint, AxisValues> valuesByKey, uint key, uint value)
         {
-            if (!valuesByKey.TryGetValue(key, out var values))
-            {
-                values = new List<uint>(1);
-                valuesByKey[key] = values;
-            }
-
+            ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(valuesByKey, key, out _);
             values.Add(value);
         }
 
-        private static void SortValues(Dictionary<uint, List<uint>> valuesByKey)
+        private static void SortValues(Dictionary<uint, AxisValues> valuesByKey)
         {
-            foreach (var values in valuesByKey.Values)
+            foreach (var key in valuesByKey.Keys)
             {
-                if (values.Count > 1)
-                    values.Sort();
+                ref var values = ref CollectionsMarshal.GetValueRefOrNullRef(valuesByKey, key);
+                values.Sort();
             }
         }
 
-        private static bool HasAnyInRange(List<uint> sortedValues, uint start, uint end)
+        private static bool HasAnyInRange(AxisValues sortedValues, uint start, uint end)
         {
-            var index = sortedValues.BinarySearch(start);
+            if (sortedValues.Count == 0)
+                return false;
+
+            if (sortedValues.Count == 1)
+                return sortedValues.First >= start && sortedValues.First <= end;
+
+            if (sortedValues.Count == 2)
+            {
+                return (sortedValues.First >= start && sortedValues.First <= end) ||
+                    (sortedValues.Second >= start && sortedValues.Second <= end);
+            }
+
+            var values = sortedValues.Overflow!;
+            var index = values.BinarySearch(start);
             if (index < 0)
                 index = ~index;
 
-            return index < sortedValues.Count && sortedValues[index] <= end;
+            return index < values.Count && values[index] <= end;
+        }
+
+        private struct AxisValues
+        {
+            public int Count;
+            public uint First;
+            public uint Second;
+            public List<uint>? Overflow;
+
+            public void Add(uint value)
+            {
+                if (Count == 0)
+                {
+                    First = value;
+                }
+                else if (Count == 1)
+                {
+                    Second = value;
+                }
+                else
+                {
+                    Overflow ??= [First, Second];
+                    Overflow.Add(value);
+                }
+
+                Count++;
+            }
+
+            public void Sort()
+            {
+                if (Count == 2)
+                {
+                    if (Second < First)
+                        (First, Second) = (Second, First);
+                    return;
+                }
+
+                Overflow?.Sort();
+            }
         }
     }
 }
