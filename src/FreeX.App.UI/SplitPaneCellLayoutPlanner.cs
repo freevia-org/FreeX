@@ -3,6 +3,11 @@ using System.Windows;
 
 namespace FreeX.App.UI;
 
+public interface ISplitPaneCellLayoutConsumer
+{
+    void AcceptLayout(SplitPaneCellLayout layout);
+}
+
 public static class SplitPaneCellLayoutPlanner
 {
     public static IReadOnlyList<SplitPaneCellLayout> CalculateLayouts(
@@ -10,12 +15,24 @@ public static class SplitPaneCellLayoutPlanner
         IReadOnlyList<GridRange>? mergedRegions = null,
         CellAddress? editingCell = null)
     {
+        var consumer = new SplitPaneCellLayoutCollector(viewport.SplitPanes?.Cells?.Count ?? 0);
+        VisitLayouts(viewport, mergedRegions, editingCell, ref consumer);
+        return consumer.ToLayouts();
+    }
+
+    public static void VisitLayouts<TConsumer>(
+        ViewportModel viewport,
+        IReadOnlyList<GridRange>? mergedRegions,
+        CellAddress? editingCell,
+        ref TConsumer consumer)
+        where TConsumer : struct, ISplitPaneCellLayoutConsumer
+    {
         if (viewport.SplitPanes is not { } splitPanes)
-            return [];
+            return;
 
         var cells = splitPanes.Cells ?? [];
         if (cells.Count == 0)
-            return [];
+            return;
 
         var topRows = splitPanes.TopRows ?? [];
         var leftColumns = splitPanes.LeftColumns ?? [];
@@ -30,7 +47,6 @@ public static class SplitPaneCellLayoutPlanner
         var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
         var horizontalY = dividerLayout.HorizontalY ?? GridView.ColHeaderHeight;
         var verticalX = dividerLayout.VerticalX ?? rowHeaderWidth;
-        var layouts = new List<SplitPaneCellLayout>(cells.Count);
         HashSet<(uint Row, uint Col)>? occupied = null;
 
         foreach (var cell in cells)
@@ -78,10 +94,23 @@ public static class SplitPaneCellLayoutPlanner
                 textClipRect = new Rect(x, y, renderWidth, height);
             }
 
-            layouts.Add(new SplitPaneCellLayout(cell, rect, textClipRect, region));
+            consumer.AcceptLayout(new SplitPaneCellLayout(cell, rect, textClipRect, region));
+        }
+    }
+
+    private struct SplitPaneCellLayoutCollector(int capacity) : ISplitPaneCellLayoutConsumer
+    {
+        private readonly int _capacity = capacity;
+        private List<SplitPaneCellLayout>? _layouts;
+
+        public void AcceptLayout(SplitPaneCellLayout layout)
+        {
+            _layouts ??= new List<SplitPaneCellLayout>(_capacity);
+            _layouts.Add(layout);
         }
 
-        return layouts;
+        public readonly IReadOnlyList<SplitPaneCellLayout> ToLayouts() =>
+            _layouts is { Count: > 0 } layouts ? layouts : [];
     }
 
     private static SplitPaneRegion ResolveSplitPaneRegion(bool isTopPane, bool isLeftPane) =>
@@ -116,7 +145,7 @@ public static class SplitPaneCellLayoutPlanner
 
     private static HashSet<(uint Row, uint Col)> BuildOccupiedCells(IReadOnlyList<DisplayCell> cells, CellAddress? editingCell)
     {
-        var occupied = new HashSet<(uint Row, uint Col)>();
+        var occupied = new HashSet<(uint Row, uint Col)>(cells.Count);
         foreach (var cell in cells)
         {
             if (GridView.IsOverflowOccupied(cell, editingCell))
