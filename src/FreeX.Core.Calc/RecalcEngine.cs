@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Runtime.CompilerServices;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
@@ -12,6 +13,7 @@ public sealed class RecalcEngine
 {
     private const long CompactRangeCellThreshold = 1024;
     private const int MaxDependencyPlanCacheEntries = 1024;
+    private static readonly IReadOnlySet<CellAddress> EmptyDependencyCells = FrozenSet<CellAddress>.Empty;
     private static readonly RecalcReport EmptyReport = new([], [], []);
 
     private readonly DependencyGraph _graph;
@@ -256,7 +258,7 @@ public sealed class RecalcEngine
             _dependencyPlanCache.Remove(oldest);
         }
 
-        var cells = refs.Cells.Count == 0 ? Array.Empty<CellAddress>() : refs.Cells.ToArray();
+        var cells = refs.Cells.Count == 0 ? EmptyDependencyCells : refs.Cells.ToFrozenSet();
         var ranges = refs.Ranges.Count == 0 ? Array.Empty<GridRange>() : refs.Ranges.ToArray();
 
         _dependencyPlanCache[cacheKey] = new FormulaDependencyPlan(cells, ranges, containsVolatileFunction);
@@ -599,7 +601,7 @@ public sealed class RecalcEngine
     private sealed class FormulaDependencyPlan
     {
         public FormulaDependencyPlan(
-            IReadOnlyList<CellAddress> cells,
+            IReadOnlySet<CellAddress> cells,
             IReadOnlyList<GridRange> ranges,
             bool containsVolatileFunction)
         {
@@ -608,7 +610,7 @@ public sealed class RecalcEngine
             ContainsVolatileFunction = containsVolatileFunction;
         }
 
-        public IReadOnlyList<CellAddress> Cells { get; }
+        public IReadOnlySet<CellAddress> Cells { get; }
         public IReadOnlyList<GridRange> Ranges { get; }
         public bool ContainsVolatileFunction { get; }
     }
