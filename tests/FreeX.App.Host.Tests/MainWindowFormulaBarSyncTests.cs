@@ -472,6 +472,32 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarEscape_AfterFormulaReferenceSelection_RestoresOriginalEditCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=");
+            harness.SetFormulaBarCaretIndex("=".Length);
+
+            harness.PressFormulaBarKey(Key.Down).Should().BeTrue();
+            harness.PressFormulaBarKey(Key.Escape).Should().BeTrue();
+
+            harness.FormulaBarText.Should().Be("original");
+            harness.CellText(1, 1).Should().Be("original");
+            harness.CellFormula(1, 1).Should().BeNull();
+            harness.CellText(2, 1).Should().BeNull();
+            harness.CellFormula(2, 1).Should().BeNull();
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void FormulaBarDown_WithExistingFormulaEdit_PreservesDraftAndSelection()
     {
         StaTestRunner.Run(() =>
