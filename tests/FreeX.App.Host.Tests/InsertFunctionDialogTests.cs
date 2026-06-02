@@ -1,4 +1,7 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
+using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Formula;
 
@@ -223,6 +226,28 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void InsertFunctionDialog_FunctionListDoubleClickWithoutSelectionDoesNotHandleMouseEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new InsertFunctionDialog();
+            var listBox = GetPrivateControl<ListBox>(dialog, "_listBox");
+            listBox.SelectedItem = null;
+
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+
+            listBox.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeFalse();
+            dialog.SelectedFormula.Should().BeNull();
+            dialog.DialogResult.Should().BeNull();
+        });
+    }
+
+    [Fact]
     public void DialogCommands_ExposeOnlyOkAsTheDefaultAction()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "InsertFunctionDialog.cs"));
@@ -257,5 +282,13 @@ public sealed class InsertFunctionDialogTests
 
         index.Should().BeGreaterThanOrEqualTo(0);
         return char.ToUpperInvariant(label[index + 1]);
+    }
+
+    private static T GetPrivateControl<T>(InsertFunctionDialog dialog, string fieldName)
+        where T : class
+    {
+        var field = typeof(InsertFunctionDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
 }
