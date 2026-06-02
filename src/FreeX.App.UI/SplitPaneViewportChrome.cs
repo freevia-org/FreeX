@@ -21,7 +21,8 @@ public static class SplitPaneViewportChrome
 
         if (dividerLayout.HorizontalY is { } horizontalY &&
             dividerLayout.VerticalX is { } verticalX &&
-            topRightColumns.Count > 0)
+            topRightColumns.Count > 0 &&
+            actualWidth > verticalX)
         {
             var track = new Rect(
                 verticalX,
@@ -44,7 +45,8 @@ public static class SplitPaneViewportChrome
 
         if (dividerLayout.HorizontalY is { } bottomY &&
             dividerLayout.VerticalX is { } leftX &&
-            bottomLeftRows.Count > 0)
+            bottomLeftRows.Count > 0 &&
+            actualHeight > bottomY)
         {
             var track = new Rect(
                 Math.Max(GridView.CalculateRowHeaderWidth(viewport), leftX - SplitPaneScrollbarLayoutPlanner.Thickness),
