@@ -120,14 +120,23 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Font color.</summary>
     public CellColor FontColor { get; set; } = CellColor.Black;
 
+    /// <summary>Theme-backed font color. When present, resolves against the workbook theme before falling back to <see cref="FontColor"/>.</summary>
+    public WorkbookThemeColorReference? FontThemeColor { get; set; }
+
     /// <summary>Background fill color. Null means transparent / no fill.</summary>
     public CellColor? FillColor { get; set; }
+
+    /// <summary>Theme-backed fill color. When present, resolves against the workbook theme before falling back to <see cref="FillColor"/>.</summary>
+    public WorkbookThemeColorReference? FillThemeColor { get; set; }
 
     /// <summary>Pattern rendered over the background fill.</summary>
     public CellFillPatternStyle FillPatternStyle { get; set; }
 
     /// <summary>Pattern foreground color. Null means the app default foreground.</summary>
     public CellColor? FillPatternColor { get; set; }
+
+    /// <summary>Theme-backed pattern foreground color. When present, resolves against the workbook theme before falling back to <see cref="FillPatternColor"/>.</summary>
+    public WorkbookThemeColorReference? FillPatternThemeColor { get; set; }
 
     /// <summary>Top border.</summary>
     public CellBorder BorderTop { get; set; }
@@ -195,9 +204,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
         Superscript = Superscript,
         Subscript = Subscript,
         FontColor = FontColor,
+        FontThemeColor = FontThemeColor,
         FillColor = FillColor,
+        FillThemeColor = FillThemeColor,
         FillPatternStyle = FillPatternStyle,
         FillPatternColor = FillPatternColor,
+        FillPatternThemeColor = FillPatternThemeColor,
         BorderTop = BorderTop,
         BorderRight = BorderRight,
         BorderBottom = BorderBottom,
@@ -234,9 +246,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && Superscript == other.Superscript
             && Subscript == other.Subscript
             && FontColor == other.FontColor
+            && FontThemeColor == other.FontThemeColor
             && FillColor == other.FillColor
+            && FillThemeColor == other.FillThemeColor
             && FillPatternStyle == other.FillPatternStyle
             && FillPatternColor == other.FillPatternColor
+            && FillPatternThemeColor == other.FillPatternThemeColor
             && BorderTop == other.BorderTop
             && BorderRight == other.BorderRight
             && BorderBottom == other.BorderBottom
@@ -294,9 +309,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(Superscript);
         h.Add(Subscript);
         h.Add(FontColor);
+        h.Add(FontThemeColor);
         h.Add(FillColor);
+        h.Add(FillThemeColor);
         h.Add(FillPatternStyle);
         h.Add(FillPatternColor);
+        h.Add(FillPatternThemeColor);
         h.Add(BorderTop);
         h.Add(BorderRight);
         h.Add(BorderBottom);
@@ -315,6 +333,27 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(GetListHashCode(NativeDifferentialChildXmls));
         h.Add(GetDictionaryHashCode(NativeDifferentialElementXmls));
         return h.ToHashCode();
+    }
+
+    /// <summary>Resolves the effective font color against <paramref name="theme"/>.</summary>
+    public CellColor ResolveFontColor(WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        return FontThemeColor?.Resolve(theme) ?? FontColor;
+    }
+
+    /// <summary>Resolves the effective fill color against <paramref name="theme"/>.</summary>
+    public CellColor? ResolveFillColor(WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        return FillThemeColor?.Resolve(theme) ?? FillColor;
+    }
+
+    /// <summary>Resolves the effective pattern foreground color against <paramref name="theme"/>.</summary>
+    public CellColor? ResolveFillPatternColor(WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        return FillPatternThemeColor?.Resolve(theme) ?? FillPatternColor;
     }
 
     private static int GetDictionaryHashCode(IReadOnlyDictionary<string, string>? dict)
@@ -351,7 +390,9 @@ public record StyleDiff(
     string? FontName            = null,
     double? FontSize            = null,
     CellColor? FontColor        = null,
+    WorkbookThemeColorReference? FontThemeColor = null,
     CellColor? FillColor        = null,
+    WorkbookThemeColorReference? FillThemeColor = null,
     HorizontalAlignment? HAlign = null,
     VerticalAlignment? VAlign   = null,
     bool? WrapText              = null,
@@ -368,7 +409,8 @@ public record StyleDiff(
     bool? Hidden                = null,
     bool? ClearFill             = null,
     CellFillPatternStyle? FillPatternStyle = null,
-    CellColor? FillPatternColor = null
+    CellColor? FillPatternColor = null,
+    WorkbookThemeColorReference? FillPatternThemeColor = null
 )
 {
     /// <summary>Create a StyleDiff that captures all properties of <paramref name="style"/> as explicit overrides.</summary>
@@ -382,9 +424,12 @@ public record StyleDiff(
         FontName:        style.FontName,
         FontSize:        style.FontSize,
         FontColor:       style.FontColor,
+        FontThemeColor:  style.FontThemeColor,
         FillColor:       style.FillColor,
+        FillThemeColor:  style.FillThemeColor,
         FillPatternStyle: style.FillPatternStyle,
         FillPatternColor: style.FillPatternColor,
+        FillPatternThemeColor: style.FillPatternThemeColor,
         HAlign:          style.HorizontalAlignment,
         VAlign:          style.VerticalAlignment,
         WrapText:        style.WrapText,
@@ -423,16 +468,33 @@ public record StyleDiff(
         }
         if (FontName       is not null) s.FontName      = FontName;
         if (FontSize       is not null) s.FontSize      = FontSize.Value;
-        if (FontColor      is not null) s.FontColor     = FontColor.Value;
-        if (FillColor      is not null) s.FillColor     = FillColor.Value;
+        if (FontColor      is not null)
+        {
+            s.FontColor = FontColor.Value;
+            s.FontThemeColor = null;
+        }
+        if (FontThemeColor is not null) s.FontThemeColor = FontThemeColor.Value;
+        if (FillColor      is not null)
+        {
+            s.FillColor = FillColor.Value;
+            s.FillThemeColor = null;
+        }
+        if (FillThemeColor is not null) s.FillThemeColor = FillThemeColor.Value;
         if (ClearFill      == true)
         {
             s.FillColor = null;
+            s.FillThemeColor = null;
             s.FillPatternStyle = CellFillPatternStyle.None;
             s.FillPatternColor = null;
+            s.FillPatternThemeColor = null;
         }
         if (FillPatternStyle is not null) s.FillPatternStyle = FillPatternStyle.Value;
-        if (FillPatternColor is not null) s.FillPatternColor = FillPatternColor.Value;
+        if (FillPatternColor is not null)
+        {
+            s.FillPatternColor = FillPatternColor.Value;
+            s.FillPatternThemeColor = null;
+        }
+        if (FillPatternThemeColor is not null) s.FillPatternThemeColor = FillPatternThemeColor.Value;
         if (HAlign         is not null) s.HorizontalAlignment = HAlign.Value;
         if (VAlign         is not null) s.VerticalAlignment   = VAlign.Value;
         if (WrapText       is not null) s.WrapText      = WrapText.Value;

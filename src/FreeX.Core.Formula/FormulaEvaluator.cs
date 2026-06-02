@@ -32,7 +32,10 @@ public sealed class FormulaEvaluator
     private static readonly BoolValue TrueValue = new(true);
     private static readonly BoolValue FalseValue = new(false);
 
+    private ParsedFormulaEntry? _lastParsedFormula;
     private SheetEvalContext? _singleSheetEvalContext;
+
+    private sealed record ParsedFormulaEntry(string FormulaText, FormulaNode Node);
 
     private static readonly HashSet<string> AggregateFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -183,7 +186,7 @@ public sealed class FormulaEvaluator
         try
         {
             _evalDepth = 0;
-            var ast = GetOrParseFormula(formulaText);
+            var ast = GetOrParseFormulaForInstance(formulaText);
             var context = workbook is null && currentCell is null
                 ? GetSingleSheetEvalContext(sheet)
                 : new SheetEvalContext(sheet, workbook, this, currentCell);
@@ -216,6 +219,17 @@ public sealed class FormulaEvaluator
         {
             return ErrorFromCode(ex.ErrorCode);
         }
+    }
+
+    private FormulaNode GetOrParseFormulaForInstance(string formulaText)
+    {
+        var last = _lastParsedFormula;
+        if (last is not null && string.Equals(last.FormulaText, formulaText, StringComparison.Ordinal))
+            return last.Node;
+
+        var parsed = GetOrParseFormula(formulaText);
+        _lastParsedFormula = new ParsedFormulaEntry(formulaText, parsed);
+        return parsed;
     }
 
     private SheetEvalContext GetSingleSheetEvalContext(Sheet sheet)
