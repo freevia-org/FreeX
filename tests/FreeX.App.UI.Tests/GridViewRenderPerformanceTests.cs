@@ -1062,7 +1062,11 @@ public sealed class GridViewRenderPerformanceTests
         renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel(\"Timeline\"");
         drawObjectPlaceholder.Should().Contain("double pixelsPerDip)");
         drawObjectPlaceholder.Should().Contain("GetDrawingObjectText(");
+        drawObjectPlaceholder.Should().Contain("var textClipRect = new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight);");
+        drawObjectPlaceholder.Should().Contain("dc.PushClip(GetDrawingObjectClipGeometry(textClipRect));");
         drawObjectPlaceholder.Should().NotContain("VisualTreeHelper.GetDpi(this)");
+        drawObjectPlaceholder.Should().NotContain("new RectangleGeometry");
+        drawObjectPlaceholder.Should().NotContain("GetDrawingObjectClipGeometry(new Rect");
     }
 
     [Fact]

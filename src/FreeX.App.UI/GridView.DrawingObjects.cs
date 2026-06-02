@@ -896,19 +896,22 @@ public partial class GridView
         dc.DrawRectangle(ObjectPlaceholderFill, ObjectPlaceholderPen, rect);
         DrawPlaceholderDiagonals(dc, rect);
 
+        var textWidth = Math.Max(1, rect.Width - 8);
+        var textHeight = Math.Max(1, rect.Height - 8);
+        var textClipRect = new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight);
         var text = GetDrawingObjectText(
             label,
             ObjectPlaceholderTextBrush,
             11,
-            Math.Max(1, rect.Width - 8),
-            Math.Max(1, rect.Height - 8),
+            textWidth,
+            textHeight,
             pixelsPerDip,
             TextTrimming.CharacterEllipsis);
 
         var textPoint = new Point(
             rect.Left + Math.Max(4, (rect.Width - text.Width) / 2),
             rect.Top + Math.Max(4, (rect.Height - text.Height) / 2));
-        dc.PushClip(GetDrawingObjectClipGeometry(new Rect(rect.Left + 4, rect.Top + 4, Math.Max(1, rect.Width - 8), Math.Max(1, rect.Height - 8))));
+        dc.PushClip(GetDrawingObjectClipGeometry(textClipRect));
         dc.DrawText(text, textPoint);
         dc.Pop();
     }

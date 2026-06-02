@@ -12,6 +12,7 @@ public static partial class FormulaAuditingService
     public const string InconsistentFormulaErrorCode = "InconsistentFormula";
     public const string FormulaOmitsAdjacentCellsErrorCode = "FormulaOmitsAdjacentCells";
     public const string UnlockedFormulaCellsErrorCode = "UnlockedFormulaCells";
+    public const string DataValidationErrorCode = "DataValidation";
 
     public static IReadOnlyList<CellAddress> GetDirectPrecedents(Workbook workbook, CellAddress formulaAddress)
     {

@@ -15,7 +15,7 @@ public partial class MainWindow
     {
         var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options);
         var ignoredWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var ignoredIssues = new HashSet<(CellAddress Address, string Word)>();
+        var ignoredIssues = new HashSet<SpellingIssueKey>();
 
         while (true)
         {
@@ -42,7 +42,7 @@ public partial class MainWindow
 
             if (dialog.Result.Action == SpellCheckDialogAction.Ignore)
             {
-                ignoredIssues.Add((issue.Address, issue.Word));
+                ignoredIssues.Add(SpellCheckWorkflowPlanner.CreateIssueKey(issue));
                 continue;
             }
 
@@ -64,8 +64,8 @@ public partial class MainWindow
 
             if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
             {
-                var edits = SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, issue.Word, replacement);
-                if (edits.Count > 0 && !TryExecuteSpellCheckEdits(edits))
+                var command = SpellCheckWorkflowPlanner.BuildReplaceAllCommand(issues, issue.Word, replacement);
+                if (command is not null && !TryExecuteSpellCheckCommand(command))
                     return;
 
                 UpdateViewport();
@@ -73,7 +73,7 @@ public partial class MainWindow
                 continue;
             }
 
-            if (!TryExecuteSpellCheckEdits([SpellCheckWorkflowPlanner.BuildReplacementEdit(issue, replacement)]))
+            if (!TryExecuteSpellCheckCommand(SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, replacement)))
                 return;
 
             UpdateViewport();
@@ -81,8 +81,8 @@ public partial class MainWindow
         }
     }
 
-    private bool TryExecuteSpellCheckEdits(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits) =>
-        TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Spell Check");
+    private bool TryExecuteSpellCheckCommand(IWorkbookCommand command) =>
+        TryExecuteCommand(command, "Spell Check");
 
     private void WorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e)
     {

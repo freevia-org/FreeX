@@ -198,6 +198,7 @@ public partial class MainWindow
         InfoFormat.Text = plan.Format;
         InfoFileSize.Text = plan.FileSize;
         InfoLastModified.Text = plan.LastModified;
+        InfoShareStatus.Text = plan.SharingStatus;
         InfoWorkbookProtectionSummary.Text = plan.Summary.WorkbookProtectionSummary;
         InfoActiveSheetProtectionSummary.Text = plan.Summary.ActiveSheetProtectionSummary;
         InfoStatisticsSummary.Text = plan.StatisticsSummary;

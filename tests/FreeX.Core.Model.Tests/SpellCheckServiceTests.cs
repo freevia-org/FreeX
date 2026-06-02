@@ -76,6 +76,33 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssues_ReturnsKnownMisspellingsInNotesAndThreadedComments()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("adn cell"));
+        sheet.Comments[a1] = "teh note";
+        sheet.ThreadedComments[b1] = new ThreadedComment("recieve root")
+        {
+            Replies =
+            [
+                new CommentReply("adn reply"),
+                new CommentReply("clean reply")
+            ]
+        };
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Address, issue.Word, issue.Source, issue.ReplyIndex)).Should().Equal(
+            (a1, "adn", SpellingIssueSource.CellText, -1),
+            (a1, "teh", SpellingIssueSource.Note, -1),
+            (b1, "recieve", SpellingIssueSource.ThreadedComment, -1),
+            (b1, "adn", SpellingIssueSource.ThreadedCommentReply, 0));
+    }
+
+    [Fact]
     public void FindIssuesInCell_IgnoresInternetEmailAndFileAddressSpans()
     {
         var address = new CellAddress(SheetId.New(), 1, 1);
@@ -309,6 +336,19 @@ public sealed class SpellCheckServiceTests
         var corrected = SpellCheckService.ApplyCorrectionToAllOccurrences(issue, "the");
 
         corrected.Should().Be("the THE The");
+    }
+
+    [Fact]
+    public void ApplyCorrectionToAllOccurrences_SkipsIgnoredAddressSpans()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var issue = SpellCheckService
+            .FindIssuesInCell(address, "Fix teh but leave https://teh.example.com and C:\\teh\\file.txt")
+            .First();
+
+        var corrected = SpellCheckService.ApplyCorrectionToAllOccurrences(issue, "the");
+
+        corrected.Should().Be("Fix the but leave https://teh.example.com and C:\\teh\\file.txt");
     }
 
     [Theory]
