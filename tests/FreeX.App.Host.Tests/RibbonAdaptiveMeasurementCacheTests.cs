@@ -323,10 +323,12 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         fieldsSource.Should().Contain("RibbonAppliedStateKey? _lastRibbonAdaptiveAppliedStateKey");
 
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        const string keyHelperStart = "private static RibbonAdaptiveLayoutPlanCacheEntryKey CreateRibbonAdaptiveLayoutPlanCacheEntryKey";
+        const string keyHelperEnd = "private string CreateRibbonAdaptiveMeasurementCacheKey";
         var hotPathKeyHelpers = source.Substring(
-            source.IndexOf("private static RibbonAdaptiveLayoutPlanCacheEntryKey CreateRibbonAdaptiveLayoutPlanCacheEntryKey", StringComparison.Ordinal),
-            source.IndexOf("private static string CreateRibbonAdaptiveMeasurementCacheKey", StringComparison.Ordinal) -
-            source.IndexOf("private static RibbonAdaptiveLayoutPlanCacheEntryKey CreateRibbonAdaptiveLayoutPlanCacheEntryKey", StringComparison.Ordinal));
+            source.IndexOf(keyHelperStart, StringComparison.Ordinal),
+            source.IndexOf(keyHelperEnd, StringComparison.Ordinal) -
+            source.IndexOf(keyHelperStart, StringComparison.Ordinal));
 
         hotPathKeyHelpers.Should().Contain("CreateRibbonStateSignature(");
         hotPathKeyHelpers.Should().Contain("RoundRibbonWidthToTenths(");
