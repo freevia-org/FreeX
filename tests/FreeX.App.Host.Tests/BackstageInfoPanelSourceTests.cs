@@ -41,6 +41,7 @@ public sealed class BackstageInfoPanelSourceTests
         {
             "InfoFileSize",
             "InfoLastModified",
+            "InfoShareStatus",
             "InfoWorkbookProtectionSummary",
             "InfoActiveSheetProtectionSummary"
         };
@@ -63,6 +64,7 @@ public sealed class BackstageInfoPanelSourceTests
         source.Should().Contain("var activeSheet = _workbook.GetSheet(_currentSheetId);");
         source.Should().Contain("BackstageInfoPlanner.Build(_workbook, _currentFilePath, activeSheet)");
         source.Should().Contain("InfoFileSize.Text = plan.FileSize;");
+        source.Should().Contain("InfoShareStatus.Text = plan.SharingStatus;");
         source.Should().Contain("InfoWorkbookProtectionSummary.Text = plan.Summary.WorkbookProtectionSummary;");
         source.Should().Contain("ProtectWorkbookBtn_Click(sender, e);");
     }

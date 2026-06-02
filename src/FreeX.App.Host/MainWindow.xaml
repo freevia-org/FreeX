@@ -4796,7 +4796,11 @@
                                     <TextBlock x:Name="InfoFileSize" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,12"/>
 
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_LastModified}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
-                                    <TextBlock x:Name="InfoLastModified" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,20"/>
+                                    <TextBlock x:Name="InfoLastModified" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_Share}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoShareStatus" FontSize="13" Foreground="#1F1F1F"
+                                               TextWrapping="Wrap" Margin="0,0,0,20"/>
 
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_WorkbookProtection}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
                                     <TextBlock x:Name="InfoWorkbookProtectionSummary" FontSize="13" Foreground="#1F1F1F"
