@@ -269,15 +269,20 @@ public partial class GridView
                     pixelsPerDip);
             }
 
-            var wrapMaxTextWidth = Math.Max(1, rect.Width - 4);
-            var wrapTextAlignment = hAlign switch
-            {
-                CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
-                CellHAlign.Right => TextAlignment.Right,
-                _ => TextAlignment.Left
-            };
             var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
-            var useDefaultWrappedTextLayout = !useDefaultTextLayout && wrapText && CanUseDefaultWrappedFormattedText(style);
+            var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
+            var wrapTextAlignment = TextAlignment.Left;
+            var useDefaultWrappedTextLayout = false;
+            if (!useDefaultTextLayout && wrapText)
+            {
+                wrapTextAlignment = hAlign switch
+                {
+                    CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
+                    CellHAlign.Right => TextAlignment.Right,
+                    _ => TextAlignment.Left
+                };
+                useDefaultWrappedTextLayout = CanUseDefaultWrappedFormattedText(style);
+            }
             FormattedText text;
             if (useDefaultTextLayout)
             {

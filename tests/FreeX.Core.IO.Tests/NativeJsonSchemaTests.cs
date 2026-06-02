@@ -765,6 +765,28 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonDrawingAndSparklineEntries()
+    {
+        var workbook = new Workbook("NullDrawingEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        sheet.Pictures.Add(null!);
+        sheet.TextBoxes.Add(null!);
+        sheet.DrawingShapes.Add(null!);
+        sheet.Sparklines.Add(null!);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var sheetJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single();
+        sheetJson.GetProperty("Pictures").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("TextBoxes").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("DrawingShapes").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("Sparklines").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Save_DropsNullNativeJsonChartListEntries()
     {
         var workbook = new Workbook("NullChartListEntries");
