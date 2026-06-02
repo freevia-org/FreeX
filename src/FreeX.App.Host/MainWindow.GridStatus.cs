@@ -22,7 +22,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            ApplyStatusBarDisplayState(StatusBarDisplayState.Ready(UiText.Get("MainWindow_Text_Ready")));
+            ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(UiText.Get("MainWindow_Text_Ready")));
             return;
         }
 
@@ -33,12 +33,12 @@ public partial class MainWindow
 
         if (stats.Count == 0)
         {
-            ApplyStatusBarDisplayState(StatusBarDisplayState.Ready(
+            ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
                 StatusBarCalculator.GetReadyStatusText(sheet, range.Start)));
             return;
         }
 
-        ApplyStatusBarDisplayState(StatusBarDisplayState.Stats(stats));
+        ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats));
     }
 
     private void ApplyStatusBarDisplayState(StatusBarDisplayState state)

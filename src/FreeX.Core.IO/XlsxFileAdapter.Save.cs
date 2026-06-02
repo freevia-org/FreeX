@@ -8,8 +8,9 @@ public sealed partial class XlsxFileAdapter
 {
     public void Save(Workbook workbook, Stream stream)
     {
+        string? currentModelFingerprint = null;
         if (SourcePackages.TryGetValue(workbook, out var sourcePackage) &&
-            sourcePackage.Matches(workbook))
+            sourcePackage.Matches(workbook, out currentModelFingerprint))
         {
             sourcePackage.CopyTo(stream);
             return;
@@ -276,14 +277,14 @@ public sealed partial class XlsxFileAdapter
             stream.Position = 0;
             stream.SetLength(0);
             xlWorkbook.SaveAs(stream);
-            ApplyPackagePostProcessing(workbook, stream);
+            ApplyPackagePostProcessing(workbook, stream, currentModelFingerprint);
             stream.Position = stream.Length;
             return;
         }
 
         using var packageStream = new MemoryStream();
         xlWorkbook.SaveAs(packageStream);
-        ApplyPackagePostProcessing(workbook, packageStream);
+        ApplyPackagePostProcessing(workbook, packageStream, currentModelFingerprint);
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
     }
