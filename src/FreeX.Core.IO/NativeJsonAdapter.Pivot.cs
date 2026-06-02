@@ -299,7 +299,7 @@ public sealed partial class NativeJsonAdapter
             RefreshedVersion = cache.RefreshedVersion,
             RefreshedBy = cache.RefreshedBy,
             RefreshedDateIso = cache.RefreshedDateIso,
-            Fields = cache.Fields.Select(FromPivotCacheField).ToList()
+            Fields = cache.Fields.OfType<PivotCacheFieldModel>().Select(FromPivotCacheField).ToList()
         };
 
     private static PivotCacheFieldDto FromPivotCacheField(PivotCacheFieldModel field) =>
@@ -393,15 +393,15 @@ public sealed partial class NativeJsonAdapter
             GrandTotalCaption = pivot.GrandTotalCaption,
             MissingCaption = pivot.MissingCaption,
             ErrorCaption = pivot.ErrorCaption,
-            RowFields = pivot.RowFields.Select(FromPivotField).ToList(),
-            ColumnFields = pivot.ColumnFields.Select(FromPivotField).ToList(),
-            PageFields = pivot.PageFields.Select(FromPivotField).ToList(),
-            DataFields = pivot.DataFields.Select(FromPivotDataField).ToList(),
-            CalculatedFields = pivot.CalculatedFields.Select(FromPivotCalculatedField).ToList(),
-            CalculatedItems = pivot.CalculatedItems.Select(FromPivotCalculatedItem).ToList(),
-            LabelFilters = pivot.LabelFilters.Select(FromPivotLabelFilter).ToList(),
-            ValueFilters = pivot.ValueFilters.Select(FromPivotValueFilter).ToList(),
-            Sorts = pivot.Sorts.Select(FromPivotSort).ToList()
+            RowFields = pivot.RowFields.OfType<PivotFieldModel>().Select(FromPivotField).ToList(),
+            ColumnFields = pivot.ColumnFields.OfType<PivotFieldModel>().Select(FromPivotField).ToList(),
+            PageFields = pivot.PageFields.OfType<PivotFieldModel>().Select(FromPivotField).ToList(),
+            DataFields = pivot.DataFields.OfType<PivotDataFieldModel>().Select(FromPivotDataField).ToList(),
+            CalculatedFields = pivot.CalculatedFields.OfType<PivotCalculatedFieldModel>().Select(FromPivotCalculatedField).ToList(),
+            CalculatedItems = pivot.CalculatedItems.OfType<PivotCalculatedItemModel>().Select(FromPivotCalculatedItem).ToList(),
+            LabelFilters = pivot.LabelFilters.OfType<PivotLabelFilterModel>().Select(FromPivotLabelFilter).ToList(),
+            ValueFilters = pivot.ValueFilters.OfType<PivotValueFilterModel>().Select(FromPivotValueFilter).ToList(),
+            Sorts = pivot.Sorts.OfType<PivotSortModel>().Select(FromPivotSort).ToList()
         };
     }
 
