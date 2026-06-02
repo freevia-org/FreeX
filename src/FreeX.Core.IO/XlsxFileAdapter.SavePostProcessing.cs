@@ -6,7 +6,10 @@ namespace FreeX.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
-    private static void ApplyPackagePostProcessing(Workbook workbook, Stream packageStream)
+    private static void ApplyPackagePostProcessing(
+        Workbook workbook,
+        Stream packageStream,
+        string? currentModelFingerprint = null)
     {
         var featurePlan = XlsxPostProcessingFeaturePlan.Create(workbook);
         XlsxWorkbookWorksheetPathMap? worksheetPathMap = null;
@@ -253,7 +256,7 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream, workbook));
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream, workbook, currentModelFingerprint));
 
         void SaveSourcePackageIndependentPostProcessingMetadata()
         {
