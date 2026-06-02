@@ -31,6 +31,28 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Fact]
+    public void LexerIdentifierScanning_AvoidsDuplicateIdentifierStringAllocation()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "Lexer.cs"));
+        var identifierScanner = source[
+            source.IndexOf("private Token ReadIdentifierOrRef", StringComparison.Ordinal)..
+            source.IndexOf("private Token ReadQuotedSheetQualifier", StringComparison.Ordinal)];
+        var structuredSelectorScanner = source[
+            source.IndexOf("private Token ReadStructuredReferenceSelector()", StringComparison.Ordinal)..
+            source.IndexOf("private Token ReadIdentifierOrRef", StringComparison.Ordinal)];
+
+        identifierScanner.Should().Contain(
+            "_text.AsSpan(start, _pos - start)",
+            "identifier scanning should classify from the formula text span and allocate only the final token value");
+        identifierScanner.Should().NotContain(
+            "var value = _text[start.._pos]",
+            "slicing to a string before uppercasing creates duplicate identifier string allocations");
+        structuredSelectorScanner.Should().Contain(
+            "ReadStructuredReferenceSelectorSlow(start)",
+            "simple structured selectors should avoid StringBuilder while preserving nested/escaped selector handling");
+    }
+
+    [Fact]
     public void RepeatedFormulaTextEvaluation_ReusesParsedAst()
     {
         var evaluator = new FormulaEvaluator();
@@ -156,7 +178,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         node.Should().BeOfType<BinaryOpNode>();
         _output.WriteLine(
             $"PERF parser repeated identifier formula iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(110_000_000);
+        allocatedBytes.Should().BeLessThan(94_000_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
