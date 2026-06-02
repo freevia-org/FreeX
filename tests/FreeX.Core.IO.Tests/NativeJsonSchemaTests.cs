@@ -1088,7 +1088,10 @@ public sealed class NativeJsonSchemaTests
         {
             AppliesTo = GridRange.Parse("A1:A3", sheet.Id),
             RuleType = CfRuleType.IconSet,
-            IconSetStyle = "3Arrows"
+            IconSetStyle = "3Arrows",
+            NativeChildXmls = [null!, " ", "<x:ext />"],
+            NativePayloadChildXmls = [null!, "", "<x:payload />"],
+            NativeContainerChildXmls = [null!, " ", "<x:container />"]
         };
         format.IconSetThresholds.Add(null!);
         format.IconSetThresholds.Add(new CfThresholdModel(CfThresholdType.Number, "5"));
@@ -1106,6 +1109,48 @@ public sealed class NativeJsonSchemaTests
             .Should().ContainSingle().Which.GetProperty("Value").GetString().Should().Be("5");
         formatJson.GetProperty("IconOverrides").EnumerateArray()
             .Should().ContainSingle().Which.GetProperty("IconSet").GetString().Should().Be("3Arrows");
+        formatJson.GetProperty("NativeChildXmls").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("<x:ext />");
+        formatJson.GetProperty("NativePayloadChildXmls").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("<x:payload />");
+        formatJson.GetProperty("NativeContainerChildXmls").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("<x:container />");
+    }
+
+    [Fact]
+    public void Load_DropsNullNativeJsonConditionalFormatNativeChildXmlEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullConditionalFormatNativeChildXmls",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "ConditionalFormats": [
+                    {
+                      "AppliesTo": "A1:A3",
+                      "RuleType": 6,
+                      "IconSetStyle": "3Arrows",
+                      "NativeChildXmls": [ null, " ", "<x:ext />" ],
+                      "NativePayloadChildXmls": [ null, "", "<x:payload />" ],
+                      "NativeContainerChildXmls": [ null, " ", "<x:container />" ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var format = new NativeJsonAdapter().Load(stream).GetSheetAt(0).ConditionalFormats
+            .Should().ContainSingle().Subject;
+
+        format.NativeChildXmls.Should().ContainSingle().Which.Should().Be("<x:ext />");
+        format.NativePayloadChildXmls.Should().ContainSingle().Which.Should().Be("<x:payload />");
+        format.NativeContainerChildXmls.Should().ContainSingle().Which.Should().Be("<x:container />");
     }
 
     [Fact]
