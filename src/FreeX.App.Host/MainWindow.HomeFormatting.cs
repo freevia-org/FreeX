@@ -425,9 +425,23 @@ public partial class MainWindow
             return;
 
         var mode = _borderDrawMode;
+        var style = _borderPickerStyle;
+        var color = _borderPickerColor;
         _borderDrawMode = BorderDrawMode.None;
         SheetGrid.SelectedRange = range;
-        ApplyStyleDiff(BorderDrawPlanner.CreateDiff(mode, _borderPickerStyle, _borderPickerColor));
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                BorderDrawPlanner.CommandTitle(mode),
+                sheetId => BorderDrawPlanner.CreateCommand(
+                    sheetId,
+                    SheetGrid.SelectedRange ?? range,
+                    mode,
+                    style,
+                    color)))
+            return;
+
+        UpdateViewport();
+        RefreshToolbar();
         RefreshStatusBar();
     }
 
