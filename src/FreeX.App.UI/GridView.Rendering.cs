@@ -317,8 +317,12 @@ public partial class GridView
             };
             textY = Math.Max(rect.Top, textY);
 
-            dc.PushClip(GetCellClipGeometry(textClipRect));
-            dc.DrawText(text, new Point(Math.Round(textX), Math.Round(textY)));
+            var textPoint = new Point(Math.Round(textX), Math.Round(textY));
+            var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textPoint);
+            if (shouldClipText)
+                dc.PushClip(GetCellClipGeometry(textClipRect));
+
+            dc.DrawText(text, textPoint);
 
             if (style?.DoubleUnderline == true)
             {
@@ -328,7 +332,8 @@ public partial class GridView
                 dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
             }
 
-            dc.Pop();
+            if (shouldClipText)
+                dc.Pop();
             dc.Pop();
         }
     }

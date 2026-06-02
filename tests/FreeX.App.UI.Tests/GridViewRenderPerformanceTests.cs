@@ -1157,8 +1157,28 @@ public sealed class GridViewRenderPerformanceTests
         renderSplitPaneCells.Should().Contain("var textClipRect = layout.TextClipRect;");
         conditionalIconBlock.Should().Contain("rect = iconLayout.TextRect;");
         conditionalIconBlock.Should().Contain("textClipRect = AdjustConditionalIconTextClipRect(layout.TextClipRect, rect);");
+        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textPoint);");
+        renderSplitPaneCells.Should().Contain("if (shouldClipText)");
         renderSplitPaneCells.Should().Contain("dc.PushClip(GetCellClipGeometry(textClipRect));");
         renderSplitPaneCells.Should().Contain("private static Rect AdjustConditionalIconTextClipRect(Rect clipRect, Rect textRect)");
+    }
+
+    [Fact]
+    public void RenderSplitPaneCells_OnlyPushesTextClipWhenTextNeedsClipping()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("var textPoint = new Point(Math.Round(textX), Math.Round(textY));");
+        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textPoint);");
+        renderSplitPaneCells.IndexOf("dc.PushClip(GetCellClipGeometry(textClipRect));", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSplitPaneCells.IndexOf("dc.DrawText(text, textPoint);", StringComparison.Ordinal));
+        renderSplitPaneCells.LastIndexOf("dc.Pop();", StringComparison.Ordinal)
+            .Should()
+            .BeGreaterThan(renderSplitPaneCells.IndexOf("dc.DrawText(text, textPoint);", StringComparison.Ordinal));
     }
 
     [Fact]
