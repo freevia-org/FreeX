@@ -12,6 +12,7 @@ namespace FreeX.Core.Model.Tests;
 /// </summary>
 public sealed class CommandBusUndoByteBudgetTests
 {
+    private const int MaxUndoByteBudget = 52_428_800;
     private static readonly WorkbookId WbId = WorkbookId.New();
 
     // ── helper stubs ──────────────────────────────────────────────────────────
@@ -23,6 +24,22 @@ public sealed class CommandBusUndoByteBudgetTests
         public int EstimatedBytes => bytes;
         public CommandOutcome Apply(ICommandContext ctx) => new(true);
         public void Revert(ICommandContext ctx) { }
+    }
+
+    private sealed class MutableSizedCommand(int bytes) : IWorkbookCommand, IEstimatesMemory
+    {
+        public string Label => $"MutableSized({EstimatedBytes})";
+        public int EstimatedBytes { get; set; } = bytes;
+        public CommandOutcome Apply(ICommandContext ctx) => new(true);
+        public void Revert(ICommandContext ctx) { }
+    }
+
+    private sealed class MutableSizedThrowingRevertCommand(int bytes) : IWorkbookCommand, IEstimatesMemory
+    {
+        public string Label => $"MutableSizedThrowingRevert({EstimatedBytes})";
+        public int EstimatedBytes { get; set; } = bytes;
+        public CommandOutcome Apply(ICommandContext ctx) => new(true);
+        public void Revert(ICommandContext ctx) => throw new InvalidOperationException("simulated revert failure");
     }
 
     /// <summary>A no-op command with no IEstimatesMemory — falls back to default 200 bytes.</summary>
@@ -87,6 +104,47 @@ public sealed class CommandBusUndoByteBudgetTests
 
         // The undo stack is empty — byte tracking was correct throughout.
         bus.CanUndo(WbId).Should().BeFalse("all bytes should be subtracted after a successful undo");
+    }
+
+    [Fact]
+    public void CommandStack_RedoReusesOriginalByteEstimateWhenCommandEstimateChanges()
+    {
+        var bus = MakeBus();
+        var command = new MutableSizedCommand(1);
+
+        bus.Execute(WbId, command).Success.Should().BeTrue();
+        bus.Undo(WbId).Success.Should().BeTrue();
+
+        command.EstimatedBytes = MaxUndoByteBudget;
+
+        bus.Redo(WbId).Success.Should().BeTrue();
+        bus.Execute(WbId, new SizedCommand(1)).Success.Should().BeTrue();
+
+        var undoCount = 0;
+        while (bus.CanUndo(WbId))
+        {
+            bus.Undo(WbId).Success.Should().BeTrue();
+            undoCount++;
+        }
+
+        undoCount.Should().Be(2, "redo should restore the entry's original byte estimate");
+    }
+
+    [Fact]
+    public void CommandStack_FailedUndoRollbackReusesOriginalByteEstimateWhenCommandEstimateChanges()
+    {
+        var bus = MakeBus();
+        var command = new MutableSizedThrowingRevertCommand(1);
+
+        bus.Execute(WbId, command).Success.Should().BeTrue();
+        command.EstimatedBytes = MaxUndoByteBudget;
+
+        bus.Undo(WbId).Success.Should().BeFalse();
+        bus.Execute(WbId, new SizedCommand(1)).Success.Should().BeTrue();
+
+        bus.Undo(WbId).Success.Should().BeTrue();
+        bus.CanUndo(WbId).Should().BeTrue(
+            "failed undo rollback should restore the entry's original byte estimate");
     }
 
     [Fact]
