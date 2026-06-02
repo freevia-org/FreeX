@@ -1129,6 +1129,24 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderSplitPaneCells_ClipsConditionalIconTextToAdjustedTextRect()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+        var conditionalIconBlock = renderSplitPaneCells[
+            renderSplitPaneCells.IndexOf("if (cell.ConditionalIcon is { } splitIcon)", StringComparison.Ordinal)..
+            renderSplitPaneCells.IndexOf("var hAlign = style?.HorizontalAlignment", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("var textClipRect = layout.TextClipRect;");
+        conditionalIconBlock.Should().Contain("rect = iconLayout.TextRect;");
+        conditionalIconBlock.Should().Contain("textClipRect = AdjustConditionalIconTextClipRect(layout.TextClipRect, rect);");
+        renderSplitPaneCells.Should().Contain("dc.PushClip(GetCellClipGeometry(textClipRect));");
+        renderSplitPaneCells.Should().Contain("private static Rect AdjustConditionalIconTextClipRect(Rect clipRect, Rect textRect)");
+    }
+
+    [Fact]
     public void RenderSplitPaneCells_UsesWrappedTextLayoutCacheForDefaultWrappedCells()
     {
         var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));

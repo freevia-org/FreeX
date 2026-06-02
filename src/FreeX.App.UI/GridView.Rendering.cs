@@ -229,6 +229,7 @@ public partial class GridView
                 continue;
             }
 
+            var textClipRect = layout.TextClipRect;
             if (cell.ConditionalIcon is { } splitIcon)
             {
                 var iconLayout = CalculateConditionalIconCellLayout(rect, splitIcon);
@@ -240,6 +241,7 @@ public partial class GridView
                 }
 
                 rect = iconLayout.TextRect;
+                textClipRect = AdjustConditionalIconTextClipRect(layout.TextClipRect, rect);
             }
 
             var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
@@ -313,11 +315,21 @@ public partial class GridView
                 _ => rect.Top + (rect.Height - text.Height) / 2
             };
 
-            dc.PushClip(GetCellClipGeometry(layout.TextClipRect));
+            dc.PushClip(GetCellClipGeometry(textClipRect));
             dc.DrawText(text, new Point(Math.Round(textX), Math.Round(Math.Max(rect.Top, textY))));
             dc.Pop();
             dc.Pop();
         }
+    }
+
+    private static Rect AdjustConditionalIconTextClipRect(Rect clipRect, Rect textRect)
+    {
+        var left = Math.Max(clipRect.Left, textRect.Left);
+        return new Rect(
+            left,
+            textRect.Top,
+            Math.Max(0, clipRect.Right - left),
+            textRect.Height);
     }
 
     private static RectangleGeometry FrozenClipGeometry(Rect rect)
