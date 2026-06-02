@@ -87,6 +87,17 @@ public partial class GridView
         anchor.Row <= lastRenderableRow &&
         anchor.Col <= lastRenderableColumn;
 
+    private static bool CanAnchoredObjectReachDrawingViewport(
+        DrawingAnchorRange anchor,
+        uint lastRenderableRow,
+        uint lastRenderableColumn) =>
+        lastRenderableRow > 0 &&
+        lastRenderableColumn > 0 &&
+        anchor.From.Row != uint.MaxValue &&
+        anchor.From.Column != uint.MaxValue &&
+        anchor.From.Row < lastRenderableRow &&
+        anchor.From.Column < lastRenderableColumn;
+
     private static bool NeedsDrawingViewportCull(
         Rect rect,
         double rotationDegrees,
@@ -446,12 +457,14 @@ public partial class GridView
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
         var metricLookups = GetRenderMetricLookups(Viewport);
         if (NativeSlicers is not null)
         {
             foreach (var slicer in NativeSlicers)
             {
                 if (slicer.DrawingAnchor is not { } anchor ||
+                    !CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn) ||
                     !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                     continue;
 
@@ -468,6 +481,7 @@ public partial class GridView
             foreach (var timeline in NativeTimelines)
             {
                 if (timeline.DrawingAnchor is not { } anchor ||
+                    !CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn) ||
                     !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                     continue;
 
@@ -795,6 +809,7 @@ public partial class GridView
             foreach (var slicer in NativeSlicers)
             {
                 if (slicer.DrawingAnchor is { } anchor &&
+                    CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn) &&
                     TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
@@ -811,6 +826,7 @@ public partial class GridView
             foreach (var timeline in NativeTimelines)
             {
                 if (timeline.DrawingAnchor is { } anchor &&
+                    CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn) &&
                     TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
