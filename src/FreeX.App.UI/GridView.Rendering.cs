@@ -376,6 +376,9 @@ public partial class GridView
                 topRightClip,
                 bottomLeftClip,
                 bottomRightClip);
+            if (clipGeometry.Rect.Width <= 0 || clipGeometry.Rect.Height <= 0)
+                return;
+
             dc.PushClip(clipGeometry);
             grid.RenderSplitPaneCell(dc, layout, gridPen, pixelsPerDip);
             dc.Pop();
