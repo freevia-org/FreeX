@@ -1594,6 +1594,40 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsMalformedNativeJsonSparklineEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "MalformedSparklines",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Sparklines": [
+                    null,
+                    { "DataRange": "A1:C1", "Location": "D1", "Kind": 1 },
+                    { "DataRange": "not-a-range", "Location": "D2", "Kind": 0 },
+                    { "DataRange": "A3:C3", "Location": "not-an-address", "Kind": 0 },
+                    { "DataRange": "A4:C4", "Location": "D4", "Kind": 99 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sparkline = new NativeJsonAdapter().Load(stream).GetSheetAt(0).Sparklines
+            .Should().ContainSingle().Subject;
+
+        sparkline.DataRange.Start.ToA1().Should().Be("A1");
+        sparkline.DataRange.End.ToA1().Should().Be("C1");
+        sparkline.Location.ToA1().Should().Be("D1");
+        sparkline.Kind.Should().Be(SparklineKind.Column);
+    }
+
+    [Fact]
     public void Save_DropsNullNativeJsonPivotTableEntries()
     {
         var workbook = new Workbook("NullPivotTableEntries");
