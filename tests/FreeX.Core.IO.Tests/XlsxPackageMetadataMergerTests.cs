@@ -181,6 +181,32 @@ public sealed class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void CopyUnknownPackageParts_SkipsGeneratedPartWithCaseEquivalentName()
+    {
+        using var sourcePackage = new MemoryStream();
+        using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(sourceArchive, "xl/drawings/vmlDrawing2.vml", "source");
+        }
+
+        sourcePackage.Position = 0;
+        using var targetPackage = new MemoryStream();
+        using (var generatedArchive = new ZipArchive(targetPackage, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(generatedArchive, "xl/drawings/vmldrawing2.vml", "generated");
+        }
+
+        targetPackage.Position = 0;
+        using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(source, target);
+
+        generatedEntriesBeforeMerge.Should().Contain("xl/drawings/vmldrawing2.vml");
+        target.Entries.Select(entry => entry.FullName).Should().Equal("xl/drawings/vmldrawing2.vml");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesWhitespacePaddedInternalTargetsForCopiedParts()
     {
         using var sourcePackage = CreatePackageWithWhitespacePaddedInternalMediaRelationship();

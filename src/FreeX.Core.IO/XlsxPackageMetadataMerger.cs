@@ -13,6 +13,7 @@ internal static class XlsxPackageMetadataMerger
         var generatedEntriesBeforeMerge = targetArchive.Entries
             .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var targetEntryNames = new HashSet<string>(generatedEntriesBeforeMerge, StringComparer.OrdinalIgnoreCase);
 
         foreach (var sourceEntry in sourceArchive.Entries)
         {
@@ -22,10 +23,11 @@ internal static class XlsxPackageMetadataMerger
                 continue;
             if (IsPackageMetadataEntry(sourceEntryName))
                 continue;
-            if (targetArchive.GetEntry(sourceEntryName) is not null)
+            if (targetEntryNames.Contains(sourceEntryName))
                 continue;
 
             CopyEntry(sourceEntry, targetArchive, sourceEntryName);
+            targetEntryNames.Add(sourceEntryName);
         }
 
         return generatedEntriesBeforeMerge;
@@ -36,6 +38,7 @@ internal static class XlsxPackageMetadataMerger
 
     private static void CopyEntry(ZipArchiveEntry sourceEntry, ZipArchive targetArchive, string targetEntryName)
     {
+        DeleteEntries(targetArchive, targetEntryName);
         var targetEntry = targetArchive.CreateEntry(targetEntryName, CompressionLevel.Optimal);
         targetEntry.LastWriteTime = sourceEntry.LastWriteTime;
         using var sourceStream = sourceEntry.Open();
@@ -116,7 +119,7 @@ internal static class XlsxPackageMetadataMerger
             if (IsExcludedSourcePart(sourceEntry.FullName, excludedSourceParts))
                 continue;
 
-            var targetEntry = targetArchive.GetEntry(sourceEntry.FullName);
+            var targetEntry = GetEntry(targetArchive, sourceEntry.FullName);
             if (targetEntry is null)
             {
                 if (RelationshipsPartTargetsOnlyExcludedParts(sourceEntry, excludedSourceParts))
@@ -169,7 +172,32 @@ internal static class XlsxPackageMetadataMerger
             }
 
             if (changed)
-                XlsxPackageXmlEditor.ReplaceXml(targetArchive, sourceEntry.FullName, targetXml);
+                XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetEntry.FullName, targetXml);
+        }
+    }
+
+    private static ZipArchiveEntry? GetEntry(ZipArchive archive, string entryName)
+    {
+        var normalizedEntryName = XlsxPackagePath.NormalizeZipPath(entryName.Replace('\\', '/'));
+        return archive.GetEntry(entryName) ??
+               archive.Entries.FirstOrDefault(entry =>
+                   string.Equals(
+                       XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')),
+                       normalizedEntryName,
+                       StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void DeleteEntries(ZipArchive archive, string entryName)
+    {
+        var normalizedEntryName = XlsxPackagePath.NormalizeZipPath(entryName.Replace('\\', '/'));
+        foreach (var entry in archive.Entries
+                     .Where(candidate => string.Equals(
+                         XlsxPackagePath.NormalizeZipPath(candidate.FullName.Replace('\\', '/')),
+                         normalizedEntryName,
+                         StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            entry.Delete();
         }
     }
 

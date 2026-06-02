@@ -138,14 +138,34 @@ internal static class XlsxPivotXmlReferencePreserver
             if (sourcePivotDefinitions.Count == 0)
                 continue;
 
+            var sourceWorksheetRels = XlsxRelationshipReader.LoadTargets(
+                sourceArchive,
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+                sourceWorksheetPath,
+                packageRelNs);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+            var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
+            var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
+                ? XlsxPackageXmlEditor.LoadXml(targetWorksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+
             var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
             var targetRoot = targetWorksheetXml.Root;
             if (targetRoot is null || targetRoot.Elements(workbookNs + "pivotTableDefinition").Any())
                 continue;
 
             foreach (var pivotDefinition in sourcePivotDefinitions)
-                targetRoot.Add(new XElement(pivotDefinition));
+            {
+                targetRoot.Add(RemapPivotDefinitionRelationship(
+                    pivotDefinition,
+                    sourceWorksheetRels,
+                    targetWorksheetRelsXml,
+                    targetWorksheetPath,
+                    relNs,
+                    packageRelNs));
+            }
 
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
     }
@@ -175,16 +195,62 @@ internal static class XlsxPivotXmlReferencePreserver
             if (sourcePivotDefinitions.Count == 0)
                 continue;
 
+            var sourceWorksheetRels = XlsxRelationshipReader.LoadTargets(
+                sourceArchive,
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+                sourceWorksheetPath,
+                context.PackageRelNs);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+            var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
+            var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
+                ? XlsxPackageXmlEditor.LoadXml(targetWorksheetRelsEntry)
+                : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+
             var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
             var targetRoot = targetWorksheetXml.Root;
             if (targetRoot is null || targetRoot.Elements(context.WorkbookNs + "pivotTableDefinition").Any())
                 continue;
 
             foreach (var pivotDefinition in sourcePivotDefinitions)
-                targetRoot.Add(new XElement(pivotDefinition));
+            {
+                targetRoot.Add(RemapPivotDefinitionRelationship(
+                    pivotDefinition,
+                    sourceWorksheetRels,
+                    targetWorksheetRelsXml,
+                    targetWorksheetPath,
+                    context.RelNs,
+                    context.PackageRelNs));
+            }
 
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static XElement RemapPivotDefinitionRelationship(
+        XElement sourcePivotDefinition,
+        IReadOnlyDictionary<string, string> sourceWorksheetRels,
+        XDocument targetWorksheetRelsXml,
+        string targetWorksheetPath,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var pivotDefinition = new XElement(sourcePivotDefinition);
+        var sourceRelId = sourcePivotDefinition.Attribute(relNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(sourceRelId) ||
+            !sourceWorksheetRels.TryGetValue(sourceRelId, out var pivotTablePath))
+        {
+            return pivotDefinition;
+        }
+
+        var targetRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+            targetWorksheetRelsXml,
+            packageRelNs,
+            targetWorksheetPath,
+            pivotTablePath,
+            PivotTableRelationshipType);
+        pivotDefinition.SetAttributeValue(relNs + "id", targetRelId);
+        return pivotDefinition;
     }
 
     private static bool HasWorksheetPivotTableRelationships(
