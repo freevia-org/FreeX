@@ -392,6 +392,28 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void HitTestViewportCell_ReusesRowHeaderWidthWithinHitTest()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var hitTestViewportCell = source[
+            source.IndexOf("public static CellAddress? HitTestViewportCell", StringComparison.Ordinal)..
+            source.IndexOf("public static SplitPaneRegion HitTestSplitPaneRegion", StringComparison.Ordinal)];
+
+        hitTestViewportCell.Should().Contain("var rowHeaderWidth = CalculateRowHeaderWidth(viewport);");
+        hitTestViewportCell.Should().Contain("if (pos.X < rowHeaderWidth || pos.Y < ColHeaderHeight)");
+        hitTestViewportCell.Should().Contain(": rowHeaderWidth;");
+        hitTestViewportCell.Should().Contain("ColHeaderHeight, rowHeaderWidth)");
+        hitTestViewportCell.IndexOf("var rowHeaderWidth = CalculateRowHeaderWidth(viewport);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal));
+        hitTestViewportCell[
+            hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal)..]
+            .Should()
+            .NotContain("CalculateRowHeaderWidth(viewport)");
+    }
+
+    [Fact]
     public void HitTestSplitPaneRegion_ClassifiesSplitQuadrants()
     {
         var viewport = SplitViewport();
