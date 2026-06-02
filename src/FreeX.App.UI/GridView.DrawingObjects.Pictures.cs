@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 
@@ -59,6 +58,9 @@ public partial class GridView
                             Math.Max(0.01, 1 - picture.CropLeft - picture.CropRight),
                             Math.Max(0.01, 1 - picture.CropTop - picture.CropBottom))
                     };
+                    if (brush.CanFreeze)
+                        brush.Freeze();
+
                     dc.DrawRectangle(brush, null, rect);
                 }
                 else

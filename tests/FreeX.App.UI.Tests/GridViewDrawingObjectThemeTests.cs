@@ -413,6 +413,8 @@ public sealed class GridViewDrawingObjectThemeTests
         source.Should().Contain("private static readonly Brush PictureSelectionBrush = MakeBrush");
         source.Should().Contain("private static readonly Pen PictureSelectionPen = CreateFrozenPen");
         renderPictures.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        renderPictures.Should().Contain("if (brush.CanFreeze)");
+        renderPictures.Should().Contain("brush.Freeze();");
         renderPictures.Should().Contain("GetDrawingObjectText(");
         renderPictures.Should().Contain("pixelsPerDip,");
         renderPictures.Should().Contain("TextTrimming.CharacterEllipsis");
