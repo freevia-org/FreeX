@@ -8,6 +8,19 @@ namespace FreeX.Core.Commands;
 
 public static partial class FormulaAuditingService
 {
+    private const string OmittedAdjacentCellsAggregateFunctionPattern = "SUM|AVERAGE|COUNTA|COUNT|MIN|MAX|PRODUCT";
+
+    private static readonly string[] OmittedAdjacentCellsAggregateFunctions =
+    [
+        "SUM",
+        "AVERAGE",
+        "COUNT",
+        "COUNTA",
+        "MIN",
+        "MAX",
+        "PRODUCT"
+    ];
+
     public static IReadOnlyList<FormulaErrorInfo> FindFormulaErrors(Workbook workbook, SheetId? sheetId = null)
     {
         var result = new List<FormulaErrorInfo>();
@@ -538,10 +551,10 @@ public static partial class FormulaAuditingService
         if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
             return false;
 
-        if (cell.FormulaText.IndexOf("SUM", StringComparison.OrdinalIgnoreCase) < 0)
+        if (!ContainsOmittedAdjacentCellsAggregateFunction(cell.FormulaText))
             return false;
 
-        foreach (var ranges in ExtractSumRangeGroups(sheetId, cell.FormulaText))
+        foreach (var ranges in ExtractAggregateRangeGroups(sheetId, cell.FormulaText))
         {
             var sameSheetRanges = ranges
                 .Where(range => range.Start.Sheet == range.End.Sheet)
@@ -569,7 +582,7 @@ public static partial class FormulaAuditingService
                 }
             }
 
-            if (HasOmittedValuesBetweenSumArguments(workbook, sameSheetRanges))
+            if (HasOmittedValuesBetweenAggregateArguments(workbook, sameSheetRanges))
             {
                 return true;
             }
@@ -578,7 +591,11 @@ public static partial class FormulaAuditingService
         return false;
     }
 
-    private static bool HasOmittedValuesBetweenSumArguments(Workbook workbook, IReadOnlyList<GridRange> ranges)
+    private static bool ContainsOmittedAdjacentCellsAggregateFunction(string formulaText) =>
+        OmittedAdjacentCellsAggregateFunctions.Any(functionName =>
+            formulaText.Contains(functionName, StringComparison.OrdinalIgnoreCase));
+
+    private static bool HasOmittedValuesBetweenAggregateArguments(Workbook workbook, IReadOnlyList<GridRange> ranges)
     {
         foreach (var group in ranges.GroupBy(range => (range.Start.Sheet, range.Start.Col)))
         {
@@ -647,15 +664,15 @@ public static partial class FormulaAuditingService
     private static bool IsSingleRowRange(GridRange range) =>
         range.Start.Row == range.End.Row;
 
-    private static IEnumerable<IReadOnlyList<GridRange>> ExtractSumRangeGroups(SheetId sheetId, string formulaText)
+    private static IEnumerable<IReadOnlyList<GridRange>> ExtractAggregateRangeGroups(SheetId sheetId, string formulaText)
     {
-        foreach (Match sumMatch in Regex.Matches(
+        foreach (Match aggregateMatch in Regex.Matches(
                      formulaText,
-                     @"\bSUM\s*\((?<args>[^)]*)\)",
+                     $@"\b(?:{OmittedAdjacentCellsAggregateFunctionPattern})\s*\((?<args>[^)]*)\)",
                      RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
             var ranges = new List<GridRange>();
-            foreach (var token in sumMatch.Groups["args"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            foreach (var token in aggregateMatch.Groups["args"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             {
                 if (TryParseLocalRange(sheetId, token, out var range))
                     ranges.Add(range);
