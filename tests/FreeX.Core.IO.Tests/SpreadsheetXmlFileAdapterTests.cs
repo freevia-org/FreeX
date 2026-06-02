@@ -3872,7 +3872,9 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
         var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
 
-        act.Should().Throw<Exception>();
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access*")
+            .WithInnerException<XsltException>();
     }
 
     [Fact]
