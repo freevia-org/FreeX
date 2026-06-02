@@ -313,9 +313,12 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
                 return new CommandOutcome(false, "Scenario result cells must belong to this workbook.");
         }
 
+        var sheetOrder = ScenarioCommandHelpers.BuildSheetOrder(ctx.Workbook);
+        var changingCells = ScenarioCommandHelpers.CollectOrderedChangingCells(ctx.Workbook.Scenarios, sheetOrder);
+
         var report = ctx.Workbook.AddSheet(GetUniqueReportSheetName(ctx.Workbook));
         _reportSheetId = report.Id;
-
+        report.EnsureCellCapacity(EstimateReportCellCount(ctx.Workbook.Scenarios.Count, changingCells.Count, _resultCells.Count));
         report.SetCell(new CellAddress(report.Id, 1, 1), new TextValue("Scenario Summary"));
         report.SetCell(new CellAddress(report.Id, 3, 1), new TextValue("Changing Cells"));
         for (var index = 0; index < ctx.Workbook.Scenarios.Count; index++)
@@ -325,8 +328,6 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
                 new TextValue(ctx.Workbook.Scenarios[index].Name));
         }
 
-        var sheetOrder = ScenarioCommandHelpers.BuildSheetOrder(ctx.Workbook);
-        var changingCells = ScenarioCommandHelpers.CollectOrderedChangingCells(ctx.Workbook.Scenarios, sheetOrder);
         for (var rowIndex = 0; rowIndex < changingCells.Count; rowIndex++)
         {
             var address = changingCells[rowIndex];
@@ -360,6 +361,26 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
             AddResultCellsSection(ctx.Workbook, report, (uint)changingCells.Count + 6);
 
         return new CommandOutcome(true);
+    }
+
+    private static int EstimateReportCellCount(int scenarioCount, int changingCellCount, int resultCellCount)
+    {
+        long count =
+            2L +
+            scenarioCount +
+            changingCellCount +
+            (long)changingCellCount * scenarioCount;
+
+        if (resultCellCount > 0)
+        {
+            count +=
+                1L +
+                scenarioCount +
+                resultCellCount +
+                (long)resultCellCount * scenarioCount;
+        }
+
+        return count > int.MaxValue ? int.MaxValue : (int)count;
     }
 
     private static bool TryAddSharedChangingCellValues(
