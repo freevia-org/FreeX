@@ -293,6 +293,7 @@ public sealed partial class NativeJsonAdapter
                     .Select(ToChartDto)
                     .ToList(),
                 PivotTables = s.PivotTables
+                    .OfType<PivotTableModel>()
                     .Select(pivot => ToPivotTableDto(workbook, s, pivot))
                     .OfType<PivotTableDto>()
                     .ToList(),

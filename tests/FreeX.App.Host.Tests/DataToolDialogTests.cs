@@ -558,8 +558,13 @@ public sealed class DataToolDialogTests
             .BeLessThan(mouseMove.IndexOf("var positions = ParseFixedWidthBreakPositions", StringComparison.Ordinal));
 
         mouseUpAndLostCapture.Should().Contain("CancelFixedWidthRulerDrag();");
+        mouseUpAndLostCapture.Should().Contain("if (_dragBreakIndex is null && !_fixedWidthRuler.IsMouseCaptured)");
+        mouseUpAndLostCapture.Should().Contain("return;");
         mouseUpAndLostCapture.Should().Contain("private void FixedWidthRuler_LostMouseCapture");
         mouseUpAndLostCapture.Should().Contain("_dragBreakIndex = null;");
+        mouseUpAndLostCapture.IndexOf("if (_dragBreakIndex is null && !_fixedWidthRuler.IsMouseCaptured)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseUpAndLostCapture.IndexOf("CancelFixedWidthRulerDrag();", StringComparison.Ordinal));
         cancelHelper.Should().Contain("_dragBreakIndex = null;");
         cancelHelper.Should().Contain("if (_fixedWidthRuler.IsMouseCaptured)");
         cancelHelper.Should().Contain("_fixedWidthRuler.ReleaseMouseCapture();");
