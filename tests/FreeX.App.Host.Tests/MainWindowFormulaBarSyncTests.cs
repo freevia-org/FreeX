@@ -687,6 +687,28 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void EditInFormulaBar_WithEmptyActiveCell_ClearsFormulaBarAndFocusesAtStart()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "stale");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaBarText("stale draft");
+            harness.SelectActiveCell(2, 2);
+
+            harness.EditActiveCellInFormulaBar();
+
+            harness.FormulaBarText.Should().BeEmpty();
+            harness.FormulaBarCaretIndex.Should().Be(0);
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellText(2, 2).Should().BeNull();
+        });
+    }
+
+    [Fact]
     public void FormulaBarExpandButton_TogglesMultilineEntryAndAccessibilityName()
     {
         StaTestRunner.Run(() =>
