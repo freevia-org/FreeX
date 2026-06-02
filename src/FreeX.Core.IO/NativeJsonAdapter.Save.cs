@@ -284,6 +284,7 @@ public sealed partial class NativeJsonAdapter
                     .Select(ToSparklineDto)
                     .ToList(),
                 Charts = s.Charts
+                    .OfType<ChartModel>()
                     .Where(chart => IsChartOnSheet(chart, s.Id))
                     .Select(ToChartDto)
                     .ToList(),
