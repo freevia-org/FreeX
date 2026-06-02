@@ -2402,13 +2402,34 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void ReviewCommentNavigation_IncludesThreadedComments()
+    public void WorksheetContextMenuShowNotes_UsesNoteOnlyWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorksheetContextMenuPlanner.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.ShowNotes:");
+        source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs());");
+        source.Should().NotContain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());");
+        plannerSource.Should().Contain("new(\"Show Notes\", WorksheetContextMenuAction.ShowNotes, AccessHeader: \"_Show Notes\", IsEnabled: state.HasNote)");
+        plannerSource.Should().NotContain("IsEnabled: state.HasNote || state.HasThreadedComment");
+    }
+
+    [Fact]
+    public void ReviewCommentAndNoteNavigation_KeepsThreadedCommentsAndNotesSeparate()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
 
-        source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
-        source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
-        source.Should().Contain("sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0");
+        source.Should().Contain("CommentNavigationPlanner.FormatThreadedCommentList(sheet.ThreadedComments)");
+        source.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
+        source.Should().Contain("sheet.ThreadedComments.Count == 0");
+        source.Should().Contain("private void ReviewPrevNoteBtn_Click(");
+        source.Should().Contain("private void ReviewNextNoteBtn_Click(");
+        source.Should().Contain("private void ReviewShowNotesBtn_Click(");
+        source.Should().Contain("CommentNavigationPlanner.FormatNoteList(sheet.Comments)");
+        source.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
+        source.Should().Contain("sheet.Comments.Count == 0");
+        source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
+        source.Should().NotContain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
     }
 
     [Fact]

@@ -7,7 +7,14 @@ namespace FreeX.App.Host;
 public static class CommentNavigationPlanner
 {
     public static List<CellAddress> OrderedCommentAddresses(IReadOnlyDictionary<CellAddress, string> comments) =>
-        OrderAddresses(comments.Keys);
+        OrderedNoteAddresses(comments);
+
+    public static List<CellAddress> OrderedNoteAddresses(IReadOnlyDictionary<CellAddress, string> notes) =>
+        OrderAddresses(notes.Keys);
+
+    public static List<CellAddress> OrderedThreadedCommentAddresses(
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
+        OrderAddresses(threadedComments.Keys);
 
     public static List<CellAddress> OrderedCommentAddresses(
         IReadOnlyDictionary<CellAddress, string> comments,
@@ -31,8 +38,17 @@ public static class CommentNavigationPlanner
     }
 
     public static string FormatCommentList(IReadOnlyDictionary<CellAddress, string> comments) =>
+        FormatNoteList(comments);
+
+    public static string FormatNoteList(IReadOnlyDictionary<CellAddress, string> notes) =>
         string.Join(Environment.NewLine,
-            OrderedCommentAddresses(comments).Select(address => $"{address.ToA1()}: {comments[address]}"));
+            OrderedNoteAddresses(notes).Select(address => $"{address.ToA1()}: {notes[address]}"));
+
+    public static string FormatThreadedCommentList(
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
+        string.Join(Environment.NewLine,
+            OrderedThreadedCommentAddresses(threadedComments)
+                .Select(address => $"{address.ToA1()}: {FormatThreadedComment(threadedComments[address])}"));
 
     public static string FormatCommentList(
         IReadOnlyDictionary<CellAddress, string> comments,

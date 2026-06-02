@@ -270,18 +270,18 @@ public partial class MainWindow
 
     private void ReviewPrevCommentBtn_Click(object sender, RoutedEventArgs e)
     {
-        NavigateComment(previous: true);
+        NavigateThreadedComment(previous: true);
     }
 
     private void ReviewNextCommentBtn_Click(object sender, RoutedEventArgs e)
     {
-        NavigateComment(previous: false);
+        NavigateThreadedComment(previous: false);
     }
 
     private void ReviewShowCommentsBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null || sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
+        if (sheet is null || sheet.ThreadedComments.Count == 0)
         {
             _messageService.ShowInfo(
                 UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
@@ -289,14 +289,39 @@ public partial class MainWindow
             return;
         }
 
-        var text = CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments);
+        var text = CommentNavigationPlanner.FormatThreadedCommentList(sheet.ThreadedComments);
         _messageService.ShowInfo(text, UiText.Get("MainWindowMessage_CommentsTitle"));
     }
 
-    private void NavigateComment(bool previous)
+    private void ReviewPrevNoteBtn_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateNote(previous: true);
+    }
+
+    private void ReviewNextNoteBtn_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateNote(previous: false);
+    }
+
+    private void ReviewShowNotesBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null || sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
+        if (sheet is null || sheet.Comments.Count == 0)
+        {
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
+                UiText.Get("MainWindow_Text_Notes"));
+            return;
+        }
+
+        var text = CommentNavigationPlanner.FormatNoteList(sheet.Comments);
+        _messageService.ShowInfo(text, UiText.Get("MainWindow_Text_Notes"));
+    }
+
+    private void NavigateThreadedComment(bool previous)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null || sheet.ThreadedComments.Count == 0)
         {
             _messageService.ShowInfo(
                 UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
@@ -304,9 +329,29 @@ public partial class MainWindow
             return;
         }
 
-        var comments = CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments);
-        var current = SheetGrid.SelectedRange?.Start ?? comments[0];
-        var target = CommentNavigationPlanner.FindNext(comments, current, previous);
+        var threadedComments = CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments);
+        var current = SheetGrid.SelectedRange?.Start ?? threadedComments[0];
+        var target = CommentNavigationPlanner.FindNext(threadedComments, current, previous);
+
+        SetActiveCell(target);
+        EnsureCellVisible(target);
+        UpdateViewport();
+    }
+
+    private void NavigateNote(bool previous)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null || sheet.Comments.Count == 0)
+        {
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
+                UiText.Get("MainWindow_Text_Notes"));
+            return;
+        }
+
+        var notes = CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments);
+        var current = SheetGrid.SelectedRange?.Start ?? notes[0];
+        var target = CommentNavigationPlanner.FindNext(notes, current, previous);
 
         SetActiveCell(target);
         EnsureCellVisible(target);
