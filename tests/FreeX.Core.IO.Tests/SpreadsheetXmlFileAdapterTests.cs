@@ -1637,6 +1637,47 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromWhitespaceRules()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row>
+                <label>   India   </label>
+                <note>  Juliet  </note>
+              </row>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:strip-space elements="*" />
+              <xsl:preserve-space elements="note" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Whitespace">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="normalize-space(row/label)" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/note" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Whitespace");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("India"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("  Juliet  "));
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesXsltParametersToGeneratedSpreadsheetMl()
     {
         using var source = StreamFromString("<rows><row amount=\"42.5\" /></rows>");
