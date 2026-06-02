@@ -923,7 +923,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute("Click")?.Value == "SpellCheckBtn_Click");
 
         LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("known misspellings");
-        LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("text cells");
+        LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("threaded comments");
         LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("replace all");
         LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().NotContain("proofing engine");
     }
