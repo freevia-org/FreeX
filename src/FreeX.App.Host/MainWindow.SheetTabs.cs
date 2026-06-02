@@ -1011,6 +1011,9 @@ public partial class MainWindow
             return false;
         }
 
+        if (FindSheetTabContextMenuTarget(focusedElement) is null)
+            return false;
+
         var handled = e.Key switch
         {
             Key.Left => FocusAdjacentVisibleSheetTab(-1),

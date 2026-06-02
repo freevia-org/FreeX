@@ -443,12 +443,15 @@ public partial class MainWindow
                 return;
         }
 
-        if (string.IsNullOrWhiteSpace(_currentFilePath))
+        var sharePath = plan.Kind == ShareWorkbookPlanKind.ShareExistingFile
+            ? plan.Path
+            : _currentFilePath;
+        if (string.IsNullOrWhiteSpace(sharePath))
             return;
 
         try
         {
-            await _shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name);
+            await _shareService.ShareFileAsync(this, sharePath, _workbook.Name);
         }
         catch (Exception ex)
         {
