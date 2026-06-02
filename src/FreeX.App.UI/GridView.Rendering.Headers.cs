@@ -274,6 +274,9 @@ public partial class GridView
         if (selectedRanges is not { Count: > 0 } && selRange is null)
             return;
 
+        if (TryRenderSingleCellSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip))
+            return;
+
         var columnIntervals = BuildColumnHeaderSelectionIntervals(selectedRanges, selRange);
         var rowIntervals = BuildRowHeaderSelectionIntervals(selectedRanges, selRange);
         var columnIntervalIndex = 0;
@@ -290,6 +293,42 @@ public partial class GridView
             if (IsHeaderSelected(row.Row, rowIntervals, ref rowIntervalIndex))
                 DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
         }
+    }
+
+    private bool TryRenderSingleCellSelectedHeaders(
+        DrawingContext dc,
+        ViewportModel viewport,
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? selectedRange,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double pixelsPerDip)
+    {
+        if (!TryGetSingleCellSelectedHeaderRange(selectedRanges, selectedRange, out var range))
+            return false;
+
+        var lookups = GetRenderMetricLookups(viewport);
+        if (lookups.Columns.TryGetValue(range.Start.Col, out var column))
+            DrawColumnHeader(dc, column, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
+        if (lookups.Rows.TryGetValue(range.Start.Row, out var row))
+            DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
+
+        return true;
+    }
+
+    private static bool TryGetSingleCellSelectedHeaderRange(
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? selectedRange,
+        out GridRange range)
+    {
+        if (selectedRanges is { Count: > 0 })
+        {
+            range = selectedRanges.Count == 1 ? selectedRanges[0] : default;
+            return selectedRanges.Count == 1 && IsSingleCellRange(range);
+        }
+
+        range = selectedRange.GetValueOrDefault();
+        return selectedRange.HasValue && IsSingleCellRange(range);
     }
 
     private void DrawColumnHeader(
