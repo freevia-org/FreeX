@@ -95,6 +95,53 @@ public sealed class SortCommandTests
     }
 
     [Fact]
+    public void SortCommand_LeftToRight_MovesCommentsAndThreadedCommentsAndUndoRestores()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3));
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var c2 = new CellAddress(sheet.Id, 2, 3);
+        sheet.SetCell(a1, new NumberValue(3));
+        sheet.SetCell(a2, new TextValue("C"));
+        sheet.SetCell(b1, new NumberValue(1));
+        sheet.SetCell(b2, new TextValue("A"));
+        sheet.SetCell(c1, new NumberValue(2));
+        sheet.SetCell(c2, new TextValue("B"));
+        sheet.Comments[a2] = "comment C";
+        sheet.Comments[b2] = "comment A";
+        sheet.Comments[c2] = "comment B";
+        sheet.ThreadedComments[a1] = new ThreadedComment("thread C", "Quinn");
+        sheet.ThreadedComments[b1] = new ThreadedComment("thread A", "Codex");
+        sheet.ThreadedComments[c1] = new ThreadedComment("thread B", "FreeX");
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true)], new SortOptions(LeftToRight: true));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Comments[a2].Should().Be("comment A");
+        sheet.Comments[b2].Should().Be("comment B");
+        sheet.Comments[c2].Should().Be("comment C");
+        sheet.ThreadedComments[a1].Should().Be(new ThreadedComment("thread A", "Codex"));
+        sheet.ThreadedComments[b1].Should().Be(new ThreadedComment("thread B", "FreeX"));
+        sheet.ThreadedComments[c1].Should().Be(new ThreadedComment("thread C", "Quinn"));
+
+        command.Revert(ctx);
+
+        sheet.Comments[a2].Should().Be("comment C");
+        sheet.Comments[b2].Should().Be("comment A");
+        sheet.Comments[c2].Should().Be("comment B");
+        sheet.ThreadedComments[a1].Should().Be(new ThreadedComment("thread C", "Quinn"));
+        sheet.ThreadedComments[b1].Should().Be(new ThreadedComment("thread A", "Codex"));
+        sheet.ThreadedComments[c1].Should().Be(new ThreadedComment("thread B", "FreeX"));
+    }
+
+    [Fact]
     public void SortCommand_CanSortRowsByCellFillColor()
     {
         var workbook = new Workbook("test");
