@@ -210,13 +210,18 @@ public sealed partial class ViewportService : IViewportService
         if (rowMetrics.Count == 0 || row < rowMetrics[0].Row || row > rowMetrics[^1].Row)
             return false;
 
-        for (var i = 0; i < rowMetrics.Count; i++)
+        var low = 0;
+        var high = rowMetrics.Count - 1;
+        while (low <= high)
         {
-            var metricRow = rowMetrics[i].Row;
+            var mid = low + ((high - low) >> 1);
+            var metricRow = rowMetrics[mid].Row;
             if (metricRow == row)
                 return true;
-            if (metricRow > row)
-                return false;
+            if (metricRow < row)
+                low = mid + 1;
+            else
+                high = mid - 1;
         }
 
         return false;
@@ -231,17 +236,22 @@ public sealed partial class ViewportService : IViewportService
         if (colMetrics.Count == 0 || col < colMetrics[0].Col || col > colMetrics[^1].Col)
             return false;
 
-        for (var i = 0; i < colMetrics.Count; i++)
+        var low = 0;
+        var high = colMetrics.Count - 1;
+        while (low <= high)
         {
-            var metric = colMetrics[i];
+            var mid = low + ((high - low) >> 1);
+            var metric = colMetrics[mid];
             if (metric.Col == col)
             {
                 targetWidthCharacters = EstimateCharacterWidth(metric.Width);
                 return true;
             }
 
-            if (metric.Col > col)
-                return false;
+            if (metric.Col < col)
+                low = mid + 1;
+            else
+                high = mid - 1;
         }
 
         return false;
