@@ -1223,8 +1223,8 @@ public sealed class XsltWorkbookTransformTests
     public void TransformToSpreadsheetXml_RowColumnLayoutAttributeValueTemplates_GenerateSpreadsheetMl()
     {
         using var source = StreamFromString("""
-            <layout columnIndex="2" columnSpan="1" width="22.75" columnHidden="1"
-                    rowIndex="3" rowSpan="1" height="28.5" rowHidden="1">
+            <layout columnIndex="2" columnSpan="1" width="22.75" columnHidden="TRUE"
+                    rowIndex="3" rowSpan="1" height="28.5" rowHidden="TRUE">
               <cell value="Layout"/>
             </layout>
             """);
@@ -1260,11 +1260,11 @@ public sealed class XsltWorkbookTransformTests
         column.Attribute(ss + "Index")!.Value.Should().Be("2");
         column.Attribute(ss + "Span")!.Value.Should().Be("1");
         column.Attribute(ss + "Width")!.Value.Should().Be("22.75");
-        column.Attribute(ss + "Hidden")!.Value.Should().Be("1");
+        column.Attribute(ss + "Hidden")!.Value.Should().Be("TRUE");
         row.Attribute(ss + "Index")!.Value.Should().Be("3");
         row.Attribute(ss + "Span")!.Value.Should().Be("1");
         row.Attribute(ss + "Height")!.Value.Should().Be("28.5");
-        row.Attribute(ss + "Hidden")!.Value.Should().Be("1");
+        row.Attribute(ss + "Hidden")!.Value.Should().Be("TRUE");
         cell.Attribute(ss + "Index")!.Value.Should().Be("2");
         cell.Element(ss + "Data")!.Value.Should().Be("Layout");
     }
