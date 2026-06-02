@@ -382,6 +382,30 @@ public sealed class FormulaAuditingServiceTests
         issue.FormulaText.Should().Be("=SUM(A2:C2)");
     }
 
+    [Theory]
+    [InlineData("AVERAGE")]
+    [InlineData("COUNT")]
+    [InlineData("COUNTA")]
+    [InlineData("MIN")]
+    [InlineData("MAX")]
+    [InlineData("PRODUCT")]
+    public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsForAggregateFunctions(string functionName)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        var formula = $"{functionName}(A1:A2)";
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula(formula));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode).Subject;
+
+        issue.Cell.Should().Be("A4");
+        issue.FormulaText.Should().Be("=" + formula);
+    }
+
     [Fact]
     public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsBetweenSumArgumentsInColumn()
     {
@@ -565,6 +589,21 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledAggregateFormulaOmitsAdjacentCellsRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula("AVERAGE(A1:A2)"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_SkipsDisabledUnlockedFormulaCellsRule()
     {
         var wb = new Workbook("test");
@@ -734,6 +773,30 @@ public sealed class FormulaAuditingServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
         sheet.SetCell(address, Cell.FromFormula("SUM(A1:A2)"));
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+    }
+
+    [Fact]
+    public void SetFormulaErrorIgnoredCommand_IgnoresAggregateFormulaOmitsAdjacentCellsIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 4, 1);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(address, Cell.FromFormula("AVERAGE(A1:A2)"));
         var ctx = new SimpleCtx(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
