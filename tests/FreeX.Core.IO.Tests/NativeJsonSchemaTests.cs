@@ -1594,6 +1594,57 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsMalformedNativeJsonPictureEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "MalformedPictures",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Pictures": [
+                    null,
+                    {
+                      "Name": "Kept",
+                      "Anchor": "B2",
+                      "Kind": 1,
+                      "ImageBase64": "AQIDBA==",
+                      "ContentType": "image/png",
+                      "Width": 144,
+                      "Height": 96,
+                      "Cells": [
+                        null,
+                        { "RowOffset": 1, "ColumnOffset": 2, "Text": "snapshot" }
+                      ]
+                    },
+                    { "Name": "BadAnchor", "Anchor": "not-an-address" },
+                    { "Name": "BadLinkedRange", "Anchor": "C3", "LinkedSourceRange": "not-a-range" },
+                    { "Name": "BadImage", "Anchor": "D4", "ImageBase64": "not-base64!" }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var picture = new NativeJsonAdapter().Load(stream).GetSheetAt(0).Pictures
+            .Should().ContainSingle().Subject;
+
+        picture.Name.Should().Be("Kept");
+        picture.Anchor.ToA1().Should().Be("B2");
+        picture.Kind.Should().Be(PictureKind.Image);
+        picture.ImageBytes.Should().Equal([1, 2, 3, 4]);
+        picture.ContentType.Should().Be("image/png");
+        picture.Width.Should().Be(144);
+        picture.Height.Should().Be(96);
+        picture.Cells.Should().ContainSingle()
+            .Which.Should().Be(new PictureCellSnapshot(1, 2, "snapshot"));
+    }
+
+    [Fact]
     public void Load_DropsMalformedNativeJsonSparklineEntries()
     {
         const string json = """
