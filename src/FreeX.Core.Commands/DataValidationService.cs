@@ -13,7 +13,7 @@ public static partial class DataValidationService
 {
     private static readonly ConditionalWeakTable<Sheet, DataValidationLookupCache> LookupCaches = new();
 
-    public sealed record InputPrompt(string Title, string Message);
+    public readonly record struct InputPrompt(string Title, string Message);
 
     /// <summary>
     /// Returns null if the value is valid according to the rule, or an error message if it is not.
