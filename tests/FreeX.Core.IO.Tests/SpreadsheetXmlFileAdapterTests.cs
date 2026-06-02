@@ -2649,6 +2649,50 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromInheritedStyleAttributeValueTemplates()
+    {
+        using var source = StreamFromString("""
+            <report>
+              <base id="moneyBase" format="$#,##0.00"/>
+              <style id="moneyChild" parent="moneyBase"/>
+              <row amount="42.5" style="moneyChild"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="{base/@id}">
+                      <ss:NumberFormat ss:Format="{base/@format}" />
+                    </ss:Style>
+                    <ss:Style ss:ID="{style/@id}" ss:Parent="{style/@parent}" />
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Inherited Style AVT">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell ss:StyleID="{row/@style}">
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@amount"/></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Inherited Style AVT");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new NumberValue(42.5));
+        workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
     public void LoadTransformed_InheritsSpreadsheetMlRowAndColumnNumberFormatStyles()
     {
         using var source = StreamFromString("""
