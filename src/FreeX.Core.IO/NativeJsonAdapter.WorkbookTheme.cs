@@ -30,7 +30,10 @@ public sealed partial class NativeJsonAdapter
             .WithNativeFormatSchemeXml(dto.NativeFormatSchemeXml)
             .WithNativeThemeSupplementXml(dto.NativeThemeSupplementXml)
             .WithSupplementalMetadata(
-                (dto.AlternateColorSchemes ?? []).Select(ToAlternateColorScheme).ToArray(),
+                (dto.AlternateColorSchemes ?? [])
+                    .OfType<WorkbookThemeAlternateColorSchemeDto>()
+                    .Select(ToAlternateColorScheme)
+                    .ToArray(),
                 dto.HasObjectDefaults,
                 ToObjectDefaults(dto.ObjectDefaults));
     }
@@ -49,6 +52,7 @@ public sealed partial class NativeJsonAdapter
             HasObjectDefaults = theme.HasObjectDefaults,
             ObjectDefaults = FromObjectDefaults(theme.ObjectDefaults),
             AlternateColorSchemes = (theme.AlternateColorSchemes ?? [])
+                .OfType<WorkbookThemeAlternateColorScheme>()
                 .Select(FromAlternateColorScheme)
                 .ToList(),
             Colors = Enum.GetValues<WorkbookThemeColorSlot>()
@@ -153,7 +157,7 @@ public sealed partial class NativeJsonAdapter
         WorkbookThemeAlternateColorSchemeDto dto)
     {
         var colors = new Dictionary<WorkbookThemeColorSlot, CellColor>();
-        foreach (var color in dto.Colors ?? [])
+        foreach (var color in (dto.Colors ?? []).OfType<WorkbookThemeColorDto>())
         {
             if (Enum.IsDefined(color.Slot) && ParseColor(color.Color ?? "") is { } parsed)
                 colors[color.Slot] = parsed;
@@ -172,11 +176,11 @@ public sealed partial class NativeJsonAdapter
             Name = scheme.Name,
             NativeColorSchemeXml = scheme.NativeColorSchemeXml,
             Colors = Enum.GetValues<WorkbookThemeColorSlot>()
-                .Where(slot => scheme.Colors.ContainsKey(slot))
+                .Where(slot => scheme.Colors is not null && scheme.Colors.ContainsKey(slot))
                 .Select(slot => new WorkbookThemeColorDto
                 {
                     Slot = slot,
-                    Color = FormatColor(scheme.Colors[slot])
+                    Color = FormatColor(scheme.Colors![slot])
                 })
                 .ToList()
         };
