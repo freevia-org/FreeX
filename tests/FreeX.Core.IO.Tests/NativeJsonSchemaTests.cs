@@ -179,6 +179,51 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsMalformedNativeJsonHeaderFooterPicturePayloads()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "HeaderFooterPictures",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "PageHeaderPictures": {
+                    "Left": {
+                      "ImageBase64": "not-base64!",
+                      "ContentType": "image/png",
+                      "FileName": "broken.png",
+                      "Width": 120,
+                      "Height": 48
+                    },
+                    "Center": {
+                      "ImageBase64": "AQIDBA==",
+                      "ContentType": "image/png",
+                      "FileName": "logo.png",
+                      "Width": 144,
+                      "Height": 64
+                    }
+                  }
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.PageHeaderPictures.Left.Should().BeNull();
+        sheet.PageHeaderPictures.Center.Should().NotBeNull();
+        sheet.PageHeaderPictures.Center!.ImageBytes.Should().Equal([1, 2, 3, 4]);
+        sheet.PageHeaderPictures.Center.ContentType.Should().Be("image/png");
+        sheet.PageHeaderPictures.Center.FileName.Should().Be("logo.png");
+        sheet.PageHeaderPictures.Center.Width.Should().Be(144);
+        sheet.PageHeaderPictures.Center.Height.Should().Be(64);
+    }
+
+    [Fact]
     public void Save_WritesNonFiniteNativeJsonNumbersAsTextCells()
     {
         var workbook = new Workbook("NonFinite");

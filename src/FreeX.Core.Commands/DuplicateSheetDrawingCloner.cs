@@ -7,14 +7,42 @@ internal static class DuplicateSheetDrawingCloner
 {
     internal static void CopyDrawingCollections(Sheet source, Sheet copy, SheetId copyId)
     {
+        var zOrderIdMap = new Dictionary<DrawingObjectZOrderEntry, DrawingObjectZOrderEntry>();
         foreach (var chart in source.Charts)
             copy.Charts.Add(CloneChart(chart, copyId));
         foreach (var textBox in source.TextBoxes)
-            copy.TextBoxes.Add(CloneTextBox(textBox, copyId));
+        {
+            var cloned = CloneTextBox(textBox, copyId);
+            copy.TextBoxes.Add(cloned);
+            zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id)] =
+                new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, cloned.Id);
+        }
+
         foreach (var shape in source.DrawingShapes)
-            copy.DrawingShapes.Add(CloneDrawingShape(shape, copyId));
+        {
+            var cloned = CloneDrawingShape(shape, copyId);
+            copy.DrawingShapes.Add(cloned);
+            zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id)] =
+                new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, cloned.Id);
+        }
+
         foreach (var picture in source.Pictures)
-            copy.Pictures.Add(ClonePicture(picture, source.Id, source.Name, copy.Name, copyId));
+        {
+            var cloned = ClonePicture(picture, source.Id, source.Name, copy.Name, copyId);
+            copy.Pictures.Add(cloned);
+            zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id)] =
+                new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, cloned.Id);
+        }
+
+        if (source.DrawingObjectZOrder.Count > 0)
+        {
+            foreach (var entry in DrawingObjectZOrder.GetNormalizedOrder(source))
+            {
+                if (zOrderIdMap.TryGetValue(entry, out var clonedEntry))
+                    copy.DrawingObjectZOrder.Add(clonedEntry);
+            }
+        }
+
         foreach (var sparkline in source.Sparklines)
             copy.Sparklines.Add(new SparklineModel
             {

@@ -285,6 +285,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 if (NativeJsonVisualDtoMapper.ToDrawingShape(shapeDto, sheet.Id) is { } shape)
                     sheet.DrawingShapes.Add(shape);
             }
+            LoadDrawingObjectZOrder(sheet, sDto.DrawingObjectZOrder);
             foreach (var sparklineDto in sDto.Sparklines ?? [])
             {
                 if (TryLoadSparkline(sparklineDto, sheet.Id) is { } sparkline)

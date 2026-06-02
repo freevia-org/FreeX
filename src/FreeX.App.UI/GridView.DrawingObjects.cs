@@ -192,39 +192,51 @@ public partial class GridView
         var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
         var metricLookups = GetRenderMetricLookups(Viewport);
         foreach (var textBox in TextBoxes)
-        {
-            if (!textBox.IsVisible) continue;
-            if (!CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn))
-                continue;
-            if (!TryCreateAnchoredObjectRect(
-                    metricLookups,
-                    textBox.Anchor,
-                    textBox.Width,
-                    textBox.Height,
-                    MinimumTextBoxObjectWidth,
-                    MinimumTextBoxObjectHeight,
-                    out var rect))
-                continue;
-            if (NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) &&
-                !IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom))
-                continue;
+            RenderTextBox(dc, metricLookups, textBox, themeEffect, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
+    }
 
-            var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
-            var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
-            DrawTextBoxThemeEffect(dc, rect, themeEffect);
-            var fillBrush = GetDrawingObjectBrush(242, colors.Fill);
-            var borderPen = GetDrawingObjectPen(255, colors.Outline, 1);
-            dc.DrawRectangle(fillBrush, borderPen, rect);
+    private void RenderTextBox(
+        DrawingContext dc,
+        RenderMetricLookupCache metricLookups,
+        TextBoxModel textBox,
+        WorkbookThemeEffectStyle themeEffect,
+        double pixelsPerDip,
+        double visibleRight,
+        double visibleBottom,
+        uint lastRenderableRow,
+        uint lastRenderableColumn)
+    {
+        if (!textBox.IsVisible) return;
+        if (!CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn))
+            return;
+        if (!TryCreateAnchoredObjectRect(
+                metricLookups,
+                textBox.Anchor,
+                textBox.Width,
+                textBox.Height,
+                MinimumTextBoxObjectWidth,
+                MinimumTextBoxObjectHeight,
+                out var rect))
+            return;
+        if (NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) &&
+            !IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom))
+            return;
 
-            var textWidth = Math.Max(1, rect.Width - 8);
-            var textHeight = Math.Max(1, rect.Height - 8);
-            var text = GetDrawingObjectText(textBox.Text, TextBrush, 12, textWidth, textHeight, pixelsPerDip);
+        var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
+        var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
+        DrawTextBoxThemeEffect(dc, rect, themeEffect);
+        var fillBrush = GetDrawingObjectBrush(242, colors.Fill);
+        var borderPen = GetDrawingObjectPen(255, colors.Outline, 1);
+        dc.DrawRectangle(fillBrush, borderPen, rect);
 
-            dc.PushClip(GetDrawingObjectClipGeometry(new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight)));
-            dc.DrawText(text, new Point(rect.Left + 4, rect.Top + 4));
-            dc.Pop();
-            if (rotationPushed) dc.Pop();
-        }
+        var textWidth = Math.Max(1, rect.Width - 8);
+        var textHeight = Math.Max(1, rect.Height - 8);
+        var text = GetDrawingObjectText(textBox.Text, TextBrush, 12, textWidth, textHeight, pixelsPerDip);
+
+        dc.PushClip(GetDrawingObjectClipGeometry(new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight)));
+        dc.DrawText(text, new Point(rect.Left + 4, rect.Top + 4));
+        dc.Pop();
+        if (rotationPushed) dc.Pop();
     }
 
     private void RenderDrawingShapes(DrawingContext dc)
@@ -237,44 +249,193 @@ public partial class GridView
         var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
         var metricLookups = GetRenderMetricLookups(Viewport);
         foreach (var shape in DrawingShapes)
-        {
-            if (!shape.IsVisible) continue;
-            if (!CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn))
-                continue;
-            if (!TryCreateAnchoredObjectRect(
-                    metricLookups,
-                    shape.Anchor,
-                    shape.Width,
-                    shape.Height,
-                    MinimumShapeObjectWidth,
-                    MinimumShapeObjectHeight,
-                    out var rect))
-                continue;
-            if (NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) &&
-                !IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom))
-                continue;
+            RenderDrawingShape(dc, metricLookups, shape, themeEffect, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
+    }
 
-            var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
-            var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
-            DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);
-            DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape);
-            var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
-            var fill = CreateDrawingShapeFill(shape, colors.Fill);
-            switch (shape.Kind)
+    private void RenderDrawingShape(
+        DrawingContext dc,
+        RenderMetricLookupCache metricLookups,
+        DrawingShapeModel shape,
+        WorkbookThemeEffectStyle themeEffect,
+        double visibleRight,
+        double visibleBottom,
+        uint lastRenderableRow,
+        uint lastRenderableColumn)
+    {
+        if (!shape.IsVisible) return;
+        if (!CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn))
+            return;
+        if (!TryCreateAnchoredObjectRect(
+                metricLookups,
+                shape.Anchor,
+                shape.Width,
+                shape.Height,
+                MinimumShapeObjectWidth,
+                MinimumShapeObjectHeight,
+                out var rect))
+            return;
+        if (NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) &&
+            !IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom))
+            return;
+
+        var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
+        var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
+        DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);
+        DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape);
+        var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
+        var fill = CreateDrawingShapeFill(shape, colors.Fill);
+        switch (shape.Kind)
+        {
+            case DrawingShapeKind.Rectangle:
+                dc.DrawRectangle(fill, pen, rect);
+                break;
+            case DrawingShapeKind.Ellipse:
+                dc.DrawEllipse(fill, pen, new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2), rect.Width / 2, rect.Height / 2);
+                break;
+            case DrawingShapeKind.Line:
+                dc.DrawLine(pen, rect.TopLeft, rect.BottomRight);
+                break;
+        }
+        if (rotationPushed) dc.Pop();
+    }
+
+    private bool HasExplicitDrawingObjectZOrder() =>
+        DrawingObjectZOrder is { Count: > 0 };
+
+    private void RenderDrawingObjectsByZOrder(DrawingContext dc)
+    {
+        if (Viewport == null) return;
+
+        var order = GetNormalizedDrawingObjectZOrder();
+        if (order.Count == 0)
+            return;
+
+        var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var visibleRight = GetDrawingViewportRight();
+        var visibleBottom = GetDrawingViewportBottom();
+        var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
+        var metricLookups = GetRenderMetricLookups(Viewport);
+        foreach (var entry in order)
+        {
+            switch (entry.Kind)
             {
-                case DrawingShapeKind.Rectangle:
-                    dc.DrawRectangle(fill, pen, rect);
+                case SelectionPaneObjectKind.Shape when FindDrawingShape(entry.Id) is { } shape:
+                    RenderDrawingShape(dc, metricLookups, shape, themeEffect, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
                     break;
-                case DrawingShapeKind.Ellipse:
-                    dc.DrawEllipse(fill, pen, new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2), rect.Width / 2, rect.Height / 2);
+                case SelectionPaneObjectKind.Picture when FindPicture(entry.Id) is { } picture:
+                    RenderPicture(dc, metricLookups, picture, Brushes.White, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
                     break;
-                case DrawingShapeKind.Line:
-                    dc.DrawLine(pen, rect.TopLeft, rect.BottomRight);
+                case SelectionPaneObjectKind.TextBox when FindTextBox(entry.Id) is { } textBox:
+                    RenderTextBox(dc, metricLookups, textBox, themeEffect, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
                     break;
             }
-            if (rotationPushed) dc.Pop();
         }
     }
+
+    private IReadOnlyList<DrawingObjectZOrderEntry> GetNormalizedDrawingObjectZOrder()
+    {
+        var normalized = new List<DrawingObjectZOrderEntry>(
+            (DrawingShapes?.Count ?? 0) + (Pictures?.Count ?? 0) + (TextBoxes?.Count ?? 0));
+        var seen = new HashSet<DrawingObjectZOrderEntry>();
+
+        if (DrawingObjectZOrder is not null)
+        {
+            foreach (var entry in DrawingObjectZOrder)
+            {
+                if (!FreeX.Core.Model.DrawingObjectZOrder.IsSupportedKind(entry.Kind) ||
+                    !ContainsRenderableDrawingObject(entry) ||
+                    !seen.Add(entry))
+                {
+                    continue;
+                }
+
+                normalized.Add(entry);
+            }
+        }
+
+        AddMissingDrawingObjectEntries(DrawingShapes, SelectionPaneObjectKind.Shape, normalized, seen);
+        AddMissingDrawingObjectEntries(Pictures, SelectionPaneObjectKind.Picture, normalized, seen);
+        AddMissingDrawingObjectEntries(TextBoxes, SelectionPaneObjectKind.TextBox, normalized, seen);
+        return normalized;
+    }
+
+    private static void AddMissingDrawingObjectEntries<T>(
+        IReadOnlyList<T>? items,
+        SelectionPaneObjectKind kind,
+        List<DrawingObjectZOrderEntry> normalized,
+        HashSet<DrawingObjectZOrderEntry> seen)
+    {
+        if (items is null)
+            return;
+
+        foreach (var item in items)
+        {
+            var entry = new DrawingObjectZOrderEntry(kind, GetDrawingObjectId(item));
+            if (seen.Add(entry))
+                normalized.Add(entry);
+        }
+    }
+
+    private bool ContainsRenderableDrawingObject(DrawingObjectZOrderEntry entry) =>
+        entry.Kind switch
+        {
+            SelectionPaneObjectKind.Shape => FindDrawingShape(entry.Id) is not null,
+            SelectionPaneObjectKind.Picture => FindPicture(entry.Id) is not null,
+            SelectionPaneObjectKind.TextBox => FindTextBox(entry.Id) is not null,
+            _ => false
+        };
+
+    private DrawingShapeModel? FindDrawingShape(Guid id)
+    {
+        if (DrawingShapes is null)
+            return null;
+
+        foreach (var shape in DrawingShapes)
+        {
+            if (shape.Id == id)
+                return shape;
+        }
+
+        return null;
+    }
+
+    private PictureModel? FindPicture(Guid id)
+    {
+        if (Pictures is null)
+            return null;
+
+        foreach (var picture in Pictures)
+        {
+            if (picture.Id == id)
+                return picture;
+        }
+
+        return null;
+    }
+
+    private TextBoxModel? FindTextBox(Guid id)
+    {
+        if (TextBoxes is null)
+            return null;
+
+        foreach (var textBox in TextBoxes)
+        {
+            if (textBox.Id == id)
+                return textBox;
+        }
+
+        return null;
+    }
+
+    private static Guid GetDrawingObjectId<T>(T item) =>
+        item switch
+        {
+            DrawingShapeModel shape => shape.Id,
+            PictureModel picture => picture.Id,
+            TextBoxModel textBox => textBox.Id,
+            _ => Guid.Empty
+        };
 
     private void RenderNativeSlicerTimelineControls(DrawingContext dc)
     {
@@ -285,12 +446,13 @@ public partial class GridView
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var metricLookups = GetRenderMetricLookups(Viewport);
         if (NativeSlicers is not null)
         {
             foreach (var slicer in NativeSlicers)
             {
                 if (slicer.DrawingAnchor is not { } anchor ||
-                    !TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                     continue;
 
                 var controlRect = EnsureMinimumControlRect(rect);
@@ -306,7 +468,7 @@ public partial class GridView
             foreach (var timeline in NativeTimelines)
             {
                 if (timeline.DrawingAnchor is not { } anchor ||
-                    !TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                     continue;
 
                 var controlRect = EnsureMinimumControlRect(rect);
@@ -633,7 +795,7 @@ public partial class GridView
             foreach (var slicer in NativeSlicers)
             {
                 if (slicer.DrawingAnchor is { } anchor &&
-                    TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
                     if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
@@ -649,7 +811,7 @@ public partial class GridView
             foreach (var timeline in NativeTimelines)
             {
                 if (timeline.DrawingAnchor is { } anchor &&
-                    TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
                     if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
@@ -699,6 +861,18 @@ public partial class GridView
             height,
             minimumWidth,
             minimumHeight,
+            out rect);
+
+    private bool TryCreateDrawingAnchorRect(
+        RenderMetricLookupCache metricLookups,
+        DrawingAnchorRange anchor,
+        out Rect rect) =>
+        GridDrawingObjectPlanner.TryCreateDrawingAnchorRect(
+            metricLookups.Rows,
+            metricLookups.Columns,
+            anchor,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
             out rect);
 
     private void DrawObjectPlaceholder(DrawingContext dc, Rect rect, string label, double pixelsPerDip)

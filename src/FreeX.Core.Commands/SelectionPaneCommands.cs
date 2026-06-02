@@ -63,6 +63,8 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     private readonly bool _forward;
     private int _fromIndex = -1;
     private int _toIndex = -1;
+    private List<DrawingObjectZOrderEntry>? _previousDrawingOrder;
+    private bool _hadExplicitDrawingOrder;
 
     public string Label => _forward ? "Bring Forward" : "Send Backward";
 
@@ -83,15 +85,26 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
         return _kind switch
         {
             SelectionPaneObjectKind.Chart => Move(sheet.Charts, chart => chart.Id, chart => chart.DataRange.Start),
-            SelectionPaneObjectKind.Picture => Move(sheet.Pictures, picture => picture.Id, picture => picture.Anchor),
-            SelectionPaneObjectKind.TextBox => Move(sheet.TextBoxes, textBox => textBox.Id, textBox => textBox.Anchor),
-            SelectionPaneObjectKind.Shape => Move(sheet.DrawingShapes, shape => shape.Id, shape => shape.Anchor),
+            SelectionPaneObjectKind.Picture or
+                SelectionPaneObjectKind.TextBox or
+                SelectionPaneObjectKind.Shape => MoveDrawingObject(sheet),
             _ => new CommandOutcome(false, "Selection pane object kind is not supported.")
         };
     }
 
     public void Revert(ICommandContext ctx)
     {
+        if (_previousDrawingOrder is not null)
+        {
+            var drawingSheet = ctx.GetSheet(_sheetId);
+            drawingSheet.DrawingObjectZOrder.Clear();
+            if (_hadExplicitDrawingOrder)
+                drawingSheet.DrawingObjectZOrder.AddRange(_previousDrawingOrder);
+            _previousDrawingOrder = null;
+            _hadExplicitDrawingOrder = false;
+            return;
+        }
+
         if (_fromIndex < 0 || _toIndex < 0)
             return;
 
@@ -130,6 +143,48 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
         (list[_fromIndex], list[_toIndex]) = (list[_toIndex], list[_fromIndex]);
         return new CommandOutcome(true, AffectedCells: [getAnchor(list[_toIndex])]);
     }
+
+    private CommandOutcome MoveDrawingObject(Sheet sheet)
+    {
+        var entry = new DrawingObjectZOrderEntry(_kind, _objectId);
+        if (!DrawingObjectZOrder.ContainsObject(sheet, entry))
+            return new CommandOutcome(false, "Selection pane object was not found.");
+
+        var normalizedOrder = DrawingObjectZOrder.GetNormalizedOrder(sheet);
+        var index = FindDrawingOrderIndex(normalizedOrder, entry);
+        if (index < 0)
+            return new CommandOutcome(false, "Selection pane object was not found.");
+
+        var toIndex = _forward ? index + 1 : index - 1;
+        if (toIndex < 0 || toIndex >= normalizedOrder.Count)
+            return new CommandOutcome(true);
+
+        _hadExplicitDrawingOrder = sheet.DrawingObjectZOrder.Count > 0;
+        _previousDrawingOrder = sheet.DrawingObjectZOrder.ToList();
+        sheet.DrawingObjectZOrder.Clear();
+        sheet.DrawingObjectZOrder.AddRange(normalizedOrder);
+        (sheet.DrawingObjectZOrder[index], sheet.DrawingObjectZOrder[toIndex]) =
+            (sheet.DrawingObjectZOrder[toIndex], sheet.DrawingObjectZOrder[index]);
+        return new CommandOutcome(true, AffectedCells: GetAffectedCells(sheet));
+    }
+
+    private static int FindDrawingOrderIndex(
+        IReadOnlyList<DrawingObjectZOrderEntry> order,
+        DrawingObjectZOrderEntry entry)
+    {
+        for (var index = 0; index < order.Count; index++)
+        {
+            if (order[index] == entry)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private IReadOnlyList<CellAddress> GetAffectedCells(Sheet sheet) =>
+        SelectionPaneObjectAccess.Find(sheet, _kind, _objectId) is { } target
+            ? [target.Anchor]
+            : [];
 
     private void Swap<T>(List<T> list) =>
         (list[_fromIndex], list[_toIndex]) = (list[_toIndex], list[_fromIndex]);

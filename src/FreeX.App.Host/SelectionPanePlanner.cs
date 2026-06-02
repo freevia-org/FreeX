@@ -16,9 +16,7 @@ public static class SelectionPanePlanner
     {
         var items = new List<SelectionPaneItem>();
         AddChartItems(sheet, items);
-        AddShapeItems(sheet, items);
-        AddPictureItems(sheet, items);
-        AddTextBoxItems(sheet, items);
+        AddDrawingObjectItems(sheet, items);
         items.Reverse();
         return items;
     }
@@ -38,49 +36,93 @@ public static class SelectionPanePlanner
         }
     }
 
-    private static void AddShapeItems(Sheet sheet, List<SelectionPaneItem> items)
+    private static void AddDrawingObjectItems(Sheet sheet, List<SelectionPaneItem> items)
     {
-        for (var index = 0; index < sheet.DrawingShapes.Count; index++)
+        var shapeIndexes = CreateIndexMap(sheet.DrawingShapes, shape => shape.Id);
+        var pictureIndexes = CreateIndexMap(sheet.Pictures, picture => picture.Id);
+        var textBoxIndexes = CreateIndexMap(sheet.TextBoxes, textBox => textBox.Id);
+        var order = DrawingObjectZOrder.GetNormalizedOrder(sheet);
+        for (var stackIndex = 0; stackIndex < order.Count; stackIndex++)
         {
-            var shape = sheet.DrawingShapes[index];
-            items.Add(new SelectionPaneItem(
-                SelectionPaneObjectKind.Shape,
-                shape.Id,
-                DisplayName(shape.Name, UiText.Format("SelectionPane_DefaultShapeNameFormat", ShapeName(shape.Kind), index + 1)),
-                shape.IsVisible,
-                index < sheet.DrawingShapes.Count - 1,
-                index > 0));
+            var entry = order[stackIndex];
+            var canMoveUp = stackIndex < order.Count - 1;
+            var canMoveDown = stackIndex > 0;
+            switch (entry.Kind)
+            {
+                case SelectionPaneObjectKind.Shape:
+                    AddShapeItem(sheet, items, entry.Id, shapeIndexes, canMoveUp, canMoveDown);
+                    break;
+                case SelectionPaneObjectKind.Picture:
+                    AddPictureItem(sheet, items, entry.Id, pictureIndexes, canMoveUp, canMoveDown);
+                    break;
+                case SelectionPaneObjectKind.TextBox:
+                    AddTextBoxItem(sheet, items, entry.Id, textBoxIndexes, canMoveUp, canMoveDown);
+                    break;
+            }
         }
     }
 
-    private static void AddPictureItems(Sheet sheet, List<SelectionPaneItem> items)
+    private static void AddShapeItem(
+        Sheet sheet,
+        List<SelectionPaneItem> items,
+        Guid id,
+        IReadOnlyDictionary<Guid, int> shapeIndexes,
+        bool canMoveUp,
+        bool canMoveDown)
     {
-        for (var index = 0; index < sheet.Pictures.Count; index++)
-        {
-            var picture = sheet.Pictures[index];
-            items.Add(new SelectionPaneItem(
-                SelectionPaneObjectKind.Picture,
-                picture.Id,
-                DisplayName(picture.Name, UiText.Format("SelectionPane_DefaultPictureName", index + 1)),
-                picture.IsVisible,
-                index < sheet.Pictures.Count - 1,
-                index > 0));
-        }
+        if (!shapeIndexes.TryGetValue(id, out var index))
+            return;
+
+        var shape = sheet.DrawingShapes[index];
+        items.Add(new SelectionPaneItem(
+            SelectionPaneObjectKind.Shape,
+            shape.Id,
+            DisplayName(shape.Name, UiText.Format("SelectionPane_DefaultShapeNameFormat", ShapeName(shape.Kind), index + 1)),
+            shape.IsVisible,
+            canMoveUp,
+            canMoveDown));
     }
 
-    private static void AddTextBoxItems(Sheet sheet, List<SelectionPaneItem> items)
+    private static void AddPictureItem(
+        Sheet sheet,
+        List<SelectionPaneItem> items,
+        Guid id,
+        IReadOnlyDictionary<Guid, int> pictureIndexes,
+        bool canMoveUp,
+        bool canMoveDown)
     {
-        for (var index = 0; index < sheet.TextBoxes.Count; index++)
-        {
-            var textBox = sheet.TextBoxes[index];
-            items.Add(new SelectionPaneItem(
-                SelectionPaneObjectKind.TextBox,
-                textBox.Id,
-                DisplayName(textBox.Name, UiText.Format("SelectionPane_DefaultTextBoxName", index + 1)),
-                textBox.IsVisible,
-                index < sheet.TextBoxes.Count - 1,
-                index > 0));
-        }
+        if (!pictureIndexes.TryGetValue(id, out var index))
+            return;
+
+        var picture = sheet.Pictures[index];
+        items.Add(new SelectionPaneItem(
+            SelectionPaneObjectKind.Picture,
+            picture.Id,
+            DisplayName(picture.Name, UiText.Format("SelectionPane_DefaultPictureName", index + 1)),
+            picture.IsVisible,
+            canMoveUp,
+            canMoveDown));
+    }
+
+    private static void AddTextBoxItem(
+        Sheet sheet,
+        List<SelectionPaneItem> items,
+        Guid id,
+        IReadOnlyDictionary<Guid, int> textBoxIndexes,
+        bool canMoveUp,
+        bool canMoveDown)
+    {
+        if (!textBoxIndexes.TryGetValue(id, out var index))
+            return;
+
+        var textBox = sheet.TextBoxes[index];
+        items.Add(new SelectionPaneItem(
+            SelectionPaneObjectKind.TextBox,
+            textBox.Id,
+            DisplayName(textBox.Name, UiText.Format("SelectionPane_DefaultTextBoxName", index + 1)),
+            textBox.IsVisible,
+            canMoveUp,
+            canMoveDown));
     }
 
     private static string ShapeName(DrawingShapeKind kind) =>
@@ -93,4 +135,15 @@ public static class SelectionPanePlanner
 
     private static string DisplayName(string? name, string fallback) =>
         string.IsNullOrWhiteSpace(name) ? fallback : name.Trim();
+
+    private static IReadOnlyDictionary<Guid, int> CreateIndexMap<T>(
+        IReadOnlyList<T> items,
+        Func<T, Guid> getId)
+    {
+        var indexes = new Dictionary<Guid, int>(items.Count);
+        for (var index = 0; index < items.Count; index++)
+            indexes[getId(items[index])] = index;
+
+        return indexes;
+    }
 }

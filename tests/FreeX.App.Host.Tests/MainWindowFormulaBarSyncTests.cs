@@ -448,6 +448,30 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaReferenceEntry_AfterFormulaBarSelection_CommitsOnlyOriginalEditCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=");
+            harness.SetFormulaBarCaretIndex("=".Length);
+
+            harness.PressFormulaBarKey(Key.Down).Should().BeTrue();
+            harness.CommitEditAcrossSelection(fillFormulaEditCellOnly: true).Should().BeTrue();
+
+            harness.CellFormula(1, 1).Should().Be("A2");
+            harness.CellText(1, 1).Should().BeNull();
+            harness.CellFormula(2, 1).Should().BeNull();
+            harness.FormulaBarText.Should().Be("=A2");
+        });
+    }
+
+    [Fact]
     public void FormulaBarDown_WithExistingFormulaEdit_PreservesDraftAndSelection()
     {
         StaTestRunner.Run(() =>

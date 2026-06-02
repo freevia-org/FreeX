@@ -23,6 +23,35 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 .FirstOrDefault(candidate => candidate is not null);
     }
 
+    private static int ReadNearestAnchorOrderIndex(XElement element)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var anchor = element
+            .Ancestors()
+            .FirstOrDefault(candidate => IsSpreadsheetDrawingAnchor(candidate, spreadsheetDrawingNs));
+        if (anchor?.Parent is null)
+            return -1;
+
+        var index = 0;
+        foreach (var sibling in anchor.Parent.Elements())
+        {
+            if (!IsSpreadsheetDrawingAnchor(sibling, spreadsheetDrawingNs))
+                continue;
+
+            if (ReferenceEquals(sibling, anchor))
+                return index;
+
+            index++;
+        }
+
+        return -1;
+    }
+
+    private static bool IsSpreadsheetDrawingAnchor(XElement element, XNamespace spreadsheetDrawingNs) =>
+        element.Name == spreadsheetDrawingNs + "twoCellAnchor" ||
+        element.Name == spreadsheetDrawingNs + "oneCellAnchor" ||
+        element.Name == spreadsheetDrawingNs + "absoluteAnchor";
+
     private static XlsxDrawingAnchor? TryReadTwoCellAnchor(XElement anchor)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";

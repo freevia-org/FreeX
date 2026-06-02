@@ -77,6 +77,7 @@ public sealed partial class XlsxFileAdapter
         sheet.ApplyOutlineStyles = layout.ApplyOutlineStyles;
         sheet.GroupHiddenRows.UnionWith(layout.GroupHiddenRows);
         sheet.GroupHiddenCols.UnionWith(layout.GroupHiddenCols);
+        var loadedDrawingObjectOrder = new List<(int OrderIndex, DrawingObjectZOrderEntry Entry)>();
         foreach (var chartPart in layout.ChartParts)
         {
             if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
@@ -111,6 +112,11 @@ public sealed partial class XlsxFileAdapter
             XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
             picture.IsSourceLoaded = true;
             sheet.Pictures.Add(picture);
+            AddLoadedDrawingObjectOrder(
+                loadedDrawingObjectOrder,
+                picturePart.DrawingOrderIndex,
+                SelectionPaneObjectKind.Picture,
+                picture.Id);
         }
         foreach (var textBoxPart in layout.TextBoxParts)
         {
@@ -133,6 +139,11 @@ public sealed partial class XlsxFileAdapter
             XlsxDrawingAnchorApplier.ApplyToTextBox(textBox, textBoxPart.Anchor, sheet);
             textBox.IsSourceLoaded = true;
             sheet.TextBoxes.Add(textBox);
+            AddLoadedDrawingObjectOrder(
+                loadedDrawingObjectOrder,
+                textBoxPart.DrawingOrderIndex,
+                SelectionPaneObjectKind.TextBox,
+                textBox.Id);
         }
         foreach (var shapePart in layout.ShapeParts)
         {
@@ -159,7 +170,13 @@ public sealed partial class XlsxFileAdapter
             XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet);
             shape.IsSourceLoaded = true;
             sheet.DrawingShapes.Add(shape);
+            AddLoadedDrawingObjectOrder(
+                loadedDrawingObjectOrder,
+                shapePart.DrawingOrderIndex,
+                SelectionPaneObjectKind.Shape,
+                shape.Id);
         }
+        ApplyLoadedDrawingObjectZOrder(sheet, loadedDrawingObjectOrder);
         foreach (var sparkline in layout.Sparklines)
         {
             sheet.Sparklines.Add(new SparklineModel
@@ -248,6 +265,43 @@ public sealed partial class XlsxFileAdapter
         sheet.PrimaryViewMetadata = layout.PrimaryViewMetadata;
         sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
         sheet.PhoneticProperties = layout.PhoneticProperties;
+    }
+
+    private static void AddLoadedDrawingObjectOrder(
+        List<(int OrderIndex, DrawingObjectZOrderEntry Entry)> order,
+        int orderIndex,
+        SelectionPaneObjectKind kind,
+        Guid id)
+    {
+        if (orderIndex < 0 || id == Guid.Empty || !DrawingObjectZOrder.IsSupportedKind(kind))
+            return;
+
+        order.Add((orderIndex, new DrawingObjectZOrderEntry(kind, id)));
+    }
+
+    private static void ApplyLoadedDrawingObjectZOrder(
+        Sheet sheet,
+        List<(int OrderIndex, DrawingObjectZOrderEntry Entry)> order)
+    {
+        if (order.Count == 0)
+            return;
+
+        var loadedOrder = order
+            .OrderBy(item => item.OrderIndex)
+            .Select(item => item.Entry)
+            .Where(entry => DrawingObjectZOrder.ContainsObject(sheet, entry))
+            .Distinct()
+            .ToList();
+        if (loadedOrder.Count == 0)
+            return;
+
+        var defaultOrder = DrawingObjectZOrder.GetNormalizedOrder(sheet);
+        if (loadedOrder.SequenceEqual(defaultOrder))
+            return;
+
+        sheet.DrawingObjectZOrder.Clear();
+        sheet.DrawingObjectZOrder.AddRange(loadedOrder);
+        DrawingObjectZOrder.EnsureNormalizedOrder(sheet);
     }
 
     private static void ApplyExistingCellOnlyIgnoredErrors(Sheet sheet, IReadOnlyList<GridRange> ranges)
