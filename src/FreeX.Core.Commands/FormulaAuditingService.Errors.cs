@@ -353,16 +353,24 @@ public static partial class FormulaAuditingService
                 if (run.Count < 3)
                     continue;
 
-                var patternGroups = run
-                    .GroupBy(item => item.Pattern, StringComparer.Ordinal)
-                    .OrderByDescending(item => item.Count())
-                    .ToList();
+                var patternCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+                var majorityCount = 0;
+                foreach (var formula in run)
+                {
+                    var count = patternCounts.GetValueOrDefault(formula.Pattern) + 1;
+                    patternCounts[formula.Pattern] = count;
+                    if (count > majorityCount)
+                        majorityCount = count;
+                }
 
-                if (patternGroups.Count < 2 || patternGroups[0].Count() < 2)
+                if (patternCounts.Count < 2 || majorityCount < 2)
                     continue;
 
-                foreach (var outlier in patternGroups.Where(item => item.Count() == 1).SelectMany(item => item))
+                foreach (var outlier in run)
                 {
+                    if (patternCounts[outlier.Pattern] != 1)
+                        continue;
+
                     if (!flagged.Add(outlier.Address))
                         continue;
 
