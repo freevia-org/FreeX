@@ -243,21 +243,22 @@ public sealed partial class ScenarioManagerDialog : Window
         }
     }
 
-    private void AcceptSelectedScenario()
+    private bool AcceptSelectedScenario()
     {
         if (_scenarioList.SelectedItem is null)
         {
             FocusInitialKeyboardTarget();
-            return;
+            return false;
         }
 
         Accept(ScenarioManagerAction.Show);
+        return true;
     }
 
     private void ScenarioList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        AcceptSelectedScenario();
-        e.Handled = true;
+        if (AcceptSelectedScenario())
+            e.Handled = true;
     }
 
     private void Accept(ScenarioManagerAction action)
