@@ -6,9 +6,15 @@ internal static partial class RowColumnShiftHelpers
 {
     internal static void ShiftCommentRowsUp<TValue>(Dictionary<CellAddress, TValue> comments, uint start, uint count)
     {
-        var shifted = comments
-            .Where(p => p.Key.Row >= start)
-            .ToList();
+        List<KeyValuePair<CellAddress, TValue>>? shifted = null;
+        foreach (var pair in comments)
+        {
+            if (pair.Key.Row >= start)
+                (shifted ??= new List<KeyValuePair<CellAddress, TValue>>(comments.Count)).Add(pair);
+        }
+
+        if (shifted is null)
+            return;
 
         foreach (var (addr, _) in shifted)
             comments.Remove(addr);
@@ -45,9 +51,15 @@ internal static partial class RowColumnShiftHelpers
 
     internal static void ShiftCommentColumnsUp<TValue>(Dictionary<CellAddress, TValue> comments, uint start, uint count)
     {
-        var shifted = comments
-            .Where(p => p.Key.Col >= start)
-            .ToList();
+        List<KeyValuePair<CellAddress, TValue>>? shifted = null;
+        foreach (var pair in comments)
+        {
+            if (pair.Key.Col >= start)
+                (shifted ??= new List<KeyValuePair<CellAddress, TValue>>(comments.Count)).Add(pair);
+        }
+
+        if (shifted is null)
+            return;
 
         foreach (var (addr, _) in shifted)
             comments.Remove(addr);
