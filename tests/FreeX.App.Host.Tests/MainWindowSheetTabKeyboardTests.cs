@@ -103,6 +103,23 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void EnterKeyOnFocusedSheetTab_DoesNotRouteAsSheetTabNavigation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.FocusCurrentSheetTab().Should().BeTrue();
+            harness.FocusedSheetTabName.Should().Be("Sheet1");
+
+            harness.HandleFocusedSheetTabKeyboardNavigation(Key.Enter).Should().BeFalse();
+
+            harness.ActiveSheetTabName.Should().Be("Sheet1");
+            harness.FocusedSheetTabName.Should().Be("Sheet1");
+        });
+    }
+
+    [Fact]
     public void RightClickSheetTab_ClearsPreviousGroupedHighlight()
     {
         StaTestRunner.Run(() =>
