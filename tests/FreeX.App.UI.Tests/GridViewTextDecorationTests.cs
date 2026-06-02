@@ -182,6 +182,19 @@ public sealed class GridViewTextDecorationTests
     }
 
     [Fact]
+    public void ResolveConditionalIconStyle_TreatsStyleNamesCaseInsensitively()
+    {
+        var icon = new ConditionalFormatIcon("3trafficlights1GRAY", 0, 3, true);
+
+        GridView.ResolveConditionalIconGlyphKind(icon)
+            .Should()
+            .Be(ConditionalIconGlyphKind.TrafficLight);
+        GridView.ResolveConditionalIconColor(icon)
+            .Should()
+            .Be("#666666");
+    }
+
+    [Fact]
     public void ResolveConditionalIconColor_TreatsMissingStyleAsDefaultPalette()
     {
         GridView.ResolveConditionalIconColor(new ConditionalFormatIcon(null!, 1, 3, true))
