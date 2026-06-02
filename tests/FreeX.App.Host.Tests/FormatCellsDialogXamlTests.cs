@@ -3,7 +3,6 @@ using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
 using System.Globalization;
 using FreeX.App.Host;
 using FreeX.Core.Commands;
@@ -11,6 +10,7 @@ using FreeX.Core.Model;
 using FluentAssertions;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 using CellVAlign = FreeX.Core.Model.VerticalAlignment;
+using static FreeX.App.Host.Tests.DispatcherTestPump;
 
 namespace FreeX.App.Host.Tests;
 
@@ -1647,15 +1647,6 @@ public sealed class FormatCellsDialogXamlTests
         dialog.Show();
         PumpDispatcher();
         return dialog;
-    }
-
-    private static void PumpDispatcher()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(
-            DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        Dispatcher.PushFrame(frame);
     }
 
     private static string ReadFormatCellsDialogSource()

@@ -201,6 +201,7 @@
                                   FontSize="12" Margin="0,0,0,6"/>
                         <CheckBox x:Name="OptFormulasAutocomplete"
                                   Content="{local:Loc Key=Options_EnableAutoCompleteForCellValues}"
+                                  IsEnabled="False"
                                   FontSize="12" Margin="0,0,0,4"/>
 
                         <TextBlock Text="{local:Loc Key=Options_ErrorCheckingRules}"
@@ -217,11 +218,17 @@
                         <TextBlock Text="{local:Loc Key=Options_AutoCorrectOptions}"
                                    FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
-                        <CheckBox Content="{local:Loc Key=Options_CheckSpellingAsYouType}" IsChecked="True"
+                        <CheckBox x:Name="OptProofingCheckSpellingAsYouType"
+                                  Content="{local:Loc Key=Options_CheckSpellingAsYouType}"
+                                  IsChecked="True" IsEnabled="False"
                                   FontSize="12" Margin="0,0,0,6"/>
-                        <CheckBox Content="{local:Loc Key=Options_IgnoreWordsInUPPERCASE}"
+                        <CheckBox x:Name="OptProofingIgnoreUppercase"
+                                  Content="{local:Loc Key=Options_IgnoreWordsInUPPERCASE}"
+                                  IsEnabled="False"
                                   FontSize="12" Margin="0,0,0,6"/>
-                        <CheckBox Content="{local:Loc Key=Options_FlagRepeatedWords}"
+                        <CheckBox x:Name="OptProofingFlagRepeatedWords"
+                                  Content="{local:Loc Key=Options_FlagRepeatedWords}"
+                                  IsEnabled="False"
                                   FontSize="12" Margin="0,0,0,12"/>
                         <Button x:Name="AutoCorrectOptionsButton" Content="{local:Loc Key=Options_AutoCorrectOptions2}" Width="150" Height="26"
                                 HorizontalAlignment="Left" Click="AutoCorrectOptionsButton_Click"/>
@@ -276,11 +283,16 @@
                         <TextBlock Text="{local:Loc Key=Options_EaseOfAccessOptions}"
                                    FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
-                        <CheckBox Content="{local:Loc Key=Options_ProvideFeedbackWithSound}"
+                        <CheckBox x:Name="OptEaseFeedbackSound"
+                                  Content="{local:Loc Key=Options_ProvideFeedbackWithSound}"
+                                  IsEnabled="False"
                                   FontSize="12" Margin="0,0,0,6"/>
-                        <CheckBox Content="{local:Loc Key=Options_ShowQuickAnalysisOptionsOnSelection}"
-                                  IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
-                        <CheckBox Content="{local:Loc Key=Options_OptimizeDisplayForAccessibility}"
+                        <CheckBox x:Name="OptEaseQuickAnalysis"
+                                  Content="{local:Loc Key=Options_ShowQuickAnalysisOptionsOnSelection}"
+                                  IsChecked="True" IsEnabled="False" FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox x:Name="OptEaseAccessibilityDisplay"
+                                  Content="{local:Loc Key=Options_OptimizeDisplayForAccessibility}"
+                                  IsEnabled="False"
                                   FontSize="12" Margin="0,0,0,6"/>
                     </StackPanel>
 
@@ -305,10 +317,12 @@
                             <ComboBox x:Name="OptAfterEnterDirection" Grid.Column="1"
                                       Height="24" VerticalAlignment="Center"/>
                         </Grid>
-                        <CheckBox Content="{local:Loc Key=Options_EnableFillHandleAndCellDragAndDrop}"
-                                  IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
-                        <CheckBox Content="{local:Loc Key=Options_EnableAutoCompleteForCellValues}"
-                                  IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox x:Name="OptAdvancedFillHandle"
+                                  Content="{local:Loc Key=Options_EnableFillHandleAndCellDragAndDrop}"
+                                  IsChecked="True" IsEnabled="False" FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox x:Name="OptAdvancedAutoComplete"
+                                  Content="{local:Loc Key=Options_EnableAutoCompleteForCellValues}"
+                                  IsChecked="True" IsEnabled="False" FontSize="12" Margin="0,0,0,6"/>
 
                         <TextBlock Text="{local:Loc Key=Options_DisplayOptionsForThisWorkbook}"
                                    FontWeight="SemiBold" FontSize="13" Margin="0,18,0,5"/>
