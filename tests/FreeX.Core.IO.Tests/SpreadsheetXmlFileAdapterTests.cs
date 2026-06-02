@@ -3636,6 +3636,22 @@ public sealed class SpreadsheetXmlFileAdapterTests
         stylesheet.CanRead.Should().BeTrue();
     }
 
+    [Fact]
+    public void LoadTransformed_EmptyStylesheet_ReportsTransformStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString(string.Empty);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+        source.Position.Should().Be(0);
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(0, 1, "maxOutputBytes")]
     [InlineData(1, 0, "maxInputCharacters")]
