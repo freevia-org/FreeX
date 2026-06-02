@@ -4,6 +4,7 @@ using FluentAssertions;
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using DocumentFormat.OpenXml.Packaging;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -4886,45 +4887,64 @@ public class XlsxCorpusRunnerTests
 
         try
         {
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-            var entries = archive.Entries
-                .Select(entry => entry.FullName.Replace('\\', '/'))
-                .ToArray();
-            entries.Should().OnlyHaveUniqueItems(because);
-
-            var entrySet = entries.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            archive.GetEntry("[Content_Types].xml").Should().NotBeNull(because);
-            foreach (var xmlEntry in archive.Entries.Where(entry =>
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
-                         entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
             {
-                using var xmlStream = xmlEntry.Open();
-                var load = () => XDocument.Load(xmlStream);
-                load.Should().NotThrow($"{because}: {xmlEntry.FullName} should be parseable XML");
-            }
+                var entries = archive.Entries
+                    .Select(entry => entry.FullName.Replace('\\', '/'))
+                    .ToArray();
+                entries.Should().OnlyHaveUniqueItems(because);
 
-            foreach (var relsEntry in archive.Entries.Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
-            {
-                var sourcePart = RelationshipSourcePart(relsEntry.FullName.Replace('\\', '/'));
-                var sourceDirectory = Path.GetDirectoryName(sourcePart)?.Replace('\\', '/') ?? string.Empty;
-                var relsXml = LoadPackageXml(relsEntry);
-                XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-                foreach (var relationship in relsXml.Root?.Elements(relNs + "Relationship") ?? [])
+                // OPC part names are compared case-insensitively, so two names differing only by case
+                // (e.g. ClosedXML's xl/drawings/vmldrawing2.vml vs Excel's xl/drawings/vmlDrawing2.vml)
+                // make the package unreadable in Excel even though the zip entries are distinct.
+                entries.Select(name => name.ToLowerInvariant())
+                    .Should().OnlyHaveUniqueItems($"{because}: OPC part names must be unique case-insensitively");
+
+                var entrySet = entries.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                archive.GetEntry("[Content_Types].xml").Should().NotBeNull(because);
+                foreach (var xmlEntry in archive.Entries.Where(entry =>
+                             entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                             entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
                 {
-                    if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    using var xmlStream = xmlEntry.Open();
+                    var load = () => XDocument.Load(xmlStream);
+                    load.Should().NotThrow($"{because}: {xmlEntry.FullName} should be parseable XML");
+                }
 
-                    var target = relationship.Attribute("Target")?.Value;
-                    if (string.IsNullOrWhiteSpace(target) || target.StartsWith("/", StringComparison.Ordinal))
-                        continue;
+                foreach (var relsEntry in archive.Entries.Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var sourcePart = RelationshipSourcePart(relsEntry.FullName.Replace('\\', '/'));
+                    var sourceDirectory = Path.GetDirectoryName(sourcePart)?.Replace('\\', '/') ?? string.Empty;
+                    var relsXml = LoadPackageXml(relsEntry);
+                    XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+                    foreach (var relationship in relsXml.Root?.Elements(relNs + "Relationship") ?? [])
+                    {
+                        if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                            continue;
 
-                    target = Uri.UnescapeDataString(target);
-                    var resolved = NormalizePackagePath(string.IsNullOrWhiteSpace(sourceDirectory)
-                        ? target
-                        : $"{sourceDirectory}/{target}");
-                    entrySet.Should().Contain(resolved, $"{because}: {relsEntry.FullName} relationship target should exist");
+                        var target = relationship.Attribute("Target")?.Value;
+                        if (string.IsNullOrWhiteSpace(target) || target.StartsWith("/", StringComparison.Ordinal))
+                            continue;
+
+                        target = Uri.UnescapeDataString(target);
+                        var resolved = NormalizePackagePath(string.IsNullOrWhiteSpace(sourceDirectory)
+                            ? target
+                            : $"{sourceDirectory}/{target}");
+                        entrySet.Should().Contain(resolved, $"{because}: {relsEntry.FullName} relationship target should exist");
+                    }
                 }
             }
+
+            // The definitive check: the Open XML SDK (same OPC layer Excel uses) must be able to open
+            // the package. A "Format error in package" here is exactly what makes Excel refuse the file
+            // and strip features on repair.
+            stream.Position = 0;
+            var openPackage = () =>
+            {
+                using var document = SpreadsheetDocument.Open(stream, isEditable: false);
+                _ = document.WorkbookPart;
+            };
+            openPackage.Should().NotThrow($"{because}: saved package must be OPC-readable (Excel can open it)");
         }
         finally
         {
