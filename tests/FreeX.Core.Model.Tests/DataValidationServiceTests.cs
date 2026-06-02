@@ -285,7 +285,7 @@ public sealed class DataValidationServiceTests
         items.Should().NotBeNull();
         items!.Should().HaveCount(itemCount);
         items[^1].Should().Be($"Item {itemCount}");
-        allocatedBytes.Should().BeLessThan(4_000_000);
+        allocatedBytes.Should().BeLessThan(100_000);
     }
 
     private static DataValidation NewListRule(SheetId sheetId, string formula1) =>

@@ -440,21 +440,60 @@ public static partial class DataValidationService
         var endRow = Math.Max(firstRow, lastRow);
         var startCol = Math.Min(firstCol, lastCol);
         var endCol = Math.Max(firstCol, lastCol);
-        var cellCount = (ulong)(endRow - startRow + 1) * (endCol - startCol + 1);
-        var list = cellCount <= int.MaxValue
-            ? new List<string>((int)cellCount)
-            : [];
+        return RangeListItems.Create(sheet, startRow, endRow, startCol, endCol);
+    }
 
-        for (var row = startRow; row <= endRow; row++)
+    private sealed class RangeListItems : IReadOnlyList<string>
+    {
+        private readonly Sheet _sheet;
+        private readonly uint _startRow;
+        private readonly uint _startCol;
+        private readonly uint _columnCount;
+        private readonly int _count;
+
+        private RangeListItems(Sheet sheet, uint startRow, uint startCol, uint columnCount, int count)
         {
-            for (var col = startCol; col <= endCol; col++)
+            _sheet = sheet;
+            _startRow = startRow;
+            _startCol = startCol;
+            _columnCount = columnCount;
+            _count = count;
+        }
+
+        public static RangeListItems Create(Sheet sheet, uint startRow, uint endRow, uint startCol, uint endCol)
+        {
+            var rowCount = (ulong)(endRow - startRow) + 1;
+            var columnCount = (ulong)(endCol - startCol) + 1;
+            var cellCount = rowCount * columnCount;
+            if (cellCount > int.MaxValue)
+                throw new InvalidOperationException("Validation list range is too large to expose as an item list.");
+
+            return new RangeListItems(sheet, startRow, startCol, (uint)columnCount, (int)cellCount);
+        }
+
+        public int Count => _count;
+
+        public string this[int index]
+        {
+            get
             {
-                var cellValue = sheet.GetCell(row, col)?.Value ?? BlankValue.Instance;
-                list.Add(ToValidationText(cellValue));
+                if ((uint)index >= (uint)_count)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
+                var row = _startRow + (uint)index / _columnCount;
+                var col = _startCol + (uint)index % _columnCount;
+                var value = _sheet.GetCell(row, col)?.Value ?? BlankValue.Instance;
+                return ToValidationText(value);
             }
         }
 
-        return list;
+        public IEnumerator<string> GetEnumerator()
+        {
+            for (var i = 0; i < _count; i++)
+                yield return this[i];
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private static string? ValidateListAgainstValues(DataValidation dv, ScalarValue value, IReadOnlyCollection<string> allowedValues)
