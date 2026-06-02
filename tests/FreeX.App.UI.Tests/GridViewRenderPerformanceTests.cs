@@ -1037,6 +1037,9 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("BuildColumnLookup(topRightColumns)");
         calculateLayouts.Should().Contain("ResolveSplitPaneRegion(isTopPane, isLeftPane)");
         calculateLayouts.Should().Contain("if (cells.Count == 0)");
+        calculateLayouts.Should().Contain("var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);");
+        calculateLayouts.Should().Contain("var verticalX = dividerLayout.VerticalX ?? rowHeaderWidth;");
+        calculateLayouts.Should().Contain("? rowHeaderWidth + column.LeftOffset");
         calculateLayouts.Should().Contain("new List<SplitPaneCellLayout>(cells.Count)");
         calculateLayouts.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
         calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell)");
@@ -1044,6 +1047,13 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.IndexOf("if (cells.Count == 0)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(calculateLayouts.IndexOf("BuildRowLookup(topRows)", StringComparison.Ordinal));
+        calculateLayouts.IndexOf("var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(calculateLayouts.IndexOf("foreach (var cell in cells)", StringComparison.Ordinal));
+        calculateLayouts[
+            calculateLayouts.IndexOf("foreach (var cell in cells)", StringComparison.Ordinal)..]
+            .Should()
+            .NotContain("GridView.CalculateRowHeaderWidth(viewport)");
         calculateLayouts.Should().NotContain("occupied.Add((cell.Row, cell.Col))");
         buildOccupiedCells.Should().Contain("occupied.Add((cell.Row, cell.Col))");
         mergeRangeIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
