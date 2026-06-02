@@ -745,6 +745,33 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_TreatsNullNativeJsonWorksheetDataListsAsEmpty()
+    {
+        var workbook = new Workbook("NullWorksheetDataLists");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DataConsolidation = new WorksheetDataConsolidationModel
+        {
+            Function = "sum",
+            References = null!
+        };
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            Reference = "A1:B2",
+            Conditions = null!
+        };
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var sheetJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single();
+        sheetJson.GetProperty("DataConsolidation").GetProperty("References")
+            .EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("SortState").GetProperty("Conditions")
+            .EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Save_TreatsNullNativeJsonChartListsAsEmpty()
     {
         var workbook = new Workbook("NullChartLists");
