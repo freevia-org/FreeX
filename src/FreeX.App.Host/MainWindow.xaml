@@ -3662,7 +3662,7 @@
         <Border Grid.Row="5" Panel.ZIndex="5" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="{StaticResource FreeXBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
-                  MinHeight="38"
+                  MinHeight="32"
                   Background="{StaticResource FreeXSheetSurfaceBrush}"
                   SizeChanged="SheetTabsRowGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
@@ -3697,13 +3697,13 @@
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="35" Padding="0"
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Width="28" Height="28" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
                         Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
-                        HorizontalAlignment="Right" HorizontalContentAlignment="Center"
+                        HorizontalAlignment="Center" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
-                        Panel.ZIndex="7"
+                        Panel.ZIndex="9"
                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScrollTabsLeft}"
                         local:RibbonTooltip.KeyTip="SL"
                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScrollTheSheetTabListToTheLeft}" local:RibbonMetadata.CommandName="Scroll Tabs Left">
@@ -3727,6 +3727,16 @@
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Button.Template>
+                    <Grid Width="14" Height="14" SnapsToDevicePixels="True">
+                        <Path Data="M 9,1 L 5,5 L 9,9"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.75"
+                              StrokeStartLineCap="Square"
+                              StrokeEndLineCap="Square"
+                              StrokeLineJoin="Miter"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"/>
+                    </Grid>
                 </Button>
 
                 <!-- Sheet tabs in a clipped, scrollbar-free viewport -->
@@ -3817,91 +3827,12 @@
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_MoveRight}"      local:RibbonTooltip.KeyTip="M" Click="SheetCtxMoveRight_Click" local:RibbonMetadata.CommandName="Move Right"/>
                                             </ContextMenu>
                                         </Grid.ContextMenu>
-                                        <Path x:Name="TabLeftOutline"
-                                              Data="M 0,0 A 8,8 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26"
-                                              Stroke="{Binding ElementName=TabBorder, Path=BorderBrush}"
-                                              StrokeThickness="1.25"
-                                              StrokeStartLineCap="Round"
-                                              StrokeEndLineCap="Round"
-                                              StrokeLineJoin="Round"
-                                              Panel.ZIndex="3"
-                                              SnapsToDevicePixels="True"
-                                              Visibility="Collapsed"
-                                              IsHitTestVisible="False"/>
-                                        <Path x:Name="TabRightOutline"
-                                              Data="M 12,0 A 8,8 0 0 0 4,8 L 4,22 A 4,4 0 0 1 0,26"
-                                              HorizontalAlignment="Right"
-                                              Stroke="{Binding ElementName=TabBorder, Path=BorderBrush}"
-                                              StrokeThickness="1.25"
-                                              StrokeStartLineCap="Round"
-                                              StrokeEndLineCap="Round"
-                                              StrokeLineJoin="Round"
-                                              Panel.ZIndex="3"
-                                              SnapsToDevicePixels="True"
-                                              Visibility="Collapsed"
-                                              IsHitTestVisible="False"/>
-                                        <Border x:Name="TabBottomOutline"
-                                                Height="1.25"
-                                                VerticalAlignment="Bottom"
-                                                Margin="12,0,12,0"
-                                                Background="{Binding ElementName=TabBorder, Path=BorderBrush}"
-                                                Panel.ZIndex="3"
-                                                Visibility="Collapsed"
-                                                IsHitTestVisible="False"/>
-                                        <Canvas x:Name="TabOutlineCanvas"
-                                                Height="26"
-                                                VerticalAlignment="Top"
-                                                Panel.ZIndex="4"
-                                                Visibility="Collapsed"
-                                                IsHitTestVisible="False">
-                                            <Path x:Name="TabOutline"
-                                                  Data="M 1,0 C 5,0 8,3 8,8 L 8,22 C 8,24 10,26 12,26 L 88,26 C 90,26 92,24 92,22 L 92,8 C 92,3 95,0 99,0"
-                                                  Width="{Binding ActualWidth, ElementName=TabChrome}"
-                                                  Height="26"
-                                                  Stretch="Fill"
-                                                  Stroke="{Binding ElementName=TabBorder, Path=BorderBrush}"
-                                                  StrokeThickness="1.25"
-                                                  StrokeStartLineCap="Round"
-                                                  StrokeEndLineCap="Round"
-                                                  StrokeLineJoin="Round"
-                                                  SnapsToDevicePixels="True"/>
-                                        </Canvas>
-                                        <Border x:Name="ActiveTabTopCutout"
-                                                Height="2"
-                                                VerticalAlignment="Top"
-                                                Margin="2,0,2,0"
-                                                Background="{StaticResource FreeXRibbonSurfaceBrush}"
-                                                Panel.ZIndex="6"
-                                                IsHitTestVisible="False">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                </Style>
-                                            </Border.Style>
-                                        </Border>
                                         <Border x:Name="TabBorder"
-                                                CornerRadius="0,0,4,4" Padding="12,7,12,1"
+                                                CornerRadius="0,0,4,4" Padding="12,5,12,1"
                                                 Margin="8,0,8,0"
-                                                Panel.ZIndex="2">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background"      Value="Transparent"/>
-                                                    <Setter Property="BorderBrush"     Value="{StaticResource FreeXBorderStrongBrush}"/>
-                                                    <Setter Property="BorderThickness" Value="0"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                            <Setter Property="Background"      Value="Transparent"/>
-                                                            <Setter Property="BorderBrush"     Value="{StaticResource FreeXAccentBrush}"/>
-                                                            <Setter Property="BorderThickness" Value="0"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                            <Setter Property="Background"      Value="Transparent"/>
-                                                            <Setter Property="BorderBrush"     Value="{StaticResource FreeXAccentBrush}"/>
-                                                            <Setter Property="BorderThickness" Value="0"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
+                                                Panel.ZIndex="2"
+                                                Background="Transparent"
+                                                BorderThickness="0">
                                             <Grid>
                                                 <Grid MouseDown="SheetTab_LabelMouseDown">
                                                     <Grid.RowDefinitions>
@@ -3931,18 +3862,12 @@
                                         <DataTrigger Binding="{Binding IsKeyboardFocusWithin, ElementName=TabChrome}" Value="True">
                                             <Setter TargetName="TabFocusCue" Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreeXAccentBrush}"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreeXAccentBrush}"/>
-                                        </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <Button x:Name="AddSheetButton" Content="+" Width="70" MinWidth="70" MinHeight="31"
-                                FontSize="17" FontWeight="SemiBold" Margin="0,0,0,1" Padding="0"
+                        <Button x:Name="AddSheetButton" Content="+" Width="44" MinWidth="44" MinHeight="31"
+                                FontSize="16" FontWeight="SemiBold" Margin="0,0,0,1" Padding="0"
                                 Background="Transparent" BorderBrush="Transparent" BorderThickness="0"
                                 Foreground="{StaticResource FreeXAccentBrush}" Opacity="1"
                                 VerticalAlignment="Top" Cursor="Hand"
@@ -3951,8 +3876,6 @@
                                 AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_InsertSheet}"
                                 AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_AddANewSheetToTheWorkbook}"
                                 Click="AddSheetButton_Click"
-                                MouseEnter="AddSheetButton_MouseEnter"
-                                MouseLeave="AddSheetButton_MouseLeave"
                                 Loaded="SheetTabsScroller_Loaded"
                                 SizeChanged="SheetTabsScroller_SizeChanged"
                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InsertSheet}"
@@ -3960,16 +3883,15 @@
                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddANewSheetToTheWorkbook}" local:RibbonMetadata.CommandName="Insert Sheet">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
-                                    <Grid x:Name="GhostTabRoot"
-                                          Background="Transparent"
+                                    <Grid Background="Transparent"
                                           Opacity="{TemplateBinding Opacity}">
-                                        <Border x:Name="GhostTabChrome"
+                                        <Border x:Name="AddSheetHitVisual"
+                                                Width="28"
+                                                Height="24"
                                                 Background="Transparent"
-                                                BorderBrush="{TemplateBinding BorderBrush}"
-                                                BorderThickness="0"
-                                                CornerRadius="0,0,4,4"
-                                                Margin="0"
-                                                Panel.ZIndex="2"
+                                                CornerRadius="3"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
                                                 SnapsToDevicePixels="True">
                                             <TextBlock Text="+"
                                                        FontSize="{TemplateBinding FontSize}"
@@ -3977,25 +3899,16 @@
                                                        Foreground="{TemplateBinding Foreground}"
                                                        LineHeight="18"
                                                        LineStackingStrategy="BlockLineHeight"
-                                                       Margin="0,1,0,0"
                                                        HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center">
-                                                <TextBlock.RenderTransform>
-                                                    <TranslateTransform X="-8"/>
-                                                </TextBlock.RenderTransform>
-                                            </TextBlock>
+                                                       VerticalAlignment="Center"/>
                                         </Border>
                                     </Grid>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
-                                            <Setter TargetName="GhostTabChrome" Property="Background" Value="Transparent"/>
-                                            <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
+                                            <Setter TargetName="AddSheetHitVisual" Property="Background" Value="#E6F6FA"/>
                                         </Trigger>
                                         <Trigger Property="IsPressed" Value="True">
-                                            <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
-                                            <Setter TargetName="GhostTabChrome" Property="Background" Value="Transparent"/>
-                                            <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreeXAccentDarkBrush}"/>
+                                            <Setter TargetName="AddSheetHitVisual" Property="Background" Value="#CCEAF2"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -4003,6 +3916,57 @@
                         </Button>
                     </StackPanel>
                 </ScrollViewer>
+
+                <Canvas x:Name="SheetTabsViewportMaskLayer"
+                        Grid.Column="1"
+                        Grid.ColumnSpan="4"
+                        Width="{Binding ActualWidth, ElementName=SheetTabsScroller}"
+                        Height="32"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="8"
+                        ClipToBounds="True"
+                        SnapsToDevicePixels="True"
+                        IsHitTestVisible="False">
+                    <Border x:Name="SheetTabsLeftViewportMask"
+                            Canvas.Left="0"
+                            Canvas.Top="2"
+                            Width="0"
+                            Height="30"
+                            Background="{StaticResource FreeXSheetSurfaceBrush}"
+                            Visibility="Hidden"
+                            IsHitTestVisible="False"/>
+                    <Border x:Name="SheetTabsRightViewportMask"
+                            Canvas.Top="2"
+                            Width="0"
+                            Height="30"
+                            Background="{StaticResource FreeXSheetSurfaceBrush}"
+                            Visibility="Hidden"
+                            IsHitTestVisible="False"/>
+                </Canvas>
+
+                <Border x:Name="SheetTabsLeftEdgeMask"
+                        Grid.Column="0"
+                        Height="30"
+                        Margin="0,2,0,0"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="8"
+                        Background="{StaticResource FreeXSheetSurfaceBrush}"
+                        Visibility="Hidden"
+                        IsHitTestVisible="False"/>
+
+                <Border x:Name="SheetTabsRightEdgeMask"
+                        Grid.Column="3"
+                        Width="28"
+                        Height="30"
+                        Margin="0,2,0,0"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="8"
+                        Background="{StaticResource FreeXSheetSurfaceBrush}"
+                        Visibility="Hidden"
+                        IsHitTestVisible="False"/>
 
                 <Canvas x:Name="SheetTabsOverlayLayer"
                         Grid.Column="0"
@@ -4016,14 +3980,14 @@
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;"
-                        Width="18" Height="35" Padding="0"
+                <Button x:Name="SheetNavRightBtn" Grid.Column="3"
+                        Width="28" Height="28" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
                         Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
-                        Panel.ZIndex="7"
+                        Panel.ZIndex="9"
                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ScrollTabsRight}"
                         local:RibbonTooltip.KeyTip="SR"
                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ScrollTheSheetTabListToTheRight}" local:RibbonMetadata.CommandName="Scroll Tabs Right">
@@ -4047,6 +4011,16 @@
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Button.Template>
+                    <Grid Width="14" Height="14" SnapsToDevicePixels="True">
+                        <Path Data="M 5,1 L 9,5 L 5,9"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.75"
+                              StrokeStartLineCap="Square"
+                              StrokeEndLineCap="Square"
+                              StrokeLineJoin="Miter"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"/>
+                    </Grid>
                 </Button>
 
                 <!-- Horizontal scrollbar (Excel-style, right of sheet tabs) -->

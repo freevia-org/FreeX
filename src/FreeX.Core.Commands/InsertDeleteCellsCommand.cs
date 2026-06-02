@@ -68,6 +68,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     {
         if (_snapshot is null) return;
         _snapshot.Restore(ctx.GetSheet(_sheetId));
+        _snapshot = null;
     }
 
     private void InsertShiftRight(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
@@ -233,6 +234,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     {
         if (_snapshot is null) return;
         _snapshot.Restore(ctx.GetSheet(_sheetId));
+        _snapshot = null;
     }
 
     private void DeleteShiftLeft(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
@@ -324,17 +326,35 @@ internal sealed class CellShiftSnapshot(
 {
     public void Restore(Sheet sheet)
     {
-        var current = new List<CellAddress>(cells.Count);
-        foreach (var ((row, col), _) in sheet.GetOccupiedCellMap())
+        var current = ArrayPool<CellAddress>.Shared.Rent(Math.Max(cells.Count, 16));
+        var count = 0;
+        try
         {
-            if (region.Contains(row, col))
-                current.Add(new CellAddress(sheet.Id, row, col));
+            foreach (var ((row, col), _) in sheet.GetOccupiedCellMap())
+            {
+                if (!region.Contains(row, col))
+                    continue;
+
+                if (count == current.Length)
+                {
+                    var expanded = ArrayPool<CellAddress>.Shared.Rent(current.Length * 2);
+                    current.AsSpan(0, count).CopyTo(expanded);
+                    ArrayPool<CellAddress>.Shared.Return(current);
+                    current = expanded;
+                }
+
+                current[count++] = new CellAddress(sheet.Id, row, col);
+            }
+
+            for (var i = 0; i < count; i++)
+                sheet.ClearCell(current[i]);
+
+            foreach (var (address, cell) in cells)
+                sheet.SetCell(address, cell);
         }
-
-        foreach (var address in current)
-            sheet.ClearCell(address);
-
-        foreach (var (address, cell) in cells)
-            sheet.SetCell(address, cell.Clone());
+        finally
+        {
+            ArrayPool<CellAddress>.Shared.Return(current);
+        }
     }
 }
