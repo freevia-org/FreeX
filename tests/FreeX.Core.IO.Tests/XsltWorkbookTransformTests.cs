@@ -1098,6 +1098,46 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_MergeAttributeValueTemplates_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <layout>
+              <header title="Summary" across="1" down="2" next="Detail"/>
+            </layout>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/layout">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Merged AVT">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell ss:MergeAcross="{header/@across}" ss:MergeDown="{header/@down}">
+                          <ss:Data ss:Type="String"><xsl:value-of select="header/@title"/></ss:Data>
+                        </ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="header/@next"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var cells = XDocument.Load(transformed).Descendants(ss + "Cell").ToList();
+
+        cells[0].Attribute(ss + "MergeAcross")!.Value.Should().Be("1");
+        cells[0].Attribute(ss + "MergeDown")!.Value.Should().Be("2");
+        cells[0].Element(ss + "Data")!.Value.Should().Be("Summary");
+        cells[1].Element(ss + "Data")!.Value.Should().Be("Detail");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NamedRangeAttributeValueTemplate_GeneratesSpreadsheetMl()
     {
         using var source = StreamFromString("""

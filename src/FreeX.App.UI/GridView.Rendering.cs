@@ -192,6 +192,7 @@ public partial class GridView
         _borderPenCache.Clear();
         _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
+        _underlinePenCache.Clear();
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions, EditingCell))
         {
             var cell = layout.Cell;
@@ -314,9 +315,19 @@ public partial class GridView
                 CellVAlign.Bottom => rect.Bottom - text.Height - 1,
                 _ => rect.Top + (rect.Height - text.Height) / 2
             };
+            textY = Math.Max(rect.Top, textY);
 
             dc.PushClip(GetCellClipGeometry(textClipRect));
-            dc.DrawText(text, new Point(Math.Round(textX), Math.Round(Math.Max(rect.Top, textY))));
+            dc.DrawText(text, new Point(Math.Round(textX), Math.Round(textY)));
+
+            if (style?.DoubleUnderline == true)
+            {
+                double uY = textY + text.Height + 1;
+                var underlinePen = UnderlinePenForTextBrush(textBrush, _underlinePenCache);
+                dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));
+                dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
+            }
+
             dc.Pop();
             dc.Pop();
         }

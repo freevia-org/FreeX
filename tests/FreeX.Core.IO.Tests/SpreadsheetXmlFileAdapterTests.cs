@@ -2680,6 +2680,46 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromMergeAttributeValueTemplates()
+    {
+        using var source = StreamFromString("""
+            <layout>
+              <header title="Summary" across="1" down="2" next="Detail"/>
+            </layout>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/layout">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Merged AVT">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell ss:MergeAcross="{header/@across}" ss:MergeDown="{header/@down}">
+                          <ss:Data ss:Type="String"><xsl:value-of select="header/@title"/></ss:Data>
+                        </ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="header/@next"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Merged AVT");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Summary"));
+        sheet.GetCell(1, 3)!.Value.Should().Be(new TextValue("Detail"));
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2)));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromFormulaAttributeValueTemplate()
     {
         using var source = StreamFromString("""
