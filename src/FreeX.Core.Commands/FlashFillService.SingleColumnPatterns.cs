@@ -37,6 +37,40 @@ public static partial class FlashFillService
         int MonthWidth,
         int DayWidth);
 
+    private sealed class ExtractedSegmentCache
+    {
+        private const int MaxCachedSegments = 16;
+        private List<string>? _segments;
+
+        public string GetOrAdd(string source, int start, int endExclusive)
+        {
+            var length = endExclusive - start;
+            if (length == 0)
+                return string.Empty;
+
+            var span = source.AsSpan(start, length);
+            if (_segments is { } segments)
+            {
+                for (var i = 0; i < segments.Count; i++)
+                {
+                    var segment = segments[i];
+                    if (segment.Length == length && span.SequenceEqual(segment.AsSpan()))
+                        return segment;
+                }
+            }
+            else
+            {
+                _segments = segments = new List<string>(4);
+            }
+
+            var extracted = SliceSegment(source, start, endExclusive);
+            if (segments.Count < MaxCachedSegments)
+                segments.Add(extracted);
+
+            return extracted;
+        }
+    }
+
     // Delimiters tried in order for extract-by-delimiter, token casing, and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', ';', ':', '|', '-', '_', '@', '.', '/', '\\'];
     private static readonly char[] FinalDelimitedTokenDelimiters = [',', ';', ':', '|', '-', '_', '/', '\\'];
@@ -198,7 +232,10 @@ public static partial class FlashFillService
         if (!examples.All(e => TryGetFinalDottedToken(e.Source, out var token) && token == e.Expected))
             return null;
 
-        return source => TryGetFinalDottedToken(source, out var token) ? token : null;
+        var cache = new ExtractedSegmentCache();
+        return source => TryGetFinalDottedTokenRange(source, out var start, out var endExclusive)
+            ? cache.GetOrAdd(source, start, endExclusive)
+            : null;
     }
 
     private static Func<string, string?>? TryExtractFinalDelimitedToken(IReadOnlyList<(string Source, string Expected)> examples)
@@ -208,7 +245,11 @@ public static partial class FlashFillService
             if (!examples.All(e => TryGetFinalDelimitedToken(e.Source, delimiter, out var token) && token == e.Expected))
                 continue;
 
-            return source => TryGetFinalDelimitedToken(source, delimiter, out var token) ? token : null;
+            var d = delimiter;
+            var cache = new ExtractedSegmentCache();
+            return source => TryGetFinalDelimitedTokenRange(source, d, out var start, out var endExclusive)
+                ? cache.GetOrAdd(source, start, endExclusive)
+                : null;
         }
 
         return null;
@@ -260,7 +301,17 @@ public static partial class FlashFillService
     private static bool TryGetFinalDottedToken(string source, out string token)
     {
         token = string.Empty;
+        if (!TryGetFinalDottedTokenRange(source, out var tokenStart, out var tokenEndExclusive))
+            return false;
 
+        token = SliceSegment(source, tokenStart, tokenEndExclusive);
+        return true;
+    }
+
+    private static bool TryGetFinalDottedTokenRange(string source, out int tokenStart, out int tokenEndExclusive)
+    {
+        tokenStart = 0;
+        tokenEndExclusive = 0;
         var end = source.Length - 1;
         TrimTrailingWhitespace(source, ref end);
 
@@ -270,12 +321,13 @@ public static partial class FlashFillService
             if (dotIndex < 0)
                 return false;
 
-            var tokenStart = dotIndex + 1;
-            var tokenEnd = end;
-            TrimSegment(source, ref tokenStart, ref tokenEnd);
-            if (tokenStart <= tokenEnd && HasNonEmptyPartBeforeDelimiter(source, dotIndex, '.'))
+            var currentTokenStart = dotIndex + 1;
+            var currentTokenEnd = end;
+            TrimSegment(source, ref currentTokenStart, ref currentTokenEnd);
+            if (currentTokenStart <= currentTokenEnd && HasNonEmptyPartBeforeDelimiter(source, dotIndex, '.'))
             {
-                token = SliceSegment(source, tokenStart, tokenEnd + 1);
+                tokenStart = currentTokenStart;
+                tokenEndExclusive = currentTokenEnd + 1;
                 return true;
             }
 
@@ -342,12 +394,30 @@ public static partial class FlashFillService
     private static bool TryGetFinalDelimitedToken(string source, char delimiter, out string token)
     {
         token = string.Empty;
+        if (!TryGetFinalDelimitedTokenRange(source, delimiter, out var tokenStart, out var tokenEndExclusive))
+            return false;
+
+        token = SliceSegment(source, tokenStart, tokenEndExclusive);
+        return true;
+    }
+
+    private static bool TryGetFinalDelimitedTokenRange(string source, char delimiter, out int tokenStart, out int tokenEndExclusive)
+    {
+        tokenStart = 0;
+        tokenEndExclusive = 0;
         var lastDelimiterIndex = source.LastIndexOf(delimiter);
         if (lastDelimiterIndex < 0 || lastDelimiterIndex == source.Length - 1)
             return false;
 
-        token = source[(lastDelimiterIndex + 1)..].Trim();
-        return token.Length > 0;
+        var start = lastDelimiterIndex + 1;
+        var end = source.Length - 1;
+        TrimSegment(source, ref start, ref end);
+        if (start > end)
+            return false;
+
+        tokenStart = start;
+        tokenEndExclusive = end + 1;
+        return true;
     }
 
     private static Func<string, string?>? TryEmailDisplayName(IReadOnlyList<(string Source, string Expected)> examples)
