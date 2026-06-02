@@ -18,9 +18,11 @@ internal sealed record CfEvaluationContext(
     Dictionary<ConditionalFormat, CfFormulaCache> Formulas,
     Dictionary<CfThresholdFormulaKey, FormulaNode> ThresholdFormulas,
     Dictionary<CfThresholdFormulaKey, double> StaticThresholdFormulaValues,
+    Dictionary<ConditionalFormat, CfColorScaleThresholdCache> ColorScaleThresholds,
     Dictionary<ConditionalFormat, CfIconSetThresholdCache> IconSetThresholds,
     Dictionary<ConditionalFormat, CellStyle> DefaultMergedFormatStyles);
 
+internal sealed record CfColorScaleThresholdCache(double Min, double Max, double? Mid);
 internal sealed record CfIconSetThresholdCache(double[] Values, bool[] GreaterThanOrEqual);
 
 internal sealed record CfFormulaCache(
@@ -75,6 +77,7 @@ internal static class ViewportConditionalFormatEvaluator
     private static readonly Dictionary<ConditionalFormat, CfFormulaCache> EmptyFormulas = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<CfThresholdFormulaKey, FormulaNode> EmptyThresholdFormulas = [];
     private static readonly Dictionary<CfThresholdFormulaKey, double> EmptyStaticThresholdFormulaValues = [];
+    private static readonly Dictionary<ConditionalFormat, CfColorScaleThresholdCache> EmptyColorScaleThresholds = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<ConditionalFormat, CfIconSetThresholdCache> EmptyIconSetThresholds = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<ConditionalFormat, CellStyle> EmptyDefaultMergedFormatStyles = new(ReferenceEqualityComparer.Instance);
     private static readonly FormulaEvaluator ThresholdFormulaEvaluator = new();
@@ -85,6 +88,7 @@ internal static class ViewportConditionalFormatEvaluator
         EmptyFormulas,
         EmptyThresholdFormulas,
         EmptyStaticThresholdFormulaValues,
+        EmptyColorScaleThresholds,
         EmptyIconSetThresholds,
         EmptyDefaultMergedFormatStyles);
 
@@ -106,6 +110,7 @@ internal static class ViewportConditionalFormatEvaluator
             PrecomputeFormulaCaches(sheet),
             thresholdFormulas,
             staticThresholdFormulaValues,
+            PrecomputeColorScaleThresholdCaches(sheet, aggregates, staticThresholdFormulaValues),
             PrecomputeIconSetThresholdCaches(sheet, aggregates, staticThresholdFormulaValues),
             PrecomputeDefaultMergedFormatStyles(rulesByPriority));
     }
@@ -605,6 +610,81 @@ internal static class ViewportConditionalFormatEvaluator
         }
 
         return result ?? EmptyIconSetThresholds;
+    }
+
+    private static Dictionary<ConditionalFormat, CfColorScaleThresholdCache> PrecomputeColorScaleThresholdCaches(
+        Sheet sheet,
+        Dictionary<ConditionalFormat, CfAggregateCache> aggregates,
+        Dictionary<CfThresholdFormulaKey, double> staticThresholdFormulaValues)
+    {
+        Dictionary<ConditionalFormat, CfColorScaleThresholdCache>? result = null;
+        foreach (var cf in sheet.ConditionalFormats)
+        {
+            if (cf.RuleType != CfRuleType.ColorScale ||
+                !aggregates.TryGetValue(cf, out var cache))
+            {
+                continue;
+            }
+
+            if (!TryResolveStaticOrFormulaThreshold(
+                    cf,
+                    CfThresholdFormulaSlot.ColorScaleMin,
+                    cf.MinThresholdType,
+                    cf.MinThresholdValue,
+                    cache,
+                    staticThresholdFormulaValues,
+                    out var min) ||
+                !TryResolveStaticOrFormulaThreshold(
+                    cf,
+                    CfThresholdFormulaSlot.ColorScaleMax,
+                    cf.MaxThresholdType,
+                    cf.MaxThresholdValue,
+                    cache,
+                    staticThresholdFormulaValues,
+                    out var max))
+            {
+                continue;
+            }
+
+            double? mid = null;
+            if (cf.UseThreeColorScale &&
+                TryResolveStaticOrFormulaThreshold(
+                    cf,
+                    CfThresholdFormulaSlot.ColorScaleMid,
+                    cf.MidThresholdType,
+                    cf.MidThresholdValue,
+                    cache,
+                    staticThresholdFormulaValues,
+                    out var resolvedMid) &&
+                resolvedMid > min &&
+                resolvedMid < max)
+            {
+                mid = resolvedMid;
+            }
+
+            result ??= new Dictionary<ConditionalFormat, CfColorScaleThresholdCache>(ReferenceEqualityComparer.Instance);
+            result[cf] = new CfColorScaleThresholdCache(min, max, mid);
+        }
+
+        return result ?? EmptyColorScaleThresholds;
+    }
+
+    private static bool TryResolveStaticOrFormulaThreshold(
+        ConditionalFormat cf,
+        CfThresholdFormulaSlot slot,
+        CfThresholdType type,
+        string? text,
+        CfAggregateCache cache,
+        Dictionary<CfThresholdFormulaKey, double> staticThresholdFormulaValues,
+        out double value)
+    {
+        if (type == CfThresholdType.Formula)
+        {
+            return staticThresholdFormulaValues.TryGetValue(new CfThresholdFormulaKey(cf, slot), out value) &&
+                   double.IsFinite(value);
+        }
+
+        return TryResolveStaticThreshold(type, text, cache, out value);
     }
 
     private static bool TryResolveStaticThreshold(
@@ -1273,51 +1353,66 @@ internal static class ViewportConditionalFormatEvaluator
         if (!double.IsFinite(cellVal)) return null;
         if (!cfContext.Aggregates.TryGetValue(cf, out var cache)) return null;
 
-        if (!TryResolveThreshold(
-                cf.MinThresholdType,
-                cf.MinThresholdValue,
-                cache,
-                sheet,
-                workbook,
-                addr,
-                cf.AppliesTo.Start,
-                GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMin),
-                GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMin),
-                out var min) ||
-            !TryResolveThreshold(
-                cf.MaxThresholdType,
-                cf.MaxThresholdValue,
-                cache,
-                sheet,
-                workbook,
-                addr,
-                cf.AppliesTo.Start,
-                GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMax),
-                GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMax),
-                out var max))
+        double min;
+        double max;
+        double? mid;
+        if (cfContext.ColorScaleThresholds.TryGetValue(cf, out var cachedThresholds))
+        {
+            min = cachedThresholds.Min;
+            max = cachedThresholds.Max;
+            mid = cachedThresholds.Mid;
+        }
+        else if (!TryResolveThreshold(
+                     cf.MinThresholdType,
+                     cf.MinThresholdValue,
+                     cache,
+                     sheet,
+                     workbook,
+                     addr,
+                     cf.AppliesTo.Start,
+                     GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMin),
+                     GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMin),
+                     out min) ||
+                 !TryResolveThreshold(
+                     cf.MaxThresholdType,
+                     cf.MaxThresholdValue,
+                     cache,
+                     sheet,
+                     workbook,
+                     addr,
+                     cf.AppliesTo.Start,
+                     GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMax),
+                     GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMax),
+                     out max))
         {
             return null;
+        }
+        else
+        {
+            mid = cf.UseThreeColorScale &&
+                  TryResolveThreshold(
+                      cf.MidThresholdType,
+                      cf.MidThresholdValue,
+                      cache,
+                      sheet,
+                      workbook,
+                      addr,
+                      cf.AppliesTo.Start,
+                      GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
+                      GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
+                      out var resolvedMid) &&
+                  resolvedMid > min &&
+                  resolvedMid < max
+                ? resolvedMid
+                : null;
         }
 
         if (max <= min) return new CellStyle { FillColor = cf.MinColor.ToCellColor() };
 
-        var interpolated = cf.UseThreeColorScale &&
-                           TryResolveThreshold(
-                               cf.MidThresholdType,
-                               cf.MidThresholdValue,
-                               cache,
-                               sheet,
-                               workbook,
-                               addr,
-                               cf.AppliesTo.Start,
-                               GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
-                               GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
-                               out var mid) &&
-                           mid > min &&
-                           mid < max
-            ? cellVal <= mid
-                ? Lerp(cf.MinColor, cf.MidColor, Math.Clamp((cellVal - min) / (mid - min), 0d, 1d))
-                : Lerp(cf.MidColor, cf.MaxColor, Math.Clamp((cellVal - mid) / (max - mid), 0d, 1d))
+        var interpolated = mid.HasValue
+            ? cellVal <= mid.Value
+                ? Lerp(cf.MinColor, cf.MidColor, Math.Clamp((cellVal - min) / (mid.Value - min), 0d, 1d))
+                : Lerp(cf.MidColor, cf.MaxColor, Math.Clamp((cellVal - mid.Value) / (max - mid.Value), 0d, 1d))
             : Lerp(cf.MinColor, cf.MaxColor, Math.Clamp((cellVal - min) / (max - min), 0d, 1d));
 
         return new CellStyle { FillColor = interpolated };
