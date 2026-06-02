@@ -27,7 +27,9 @@ internal static partial class AccessibilityTextRules
         "photo",
         "screenshot",
         "shape",
+        "text",
         "text box",
+        "textbox",
         "object",
         "graphic"
     };
@@ -63,6 +65,9 @@ internal static partial class AccessibilityTextRules
             text.StartsWith("image ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "image ") ||
             text.StartsWith("shape ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "shape ") ||
             text.StartsWith("text box ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "text box ") ||
+            text.StartsWith("textbox ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "textbox ") ||
+            text.StartsWith("object ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "object ") ||
+            text.StartsWith("graphic ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "graphic ") ||
             LooksLikeImageFileName(text);
     }
 
