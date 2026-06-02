@@ -189,6 +189,12 @@ public sealed partial class XlsxFileAdapter
             XlsxSlicerTimelineWriter.SavePivotTableStyles(packageStream, workbook);
         }
 
+        if (workbook.StructuredTableStyles.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxStructuredTableStyleMetadataWriter.Save(packageStream, workbook);
+        }
+
         IReadOnlyDictionary<int, int> numberFormatIdMap = new Dictionary<int, int>();
         if (workbook.NumberFormatCatalog.Count > 0 ||
             featurePlan.HasPivotCustomNumberFormats)
