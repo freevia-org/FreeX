@@ -39,6 +39,26 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void MenuKeyOnInactiveFocusedSheetTab_SelectsTabBeforeWorksheetFallback()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.InsertNewSheet();
+            harness.ActiveSheetTabName.Should().Be("Sheet2");
+
+            harness.FocusSheetTab("Sheet1").Should().BeTrue();
+            harness.FocusedSheetTabName.Should().Be("Sheet1");
+
+            harness.RouteFocusedSheetTabContextMenu().Should().BeTrue();
+
+            harness.ActiveSheetTabName.Should().Be("Sheet1");
+            harness.GroupedSheetTabNames.Should().Equal("Sheet1");
+        });
+    }
+
+    [Fact]
     public void AddSheetGhostTab_LivesInScrollableTabStripAndExposesKeyboardAutomation()
     {
         StaTestRunner.Run(() =>
@@ -389,6 +409,15 @@ public sealed class MainWindowSheetTabKeyboardTests
             return focused;
         }
 
+        public bool FocusSheetTab(string name)
+        {
+            var target = SheetTabTarget(name);
+            var focused = target.Focus();
+            Keyboard.Focus(target);
+            PumpDispatcher();
+            return focused;
+        }
+
         public bool FocusAddSheetButton()
         {
             if (_window.FindName("AddSheetButton") is not FrameworkElement addSheet)
@@ -433,9 +462,7 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         public void RightClickSheetTab(string name)
         {
-            var target = SheetTabTargets.Single(element =>
-                element.DataContext is { } viewModel &&
-                string.Equals(GetStringProperty(viewModel, "Name"), name, StringComparison.Ordinal));
+            var target = SheetTabTarget(name);
             var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Right)
             {
                 RoutedEvent = UIElement.MouseRightButtonDownEvent,
@@ -458,6 +485,15 @@ public sealed class MainWindowSheetTabKeyboardTests
             opened.Should().BeTrue("the focused sheet tab route should open the sheet-tab context menu before worksheet fallback");
             if (_routedSheetTabTarget.ContextMenu is { } menu)
                 _sheetTabContextMenuOpened.Invoke(null, [menu, new RoutedEventArgs(ContextMenu.OpenedEvent, menu)]);
+        }
+
+        public bool RouteFocusedSheetTabContextMenu()
+        {
+            var routed = (bool)_tryOpenFocusedSheetTabContextMenu.Invoke(_window, [])!;
+            _window.UpdateLayout();
+            PumpDispatcher();
+            _window.UpdateLayout();
+            return routed;
         }
 
         public static MainWindowHarness Create(int sheetCount = 2)
@@ -516,6 +552,11 @@ public sealed class MainWindowSheetTabKeyboardTests
                 .Cast<object>()
                 .Distinct()
                 .ToList();
+
+        private FrameworkElement SheetTabTarget(string name) =>
+            SheetTabTargets.Single(element =>
+                element.DataContext is { } viewModel &&
+                string.Equals(GetStringProperty(viewModel, "Name"), name, StringComparison.Ordinal));
 
         private IReadOnlyList<FrameworkElement> SheetTabTargets
         {
