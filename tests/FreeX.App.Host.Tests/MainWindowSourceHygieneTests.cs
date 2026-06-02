@@ -2250,11 +2250,11 @@ public sealed class MainWindowSourceHygieneTests
         xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
-        gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(StatusBarDisplayState.Stats(stats))");
+        gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats))");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusCountText, state.CountText)");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText)");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusSumText, state.SumText)");
-        gridStatusSource.Should().Contain("StatusBarDisplayState.Ready(UiText.Get(\"MainWindow_Text_Ready\"))");
+        gridStatusSource.Should().Contain("_statusBarDisplayStateCache.GetReady(UiText.Get(\"MainWindow_Text_Ready\"))");
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "StatusBarDisplayState.cs"))
             .Should()
             .Contain("UiText.Format(\"StatusBar_CountFormat\", stats.Count)")
