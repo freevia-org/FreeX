@@ -327,12 +327,14 @@ public partial class GridView
     {
         if (Viewport is null || ObjectDisplayMode == GridObjectDisplayMode.Nothing) return default;
 
+        var metricLookups = GetRenderMetricLookups(Viewport);
         if (TextBoxes is not null)
             for (var i = TextBoxes.Count - 1; i >= 0; i--)
             {
                 var t = TextBoxes[i];
                 if (t.IsVisible &&
                     TryCreateAnchoredObjectRect(
+                        metricLookups,
                         t.Anchor,
                         t.Width,
                         t.Height,
@@ -351,6 +353,7 @@ public partial class GridView
                 var p = Pictures[i];
                 if (p.IsVisible &&
                     TryCreateAnchoredObjectRect(
+                        metricLookups,
                         p.Anchor,
                         p.Width,
                         p.Height,
@@ -369,6 +372,7 @@ public partial class GridView
                 var s = DrawingShapes[i];
                 if (s.IsVisible &&
                     TryCreateAnchoredObjectRect(
+                        metricLookups,
                         s.Anchor,
                         s.Width,
                         s.Height,

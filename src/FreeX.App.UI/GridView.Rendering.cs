@@ -788,12 +788,26 @@ public partial class GridView
         if (_renderCellLookupCache is { } cached && ReferenceEquals(cached.Viewport, viewport))
             return cached;
 
+        var metricLookups = GetRenderMetricLookups(viewport);
         var lookups = new RenderCellLookupCache(
             viewport,
             BuildRenderCellStyleLookup(viewport.Cells),
+            metricLookups.Rows,
+            metricLookups.Columns);
+        _renderCellLookupCache = lookups;
+        return lookups;
+    }
+
+    private RenderMetricLookupCache GetRenderMetricLookups(ViewportModel viewport)
+    {
+        if (_renderMetricLookupCache is { } cached && ReferenceEquals(cached.Viewport, viewport))
+            return cached;
+
+        var lookups = new RenderMetricLookupCache(
+            viewport,
             BuildRenderRowMetricLookup(viewport.RowMetrics),
             BuildRenderColumnMetricLookup(viewport.ColMetrics));
-        _renderCellLookupCache = lookups;
+        _renderMetricLookupCache = lookups;
         return lookups;
     }
 
@@ -814,6 +828,7 @@ public partial class GridView
     private void ClearRenderLookupCache()
     {
         _renderCellLookupCache = null;
+        _renderMetricLookupCache = null;
         _occupiedCellLookupCache = null;
     }
 
