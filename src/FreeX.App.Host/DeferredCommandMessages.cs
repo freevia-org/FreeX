@@ -19,10 +19,12 @@ public static class DeferredCommandMessages
             UiText.Get("DeferredCommand_OnlineTemplates_Title"),
             UiText.Get("DeferredCommand_OnlineTemplates_Body"));
 
-    public static DeferredCommandMessage LocalAccountInfo() =>
+    public static DeferredCommandMessage LocalAccountInfo(LocalAccountPlan? plan = null) =>
         new(
             UiText.Get("DeferredCommand_LocalAccount_Title"),
-            UiText.Get("DeferredCommand_LocalAccount_Body"));
+            plan is null
+                ? UiText.Get("DeferredCommand_LocalAccount_Body")
+                : LocalAccountPlanner.FormatMessageBody(plan));
 
     public static DeferredCommandMessage PivotTableModelFirst() =>
         new(

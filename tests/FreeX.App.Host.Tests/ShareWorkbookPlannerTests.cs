@@ -36,6 +36,17 @@ public sealed class ShareWorkbookPlannerTests
         plan.Path.Should().BeNull();
     }
 
+    [Fact]
+    public void CreatePlan_UsesInjectedFileProbe_ForDeterministicCallers()
+    {
+        var plan = ShareWorkbookPlanner.CreatePlan(
+            @"C:\Work\Budget.xlsx",
+            path => path == @"C:\Work\Budget.xlsx");
+
+        plan.Kind.Should().Be(ShareWorkbookPlanKind.ShareExistingFile);
+        plan.Path.Should().Be(@"C:\Work\Budget.xlsx");
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
