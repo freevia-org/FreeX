@@ -1455,6 +1455,46 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_InternalHyperlinkAttributeValueTemplates_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <links>
+              <link label="Jump to summary" target="#'Q1 Summary'!A1" tip="Open summary"/>
+            </links>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/links">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Links">
+                    <ss:Table>
+                      <xsl:for-each select="link">
+                        <ss:Row>
+                          <ss:Cell ss:HRef="{@target}" ss:HRefScreenTip="{@tip}">
+                            <ss:Data ss:Type="String"><xsl:value-of select="@label"/></ss:Data>
+                          </ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var cell = XDocument.Load(transformed).Descendants(ss + "Cell").Single();
+
+        cell.Attribute(ss + "HRef")!.Value.Should().Be("#'Q1 Summary'!A1");
+        cell.Attribute(ss + "HRefScreenTip")!.Value.Should().Be("Open summary");
+        cell.Element(ss + "Data")!.Value.Should().Be("Jump to summary");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NumberInstruction_GeneratesFormattedSequenceCells()
     {
         using var source = StreamFromString("""
@@ -1590,6 +1630,57 @@ public sealed class XsltWorkbookTransformTests
             .Select(element => element.Attribute(ss + "StyleID")?.Value)
             .Where(value => value is not null)
             .Should().Equal("money", "percent");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_InheritedStyleAttributeValueTemplates_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <report>
+              <base id="moneyBase" format="$#,##0.00"/>
+              <style id="moneyChild" parent="moneyBase"/>
+              <row amount="42.5" style="moneyChild"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="{base/@id}">
+                      <ss:NumberFormat ss:Format="{base/@format}" />
+                    </ss:Style>
+                    <ss:Style ss:ID="{style/@id}" ss:Parent="{style/@parent}" />
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Inherited Style AVT">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell ss:StyleID="{row/@style}">
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@amount"/></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var document = XDocument.Load(transformed);
+        var styles = document.Descendants(ss + "Style").ToList();
+        var cell = document.Descendants(ss + "Cell").Single();
+
+        styles.Select(style => style.Attribute(ss + "ID")?.Value)
+            .Should().Equal("moneyBase", "moneyChild");
+        styles[0].Element(ss + "NumberFormat")!.Attribute(ss + "Format")!.Value.Should().Be("$#,##0.00");
+        styles[1].Attribute(ss + "Parent")!.Value.Should().Be("moneyBase");
+        cell.Attribute(ss + "StyleID")!.Value.Should().Be("moneyChild");
+        cell.Element(ss + "Data")!.Value.Should().Be("42.5");
     }
 
     [Fact]

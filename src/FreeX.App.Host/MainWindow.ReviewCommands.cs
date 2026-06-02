@@ -13,13 +13,14 @@ public partial class MainWindow
 {
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
+        var customDictionary = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ignoredWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ignoredIssues = new HashSet<(CellAddress Address, string Word)>();
 
         while (true)
         {
             var issues = SpellCheckWorkflowPlanner.FilterIssues(
-                SpellCheckService.FindIssues(_workbook, _currentSheetId),
+                SpellCheckService.FindIssues(_workbook, _currentSheetId, customDictionary),
                 ignoredWords,
                 ignoredIssues);
             if (issues.Count == 0)
@@ -45,9 +46,15 @@ public partial class MainWindow
                 continue;
             }
 
-            if (dialog.Result.Action is SpellCheckDialogAction.IgnoreAll or SpellCheckDialogAction.Add)
+            if (dialog.Result.Action == SpellCheckDialogAction.IgnoreAll)
             {
                 ignoredWords.Add(issue.Word);
+                continue;
+            }
+
+            if (dialog.Result.Action == SpellCheckDialogAction.Add)
+            {
+                customDictionary.Add(issue.Word);
                 continue;
             }
 

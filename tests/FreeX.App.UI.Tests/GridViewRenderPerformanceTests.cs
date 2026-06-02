@@ -1036,10 +1036,14 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("BuildColumnLookup(leftColumns)");
         calculateLayouts.Should().Contain("BuildColumnLookup(topRightColumns)");
         calculateLayouts.Should().Contain("ResolveSplitPaneRegion(isTopPane, isLeftPane)");
+        calculateLayouts.Should().Contain("if (cells.Count == 0)");
         calculateLayouts.Should().Contain("new List<SplitPaneCellLayout>(cells.Count)");
         calculateLayouts.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
         calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell)");
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
+        calculateLayouts.IndexOf("if (cells.Count == 0)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(calculateLayouts.IndexOf("BuildRowLookup(topRows)", StringComparison.Ordinal));
         calculateLayouts.Should().NotContain("occupied.Add((cell.Row, cell.Col))");
         buildOccupiedCells.Should().Contain("occupied.Add((cell.Row, cell.Col))");
         mergeRangeIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
@@ -1158,6 +1162,55 @@ public sealed class GridViewRenderPerformanceTests
         loop.Should().NotContain("GetSplitPaneClipRectForCell");
         rendering.Should().Contain("geometry.Freeze();");
         splitPanes.Should().Contain("public readonly record struct SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
+    }
+
+    [Fact]
+    public void RenderSplitPaneCells_RespectsHiddenGridLinesForDefaultCellBorders()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("var gridPen = ShowGridLines ? GridPen : null;");
+        renderSplitPaneCells.Should().Contain("dc.DrawRectangle(fill, gridPen, rect);");
+        renderSplitPaneCells.Should().Contain("DrawBorderEdge(dc, style.BorderTop");
+        renderSplitPaneCells.Should().NotContain("dc.DrawRectangle(fill, GridPen, rect);");
+    }
+
+    [Fact]
+    public void RenderSplitPaneCells_SkipsZeroSizedCellsBeforeDrawingWork()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("if (rect.Width <= 0 || rect.Height <= 0)");
+        renderSplitPaneCells.IndexOf("if (rect.Width <= 0 || rect.Height <= 0)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSplitPaneCells.IndexOf("var style = cell.Style;", StringComparison.Ordinal));
+        renderSplitPaneCells.IndexOf("if (rect.Width <= 0 || rect.Height <= 0)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSplitPaneCells.IndexOf("dc.PushClip(clipGeometry);", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RenderSplitPaneCells_SkipsNoOpDefaultBackgroundDraw()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("if (fill is not null || gridPen is not null)");
+        renderSplitPaneCells.Should().Contain("dc.DrawRectangle(fill, gridPen, rect);");
+        renderSplitPaneCells.IndexOf("if (fill is not null || gridPen is not null)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, style", StringComparison.Ordinal));
+        renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, style", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSplitPaneCells.IndexOf("if (style is not null && HasVisibleCellBorder(style))", StringComparison.Ordinal));
     }
 
     [Fact]
