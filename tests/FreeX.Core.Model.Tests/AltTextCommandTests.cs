@@ -11,7 +11,7 @@ public sealed class AltTextCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -34,7 +34,7 @@ public sealed class AltTextCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -54,7 +54,7 @@ public sealed class AltTextCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -77,7 +77,7 @@ public sealed class AltTextCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -97,7 +97,7 @@ public sealed class AltTextCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -121,7 +121,7 @@ public sealed class AltTextCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -135,11 +135,5 @@ public sealed class AltTextCommandTests
 
         new SetTextBoxAltTextCommand(sheet.Id, textBox.Id, "   ").Apply(ctx).Success.Should().BeTrue();
         textBox.AltText.Should().BeNull();
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }
