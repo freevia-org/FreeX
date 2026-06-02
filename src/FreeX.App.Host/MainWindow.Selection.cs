@@ -1210,6 +1210,25 @@ public partial class MainWindow
         e.Handled = true;
     }
 
+    private void SheetGrid_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (!_dragSelectActive &&
+            !_formatPainterTargetSelectionActive &&
+            !_dragSelectAddsAdditionalRange &&
+            !_dragHeaderSelectionTarget.HasValue)
+        {
+            return;
+        }
+
+        _formatPainterTargetSelectionActive = false;
+        _dragSelectActive = false;
+        _dragSelectAddsAdditionalRange = false;
+        _dragHeaderSelectionTarget = null;
+        _dragHeaderSelectionAnchor = 0;
+        CompleteDragSelectionToolbarRefresh();
+        CompleteDragSelectionStatusRefresh();
+    }
+
     private static IReadOnlyList<GridRange> CreateAdditionalSelectionRanges(
         IReadOnlyList<GridRange>? selectedRanges,
         GridRange? currentActive,

@@ -642,6 +642,32 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void LostMouseCaptureClearsDragSelectionStateAndCompletesDeferredRefreshes()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+
+        var lostCapture = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_LostMouseCapture", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private static IReadOnlyList<GridRange> CreateAdditionalSelectionRanges", StringComparison.Ordinal)];
+
+        windowSource.Should().Contain("SheetGrid.LostMouseCapture += SheetGrid_LostMouseCapture;");
+        lostCapture.Should().Contain("if (!_dragSelectActive &&");
+        lostCapture.Should().Contain("!_formatPainterTargetSelectionActive &&");
+        lostCapture.Should().Contain("!_dragSelectAddsAdditionalRange &&");
+        lostCapture.Should().Contain("!_dragHeaderSelectionTarget.HasValue)");
+        lostCapture.Should().Contain("_formatPainterTargetSelectionActive = false;");
+        lostCapture.Should().Contain("_dragSelectActive = false;");
+        lostCapture.Should().Contain("_dragSelectAddsAdditionalRange = false;");
+        lostCapture.Should().Contain("_dragHeaderSelectionTarget = null;");
+        lostCapture.Should().Contain("_dragHeaderSelectionAnchor = 0;");
+        lostCapture.Should().Contain("CompleteDragSelectionToolbarRefresh();");
+        lostCapture.Should().Contain("CompleteDragSelectionStatusRefresh();");
+    }
+
+    [Fact]
     public void AdditionalDragSelectionReusesOwnedRangesInsteadOfCloningList()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(

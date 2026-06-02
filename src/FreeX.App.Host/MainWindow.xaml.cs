@@ -266,6 +266,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.PictureCropped += OnPictureCropped;
         SheetGrid.MouseMove  += SheetGrid_MouseMove;
         SheetGrid.MouseUp    += SheetGrid_MouseUp;
+        SheetGrid.LostMouseCapture += SheetGrid_LostMouseCapture;
         SheetGrid.MouseWheel += SheetGrid_MouseWheel;
         this.PreviewKeyDown += MainWindow_PreviewKeyDown;
         this.KeyDown += MainWindow_KeyDown;
