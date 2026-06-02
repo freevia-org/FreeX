@@ -1168,7 +1168,7 @@ public sealed class FormulaEvaluator
         var ranges = new List<FastAggregateRange>(arguments.Count);
         for (var index = 0; index < arguments.Count; index++)
         {
-            var resolution = TryResolveFastAggregateRange(arguments[index], context, out var range, out var error);
+            var resolution = TryResolveFastAggregateRange(kind, arguments[index], context, out var range, out var error);
             if (resolution == FastAggregateRangeResolution.Unsupported)
                 return false;
 
@@ -1202,6 +1202,10 @@ public sealed class FormulaEvaluator
             FastAggregateKind.Min => EvaluateFastRangeOnlyMinMax(ranges, context, findMax: false),
             FastAggregateKind.Max => EvaluateFastRangeOnlyMinMax(ranges, context, findMax: true),
             FastAggregateKind.CountBlank => EvaluateFastRangeOnlyCountBlank(ranges, context),
+            FastAggregateKind.StdevS => EvaluateFastRangeOnlyVariance(ranges, context, sample: true, squareRoot: true),
+            FastAggregateKind.StdevP => EvaluateFastRangeOnlyVariance(ranges, context, sample: false, squareRoot: true),
+            FastAggregateKind.VarS => EvaluateFastRangeOnlyVariance(ranges, context, sample: true, squareRoot: false),
+            FastAggregateKind.VarP => EvaluateFastRangeOnlyVariance(ranges, context, sample: false, squareRoot: false),
             _ => EvaluateFastRangeOnlyCount(ranges, context)
         };
     }
@@ -1514,10 +1518,78 @@ public sealed class FormulaEvaluator
         return new NumberValue(count);
     }
 
+    private static ScalarValue EvaluateFastRangeOnlyVariance(
+        IReadOnlyList<FastAggregateRange> ranges,
+        IEvalContext context,
+        bool sample,
+        bool squareRoot)
+    {
+        long count = 0;
+        double mean = 0;
+        double m2 = 0;
+
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        if (!AccumulateFastVarianceValue(sheet.GetValue(row, col), ref count, ref mean, ref m2, out var error))
+                            return error!;
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (!AccumulateFastVarianceValue(value, ref count, ref mean, ref m2, out var error))
+                            return error!;
+                    }
+                }
+            }
+        }
+
+        if (count == 0 || (sample && count < 2))
+            return ErrorValue.DivByZero;
+
+        var variance = m2 / (sample ? count - 1 : count);
+        var result = squareRoot ? Math.Sqrt(variance) : variance;
+        return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
+    }
+
+    private static bool AccumulateFastVarianceValue(
+        ScalarValue value,
+        ref long count,
+        ref double mean,
+        ref double m2,
+        out ErrorValue? error)
+    {
+        if (!TryDirectRangeNumber(value, out var number, out error))
+            return error is null;
+
+        count++;
+        var delta = number - mean;
+        mean += delta / count;
+        m2 += delta * (number - mean);
+        return true;
+    }
+
     private static Sheet? ResolveFastAggregateSheet(FastAggregateRange range, SheetEvalContext context)
         => context.ResolveSheetForFastRange(range.SheetName);
 
     private static FastAggregateRangeResolution TryResolveFastAggregateRange(
+        FastAggregateKind kind,
         FormulaNode argument,
         IEvalContext context,
         out FastAggregateRange range,
@@ -1541,7 +1613,7 @@ public sealed class FormulaEvaluator
                 Math.Max(rangeRef.Start.Row, rangeRef.End.Row),
                 Math.Max(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber));
 
-            if (!TryAcceptFastAggregateRange(resolvedRange, out error))
+            if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
                 return FastAggregateRangeResolution.Error;
 
             range = resolvedRange;
@@ -1570,7 +1642,7 @@ public sealed class FormulaEvaluator
                 Math.Max(indirectRange.StartRow, indirectRange.EndRow),
                 Math.Max(indirectRange.StartCol, indirectRange.EndCol));
 
-            if (!TryAcceptFastAggregateRange(resolvedRange, out error))
+            if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
                 return FastAggregateRangeResolution.Error;
 
             range = resolvedRange;
@@ -1594,7 +1666,7 @@ public sealed class FormulaEvaluator
                 gridRange.End.Row,
                 gridRange.End.Col);
 
-            if (!TryAcceptFastAggregateRange(resolvedRange, out error))
+            if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
                 return FastAggregateRangeResolution.Error;
 
             range = resolvedRange;
@@ -1604,7 +1676,7 @@ public sealed class FormulaEvaluator
         return FastAggregateRangeResolution.Unsupported;
     }
 
-    private static bool TryAcceptFastAggregateRange(FastAggregateRange range, out ErrorValue? error)
+    private static bool TryAcceptFastAggregateRange(FastAggregateRange range, FastAggregateKind kind, out ErrorValue? error)
     {
         error = null;
         var cellCount = FormulaSafetyLimits.GetRangeCellCount(
@@ -1612,7 +1684,10 @@ public sealed class FormulaEvaluator
             range.StartCol,
             range.EndRow,
             range.EndCol);
-        if (cellCount <= FormulaSafetyLimits.MaxStreamingRangeCells)
+        var maxCells = kind is FastAggregateKind.StdevS or FastAggregateKind.StdevP or FastAggregateKind.VarS or FastAggregateKind.VarP
+            ? FormulaSafetyLimits.MaxMaterializedRangeCells
+            : FormulaSafetyLimits.MaxStreamingRangeCells;
+        if (cellCount <= maxCells)
             return true;
 
         error = ErrorValue.Ref;
@@ -1699,6 +1774,22 @@ public sealed class FormulaEvaluator
             case "COUNTBLANK":
                 kind = FastAggregateKind.CountBlank;
                 return true;
+            case "STDEV":
+            case "STDEV.S":
+                kind = FastAggregateKind.StdevS;
+                return true;
+            case "STDEVP":
+            case "STDEV.P":
+                kind = FastAggregateKind.StdevP;
+                return true;
+            case "VAR":
+            case "VAR.S":
+                kind = FastAggregateKind.VarS;
+                return true;
+            case "VARP":
+            case "VAR.P":
+                kind = FastAggregateKind.VarP;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -1719,7 +1810,11 @@ public sealed class FormulaEvaluator
         Min,
         Max,
         Count,
-        CountBlank
+        CountBlank,
+        StdevS,
+        StdevP,
+        VarS,
+        VarP
     }
 
     private enum FastAggregateRangeResolution
