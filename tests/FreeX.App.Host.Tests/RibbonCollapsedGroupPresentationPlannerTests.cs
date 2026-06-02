@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -46,5 +47,41 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
             .GetPlannedWidth(measuredWidth, availableWidth)
             .Should()
             .Be(expectedWidth);
+    }
+
+    [Fact]
+    public void SetCollapsedButtonFootprint_RebuildsCachedTargetsWhenButtonContentChangesInsideSameMode()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var button = new Button { Content = CreateCollapsedButtonContent(out _, out _) };
+            RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(new[] { button }, 900);
+
+            button.Content = CreateCollapsedButtonContent(out var caption, out var icon);
+            RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(new[] { button }, 900);
+
+            button.Width.Should().Be(52);
+            caption.Visibility.Should().Be(Visibility.Visible);
+            caption.FontSize.Should().Be(12);
+            caption.MaxWidth.Should().Be(48);
+            caption.TextWrapping.Should().Be(TextWrapping.NoWrap);
+            caption.TextTrimming.Should().Be(TextTrimming.CharacterEllipsis);
+            caption.TextAlignment.Should().Be(TextAlignment.Center);
+            icon.FontSize.Should().Be(18);
+        });
+    }
+
+    private static StackPanel CreateCollapsedButtonContent(out TextBlock caption, out TextBlock icon)
+    {
+        var content = new StackPanel();
+        caption = new TextBlock { Text = "Group" };
+        RibbonMetadata.SetRole(caption, RibbonMetadataRole.CommandLabel);
+        content.Children.Add(caption);
+
+        icon = new TextBlock { Text = "\uE8A5" };
+        RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
+        content.Children.Add(icon);
+
+        return content;
     }
 }
