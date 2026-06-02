@@ -142,6 +142,7 @@ public sealed class UpdateThreadedCommentReplyCommand : IWorkbookCommand
     private readonly CellAddress _address;
     private readonly int _replyIndex;
     private readonly string _text;
+    private readonly bool? _isResolved;
     private readonly DateTimeOffset _timestampUtc;
     private ThreadedComment? _previous;
 
@@ -152,12 +153,14 @@ public sealed class UpdateThreadedCommentReplyCommand : IWorkbookCommand
         CellAddress address,
         int replyIndex,
         string text,
+        bool? isResolved = null,
         DateTimeOffset? timestampUtc = null)
     {
         _sheetId = sheetId;
         _address = address;
         _replyIndex = replyIndex;
         _text = text;
+        _isResolved = isResolved;
         _timestampUtc = ThreadedCommentTimestamps.Normalize(timestampUtc);
     }
 
@@ -173,7 +176,13 @@ public sealed class UpdateThreadedCommentReplyCommand : IWorkbookCommand
 
         var replies = _previous.Replies.ToList();
         replies[_replyIndex] = ThreadedCommentTimestamps.Touch(replies[_replyIndex] with { Text = _text }, _timestampUtc);
-        sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(_previous with { Replies = replies }, _timestampUtc);
+        sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(
+            _previous with
+            {
+                Replies = replies,
+                IsResolved = _isResolved ?? _previous.IsResolved
+            },
+            _timestampUtc);
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
@@ -194,6 +203,7 @@ public sealed class DeleteThreadedCommentReplyCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly CellAddress _address;
     private readonly int _replyIndex;
+    private readonly bool? _isResolved;
     private readonly DateTimeOffset _timestampUtc;
     private ThreadedComment? _previous;
 
@@ -203,11 +213,13 @@ public sealed class DeleteThreadedCommentReplyCommand : IWorkbookCommand
         SheetId sheetId,
         CellAddress address,
         int replyIndex,
+        bool? isResolved = null,
         DateTimeOffset? timestampUtc = null)
     {
         _sheetId = sheetId;
         _address = address;
         _replyIndex = replyIndex;
+        _isResolved = isResolved;
         _timestampUtc = ThreadedCommentTimestamps.Normalize(timestampUtc);
     }
 
@@ -223,7 +235,13 @@ public sealed class DeleteThreadedCommentReplyCommand : IWorkbookCommand
 
         var replies = _previous.Replies.ToList();
         replies.RemoveAt(_replyIndex);
-        sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(_previous with { Replies = replies }, _timestampUtc);
+        sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(
+            _previous with
+            {
+                Replies = replies,
+                IsResolved = _isResolved ?? _previous.IsResolved
+            },
+            _timestampUtc);
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
