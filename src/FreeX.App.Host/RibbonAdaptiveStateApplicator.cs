@@ -6,6 +6,13 @@ namespace FreeX.App.Host;
 
 internal static class RibbonAdaptiveStateApplicator
 {
+    private static readonly DependencyProperty CollapsedButtonFootprintTargetsProperty =
+        DependencyProperty.RegisterAttached(
+            "CollapsedButtonFootprintTargets",
+            typeof(CollapsedButtonFootprintTargets),
+            typeof(RibbonAdaptiveStateApplicator),
+            new PropertyMetadata(null));
+
     public static int ApplyStates(
         IReadOnlyList<MainWindow.RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
@@ -49,17 +56,24 @@ internal static class RibbonAdaptiveStateApplicator
     public static void SetCollapsedButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)
     {
         var footprint = RibbonCollapsedGroupPresentationPlanner.CreateFootprint(availableWidth);
-        foreach (var button in collapsedButtons)
+        for (var i = 0; i < collapsedButtons.Count; i++)
         {
+            var button = collapsedButtons[i];
+            var targets = GetCollapsedButtonFootprintTargets(button);
+            if (targets.LastAppliedMode == footprint.Mode)
+                continue;
+
             SetIfChanged(button, FrameworkElement.WidthProperty, footprint.Width);
             SetIfChanged(button, FrameworkElement.MarginProperty, footprint.Margin);
             SetIfChanged(button, Control.PaddingProperty, footprint.Padding);
 
-            if (TryGetCollapsedRibbonButtonCaption(button, out var caption))
+            if (targets.Caption is { } caption)
                 ApplyCollapsedRibbonButtonCaptionFootprint(caption, footprint);
 
-            if (TryGetCollapsedRibbonButtonTextIcon(button, out var icon))
+            if (targets.Icon is { } icon)
                 SetIfChanged(icon, TextBlock.FontSizeProperty, footprint.IconFontSize);
+
+            targets.LastAppliedMode = footprint.Mode;
         }
     }
 
@@ -322,39 +336,57 @@ internal static class RibbonAdaptiveStateApplicator
         availableWidth <= 1300 &&
         catalogId is "DataSortFilterGroup";
 
-    private static bool TryGetCollapsedRibbonButtonCaption(Button button, out TextBlock caption)
+    private static CollapsedButtonFootprintTargets GetCollapsedButtonFootprintTargets(Button button)
     {
-        caption = null!;
-        if (button.Content is not Panel content)
-            return false;
+        if (button.ReadLocalValue(CollapsedButtonFootprintTargetsProperty) is CollapsedButtonFootprintTargets cached &&
+            ReferenceEquals(cached.Content, button.Content))
+        {
+            return cached;
+        }
 
+        var targets = CreateCollapsedButtonFootprintTargets(button);
+        button.SetValue(CollapsedButtonFootprintTargetsProperty, targets);
+        return targets;
+    }
+
+    private static CollapsedButtonFootprintTargets CreateCollapsedButtonFootprintTargets(Button button)
+    {
+        if (button.Content is not Panel content)
+            return new CollapsedButtonFootprintTargets(button.Content, null, null);
+
+        var caption = FindCollapsedRibbonButtonCaption(content);
+        if (caption is not null)
+            ApplyCollapsedRibbonButtonCaptionStaticFootprint(caption);
+
+        return new CollapsedButtonFootprintTargets(
+            button.Content,
+            caption,
+            FindCollapsedRibbonButtonTextIcon(content));
+    }
+
+    private static TextBlock? FindCollapsedRibbonButtonCaption(Panel content)
+    {
         foreach (var child in content.Children)
         {
             if (child is TextBlock textBlock &&
                 RibbonMetadata.IsCommandLabel(textBlock))
             {
-                caption = textBlock;
-                return true;
+                return textBlock;
             }
         }
 
-        return false;
+        return null;
     }
 
-    private static bool TryGetCollapsedRibbonButtonTextIcon(Button button, out TextBlock icon)
+    private static TextBlock? FindCollapsedRibbonButtonTextIcon(Panel content)
     {
-        icon = null!;
-        if (button.Content is not Panel content)
-            return false;
-
         foreach (var child in content.Children)
         {
             if (child is TextBlock textBlock &&
                 RibbonMetadata.IsCommandIcon(textBlock) &&
                 !RibbonMetadata.IsCollapsedChevron(textBlock))
             {
-                icon = textBlock;
-                return true;
+                return textBlock;
             }
         }
 
@@ -364,12 +396,11 @@ internal static class RibbonAdaptiveStateApplicator
                 RibbonMetadata.IsCommandIcon(textBlock) &&
                 !RibbonMetadata.IsCollapsedChevron(textBlock))
             {
-                icon = textBlock;
-                return true;
+                return textBlock;
             }
         }
 
-        return false;
+        return null;
     }
 
     private static void ApplyCollapsedRibbonButtonCaptionFootprint(
@@ -379,6 +410,10 @@ internal static class RibbonAdaptiveStateApplicator
         SetIfChanged(caption, UIElement.VisibilityProperty, footprint.CaptionVisibility);
         SetIfChanged(caption, TextBlock.FontSizeProperty, footprint.CaptionFontSize);
         SetIfChanged(caption, FrameworkElement.MaxWidthProperty, footprint.CaptionMaxWidth);
+    }
+
+    private static void ApplyCollapsedRibbonButtonCaptionStaticFootprint(TextBlock caption)
+    {
         SetIfChanged(caption, TextBlock.TextWrappingProperty, TextWrapping.NoWrap);
         SetIfChanged(caption, TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
         SetIfChanged(caption, TextBlock.TextAlignmentProperty, TextAlignment.Center);
@@ -503,4 +538,15 @@ internal static class RibbonAdaptiveStateApplicator
 
     private static string GetRibbonGroupName(FrameworkElement group) =>
         RibbonMetadata.TryGetGroupName(group, out var groupName) ? groupName : "Commands";
+
+    private sealed class CollapsedButtonFootprintTargets(
+        object? content,
+        TextBlock? caption,
+        TextBlock? icon)
+    {
+        public object? Content { get; } = content;
+        public TextBlock? Caption { get; } = caption;
+        public TextBlock? Icon { get; } = icon;
+        public RibbonCollapsedGroupFootprintMode? LastAppliedMode { get; set; }
+    }
 }
