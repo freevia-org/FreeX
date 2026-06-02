@@ -97,6 +97,21 @@ public sealed class XlsxWorkbookThemeReaderTests
     }
 
     [Fact]
+    public void Load_ReadsFormatSchemePresetShadowEffectDefaults()
+    {
+        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithPresetShadowXml));
+
+        var theme = XlsxWorkbookThemeReader.Load(package);
+
+        theme.NativeFormatSchemeXml.Should().Contain("prstShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeTrue();
+        theme.EffectDefaults.ShadowOpacity.Should().BeApproximately(0.5, 0.0001);
+        theme.EffectDefaults.ShadowOffsetX.Should().Be(4);
+        theme.EffectDefaults.ShadowOffsetY.Should().Be(0);
+    }
+
+    [Fact]
     public void LoadSave_PreservesThemeSupplementElementsBesideThemeElements()
     {
         using var package = CreatePackage(("xl/theme/theme1.xml", """
@@ -515,6 +530,25 @@ public sealed class XlsxWorkbookThemeReaderTests
               <a:compatExt spid="1"/>
             </a:ext>
           </a:extLst>
+        </a:theme>
+        """;
+
+    private const string NativeThemeWithPresetShadowXml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Preset Shadow Theme">
+          <a:themeElements>
+            <a:fmtScheme name="Preset Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:prstShdw prst="shdw1" dist="38100" dir="0">
+                      <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>
+                    </a:prstShdw>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+          </a:themeElements>
         </a:theme>
         """;
 }

@@ -58,6 +58,19 @@ public sealed class WorkbookThemeTests
     }
 
     [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_InterpretsPresetShadowEffectDefaults()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml(NativeFormatSchemeWithPresetShadow);
+
+        theme.NativeFormatSchemeXml.Should().Contain("prstShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeTrue();
+        theme.EffectDefaults.ShadowOpacity.Should().BeApproximately(0.5, 0.0001);
+        theme.EffectDefaults.ShadowOffsetX.Should().Be(4);
+        theme.EffectDefaults.ShadowOffsetY.Should().Be(0);
+    }
+
+    [Fact]
     public void WorkbookTheme_WithEffects_RenamesNativeFormatSchemeAndKeepsEffectDefaults()
     {
         var theme = WorkbookTheme.Office
@@ -168,6 +181,23 @@ public sealed class WorkbookThemeTests
                 <a:outerShdw blurRad="40000" dist="19050" dir="5400000" rotWithShape="0">
                   <a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr>
                 </a:outerShdw>
+              </a:effectLst>
+            </a:effectStyle>
+          </a:effectStyleLst>
+          <a:bgFillStyleLst/>
+        </a:fmtScheme>
+        """;
+
+    private const string NativeFormatSchemeWithPresetShadow = """
+        <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+          <a:fillStyleLst/>
+          <a:lnStyleLst/>
+          <a:effectStyleLst>
+            <a:effectStyle>
+              <a:effectLst>
+                <a:prstShdw prst="shdw1" dist="38100" dir="0">
+                  <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>
+                </a:prstShdw>
               </a:effectLst>
             </a:effectStyle>
           </a:effectStyleLst>

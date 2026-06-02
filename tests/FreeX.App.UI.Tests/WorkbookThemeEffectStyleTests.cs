@@ -62,6 +62,33 @@ public sealed class WorkbookThemeEffectStyleTests
     }
 
     [Fact]
+    public void FromTheme_UsesImportedFormatSchemePresetShadow()
+    {
+        var theme = WorkbookTheme.Office
+            .WithEffects("Office")
+            .WithNativeFormatSchemeXml("""
+                <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+                  <a:effectStyleLst>
+                    <a:effectStyle>
+                      <a:effectLst>
+                        <a:prstShdw prst="shdw1" dist="38100" dir="0">
+                          <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>
+                        </a:prstShdw>
+                      </a:effectLst>
+                    </a:effectStyle>
+                  </a:effectStyleLst>
+                </a:fmtScheme>
+                """);
+
+        var style = WorkbookThemeEffectStyle.FromTheme(theme);
+
+        style.HasShadow.Should().BeTrue();
+        style.ShadowOpacity.Should().BeApproximately(0.5, 0.0001);
+        style.ShadowOffsetX.Should().Be(4);
+        style.ShadowOffsetY.Should().Be(0);
+    }
+
+    [Fact]
     public void FromTheme_TreatsUnknownEffectsAsOffice()
     {
         WorkbookThemeEffectStyle.FromTheme(WorkbookTheme.Office.WithEffects("Custom")).HasShadow.Should().BeFalse();
