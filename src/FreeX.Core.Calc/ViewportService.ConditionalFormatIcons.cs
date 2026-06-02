@@ -16,32 +16,35 @@ public sealed partial class ViewportService
             var rule = cfContext.IconRulesByPriority[i];
             if (!rule.AppliesTo.Contains(addr))
                 continue;
-            if (!TryGetDouble(value, out var cellValue) || !cfContext.Aggregates.TryGetValue(rule, out var cache))
+            if (!TryGetDouble(value, out var cellValue))
                 return null;
 
             var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
             var iconCount = ViewportConditionalFormatEvaluator.GetIconSetCount(style);
+            cfContext.Aggregates.TryGetValue(rule, out var cache);
             var bucketIndex = ResolveIconSetIndex(rule, cellValue, cache, sheet, workbook, addr, iconCount, cfContext);
+            if (!bucketIndex.HasValue)
+                return null;
 
             if (rule.IconOverrides.Count == iconCount)
             {
-                var ovr = rule.IconOverrides[bucketIndex];
+                var ovr = rule.IconOverrides[bucketIndex.Value];
                 return new ConditionalFormatIcon(ovr.IconSet, ovr.IconId, iconCount, rule.IconSetShowValue);
             }
 
             if (rule.IconSetReverse)
-                bucketIndex = iconCount - 1 - bucketIndex;
+                bucketIndex = iconCount - 1 - bucketIndex.Value;
 
-            return new ConditionalFormatIcon(style, bucketIndex, iconCount, rule.IconSetShowValue);
+            return new ConditionalFormatIcon(style, bucketIndex.Value, iconCount, rule.IconSetShowValue);
         }
 
         return null;
     }
 
-    private static int ResolveIconSetIndex(
+    private static int? ResolveIconSetIndex(
         ConditionalFormat rule,
         double value,
-        CfAggregateCache cache,
+        CfAggregateCache? cache,
         Sheet sheet,
         Workbook workbook,
         CellAddress addr,
@@ -57,6 +60,9 @@ public sealed partial class ViewportService
                 cachedThresholds.GreaterThanOrEqual,
                 iconCount);
         }
+
+        if (cache is null)
+            return null;
 
         Span<double> thresholdValues = stackalloc double[thresholdCount];
         Span<bool> thresholdComparisons = stackalloc bool[thresholdCount];

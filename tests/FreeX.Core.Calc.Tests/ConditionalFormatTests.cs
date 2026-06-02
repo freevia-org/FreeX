@@ -400,6 +400,29 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void IconSetNumberThresholds_DoNotRequireAggregateScans()
+    {
+        var evaluatorSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var iconsSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatIcons.cs"));
+        var aggregateThresholds = evaluatorSource[
+            evaluatorSource.IndexOf("private static bool RequiresAggregateThreshold", StringComparison.Ordinal)..
+            evaluatorSource.IndexOf("private static IReadOnlySet<CellAddress>? ResolveTopBottomMatches", StringComparison.Ordinal)];
+
+        evaluatorSource.Should().Contain("CfRuleType.IconSet => RequiresIconSetAggregateCache(cf)");
+        evaluatorSource.Should().Contain("List<double>? numericValues = RequiresSortedNumericValues(cf) ? [] : null");
+        evaluatorSource.Should().Contain("TryGetIconSetAggregateCache(cf, aggregates, out var cache)");
+        aggregateThresholds.Should().NotContain(
+            "CfThresholdType.Number",
+            "static numeric icon-set thresholds should use the precomputed threshold cache without scanning the applies-to range");
+        iconsSource.Should().Contain("cfContext.Aggregates.TryGetValue(rule, out var cache);");
+        iconsSource.Should().NotContain(
+            "!cfContext.Aggregates.TryGetValue(rule, out var cache)",
+            "cached numeric icon-set thresholds should render even when no aggregate cache was built for the rule");
+    }
+
+    [Fact]
     public void FormulaConditionalFormatEvaluation_DoesNotSerializeShiftedFormulaPerDisplayedCell()
     {
         var formulaSource = File.ReadAllText(FindWorkspaceFile(
