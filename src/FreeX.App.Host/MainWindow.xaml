@@ -3662,7 +3662,7 @@
         <Border Grid.Row="5" Panel.ZIndex="5" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="{StaticResource FreeXBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
-                  MinHeight="31"
+                  MinHeight="34"
                   Background="{StaticResource FreeXSheetSurfaceBrush}"
                   SizeChanged="SheetTabsRowGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
@@ -3676,8 +3676,8 @@
 
                 <Border x:Name="SheetTabsLeadingSpacer" Grid.Column="0"
                         Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"
-                        Height="30"
-                        Margin="0,1,0,0"
+                        Height="32"
+                        Margin="0,2,0,0"
                         VerticalAlignment="Top"
                         Panel.ZIndex="4"
                         Background="{StaticResource FreeXSheetSurfaceBrush}"
@@ -3688,8 +3688,8 @@
                 <Canvas x:Name="SheetTabsChromeLayer"
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
-                        Height="30"
-                        Margin="0,1,0,0"
+                        Height="32"
+                        Margin="0,2,0,0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
                         Panel.ZIndex="1"
@@ -3697,10 +3697,10 @@
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="30" Padding="0"
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="32" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
@@ -3735,9 +3735,9 @@
                 <!-- Sheet tabs in a clipped, scrollbar-free viewport -->
                 <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="1"
                               Grid.ColumnSpan="4"
-                              Height="30"
-                              MinHeight="30"
-                              Margin="0,1,0,0"
+                              Height="32"
+                              MinHeight="32"
+                              Margin="0,2,0,0"
                               Panel.ZIndex="3"
                               ClipToBounds="True"
                               HorizontalAlignment="Left"
@@ -3789,7 +3789,7 @@
                                             <Style TargetType="Grid">
                                                 <Setter Property="Margin"       Value="-16,0,0,1"/>
                                                 <Setter Property="Panel.ZIndex" Value="0"/>
-                                                <Setter Property="MinHeight"    Value="29"/>
+                                                <Setter Property="MinHeight"    Value="31"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                                         <Setter Property="Margin"       Value="-16,0,0,1"/>
@@ -3944,7 +3944,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <Button x:Name="AddSheetButton" Content="+" Width="70" MinWidth="70" MinHeight="29"
+                        <Button x:Name="AddSheetButton" Content="+" Width="70" MinWidth="70" MinHeight="31"
                                 FontSize="17" FontWeight="SemiBold" Margin="0,0,0,1" Padding="0"
                                 Background="Transparent" BorderBrush="Transparent" BorderThickness="0"
                                 Foreground="{StaticResource FreeXAccentBrush}" Opacity="1"
@@ -4008,8 +4008,8 @@
                 <Canvas x:Name="SheetTabsOverlayLayer"
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
-                        Height="30"
-                        Margin="0,1,0,0"
+                        Height="32"
+                        Margin="0,2,0,0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
                         Panel.ZIndex="6"
@@ -4018,10 +4018,10 @@
                         IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;"
-                        Width="18" Height="30" Padding="0"
+                        Width="18" Height="32" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"

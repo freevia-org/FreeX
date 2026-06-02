@@ -117,10 +117,10 @@ public sealed class MainWindowSheetTabKeyboardTests
             var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
             var focusedTabBounds = BoundsRelativeToWindow(focusedTab, window);
 
-            scrollerBounds.Top.Should().BeGreaterThan(rowBounds.Top + 0.5, "the clipped viewport needs breathing room above tab text and focus visuals");
-            chromeBounds.Top.Should().BeGreaterThan(rowBounds.Top + 0.5, "the drawn tab chrome stroke should not start on the row's clipping edge");
+            scrollerBounds.Top.Should().BeGreaterThan(rowBounds.Top + 1.5, "the clipped viewport needs enough breathing room above tab text and focus visuals for the rounded stroke to render");
+            chromeBounds.Top.Should().BeGreaterThan(rowBounds.Top + 1.5, "the drawn tab chrome stroke should not start on the row's clipping edge");
             overlayBounds.Top.Should().BeApproximately(chromeBounds.Top, 0.25);
-            scroller.ActualHeight.Should().BeGreaterThanOrEqualTo(30);
+            scroller.ActualHeight.Should().BeGreaterThanOrEqualTo(32);
             rowBounds.Height.Should().BeGreaterThan(scroller.ActualHeight);
             focusedTabBounds.Top.Should().BeGreaterThanOrEqualTo(scrollerBounds.Top - 0.5);
             focusedTabBounds.Bottom.Should().BeLessThanOrEqualTo(scrollerBounds.Bottom + 0.5, "the focused sheet tab chrome must fit inside the clipped viewport");
