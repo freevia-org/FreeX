@@ -1363,6 +1363,33 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsNullNativeJsonThemeColorEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullThemeColors",
+              "Theme": {
+                "Colors": [
+                  null,
+                  { "Slot": 4, "Color": "#010203" }
+                ]
+              },
+              "Sheets": [
+                { "Name": "Sheet1" }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var theme = new NativeJsonAdapter().Load(stream).Theme;
+
+        theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(1, 2, 3));
+    }
+
+    [Fact]
     public void Save_NormalizesNativeJsonWaterfallTotalPointIndices()
     {
         var workbook = new Workbook("WaterfallTotals");
