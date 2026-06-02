@@ -136,35 +136,28 @@ public static class ClipboardSerializer
 
     private static void AppendTsvCell(StringBuilder sb, string text)
     {
-        var span = text.AsSpan();
-        var firstSpecial = IndexOfTsvSpecial(span);
-        if (firstSpecial < 0)
+        if (!RequiresTsvQuoting(text))
         {
             sb.Append(text);
             return;
         }
 
         sb.Append('"');
-        var segmentStart = 0;
-        for (var i = firstSpecial; i < span.Length; i++)
+        foreach (var ch in text)
         {
-            if (span[i] != '"')
-                continue;
-
-            sb.Append(span[segmentStart..i]);
-            sb.Append("\"\"");
-            segmentStart = i + 1;
+            if (ch == '"')
+                sb.Append("\"\"");
+            else
+                sb.Append(ch);
         }
 
-        sb.Append(span[segmentStart..]);
         sb.Append('"');
     }
 
     private static void AppendTsvCell(Span<char> destination, ref int offset, string text)
     {
         var span = text.AsSpan();
-        var firstSpecial = IndexOfTsvSpecial(span);
-        if (firstSpecial < 0)
+        if (!RequiresTsvQuoting(text))
         {
             span.CopyTo(destination[offset..]);
             offset += span.Length;
@@ -173,7 +166,7 @@ public static class ClipboardSerializer
 
         destination[offset++] = '"';
         var segmentStart = 0;
-        for (var i = firstSpecial; i < span.Length; i++)
+        for (var i = 0; i < span.Length; i++)
         {
             if (span[i] != '"')
                 continue;
@@ -192,29 +185,35 @@ public static class ClipboardSerializer
 
     private static int GetTsvEncodedLength(string text)
     {
-        var span = text.AsSpan();
-        var firstSpecial = IndexOfTsvSpecial(span);
-        if (firstSpecial < 0)
-            return span.Length;
-
-        var length = span.Length + 2;
-        for (var i = firstSpecial; i < span.Length; i++)
+        var length = text.Length;
+        var requiresQuoting = false;
+        foreach (var ch in text)
         {
-            if (span[i] == '"')
+            if (ch is '\t' or '\r' or '\n')
+            {
+                requiresQuoting = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                requiresQuoting = true;
                 length++;
+            }
         }
 
-        return length;
+        return requiresQuoting ? length + 2 : length;
     }
 
-    private static int IndexOfTsvSpecial(ReadOnlySpan<char> text)
+    private static bool RequiresTsvQuoting(string text)
     {
-        var delimiterIndex = text.IndexOfAny('\t', '\r', '\n');
-        var quoteIndex = text.IndexOf('"');
-        if (delimiterIndex < 0)
-            return quoteIndex;
+        foreach (var ch in text)
+        {
+            if (ch is '\t' or '\r' or '\n' or '"')
+                return true;
+        }
 
-        return quoteIndex < 0 ? delimiterIndex : Math.Min(delimiterIndex, quoteIndex);
+        return false;
     }
 
     private static bool IsBefore(DisplayCell cell, uint row, uint col) =>
