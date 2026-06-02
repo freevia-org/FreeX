@@ -211,7 +211,8 @@ public partial class GridView
             if (style?.FillColor is { } fillColor)
                 fill = BrushForCellColor(fillColor, _brushCache);
 
-            dc.DrawRectangle(fill, gridPen, rect);
+            if (fill is not null || gridPen is not null)
+                dc.DrawRectangle(fill, gridPen, rect);
             DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
 
             if (style is not null && HasVisibleCellBorder(style))
