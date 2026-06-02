@@ -72,6 +72,8 @@ public sealed class FreeXOptions
 
     private static string StorePath => ResolveStorePath();
 
+    internal static string StorePathForDisplay => StorePath;
+
     public static FreeXOptions Load() => LoadFromPath(StorePath);
 
     private static string ResolveStorePath()

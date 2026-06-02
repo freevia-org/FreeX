@@ -34,6 +34,26 @@ public sealed class SheetTabFocusPlannerTests
     [Theory]
     [InlineData(2)]
     [InlineData(10)]
+    public void AdjacentTab_TreatsMissingCurrentPositiveDirectionAsSingleStepFromBeforeFirstTab(int direction)
+    {
+        var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
+
+        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), direction).Should().Be(tabs[0].Id);
+    }
+
+    [Theory]
+    [InlineData(-2)]
+    [InlineData(-10)]
+    public void AdjacentTab_TreatsMissingCurrentNegativeDirectionAsSingleStepFromAfterLastTab(int direction)
+    {
+        var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
+
+        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), direction).Should().Be(tabs[2].Id);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(10)]
     public void AdjacentTab_TreatsPositiveDirectionAsSingleStep(int direction)
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3", "Sheet4");
