@@ -87,6 +87,9 @@ public class ConditionalFormatTests
             $"p95_ms={p95:F2} max_ms={timings[^1]:F2} allocated_bytes={allocated:N0}");
 
         viewport.Cells.Should().HaveCount(4_800);
+        allocated.Should().BeLessThan(
+            14_500_000,
+            "color-scale threshold evaluation should reuse per-viewport fill-only styles instead of allocating one style per displayed cell");
         total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 
@@ -474,6 +477,22 @@ public class ConditionalFormatTests
         colorScaleSource.Should().Contain("cachedThresholds.Min");
         colorScaleSource.Should().Contain("cachedThresholds.Mid");
         colorScaleSource.Should().Contain("GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid)");
+    }
+
+    [Fact]
+    public void ColorScaleStyleResolution_ReusesCachedFillStyles()
+    {
+        var evaluatorSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var colorScaleSource = evaluatorSource[
+            evaluatorSource.IndexOf("private static CellStyle? ComputeColorScaleStyle", StringComparison.Ordinal)..
+            evaluatorSource.IndexOf("internal static bool TryResolveThreshold", StringComparison.Ordinal)];
+
+        evaluatorSource.Should().Contain("CfColorScaleStyleCache");
+        evaluatorSource.Should().Contain("CreateColorScaleStyleCache(rulesByPriority)");
+        colorScaleSource.Should().Contain("GetColorScaleStyle(cfContext");
+        colorScaleSource.Should().NotContain("return new CellStyle { FillColor = interpolated };");
+        colorScaleSource.Should().NotContain("return new CellStyle { FillColor = cf.MinColor.ToCellColor() };");
     }
 
     [Fact]

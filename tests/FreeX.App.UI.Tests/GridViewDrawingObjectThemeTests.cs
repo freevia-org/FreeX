@@ -704,9 +704,9 @@ public sealed class GridViewDrawingObjectThemeTests
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
 
-        source.Should().Contain("ContainsRotatedInclusive(r, pos, t.RotationDegrees)");
-        source.Should().Contain("ContainsRotatedInclusive(r, pos, p.RotationDegrees)");
-        source.Should().Contain("ContainsRotatedInclusive(r, pos, s.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(rect, pos, textBox.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(rect, pos, picture.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(rect, pos, shape.RotationDegrees)");
         source.Should().Contain("var radians = -rotationDegrees * Math.PI / 180.0;");
     }
 

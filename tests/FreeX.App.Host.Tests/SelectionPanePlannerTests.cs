@@ -28,27 +28,27 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_FindSameKindMoveTargetIndex_SkipsOtherKinds()
+    public void SelectionPaneDialogStatePlanner_FindMoveTargetIndex_UsesSupportedDrawingObjectStack()
     {
         var frontPicture = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
         var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
         var backPicture = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
 
-        var forwardTarget = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(
+        var forwardTarget = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(
             [frontPicture, shape, backPicture],
             currentIndex: 2,
             forward: true);
-        var backwardTarget = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(
+        var backwardTarget = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(
             [frontPicture, shape, backPicture],
             currentIndex: 0,
             forward: false);
 
-        forwardTarget.Should().Be(0);
-        backwardTarget.Should().Be(2);
+        forwardTarget.Should().Be(1);
+        backwardTarget.Should().Be(1);
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanMove_ReordersAgainstSameKindTarget()
+    public void SelectionPaneDialogStatePlanner_PlanMove_ReordersAgainstMixedSupportedTarget()
     {
         var frontPicture = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
         var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
@@ -60,7 +60,7 @@ public sealed class SelectionPanePlannerTests
             forward: true);
 
         plan.Should().NotBeNull();
-        plan!.OrderedIds.Should().Equal(backPicture.Id, shape.Id, frontPicture.Id);
+        plan!.OrderedIds.Should().Equal(frontPicture.Id, backPicture.Id, shape.Id);
         plan.MoveChanges.Should().Equal(new SelectionPaneMoveChange(
             SelectionPaneObjectKind.Picture,
             backPicture.Id,
@@ -107,10 +107,10 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanDropVisual_AllowsSameKindInsertionCue()
+    public void SelectionPaneDialogStatePlanner_PlanDropVisual_AllowsMixedSupportedInsertionCue()
     {
         var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
-        var back = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+        var back = DialogState(SelectionPaneObjectKind.Shape, "Back", isVisible: true);
 
         var plan = SelectionPaneDialogStatePlanner.PlanDropVisual(
             [front, back],
@@ -125,28 +125,28 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialogStatePlanner_PlanDropVisual_RejectsSameItemAndCrossKindCues()
+    public void SelectionPaneDialogStatePlanner_PlanDropVisual_RejectsSameItemAndUnsupportedChartCues()
     {
         var picture = DialogState(SelectionPaneObjectKind.Picture, "Picture", isVisible: true);
-        var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
+        var chart = DialogState(SelectionPaneObjectKind.Chart, "Chart", isVisible: true);
 
         var sameItem = SelectionPaneDialogStatePlanner.PlanDropVisual(
-            [picture, shape],
+            [picture, chart],
             draggedId: picture.Id,
             targetId: picture.Id,
             placement: SelectionPaneDropPlacement.After);
-        var crossKind = SelectionPaneDialogStatePlanner.PlanDropVisual(
-            [picture, shape],
+        var chartCue = SelectionPaneDialogStatePlanner.PlanDropVisual(
+            [picture, chart],
             draggedId: picture.Id,
-            targetId: shape.Id,
+            targetId: chart.Id,
             placement: SelectionPaneDropPlacement.After);
 
         sameItem.Should().Be(new SelectionPaneDropVisualPlan(
             picture.Id,
             SelectionPaneDropPlacement.After,
             IsAllowed: false));
-        crossKind.Should().Be(new SelectionPaneDropVisualPlan(
-            shape.Id,
+        chartCue.Should().Be(new SelectionPaneDropVisualPlan(
+            chart.Id,
             SelectionPaneDropPlacement.After,
             IsAllowed: false));
     }
@@ -233,21 +233,26 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void BuildItems_ExposesMoveFlagsWithinObjectKindStack()
+    public void BuildItems_ExposesMoveFlagsWithinMixedSupportedObjectStack()
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var back = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
-        var front = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
-        sheet.Pictures.Add(back);
-        sheet.Pictures.Add(front);
+        var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+        var middle = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
+        var front = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 3) };
+        sheet.DrawingShapes.Add(back);
+        sheet.Pictures.Add(middle);
+        sheet.TextBoxes.Add(front);
 
         var items = SelectionPanePlanner.BuildItems(sheet);
 
         var frontItem = items.Single(item => item.Id == front.Id);
+        var middleItem = items.Single(item => item.Id == middle.Id);
         var backItem = items.Single(item => item.Id == back.Id);
         frontItem.CanMoveUp.Should().BeFalse();
         frontItem.CanMoveDown.Should().BeTrue();
+        middleItem.CanMoveUp.Should().BeTrue();
+        middleItem.CanMoveDown.Should().BeTrue();
         backItem.CanMoveUp.Should().BeTrue();
         backItem.CanMoveDown.Should().BeFalse();
     }
@@ -484,7 +489,7 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialog_CreateDragMoveChanges_RejectsCrossKindDrops()
+    public void SelectionPaneDialog_CreateDragMoveChanges_AllowsMixedSupportedDrops()
     {
         var picture = Guid.NewGuid();
         var shape = Guid.NewGuid();
@@ -495,7 +500,25 @@ public sealed class SelectionPanePlannerTests
                 (SelectionPaneObjectKind.Shape, shape)
             ],
             draggedId: picture,
-            targetId: shape);
+            targetId: shape,
+            placement: SelectionPaneDropPlacement.After);
+
+        moves.Should().Equal(new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, picture, Forward: false));
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_CreateDragMoveChanges_RejectsChartMixedDrops()
+    {
+        var picture = Guid.NewGuid();
+        var chart = Guid.NewGuid();
+
+        var moves = SelectionPaneDialog.CreateDragMoveChanges(
+            [
+                (SelectionPaneObjectKind.Picture, picture),
+                (SelectionPaneObjectKind.Chart, chart)
+            ],
+            draggedId: picture,
+            targetId: chart);
 
         moves.Should().BeEmpty();
     }

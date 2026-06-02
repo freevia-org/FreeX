@@ -86,13 +86,14 @@ internal static class XlsxWorksheetDrawingObjectWriter
             if (pictures.Count == 0 && textBoxes.Count == 0 && shapes.Count == 0)
                 continue;
 
-            WriteWorksheetDrawingObjects(archive, worksheetPath, pictures, textBoxes, shapes, drawingIndex++, ref pictureIndex);
+            WriteWorksheetDrawingObjects(archive, worksheetPath, sheet, pictures, textBoxes, shapes, drawingIndex++, ref pictureIndex);
         }
     }
 
     private static void WriteWorksheetDrawingObjects(
         ZipArchive archive,
         string worksheetPath,
+        Sheet sheet,
         IReadOnlyList<PictureModel> pictures,
         IReadOnlyList<TextBoxModel> textBoxes,
         IReadOnlyList<DrawingShapeModel> shapes,
@@ -116,9 +117,42 @@ internal static class XlsxWorksheetDrawingObjectWriter
 
         var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
         var anchors = new List<XElement>();
-        foreach (var picture in pictures)
+        var nextPictureIndex = pictureIndex;
+        var shapeIndex = 1;
+        if (sheet.DrawingObjectZOrder.Count > 0)
         {
-            var currentPictureIndex = pictureIndex++;
+            var picturesById = CreateObjectMap(pictures, picture => picture.Id);
+            var textBoxesById = CreateObjectMap(textBoxes, textBox => textBox.Id);
+            var shapesById = CreateObjectMap(shapes, shape => shape.Id);
+            foreach (var entry in DrawingObjectZOrder.GetNormalizedOrder(sheet))
+            {
+                switch (entry.Kind)
+                {
+                    case SelectionPaneObjectKind.Picture when picturesById.TryGetValue(entry.Id, out var picture):
+                        AddPictureAnchor(picture);
+                        break;
+                    case SelectionPaneObjectKind.TextBox when textBoxesById.TryGetValue(entry.Id, out var textBox):
+                        AddTextBoxAnchor(textBox);
+                        break;
+                    case SelectionPaneObjectKind.Shape when shapesById.TryGetValue(entry.Id, out var shape):
+                        AddShapeAnchor(shape);
+                        break;
+                }
+            }
+        }
+        else
+        {
+            foreach (var picture in pictures)
+                AddPictureAnchor(picture);
+            foreach (var textBox in textBoxes)
+                AddTextBoxAnchor(textBox);
+            foreach (var shape in shapes)
+                AddShapeAnchor(shape);
+        }
+
+        void AddPictureAnchor(PictureModel picture)
+        {
+            var currentPictureIndex = nextPictureIndex++;
             var contentType = string.IsNullOrWhiteSpace(picture.ContentType) ? "image/png" : picture.ContentType;
             var extension = XlsxPackagePath.GetImageExtension(contentType).TrimStart('.');
             var mediaPath = $"xl/media/freexPicture{currentPictureIndex}.{extension}";
@@ -143,8 +177,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 relNs));
         }
 
-        var shapeIndex = 1;
-        foreach (var textBox in textBoxes)
+        void AddTextBoxAnchor(TextBoxModel textBox)
         {
             anchors.Add(ToOneCellTextBoxAnchor(
                 textBox,
@@ -153,7 +186,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 drawingNs));
         }
 
-        foreach (var shape in shapes)
+        void AddShapeAnchor(DrawingShapeModel shape)
         {
             anchors.Add(ToOneCellDrawingShapeAnchor(
                 shape,
@@ -161,6 +194,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 spreadsheetDrawingNs,
                 drawingNs));
         }
+
+        pictureIndex = nextPictureIndex;
 
         XlsxPackageXmlEditor.ReplaceXml(archive, drawingPath, new XDocument(
             new XElement(spreadsheetDrawingNs + "wsDr",
@@ -239,6 +274,17 @@ internal static class XlsxWorksheetDrawingObjectWriter
         picture.CropTop > 0 ||
         picture.CropRight > 0 ||
         picture.CropBottom > 0;
+
+    private static Dictionary<Guid, T> CreateObjectMap<T>(
+        IReadOnlyList<T> items,
+        Func<T, Guid> getId)
+    {
+        var result = new Dictionary<Guid, T>(items.Count);
+        foreach (var item in items)
+            result.TryAdd(getId(item), item);
+
+        return result;
+    }
 
     private static string ToSourceRectanglePercent(double ratio) =>
         ((int)Math.Round(Math.Clamp(ratio, 0, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);

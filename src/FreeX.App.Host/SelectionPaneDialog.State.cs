@@ -224,7 +224,7 @@ public sealed partial class SelectionPaneDialog
         dragged is not null &&
         target is not null &&
         !ReferenceEquals(dragged, target) &&
-        dragged.Source.Kind == target.Source.Kind;
+        SelectionPaneDialogStatePlanner.CanReorderKinds(dragged.Source.Kind, target.Source.Kind);
 
     private void RenameSelectedItem()
     {
@@ -270,8 +270,8 @@ public sealed partial class SelectionPaneDialog
 
         var currentIndex = _items.IndexOf(selected);
         var states = CurrentItemStates();
-        _moveUpButton.IsEnabled = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(states, currentIndex, forward: true) >= 0;
-        _moveDownButton.IsEnabled = SelectionPaneDialogStatePlanner.FindSameKindMoveTargetIndex(states, currentIndex, forward: false) >= 0;
+        _moveUpButton.IsEnabled = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(states, currentIndex, forward: true) >= 0;
+        _moveDownButton.IsEnabled = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(states, currentIndex, forward: false) >= 0;
     }
 
     private IReadOnlyList<SelectionPaneDialogItemState> CurrentItemStates() =>

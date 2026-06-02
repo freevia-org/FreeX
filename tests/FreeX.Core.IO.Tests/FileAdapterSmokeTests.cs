@@ -3097,6 +3097,57 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_DrawingObjectZOrder()
+    {
+        var workbook = new Workbook("DrawingObjectZOrderTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = PictureKind.Image,
+            Name = "Logo",
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png"
+        };
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Name = "Notes",
+            Text = "Callout"
+        };
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 2),
+            Name = "Marker",
+            Kind = DrawingShapeKind.Ellipse
+        };
+        sheet.Pictures.Add(picture);
+        sheet.TextBoxes.Add(textBox);
+        sheet.DrawingShapes.Add(shape);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loadedSheet = adapter.Load(ms).GetSheetAt(0);
+
+        var loadedTextBox = loadedSheet.TextBoxes.Should().ContainSingle().Subject;
+        var loadedPicture = loadedSheet.Pictures.Should().ContainSingle().Subject;
+        var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
+        loadedTextBox.Id.Should().Be(textBox.Id);
+        loadedPicture.Id.Should().Be(picture.Id);
+        loadedShape.Id.Should().Be(shape.Id);
+        loadedSheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, loadedTextBox.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, loadedPicture.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, loadedShape.Id));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsTextBoxesAndDrawingShapes()
     {
         var workbook = new Workbook("XlsxDrawingLoadTest");
@@ -3206,6 +3257,66 @@ public partial class FileAdapterSmokeTests
         loadedShape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
         loadedShape.HasShadowEffect.Should().BeTrue();
         loadedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Shadow);
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_DrawingObjectZOrder()
+    {
+        var workbook = new Workbook("XlsxDrawingObjectZOrderTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = PictureKind.Image,
+            Name = "Logo",
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png"
+        };
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Name = "Notes",
+            Text = "Callout"
+        };
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 2),
+            Name = "Marker",
+            Kind = DrawingShapeKind.Ellipse
+        };
+        sheet.Pictures.Add(picture);
+        sheet.TextBoxes.Add(textBox);
+        sheet.DrawingShapes.Add(shape);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+            XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            drawingXml.Root!.Elements()
+                .Select(anchor => anchor.Descendants(xdr + "cNvPr").First().Attribute("name")?.Value)
+                .Should()
+                .Equal("Notes", "Logo", "Marker");
+        }
+
+        ms.Position = 0;
+        var loadedSheet = adapter.Load(ms).GetSheetAt(0);
+
+        var loadedTextBox = loadedSheet.TextBoxes.Should().ContainSingle().Subject;
+        var loadedPicture = loadedSheet.Pictures.Should().ContainSingle().Subject;
+        var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
+        loadedSheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, loadedTextBox.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, loadedPicture.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, loadedShape.Id));
     }
 
     [Fact]

@@ -151,6 +151,15 @@ public partial class GridView
         set => SetValue(PicturesProperty, value);
     }
 
+    public static readonly DependencyProperty DrawingObjectZOrderProperty =
+        DependencyProperty.Register(nameof(DrawingObjectZOrder), typeof(IReadOnlyList<DrawingObjectZOrderEntry>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<DrawingObjectZOrderEntry>? DrawingObjectZOrder
+    {
+        get => (IReadOnlyList<DrawingObjectZOrderEntry>?)GetValue(DrawingObjectZOrderProperty);
+        set => SetValue(DrawingObjectZOrderProperty, value);
+    }
+
     public static readonly DependencyProperty NativeSlicersProperty =
         DependencyProperty.Register(nameof(NativeSlicers), typeof(IReadOnlyList<SlicerModel>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));

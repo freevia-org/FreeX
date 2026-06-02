@@ -388,6 +388,7 @@ public partial class MainWindow
         SheetGrid.DrawingShapes = keepObjectData ? sheet?.DrawingShapes : null;
         SheetGrid.WorkbookTheme = _workbook.Theme;
         SheetGrid.Pictures = keepObjectData ? sheet?.Pictures : null;
+        SheetGrid.DrawingObjectZOrder = keepObjectData ? sheet?.DrawingObjectZOrder : null;
         var nativeVisualFilters = keepObjectData && sheet is not null
             ? SlicerTimelinePlanner.GetNativeVisualFilters(_workbook, sheet)
             : null;

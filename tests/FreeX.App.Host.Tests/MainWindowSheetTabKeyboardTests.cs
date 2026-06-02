@@ -102,6 +102,32 @@ public sealed class MainWindowSheetTabKeyboardTests
         });
     }
 
+    [Fact]
+    public void HomeEndKeysOnFocusedSheetTab_RouteToEdgeSheetTabs()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.InsertNewSheet();
+            harness.InsertNewSheet();
+            harness.ActiveSheetTabName.Should().Be("Sheet3");
+
+            harness.FocusCurrentSheetTab().Should().BeTrue();
+            harness.FocusedSheetTabName.Should().Be("Sheet3");
+
+            harness.HandleFocusedSheetTabKeyboardNavigation(Key.Home).Should().BeTrue();
+
+            harness.ActiveSheetTabName.Should().Be("Sheet1");
+            harness.FocusedSheetTabName.Should().Be("Sheet1");
+
+            harness.HandleFocusedSheetTabKeyboardNavigation(Key.End).Should().BeTrue();
+
+            harness.ActiveSheetTabName.Should().Be("Sheet3");
+            harness.FocusedSheetTabName.Should().Be("Sheet3");
+        });
+    }
+
     [Theory]
     [InlineData(Key.Enter)]
     [InlineData(Key.Escape)]
