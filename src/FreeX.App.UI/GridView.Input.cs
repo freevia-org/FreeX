@@ -222,15 +222,35 @@ public partial class GridView
             }
 
             var (target, _, _) = HitTestResize(pos);
-            var marginGuide = HitTestPageMarginGuide(pos);
+            if (target == ResizeTarget.Column)
+            {
+                Cursor = Cursors.SizeWE;
+                return;
+            }
+
+            if (target == ResizeTarget.Row)
+            {
+                Cursor = Cursors.SizeNS;
+                return;
+            }
+
             var splitScrollbarHit = Viewport is null
                 ? null
                 : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight), pos);
-            Cursor = target == ResizeTarget.Column ? Cursors.SizeWE
-                   : target == ResizeTarget.Row    ? Cursors.SizeNS
-                   : splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Horizontal ? Cursors.SizeWE
-                   : splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Vertical ? Cursors.SizeNS
-                   : marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
+            if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Horizontal)
+            {
+                Cursor = Cursors.SizeWE;
+                return;
+            }
+
+            if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Vertical)
+            {
+                Cursor = Cursors.SizeNS;
+                return;
+            }
+
+            var marginGuide = HitTestPageMarginGuide(pos);
+            Cursor = marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
                    : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
                    : IsOnAutofillHandle(pos) ? Cursors.Cross
                    : null;

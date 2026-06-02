@@ -10,7 +10,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private readonly uint _startRow;
     private readonly uint _count;
     private List<(CellAddress Addr, Cell Cell)>? _deletedSnapshot;
-    private List<(CellAddress Addr, Cell Cell)>? _shiftedSnapshot;
+    private List<(CellAddress Addr, Cell Snapshot, Cell? Original)>? _shiftedSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private HashSet<uint>? _hiddenRowsSnapshot;
@@ -52,10 +52,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         foreach (var (addr, _) in _deletedSnapshot)
             sheet.ClearCell(addr);
 
-        foreach (var (addr, _) in _shiftedSnapshot)
+        foreach (var (addr, _, _) in _shiftedSnapshot)
             sheet.ClearCell(addr);
-        foreach (var (addr, cell) in _shiftedSnapshot)
-            sheet.SetCell(new CellAddress(addr.Sheet, addr.Row - _count, addr.Col), cell.Clone());
+        foreach (var (addr, _, original) in _shiftedSnapshot)
+            sheet.SetCell(new CellAddress(addr.Sheet, addr.Row - _count, addr.Col), original!);
 
         _hiddenRowsSnapshot = [.. sheet.HiddenRows];
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.HiddenRows, _startRow, _count);
@@ -133,11 +133,11 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
-        foreach (var (addr, _) in _shiftedSnapshot)
+        foreach (var (addr, _, _) in _shiftedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row - _count, addr.Col));
 
-        foreach (var (addr, cell) in _shiftedSnapshot)
-            sheet.SetCell(addr, cell.Clone());
+        foreach (var (addr, snapshot, _) in _shiftedSnapshot)
+            sheet.SetCell(addr, snapshot.Clone());
 
         foreach (var (addr, cell) in _deletedSnapshot)
             sheet.SetCell(addr, cell.Clone());
@@ -159,20 +159,21 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
+        ReleaseOriginalCells(_shiftedSnapshot);
     }
 
-    private (List<(CellAddress Addr, Cell Cell)> Deleted, List<(CellAddress Addr, Cell Cell)> Shifted)
+    private (List<(CellAddress Addr, Cell Cell)> Deleted, List<(CellAddress Addr, Cell Snapshot, Cell? Original)> Shifted)
         CaptureDeletedAndShiftedCells(Sheet sheet, uint endRow)
     {
         var deleted = new List<(CellAddress Addr, Cell Cell)>();
-        var shifted = new List<(CellAddress Addr, Cell Cell)>(sheet.CellCount);
+        var shifted = new List<(CellAddress Addr, Cell Snapshot, Cell? Original)>(sheet.CellCount);
 
         foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
         {
             if (row > endRow)
             {
                 var addr = new CellAddress(sheet.Id, row, col);
-                shifted.Add((addr, cell.Clone()));
+                shifted.Add((addr, cell.Clone(), cell));
             }
             else if (row >= _startRow)
             {
@@ -182,5 +183,14 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         }
 
         return (deleted, shifted);
+    }
+
+    private static void ReleaseOriginalCells(List<(CellAddress Addr, Cell Snapshot, Cell? Original)> cells)
+    {
+        for (var i = 0; i < cells.Count; i++)
+        {
+            var cell = cells[i];
+            cells[i] = (cell.Addr, cell.Snapshot, null);
+        }
     }
 }
