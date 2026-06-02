@@ -18,7 +18,7 @@ public sealed partial class NativeJsonAdapter
                 dto.MinorFontName ?? WorkbookTheme.Office.MinorFontName)
             .WithEffects(dto.EffectsName ?? WorkbookTheme.Office.EffectsName);
 
-        foreach (var color in dto.Colors ?? [])
+        foreach (var color in (dto.Colors ?? []).OfType<WorkbookThemeColorDto>())
         {
             if (Enum.IsDefined(color.Slot) && ParseColor(color.Color ?? "") is { } parsed)
                 theme = theme.WithColor(color.Slot, parsed);

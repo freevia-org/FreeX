@@ -3554,6 +3554,37 @@ public sealed class SpreadsheetXmlFileAdapterTests
         stylesheet.CanRead.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(0, 1, "maxOutputBytes")]
+    [InlineData(1, 0, "maxInputCharacters")]
+    public void LoadTransformed_InvalidSafetyLimit_ThrowsArgumentOutOfRangeException(
+        long maxOutputBytes,
+        long maxInputCharacters,
+        string parameterName)
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Limited"><ss:Table/></ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(
+            source,
+            stylesheet,
+            maxOutputBytes,
+            maxInputCharacters);
+
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .Where(exception => exception.ParamName == parameterName);
+    }
+
     [Fact]
     public void LoadTransformed_OutputAboveLimit_ReportsTransformSafetyDiagnostic()
     {
