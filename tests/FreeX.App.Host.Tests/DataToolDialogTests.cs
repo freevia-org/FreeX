@@ -566,6 +566,25 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsFixedWidthRulerRightClick_RemovesNearestBreakAndHandlesMouseEvent()
+    {
+        var rulerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.FixedWidth.cs"));
+
+        var rightClick = rulerSource[
+            rulerSource.IndexOf("private void FixedWidthRuler_MouseRightButtonDown", StringComparison.Ordinal)..
+            rulerSource.IndexOf("private int AddFixedWidthBreakAt", StringComparison.Ordinal)];
+
+        rightClick.Should().Contain("if (_fixedWidthButton.IsChecked != true)");
+        rightClick.Should().Contain("var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);");
+        rightClick.Should().Contain("FindNearestBreakIndex(positions, e.GetPosition(_fixedWidthRuler).X, tolerance: 10)");
+        rightClick.Should().Contain("UpdateFixedWidthBreakPositions(RemoveFixedWidthBreakPosition(positions, nearest));");
+        rightClick.Should().Contain("e.Handled = true;");
+        rightClick.IndexOf("UpdateFixedWidthBreakPositions(RemoveFixedWidthBreakPosition(positions, nearest));", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(rightClick.IndexOf("e.Handled = true;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TextToColumnsResult_CapturesTextQualifierAndConsecutiveDelimiterChoice()
     {
         var result = TextToColumnsDialog.CreateResult(
