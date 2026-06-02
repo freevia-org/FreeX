@@ -92,6 +92,9 @@ public sealed partial class NamedRangeDialog : Window
 
     private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        if (NamesList.SelectedItem is not NamedRangeViewModel)
+            return;
+
         EditButton_Click(sender, e);
         e.Handled = true;
     }
