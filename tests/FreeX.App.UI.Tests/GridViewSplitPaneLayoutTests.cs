@@ -1290,6 +1290,47 @@ public sealed class GridViewSplitPaneLayoutTests
         visitedAllocatedBytes.Should().BeLessThan(materializedAllocatedBytes);
     }
 
+    [Fact]
+    public void Benchmark_SplitPaneScrollbarChrome_ReportsAllocations()
+    {
+        const int iterations = 50_000;
+        const double actualWidth = 1_920;
+        const double actualHeight = 1_080;
+        var viewport = MeasuredSplitPaneViewport();
+
+        GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth, actualHeight)
+            .HorizontalTopRight.Should().NotBeNull();
+        GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth, actualHeight)
+            .VerticalBottomLeft.Should().NotBeNull();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        SplitPaneScrollbar? horizontal = null;
+        SplitPaneScrollbar? vertical = null;
+        for (var i = 0; i < iterations; i++)
+        {
+            var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth, actualHeight);
+            horizontal = chrome.HorizontalTopRight;
+            vertical = chrome.VerticalBottomLeft;
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF SPLIT_PANE_SCROLLBAR_CHROME " +
+            $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        horizontal.Should().NotBeNull();
+        vertical.Should().NotBeNull();
+        allocatedBytes.Should().BeLessThan(17_000_000);
+    }
+
     private static DisplayCell Cell(uint row, uint col, string text, CellStyle? style = null) =>
         new(row, col, new TextValue(text), text, null, StyleId.Default, null, style);
 

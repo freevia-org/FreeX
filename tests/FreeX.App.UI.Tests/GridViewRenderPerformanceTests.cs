@@ -1191,6 +1191,7 @@ public sealed class GridViewRenderPerformanceTests
         renderConsumer.Should().Contain("grid.RenderSplitPaneCell(dc, layout, gridPen, pixelsPerDip);");
         renderConsumer.Should().NotContain("new RectangleGeometry(clipRect)");
         renderConsumer.Should().NotContain("GetSplitPaneClipRectForCell");
+        splitPanes.Should().NotContain("GetSplitPaneClipRectForCell");
         rendering.Should().Contain("geometry.Freeze();");
         splitPanes.Should().Contain("public readonly record struct SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
     }
