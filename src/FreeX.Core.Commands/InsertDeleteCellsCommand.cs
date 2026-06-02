@@ -84,8 +84,6 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 var address = captured[i].Address;
                 sheet.SetCell(new CellAddress(address.Sheet, address.Row, address.Col + width), originalCells[i]);
             }
-
-            ClearRange(sheet, _range);
         }
         finally
         {
@@ -107,8 +105,6 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 var address = captured[i].Address;
                 sheet.SetCell(new CellAddress(address.Sheet, address.Row + height, address.Col), originalCells[i]);
             }
-
-            ClearRange(sheet, _range);
         }
         finally
         {
@@ -124,11 +120,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
 
     private static CellShiftCapture CaptureCellsForMove(Sheet sheet, CellShiftRegion region)
     {
-        var snapshotCells = new List<(CellAddress Address, Cell Cell)>();
+        var occupiedCells = sheet.GetOccupiedCellMap();
+        var snapshotCells = new List<(CellAddress Address, Cell Cell)>(
+            CountCellsInRegion(occupiedCells, region));
         uint maxRow = 0;
         uint maxCol = 0;
 
-        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+        foreach (var ((row, col), cell) in occupiedCells)
         {
             if (!region.Contains(row, col))
                 continue;
@@ -147,6 +145,18 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             snapshotCells,
             maxRow,
             maxCol);
+    }
+
+    private static int CountCellsInRegion(IReadOnlyDictionary<(uint Row, uint Col), Cell> occupiedCells, CellShiftRegion region)
+    {
+        var count = 0;
+        foreach (var ((row, col), _) in occupiedCells)
+        {
+            if (region.Contains(row, col))
+                count++;
+        }
+
+        return count;
     }
 
     internal static Cell[] RentOriginalCells(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
@@ -314,7 +324,7 @@ internal sealed class CellShiftSnapshot(
 {
     public void Restore(Sheet sheet)
     {
-        var current = new List<CellAddress>();
+        var current = new List<CellAddress>(cells.Count);
         foreach (var ((row, col), _) in sheet.GetOccupiedCellMap())
         {
             if (region.Contains(row, col))
