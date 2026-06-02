@@ -7,8 +7,6 @@ namespace FreeX.Core.Calc;
 
 public static partial class NumberFormatter
 {
-    private static readonly Regex DateTimeElapsedTokenRegex = new(@"\[([hH])\]|\[([mM])\]|\[([sS])\]");
-    private static readonly Regex DateTimeBracketDirectiveRegex = new(@"\[[^\]]*\]");
     private static readonly Regex SpecialDateTimeLocaleTokenRegex = new(
         @"^\s*\[\$-F(?<kind>400|800)\](?<suffix>.*)$",
         RegexOptions.IgnoreCase);
@@ -80,12 +78,16 @@ public static partial class NumberFormatter
         }
         cleanFmt = PreserveLocaleCurrencyTokens(cleanFmt, out _, out var dateTimeFormat);
 
-        var elapsedMatch = DateTimeElapsedTokenRegex.Match(cleanFmt);
-        if (elapsedMatch.Success)
-            return NativeDigits(FormatElapsedTime(oaDate, RemoveSpacingAndFillDirectives(cleanFmt), elapsedMatch));
+        var directiveFormat = PreprocessBracketFormatDirectives(cleanFmt);
+        if (directiveFormat.ElapsedTimeMatch.Success)
+        {
+            return NativeDigits(FormatElapsedTime(
+                oaDate,
+                directiveFormat.Format,
+                directiveFormat.ElapsedTimeMatch));
+        }
 
-        cleanFmt = DateTimeBracketDirectiveRegex.Replace(cleanFmt, "");
-        cleanFmt = RemoveSpacingAndFillDirectives(cleanFmt);
+        cleanFmt = RemoveSpacingAndFillDirectives(directiveFormat.Format);
         try
         {
             var dt = DateTime.FromOADate(oaDate);
@@ -175,11 +177,11 @@ public static partial class NumberFormatter
                 return true;
 
             format = PreserveLocaleCurrencyTokens(format, out _, out _);
-            if (DateTimeElapsedTokenRegex.IsMatch(format))
+            var directiveFormat = PreprocessBracketFormatDirectives(format);
+            if (directiveFormat.ElapsedTimeMatch.Success)
                 return true;
 
-            format = DateTimeBracketDirectiveRegex.Replace(format, "");
-            format = RemoveSpacingAndFillDirectives(format);
+            format = RemoveSpacingAndFillDirectives(directiveFormat.Format);
             if (IsDateTimeFormat(format))
                 return true;
         }
