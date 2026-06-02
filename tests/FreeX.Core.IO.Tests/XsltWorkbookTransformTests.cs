@@ -1471,6 +1471,7 @@ public sealed class XsltWorkbookTransformTests
               <cell type="Number" value="42.25"/>
               <cell type="Boolean" value="1"/>
               <cell type="DateTime" value="2026-05-31T08:15:30"/>
+              <cell type="Error" value="#VALUE!"/>
             </cells>
             """);
         using var stylesheet = StreamFromString("""
@@ -1501,9 +1502,9 @@ public sealed class XsltWorkbookTransformTests
         var data = XDocument.Load(transformed).Descendants(ss + "Data").ToList();
 
         data.Select(element => element.Attribute(ss + "Type")!.Value)
-            .Should().Equal("String", "Number", "Boolean", "DateTime");
+            .Should().Equal("String", "Number", "Boolean", "DateTime", "Error");
         data.Select(element => element.Value)
-            .Should().Equal("Ready", "42.25", "1", "2026-05-31T08:15:30");
+            .Should().Equal("Ready", "42.25", "1", "2026-05-31T08:15:30", "#VALUE!");
     }
 
     [Fact]
