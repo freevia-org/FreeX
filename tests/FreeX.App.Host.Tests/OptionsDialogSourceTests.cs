@@ -273,6 +273,34 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_DisablesVisibleCheckboxesThatAreNotPersistedOptions()
+    {
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("OptionsDialog.xaml");
+
+        foreach (var name in DeferredOptionCheckboxNames)
+            AssertNamedCheckBoxDisabled(document, name);
+    }
+
+    [Fact]
+    public void OptionsDialog_RuntimeDeferredOptionCheckboxesAreReadOnly()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new OptionsDialog(new FreeXOptions());
+            dialog.Show();
+            try
+            {
+                foreach (var name in DeferredOptionCheckboxNames)
+                    GetControl<CheckBox>(dialog, name).IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void OptionsDialog_ExposesPersistedQuickAccessToolbarCustomization()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
@@ -566,6 +594,31 @@ public sealed class OptionsDialogSourceTests
             BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static readonly string[] DeferredOptionCheckboxNames =
+    [
+        "OptFormulasAutocomplete",
+        "OptProofingCheckSpellingAsYouType",
+        "OptProofingIgnoreUppercase",
+        "OptProofingFlagRepeatedWords",
+        "OptEaseFeedbackSound",
+        "OptEaseQuickAnalysis",
+        "OptEaseAccessibilityDisplay",
+        "OptAdvancedFillHandle",
+        "OptAdvancedAutoComplete"
+    ];
+
+    private static void AssertNamedCheckBoxDisabled(XDocument document, string name)
+    {
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var checkBox = document
+            .Descendants(presentation + "CheckBox")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == name);
+
+        checkBox.Attribute("IsEnabled")?.Value.Should().Be("False");
     }
 
     private static IReadOnlyList<string> GetListDisplayNames(ListBox listBox) =>
