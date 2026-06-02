@@ -31,6 +31,28 @@ public sealed class ThreadedCommentDialogTests
     }
 
     [Fact]
+    public void DialogSource_SelectedReplyBox_CommitsEditWithControlEnterWhenActionIsEnabled()
+    {
+        var source = ReadThreadedCommentDialogSource();
+
+        source.Should().Contain("_selectedReplyBox.PreviewKeyDown +=");
+        source.Should().Contain("_updateReplyButton.IsEnabled && Keyboard.Modifiers == ModifierKeys.Control");
+        source.Should().Contain("SubmitThreadedCommentReplyEdit(existing);");
+        source.Should().Contain("e.Handled = true");
+    }
+
+    [Fact]
+    public void DialogSource_SelectedReplyActionsTrackSelectionAndText()
+    {
+        var source = ReadThreadedCommentDialogSource();
+
+        source.Should().Contain("_selectedReplyBox.TextChanged += (_, _) => UpdateSelectedReplyActionState(existing);");
+        source.Should().Contain("private void UpdateSelectedReplyActionState(ThreadedComment existing)");
+        source.Should().Contain("_deleteReplyButton.IsEnabled = hasSelection;");
+        source.Should().Contain("_updateReplyButton.IsEnabled = hasSelection && !string.IsNullOrWhiteSpace(_selectedReplyBox.Text);");
+    }
+
+    [Fact]
     public void DialogSource_ReplyBox_KeepsAcceptsReturnForPlainEnter()
     {
         var source = ReadThreadedCommentDialogSource();
@@ -226,8 +248,10 @@ public sealed class ThreadedCommentDialogTests
 
                 AutomationProperties.GetName(buttons["ThreadedCommentUpdateReplyButton"]).Should().Be(UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
                 AutomationProperties.GetHelpText(buttons["ThreadedCommentUpdateReplyButton"]).Should().Be(UiText.Get("ThreadedComment_UpdateSelectedReplyHelpText"));
+                buttons["ThreadedCommentUpdateReplyButton"].IsEnabled.Should().BeTrue();
                 AutomationProperties.GetName(buttons["ThreadedCommentDeleteReplyButton"]).Should().Be(UiText.Get("ThreadedComment_DeleteSelectedReplyAutomationName"));
                 AutomationProperties.GetHelpText(buttons["ThreadedCommentDeleteReplyButton"]).Should().Be(UiText.Get("ThreadedComment_DeleteSelectedReplyHelpText"));
+                buttons["ThreadedCommentDeleteReplyButton"].IsEnabled.Should().BeTrue();
                 buttons["ThreadedCommentReplyButton"].IsDefault.Should().BeTrue();
                 AutomationProperties.GetName(buttons["ThreadedCommentReplyButton"]).Should().Be(UiText.Get("ThreadedComment_ReplyToCommentAutomationName"));
                 AutomationProperties.GetHelpText(buttons["ThreadedCommentReplyButton"]).Should().Be(UiText.Get("ThreadedComment_ReplyToCommentHelpText"));
@@ -236,6 +260,44 @@ public sealed class ThreadedCommentDialogTests
 
                 AutomationProperties.GetName(resolvedBox).Should().Be(UiText.Get("ThreadedComment_MarkAsResolvedAutomationName"));
                 AutomationProperties.GetHelpText(resolvedBox).Should().Be(UiText.Get("ThreadedComment_MarkAsResolvedHelpText"));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void ExistingThread_RuntimeReplyActionsDisableForBlankTextOrMissingSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ThreadedComment("Root note", "Quinn")
+            {
+                Replies = [new CommentReply("Existing reply", "Codex")]
+            };
+            var dialog = new ThreadedCommentDialog("Sheet1!A1", existing);
+
+            try
+            {
+                var textBoxes = FindLogicalDescendants<TextBox>(dialog)
+                    .ToDictionary(AutomationProperties.GetAutomationId);
+                var buttons = FindLogicalDescendants<Button>(dialog)
+                    .ToDictionary(AutomationProperties.GetAutomationId);
+                var replySelector = FindLogicalDescendants<ComboBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentReplySelector");
+
+                textBoxes["ThreadedCommentSelectedReplyBox"].Text = " ";
+
+                buttons["ThreadedCommentUpdateReplyButton"].IsEnabled.Should().BeFalse();
+                buttons["ThreadedCommentDeleteReplyButton"].IsEnabled.Should().BeTrue();
+
+                replySelector.SelectedIndex = -1;
+
+                textBoxes["ThreadedCommentSelectedReplyBox"].Text.Should().BeEmpty();
+                buttons["ThreadedCommentUpdateReplyButton"].IsEnabled.Should().BeFalse();
+                buttons["ThreadedCommentDeleteReplyButton"].IsEnabled.Should().BeFalse();
             }
             finally
             {

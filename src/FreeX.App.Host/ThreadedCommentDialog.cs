@@ -29,6 +29,8 @@ public sealed class ThreadedCommentDialog : Window
     private readonly TextBox _replyBox = new() { AcceptsReturn = true, MinLines = 3, MaxLines = 6 };
     private readonly ComboBox _replySelector = new() { MinWidth = 180 };
     private readonly TextBox _selectedReplyBox = new() { AcceptsReturn = true, MinLines = 2, MaxLines = 5 };
+    private readonly Button _updateReplyButton = new() { Width = 112, Margin = new Thickness(0, 8, 8, 0) };
+    private readonly Button _deleteReplyButton = new() { Width = 112, Margin = new Thickness(0, 8, 0, 0) };
     private readonly CheckBox _resolveBox;
 
     public ThreadedCommentDialogResult Result { get; private set; } = new(null, null, false);
@@ -293,23 +295,32 @@ public sealed class ThreadedCommentDialog : Window
         AutomationProperties.SetName(_selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextAutomationName"));
         AutomationProperties.SetAutomationId(_selectedReplyBox, "ThreadedCommentSelectedReplyBox");
         AutomationProperties.SetHelpText(_selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextHelpText"));
+        _selectedReplyBox.TextChanged += (_, _) => UpdateSelectedReplyActionState(existing);
+        _selectedReplyBox.PreviewKeyDown += (_, e) =>
+        {
+            if (_updateReplyButton.IsEnabled && Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Enter)
+            {
+                SubmitThreadedCommentReplyEdit(existing);
+                e.Handled = true;
+            }
+        };
         panel.Children.Add(new Label { Content = UiText.Get("ThreadedComment_SelectedReplyTextLabel"), Target = _selectedReplyBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
         panel.Children.Add(_selectedReplyBox);
 
-        var updateReply = new Button { Content = UiText.Get("ThreadedComment_UpdateReplyButton"), Width = 112, Margin = new Thickness(0, 8, 8, 0) };
-        var deleteReply = new Button { Content = UiText.Get("ThreadedComment_DeleteReplyButton"), Width = 112, Margin = new Thickness(0, 8, 0, 0) };
-        AutomationProperties.SetName(updateReply, UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
-        AutomationProperties.SetAutomationId(updateReply, "ThreadedCommentUpdateReplyButton");
-        AutomationProperties.SetHelpText(updateReply, UiText.Get("ThreadedComment_UpdateSelectedReplyHelpText"));
-        AutomationProperties.SetName(deleteReply, UiText.Get("ThreadedComment_DeleteSelectedReplyAutomationName"));
-        AutomationProperties.SetAutomationId(deleteReply, "ThreadedCommentDeleteReplyButton");
-        AutomationProperties.SetHelpText(deleteReply, UiText.Get("ThreadedComment_DeleteSelectedReplyHelpText"));
-        updateReply.Click += (_, _) => SubmitThreadedCommentReplyEdit(existing);
-        deleteReply.Click += (_, _) => SubmitThreadedCommentReplyDelete(existing);
+        _updateReplyButton.Content = UiText.Get("ThreadedComment_UpdateReplyButton");
+        _deleteReplyButton.Content = UiText.Get("ThreadedComment_DeleteReplyButton");
+        AutomationProperties.SetName(_updateReplyButton, UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
+        AutomationProperties.SetAutomationId(_updateReplyButton, "ThreadedCommentUpdateReplyButton");
+        AutomationProperties.SetHelpText(_updateReplyButton, UiText.Get("ThreadedComment_UpdateSelectedReplyHelpText"));
+        AutomationProperties.SetName(_deleteReplyButton, UiText.Get("ThreadedComment_DeleteSelectedReplyAutomationName"));
+        AutomationProperties.SetAutomationId(_deleteReplyButton, "ThreadedCommentDeleteReplyButton");
+        AutomationProperties.SetHelpText(_deleteReplyButton, UiText.Get("ThreadedComment_DeleteSelectedReplyHelpText"));
+        _updateReplyButton.Click += (_, _) => SubmitThreadedCommentReplyEdit(existing);
+        _deleteReplyButton.Click += (_, _) => SubmitThreadedCommentReplyDelete(existing);
 
         var actionRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Left };
-        actionRow.Children.Add(updateReply);
-        actionRow.Children.Add(deleteReply);
+        actionRow.Children.Add(_updateReplyButton);
+        actionRow.Children.Add(_deleteReplyButton);
         panel.Children.Add(actionRow);
         PopulateSelectedReplyText(existing);
         return panel;
@@ -321,6 +332,14 @@ public sealed class ThreadedCommentDialog : Window
         _selectedReplyBox.Text = IsValidReplyIndex(existing, replyIndex)
             ? existing.Replies[replyIndex].Text
             : "";
+        UpdateSelectedReplyActionState(existing);
+    }
+
+    private void UpdateSelectedReplyActionState(ThreadedComment existing)
+    {
+        var hasSelection = IsValidReplyIndex(existing, _replySelector.SelectedIndex);
+        _deleteReplyButton.IsEnabled = hasSelection;
+        _updateReplyButton.IsEnabled = hasSelection && !string.IsNullOrWhiteSpace(_selectedReplyBox.Text);
     }
 
     private void SubmitThreadedCommentReplyEdit(ThreadedComment existing)
