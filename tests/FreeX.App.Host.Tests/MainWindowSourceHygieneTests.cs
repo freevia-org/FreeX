@@ -814,7 +814,7 @@ public sealed class MainWindowSourceHygieneTests
         shareMethod.Should().Contain("SaveWorkbookWithDialogAsync()");
         shareMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(plan.Path, _fileAdapters, out var target)");
         shareMethod.Should().Contain("SaveWorkbookToTargetAsync(target!)");
-        shareMethod.Should().Contain("_shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name)");
+        shareMethod.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
 
         reviewSource.Should().Contain("private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();");
         backstageSource.Should().Contain("await ShareWorkbookAsync();");
@@ -2153,6 +2153,7 @@ public sealed class MainWindowSourceHygieneTests
         selectionSource.Should().Contain("if (TryHandleFocusedSheetTabKeyboardNavigation(e))");
         sheetTabsSource.Should().Contain("private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
         sheetTabsSource.Should().Contain("Keyboard.Modifiers != ModifierKeys.None");
+        sheetTabsSource.Should().Contain("if (FindSheetTabContextMenuTarget(focusedElement) is null)");
         sheetTabsSource.Should().Contain("Key.Left => FocusAdjacentVisibleSheetTab(-1)");
         sheetTabsSource.Should().Contain("Key.Right => FocusAdjacentVisibleSheetTab(1)");
         sheetTabsSource.Should().Contain("Key.Home => FocusEdgeVisibleSheetTab(first: true)");

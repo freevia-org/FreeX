@@ -772,6 +772,42 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarExpandButton_WithInlineEditorDraft_PreservesSynchronizedDraft()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            if (harness.FormulaBarAcceptsReturn)
+                harness.ToggleFormulaBarExpansion();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+            harness.SetInlineEditorText("inline draft");
+            harness.FocusFormulaBar();
+
+            harness.ToggleFormulaBarExpansion();
+
+            harness.FormulaBarAcceptsReturn.Should().BeTrue();
+            harness.FormulaBarText.Should().Be("inline draft");
+            harness.InlineEditorText.Should().Be("inline draft");
+            harness.InlineEditorVisible.Should().BeTrue();
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+
+            harness.ToggleFormulaBarExpansion();
+
+            harness.FormulaBarAcceptsReturn.Should().BeFalse();
+            harness.FormulaBarText.Should().Be("inline draft");
+            harness.InlineEditorText.Should().Be("inline draft");
+            harness.InlineEditorVisible.Should().BeTrue();
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+        });
+    }
+
+    [Fact]
     public void NameBoxEnter_NavigatesRefreshesFormulaBarAndReturnsFocusToGrid()
     {
         StaTestRunner.Run(() =>
