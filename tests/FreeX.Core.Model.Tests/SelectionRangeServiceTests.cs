@@ -148,6 +148,7 @@ public class SelectionRangeServiceTests(ITestOutputHelper output)
         region.Should().Be(new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, rows, cols)));
+        allocated.Should().BeLessThan(1_000_000);
     }
 
     [Fact]
