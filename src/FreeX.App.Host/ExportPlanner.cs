@@ -103,7 +103,7 @@ internal static partial class ExportPlanner
     public static string PdfFallbackMessage => UiText.Get("Export_PdfFallbackMessage");
 
     public static ExportFormat InferExportFormat(string path) =>
-        string.Equals(Path.GetExtension(path), ".xps", StringComparison.OrdinalIgnoreCase)
+        string.Equals(TryGetExtension(path, out var extension) ? extension : "", ".xps", StringComparison.OrdinalIgnoreCase)
             ? ExportFormat.Xps
             : ExportFormat.Pdf;
 
@@ -128,10 +128,60 @@ internal static partial class ExportPlanner
 
     private static string NormalizeExportPath(string path, ExportFormat format, bool forceMatchingExtension)
     {
-        if (!forceMatchingExtension && !string.IsNullOrEmpty(Path.GetExtension(path)))
+        if (!forceMatchingExtension && TryGetExtension(path, out _))
             return path;
 
-        return Path.ChangeExtension(path, format == ExportFormat.Xps ? ".xps" : ".pdf");
+        return TryChangeExtension(path, format == ExportFormat.Xps ? ".xps" : ".pdf", out var normalized)
+            ? normalized
+            : path;
+    }
+
+    private static bool TryGetExtension(string path, out string extension)
+    {
+        try
+        {
+            extension = Path.GetExtension(path) ?? "";
+            return !string.IsNullOrEmpty(extension);
+        }
+        catch (ArgumentException)
+        {
+            extension = "";
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            extension = "";
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            extension = "";
+            return false;
+        }
+    }
+
+    private static bool TryChangeExtension(string path, string extension, out string normalizedPath)
+    {
+        try
+        {
+            normalizedPath = Path.ChangeExtension(path, extension) ?? path;
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            normalizedPath = path;
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            normalizedPath = path;
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            normalizedPath = path;
+            return false;
+        }
     }
 
     public static string NormalizePdfLanguage(string? pdfLanguage)

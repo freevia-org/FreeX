@@ -34,6 +34,12 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void InferExportFormat_DefaultsToPdfForMalformedPath()
+    {
+        ExportPlanner.InferExportFormat("bad\0report.xps").Should().Be(ExportFormat.Pdf);
+    }
+
+    [Fact]
     public void PlanExport_CarriesInferredFormatWithRequestedPath()
     {
         var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
@@ -75,6 +81,21 @@ public class ExportPlannerTests
             ExportOptions.ExcelLikeDefault,
             null));
         request.ActualPath.Should().Be(expectedPath);
+    }
+
+    [Fact]
+    public void PlanExport_KeepsMalformedInferredPdfPathForHandledExportFailure()
+    {
+        var path = "bad\0report.xlsx";
+
+        var request = ExportPlanner.PlanExport(path);
+
+        request.Should().Be(new ExportRequest(
+            path,
+            ExportFormat.Pdf,
+            ExportOptions.ExcelLikeDefault,
+            null));
+        request.ActualPath.Should().Be(path);
     }
 
     [Fact]
@@ -124,6 +145,18 @@ public class ExportPlannerTests
         request.Path.Should().Be(expectedPath);
         request.Format.Should().Be(format);
         request.ActualPath.Should().Be(expectedPath);
+    }
+
+    [Fact]
+    public void PlanExport_KeepsMalformedExplicitFormatPathForHandledExportFailure()
+    {
+        var path = "bad\0report.pdf";
+
+        var request = ExportPlanner.PlanExport(path, ExportFormat.Xps, ExportOptions.ExcelLikeDefault);
+
+        request.Path.Should().Be(path);
+        request.Format.Should().Be(ExportFormat.Xps);
+        request.ActualPath.Should().Be(path);
     }
 
     [Fact]
