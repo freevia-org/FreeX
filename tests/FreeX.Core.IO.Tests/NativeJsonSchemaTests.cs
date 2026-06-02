@@ -681,6 +681,39 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_TreatsNullNativeJsonWorkbookMetadataListsAsEmpty()
+    {
+        var workbook = new Workbook("NullWorkbookMetadataLists")
+        {
+            FunctionGroups = new WorkbookFunctionGroupsModel
+            {
+                BuiltInGroupCount = "16",
+                Groups = null!
+            },
+            SmartTags = new WorkbookSmartTagMetadataModel
+            {
+                Show = "all",
+                Types = null!
+            },
+            AdditionalViews = new WorkbookAdditionalViewsModel
+            {
+                NativeAttributes = new Dictionary<string, string> { ["xr:uid"] = "{views}" },
+                Views = null!
+            }
+        };
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var root = document.RootElement;
+        root.GetProperty("FunctionGroups").GetProperty("Groups").EnumerateArray().Should().BeEmpty();
+        root.GetProperty("SmartTags").GetProperty("Types").EnumerateArray().Should().BeEmpty();
+        root.GetProperty("AdditionalViews").GetProperty("Views").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Save_TreatsNullNativeJsonChartListsAsEmpty()
     {
         var workbook = new Workbook("NullChartLists");
