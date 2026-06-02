@@ -90,7 +90,7 @@ public partial class GridView
 
     public static readonly DependencyProperty FormulaTraceArrowsProperty =
         DependencyProperty.Register(nameof(FormulaTraceArrows), typeof(IReadOnlyList<FormulaTraceArrow>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnFormulaTraceRenderCacheInputChanged));
     public IReadOnlyList<FormulaTraceArrow>? FormulaTraceArrows
     {
         get => (IReadOnlyList<FormulaTraceArrow>?)GetValue(FormulaTraceArrowsProperty);
@@ -99,7 +99,7 @@ public partial class GridView
 
     public static readonly DependencyProperty FormulaTraceSheetIdProperty =
         DependencyProperty.Register(nameof(FormulaTraceSheetId), typeof(SheetId), typeof(GridView),
-            new FrameworkPropertyMetadata(default(SheetId), FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(default(SheetId), FrameworkPropertyMetadataOptions.AffectsRender, OnFormulaTraceRenderCacheInputChanged));
     public SheetId FormulaTraceSheetId
     {
         get => (SheetId)GetValue(FormulaTraceSheetIdProperty);
@@ -374,6 +374,12 @@ public partial class GridView
             grid.ClearChartRenderCache();
     }
 
+    private static void OnFormulaTraceRenderCacheInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+            grid.ClearFormulaTraceArrowHeadGeometryCache();
+    }
+
     private static void OnRowPageBreaksChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is GridView grid)
@@ -392,6 +398,7 @@ public partial class GridView
             return;
 
         grid.ClearChartRenderCache();
+        grid.ClearFormulaTraceArrowHeadGeometryCache();
         grid.ClearRenderLookupCache();
         grid.ClearPreSelectionLayerCache();
     }
