@@ -913,6 +913,21 @@ public sealed class GridViewSplitPaneLayoutTests
         clips.BottomRight.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight + 58, 262, 224));
     }
 
+    [Fact]
+    public void CalculateSplitPaneClipRects_ClampsPaneSizesToControlBounds()
+    {
+        var viewport = SplitViewport();
+        var actualWidth = GridView.RowHeaderWidth + 100;
+        var actualHeight = GridView.ColHeaderHeight + 30;
+
+        var clips = SplitPaneClipLayoutPlanner.CalculateClipRects(viewport, actualWidth, actualHeight);
+
+        clips.TopLeft.Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 100, 30));
+        clips.TopRight.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 0, 30));
+        clips.BottomLeft.Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 100, 0));
+        clips.BottomRight.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight + 58, 0, 0));
+    }
+
     [Theory]
     [InlineData(SplitPaneRegion.TopLeft, false, false)]
     [InlineData(SplitPaneRegion.TopRight, false, false)]

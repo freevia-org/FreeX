@@ -15,13 +15,13 @@ public static class SplitPaneClipLayoutPlanner
         var verticalX = layout.VerticalX ?? actualWidth;
         var top = GridView.ColHeaderHeight;
         var left = GridView.CalculateRowHeaderWidth(viewport);
-        var right = Math.Max(verticalX, actualWidth);
-        var bottom = Math.Max(horizontalY, actualHeight);
+        var leftPaneRight = Math.Min(verticalX, actualWidth);
+        var topPaneBottom = Math.Min(horizontalY, actualHeight);
 
         return new SplitPaneClipRects(
-            new Rect(left, top, Math.Max(0, verticalX - left), Math.Max(0, horizontalY - top)),
-            new Rect(verticalX, top, Math.Max(0, right - verticalX), Math.Max(0, horizontalY - top)),
-            new Rect(left, horizontalY, Math.Max(0, verticalX - left), Math.Max(0, bottom - horizontalY)),
-            new Rect(verticalX, horizontalY, Math.Max(0, right - verticalX), Math.Max(0, bottom - horizontalY)));
+            new Rect(left, top, Math.Max(0, leftPaneRight - left), Math.Max(0, topPaneBottom - top)),
+            new Rect(verticalX, top, Math.Max(0, actualWidth - verticalX), Math.Max(0, topPaneBottom - top)),
+            new Rect(left, horizontalY, Math.Max(0, leftPaneRight - left), Math.Max(0, actualHeight - horizontalY)),
+            new Rect(verticalX, horizontalY, Math.Max(0, actualWidth - verticalX), Math.Max(0, actualHeight - horizontalY)));
     }
 }
