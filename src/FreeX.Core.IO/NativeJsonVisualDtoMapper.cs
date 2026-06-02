@@ -27,12 +27,15 @@ internal static class NativeJsonVisualDtoMapper
         CropBottom = SanitizeCropEdge(picture.CropBottom),
         Title = picture.Title,
         AltText = picture.AltText,
-        Cells = picture.Cells.Select(cell => new PictureCellDto
-        {
-            RowOffset = cell.RowOffset,
-            ColumnOffset = cell.ColumnOffset,
-            Text = cell.Text
-        }).ToList()
+        Cells = picture.Cells
+            .OfType<PictureCellSnapshot>()
+            .Select(cell => new PictureCellDto
+            {
+                RowOffset = cell.RowOffset,
+                ColumnOffset = cell.ColumnOffset,
+                Text = cell.Text
+            })
+            .ToList()
     };
 
     public static bool IsPictureOnSheet(PictureModel picture, SheetId sheetId) =>

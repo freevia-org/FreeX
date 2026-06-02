@@ -100,20 +100,15 @@ public partial class GridView
                     rect.Top + cell.RowOffset * cellHeight + 1,
                     Math.Max(1, cellWidth - 6),
                     Math.Max(1, cellHeight - 2));
-                var text = new FormattedText(
+                var text = GetDrawingObjectText(
                     cell.Text,
-                    CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    DefaultTypeface,
-                    11,
                     TextBrush,
-                    pixelsPerDip)
-                {
-                    MaxTextWidth = textRect.Width,
-                    MaxTextHeight = textRect.Height,
-                    Trimming = TextTrimming.CharacterEllipsis
-                };
-                dc.PushClip(new RectangleGeometry(textRect));
+                    11,
+                    textRect.Width,
+                    textRect.Height,
+                    pixelsPerDip,
+                    TextTrimming.CharacterEllipsis);
+                dc.PushClip(GetDrawingObjectClipGeometry(textRect));
                 dc.DrawText(text, textRect.TopLeft);
                 dc.Pop();
             }

@@ -1160,6 +1160,17 @@ public sealed class NativeJsonSchemaTests
         var sheet = workbook.AddSheet("Sheet1");
 
         sheet.Pictures.Add(null!);
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            SourceRowCount = 2,
+            SourceColumnCount = 2,
+            Cells =
+            {
+                null!,
+                new PictureCellSnapshot(1, 1, "kept")
+            }
+        });
         sheet.TextBoxes.Add(null!);
         sheet.DrawingShapes.Add(null!);
         sheet.Sparklines.Add(null!);
@@ -1169,7 +1180,9 @@ public sealed class NativeJsonSchemaTests
 
         using var document = JsonDocument.Parse(stream.ToArray());
         var sheetJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single();
-        sheetJson.GetProperty("Pictures").EnumerateArray().Should().BeEmpty();
+        var pictureJson = sheetJson.GetProperty("Pictures").EnumerateArray().Should().ContainSingle().Subject;
+        pictureJson.GetProperty("Cells").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Text").GetString().Should().Be("kept");
         sheetJson.GetProperty("TextBoxes").EnumerateArray().Should().BeEmpty();
         sheetJson.GetProperty("DrawingShapes").EnumerateArray().Should().BeEmpty();
         sheetJson.GetProperty("Sparklines").EnumerateArray().Should().BeEmpty();
