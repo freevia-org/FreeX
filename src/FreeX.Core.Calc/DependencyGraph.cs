@@ -37,6 +37,24 @@ public sealed class DependencyGraph
         => SetDependencies(cell, precedents, []);
 
     /// <summary>
+    /// Set dependencies from a cached immutable template while still giving the graph fresh storage.
+    /// </summary>
+    internal void SetDependenciesFromTemplate(
+        CellAddress cell,
+        IReadOnlyList<CellAddress> precedents,
+        IReadOnlyList<GridRange> rangePrecedents)
+    {
+        var precedentSet = precedents.Count == 0
+            ? []
+            : new HashSet<CellAddress>(precedents.Count);
+
+        for (var i = 0; i < precedents.Count; i++)
+            precedentSet.Add(precedents[i]);
+
+        SetDependencies(cell, precedentSet, rangePrecedents);
+    }
+
+    /// <summary>
     /// Set dependencies using a fresh, caller-owned set plus compact range precedents.
     /// </summary>
     internal void SetDependencies(

@@ -325,6 +325,45 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void RegisterFormulaDependencies_SheetQualifiedReferencesResolvePerWorkbookWhenAstIsReused()
+    {
+        var formulaSheetId = SheetId.New();
+        var firstDataSheetId = SheetId.New();
+        var secondDataSheetId = SheetId.New();
+        var ast = new Parser(new Lexer("=Data!A1").Tokenize()).Parse();
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        var formula = new CellAddress(formulaSheetId, 1, 1);
+
+        var firstWorkbook = new Workbook("First");
+        var firstFormulaSheet = new Sheet(formulaSheetId, "Formula");
+        var firstDataSheet = new Sheet(firstDataSheetId, "Data");
+        firstWorkbook.InsertSheet(0, firstFormulaSheet);
+        firstWorkbook.InsertSheet(1, firstDataSheet);
+
+        engine.RegisterFormulaDependencies(formula, ast, firstFormulaSheet.Id, firstWorkbook);
+        graph.GetDirectPrecedents(formula)
+            .Should()
+            .Contain(new CellAddress(firstDataSheet.Id, 1, 1));
+
+        var secondWorkbook = new Workbook("Second");
+        var secondFormulaSheet = new Sheet(formulaSheetId, "Formula");
+        var secondDataSheet = new Sheet(secondDataSheetId, "Data");
+        secondWorkbook.InsertSheet(0, secondFormulaSheet);
+        secondWorkbook.InsertSheet(1, secondDataSheet);
+
+        engine.RegisterFormulaDependencies(formula, ast, secondFormulaSheet.Id, secondWorkbook);
+
+        graph.GetDirectPrecedents(formula)
+            .Should()
+            .Contain(new CellAddress(secondDataSheet.Id, 1, 1));
+        graph.GetDirectPrecedents(formula)
+            .Should()
+            .NotContain(new CellAddress(firstDataSheet.Id, 1, 1),
+                "sheet-qualified references must not reuse dependency plans resolved against another workbook");
+    }
+
+    [Fact]
     public void NamedLargeRangeDependency_RecalculatesWhenChangedCellIsInsideRange()
     {
         var workbook = new Workbook("Test");
