@@ -1036,10 +1036,14 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("BuildColumnLookup(leftColumns)");
         calculateLayouts.Should().Contain("BuildColumnLookup(topRightColumns)");
         calculateLayouts.Should().Contain("ResolveSplitPaneRegion(isTopPane, isLeftPane)");
+        calculateLayouts.Should().Contain("if (cells.Count == 0)");
         calculateLayouts.Should().Contain("new List<SplitPaneCellLayout>(cells.Count)");
         calculateLayouts.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
         calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell)");
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
+        calculateLayouts.IndexOf("if (cells.Count == 0)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(calculateLayouts.IndexOf("BuildRowLookup(topRows)", StringComparison.Ordinal));
         calculateLayouts.Should().NotContain("occupied.Add((cell.Row, cell.Col))");
         buildOccupiedCells.Should().Contain("occupied.Add((cell.Row, cell.Col))");
         mergeRangeIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
