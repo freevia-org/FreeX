@@ -29,6 +29,27 @@ public sealed class ClipboardSerializerTests
     }
 
     [Fact]
+    public void Serialize_DenseContiguousRange_WritesQuotedText()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [
+                Cell(1, 1, "alpha"),
+                Cell(1, 2, "bravo\tquoted"),
+                Cell(2, 1, "charlie \"delta\""),
+                Cell(2, 2, "echo"),
+            ],
+            [],
+            []);
+
+        var text = ClipboardSerializer.Serialize(
+            viewport,
+            new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)));
+
+        text.Should().Be("alpha\t\"bravo\tquoted\"\r\n\"charlie \"\"delta\"\"\"\techo");
+    }
+
+    [Fact]
     public void Deserialize_ReadsQuotedTabsRowsAndEscapedQuotes()
     {
         var rows = ClipboardSerializer.Deserialize("alpha\t\"bravo\tquoted\"\r\n\"charlie \"\"delta\"\"\"\t");
@@ -50,6 +71,21 @@ public sealed class ClipboardSerializerTests
             [
                 new[] { "alpha", "bravo" },
                 new[] { "charlie", "delta" },
+            ],
+            options => options.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void DeserializePlainText_PreservesRaggedRowsBlankRowsAndTrailingEmptyFields()
+    {
+        var rows = ClipboardSerializer.Deserialize("alpha\t\r\n\tbravo\r\n\r\ncharlie\t\t");
+
+        rows.Should().BeEquivalentTo(
+            [
+                new[] { "alpha", "" },
+                new[] { "", "bravo" },
+                new[] { "" },
+                new[] { "charlie", "", "" },
             ],
             options => options.WithStrictOrdering());
     }

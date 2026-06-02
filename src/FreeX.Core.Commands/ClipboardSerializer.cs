@@ -9,6 +9,9 @@ public static class ClipboardSerializer
     /// tab/newline-delimited text.</summary>
     public static string Serialize(ViewportModel viewport, GridRange range)
     {
+        if (TrySerializeDenseContiguous(viewport.Cells, range, out var denseText))
+            return denseText;
+
         var plan = AnalyzeCells(viewport.Cells, range);
         var sb = new StringBuilder(plan.EstimatedCapacity);
         if (plan.IsRowMajorSorted)
@@ -23,6 +26,60 @@ public static class ClipboardSerializer
 
         AppendLookupCells(sb, cellLookup, range);
         return sb.ToString();
+    }
+
+    private static bool TrySerializeDenseContiguous(
+        IReadOnlyList<DisplayCell> cells,
+        GridRange range,
+        out string text)
+    {
+        text = string.Empty;
+        var rowCount = (long)range.End.Row - range.Start.Row + 1;
+        var colCount = (long)range.End.Col - range.Start.Col + 1;
+        if (rowCount <= 0 || colCount <= 0 || rowCount > int.MaxValue || colCount > int.MaxValue)
+            return false;
+
+        var expectedCellCount = rowCount * colCount;
+        if (expectedCellCount != cells.Count)
+            return false;
+
+        var length = Math.Max(0, rowCount - 1) * 2 + rowCount * Math.Max(0, colCount - 1);
+        for (var i = 0; i < cells.Count; i++)
+        {
+            var cell = cells[i];
+            var expectedRow = range.Start.Row + (uint)(i / colCount);
+            var expectedCol = range.Start.Col + (uint)(i % colCount);
+            if (cell.Row != expectedRow || cell.Col != expectedCol)
+                return false;
+
+            length += GetTsvEncodedLength(cell.DisplayText);
+            if (length > int.MaxValue)
+                return false;
+        }
+
+        var state = new DenseSerializationState(cells, (int)colCount);
+        text = string.Create((int)length, state, static (destination, state) =>
+        {
+            var offset = 0;
+            for (var i = 0; i < state.Cells.Count; i++)
+            {
+                if (i > 0)
+                {
+                    if (i % state.ColumnCount == 0)
+                    {
+                        destination[offset++] = '\r';
+                        destination[offset++] = '\n';
+                    }
+                    else
+                    {
+                        destination[offset++] = '\t';
+                    }
+                }
+
+                AppendTsvCell(destination, ref offset, state.Cells[i].DisplayText);
+            }
+        });
+        return true;
     }
 
     private static void AppendLookupCells(
@@ -79,33 +136,85 @@ public static class ClipboardSerializer
 
     private static void AppendTsvCell(StringBuilder sb, string text)
     {
-        if (!RequiresTsvQuoting(text))
+        var span = text.AsSpan();
+        var firstSpecial = IndexOfTsvSpecial(span);
+        if (firstSpecial < 0)
         {
             sb.Append(text);
             return;
         }
 
         sb.Append('"');
-        foreach (var ch in text)
+        var segmentStart = 0;
+        for (var i = firstSpecial; i < span.Length; i++)
         {
-            if (ch == '"')
-                sb.Append("\"\"");
-            else
-                sb.Append(ch);
+            if (span[i] != '"')
+                continue;
+
+            sb.Append(span[segmentStart..i]);
+            sb.Append("\"\"");
+            segmentStart = i + 1;
         }
 
+        sb.Append(span[segmentStart..]);
         sb.Append('"');
     }
 
-    private static bool RequiresTsvQuoting(string text)
+    private static void AppendTsvCell(Span<char> destination, ref int offset, string text)
     {
-        foreach (var ch in text)
+        var span = text.AsSpan();
+        var firstSpecial = IndexOfTsvSpecial(span);
+        if (firstSpecial < 0)
         {
-            if (ch is '\t' or '\r' or '\n' or '"')
-                return true;
+            span.CopyTo(destination[offset..]);
+            offset += span.Length;
+            return;
         }
 
-        return false;
+        destination[offset++] = '"';
+        var segmentStart = 0;
+        for (var i = firstSpecial; i < span.Length; i++)
+        {
+            if (span[i] != '"')
+                continue;
+
+            span[segmentStart..i].CopyTo(destination[offset..]);
+            offset += i - segmentStart;
+            destination[offset++] = '"';
+            destination[offset++] = '"';
+            segmentStart = i + 1;
+        }
+
+        span[segmentStart..].CopyTo(destination[offset..]);
+        offset += span.Length - segmentStart;
+        destination[offset++] = '"';
+    }
+
+    private static int GetTsvEncodedLength(string text)
+    {
+        var span = text.AsSpan();
+        var firstSpecial = IndexOfTsvSpecial(span);
+        if (firstSpecial < 0)
+            return span.Length;
+
+        var length = span.Length + 2;
+        for (var i = firstSpecial; i < span.Length; i++)
+        {
+            if (span[i] == '"')
+                length++;
+        }
+
+        return length;
+    }
+
+    private static int IndexOfTsvSpecial(ReadOnlySpan<char> text)
+    {
+        var delimiterIndex = text.IndexOfAny('\t', '\r', '\n');
+        var quoteIndex = text.IndexOf('"');
+        if (delimiterIndex < 0)
+            return quoteIndex;
+
+        return quoteIndex < 0 ? delimiterIndex : Math.Min(delimiterIndex, quoteIndex);
     }
 
     private static bool IsBefore(DisplayCell cell, uint row, uint col) =>
@@ -146,6 +255,8 @@ public static class ClipboardSerializer
     }
 
     private readonly record struct SerializationPlan(int EstimatedCapacity, bool IsRowMajorSorted);
+
+    private readonly record struct DenseSerializationState(IReadOnlyList<DisplayCell> Cells, int ColumnCount);
 
     /// <summary>Parses tab/newline-delimited text into a 2-D array of strings.</summary>
     public static string[][] Deserialize(string text)
