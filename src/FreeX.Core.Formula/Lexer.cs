@@ -8,6 +8,10 @@ namespace FreeX.Core.Formula;
 /// </summary>
 public sealed class Lexer
 {
+    private static readonly object TokenCacheGate = new();
+    private static readonly Dictionary<string, Token[]> TokenCache = new(StringComparer.Ordinal);
+    private static readonly Queue<string> TokenCacheOrder = new();
+
     private static readonly string[] KnownErrors =
         [
             "#DIV/0!",
@@ -45,6 +49,13 @@ public sealed class Lexer
     /// <summary>Tokenize the entire formula into a list of tokens.</summary>
     public List<Token> Tokenize()
     {
+        var startPosition = _pos;
+        if (startPosition == 0 && TryGetCachedTokens(_text, out var cachedTokens))
+        {
+            _pos = _text.Length;
+            return new List<Token>(cachedTokens);
+        }
+
         var tokens = new List<Token>(Math.Min(_text.Length + 1, FormulaSafetyLimits.MaxParseTokens + 1));
 
         while (_pos < _text.Length)
@@ -58,7 +69,36 @@ public sealed class Lexer
         }
 
         tokens.Add(new Token(TokenType.EndOfFormula, "", _pos));
+        if (startPosition == 0)
+            AddCachedTokens(_text, tokens);
+
         return tokens;
+    }
+
+    private static bool TryGetCachedTokens(string formulaText, out Token[] tokens)
+    {
+        lock (TokenCacheGate)
+        {
+            return TokenCache.TryGetValue(formulaText, out tokens!);
+        }
+    }
+
+    private static void AddCachedTokens(string formulaText, List<Token> tokens)
+    {
+        lock (TokenCacheGate)
+        {
+            if (TokenCache.ContainsKey(formulaText))
+                return;
+
+            if (TokenCache.Count >= FormulaSafetyLimits.MaxTokenizedFormulaCacheEntries &&
+                TokenCacheOrder.TryDequeue(out var oldest))
+            {
+                TokenCache.Remove(oldest);
+            }
+
+            TokenCache[formulaText] = tokens.ToArray();
+            TokenCacheOrder.Enqueue(formulaText);
+        }
     }
 
     private Token ReadNextToken()

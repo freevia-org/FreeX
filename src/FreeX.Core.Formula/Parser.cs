@@ -6,10 +6,17 @@ namespace FreeX.Core.Formula;
 /// </summary>
 public sealed class Parser
 {
+    private static readonly object ParsedTokenCacheGate = new();
+    private static readonly Dictionary<int, List<ParsedTokenCacheEntry>> ParsedTokenCache = new();
+    private static readonly Queue<ParsedTokenCacheEntry> ParsedTokenCacheOrder = new();
+    private static int _parsedTokenCacheCount;
+
     private readonly List<Token> _tokens;
     private int _pos;
     private int _parseDepth;
     private int _nestingDepth;
+
+    private sealed record ParsedTokenCacheEntry(int Hash, Token[] Tokens, FormulaNode Node);
 
     public Parser(List<Token> tokens)
     {
@@ -24,12 +31,124 @@ public sealed class Parser
     /// <summary>Parse the token stream into an AST.</summary>
     public FormulaNode Parse()
     {
+        var canUseCache = _pos == 0;
+        var tokenHash = 0;
+        if (canUseCache && TryGetCachedParse(_tokens, out var cachedNode, out tokenHash))
+        {
+            _pos = _tokens.Count - 1;
+            return cachedNode;
+        }
+
         var node = ParseExpression();
 
         if (Current.Type != TokenType.EndOfFormula)
             throw new FormulaParseException($"Unexpected token '{Current.Value}' at position {Current.Position}");
 
+        if (canUseCache)
+            AddCachedParse(_tokens, tokenHash, node);
+
         return node;
+    }
+
+    private static bool TryGetCachedParse(List<Token> tokens, out FormulaNode node, out int hash)
+    {
+        hash = ComputeTokenSequenceHash(tokens);
+
+        lock (ParsedTokenCacheGate)
+        {
+            if (ParsedTokenCache.TryGetValue(hash, out var entries))
+            {
+                for (var i = entries.Count - 1; i >= 0; i--)
+                {
+                    var entry = entries[i];
+                    if (TokenSequencesEqual(tokens, entry.Tokens))
+                    {
+                        node = entry.Node;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        node = null!;
+        return false;
+    }
+
+    private static void AddCachedParse(List<Token> tokens, int hash, FormulaNode node)
+    {
+        lock (ParsedTokenCacheGate)
+        {
+            if (ParsedTokenCache.TryGetValue(hash, out var existingEntries))
+            {
+                foreach (var existing in existingEntries)
+                {
+                    if (TokenSequencesEqual(tokens, existing.Tokens))
+                        return;
+                }
+            }
+
+            if (_parsedTokenCacheCount >= FormulaSafetyLimits.MaxParsedTokenFormulaCacheEntries)
+                EvictOldestCachedParse();
+
+            if (!ParsedTokenCache.TryGetValue(hash, out var entries))
+            {
+                entries = new List<ParsedTokenCacheEntry>(1);
+                ParsedTokenCache[hash] = entries;
+            }
+
+            var entry = new ParsedTokenCacheEntry(hash, tokens.ToArray(), node);
+            entries.Add(entry);
+            ParsedTokenCacheOrder.Enqueue(entry);
+            _parsedTokenCacheCount++;
+        }
+    }
+
+    private static void EvictOldestCachedParse()
+    {
+        while (ParsedTokenCacheOrder.TryDequeue(out var oldest))
+        {
+            if (!ParsedTokenCache.TryGetValue(oldest.Hash, out var entries) || !entries.Remove(oldest))
+                continue;
+
+            if (entries.Count == 0)
+                ParsedTokenCache.Remove(oldest.Hash);
+            _parsedTokenCacheCount--;
+            return;
+        }
+    }
+
+    private static int ComputeTokenSequenceHash(List<Token> tokens)
+    {
+        var hash = new HashCode();
+        hash.Add(tokens.Count);
+        foreach (var token in tokens)
+        {
+            hash.Add(token.Type);
+            hash.Add(token.Value, StringComparer.Ordinal);
+            hash.Add(token.Position);
+        }
+
+        return hash.ToHashCode();
+    }
+
+    private static bool TokenSequencesEqual(List<Token> tokens, Token[] cachedTokens)
+    {
+        if (tokens.Count != cachedTokens.Length)
+            return false;
+
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var token = tokens[i];
+            var cached = cachedTokens[i];
+            if (token.Type != cached.Type ||
+                token.Position != cached.Position ||
+                !string.Equals(token.Value, cached.Value, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private Token Current => _tokens[_pos];

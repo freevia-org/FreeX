@@ -178,8 +178,19 @@ public sealed class FormulaEvaluatorPerformanceTests
         node.Should().BeOfType<BinaryOpNode>();
         _output.WriteLine(
             $"PERF parser repeated identifier formula iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(94_000_000);
+        allocatedBytes.Should().BeLessThan(20_000_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Fact]
+    public void RepeatedParserTokenSequences_ReuseCachedAst()
+    {
+        const string formula = "=SUM(A1:B2)+IF(TRUE,MAX(C1:C2),MIN(D1:D2))";
+
+        var first = new Parser(new Lexer(formula).Tokenize()).Parse();
+        var second = new Parser(new Lexer(formula).Tokenize()).Parse();
+
+        second.Should().BeSameAs(first);
     }
 
     [Theory]
