@@ -193,6 +193,7 @@ public partial class GridView
         _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
         _underlinePenCache.Clear();
+        var gridPen = ShowGridLines ? GridPen : null;
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions, EditingCell))
         {
             var cell = layout.Cell;
@@ -210,7 +211,7 @@ public partial class GridView
             if (style?.FillColor is { } fillColor)
                 fill = BrushForCellColor(fillColor, _brushCache);
 
-            dc.DrawRectangle(fill, GridPen, rect);
+            dc.DrawRectangle(fill, gridPen, rect);
             DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
 
             if (style is not null && HasVisibleCellBorder(style))
