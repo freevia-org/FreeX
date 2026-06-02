@@ -72,19 +72,20 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             if (string.IsNullOrWhiteSpace(sqref) || !IsSupportedIgnoredErrorElement(ignoredError))
                 continue;
 
-            var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+            Dictionary<string, string>? attributes = null;
             foreach (var attribute in ignoredError.Attributes())
             {
                 if (attribute.IsNamespaceDeclaration ||
-                    string.Equals(attribute.Name.LocalName, "sqref", StringComparison.Ordinal))
+                    ShouldSkipIgnoredErrorNativeAttribute(attribute.Name.ToString()))
                 {
                     continue;
                 }
 
+                attributes ??= new Dictionary<string, string>(StringComparer.Ordinal);
                 attributes[attribute.Name.ToString()] = attribute.Value;
             }
 
-            if (attributes.Count > 0)
+            if (attributes?.Count > 0)
                 model.ErrorNativeAttributes[sqref] = attributes;
         }
 
@@ -365,7 +366,11 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
 
     private static bool ShouldSkipIgnoredErrorNativeAttribute(string key) =>
         string.IsNullOrWhiteSpace(key) ||
-        string.Equals(key, "sqref", StringComparison.Ordinal);
+        string.Equals(key, "sqref", StringComparison.Ordinal) ||
+        string.Equals(key, "numberStoredAsText", StringComparison.Ordinal) ||
+        string.Equals(key, "evalError", StringComparison.Ordinal) ||
+        string.Equals(key, "formula", StringComparison.Ordinal) ||
+        string.Equals(key, "emptyCellReference", StringComparison.Ordinal);
 
     private static string[] SplitSqrefTokens(string sqref) =>
         sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
