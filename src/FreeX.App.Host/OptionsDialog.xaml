@@ -472,6 +472,12 @@
                                         Click="QuickAccessResetButton_Click"/>
                             </StackPanel>
                         </Grid>
+                        <Button x:Name="QuickAccessImportExportButton"
+                                Content="{local:Loc Key=Options_ImportExport}"
+                                Width="130" Height="26" Margin="0,12,0,0"
+                                HorizontalAlignment="Left"
+                                Click="QuickAccessImportExportButton_Click"
+                                AutomationProperties.AutomationId="QuickAccessToolbarImportExportButton"/>
                     </StackPanel>
 
                     <!-- ADD-INS -->
