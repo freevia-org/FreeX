@@ -634,6 +634,7 @@ public static partial class FlashFillService
 
         var isBareWebAddress =
             candidate.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ||
+            LooksLikeBareWebHost(candidate) ||
             candidate.Contains('/', StringComparison.Ordinal) ||
             candidate.Contains('?', StringComparison.Ordinal) ||
             candidate.Contains('#', StringComparison.Ordinal);
@@ -661,6 +662,34 @@ public static partial class FlashFillService
 
         parts = new WebAddressParts(host, hostWithoutWww, domainStem);
         return true;
+    }
+
+    private static bool LooksLikeBareWebHost(string candidate)
+    {
+        var lastDotIndex = candidate.LastIndexOf('.');
+        if (lastDotIndex <= 0 || lastDotIndex == candidate.Length - 1)
+            return false;
+
+        for (var i = 0; i < candidate.Length; i++)
+        {
+            var c = candidate[i];
+            if (!char.IsLetterOrDigit(c) && c != '-' && c != '.')
+                return false;
+        }
+
+        var suffix = candidate[(lastDotIndex + 1)..];
+        if (suffix.Length == 2)
+            return suffix.All(char.IsLetter);
+
+        return suffix.Equals("com", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("org", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("net", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("edu", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("gov", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("io", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("co", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("biz", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("info", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryNormalizeWebHost(string host, out string normalized)

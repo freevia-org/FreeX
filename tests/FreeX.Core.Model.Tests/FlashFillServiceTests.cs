@@ -799,6 +799,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_WebAddressCleanup_HandlesPathFreeBareHosts()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("contoso.com", "contoso"),
+                ("fabrikam.org", "fabrikam")
+            ],
+            ["northwind.net", "adatum.co"]);
+
+        result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_WebAddressCleanup_ReturnsNullForMixedHostAndStemExamples()
     {
         var result = FlashFillService.Fill(
