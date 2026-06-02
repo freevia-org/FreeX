@@ -198,6 +198,9 @@ public partial class GridView
         {
             var cell = layout.Cell;
             var rect = layout.Rect;
+            if (rect.Width <= 0 || rect.Height <= 0)
+                continue;
+
             var style = cell.Style;
             var clipGeometry = GetSplitPaneClipGeometryForRegion(
                 layout.Region,
