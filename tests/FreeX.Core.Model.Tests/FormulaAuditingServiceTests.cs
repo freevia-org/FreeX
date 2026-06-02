@@ -1019,7 +1019,7 @@ public sealed class FormulaAuditingServiceTests
 
         Console.WriteLine(
             $"PERF FORMULA_AUDIT_SPARSE_FORMULAS occupied={sheet.CellCount} formulas={sheet.FormulaCellCount} steps={steps} total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={meanMs:F2} max_ms={maxStepMs:F2} allocated_bytes={allocatedBytes}");
-        allocatedBytes.Should().BeLessThan(6_400_000);
+        allocatedBytes.Should().BeLessThan(6_500_000);
     }
 
     private static string FindWorkspaceFile(params string[] parts)

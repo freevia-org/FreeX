@@ -64,7 +64,7 @@ public sealed class SpellCheckDialog : Window
             if (_suggestionsBox.SelectedItem is string selected)
                 _replacementBox.Text = selected;
         };
-        _suggestionsBox.MouseDoubleClick += (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text));
+        _suggestionsBox.MouseDoubleClick += SuggestionsBox_MouseDoubleClick;
 
         Content = CreateSpellCheckContent(word);
         RefreshChangeButtonState();
@@ -85,6 +85,15 @@ public sealed class SpellCheckDialog : Window
 
     public static SpellCheckDialogResult CreateAddResult(string word) =>
         new(SpellCheckDialogAction.Add, word.Trim());
+
+    private void SuggestionsBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_suggestionsBox.SelectedItem is not string selectedSuggestion)
+            return;
+
+        Accept(CreateReplaceResult(_notInDictionaryBox.Text, selectedSuggestion));
+        e.Handled = true;
+    }
 
     private void Accept(SpellCheckDialogResult result)
     {

@@ -11,6 +11,8 @@ public partial class GridView
     private static readonly Pen PictureGridPen = CreateFrozenPen(MakeBrush(210, 210, 210), 0.75);
     private static readonly Brush PictureSelectionBrush = MakeBrush(33, 115, 70);
     private static readonly Pen PictureSelectionPen = CreateFrozenPen(PictureSelectionBrush, 2);
+    private const int CroppedPictureBrushCacheLimit = 256;
+    private readonly Dictionary<CroppedPictureBrushCacheKey, ImageBrush> _croppedPictureBrushCache = new();
     private ImageBrush? _worksheetBackgroundBrushCache;
     private WorksheetBackgroundBrushCacheKey _worksheetBackgroundBrushCacheKey;
 
@@ -46,23 +48,12 @@ public partial class GridView
                     rect.Top + rect.Height / 2));
 
             if (picture.Kind == PictureKind.Image &&
-                TryLoadPictureImage(picture, out var image))
+                TryLoadPictureImage(picture, out var image) &&
+                image is not null)
             {
                 if (HasPictureCrop(picture))
                 {
-                    var brush = new ImageBrush(image)
-                    {
-                        Stretch = Stretch.Fill,
-                        ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
-                        Viewbox = new Rect(
-                            picture.CropLeft,
-                            picture.CropTop,
-                            Math.Max(0.01, 1 - picture.CropLeft - picture.CropRight),
-                            Math.Max(0.01, 1 - picture.CropTop - picture.CropBottom))
-                    };
-                    if (brush.CanFreeze)
-                        brush.Freeze();
-
+                    var brush = GetCroppedPictureBrush(picture, image);
                     dc.DrawRectangle(brush, null, rect);
                 }
                 else
@@ -151,6 +142,37 @@ public partial class GridView
         picture.CropRight > 0 ||
         picture.CropBottom > 0;
 
+    private ImageBrush GetCroppedPictureBrush(PictureModel picture, ImageSource image)
+    {
+        var key = new CroppedPictureBrushCacheKey(
+            image,
+            picture.CropLeft,
+            picture.CropTop,
+            picture.CropRight,
+            picture.CropBottom);
+        if (_croppedPictureBrushCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_croppedPictureBrushCache.Count >= CroppedPictureBrushCacheLimit)
+            _croppedPictureBrushCache.Clear();
+
+        var brush = new ImageBrush(image)
+        {
+            Stretch = Stretch.Fill,
+            ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
+            Viewbox = new Rect(
+                picture.CropLeft,
+                picture.CropTop,
+                Math.Max(0.01, 1 - picture.CropLeft - picture.CropRight),
+                Math.Max(0.01, 1 - picture.CropTop - picture.CropBottom))
+        };
+        if (brush.CanFreeze)
+            brush.Freeze();
+
+        _croppedPictureBrushCache.Add(key, brush);
+        return brush;
+    }
+
     private void RenderWorksheetBackground(DrawingContext dc)
     {
         if (WorksheetBackground == null || !TryLoadWorksheetBackgroundImage(WorksheetBackground, out var image) || image == null)
@@ -206,4 +228,11 @@ public partial class GridView
         double ColumnHeaderHeight,
         double ImageWidth,
         double ImageHeight);
+
+    private readonly record struct CroppedPictureBrushCacheKey(
+        ImageSource Image,
+        double CropLeft,
+        double CropTop,
+        double CropRight,
+        double CropBottom);
 }
