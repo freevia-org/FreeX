@@ -978,8 +978,15 @@ public sealed class NativeJsonSchemaTests
     {
         var workbook = new Workbook("NullDataValidationEntries");
         var sheet = workbook.AddSheet("Sheet1");
+        var validation = new DataValidation
+        {
+            AppliesTo = GridRange.Parse("A1:A2", sheet.Id),
+            NativeChildXmls = [null!, " ", "<x:ext />"],
+            NativeContainerChildXmls = [null!, "", "<x:container />"]
+        };
 
         sheet.DataValidations.Add(null!);
+        sheet.DataValidations.Add(validation);
 
         using var stream = new MemoryStream();
         new NativeJsonAdapter().Save(workbook, stream);
@@ -988,7 +995,46 @@ public sealed class NativeJsonSchemaTests
         document.RootElement
             .GetProperty("Sheets").EnumerateArray().Single()
             .GetProperty("DataValidations").EnumerateArray()
-            .Should().BeEmpty();
+            .Should().ContainSingle();
+        var validationJson = document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("DataValidations").EnumerateArray().Single();
+        validationJson.GetProperty("NativeChildXmls").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("<x:ext />");
+        validationJson.GetProperty("NativeContainerChildXmls").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("<x:container />");
+    }
+
+    [Fact]
+    public void Load_DropsNullNativeJsonDataValidationNativeChildXmlEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullDataValidationNativeChildXmls",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "DataValidations": [
+                    {
+                      "AppliesTo": "A1:A2",
+                      "NativeChildXmls": [ null, " ", "<x:ext />" ],
+                      "NativeContainerChildXmls": [ null, "", "<x:container />" ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var validation = new NativeJsonAdapter().Load(stream).GetSheetAt(0).DataValidations
+            .Should().ContainSingle().Subject;
+
+        validation.NativeChildXmls.Should().ContainSingle().Which.Should().Be("<x:ext />");
+        validation.NativeContainerChildXmls.Should().ContainSingle().Which.Should().Be("<x:container />");
     }
 
     [Fact]
