@@ -1143,7 +1143,19 @@ public sealed class NativeJsonSchemaTests
         var validation = new DataValidation
         {
             AppliesTo = GridRange.Parse("A1:A2", sheet.Id),
+            NativeAttributes = new Dictionary<string, string>
+            {
+                [""] = "dropped",
+                ["imeMode"] = "noControl",
+                ["nullAttr"] = null!
+            },
             NativeChildXmls = [null!, " ", "<x:ext />"],
+            NativeContainerAttributes = new Dictionary<string, string>
+            {
+                [" "] = "dropped",
+                ["disablePrompts"] = "1",
+                ["nullAttr"] = null!
+            },
             NativeContainerChildXmls = [null!, "", "<x:container />"]
         };
 
@@ -1161,8 +1173,14 @@ public sealed class NativeJsonSchemaTests
         var validationJson = document.RootElement
             .GetProperty("Sheets").EnumerateArray().Single()
             .GetProperty("DataValidations").EnumerateArray().Single();
+        validationJson.GetProperty("NativeAttributes").EnumerateObject()
+            .Should().ContainSingle().Which.Should().Match<JsonProperty>(
+                property => property.Name == "imeMode" && property.Value.GetString() == "noControl");
         validationJson.GetProperty("NativeChildXmls").EnumerateArray()
             .Should().ContainSingle().Which.GetString().Should().Be("<x:ext />");
+        validationJson.GetProperty("NativeContainerAttributes").EnumerateObject()
+            .Should().ContainSingle().Which.Should().Match<JsonProperty>(
+                property => property.Name == "disablePrompts" && property.Value.GetString() == "1");
         validationJson.GetProperty("NativeContainerChildXmls").EnumerateArray()
             .Should().ContainSingle().Which.GetString().Should().Be("<x:container />");
     }
@@ -1182,7 +1200,17 @@ public sealed class NativeJsonSchemaTests
                   "DataValidations": [
                     {
                       "AppliesTo": "A1:A2",
+                      "NativeAttributes": {
+                        "": "dropped",
+                        "imeMode": "noControl",
+                        "nullAttr": null
+                      },
                       "NativeChildXmls": [ null, " ", "<x:ext />" ],
+                      "NativeContainerAttributes": {
+                        " ": "dropped",
+                        "disablePrompts": "1",
+                        "nullAttr": null
+                      },
                       "NativeContainerChildXmls": [ null, "", "<x:container />" ]
                     }
                   ]
@@ -1196,6 +1224,10 @@ public sealed class NativeJsonSchemaTests
             .Should().ContainSingle().Subject;
 
         validation.NativeChildXmls.Should().ContainSingle().Which.Should().Be("<x:ext />");
+        validation.NativeAttributes.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<string, string>("imeMode", "noControl"));
+        validation.NativeContainerAttributes.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<string, string>("disablePrompts", "1"));
         validation.NativeContainerChildXmls.Should().ContainSingle().Which.Should().Be("<x:container />");
     }
 

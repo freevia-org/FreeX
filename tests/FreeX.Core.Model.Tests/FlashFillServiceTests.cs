@@ -746,6 +746,84 @@ public sealed class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_WebAddressHostWithoutWww_StripsSchemeWwwPathQueryAndFragment()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://www.contoso.com/products?id=1", "contoso.com"),
+                ("http://www.fabrikam.org/support#top", "fabrikam.org")
+            ],
+            ["https://www.northwind.net/catalog/list?page=2#details", "http://adatum.co/about"]);
+
+        result.Should().BeEquivalentTo(["northwind.net", "adatum.co"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressHost_PreservesWwwWhenExamplesDo()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://www.contoso.com/products?id=1", "www.contoso.com"),
+                ("http://fabrikam.org/support#top", "fabrikam.org")
+            ],
+            ["https://www.northwind.net/catalog?x=1#details", "http://adatum.co/about"]);
+
+        result.Should().BeEquivalentTo(["www.northwind.net", "adatum.co"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressDomainStem_StripsSchemeWwwPathQueryFragmentAndTopLevelDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://www.contoso.com/products?id=1", "contoso"),
+                ("http://www.fabrikam.org/support#top", "fabrikam")
+            ],
+            ["https://www.northwind.net/catalog/list?page=2#details", "http://adatum.co/about"]);
+
+        result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressCleanup_HandlesBareWebAddresses()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("www.contoso.com/products?id=1", "contoso.com"),
+                ("www.fabrikam.org/support#top", "fabrikam.org")
+            ],
+            ["www.northwind.net/catalog/list?page=2#details"]);
+
+        result.Should().BeEquivalentTo(["northwind.net"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressCleanup_HandlesPathFreeBareHosts()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("contoso.com", "contoso"),
+                ("fabrikam.org", "fabrikam")
+            ],
+            ["northwind.net", "adatum.co"]);
+
+        result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressCleanup_ReturnsNullForMixedHostAndStemExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://www.contoso.com/products?id=1", "contoso.com"),
+                ("http://www.fabrikam.org/support#top", "fabrikam")
+            ],
+            ["https://www.northwind.net/catalog/list?page=2#details"]);
+
+        result.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(".", "alan.turing@contoso.com")]
     [InlineData("_", "alan_turing@contoso.com")]

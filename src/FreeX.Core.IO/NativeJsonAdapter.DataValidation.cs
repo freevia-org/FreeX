@@ -29,9 +29,9 @@ public sealed partial class NativeJsonAdapter
                 ErrorMessage = validationDto.ErrorMessage,
                 PromptTitle = validationDto.PromptTitle,
                 PromptMessage = validationDto.PromptMessage,
-                NativeAttributes = validationDto.NativeAttributes,
+                NativeAttributes = CleanOptionalNativeAttributes(validationDto.NativeAttributes),
                 NativeChildXmls = CleanNativeXmlList(validationDto.NativeChildXmls),
-                NativeContainerAttributes = validationDto.NativeContainerAttributes,
+                NativeContainerAttributes = CleanOptionalNativeAttributes(validationDto.NativeContainerAttributes),
                 NativeContainerChildXmls = CleanNativeXmlList(validationDto.NativeContainerChildXmls)
             };
             foreach (var range in validationDto.AdditionalRanges ?? [])
@@ -79,9 +79,9 @@ public sealed partial class NativeJsonAdapter
         ErrorMessage = validation.ErrorMessage,
         PromptTitle = validation.PromptTitle,
         PromptMessage = validation.PromptMessage,
-        NativeAttributes = validation.NativeAttributes is null ? null : new Dictionary<string, string>(validation.NativeAttributes),
+        NativeAttributes = CleanOptionalNativeAttributes(validation.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)),
         NativeChildXmls = CleanNativeXmlList(validation.NativeChildXmls),
-        NativeContainerAttributes = validation.NativeContainerAttributes is null ? null : new Dictionary<string, string>(validation.NativeContainerAttributes),
+        NativeContainerAttributes = CleanOptionalNativeAttributes(validation.NativeContainerAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)),
         NativeContainerChildXmls = CleanNativeXmlList(validation.NativeContainerChildXmls)
     };
 
