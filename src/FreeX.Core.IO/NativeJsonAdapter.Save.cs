@@ -77,7 +77,10 @@ public sealed partial class NativeJsonAdapter
                     Id = view.Id,
                     IncludePrintSettings = view.IncludePrintSettings,
                     IncludeHiddenRowsColumnsAndFilterSettings = view.IncludeHiddenRowsColumnsAndFilterSettings,
-                    Sheets = (view.Sheets ?? []).Select(ToCustomViewSheetDto).ToList()
+                    Sheets = (view.Sheets ?? [])
+                        .OfType<WorksheetCustomViewState>()
+                        .Select(ToCustomViewSheetDto)
+                        .ToList()
                 }).ToList(),
             WatchedCells = workbook.WatchedCells.Select(address =>
             {

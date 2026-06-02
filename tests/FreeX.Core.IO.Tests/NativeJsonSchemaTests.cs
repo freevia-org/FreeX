@@ -1274,6 +1274,19 @@ public sealed class NativeJsonSchemaTests
 
         workbook.CustomViews.Add(null!);
         workbook.CustomViews.Add(new WorkbookCustomView("EmptySheets", null!));
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "KeptView",
+            [
+                null!,
+                new WorksheetCustomViewState(
+                    sheet.Name,
+                    WorksheetViewMode.PageLayout,
+                    FrozenRows: 0,
+                    FrozenCols: 0,
+                    SplitRow: null,
+                    SplitColumn: null,
+                    ZoomPercent: 125)
+            ]));
         workbook.Scenarios.Add(null!);
         workbook.Scenarios.Add(new WorkbookScenario("NoChanges", null!));
         workbook.Scenarios.Add(new WorkbookScenario(
@@ -1284,16 +1297,56 @@ public sealed class NativeJsonSchemaTests
         new NativeJsonAdapter().Save(workbook, stream);
 
         using var document = JsonDocument.Parse(stream.ToArray());
-        var customViewJson = document.RootElement
-            .GetProperty("CustomViews").EnumerateArray().Should().ContainSingle().Subject;
-        customViewJson.GetProperty("Name").GetString().Should().Be("EmptySheets");
-        customViewJson.GetProperty("Sheets").EnumerateArray().Should().BeEmpty();
+        var customViews = document.RootElement
+            .GetProperty("CustomViews").EnumerateArray().ToList();
+        customViews.Should().HaveCount(2);
+        customViews[0].GetProperty("Name").GetString().Should().Be("EmptySheets");
+        customViews[0].GetProperty("Sheets").EnumerateArray().Should().BeEmpty();
+        customViews[1].GetProperty("Name").GetString().Should().Be("KeptView");
+        customViews[1].GetProperty("Sheets").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("ZoomPercent").GetInt32().Should().Be(125);
 
         var scenarioJson = document.RootElement
             .GetProperty("Scenarios").EnumerateArray().Should().ContainSingle().Subject;
         scenarioJson.GetProperty("Name").GetString().Should().Be("Kept");
         scenarioJson.GetProperty("ChangingCells").EnumerateArray()
             .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
+    }
+
+    [Fact]
+    public void Load_DropsNullNativeJsonCustomViewSheetEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullCustomViewSheetEntries",
+              "Sheets": [
+                { "Name": "Sheet1" }
+              ],
+              "CustomViews": [
+                {
+                  "Name": "Mixed",
+                  "Sheets": [
+                    null,
+                    { "SheetName": " " },
+                    { "SheetName": "Missing", "ZoomPercent": 120 },
+                    { "SheetName": "Sheet1", "ZoomPercent": 125 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var view = new NativeJsonAdapter().Load(stream).CustomViews
+            .Should().ContainSingle().Subject;
+
+        view.Name.Should().Be("Mixed");
+        var sheetState = view.Sheets.Should().ContainSingle().Subject;
+        sheetState.SheetName.Should().Be("Sheet1");
+        sheetState.ZoomPercent.Should().Be(125);
     }
 
     [Fact]
