@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-public sealed record WatchWindowEntry(
+public readonly record struct WatchWindowEntry(
     SheetId SheetId,
     string SheetName,
     CellAddress Address,
