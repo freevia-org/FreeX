@@ -13,13 +13,21 @@ public sealed partial class XlsxFileAdapter
             => Capture(stream, workbook, allowBufferReuse: false);
 
         public static XlsxSourcePackage Capture(Stream stream, Workbook workbook, bool allowBufferReuse)
+            => Capture(stream, workbook, allowBufferReuse, currentModelFingerprint: null);
+
+        public static XlsxSourcePackage Capture(Stream stream, Workbook workbook, string? currentModelFingerprint)
+            => Capture(stream, workbook, allowBufferReuse: false, currentModelFingerprint);
+
+        private static XlsxSourcePackage Capture(
+            Stream stream,
+            Workbook workbook,
+            bool allowBufferReuse,
+            string? currentModelFingerprint)
         {
             if (stream is MemoryStream memoryStream)
-                return Capture(memoryStream, workbook, allowBufferReuse);
+                return Capture(memoryStream, workbook, allowBufferReuse, currentModelFingerprint);
 
-            var fingerprint = ShouldCaptureModelFingerprint(workbook)
-                ? CreateModelFingerprint(workbook)
-                : null;
+            var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var bytes = ReadBytes(stream);
             return new XlsxSourcePackage(bytes, 0, bytes.Length, fingerprint);
         }
@@ -28,10 +36,15 @@ public sealed partial class XlsxFileAdapter
             => Capture(stream, workbook, allowBufferReuse: false);
 
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook, bool allowBufferReuse)
+            => Capture(stream, workbook, allowBufferReuse, currentModelFingerprint: null);
+
+        private static XlsxSourcePackage Capture(
+            MemoryStream stream,
+            Workbook workbook,
+            bool allowBufferReuse,
+            string? currentModelFingerprint)
         {
-            var fingerprint = ShouldCaptureModelFingerprint(workbook)
-                ? CreateModelFingerprint(workbook)
-                : null;
+            var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             if (stream.TryGetBuffer(out var buffer))
             {
                 if (allowBufferReuse &&
@@ -82,9 +95,20 @@ public sealed partial class XlsxFileAdapter
 
         public MemoryStream OpenRead() => new(Buffer, Offset, Count, writable: false);
 
-        public bool Matches(Workbook workbook) =>
-            ModelFingerprint is not null &&
-            string.Equals(ModelFingerprint, CreateModelFingerprint(workbook), StringComparison.Ordinal);
+        public bool Matches(Workbook workbook) => Matches(workbook, out _);
+
+        public bool Matches(Workbook workbook, out string? currentModelFingerprint)
+        {
+            currentModelFingerprint = null;
+            if (ModelFingerprint is null)
+                return false;
+
+            currentModelFingerprint = ShouldCaptureModelFingerprint(workbook)
+                ? CreateModelFingerprint(workbook)
+                : null;
+            return currentModelFingerprint is not null &&
+                   string.Equals(ModelFingerprint, currentModelFingerprint, StringComparison.Ordinal);
+        }
 
         public void CopyTo(Stream stream)
         {
@@ -122,6 +146,11 @@ public sealed partial class XlsxFileAdapter
 
             return true;
         }
+
+        private static string? GetModelFingerprint(Workbook workbook, string? currentModelFingerprint) =>
+            currentModelFingerprint ?? (ShouldCaptureModelFingerprint(workbook)
+                ? CreateModelFingerprint(workbook)
+                : null);
 
         private static string CreateModelFingerprint(Workbook workbook)
         {
