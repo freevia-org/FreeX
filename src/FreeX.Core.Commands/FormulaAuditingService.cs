@@ -8,6 +8,7 @@ public static partial class FormulaAuditingService
     public const string NumberStoredAsTextErrorCode = "NumberStoredAsText";
     public const string TwoDigitYearTextDateErrorCode = "TwoDigitYearTextDate";
     public const string FormulaStoredAsTextErrorCode = "FormulaStoredAsText";
+    public const string InconsistentCalculatedColumnFormulaErrorCode = "InconsistentCalculatedColumnFormula";
     public const string InconsistentFormulaErrorCode = "InconsistentFormula";
     public const string FormulaOmitsAdjacentCellsErrorCode = "FormulaOmitsAdjacentCells";
     public const string UnlockedFormulaCellsErrorCode = "UnlockedFormulaCells";
