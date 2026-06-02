@@ -19,7 +19,7 @@ public partial class MainWindow
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, row, 1);
         _selectionCursor = new CellAddress(_currentSheetId, row, maxCol);
-        SheetGrid.SelectedRanges = null;
+        SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
         CellAddressBox.Text = $"{row}:{row}";
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
@@ -36,7 +36,7 @@ public partial class MainWindow
         const uint maxRow = 1_048_576;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, col);
         _selectionCursor = new CellAddress(_currentSheetId, maxRow, col);
-        SheetGrid.SelectedRanges = null;
+        SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
         var colName = FormatColumnReference(col);
         CellAddressBox.Text = $"{colName}:{colName}";
@@ -55,7 +55,7 @@ public partial class MainWindow
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, 1);
         _selectionCursor = new CellAddress(_currentSheetId, maxRow, maxCol);
-        SheetGrid.SelectedRanges = null;
+        SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
         CellAddressBox.Text = FormatCellReference(_selectionAnchor.Value);
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
@@ -102,7 +102,7 @@ public partial class MainWindow
                             ClearCommentPreview();
                             uint anchorCol = _selectionAnchor.Value.Col;
                             _selectionCursor = new CellAddress(_currentSheetId, 1_048_576, cm.Col);
-                            SheetGrid.SelectedRanges = null;
+                            SetSelectedRangesIfChanged(null);
                             SheetGrid.SelectedRange = new GridRange(
                                 new CellAddress(_currentSheetId, 1, Math.Min(anchorCol, cm.Col)),
                                 new CellAddress(_currentSheetId, 1_048_576, Math.Max(anchorCol, cm.Col)));
@@ -139,7 +139,7 @@ public partial class MainWindow
                         ClearCommentPreview();
                         uint anchorRow = _selectionAnchor.Value.Row;
                         _selectionCursor = new CellAddress(_currentSheetId, rm.Row, 16_384);
-                        SheetGrid.SelectedRanges = null;
+                        SetSelectedRangesIfChanged(null);
                         SheetGrid.SelectedRange = new GridRange(
                             new CellAddress(_currentSheetId, Math.Min(anchorRow, rm.Row), 1),
                             new CellAddress(_currentSheetId, Math.Max(anchorRow, rm.Row), 16_384));
@@ -647,7 +647,7 @@ public partial class MainWindow
             _selectionCursor = merge.Value.End;
             sheet!.ActiveRow = merge.Value.Start.Row;
             sheet.ActiveCol = merge.Value.Start.Col;
-            SheetGrid.SelectedRanges = null;
+            SetSelectedRangesIfChanged(null);
             SheetGrid.SelectedRange = merge.Value;
             CellAddressBox.Text = FormatCellReference(merge.Value.Start);
             var mergedCell = sheet!.GetCell(merge.Value.Start);
@@ -668,9 +668,9 @@ public partial class MainWindow
             sheet.ActiveCol = addr.Col;
         }
 
-        SheetGrid.SelectedRanges = null;
+        SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = new GridRange(addr, addr);
-        CellAddressBox.Text = FormatCellReference(addr);
+        SetCellAddressBoxSelectionText(FormatCellReference(addr));
 
         var cell = sheet?.GetCell(addr);
         FormulaBar.Text = FormatFormulaBarText(cell, addr);
@@ -742,7 +742,7 @@ public partial class MainWindow
         _selectionMode = ExcelSelectionMode.Normal;
         _selectionAnchor = snapshot.Anchor;
         _selectionCursor = snapshot.Cursor;
-        SheetGrid.SelectedRanges = snapshot.AdditionalRanges;
+        SetSelectedRangesIfChanged(snapshot.AdditionalRanges);
         SheetGrid.SelectedRange = snapshot.PrimaryRange;
 
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -774,7 +774,7 @@ public partial class MainWindow
         {
             _selectionAnchor = currentRegion.Start;
             _selectionCursor = currentRegion.End;
-            SheetGrid.SelectedRanges = null;
+            SetSelectedRangesIfChanged(null);
             SheetGrid.SelectedRange = currentRegion;
             CellAddressBox.Text = FormatRangeReference(currentRegion.Start, currentRegion.End);
             var activeCellModel = sheet.GetCell(cell);
@@ -798,7 +798,7 @@ public partial class MainWindow
         {
             _selectionAnchor = currentRegion.Start;
             _selectionCursor = currentRegion.End;
-            SheetGrid.SelectedRanges = null;
+            SetSelectedRangesIfChanged(null);
             SheetGrid.SelectedRange = currentRegion;
             CellAddressBox.Text = FormatRangeReference(currentRegion.Start, currentRegion.End);
             FormulaBar.Text = FormatFormulaBarText(sheet.GetCell(cell), cell);
@@ -825,7 +825,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
-        SheetGrid.SelectedRanges = null;
+        SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = range;
         CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
         var activeCellModel = sheet?.GetCell(activeCell);
@@ -844,13 +844,13 @@ public partial class MainWindow
         ClearCommentPreview();
 
         _selectionCursor = to;
-        SheetGrid.SelectedRanges = null;
+        SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = new GridRange(
             new CellAddress(_currentSheetId,
                 Math.Min(anchor.Row, to.Row), Math.Min(anchor.Col, to.Col)),
             new CellAddress(_currentSheetId,
                 Math.Max(anchor.Row, to.Row), Math.Max(anchor.Col, to.Col)));
-        CellAddressBox.Text = FormatRangeReference(anchor, to);
+        SetCellAddressBoxSelectionText(FormatRangeReference(anchor, to));
         RefreshStatusBarAfterDragSelectionChange();
     }
 
@@ -879,9 +879,9 @@ public partial class MainWindow
             SheetGrid.SelectedRange,
             activeRange);
 
-        SheetGrid.SelectedRanges = ranges;
+        SetSelectedRangesIfChanged(ranges);
         SheetGrid.SelectedRange = activeRange;
-        CellAddressBox.Text = FormatRangeReference(activeRange.Start, activeRange.End);
+        SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(target), target);
@@ -997,7 +997,7 @@ public partial class MainWindow
 
         HideValidationDropdown();
         ClearCommentPreview();
-        SheetGrid.SelectedRanges = null;
+        SetSelectedRangesIfChanged(null);
 
         if (target == GridHeaderContextMenuTarget.Column)
         {
@@ -1058,6 +1058,34 @@ public partial class MainWindow
             _selectionCursor == new CellAddress(_currentSheetId, targetIndex, 16_384) &&
             range.Start == new CellAddress(_currentSheetId, firstRow, 1) &&
             range.End == new CellAddress(_currentSheetId, lastRow, 16_384);
+    }
+
+    private void SetSelectedRangesIfChanged(IReadOnlyList<GridRange>? ranges)
+    {
+        if (!ReferenceEquals(SheetGrid.SelectedRanges, ranges))
+            SheetGrid.SelectedRanges = ranges;
+    }
+
+    private void SetCellAddressBoxSelectionText(string text)
+    {
+        if (CellAddressBox.Text == text)
+            return;
+
+        if (CellAddressBox.IsKeyboardFocusWithin || !CellAddressBox.IsUndoEnabled)
+        {
+            CellAddressBox.Text = text;
+            return;
+        }
+
+        CellAddressBox.IsUndoEnabled = false;
+        try
+        {
+            CellAddressBox.Text = text;
+        }
+        finally
+        {
+            CellAddressBox.IsUndoEnabled = true;
+        }
     }
 
     private CellAddress? HitTestCell(System.Windows.Point pos)

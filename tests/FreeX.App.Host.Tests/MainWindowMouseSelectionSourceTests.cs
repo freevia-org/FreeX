@@ -115,10 +115,10 @@ public sealed class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
 
         addSelection.Should().Contain("HideValidationDropdown();");
-        addSelection.Should().Contain("SheetGrid.SelectedRanges = ranges;");
+        addSelection.Should().Contain("SetSelectedRangesIfChanged(ranges);");
         addSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(addSelection.IndexOf("SheetGrid.SelectedRanges = ranges;", StringComparison.Ordinal));
+            .BeLessThan(addSelection.IndexOf("SetSelectedRangesIfChanged(ranges);", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -178,7 +178,7 @@ public sealed class MainWindowMouseSelectionSourceTests
             .BeLessThan(extendSelection.IndexOf("SheetGrid.SelectedRange = new GridRange(", StringComparison.Ordinal));
         addSelection.IndexOf("ClearCommentPreview();", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(addSelection.IndexOf("SheetGrid.SelectedRanges = ranges;", StringComparison.Ordinal));
+            .BeLessThan(addSelection.IndexOf("SetSelectedRangesIfChanged(ranges);", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -333,7 +333,7 @@ public sealed class MainWindowMouseSelectionSourceTests
             mouseDown.LastIndexOf("HideValidationDropdown();", rowAnchorIndex, StringComparison.Ordinal)..
             mouseDown.IndexOf("else", rowAnchorIndex, StringComparison.Ordinal)];
 
-        columnShiftSelection.Should().Contain("SheetGrid.SelectedRanges = null;");
+        columnShiftSelection.Should().Contain("SetSelectedRangesIfChanged(null);");
         columnShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
         columnShiftSelection.Should().Contain("CellAddressBox.Text");
         columnShiftSelection.Should().Contain("HideValidationDropdown();");
@@ -342,7 +342,7 @@ public sealed class MainWindowMouseSelectionSourceTests
         columnShiftSelection.Should().Contain("RefreshToolbarAfterSelectionChange();");
         columnShiftSelection.Should().Contain("RefreshStatusBar();");
 
-        rowShiftSelection.Should().Contain("SheetGrid.SelectedRanges = null;");
+        rowShiftSelection.Should().Contain("SetSelectedRangesIfChanged(null);");
         rowShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
         rowShiftSelection.Should().Contain("CellAddressBox.Text");
         rowShiftSelection.Should().Contain("HideValidationDropdown();");
@@ -680,5 +680,32 @@ public sealed class MainWindowMouseSelectionSourceTests
         addSelection.Should().Contain("CreateAdditionalSelectionRanges(");
         addSelection.Should().NotContain(".ToList()");
         selectionSource.Should().Contain("private sealed class MutableSelectionRanges");
+    }
+
+    [Fact]
+    public void SelectionHotPathsUpdateNameBoxWithoutBuildingUndoHistory()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+
+        var setActiveCell = selectionSource[
+            selectionSource.IndexOf("private void SetActiveCell", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void EnsureActiveCellSelection", StringComparison.Ordinal)];
+        var extendSelection = selectionSource[
+            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+        var addSelection = selectionSource[
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private bool IsSelectionExtensionUnchanged", StringComparison.Ordinal)];
+        var helper = selectionSource[
+            selectionSource.IndexOf("private void SetCellAddressBoxSelectionText", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private CellAddress? HitTestCell", StringComparison.Ordinal)];
+
+        setActiveCell.Should().Contain("SetCellAddressBoxSelectionText(FormatCellReference(addr));");
+        extendSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(anchor, to));");
+        addSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));");
+        helper.Should().Contain("CellAddressBox.IsKeyboardFocusWithin");
+        helper.Should().Contain("CellAddressBox.IsUndoEnabled = false;");
+        helper.Should().Contain("CellAddressBox.IsUndoEnabled = true;");
     }
 }

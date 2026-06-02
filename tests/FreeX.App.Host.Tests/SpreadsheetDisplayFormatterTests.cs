@@ -20,6 +20,22 @@ public sealed class SpreadsheetDisplayFormatterTests
     }
 
     [Fact]
+    public void FormatCellAndColumnReference_FormatsA1AndR1C1WithoutIntermediateReferences()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 1_048_576, 16_384);
+
+        SpreadsheetDisplayFormatter.FormatCellReference(address, useR1C1ReferenceStyle: false)
+            .Should().Be("XFD1048576");
+        SpreadsheetDisplayFormatter.FormatCellReference(address, useR1C1ReferenceStyle: true)
+            .Should().Be("R1048576C16384");
+        SpreadsheetDisplayFormatter.FormatColumnReference(16_384, useR1C1ReferenceStyle: false)
+            .Should().Be("XFD");
+        SpreadsheetDisplayFormatter.FormatColumnReference(16_384, useR1C1ReferenceStyle: true)
+            .Should().Be("C16384");
+    }
+
+    [Fact]
     public void FormatFormulaBarText_ConvertsFormulaToR1C1WhenRequested()
     {
         var sheetId = SheetId.New();
