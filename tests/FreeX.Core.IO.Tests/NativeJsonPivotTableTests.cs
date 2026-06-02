@@ -201,6 +201,95 @@ public sealed class NativeJsonPivotTableTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_DropsNullPivotEntries()
+    {
+        const string json = """
+            {
+              "Name": "NullPivotEntries",
+              "PivotCaches": [
+                null,
+                { "CacheId": 0 },
+                {
+                  "CacheId": 1,
+                  "SourceSheetName": "Data",
+                  "SourceReference": "A1:B3",
+                  "Fields": [
+                    null,
+                    { "Name": "Category" },
+                    { "Name": "" }
+                  ]
+                }
+              ],
+              "Sheets": [
+                {
+                  "Name": "Data",
+                  "PivotTables": [
+                    null,
+                    { "Name": "BadPivot", "CacheId": 1, "SourceRange": "NotARange", "TargetRange": "D3:E6" },
+                    {
+                      "Name": "GoodPivot",
+                      "CacheId": 1,
+                      "TargetRange": "D3:E6",
+                      "RowFields": [
+                        null,
+                        { "SourceFieldIndex": 0 }
+                      ],
+                      "ColumnFields": [
+                        null,
+                        { "SourceFieldIndex": 1 }
+                      ],
+                      "DataFields": [
+                        null,
+                        { "SourceFieldIndex": 1, "Name": "Sum Amount", "SummaryFunction": "sum" }
+                      ],
+                      "CalculatedFields": [
+                        null,
+                        { "Name": "Margin", "Formula": "Amount*2" }
+                      ],
+                      "CalculatedItems": [
+                        null,
+                        { "SourceFieldIndex": 0, "Name": "East", "Formula": "East" }
+                      ],
+                      "LabelFilters": [
+                        null,
+                        { "SourceFieldIndex": 0, "Value": "East" }
+                      ],
+                      "ValueFilters": [
+                        null,
+                        { "DataFieldIndex": 0, "Count": 5 }
+                      ],
+                      "Sorts": [
+                        null,
+                        { "DataFieldIndex": 0, "FieldIndex": 0 }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(stream);
+
+        loaded.PivotCaches.Should().ContainSingle()
+            .Which.Fields.Should().ContainSingle()
+            .Which.Name.Should().Be("Category");
+
+        var pivot = loaded.GetSheet("Data")!.PivotTables.Should().ContainSingle().Subject;
+        pivot.Name.Should().Be("GoodPivot");
+        pivot.RowFields.Should().ContainSingle();
+        pivot.ColumnFields.Should().ContainSingle();
+        pivot.DataFields.Should().ContainSingle().Which.Name.Should().Be("Sum Amount");
+        pivot.CalculatedFields.Should().ContainSingle().Which.Name.Should().Be("Margin");
+        pivot.CalculatedItems.Should().ContainSingle().Which.Name.Should().Be("East");
+        pivot.LabelFilters.Should().ContainSingle().Which.Value.Should().Be("East");
+        pivot.ValueFilters.Should().ContainSingle().Which.Count.Should().Be(5);
+        pivot.Sorts.Should().ContainSingle();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SkipsPivotTablesWithInvalidRanges()
     {
         const string json = """
