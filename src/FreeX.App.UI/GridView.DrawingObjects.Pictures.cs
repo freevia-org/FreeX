@@ -27,7 +27,12 @@ public partial class GridView
             if (!picture.IsVisible) continue;
             if (!CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn))
                 continue;
-            if (!TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect))
+            if (!TryCreateAnchoredObjectRect(picture.Anchor,
+                    picture.Width,
+                    picture.Height,
+                    MinimumPictureObjectWidth,
+                    MinimumPictureObjectHeight,
+                    out var rect))
                 continue;
             if (NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) &&
                 !IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom))

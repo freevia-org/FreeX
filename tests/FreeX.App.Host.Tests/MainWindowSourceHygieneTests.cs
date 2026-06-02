@@ -814,7 +814,7 @@ public sealed class MainWindowSourceHygieneTests
         shareMethod.Should().Contain("SaveWorkbookWithDialogAsync()");
         shareMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(plan.Path, _fileAdapters, out var target)");
         shareMethod.Should().Contain("SaveWorkbookToTargetAsync(target!)");
-        shareMethod.Should().Contain("_shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name)");
+        shareMethod.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
 
         reviewSource.Should().Contain("private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();");
         backstageSource.Should().Contain("await ShareWorkbookAsync();");
@@ -2153,6 +2153,7 @@ public sealed class MainWindowSourceHygieneTests
         selectionSource.Should().Contain("if (TryHandleFocusedSheetTabKeyboardNavigation(e))");
         sheetTabsSource.Should().Contain("private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
         sheetTabsSource.Should().Contain("Keyboard.Modifiers != ModifierKeys.None");
+        sheetTabsSource.Should().Contain("if (FindSheetTabContextMenuTarget(focusedElement) is null)");
         sheetTabsSource.Should().Contain("Key.Left => FocusAdjacentVisibleSheetTab(-1)");
         sheetTabsSource.Should().Contain("Key.Right => FocusAdjacentVisibleSheetTab(1)");
         sheetTabsSource.Should().Contain("Key.Home => FocusEdgeVisibleSheetTab(first: true)");
@@ -2249,11 +2250,11 @@ public sealed class MainWindowSourceHygieneTests
         xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
-        gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(StatusBarDisplayState.Stats(stats))");
+        gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats))");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusCountText, state.CountText)");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText)");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusSumText, state.SumText)");
-        gridStatusSource.Should().Contain("StatusBarDisplayState.Ready(UiText.Get(\"MainWindow_Text_Ready\"))");
+        gridStatusSource.Should().Contain("_statusBarDisplayStateCache.GetReady(UiText.Get(\"MainWindow_Text_Ready\"))");
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "StatusBarDisplayState.cs"))
             .Should()
             .Contain("UiText.Format(\"StatusBar_CountFormat\", stats.Count)")

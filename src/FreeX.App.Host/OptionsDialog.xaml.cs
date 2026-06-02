@@ -367,6 +367,7 @@ public partial class OptionsDialog : Window
             QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true,
             QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
             AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
+            SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords),
             CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
             CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
             PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),

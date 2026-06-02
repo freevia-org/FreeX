@@ -2289,6 +2289,7 @@ public sealed class SpreadsheetXmlFileAdapterTests
               <style id="percent" format="0.00%"/>
               <row label="Revenue" amount="42.5" style="money"/>
               <row label="Margin" amount="0.875" style="percent"/>
+              <marker row="4" column="3" style="percent"/>
             </report>
             """);
         using var stylesheet = StreamFromString("""
@@ -2312,6 +2313,9 @@ public sealed class SpreadsheetXmlFileAdapterTests
                           <ss:Cell ss:StyleID="{@style}"><ss:Data ss:Type="Number"><xsl:value-of select="@amount"/></ss:Data></ss:Cell>
                         </ss:Row>
                       </xsl:for-each>
+                      <ss:Row ss:Index="{marker/@row}">
+                        <ss:Cell ss:Index="{marker/@column}" ss:StyleID="{marker/@style}"/>
+                      </ss:Row>
                     </ss:Table>
                   </ss:Worksheet>
                 </ss:Workbook>
@@ -2329,6 +2333,8 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(0.875));
         workbook.GetStyle(sheet.GetCell(1, 2)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
         workbook.GetStyle(sheet.GetCell(2, 2)!.StyleId).NumberFormat.Should().Be("0.00%");
+        sheet.GetCell(4, 3).Should().BeNull();
+        workbook.GetStyle(sheet.GetStyleOnly(4, 3)!.Value).NumberFormat.Should().Be("0.00%");
     }
 
     [Fact]
@@ -3617,6 +3623,44 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_RejectsRemoteDocumentFunction()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:value-of select="document('https://example.invalid/freex.xml')"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void LoadTransformed_TerminatingMessage_ReportsTransformDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:message terminate="yes">adapter stop</xsl:message>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*XSLT transform failed*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
     public void LoadTransformed_RejectsStylesheetInclude()
     {
         using var source = StreamFromString("<rows/>");
@@ -3637,12 +3681,52 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_RejectsRemoteStylesheetInclude()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:include href="https://example.invalid/freex.xsl"/>
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
     public void LoadTransformed_RejectsStylesheetImport()
     {
         using var source = StreamFromString("<rows/>");
         using var stylesheet = StreamFromString("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:import href="file:///C:/Windows/win.ini"/>
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void LoadTransformed_RejectsRemoteStylesheetImport()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:import href="https://example.invalid/freex.xsl"/>
               <xsl:template match="/">
                 <xsl:value-of select="'blocked'"/>
               </xsl:template>

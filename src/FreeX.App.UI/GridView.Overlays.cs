@@ -8,6 +8,10 @@ public partial class GridView
 {
     // Spreadsheet overlays: sparklines, resize/fill/copy adorners, formula traces, and page layout guides.
 
+    private const int FormulaTraceArrowHeadGeometryCacheLimit = 4096;
+
+    private readonly Dictionary<FormulaTraceArrowHeadGeometryKey, Geometry> _formulaTraceArrowHeadGeometryCache = new();
+
     private void RenderResizeLine(DrawingContext dc)
     {
         if (_resizeTarget == ResizeTarget.Column)
@@ -68,7 +72,7 @@ public partial class GridView
         var arrows = FormulaTraceArrows;
         if (viewport is null || arrows is not { Count: > 0 }) return;
 
-        var consumer = new FormulaTraceArrowDrawingConsumer(dc);
+        var consumer = new FormulaTraceArrowDrawingConsumer(this, dc);
         FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, FormulaTraceSheetId, ref consumer);
     }
 
@@ -85,17 +89,17 @@ public partial class GridView
         Point pos) =>
         FormulaTraceLayoutPlanner.HitTestMarker(viewport, arrows, sheetId, pos);
 
-    private readonly struct FormulaTraceArrowDrawingConsumer(DrawingContext dc) : IFormulaTraceArrowLayoutConsumer
+    private readonly struct FormulaTraceArrowDrawingConsumer(GridView grid, DrawingContext dc) : IFormulaTraceArrowLayoutConsumer
     {
         public void AcceptLayout(
             Point start,
             Point end,
             FormulaTraceArrowLayoutKind kind,
             CellAddress? navigationTarget) =>
-            DrawFormulaTraceArrow(dc, start, end, kind);
+            grid.DrawFormulaTraceArrow(dc, start, end, kind);
     }
 
-    private static void DrawFormulaTraceArrow(
+    private void DrawFormulaTraceArrow(
         DrawingContext dc,
         Point start,
         Point end,
@@ -113,6 +117,25 @@ public partial class GridView
         if (vector.Length <= 0.1) return;
         vector.Normalize();
         var perpendicular = new Vector(-vector.Y, vector.X);
+        dc.DrawGeometry(FormulaTraceArrowBrush, null, GetFormulaTraceArrowHeadGeometry(start, end, vector, perpendicular));
+    }
+
+    private Geometry GetFormulaTraceArrowHeadGeometry(Point start, Point end, Vector vector, Vector perpendicular)
+    {
+        var key = new FormulaTraceArrowHeadGeometryKey(start, end);
+        if (_formulaTraceArrowHeadGeometryCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_formulaTraceArrowHeadGeometryCache.Count >= FormulaTraceArrowHeadGeometryCacheLimit)
+            _formulaTraceArrowHeadGeometryCache.Clear();
+
+        var geometry = CreateFormulaTraceArrowHeadGeometry(end, vector, perpendicular);
+        _formulaTraceArrowHeadGeometryCache.Add(key, geometry);
+        return geometry;
+    }
+
+    private static Geometry CreateFormulaTraceArrowHeadGeometry(Point end, Vector vector, Vector perpendicular)
+    {
         const double arrowHeadLength = 8;
         const double arrowHeadHalfWidth = 4;
         var p1 = end + vector * arrowHeadLength + perpendicular * arrowHeadHalfWidth;
@@ -125,9 +148,14 @@ public partial class GridView
             ctx.LineTo(p1, isStroked: true, isSmoothJoin: false);
             ctx.LineTo(p2, isStroked: true, isSmoothJoin: false);
         }
+
         geometry.Freeze();
-        dc.DrawGeometry(FormulaTraceArrowBrush, null, geometry);
+        return geometry;
     }
+
+    private void ClearFormulaTraceArrowHeadGeometryCache() => _formulaTraceArrowHeadGeometryCache.Clear();
+
+    private readonly record struct FormulaTraceArrowHeadGeometryKey(Point Start, Point End);
 
     private static void DrawFormulaTraceMarker(DrawingContext dc, Point point, FormulaTraceArrowLayoutKind kind)
     {

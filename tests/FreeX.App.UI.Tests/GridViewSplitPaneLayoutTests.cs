@@ -672,6 +672,24 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneScrollbarLayoutPlanner_IgnoresCollapsedTracks()
+    {
+        var scrollbar = new SplitPaneScrollbar(
+            SplitPaneScrollbarOrientation.Horizontal,
+            SplitPaneRegion.TopRight,
+            new Rect(100, 20, 0, 10),
+            new Rect(100, 21, 0, 8),
+            VisibleSpan: 10,
+            MaxStartIndex: 191);
+        var point = new Point(scrollbar.Track.Left, scrollbar.Track.Top + 2);
+
+        SplitPaneScrollbarLayoutPlanner.HitTestScrollbar(scrollbar, point)
+            .Should().BeNull();
+        SplitPaneScrollbarLayoutPlanner.CalculateScrollTarget(scrollbar, point)
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void SplitPaneScrollbarLayoutPlanner_ClampsThumbToTrackWhenFirstVisibleExceedsLastStart()
     {
         var track = new Rect(100, 20, 200, 10);
@@ -911,6 +929,21 @@ public sealed class GridViewSplitPaneLayoutTests
         clips.TopRight.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 262, 58));
         clips.BottomLeft.Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 208, 224));
         clips.BottomRight.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight + 58, 262, 224));
+    }
+
+    [Fact]
+    public void CalculateSplitPaneClipRects_ClampsPaneSizesToControlBounds()
+    {
+        var viewport = SplitViewport();
+        var actualWidth = GridView.RowHeaderWidth + 100;
+        var actualHeight = GridView.ColHeaderHeight + 30;
+
+        var clips = SplitPaneClipLayoutPlanner.CalculateClipRects(viewport, actualWidth, actualHeight);
+
+        clips.TopLeft.Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 100, 30));
+        clips.TopRight.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 0, 30));
+        clips.BottomLeft.Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 100, 0));
+        clips.BottomRight.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight + 58, 0, 0));
     }
 
     [Theory]
