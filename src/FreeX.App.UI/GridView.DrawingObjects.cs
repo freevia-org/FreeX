@@ -278,6 +278,7 @@ public partial class GridView
 
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         if (NativeSlicers is not null)
         {
             foreach (var slicer in NativeSlicers)
@@ -290,7 +291,7 @@ public partial class GridView
                 if (!IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
                     continue;
 
-                DrawNativeSlicerControl(dc, controlRect, slicer);
+                DrawNativeSlicerControl(dc, controlRect, slicer, pixelsPerDip);
             }
         }
 
@@ -306,7 +307,7 @@ public partial class GridView
                 if (!IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
                     continue;
 
-                DrawNativeTimelineControl(dc, controlRect, timeline);
+                DrawNativeTimelineControl(dc, controlRect, timeline, pixelsPerDip);
             }
         }
     }
@@ -322,9 +323,9 @@ public partial class GridView
     private static Rect EnsureMinimumControlRect(Rect rect) =>
         GridDrawingObjectPlanner.EnsureMinimumControlRect(rect);
 
-    private void DrawNativeSlicerControl(DrawingContext dc, Rect rect, SlicerModel slicer)
+    private void DrawNativeSlicerControl(DrawingContext dc, Rect rect, SlicerModel slicer, double pixelsPerDip)
     {
-        DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName));
+        DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName), pixelsPerDip);
 
         var selectedItemCount = slicer.SelectedItems.Count;
         var tileCount = selectedItemCount == 0 ? 1 : Math.Min(4, selectedItemCount);
@@ -342,13 +343,13 @@ public partial class GridView
             var tileText = selectedItemCount == 0
                 ? slicer.SourceFieldName ?? slicer.CacheName ?? "All"
                 : slicer.SelectedItems[index];
-            DrawClippedText(dc, tileText, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1);
+            DrawClippedText(dc, tileText, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);
         }
     }
 
-    private void DrawNativeTimelineControl(DrawingContext dc, Rect rect, TimelineModel timeline)
+    private void DrawNativeTimelineControl(DrawingContext dc, Rect rect, TimelineModel timeline, double pixelsPerDip)
     {
-        DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName));
+        DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName), pixelsPerDip);
 
         var label = FormatTimelineRange(timeline);
         var barRect = new Rect(rect.Left + 8, rect.Top + 34, Math.Max(1, rect.Width - 16), Math.Max(6, Math.Min(14, rect.Height - 42)));
@@ -359,18 +360,18 @@ public partial class GridView
             Math.Max(6, barRect.Width * 0.56),
             barRect.Height);
         dc.DrawRoundedRectangle(NativeControlSelectedTileBrush, null, selectedRect, 3, 3);
-        DrawClippedText(dc, label, new Rect(rect.Left + 6, rect.Top + 22, Math.Max(1, rect.Width - 12), 12), NativeControlMutedTextBrush, 9, verticalPadding: 0);
+        DrawClippedText(dc, label, new Rect(rect.Left + 6, rect.Top + 22, Math.Max(1, rect.Width - 12), 12), NativeControlMutedTextBrush, 9, verticalPadding: 0, pixelsPerDip);
     }
 
-    private void DrawNativeControlFrame(DrawingContext dc, Rect rect, string caption)
+    private void DrawNativeControlFrame(DrawingContext dc, Rect rect, string caption, double pixelsPerDip)
     {
         dc.DrawRectangle(NativeControlBodyBrush, NativeControlBorderPen, rect);
         var headerRect = new Rect(rect.Left, rect.Top, rect.Width, Math.Min(22, rect.Height));
         dc.DrawRectangle(NativeControlHeaderBrush, null, headerRect);
-        DrawClippedText(dc, caption, new Rect(headerRect.Left + 5, headerRect.Top + 2, Math.Max(1, headerRect.Width - 10), Math.Max(1, headerRect.Height - 4)), Brushes.White, 11, verticalPadding: 0);
+        DrawClippedText(dc, caption, new Rect(headerRect.Left + 5, headerRect.Top + 2, Math.Max(1, headerRect.Width - 10), Math.Max(1, headerRect.Height - 4)), Brushes.White, 11, verticalPadding: 0, pixelsPerDip);
     }
 
-    private void DrawClippedText(DrawingContext dc, string textValue, Rect rect, Brush brush, double fontSize, double verticalPadding)
+    private void DrawClippedText(DrawingContext dc, string textValue, Rect rect, Brush brush, double fontSize, double verticalPadding, double pixelsPerDip)
     {
         var text = GetDrawingObjectText(
             string.IsNullOrWhiteSpace(textValue) ? " " : textValue,
@@ -378,7 +379,7 @@ public partial class GridView
             fontSize,
             Math.Max(1, rect.Width),
             Math.Max(1, rect.Height),
-            VisualTreeHelper.GetDpi(this).PixelsPerDip,
+            pixelsPerDip,
             TextTrimming.CharacterEllipsis);
 
         dc.PushClip(GetDrawingObjectClipGeometry(rect));

@@ -985,6 +985,41 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderNativeControls_ReusesPixelsPerDipAcrossClippedTextCalls()
+    {
+        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderNativeControls = drawingSource[
+            drawingSource.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)..
+            drawingSource.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)];
+        var drawNativeSlicer = drawingSource[
+            drawingSource.IndexOf("private void DrawNativeSlicerControl", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)];
+        var drawNativeTimeline = drawingSource[
+            drawingSource.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void DrawNativeControlFrame", StringComparison.Ordinal)];
+        var drawNativeFrame = drawingSource[
+            drawingSource.IndexOf("private void DrawNativeControlFrame", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void DrawClippedText", StringComparison.Ordinal)];
+        var drawClippedText = drawingSource[
+            drawingSource.IndexOf("private void DrawClippedText", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private static string GetNativeControlCaption", StringComparison.Ordinal)];
+
+        renderNativeControls.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        renderNativeControls.Should().Contain("DrawNativeSlicerControl(dc, controlRect, slicer, pixelsPerDip);");
+        renderNativeControls.Should().Contain("DrawNativeTimelineControl(dc, controlRect, timeline, pixelsPerDip);");
+        drawNativeSlicer.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName), pixelsPerDip);");
+        drawNativeSlicer.Should().Contain("DrawClippedText(dc, tileText, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
+        drawNativeTimeline.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName), pixelsPerDip);");
+        drawNativeTimeline.Should().Contain("DrawClippedText(dc, label, new Rect");
+        drawNativeTimeline.Should().Contain("pixelsPerDip);");
+        drawNativeFrame.Should().Contain("DrawClippedText(dc, caption, new Rect");
+        drawNativeFrame.Should().Contain("pixelsPerDip);");
+        drawClippedText.Should().Contain("double pixelsPerDip)");
+        drawClippedText.Should().Contain("GetDrawingObjectText(");
+        drawClippedText.Should().NotContain("VisualTreeHelper.GetDpi(this)");
+    }
+
+    [Fact]
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
