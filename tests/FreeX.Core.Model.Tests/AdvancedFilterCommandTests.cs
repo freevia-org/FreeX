@@ -151,6 +151,29 @@ public sealed class AdvancedFilterCommandTests
     }
 
     [Fact]
+    public void AdvancedFilter_CopyToLocation_RevertLeavesFilterHiddenRowsUntouched()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        Set(sheet, 1, 6, "Region");
+        Set(sheet, 2, 6, "East");
+
+        sheet.FilterHiddenRows.Add(2);
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: Addr(sheet, 8, 1),
+            UniqueRecordsOnly: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Add(3);
+
+        command.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().Equal(2u, 3u);
+    }
+
+    [Fact]
     public void AdvancedFilter_CopyToLocation_AllowsProtectedSheetWhenDestinationCellsCanBeEdited()
     {
         var (wb, sheet, ctx) = Setup();

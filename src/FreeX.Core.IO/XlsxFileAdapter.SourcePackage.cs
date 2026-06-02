@@ -49,12 +49,20 @@ public sealed partial class XlsxFileAdapter
         }
         if (sourceParts.HasPrinterSettings)
             XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
-        XlsxWorksheetMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook, context);
+        if (sourcePackage.WorksheetsWithPreservableSourceMetadata?.Count != 0)
+        {
+            XlsxWorksheetMetadataPreserver.Preserve(
+                sourceArchive,
+                generatedArchive,
+                workbook,
+                context,
+                sourcePackage.WorksheetsWithPreservableSourceMetadata);
+        }
         if (sourceParts.HasLegacyComments)
             XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         if (sourceParts.HasSharedStrings)
             XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics(sourceArchive, generatedArchive);
-        if (HasUnsupportedConditionalFormatting(sourceArchive))
+        if (sourcePackage.HasUnsupportedConditionalFormatting ?? HasUnsupportedConditionalFormatting(sourceArchive))
             XlsxUnsupportedConditionalFormattingPreserver.Preserve(sourceArchive, generatedArchive);
 
         return sourceParts;

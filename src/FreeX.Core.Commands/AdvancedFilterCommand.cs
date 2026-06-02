@@ -54,11 +54,12 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
 
         var matches = AdvancedFilterPlanBuilder.MatchingRows(sheet, _listRange, criteria.Rows, _uniqueRecordsOnly);
 
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _previousFilterHiddenRows = null;
         _copySnapshot = null;
 
         if (_copyTo is null)
         {
+            _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
             var matchedRows = new HashSet<uint>(matches);
             for (var row = _listRange.Start.Row + 1; row <= _listRange.End.Row; row++)
             {
