@@ -125,7 +125,7 @@ public partial class GridView
             {
                 var headerRect = new Rect(0, y, ActualRowHeaderWidth, height);
                 dc.DrawRectangle(HeaderBackgroundBrush, GridPen, headerRect);
-                DrawLiveResizeHeaderText(dc, (++lastRow).ToString(CultureInfo.InvariantCulture), headerRect, pixelsPerDip);
+                DrawLiveResizeHeaderText(dc, FormatRowHeader(++lastRow), headerRect, pixelsPerDip);
             }
 
             if (width > 0)

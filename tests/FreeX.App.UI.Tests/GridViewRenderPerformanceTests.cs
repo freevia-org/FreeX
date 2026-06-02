@@ -527,7 +527,8 @@ public sealed class GridViewRenderPerformanceTests
         continuation.Should().Contain("RenderLiveResizeColumnContinuation(dc, gridRight, gridTop, pixelsPerDip);");
         continuation.Should().Contain("RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom, pixelsPerDip);");
         continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect, pixelsPerDip);");
-        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, (++lastRow).ToString(CultureInfo.InvariantCulture), headerRect, pixelsPerDip);");
+        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatRowHeader(++lastRow), headerRect, pixelsPerDip);");
+        continuation.Should().NotContain("(++lastRow).ToString");
         continuation.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
     }
 
