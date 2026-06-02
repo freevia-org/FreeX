@@ -986,6 +986,12 @@ public sealed class FormulaEvaluator
                     continue;
                 }
 
+                // Full-column/full-row references nominally span the whole grid and would exceed the
+                // materialization cap (returning #REF!). Excel only ever reads the populated extent,
+                // so clamp the open end to the sheet's used range — both the streamed (GetRangeValues)
+                // and structured (BuildRangeValue) branches below then operate on a bounded range.
+                range = ClampOpenEndedRangeToUsed(range, context);
+
                 if (isStructured)
                 {
                     // Build a 2-D RangeValue for structured functions
@@ -1602,6 +1608,43 @@ public sealed class FormulaEvaluator
     private static Sheet? ResolveFastAggregateSheet(FastAggregateRange range, SheetEvalContext context)
         => context.ResolveSheetForFastRange(range.SheetName);
 
+    // Intersect a full-column/full-row range with the target sheet's used (populated) extent.
+    // Returns false when there is nothing to aggregate (empty sheet or no overlap), in which
+    // case the caller should treat the range as containing zero cells. When the context cannot
+    // resolve a sheet (non-sheet context), the range is left unchanged.
+    private static bool TryClampFullRangeToUsed(
+        string? sheetName,
+        IEvalContext context,
+        ref uint startRow,
+        ref uint startCol,
+        ref uint endRow,
+        ref uint endCol)
+    {
+        if (context is not SheetEvalContext sheetContext)
+            return true;
+
+        var sheet = sheetContext.ResolveSheetForFastRange(sheetName);
+        if (sheet is null)
+            return true;
+
+        if (sheet.GetUsedRange() is not { } used)
+            return false;
+
+        var clampedStartRow = Math.Max(startRow, used.Start.Row);
+        var clampedEndRow = Math.Min(endRow, used.End.Row);
+        var clampedStartCol = Math.Max(startCol, used.Start.Col);
+        var clampedEndCol = Math.Min(endCol, used.End.Col);
+
+        if (clampedStartRow > clampedEndRow || clampedStartCol > clampedEndCol)
+            return false;
+
+        startRow = clampedStartRow;
+        endRow = clampedEndRow;
+        startCol = clampedStartCol;
+        endCol = clampedEndCol;
+        return true;
+    }
+
     private static FastAggregateRangeResolution TryResolveFastAggregateRange(
         FastAggregateKind kind,
         FormulaNode argument,
@@ -1620,12 +1663,29 @@ public sealed class FormulaEvaluator
                 return FastAggregateRangeResolution.Error;
             }
 
-            var resolvedRange = new FastAggregateRange(
-                rangeRef.SheetName,
-                Math.Min(rangeRef.Start.Row, rangeRef.End.Row),
-                Math.Min(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber),
-                Math.Max(rangeRef.Start.Row, rangeRef.End.Row),
-                Math.Max(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber));
+            var startRow = Math.Min(rangeRef.Start.Row, rangeRef.End.Row);
+            var startCol = Math.Min(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber);
+            var endRow = Math.Max(rangeRef.Start.Row, rangeRef.End.Row);
+            var endCol = Math.Max(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber);
+
+            // Full-column (A:C) / full-row (1:5) ranges nominally span 1,048,576 rows or
+            // 16,384 columns. Excel aggregates only the populated extent; clamping to the
+            // sheet's used range gives the same numeric result, keeps us under the streaming
+            // cap (so e.g. SUM(A:C) no longer wrongly returns #REF!), and is far faster.
+            // COUNTBLANK is excluded: it must count blanks across the whole nominal range.
+            if (argument is FullColumnRangeRefNode or FullRowRangeRefNode
+                && kind != FastAggregateKind.CountBlank)
+            {
+                if (!TryClampFullRangeToUsed(rangeRef.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
+                {
+                    // No populated cells overlap the range: emit an empty range (endRow < startRow
+                    // so every aggregate loop iterates zero cells -> SUM/COUNT 0, AVERAGE #DIV/0!, etc.).
+                    range = new FastAggregateRange(rangeRef.SheetName, 1, 1, 0, 0);
+                    return FastAggregateRangeResolution.Range;
+                }
+            }
+
+            var resolvedRange = new FastAggregateRange(rangeRef.SheetName, startRow, startCol, endRow, endCol);
 
             if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
                 return FastAggregateRangeResolution.Error;
@@ -1860,6 +1920,13 @@ public sealed class FormulaEvaluator
 
     private static RangeValue BuildRangeValue(RangeRefNode range, IEvalContext context)
     {
+        // A full-column (A:A) / full-row (1:1) reference nominally spans 1,048,576 rows or 16,384
+        // columns, which exceeds the materialization cap and would otherwise return #REF! — even for
+        // a single column. Excel only ever materializes the populated extent, so clamp the open end
+        // down to the sheet's used range. The start is left untouched so positional access (INDEX,
+        // COLUMN, ...) keeps the same Nth-element / top-left meaning.
+        range = ClampOpenEndedRangeToUsed(range, context);
+
         // Normalize so r0 ≤ r1 and c0 ≤ c1 — Excel accepts B5:A1 and treats it as A1:B5.
         // Without this, uint subtraction wraps and produces a negative dimension.
         uint r0 = Math.Min(range.Start.Row, range.End.Row);
@@ -1879,6 +1946,49 @@ public sealed class FormulaEvaluator
                     : context.GetCellValue(r0 + (uint)ri, c0 + (uint)ci);
             }
         return new RangeValue(cells, r0, c0) { SheetName = range.SheetName };
+    }
+
+    // Clamp the open end of a full-column/full-row reference to the target sheet's used extent.
+    // Only ranges that reach the grid limit (End at MaxRow/MaxCol) are touched; explicit bounded
+    // ranges pass through unchanged. The start is preserved so element positions stay correct.
+    private static RangeRefNode ClampOpenEndedRangeToUsed(RangeRefNode range, IEvalContext context)
+    {
+        bool fullColumn = range.End.Row >= FreeX.Core.Model.CellAddress.MaxRow;
+        bool fullRow = range.End.ColumnNumber >= FreeX.Core.Model.CellAddress.MaxCol;
+        if (!fullColumn && !fullRow)
+            return range;
+
+        if (context is not SheetEvalContext sheetContext)
+            return range;
+
+        var sheet = sheetContext.ResolveSheetForFastRange(range.SheetName);
+        if (sheet is null)
+            return range;
+
+        uint endRow = range.End.Row;
+        uint endCol = range.End.ColumnNumber;
+
+        if (sheet.GetUsedRange() is { } used)
+        {
+            if (fullColumn) endRow = Math.Min(endRow, Math.Max(used.End.Row, range.Start.Row));
+            if (fullRow) endCol = Math.Min(endCol, Math.Max(used.End.Col, range.Start.ColumnNumber));
+        }
+        else
+        {
+            // Empty sheet: collapse the open dimension to its start (a single blank line).
+            if (fullColumn) endRow = range.Start.Row;
+            if (fullRow) endCol = range.Start.ColumnNumber;
+        }
+
+        if (endRow == range.End.Row && endCol == range.End.ColumnNumber)
+            return range;
+
+        var end = range.End with
+        {
+            ColumnName = FreeX.Core.Model.CellAddress.NumberToColumnName(endCol),
+            Row = endRow
+        };
+        return new RangeRefNode(range.Start, end, range.SheetName);
     }
 
     private static ScalarValue BuildRangeValueOrError(RangeRefNode range, IEvalContext context)

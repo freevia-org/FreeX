@@ -104,7 +104,7 @@ internal static partial class XlsxPivotTableWriter
         "smartTagPr", "smartTagTypes", "webPublishing", "fileRecoveryPr", "webPublishObjects", "extLst",
     };
 
-    private static void InsertWorkbookPivotCaches(XElement workbookRoot, XNamespace workbookNs, XElement pivotCaches)
+    internal static void InsertWorkbookPivotCaches(XElement workbookRoot, XNamespace workbookNs, XElement pivotCaches)
     {
         var anchor = workbookRoot.Elements()
             .FirstOrDefault(element => WorkbookElementsAfterPivotCaches.Contains(element.Name.LocalName));

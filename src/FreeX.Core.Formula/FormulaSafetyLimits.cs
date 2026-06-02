@@ -11,6 +11,8 @@ internal static class FormulaSafetyLimits
     public const long MaxStreamingRangeCells = 1_048_576L;
     public const int MaxRegexCacheEntries = 1_024;
     public const int MaxParsedFormulaCacheEntries = 1_024;
+    public const int MaxTokenizedFormulaCacheEntries = 1_024;
+    public const int MaxParsedTokenFormulaCacheEntries = 1_024;
 
     public static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 

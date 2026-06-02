@@ -13,7 +13,14 @@ internal static class XlsxPackageMetadataMerger
         var generatedEntriesBeforeMerge = targetArchive.Entries
             .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var targetEntryNames = new HashSet<string>(generatedEntriesBeforeMerge, StringComparer.OrdinalIgnoreCase);
+
+        // OPC part names are compared case-insensitively. A source part whose name differs only by
+        // case from one already in the generated package (e.g. Excel's xl/drawings/vmlDrawing2.vml
+        // vs ClosedXML's xl/drawings/vmldrawing2.vml for the same legacy comment) must NOT be copied:
+        // two case-colliding parts make the package unreadable ("Format error in package"), so Excel
+        // drops PivotTables/formulas on repair. Track existing names case-insensitively (zip entry
+        // lookups via GetEntry are case-sensitive and miss the collision).
+        var existingPartNames = new HashSet<string>(generatedEntriesBeforeMerge, StringComparer.OrdinalIgnoreCase);
 
         foreach (var sourceEntry in sourceArchive.Entries)
         {
@@ -23,11 +30,10 @@ internal static class XlsxPackageMetadataMerger
                 continue;
             if (IsPackageMetadataEntry(sourceEntryName))
                 continue;
-            if (targetEntryNames.Contains(sourceEntryName))
+            if (!existingPartNames.Add(sourceEntryName))
                 continue;
 
             CopyEntry(sourceEntry, targetArchive, sourceEntryName);
-            targetEntryNames.Add(sourceEntryName);
         }
 
         return generatedEntriesBeforeMerge;
