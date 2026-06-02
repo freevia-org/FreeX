@@ -581,7 +581,7 @@ public static partial class FormulaAuditingService
         if (!ContainsOmittedAdjacentCellsAggregateFunction(cell.FormulaText))
             return false;
 
-        foreach (var ranges in ExtractAggregateRangeGroups(sheetId, cell.FormulaText))
+        foreach (var ranges in ExtractAggregateRangeGroups(workbook, sheetId, cell.FormulaText))
         {
             var sameSheetRanges = ranges
                 .Where(range => range.Start.Sheet == range.End.Sheet)
@@ -698,7 +698,7 @@ public static partial class FormulaAuditingService
     private static bool IsSingleRowRange(GridRange range) =>
         range.Start.Row == range.End.Row;
 
-    private static IEnumerable<IReadOnlyList<GridRange>> ExtractAggregateRangeGroups(SheetId sheetId, string formulaText)
+    private static IEnumerable<IReadOnlyList<GridRange>> ExtractAggregateRangeGroups(Workbook workbook, SheetId sheetId, string formulaText)
     {
         foreach (Match aggregateMatch in Regex.Matches(
                      formulaText,
@@ -723,7 +723,7 @@ public static partial class FormulaAuditingService
                 if (skipBlankRangeArguments && string.IsNullOrWhiteSpace(token))
                     continue;
 
-                if (TryParseLocalRange(sheetId, token, out var range))
+                if (TryParseAggregateRangeArgument(workbook, sheetId, token, out var range))
                     ranges.Add(range);
             }
 
@@ -820,6 +820,70 @@ public static partial class FormulaAuditingService
             ? ParseLocalAddress(sheetId, match.Groups["end"].Value)
             : start;
         range = NormalizeRange(start, end);
+        return true;
+    }
+
+    private static bool TryParseAggregateRangeArgument(Workbook workbook, SheetId sheetId, string token, out GridRange range)
+    {
+        if (TryParseLocalRange(sheetId, token, out range))
+            return true;
+
+        range = default;
+        try
+        {
+            var node = new Parser(new Lexer(token).Tokenize()).Parse();
+            return TryConvertAggregateReferenceNode(workbook, sheetId, node, out range);
+        }
+        catch (FormulaParseException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryConvertAggregateReferenceNode(
+        Workbook workbook,
+        SheetId sheetId,
+        FormulaNode node,
+        out GridRange range)
+    {
+        range = default;
+        switch (node)
+        {
+            case CellRefNode cellRef:
+                if (!TryResolveCurrentSheetReference(workbook, sheetId, cellRef.SheetName, out var cellSheetId))
+                    return false;
+
+                var address = new CellAddress(cellSheetId, cellRef.Row, cellRef.ColumnNumber);
+                range = new GridRange(address, address);
+                return true;
+
+            case RangeRefNode rangeRef:
+                var sheetName = rangeRef.SheetName ?? rangeRef.Start.SheetName ?? rangeRef.End.SheetName;
+                if (!TryResolveCurrentSheetReference(workbook, sheetId, sheetName, out var rangeSheetId))
+                    return false;
+
+                var start = new CellAddress(rangeSheetId, rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
+                var end = new CellAddress(rangeSheetId, rangeRef.End.Row, rangeRef.End.ColumnNumber);
+                range = NormalizeRange(start, end);
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryResolveCurrentSheetReference(
+        Workbook workbook,
+        SheetId hostSheetId,
+        string? sheetName,
+        out SheetId resolvedSheetId)
+    {
+        resolvedSheetId = default;
+        var sheet = ResolveSheet(workbook, hostSheetId, sheetName);
+        if (sheet is null || sheet.Id != hostSheetId)
+            return false;
+
+        resolvedSheetId = sheet.Id;
         return true;
     }
 
