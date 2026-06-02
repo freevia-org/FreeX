@@ -96,6 +96,18 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("DrawingTargetResolver.GetTargetDrawingObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
     }
 
+    [Fact]
+    public void InteractivePictureCropEvent_RoutesThroughUndoableCropCommand()
+    {
+        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+
+        windowSource.Should().Contain("SheetGrid.PictureCropped += OnPictureCropped;");
+        drawingSource.Should().Contain("private void OnPictureCropped(Guid id, double left, double top, double right, double bottom)");
+        drawingSource.Should().Contain("new SetPictureCropCommand(_currentSheetId, id, left, top, right, bottom)");
+        drawingSource.Should().Contain("TryExecuteCommand(");
+    }
+
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 

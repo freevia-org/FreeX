@@ -40,6 +40,21 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void MouseMoveUsesPictureCropCursorBeforeObjectResizeCursor()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var hoverCursorBlock = source[
+            source.IndexOf("var selectedPictureCropHandle = HitTestPictureCropHandle(pos);", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
+
+        hoverCursorBlock.Should().Contain("Cursor = PictureCropCursor(selectedPictureCropHandle);");
+        hoverCursorBlock.Should().Contain("var selectedObjectDragKind = ObjectDragKind.None;");
+        hoverCursorBlock.IndexOf("Cursor = PictureCropCursor(selectedPictureCropHandle);", StringComparison.Ordinal)
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("var selectedObjectDragKind = ObjectDragKind.None;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RightClickObjectRoutesContextMenuToObjectAnchor()
     {
         var inputSource = File.ReadAllText(FindWorkspaceFile(
@@ -107,6 +122,21 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void SelectedPictureCropDragStartsBeforeObjectDragHandles()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var mouseDownBlock = inputSource[
+            inputSource.IndexOf("if (TryGetSelectedImagePicture", StringComparison.Ordinal)..
+            inputSource.IndexOf("// Check if clicking on an already-selected object's handles", StringComparison.Ordinal)];
+
+        mouseDownBlock.Should().Contain("GridPictureCropPlanner.HitTestHandle(pos, selectedPictureRect)");
+        mouseDownBlock.Should().Contain("_pictureCropDragHandle = cropHandle;");
+        mouseDownBlock.Should().Contain("_pictureCropStartCrop = GetPictureCropRatios(selectedPicture);");
+        mouseDownBlock.Should().Contain("CaptureMouse();");
+    }
+
+    [Fact]
     public void LeftMouseDownIgnoresReentrantClicksWhileCapturedDragIsActive()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -134,6 +164,7 @@ public sealed class GridViewPointerCursorTests
             source.IndexOf("private bool HasActiveCapturedGridDrag", StringComparison.Ordinal)..
             source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)];
 
+        helperBlock.Should().Contain("_pictureCropDragHandle != PictureCropHandle.None");
         helperBlock.Should().Contain("_objectDragKind != ObjectDragKind.None");
         helperBlock.Should().Contain("_marginDragEdge.HasValue");
         helperBlock.Should().Contain("_splitDividerDragHandle != SplitDividerHandle.None");
@@ -265,6 +296,23 @@ public sealed class GridViewPointerCursorTests
         objectMouseUpBlock.Should().Contain("e.Handled = true;");
         objectMouseUpBlock.IndexOf("Cursor = null;", StringComparison.Ordinal)
             .Should().BeLessThan(objectMouseUpBlock.IndexOf("ReleaseMouseCapture();", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PictureCropMouseUpRaisesCropEventAfterClearingDragState()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var pictureCropBlock = source[
+            source.IndexOf("if (_pictureCropDragHandle != PictureCropHandle.None)", mouseUpStart, StringComparison.Ordinal)..
+            source.IndexOf("if (_objectDragKind != ObjectDragKind.None)", mouseUpStart, StringComparison.Ordinal)];
+
+        pictureCropBlock.Should().Contain("_pictureCropDragHandle = PictureCropHandle.None;");
+        pictureCropBlock.Should().Contain("ReleaseMouseCapture();");
+        pictureCropBlock.Should().Contain("PictureCropped?.Invoke(");
+        pictureCropBlock.IndexOf("_pictureCropDragHandle = PictureCropHandle.None;", StringComparison.Ordinal)
+            .Should().BeLessThan(pictureCropBlock.IndexOf("PictureCropped?.Invoke(", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -545,6 +593,9 @@ public sealed class GridViewPointerCursorTests
             source.IndexOf("private void CancelActiveCapturedGridDrag", StringComparison.Ordinal)..
             source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)];
 
+        cancellationHelper.Should().Contain("if (_pictureCropDragHandle != PictureCropHandle.None)");
+        cancellationHelper.Should().Contain("_pictureCropDragHandle = PictureCropHandle.None;");
+        cancellationHelper.Should().Contain("_pictureCropDragId = Guid.Empty;");
         cancellationHelper.Should().Contain("if (_objectDragKind != ObjectDragKind.None)");
         cancellationHelper.Should().Contain("_objectDragKind = ObjectDragKind.None;");
         cancellationHelper.Should().Contain("_objectDragCurrentRect = Rect.Empty;");
