@@ -176,17 +176,33 @@ public static partial class FormulaAuditingService
             : left.Address.Col.CompareTo(right.Address.Col);
     }
 
-    internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, CellAddress address, Cell cell) =>
-        cell.Value is ErrorValue ||
-        (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value)) ||
-        (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
-        IsFormulaStoredAsText(cell) ||
-        FormulaRefersToBlankCells(workbook, sheetId, cell) ||
-        IsInconsistentCalculatedColumnFormula(workbook, sheetId, address, cell) ||
-        IsInconsistentFormula(workbook, sheetId, address) ||
-        FormulaOmitsAdjacentCells(workbook, sheetId, cell) ||
-        IsUnlockedFormulaCell(workbook, cell) ||
-        IsInvalidDataValidationEntry(workbook, sheetId, address, cell);
+    internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, CellAddress address, Cell cell)
+    {
+        var disabledCodes = workbook.DisabledFormulaErrorCodes;
+        return
+            (cell.Value is ErrorValue error && !disabledCodes.Contains(error.Code)) ||
+            (!disabledCodes.Contains(NumberStoredAsTextErrorCode) &&
+                !cell.HasFormula &&
+                cell.Value is TextValue text &&
+                IsNumberStoredAsText(text.Value)) ||
+            (!disabledCodes.Contains(TwoDigitYearTextDateErrorCode) &&
+                !cell.HasFormula &&
+                cell.Value is TextValue dateText &&
+                IsTextDateWithTwoDigitYear(dateText.Value)) ||
+            (!disabledCodes.Contains(FormulaStoredAsTextErrorCode) &&
+                IsFormulaStoredAsText(cell)) ||
+            (!disabledCodes.Contains(FormulaRefersToBlankCellsErrorCode) &&
+                FormulaRefersToBlankCells(workbook, sheetId, cell)) ||
+            (!disabledCodes.Contains(InconsistentCalculatedColumnFormulaErrorCode) &&
+                IsInconsistentCalculatedColumnFormula(workbook, sheetId, address, cell)) ||
+            (!disabledCodes.Contains(InconsistentFormulaErrorCode) &&
+                IsInconsistentFormula(workbook, sheetId, address)) ||
+            (!disabledCodes.Contains(FormulaOmitsAdjacentCellsErrorCode) &&
+                FormulaOmitsAdjacentCells(workbook, sheetId, cell)) ||
+            (!disabledCodes.Contains(UnlockedFormulaCellsErrorCode) &&
+                IsUnlockedFormulaCell(workbook, cell)) ||
+            IsInvalidDataValidationEntry(workbook, sheetId, address, cell);
+    }
 
     private static IEnumerable<FormulaErrorIssue> FindFormulaRefersToBlankCellsIssues(Workbook workbook, SheetId? sheetId)
     {
