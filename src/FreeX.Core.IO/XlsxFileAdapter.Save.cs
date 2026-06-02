@@ -253,7 +253,7 @@ public sealed partial class XlsxFileAdapter
 
             // Save data validation rules back to XLSX
             try { XlsxDataValidationClosedXmlMapper.Save(sheet, xlSheet); }
-            catch { /* ignore DV save failures */ }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping data-validation save for sheet '{sheet.Name}': {ex.Message}"); }
 
             // Save merged regions
             foreach (var region in sheet.MergedRegions)
@@ -264,13 +264,13 @@ public sealed partial class XlsxFileAdapter
                                    $":{CellAddress.NumberToColumnName(region.End.Col)}{region.End.Row}";
                     xlSheet.Range(rangeStr).Merge();
                 }
-                catch { /* ignore individual merge failures */ }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping merged-region save for sheet '{sheet.Name}': {ex.Message}"); }
             }
         }
 
         // Save named ranges
         try { XlsxNamedRangeMapper.Save(workbook, xlWorkbook); }
-        catch { /* ignore named-range save failures */ }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping named-range save: {ex.Message}"); }
 
         if (CanSavePackageInPlace(stream))
         {
