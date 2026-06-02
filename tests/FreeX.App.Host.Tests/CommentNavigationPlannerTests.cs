@@ -43,6 +43,38 @@ public sealed class CommentNavigationPlannerTests
     }
 
     [Fact]
+    public void OrderedThreadedComments_SortsByRowThenColumnWithoutNotes()
+    {
+        var sheetId = SheetId.New();
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [new(sheetId, 4, 1)] = new("Later"),
+            [new(sheetId, 2, 3)] = new("Middle"),
+            [new(sheetId, 2, 1)] = new("First")
+        };
+
+        CommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)
+            .Should()
+            .Equal(new CellAddress(sheetId, 2, 1), new CellAddress(sheetId, 2, 3), new CellAddress(sheetId, 4, 1));
+    }
+
+    [Fact]
+    public void OrderedNotes_SortsByRowThenColumnWithoutThreadedComments()
+    {
+        var sheetId = SheetId.New();
+        var notes = new Dictionary<CellAddress, string>
+        {
+            [new(sheetId, 4, 1)] = "Later",
+            [new(sheetId, 2, 3)] = "Middle",
+            [new(sheetId, 2, 1)] = "First"
+        };
+
+        CommentNavigationPlanner.OrderedNoteAddresses(notes)
+            .Should()
+            .Equal(new CellAddress(sheetId, 2, 1), new CellAddress(sheetId, 2, 3), new CellAddress(sheetId, 4, 1));
+    }
+
+    [Fact]
     public void NextComment_WrapsForwardAndBackward()
     {
         var sheetId = SheetId.New();
@@ -126,6 +158,36 @@ public sealed class CommentNavigationPlannerTests
         CommentNavigationPlanner.FormatCommentList(comments, threadedComments)
             .Should()
             .Be(string.Join(Environment.NewLine, "A1: FreeX: First thread", "B3: Later note"));
+    }
+
+    [Fact]
+    public void FormatThreadedCommentList_ExcludesNotes()
+    {
+        var sheetId = SheetId.New();
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [new(sheetId, 1, 1)] = new("First thread"),
+            [new(sheetId, 3, 2)] = new("Later thread", "Quinn")
+        };
+
+        CommentNavigationPlanner.FormatThreadedCommentList(threadedComments)
+            .Should()
+            .Be(string.Join(Environment.NewLine, "A1: FreeX: First thread", "B3: Quinn: Later thread"));
+    }
+
+    [Fact]
+    public void FormatNoteList_ExcludesThreadedComments()
+    {
+        var sheetId = SheetId.New();
+        var notes = new Dictionary<CellAddress, string>
+        {
+            [new(sheetId, 3, 2)] = "Later note",
+            [new(sheetId, 1, 1)] = "First note"
+        };
+
+        CommentNavigationPlanner.FormatNoteList(notes)
+            .Should()
+            .Be(string.Join(Environment.NewLine, "A1: First note", "B3: Later note"));
     }
 
     [Fact]

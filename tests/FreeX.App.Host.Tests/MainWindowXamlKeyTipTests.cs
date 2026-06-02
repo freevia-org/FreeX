@@ -868,7 +868,10 @@ public sealed class MainWindowXamlKeyTipTests
                 "ReviewDeleteCommentBtn_Click" or
                 "ReviewPrevCommentBtn_Click" or
                 "ReviewNextCommentBtn_Click" or
-                "ReviewShowCommentsBtn_Click")
+                "ReviewShowCommentsBtn_Click" or
+                "ReviewPrevNoteBtn_Click" or
+                "ReviewNextNoteBtn_Click" or
+                "ReviewShowNotesBtn_Click")
             .ToList();
 
         var tooltipTexts = commentButtons
