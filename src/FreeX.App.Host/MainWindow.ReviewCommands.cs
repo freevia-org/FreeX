@@ -204,7 +204,8 @@ public partial class MainWindow
                             _currentSheetId,
                             r.Start,
                             replyIndex,
-                            result.ReplyEditText));
+                            result.ReplyEditText,
+                            result.IsResolved));
                     break;
                 case ThreadedCommentDialogAction.DeleteReply when result.ReplyIndex is { } replyIndex:
                     changed = TryExecuteRepeatableCurrentRangeCommand(
@@ -213,7 +214,8 @@ public partial class MainWindow
                         r => new DeleteThreadedCommentReplyCommand(
                             _currentSheetId,
                             r.Start,
-                            replyIndex));
+                            replyIndex,
+                            result.IsResolved));
                     break;
                 default:
                     var hasThreadChange =

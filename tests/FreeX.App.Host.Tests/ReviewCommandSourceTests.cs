@@ -72,6 +72,7 @@ public sealed class ReviewCommandSourceTests
     public void ReviewCommandHandlers_RouteThroughExpectedPlannersDialogsAndServices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
         source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllEdits(");
@@ -82,8 +83,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("new ThreadedCommentDialog(addr.ToA1(), existing)");
         source.Should().Contain("case ThreadedCommentDialogAction.EditReply");
         source.Should().Contain("new UpdateThreadedCommentReplyCommand(");
+        normalizedSource.Should().Contain("result.ReplyEditText,\n                            result.IsResolved");
         source.Should().Contain("case ThreadedCommentDialogAction.DeleteReply");
         source.Should().Contain("new DeleteThreadedCommentReplyCommand(");
+        normalizedSource.Should().Contain("replyIndex,\n                            result.IsResolved");
         source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("ProtectionDialogPlanner.CreateSheetResult(");
