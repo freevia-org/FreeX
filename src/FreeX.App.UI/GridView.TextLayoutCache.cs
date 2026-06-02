@@ -99,7 +99,7 @@ public partial class GridView
         return formatted;
     }
 
-    private static bool CanUseDefaultFormattedText(CellStyle? style, bool wrapText)
+    private bool CanUseDefaultFormattedText(CellStyle? style, bool wrapText)
     {
         if (wrapText)
             return false;
@@ -107,7 +107,7 @@ public partial class GridView
         return UsesDefaultTextLayoutStyle(style);
     }
 
-    private static bool CanUseDefaultWrappedFormattedText(CellStyle? style)
+    private bool CanUseDefaultWrappedFormattedText(CellStyle? style)
     {
         if (style?.WrapText != true)
             return false;
@@ -115,11 +115,21 @@ public partial class GridView
         return UsesDefaultTextLayoutStyle(style);
     }
 
-    private static bool UsesDefaultTextLayoutStyle(CellStyle? style)
+    private bool UsesDefaultTextLayoutStyle(CellStyle? style)
     {
         if (style is null)
             return true;
 
+        if (_defaultTextLayoutStyleCache.TryGetValue(style, out var cached))
+            return cached;
+
+        var usesDefaultTextLayout = UsesDefaultTextLayoutStyleCore(style);
+        _defaultTextLayoutStyleCache.Add(style, usesDefaultTextLayout);
+        return usesDefaultTextLayout;
+    }
+
+    private static bool UsesDefaultTextLayoutStyleCore(CellStyle style)
+    {
         var usesDefaultFontName = string.IsNullOrWhiteSpace(style.FontName) ||
             string.Equals(style.FontName, "Calibri", StringComparison.OrdinalIgnoreCase);
         var usesDefaultFontSize = style.FontSize <= 0 ||
