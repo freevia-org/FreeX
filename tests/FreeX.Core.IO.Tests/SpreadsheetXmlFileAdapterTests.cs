@@ -3166,6 +3166,49 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromRowColumnLayoutAttributeValueTemplates()
+    {
+        using var source = StreamFromString("""
+            <layout columnIndex="2" columnSpan="1" width="22.75" columnHidden="1"
+                    rowIndex="3" rowSpan="1" height="28.5" rowHidden="1">
+              <cell value="Layout"/>
+            </layout>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/layout">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Layout AVT">
+                    <ss:Table>
+                      <ss:Column ss:Index="{@columnIndex}" ss:Span="{@columnSpan}" ss:Width="{@width}" ss:Hidden="{@columnHidden}"/>
+                      <ss:Row ss:Index="{@rowIndex}" ss:Span="{@rowSpan}" ss:Height="{@height}" ss:Hidden="{@rowHidden}">
+                        <ss:Cell ss:Index="{@columnIndex}">
+                          <ss:Data ss:Type="String"><xsl:value-of select="cell/@value"/></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Layout AVT");
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(2, 22.75));
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(3, 22.75));
+        sheet.HiddenCols.Should().Contain([2u, 3u]);
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(3, 28.5));
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(4, 28.5));
+        sheet.HiddenRows.Should().Contain([3u, 4u]);
+        sheet.GetCell(3, 2)!.Value.Should().Be(new TextValue("Layout"));
+    }
+
+    [Fact]
     public void LoadTransformed_UsesCurrentStreamPositionsAndLeavesInputStreamsOpen()
     {
         using var source = PositionedStreamFromString("ignored", "<rows><row name=\"Gamma\"/></rows>");
