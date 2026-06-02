@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -149,6 +150,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             var row = (FrameworkElement)window.FindName("SheetTabsRowGrid");
             var scroller = (ScrollViewer)window.FindName("SheetTabsScroller");
             var overlayLayer = (FrameworkElement)window.FindName("SheetTabsOverlayLayer");
+            var horizontalScroll = (ScrollBar)window.FindName("HorizontalScroll");
             var visibleNavButtons = new[]
                 {
                     (FrameworkElement)window.FindName("SheetNavLeftBtn"),
@@ -159,7 +161,13 @@ public sealed class MainWindowSheetTabKeyboardTests
 
             var rowBounds = BoundsRelativeToWindow(row, window);
             var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
+            var horizontalScrollArrow = EnumerateVisualDescendants(horizontalScroll)
+                .OfType<RepeatButton>()
+                .Where(button => button.ActualWidth > 0 && button.ActualHeight > 0)
+                .OrderBy(button => BoundsRelativeToWindow(button, window).Left)
+                .FirstOrDefault();
             overlayBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the blue sheet-tab rule should not sit on the row's clipping edge");
+            horizontalScrollArrow.Should().NotBeNull("the worksheet horizontal scrollbar should expose a left arrow for alignment");
             visibleNavButtons.Should().HaveCount(
                 2,
                 "the narrow many-sheet viewport must expose both navigation arrows so their rule clearance is covered; rowWidth={0:F1}, scrollerWidth={1:F1}, viewportWidth={2:F1}, extentWidth={3:F1}, scrollableWidth={4:F1}",
@@ -172,9 +180,15 @@ public sealed class MainWindowSheetTabKeyboardTests
             foreach (var button in visibleNavButtons)
             {
                 var buttonBounds = BoundsRelativeToWindow(button, window);
-                buttonBounds.Top.Should().BeGreaterThan(overlayBounds.Top + 7.0, "sheet-tab nav buttons should sit below the internal blue rule, not cover or overlap it");
+                buttonBounds.Top.Should().BeApproximately(overlayBounds.Top + 5.0, 0.75, "sheet-tab nav buttons should start immediately below the internal blue rule");
                 buttonBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5, "sheet-tab nav buttons should stay inside the sheet-tab row");
             }
+
+            var rightNavBounds = BoundsRelativeToWindow((FrameworkElement)window.FindName("SheetNavRightBtn"), window);
+            var horizontalScrollArrowBounds = BoundsRelativeToWindow(horizontalScrollArrow!, window);
+            VerticalCenter(rightNavBounds)
+                .Should()
+                .BeApproximately(VerticalCenter(horizontalScrollArrowBounds), 1.5, "the sheet-tab right arrow should align with the worksheet scrollbar left arrow");
 
             CaptureSheetTabLowerBandIfRequested(window, row);
         });
@@ -717,6 +731,21 @@ public sealed class MainWindowSheetTabKeyboardTests
 
     private static Rect BoundsRelativeToWindow(FrameworkElement element, Window window) =>
         element.TransformToAncestor(window).TransformBounds(new Rect(new Size(element.ActualWidth, element.ActualHeight)));
+
+    private static double VerticalCenter(Rect rect) => rect.Top + rect.Height / 2.0;
+
+    private static IEnumerable<DependencyObject> EnumerateVisualDescendants(DependencyObject root)
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            yield return child;
+
+            foreach (var descendant in EnumerateVisualDescendants(child))
+                yield return descendant;
+        }
+    }
 
     private static void CaptureSheetTabLowerBandIfRequested(
         Window window,

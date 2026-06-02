@@ -1786,7 +1786,7 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"3\"");
         xaml.Should().Contain("BorderBrush=\"Transparent\" BorderThickness=\"0\"");
         xaml.Should().Contain("Width=\"18\" Height=\"22\"");
-        xaml.Should().Contain("Margin=\"0,12,0,0\"");
+        xaml.Should().Contain("Margin=\"0,9,0,0\"");
         xaml.Should().NotContain("<TranslateTransform Y=\"-2\"/>");
         xamlCodeBehind.Should().Contain("private const double SheetTabGridRuleTop = 4.5;");
         source.Should().NotContain("CreateSheetTabFillGeometry(active, top: -1.0)");
