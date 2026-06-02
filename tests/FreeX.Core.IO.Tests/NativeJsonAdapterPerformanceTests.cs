@@ -282,7 +282,7 @@ public sealed class NativeJsonAdapterPerformanceTests
         var dtoSource = File.ReadAllText(FindRepoFile(
             "src",
             "FreeX.Core.IO",
-            "NativeJsonAdapter.Dto.cs"));
+            "NativeJsonAdapter.CellDto.cs"));
 
         saveSource.Should().Contain("CellDtoJsonConverter.WriteCell(");
         saveSource.Should().Contain("row,");
@@ -303,7 +303,7 @@ public sealed class NativeJsonAdapterPerformanceTests
         var dtoSource = File.ReadAllText(FindRepoFile(
             "src",
             "FreeX.Core.IO",
-            "NativeJsonAdapter.Dto.cs"));
+            "NativeJsonAdapter.CellDto.cs"));
 
         saveSource.Should().Contain("cell.Value,");
         saveSource.Should().NotContain("SerializeWithType(cell.Value)");
@@ -322,7 +322,7 @@ public sealed class NativeJsonAdapterPerformanceTests
         var dtoSource = File.ReadAllText(FindRepoFile(
             "src",
             "FreeX.Core.IO",
-            "NativeJsonAdapter.Dto.cs"));
+            "NativeJsonAdapter.CellDto.cs"));
 
         dtoSource.Should().Contain("ParsedValueType");
         dtoSource.Should().Contain("ReadValueTypeToken");
