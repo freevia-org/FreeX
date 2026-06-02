@@ -288,6 +288,64 @@ public sealed class GoToSpecialServiceTests
     }
 
     [Fact]
+    public void FindRuleBackedKinds_IndexedPathDeduplicatesOverlappingRangesInCellOrder()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 4));
+        GridRange[] ruleRanges =
+        [
+            Range(sheet, 4, 4, 4, 4),
+            Range(sheet, 3, 3, 3, 4),
+            Range(sheet, 2, 2, 3, 3),
+            Range(sheet, 1, 1, 1, 2),
+            Range(sheet, 2, 1, 4, 1),
+            Range(sheet, 4, 2, 4, 4),
+            Range(sheet, 1, 4, 2, 4),
+            Range(sheet, 2, 2, 2, 2)
+        ];
+        var expected = new[]
+        {
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 1, 4),
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 2, 4),
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 3, 2),
+            new CellAddress(sheet.Id, 3, 3),
+            new CellAddress(sheet.Id, 3, 4),
+            new CellAddress(sheet.Id, 4, 1),
+            new CellAddress(sheet.Id, 4, 2),
+            new CellAddress(sheet.Id, 4, 3),
+            new CellAddress(sheet.Id, 4, 4)
+        };
+
+        foreach (var ruleRange in ruleRanges)
+        {
+            sheet.ConditionalFormats.Add(new ConditionalFormat
+            {
+                AppliesTo = ruleRange,
+                RuleType = CfRuleType.Formula
+            });
+            sheet.DataValidations.Add(new DataValidation
+            {
+                AppliesTo = ruleRange,
+                Type = DvType.WholeNumber
+            });
+        }
+
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.ConditionalFormats)
+            .Should()
+            .Equal(expected);
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.DataValidation)
+            .Should()
+            .Equal(expected);
+    }
+
+    [Fact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_FindConditionalFormatsManyRules_ReportsTimingAndAllocatedBytes()
     {
@@ -387,6 +445,11 @@ public sealed class GoToSpecialServiceTests
 
     private static void Set(Sheet sheet, uint row, uint col, double value) =>
         sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(value));
+
+    private static GridRange Range(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
+        new(
+            new CellAddress(sheet.Id, startRow, startCol),
+            new CellAddress(sheet.Id, endRow, endCol));
 
     private static (int Count, TimeSpan Elapsed, long Allocated) MeasureFind(
         Func<IReadOnlyList<CellAddress>> find,
