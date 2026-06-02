@@ -822,6 +822,37 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonWorkbookViewAndScenarioEntries()
+    {
+        var workbook = new Workbook("NullWorkbookViewAndScenarioEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+        var validAddress = new CellAddress(sheet.Id, 1, 1);
+
+        workbook.CustomViews.Add(null!);
+        workbook.CustomViews.Add(new WorkbookCustomView("EmptySheets", null!));
+        workbook.Scenarios.Add(null!);
+        workbook.Scenarios.Add(new WorkbookScenario("NoChanges", null!));
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Kept",
+            [new ScenarioCellValue(validAddress, new TextValue("kept"))]));
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var customViewJson = document.RootElement
+            .GetProperty("CustomViews").EnumerateArray().Should().ContainSingle().Subject;
+        customViewJson.GetProperty("Name").GetString().Should().Be("EmptySheets");
+        customViewJson.GetProperty("Sheets").EnumerateArray().Should().BeEmpty();
+
+        var scenarioJson = document.RootElement
+            .GetProperty("Scenarios").EnumerateArray().Should().ContainSingle().Subject;
+        scenarioJson.GetProperty("Name").GetString().Should().Be("Kept");
+        scenarioJson.GetProperty("ChangingCells").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
+    }
+
+    [Fact]
     public void Save_DropsNullNativeJsonChartListEntries()
     {
         var workbook = new Workbook("NullChartListEntries");
