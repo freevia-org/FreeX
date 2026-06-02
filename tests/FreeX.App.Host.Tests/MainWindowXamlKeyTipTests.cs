@@ -1793,6 +1793,15 @@ public sealed class MainWindowXamlKeyTipTests
         button.Attribute("Width")?.Value.Should().Be("22");
         button.Attribute("Height")?.Value.Should().Be("22");
         button.Attribute("FontSize")?.Value.Should().Be("18");
+        var strokeDimensions = button
+            .Descendants(presentation + "Rectangle")
+            .Select(rectangle => (Width: rectangle.Attribute("Width")?.Value, Height: rectangle.Attribute("Height")?.Value))
+            .ToArray();
+        strokeDimensions.Should().Contain(("12", "2"));
+        if (buttonName == "StatusZoomInButton")
+        {
+            strokeDimensions.Should().Contain(("2", "12"));
+        }
     }
 
     [Fact]

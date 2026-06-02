@@ -91,7 +91,7 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
-    public void SheetTabViewport_LeavesTopInsetForChromeStroke()
+    public void SheetTabViewport_KeepsRuleFlushWithGridEdge()
     {
         StaTestRunner.Run(() =>
         {
@@ -119,8 +119,8 @@ public sealed class MainWindowSheetTabKeyboardTests
             var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
             var focusedTabBounds = BoundsRelativeToWindow(focusedTab, window);
 
-            scrollerBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the clipped viewport needs enough breathing room above tab text and focus visuals for the rounded stroke to render");
-            chromeBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the drawn tab chrome stroke should not start on the row's clipping edge");
+            scrollerBounds.Top.Should().BeLessThan(rowBounds.Top + 3.0, "the sheet-tab viewport should leave only the layout rounding needed for the tab chrome");
+            chromeBounds.Top.Should().BeApproximately(rowBounds.Top, 0.5, "the drawn tab chrome layer should start at the grid edge so the blue rule is visually flush");
             overlayBounds.Top.Should().BeApproximately(chromeBounds.Top, 0.25);
             scroller.ActualHeight.Should().BeGreaterThanOrEqualTo(32);
             rowBounds.Height.Should().BeGreaterThan(scroller.ActualHeight);
@@ -166,7 +166,7 @@ public sealed class MainWindowSheetTabKeyboardTests
                 .Where(button => button.ActualWidth > 0 && button.ActualHeight > 0)
                 .OrderBy(button => BoundsRelativeToWindow(button, window).Left)
                 .FirstOrDefault();
-            overlayBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the blue sheet-tab rule should not sit on the row's clipping edge");
+            overlayBounds.Top.Should().BeApproximately(rowBounds.Top, 0.5, "the blue sheet-tab rule layer should start at the grid edge without extra vertical space");
             horizontalScrollArrow.Should().NotBeNull("the worksheet horizontal scrollbar should expose a left arrow for alignment");
             visibleNavButtons.Should().HaveCount(
                 2,
@@ -180,7 +180,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             foreach (var button in visibleNavButtons)
             {
                 var buttonBounds = BoundsRelativeToWindow(button, window);
-                buttonBounds.Top.Should().BeApproximately(overlayBounds.Top + 5.0, 0.75, "sheet-tab nav buttons should start immediately below the internal blue rule");
+                buttonBounds.Top.Should().BeApproximately(overlayBounds.Top + 2.0, 0.75, "sheet-tab nav buttons should start immediately below the internal blue rule");
                 buttonBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5, "sheet-tab nav buttons should stay inside the sheet-tab row");
             }
 
@@ -188,7 +188,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             var horizontalScrollArrowBounds = BoundsRelativeToWindow(horizontalScrollArrow!, window);
             VerticalCenter(rightNavBounds)
                 .Should()
-                .BeApproximately(VerticalCenter(horizontalScrollArrowBounds), 1.5, "the sheet-tab right arrow should align with the worksheet scrollbar left arrow");
+                .BeApproximately(VerticalCenter(horizontalScrollArrowBounds), 0.75, "the sheet-tab right arrow should align with the worksheet scrollbar left arrow");
 
             CaptureSheetTabLowerBandIfRequested(window, row);
         });
@@ -221,7 +221,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             var addBounds = BoundsRelativeToWindow(addSheet, window);
             var focusedTabBounds = BoundsRelativeToWindow(focusedTab, window);
 
-            overlayBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the sheet-tab rule should not sit on the row clipping edge");
+            overlayBounds.Top.Should().BeApproximately(rowBounds.Top, 0.5, "the sheet-tab rule layer should be flush with the grid edge");
             focusedTabBounds.Top.Should().BeGreaterThanOrEqualTo(scrollerBounds.Top - 0.5);
             focusedTabBounds.Bottom.Should().BeLessThanOrEqualTo(scrollerBounds.Bottom + 0.5);
             addBounds.Top.Should().BeGreaterThanOrEqualTo(scrollerBounds.Top - 0.5);

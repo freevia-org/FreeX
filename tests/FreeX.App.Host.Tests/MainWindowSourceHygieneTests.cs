@@ -1785,10 +1785,12 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("CornerRadius=\"0,0,4,4\"");
         xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"3\"");
         xaml.Should().Contain("BorderBrush=\"Transparent\" BorderThickness=\"0\"");
-        xaml.Should().Contain("Width=\"18\" Height=\"22\"");
-        xaml.Should().Contain("Margin=\"0,9,0,0\"");
+        xaml.Should().Contain("Width=\"18\" Height=\"35\"");
+        xaml.Should().Contain("Margin=\"0,2,0,0\"");
+        xaml.Should().Contain("Margin=\"0\"");
+        xaml.Should().Contain("Padding=\"12,7,12,1\"");
         xaml.Should().NotContain("<TranslateTransform Y=\"-2\"/>");
-        xamlCodeBehind.Should().Contain("private const double SheetTabGridRuleTop = 4.5;");
+        xamlCodeBehind.Should().Contain("private const double SheetTabGridRuleTop = 1.0;");
         source.Should().NotContain("CreateSheetTabFillGeometry(active, top: -1.0)");
         xaml.Should().Contain("VerticalAlignment=\"Top\" VerticalContentAlignment=\"Center\"");
         xaml.Should().Contain("FontFamily=\"Segoe UI\"");

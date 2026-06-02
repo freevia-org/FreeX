@@ -3677,7 +3677,7 @@
                 <Border x:Name="SheetTabsLeadingSpacer" Grid.Column="0"
                         Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"
                         Height="32"
-                        Margin="0,4,0,0"
+                        Margin="0"
                         VerticalAlignment="Top"
                         Panel.ZIndex="4"
                         Background="{StaticResource FreeXSheetSurfaceBrush}"
@@ -3689,7 +3689,7 @@
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
                         Height="32"
-                        Margin="0,4,0,0"
+                        Margin="0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
                         Panel.ZIndex="1"
@@ -3697,10 +3697,10 @@
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="22" Padding="0"
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="35" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,9,0,0"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
@@ -3734,7 +3734,7 @@
                               Grid.ColumnSpan="4"
                               Height="32"
                               MinHeight="32"
-                              Margin="0,4,0,0"
+                              Margin="0"
                               Panel.ZIndex="3"
                               ClipToBounds="True"
                               HorizontalAlignment="Left"
@@ -3880,7 +3880,7 @@
                                             </Border.Style>
                                         </Border>
                                         <Border x:Name="TabBorder"
-                                                CornerRadius="0,0,4,4" Padding="12,3,12,1"
+                                                CornerRadius="0,0,4,4" Padding="12,7,12,1"
                                                 Margin="8,0,8,0"
                                                 Panel.ZIndex="2">
                                             <Border.Style>
@@ -4008,7 +4008,7 @@
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
                         Height="32"
-                        Margin="0,4,0,0"
+                        Margin="0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
                         Panel.ZIndex="6"
@@ -4017,10 +4017,10 @@
                         IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;"
-                        Width="18" Height="22" Padding="0"
+                        Width="18" Height="35" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,9,0,0"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
@@ -4138,15 +4138,22 @@
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="38"/>
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="StatusZoomOutButton" Grid.Column="0" Content="-" Width="22" Height="22"
+                    <Button x:Name="StatusZoomOutButton" Grid.Column="0" Width="22" Height="22"
                             Style="{StaticResource StatusBarZoomButtonStyle}"
-                            Foreground="White" FontSize="18" Padding="0"
+                            Foreground="White" FontSize="18" FontWeight="SemiBold" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomOut}"
                             AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_DecreaseWorksheetZoom}"
                             AutomationProperties.AutomationId="StatusZoomOutButton"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomOut}"
-                            local:RibbonTooltip.KeyTip="SZ" local:RibbonMetadata.CommandName="Zoom Out"/>
+                            local:RibbonTooltip.KeyTip="SZ" local:RibbonMetadata.CommandName="Zoom Out">
+                        <Grid Width="14" Height="14" SnapsToDevicePixels="True">
+                            <Rectangle Width="12" Height="2"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                        </Grid>
+                    </Button>
                     <Slider x:Name="ZoomSlider" Grid.Column="2" Width="120" Height="22" Minimum="0" Maximum="200" Value="100"
                             VerticalAlignment="Center" Margin="0"
                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomSlider}"
@@ -4155,15 +4162,26 @@
                             SmallChange="5" LargeChange="10"
                             TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
                             ValueChanged="ZoomSlider_ValueChanged"/>
-                    <Button x:Name="StatusZoomInButton" Grid.Column="4" Content="+" Width="22" Height="22"
+                    <Button x:Name="StatusZoomInButton" Grid.Column="4" Width="22" Height="22"
                             Style="{StaticResource StatusBarZoomButtonStyle}"
-                            Foreground="White" FontSize="18" Padding="0"
+                            Foreground="White" FontSize="18" FontWeight="SemiBold" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomIn}"
                             AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_IncreaseWorksheetZoom}"
                             AutomationProperties.AutomationId="StatusZoomInButton"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ZoomIn}"
-                            local:RibbonTooltip.KeyTip="SX" local:RibbonMetadata.CommandName="Zoom In"/>
+                            local:RibbonTooltip.KeyTip="SX" local:RibbonMetadata.CommandName="Zoom In">
+                        <Grid Width="14" Height="14" SnapsToDevicePixels="True">
+                            <Rectangle Width="12" Height="2"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                            <Rectangle Width="2" Height="12"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                        </Grid>
+                    </Button>
                     <TextBlock x:Name="StatusZoomText" Grid.Column="6" Text="100%" Foreground="White" FontSize="12"
                                VerticalAlignment="Center" Width="38" Focusable="True" Cursor="Hand"
                                ToolTip="{local:Loc Key=MainWindow_ToolTip_Zoom}"
