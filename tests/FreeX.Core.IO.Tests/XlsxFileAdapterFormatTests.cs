@@ -279,7 +279,7 @@ public sealed class XlsxFileAdapterFormatTests
         var snapshotSource = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
 
-        savePostProcessingSource.Should().Contain("XlsxSourcePackage.Capture(packageStream, workbook)");
+        savePostProcessingSource.Should().Contain("XlsxSourcePackage.Capture(packageStream, workbook, currentModelFingerprint)");
         savePostProcessingSource.Should().NotContain("refreshedPackageStream");
         savePostProcessingSource.Should().NotContain("packageStream.CopyTo(refreshedPackageStream)");
         snapshotSource.Should().Contain("public static XlsxSourcePackage Capture(Stream stream, Workbook workbook)");
