@@ -3976,6 +3976,26 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_WrapsTextTransformOutputWithXsltContext()
+    {
+        using var source = StreamFromString("<rows><row name=\"India\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="text" />
+              <xsl:template match="/rows">
+                <xsl:value-of select="row/@name" />
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*XSLT transform output*")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
     public void LoadTransformed_WrapsNonSpreadsheetMlOutputWithXsltContext()
     {
         using var source = StreamFromString("<rows/>");
