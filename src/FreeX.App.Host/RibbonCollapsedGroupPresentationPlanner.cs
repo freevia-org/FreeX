@@ -6,23 +6,41 @@ internal static class RibbonCollapsedGroupPresentationPlanner
 {
     public static IReadOnlyList<double> BreakpointThresholds { get; } = [700, 920];
 
+    private static readonly RibbonCollapsedGroupFootprint NormalFootprint = CreateCachedFootprint(
+        RibbonCollapsedGroupFootprintMode.Normal,
+        width: 64,
+        margin: new Thickness(1, 0, 3, 0),
+        padding: new Thickness(3, 2, 3, 2),
+        captionVisibility: Visibility.Visible,
+        captionMaxWidth: 60,
+        iconFontSize: 22);
+
+    private static readonly RibbonCollapsedGroupFootprint CompactFootprint = CreateCachedFootprint(
+        RibbonCollapsedGroupFootprintMode.Compact,
+        width: 52,
+        margin: new Thickness(0, 0, 2, 0),
+        padding: new Thickness(1, 2, 1, 2),
+        captionVisibility: Visibility.Visible,
+        captionMaxWidth: 48,
+        iconFontSize: 18);
+
+    private static readonly RibbonCollapsedGroupFootprint CaptionlessFootprint = CreateCachedFootprint(
+        RibbonCollapsedGroupFootprintMode.Captionless,
+        width: 52,
+        margin: new Thickness(0, 0, 2, 0),
+        padding: new Thickness(1, 2, 1, 2),
+        captionVisibility: Visibility.Collapsed,
+        captionMaxWidth: 48,
+        iconFontSize: 18);
+
     public static RibbonCollapsedGroupFootprint CreateFootprint(double availableWidth)
     {
-        var compact = availableWidth <= 920;
-        var captionless = availableWidth <= 700;
-        return new RibbonCollapsedGroupFootprint(
-            Mode: captionless
-                ? RibbonCollapsedGroupFootprintMode.Captionless
-                : compact
-                    ? RibbonCollapsedGroupFootprintMode.Compact
-                    : RibbonCollapsedGroupFootprintMode.Normal,
-            Width: compact ? 52 : 64,
-            Margin: compact ? new Thickness(0, 0, 2, 0) : new Thickness(1, 0, 3, 0),
-            Padding: compact ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2),
-            CaptionVisibility: captionless ? Visibility.Collapsed : Visibility.Visible,
-            CaptionFontSize: 12,
-            CaptionMaxWidth: compact ? 48 : 60,
-            IconFontSize: compact ? 18 : 22);
+        if (availableWidth <= 700)
+            return CaptionlessFootprint;
+
+        return availableWidth <= 920
+            ? CompactFootprint
+            : NormalFootprint;
     }
 
     public static double GetPlannedWidth(double measuredCollapsedWidth, double availableWidth)
@@ -38,6 +56,31 @@ internal static class RibbonCollapsedGroupPresentationPlanner
             RibbonCollapsedGroupFootprintMode.Compact => "compact",
             _ => "normal"
         };
+
+    private static RibbonCollapsedGroupFootprint CreateCachedFootprint(
+        RibbonCollapsedGroupFootprintMode mode,
+        double width,
+        Thickness margin,
+        Thickness padding,
+        Visibility captionVisibility,
+        double captionMaxWidth,
+        double iconFontSize) =>
+        new(
+            mode,
+            width,
+            margin,
+            padding,
+            captionVisibility,
+            12,
+            captionMaxWidth,
+            iconFontSize,
+            width,
+            margin,
+            padding,
+            captionVisibility,
+            12d,
+            captionMaxWidth,
+            iconFontSize);
 }
 
 internal readonly record struct RibbonCollapsedGroupFootprint(
@@ -48,7 +91,14 @@ internal readonly record struct RibbonCollapsedGroupFootprint(
     Visibility CaptionVisibility,
     double CaptionFontSize,
     double CaptionMaxWidth,
-    double IconFontSize);
+    double IconFontSize,
+    object BoxedWidth,
+    object BoxedMargin,
+    object BoxedPadding,
+    object BoxedCaptionVisibility,
+    object BoxedCaptionFontSize,
+    object BoxedCaptionMaxWidth,
+    object BoxedIconFontSize);
 
 public enum RibbonCollapsedGroupFootprintMode
 {

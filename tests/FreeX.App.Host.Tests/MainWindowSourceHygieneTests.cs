@@ -2420,7 +2420,10 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("UpdateCommentPreview(hitAddr.Value)");
         source.Should().Contain("ClearCommentPreview()");
         source.Should().Contain("CommentNavigationPlanner.FormatCellCommentPreview(");
-        source.Should().Contain("SheetGrid.ToolTip = preview");
+        source.Should().Contain("SetCommentPreview(preview)");
+        source.Should().Contain("private void ClearCommentPreview() => SetCommentPreview(null);");
+        source.Should().Contain("if (!Equals(SheetGrid.ToolTip, preview))");
+        source.Should().Contain("SheetGrid.ToolTip = preview;");
     }
 
     [Fact]
