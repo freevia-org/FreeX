@@ -14645,6 +14645,12 @@ public partial class FileAdapterSmokeTests
             style.Elements.Any(element =>
                 element.Type == "wholeTable" &&
                 element.DifferentialFormatId == 0));
+        loaded.StructuredTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreeXNativeTableStyle" &&
+            style.AppliesToTables &&
+            !style.AppliesToPivotTables &&
+            style.NativeXml != null &&
+            style.NativeXml.Contains("tableStyleElement", StringComparison.Ordinal));
         tableStyles.Elements(workbookNs + "tableStyle")
             .Any(element => element.Attribute("name")?.Value == "FreeXNativePivotStyle" &&
                             element.Attribute("pivot")?.Value == "1" &&
@@ -14751,6 +14757,57 @@ public partial class FileAdapterSmokeTests
         loaded.PivotTableStyles.Should().ContainSingle(style =>
             style.Name == "FreeXAuthoredPivotStyle" &&
             style.Elements.Count == 2);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesAuthoredStructuredTableStyleNativeXml()
+    {
+        var workbook = new Workbook("AuthoredStructuredTableStyleMetadataTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("table style"));
+        workbook.StructuredTableStyles.Add(new StructuredTableStyleModel
+        {
+            Name = "FreeXAuthoredTableStyle",
+            AppliesToTables = true,
+            AppliesToPivotTables = false,
+            NativeXml = """
+                <tableStyle xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="FreeXAuthoredTableStyle" pivot="0" table="1" count="1" customTableStyleAttr="kept">
+                  <tableStyleElement type="wholeTable" dxfId="0" customElementAttr="kept" />
+                </tableStyle>
+                """
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var tableStyle = stylesXml.Root!
+                .Element(workbookNs + "tableStyles")!
+                .Elements(workbookNs + "tableStyle")
+                .Where(element => element.Attribute("name")?.Value == "FreeXAuthoredTableStyle")
+                .Should().ContainSingle()
+                .Subject;
+            tableStyle.Attribute("pivot")!.Value.Should().Be("0");
+            tableStyle.Attribute("table")!.Value.Should().Be("1");
+            tableStyle.Attribute("count")!.Value.Should().Be("1");
+            tableStyle.Attribute("customTableStyleAttr")!.Value.Should().Be("kept");
+            tableStyle.Element(workbookNs + "tableStyleElement")!
+                .Attribute("customElementAttr")!
+                .Value
+                .Should()
+                .Be("kept");
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        loaded.StructuredTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreeXAuthoredTableStyle" &&
+            style.NativeXml != null &&
+            style.NativeXml.Contains("customElementAttr=\"kept\"", StringComparison.Ordinal));
     }
 
     [Fact]
