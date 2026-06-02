@@ -60,6 +60,8 @@ internal readonly record struct CfThresholdFormulaKey(
 
 internal enum CfThresholdFormulaSlot
 {
+    CellValue1,
+    CellValue2,
     ColorScaleMin,
     ColorScaleMid,
     ColorScaleMax,
@@ -194,7 +196,7 @@ internal static class ViewportConditionalFormatEvaluator
             {
                 conditionMet = cf.RuleType switch
                 {
-                    CfRuleType.CellValue => MatchesCellValue(cf, value),
+                    CfRuleType.CellValue => MatchesCellValue(cf, value, sheet, workbook, addr, cfContext),
                     CfRuleType.AboveAverage => MatchesAboveAverage(cf, value, cfContext.Aggregates),
                     CfRuleType.Formula => matchesFormula(cf, sheet, addr, workbook, cfContext),
                     CfRuleType.Top10 => MatchesTopBottom(cf, addr, cfContext.Aggregates),
@@ -444,6 +446,14 @@ internal static class ViewportConditionalFormatEvaluator
         Dictionary<CfThresholdFormulaKey, FormulaNode>? result = null;
         foreach (var cf in sheet.ConditionalFormats)
         {
+            if (cf.RuleType == CfRuleType.CellValue)
+            {
+                TryAddCellValueFormulaCache(ref result, cf, CfThresholdFormulaSlot.CellValue1, cf.Value1);
+                if (cf.Operator is CfOperator.Between or CfOperator.NotBetween)
+                    TryAddCellValueFormulaCache(ref result, cf, CfThresholdFormulaSlot.CellValue2, cf.Value2);
+                continue;
+            }
+
             if (cf.RuleType == CfRuleType.ColorScale)
             {
                 TryAddThresholdFormulaCache(ref result, cf, CfThresholdFormulaSlot.ColorScaleMin, -1, cf.MinThresholdType, cf.MinThresholdValue);
@@ -463,6 +473,26 @@ internal static class ViewportConditionalFormatEvaluator
         }
 
         return result ?? EmptyThresholdFormulas;
+    }
+
+    private static void TryAddCellValueFormulaCache(
+        ref Dictionary<CfThresholdFormulaKey, FormulaNode>? result,
+        ConditionalFormat cf,
+        CfThresholdFormulaSlot slot,
+        string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || TryParseDouble(text, out _))
+            return;
+
+        try
+        {
+            result ??= [];
+            result[new CfThresholdFormulaKey(cf, slot)] = ParseFormulaText(text);
+        }
+        catch
+        {
+            // Preserve literal text CF behavior: unparseable comparison values remain literal strings.
+        }
     }
 
     private static Dictionary<CfThresholdFormulaKey, double> PrecomputeStaticThresholdFormulaValues(
@@ -768,11 +798,28 @@ internal static class ViewportConditionalFormatEvaluator
         }
     }
 
-    private static bool MatchesCellValue(ConditionalFormat cf, ScalarValue value)
+    private static bool MatchesCellValue(
+        ConditionalFormat cf,
+        ScalarValue value,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress addr,
+        CfEvaluationContext cfContext)
     {
         if (TryGetDouble(value, out double d))
         {
-            if (!TryParseDouble(cf.Value1, out double v1)) return false;
+            if (!TryResolveCellValueNumericThreshold(
+                    cf,
+                    cf.Value1,
+                    CfThresholdFormulaSlot.CellValue1,
+                    sheet,
+                    workbook,
+                    addr,
+                    cfContext,
+                    out double v1))
+            {
+                return false;
+            }
 
             return cf.Operator switch
             {
@@ -782,8 +829,24 @@ internal static class ViewportConditionalFormatEvaluator
                 CfOperator.GreaterThanOrEqual => d >= v1,
                 CfOperator.LessThan => d < v1,
                 CfOperator.LessThanOrEqual => d <= v1,
-                CfOperator.Between => TryParseDouble(cf.Value2, out double v2) && d >= v1 && d <= v2,
-                CfOperator.NotBetween => TryParseDouble(cf.Value2, out double v2b) && !(d >= v1 && d <= v2b),
+                CfOperator.Between => TryResolveCellValueNumericThreshold(
+                    cf,
+                    cf.Value2,
+                    CfThresholdFormulaSlot.CellValue2,
+                    sheet,
+                    workbook,
+                    addr,
+                    cfContext,
+                    out double v2) && d >= v1 && d <= v2,
+                CfOperator.NotBetween => TryResolveCellValueNumericThreshold(
+                    cf,
+                    cf.Value2,
+                    CfThresholdFormulaSlot.CellValue2,
+                    sheet,
+                    workbook,
+                    addr,
+                    cfContext,
+                    out double v2b) && !(d >= v1 && d <= v2b),
                 _ => false
             };
         }
@@ -795,6 +858,245 @@ internal static class ViewportConditionalFormatEvaluator
             CfOperator.NotEqual => !string.Equals(s, cf.Value1, StringComparison.OrdinalIgnoreCase),
             _ => false
         };
+    }
+
+    private static bool TryResolveCellValueNumericThreshold(
+        ConditionalFormat cf,
+        string? text,
+        CfThresholdFormulaSlot slot,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress currentCell,
+        CfEvaluationContext cfContext,
+        out double value)
+    {
+        if (TryParseDouble(text, out value))
+            return true;
+
+        if (GetStaticThresholdFormulaValue(cfContext, cf, slot) is { } staticValue && double.IsFinite(staticValue))
+        {
+            value = staticValue;
+            return true;
+        }
+
+        if (!TryResolveCellValueScalarThreshold(cf, slot, sheet, workbook, currentCell, cfContext, out var scalar) ||
+            !TryGetDouble(scalar, out value) ||
+            !double.IsFinite(value))
+        {
+            value = 0;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryResolveCellValueScalarThreshold(
+        ConditionalFormat cf,
+        CfThresholdFormulaSlot slot,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress currentCell,
+        CfEvaluationContext cfContext,
+        out ScalarValue value)
+    {
+        if (GetStaticThresholdFormulaValue(cfContext, cf, slot) is { } staticValue && double.IsFinite(staticValue))
+        {
+            value = new NumberValue(staticValue);
+            return true;
+        }
+
+        var formulaAst = GetThresholdFormula(cfContext, cf, slot);
+        if (formulaAst is null)
+        {
+            value = BlankValue.Instance;
+            return false;
+        }
+
+        try
+        {
+            var shiftedAst = GetShiftedConditionalFormatFormula(formulaAst, cf.AppliesTo.Start, currentCell);
+            value = ThresholdFormulaEvaluator.Evaluate(shiftedAst, sheet, workbook, currentCell);
+            return value is not ErrorValue;
+        }
+        catch
+        {
+            value = BlankValue.Instance;
+            return false;
+        }
+    }
+
+    internal static FormulaNode GetShiftedConditionalFormatFormula(
+        FormulaNode ast,
+        CellAddress anchorCell,
+        CellAddress currentCell,
+        bool? hasRelativeReferences = null)
+    {
+        int dr = (int)currentCell.Row - (int)anchorCell.Row;
+        int dc = (int)currentCell.Col - (int)anchorCell.Col;
+        if ((dr == 0 && dc == 0) || !(hasRelativeReferences ?? HasRelativeReferences(ast)))
+            return ast;
+
+        return ShiftAst(ast, dr, dc);
+    }
+
+    private static FormulaNode ShiftAst(FormulaNode node, int dr, int dc)
+    {
+        return node switch
+        {
+            CellRefNode cr => ShiftCellRef(cr, dr, dc),
+            RangeRefNode rr => ShiftRangeRef(rr, dr, dc),
+            FullColumnRangeRefNode fcr => ShiftFullColumnRangeRef(fcr, dc),
+            FullRowRangeRefNode frr => ShiftFullRowRangeRef(frr, dr),
+            BinaryOpNode bin => ShiftBinaryOp(bin, dr, dc),
+            UnaryOpNode un => ShiftUnaryOp(un, dr, dc),
+            FunctionCallNode fn => ShiftFunctionCall(fn, dr, dc),
+            _ => node
+        };
+    }
+
+    private static FormulaNode ShiftBinaryOp(BinaryOpNode node, int dr, int dc)
+    {
+        var left = ShiftAst(node.Left, dr, dc);
+        var right = ShiftAst(node.Right, dr, dc);
+        return ReferenceEquals(left, node.Left) && ReferenceEquals(right, node.Right)
+            ? node
+            : node with { Left = left, Right = right };
+    }
+
+    private static FormulaNode ShiftUnaryOp(UnaryOpNode node, int dr, int dc)
+    {
+        var operand = ShiftAst(node.Operand, dr, dc);
+        return ReferenceEquals(operand, node.Operand)
+            ? node
+            : node with { Operand = operand };
+    }
+
+    private static FormulaNode ShiftFunctionCall(FunctionCallNode node, int dr, int dc)
+    {
+        List<FormulaNode>? shiftedArgs = null;
+        for (var i = 0; i < node.Arguments.Count; i++)
+        {
+            var original = node.Arguments[i];
+            var shifted = ShiftAst(original, dr, dc);
+            if (shiftedArgs is not null)
+            {
+                shiftedArgs.Add(shifted);
+                continue;
+            }
+
+            if (ReferenceEquals(shifted, original))
+                continue;
+
+            shiftedArgs = new List<FormulaNode>(node.Arguments.Count);
+            for (var j = 0; j < i; j++)
+                shiftedArgs.Add(node.Arguments[j]);
+            shiftedArgs.Add(shifted);
+        }
+
+        return shiftedArgs is null
+            ? node
+            : node with { Arguments = shiftedArgs };
+    }
+
+    private static FormulaNode ShiftRangeRef(RangeRefNode rr, int dr, int dc)
+    {
+        var start = ShiftCellRefOrError(rr.Start, dr, dc);
+        if (start is ErrorNode) return start;
+
+        var end = ShiftCellRefOrError(rr.End, dr, dc);
+        if (end is ErrorNode) return end;
+
+        if (ReferenceEquals(start, rr.Start) && ReferenceEquals(end, rr.End))
+            return rr;
+
+        return rr with
+        {
+            Start = (CellRefNode)start,
+            End = (CellRefNode)end
+        };
+    }
+
+    private static FormulaNode ShiftFullColumnRangeRef(FullColumnRangeRefNode range, int dc)
+    {
+        if (range.IsStartAbsolute && range.IsEndAbsolute)
+            return range;
+
+        var start = ShiftColumn(range.StartColumnNumber, range.IsStartAbsolute, dc);
+        if (!start.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        var end = ShiftColumn(range.EndColumnNumber, range.IsEndAbsolute, dc);
+        if (!end.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        var startName = range.IsStartAbsolute ? range.StartColumnName : CellAddress.NumberToColumnName(start.Value);
+        var endName = range.IsEndAbsolute ? range.EndColumnName : CellAddress.NumberToColumnName(end.Value);
+        if (startName == range.StartColumnName && endName == range.EndColumnName)
+            return range;
+
+        return range with
+        {
+            StartColumnName = startName,
+            EndColumnName = endName
+        };
+    }
+
+    private static FormulaNode ShiftFullRowRangeRef(FullRowRangeRefNode range, int dr)
+    {
+        if (range.IsStartAbsolute && range.IsEndAbsolute)
+            return range;
+
+        var start = ShiftRow(range.StartRow, range.IsStartAbsolute, dr);
+        if (!start.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        var end = ShiftRow(range.EndRow, range.IsEndAbsolute, dr);
+        if (!end.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        if (start.Value == range.StartRow && end.Value == range.EndRow)
+            return range;
+
+        return range with
+        {
+            StartRow = start.Value,
+            EndRow = end.Value
+        };
+    }
+
+    private static FormulaNode ShiftCellRef(CellRefNode cr, int dr, int dc) =>
+        ShiftCellRefOrError(cr, dr, dc);
+
+    private static FormulaNode ShiftCellRefOrError(CellRefNode cr, int dr, int dc)
+    {
+        if (cr.IsRowAbsolute && cr.IsColAbsolute)
+            return cr;
+
+        var newRow = ShiftRow(cr.Row, cr.IsRowAbsolute, dr);
+        if (!newRow.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        var newColNum = ShiftColumn(cr.ColumnNumber, cr.IsColAbsolute, dc);
+        if (!newColNum.HasValue) return new ErrorNode(ErrorValue.Ref);
+
+        var newColName = cr.IsColAbsolute ? cr.ColumnName : CellAddress.NumberToColumnName(newColNum.Value);
+        if (newRow.Value == cr.Row && newColName == cr.ColumnName)
+            return cr;
+
+        return cr with { Row = newRow.Value, ColumnName = newColName };
+    }
+
+    internal static uint? ShiftRow(uint row, bool isAbsolute, int dr)
+    {
+        if (isAbsolute)
+            return row;
+
+        var shifted = (long)row + dr;
+        return shifted is < 1 or > CellAddress.MaxRow ? null : (uint)shifted;
+    }
+
+    internal static uint? ShiftColumn(uint col, bool isAbsolute, int dc)
+    {
+        if (isAbsolute)
+            return col;
+
+        var shifted = (long)col + dc;
+        return shifted is < 1 or > CellAddress.MaxCol ? null : (uint)shifted;
     }
 
     private static bool MatchesAboveAverage(

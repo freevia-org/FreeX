@@ -42,7 +42,7 @@ public static partial class DataValidationService
         return ValidateList(dv, value);
     }
 
-    private static IReadOnlyCollection<string> ResolveListValues(string formulaText, Sheet sheet, Workbook? workbook)
+    private static IReadOnlyList<string> ResolveListValues(string formulaText, Sheet sheet, Workbook? workbook)
     {
         var source = formulaText.Trim();
         if (source.StartsWith('='))
@@ -61,7 +61,7 @@ public static partial class DataValidationService
         return ParseInlineListItems(formulaText);
     }
 
-    private static IReadOnlyCollection<string> ParseInlineListItems(string text)
+    private static IReadOnlyList<string> ParseInlineListItems(string text)
     {
         var items = new List<string>();
         var current = new System.Text.StringBuilder();
@@ -101,9 +101,12 @@ public static partial class DataValidationService
         string formulaText,
         Sheet sheet,
         Workbook? workbook,
-        out IReadOnlyCollection<string> values)
+        out IReadOnlyList<string> values)
     {
         values = Array.Empty<string>();
+
+        if (TryReadSimpleSameSheetRangeSource(formulaText, sheet, out values))
+            return true;
 
         try
         {
@@ -143,6 +146,41 @@ public static partial class DataValidationService
         {
             return false;
         }
+    }
+
+    private static bool TryReadSimpleSameSheetRangeSource(
+        string formulaText,
+        Sheet sheet,
+        out IReadOnlyList<string> values)
+    {
+        values = Array.Empty<string>();
+
+        var source = formulaText.AsSpan().Trim();
+        if (source.IsEmpty || source[0] != '=')
+            return false;
+
+        source = source[1..].Trim();
+        if (source.IndexOf('!') >= 0)
+            return false;
+
+        var colon = source.IndexOf(':');
+        if (colon < 0)
+        {
+            if (!TryParseA1Cell(source, sheet.Id, out var cell))
+                return false;
+
+            values = ReadRangeValues(sheet, cell.Row, cell.Col, cell.Row, cell.Col);
+            return true;
+        }
+
+        if (!TryParseA1Cell(source[..colon], sheet.Id, out var start) ||
+            !TryParseA1Cell(source[(colon + 1)..], sheet.Id, out var end))
+        {
+            return false;
+        }
+
+        values = ReadRangeValues(sheet, start.Row, start.Col, end.Row, end.Col);
+        return true;
     }
 
     private static bool TryValidateRangeOrNamedSource(
@@ -391,7 +429,7 @@ public static partial class DataValidationService
     private static bool CouldMatchMissingBlankCell(string textValue) =>
         string.Equals(textValue, MissingBlankCellText, StringComparison.OrdinalIgnoreCase);
 
-    private static IReadOnlyCollection<string> ReadRangeValues(
+    private static IReadOnlyList<string> ReadRangeValues(
         Sheet sheet,
         uint firstRow,
         uint firstCol,
@@ -402,7 +440,10 @@ public static partial class DataValidationService
         var endRow = Math.Max(firstRow, lastRow);
         var startCol = Math.Min(firstCol, lastCol);
         var endCol = Math.Max(firstCol, lastCol);
-        var list = new List<string>();
+        var cellCount = (ulong)(endRow - startRow + 1) * (endCol - startCol + 1);
+        var list = cellCount <= int.MaxValue
+            ? new List<string>((int)cellCount)
+            : [];
 
         for (var row = startRow; row <= endRow; row++)
         {

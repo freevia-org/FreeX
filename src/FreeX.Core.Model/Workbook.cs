@@ -119,6 +119,9 @@ public sealed class Workbook
     /// <summary>Custom PivotTable style metadata loaded from XLSX stylesheet tableStyle definitions.</summary>
     public List<PivotTableStyleModel> PivotTableStyles { get; } = [];
 
+    /// <summary>Custom structured-table style metadata loaded from XLSX stylesheet tableStyle definitions.</summary>
+    public List<StructuredTableStyleModel> StructuredTableStyles { get; } = [];
+
     /// <summary>Workbook number-format catalog entries keyed by XLSX numFmtId.</summary>
     public Dictionary<int, string> NumberFormatCatalog { get; } = [];
 

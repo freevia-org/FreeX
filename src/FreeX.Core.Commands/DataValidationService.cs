@@ -242,7 +242,7 @@ public static partial class DataValidationService
         if (dv.Type != DvType.List || !dv.ShowDropdown || string.IsNullOrWhiteSpace(dv.Formula1))
             return Array.Empty<string>();
 
-        return ResolveListValues(dv.Formula1, sheet, workbook).ToArray();
+        return ResolveListValues(dv.Formula1, sheet, workbook);
     }
 
     public static string FormatListSourceRange(GridRange range, string? sheetName = null)
