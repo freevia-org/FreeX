@@ -168,17 +168,17 @@ public sealed record WorkbookTheme(
             if (formatScheme.Name != drawingNs + "fmtScheme")
                 return null;
 
-            var outerShadow = formatScheme
+            var shadowEffect = formatScheme
                 .Element(drawingNs + "effectStyleLst")?
                 .Elements(drawingNs + "effectStyle")
-                .Select(effectStyle => FindOuterShadow(effectStyle, drawingNs))
+                .Select(effectStyle => FindThemeShadow(effectStyle, drawingNs))
                 .FirstOrDefault(shadow => shadow is not null);
-            if (outerShadow is null)
+            if (shadowEffect is null)
                 return null;
 
-            var opacity = ReadShadowOpacity(outerShadow, drawingNs);
-            var distancePixels = ReadPositiveCoordinatePixels(outerShadow.Attribute("dist")?.Value);
-            var directionRadians = ReadAngleRadians(outerShadow.Attribute("dir")?.Value);
+            var opacity = ReadShadowOpacity(shadowEffect, drawingNs);
+            var distancePixels = ReadPositiveCoordinatePixels(shadowEffect.Attribute("dist")?.Value);
+            var directionRadians = ReadAngleRadians(shadowEffect.Attribute("dir")?.Value);
             var offsetX = CleanZero(Math.Round(Math.Cos(directionRadians) * distancePixels, 3));
             var offsetY = CleanZero(Math.Round(Math.Sin(directionRadians) * distancePixels, 3));
 
@@ -190,14 +190,19 @@ public sealed record WorkbookTheme(
         }
     }
 
-    private static XElement? FindOuterShadow(XElement effectStyle, XNamespace drawingNs) =>
+    private static XElement? FindThemeShadow(XElement effectStyle, XNamespace drawingNs) =>
         effectStyle
             .Element(drawingNs + "effectLst")?
-            .Element(drawingNs + "outerShdw")
+            .Elements()
+            .FirstOrDefault(effect => IsThemeShadow(effect, drawingNs))
         ?? effectStyle
             .Element(drawingNs + "effectDag")?
-            .Descendants(drawingNs + "outerShdw")
-            .FirstOrDefault();
+            .Descendants()
+            .FirstOrDefault(effect => IsThemeShadow(effect, drawingNs));
+
+    private static bool IsThemeShadow(XElement effect, XNamespace drawingNs) =>
+        effect.Name == drawingNs + "outerShdw" ||
+        effect.Name == drawingNs + "prstShdw";
 
     private static double ReadShadowOpacity(XElement outerShadow, XNamespace drawingNs)
     {
