@@ -31,11 +31,14 @@ internal static class QuickAccessToolbarCommandIds
     public const string DataValidation = "DataValidation";
     public const string NameManager = "NameManager";
     public const string Spelling = "Spelling";
+    public const string CheckAccessibility = "CheckAccessibility";
+    public const string ShareWorkbook = "ShareWorkbook";
     public const string Zoom100 = "Zoom100";
     public const string ZoomSelection = "ZoomSelection";
     public const string FreezePanes = "FreezePanes";
     public const string InsertSheet = "InsertSheet";
     public const string FindSelect = "FindSelect";
+    public const string SelectionPane = "SelectionPane";
 }
 
 internal sealed record QuickAccessToolbarCommandDefinition(
@@ -86,11 +89,14 @@ internal static class QuickAccessToolbarCatalog
         new(QuickAccessToolbarCommandIds.DataValidation, "Data Validation", "MainWindow_TooltipTitle_DataValidation", "MainWindow_TooltipDescription_ControlWhatDataCanBeEnteredInTheSelectedCells", RibbonCommandIconKind.Warning, "DataValidationQatBtn"),
         new(QuickAccessToolbarCommandIds.NameManager, "Name Manager", "MainWindow_TooltipTitle_NameManager", "MainWindow_TooltipDescription_ViewCreateEditAndDeleteAllNamedRangesInTheWorkbook", RibbonCommandIconKind.Label, "NameManagerQatBtn"),
         new(QuickAccessToolbarCommandIds.Spelling, "Spelling", "MainWindow_TooltipTitle_Spelling", "MainWindow_TooltipDescription_FindKnownMisspellingsInTextCellsOnTheActiveSheetWithReplaceReplaceAllAnd_D58B6767", RibbonCommandIconKind.Spelling, "SpellingQatBtn"),
+        new(QuickAccessToolbarCommandIds.CheckAccessibility, "Check Accessibility", "MainWindow_TooltipTitle_CheckAccessibility", "MainWindow_TooltipDescription_FindMergedCellsBlankTableHeadersObjectsMissingAlternateTextAndChartsWith_4FECDB20", RibbonCommandIconKind.Accessibility, "CheckAccessibilityQatBtn"),
+        new(QuickAccessToolbarCommandIds.ShareWorkbook, "Share Workbook", "MainWindow_TooltipTitle_ShareWorkbook", "MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile", RibbonCommandIconKind.Share, "ShareWorkbookQatBtn"),
         new(QuickAccessToolbarCommandIds.Zoom100, "100% Zoom", "MainWindow_TooltipTitle_Zoom100", "MainWindow_TooltipDescription_ResetTheZoomLevelTo100", RibbonCommandIconKind.Zoom, "Zoom100QatBtn"),
         new(QuickAccessToolbarCommandIds.ZoomSelection, "Zoom to Selection", "MainWindow_TooltipTitle_ZoomToSelection", "MainWindow_TooltipDescription_ZoomTheSelectedRangeToFitTheWindow", RibbonCommandIconKind.Zoom, "ZoomSelectionQatBtn"),
         new(QuickAccessToolbarCommandIds.FreezePanes, "Freeze Panes", "MainWindow_TooltipTitle_FreezePanes", "MainWindow_TooltipDescription_KeepRowsOrColumnsVisibleWhileScrollingCreatingFrozenPanesClearsSplitPane_D77EB1E0", RibbonCommandIconKind.Freeze, "FreezePanesQatBtn"),
         new(QuickAccessToolbarCommandIds.InsertSheet, "Insert Sheet", "MainWindow_TooltipTitle_InsertSheet", "MainWindow_TooltipDescription_AddANewSheetToTheWorkbook", RibbonCommandIconKind.Insert, "InsertSheetQatBtn"),
-        new(QuickAccessToolbarCommandIds.FindSelect, "Find & Select", "MainWindow_TooltipTitle_FindSelect", "MainWindow_TooltipDescription_FindReplaceOrGoToSpecificCellsInTheWorkbook", RibbonCommandIconKind.Search, "FindSelectQatBtn")
+        new(QuickAccessToolbarCommandIds.FindSelect, "Find & Select", "MainWindow_TooltipTitle_FindSelect", "MainWindow_TooltipDescription_FindReplaceOrGoToSpecificCellsInTheWorkbook", RibbonCommandIconKind.Search, "FindSelectQatBtn"),
+        new(QuickAccessToolbarCommandIds.SelectionPane, "Selection Pane", "MainWindow_TooltipTitle_SelectionPane", "MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder", RibbonCommandIconKind.List, "SelectionPaneQatBtn")
     ];
 
     private static readonly IReadOnlyDictionary<string, QuickAccessToolbarCommandDefinition> ById =
