@@ -120,7 +120,7 @@ public sealed partial class XlsxFileAdapter
         if (featurePlan.HasIgnoredFormulaErrors)
         {
             packageStream.Position = 0;
-            XlsxWorksheetDiagnosticsMapper.SaveIgnoredErrors(packageStream, workbook);
+            XlsxWorksheetDiagnosticsMapper.SaveIgnoredErrors(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.WatchedCells.Count > 0)
