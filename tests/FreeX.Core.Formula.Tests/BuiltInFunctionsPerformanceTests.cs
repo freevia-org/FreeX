@@ -161,4 +161,35 @@ public sealed class BuiltInFunctionsPerformanceTests
             80_000,
             "scalar-rate NPV should stream direct value ranges instead of materializing RangeValue arrays");
     }
+
+    [Fact]
+    public void Irr_LargeCashFlowRangeAvoidsRangeMaterializationChurn()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(-10_000d));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(3_000d));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(4_000d));
+        sheet.SetCell(new CellAddress(sheet.Id, 20_000, 1), new NumberValue(5_000d));
+
+        evaluator.Evaluate("=IRR(A1:A20000)", sheet)
+            .Should().BeOfType<NumberValue>();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate("=IRR(A1:A20000)", sheet);
+        stopwatch.Stop();
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        result.Should().BeOfType<NumberValue>();
+        _output.WriteLine(
+            $"IRR large cash-flow range elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(
+            40_000,
+            "IRR should collect direct value ranges without materializing RangeValue arrays");
+    }
 }

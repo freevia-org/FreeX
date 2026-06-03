@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -20,6 +21,8 @@ public sealed record NativeVisualFilters(
 
 public static class SlicerTimelinePlanner
 {
+    private static readonly ConditionalWeakTable<Sheet, ActivePivotNameSetCache> ActivePivotNameSets = new();
+
     public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer, IEnumerable<string> sourceItems)
     {
         var selected = slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
@@ -113,7 +116,7 @@ public static class SlicerTimelinePlanner
         {
             if (slicer.DrawingAnchor is not null && IsConnectedToPivotOnSheet(slicer.SourcePivotTableName, activePivotNames))
             {
-                visible ??= new List<SlicerModel>();
+                visible ??= new List<SlicerModel>(slicers.Count);
                 visible.Add(slicer);
             }
         }
@@ -130,7 +133,7 @@ public static class SlicerTimelinePlanner
         {
             if (timeline.DrawingAnchor is not null && IsConnectedToPivotOnSheet(timeline.SourcePivotTableName, activePivotNames))
             {
-                visible ??= new List<TimelineModel>();
+                visible ??= new List<TimelineModel>(timelines.Count);
                 visible.Add(timeline);
             }
         }
@@ -138,18 +141,56 @@ public static class SlicerTimelinePlanner
         return visible is null ? Array.Empty<TimelineModel>() : visible;
     }
 
-    private static HashSet<string> BuildActivePivotNameSet(Sheet activeSheet)
+    private static IReadOnlySet<string> BuildActivePivotNameSet(Sheet activeSheet)
     {
-        var pivotNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pivot in activeSheet.PivotTables)
-        {
-            if (!string.IsNullOrWhiteSpace(pivot.Name))
-                pivotNames.Add(pivot.Name);
-        }
-
-        return pivotNames;
+        var cache = ActivePivotNameSets.GetValue(activeSheet, static _ => new ActivePivotNameSetCache());
+        return cache.GetOrCreate(activeSheet.PivotTables);
     }
 
     private static bool IsConnectedToPivotOnSheet(string? pivotTableName, IReadOnlySet<string> activePivotNames) =>
         !string.IsNullOrWhiteSpace(pivotTableName) && activePivotNames.Contains(pivotTableName);
+
+    private sealed class ActivePivotNameSetCache
+    {
+        private readonly object _sync = new();
+        private string?[] _names = [];
+        private HashSet<string> _nameSet = new(StringComparer.OrdinalIgnoreCase);
+
+        public IReadOnlySet<string> GetOrCreate(IReadOnlyList<PivotTableModel> pivotTables)
+        {
+            lock (_sync)
+            {
+                if (Matches(pivotTables))
+                    return _nameSet;
+
+                var names = new string?[pivotTables.Count];
+                var nameSet = new HashSet<string>(pivotTables.Count, StringComparer.OrdinalIgnoreCase);
+                for (var index = 0; index < pivotTables.Count; index++)
+                {
+                    var name = pivotTables[index].Name;
+                    names[index] = name;
+                    if (!string.IsNullOrWhiteSpace(name))
+                        nameSet.Add(name);
+                }
+
+                _names = names;
+                _nameSet = nameSet;
+                return _nameSet;
+            }
+        }
+
+        private bool Matches(IReadOnlyList<PivotTableModel> pivotTables)
+        {
+            if (_names.Length != pivotTables.Count)
+                return false;
+
+            for (var index = 0; index < _names.Length; index++)
+            {
+                if (!string.Equals(_names[index], pivotTables[index].Name, StringComparison.Ordinal))
+                    return false;
+            }
+
+            return true;
+        }
+    }
 }
