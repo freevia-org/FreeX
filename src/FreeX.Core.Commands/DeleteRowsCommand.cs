@@ -10,8 +10,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly uint _startRow;
     private readonly uint _count;
-    private List<(CellAddress Addr, Cell Cell)>? _deletedSnapshot;
-    private List<(CellAddress Addr, Cell Snapshot)>? _shiftedSnapshot;
+    private List<CellStateSnapshot>? _deletedSnapshot;
+    private List<CellStateSnapshot>? _shiftedSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private HashSet<uint>? _hiddenRowsSnapshot;
@@ -50,8 +50,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         (_deletedSnapshot, _shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endRow);
 
-        foreach (var (addr, _) in _deletedSnapshot)
-            sheet.ClearCell(addr);
+        foreach (var snapshot in _deletedSnapshot)
+            sheet.ClearCell(snapshot.Address);
 
         MoveCellsForDelete(sheet, _shiftedSnapshot, _count);
 
@@ -131,14 +131,14 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
-        foreach (var (addr, _) in _shiftedSnapshot)
-            sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row - _count, addr.Col));
+        foreach (var snapshot in _shiftedSnapshot)
+            sheet.ClearCell(new CellAddress(snapshot.Address.Sheet, snapshot.Address.Row - _count, snapshot.Address.Col));
 
-        foreach (var (addr, snapshot) in _shiftedSnapshot)
-            sheet.SetCell(addr, snapshot.Clone());
+        foreach (var snapshot in _shiftedSnapshot)
+            sheet.SetCell(snapshot.Address, snapshot.ToCell());
 
-        foreach (var (addr, cell) in _deletedSnapshot)
-            sheet.SetCell(addr, cell.Clone());
+        foreach (var snapshot in _deletedSnapshot)
+            sheet.SetCell(snapshot.Address, snapshot.ToCell());
 
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
@@ -159,23 +159,23 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 
-    private (List<(CellAddress Addr, Cell Cell)> Deleted, List<(CellAddress Addr, Cell Snapshot)> Shifted)
+    private (List<CellStateSnapshot> Deleted, List<CellStateSnapshot> Shifted)
         CaptureDeletedAndShiftedCells(Sheet sheet, uint endRow)
     {
-        var deleted = new List<(CellAddress Addr, Cell Cell)>();
-        var shifted = new List<(CellAddress Addr, Cell Snapshot)>(sheet.CellCount);
+        var deleted = new List<CellStateSnapshot>();
+        var shifted = new List<CellStateSnapshot>(sheet.CellCount);
 
         foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
         {
             if (row > endRow)
             {
                 var addr = new CellAddress(sheet.Id, row, col);
-                shifted.Add((addr, cell.Clone()));
+                shifted.Add(CellStateSnapshot.Capture(addr, cell));
             }
             else if (row >= _startRow)
             {
                 var addr = new CellAddress(sheet.Id, row, col);
-                deleted.Add((addr, cell.Clone()));
+                deleted.Add(CellStateSnapshot.Capture(addr, cell));
             }
         }
 
@@ -184,7 +184,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
     private static void MoveCellsForDelete(
         Sheet sheet,
-        IReadOnlyList<(CellAddress Addr, Cell Snapshot)> shiftedCells,
+        IReadOnlyList<CellStateSnapshot> shiftedCells,
         uint count)
     {
         if (shiftedCells.Count == 0)
@@ -194,14 +194,14 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         try
         {
             for (var i = 0; i < shiftedCells.Count; i++)
-                originals[i] = sheet.GetCell(shiftedCells[i].Addr)!;
+                originals[i] = sheet.GetCell(shiftedCells[i].Address)!;
 
             for (var i = 0; i < shiftedCells.Count; i++)
-                sheet.ClearCell(shiftedCells[i].Addr);
+                sheet.ClearCell(shiftedCells[i].Address);
 
             for (var i = 0; i < shiftedCells.Count; i++)
             {
-                var addr = shiftedCells[i].Addr;
+                var addr = shiftedCells[i].Address;
                 sheet.SetCell(new CellAddress(addr.Sheet, addr.Row - count, addr.Col), originals[i]);
             }
         }
