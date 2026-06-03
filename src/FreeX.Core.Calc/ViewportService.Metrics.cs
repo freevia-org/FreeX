@@ -7,7 +7,7 @@ public sealed partial class ViewportService
     private static bool IsRowHidden(Sheet sheet, uint row) =>
         sheet.IsRowEffectivelyHidden(row);
 
-    private static List<RowMetric> BuildFrozenAwareRowMetrics(Sheet sheet, uint startRow, double availableHeight)
+    private static IReadOnlyList<RowMetric> BuildFrozenAwareRowMetrics(Sheet sheet, uint startRow, double availableHeight)
     {
         var frozenRows = Math.Min(sheet.FrozenRows, CellAddress.MaxRow);
         if (frozenRows == 0)
@@ -26,7 +26,7 @@ public sealed partial class ViewportService
             pinnedHeight);
     }
 
-    private static List<ColMetric> BuildFrozenAwareColMetrics(Sheet sheet, uint startCol, double availableWidth)
+    private static IReadOnlyList<ColMetric> BuildFrozenAwareColMetrics(Sheet sheet, uint startCol, double availableWidth)
     {
         var frozenCols = Math.Min(sheet.FrozenCols, CellAddress.MaxCol);
         if (frozenCols == 0)
@@ -48,8 +48,8 @@ public sealed partial class ViewportService
     private static double SumRowHeights(IReadOnlyList<RowMetric> rows)
     {
         double height = 0;
-        foreach (var row in rows)
-            height += row.Height;
+        for (var i = 0; i < rows.Count; i++)
+            height += rows[i].Height;
 
         return height;
     }
@@ -57,8 +57,8 @@ public sealed partial class ViewportService
     private static double SumColumnWidths(IReadOnlyList<ColMetric> columns)
     {
         double width = 0;
-        foreach (var column in columns)
-            width += column.Width;
+        for (var i = 0; i < columns.Count; i++)
+            width += columns[i].Width;
 
         return width;
     }
@@ -70,8 +70,11 @@ public sealed partial class ViewportService
     {
         var combined = new List<RowMetric>(pinnedRows.Count + bodyRows.Count);
         combined.AddRange(pinnedRows);
-        foreach (var row in bodyRows)
+        for (var i = 0; i < bodyRows.Count; i++)
+        {
+            var row = bodyRows[i];
             combined.Add(row with { TopOffset = row.TopOffset + bodyTopOffset });
+        }
 
         return combined;
     }
@@ -83,13 +86,16 @@ public sealed partial class ViewportService
     {
         var combined = new List<ColMetric>(pinnedColumns.Count + bodyColumns.Count);
         combined.AddRange(pinnedColumns);
-        foreach (var column in bodyColumns)
+        for (var i = 0; i < bodyColumns.Count; i++)
+        {
+            var column = bodyColumns[i];
             combined.Add(column with { LeftOffset = column.LeftOffset + bodyLeftOffset });
+        }
 
         return combined;
     }
 
-    private static List<RowMetric> BuildRowMetrics(Sheet sheet, uint startRow, uint endRow, double availableHeight)
+    private static IReadOnlyList<RowMetric> BuildRowMetrics(Sheet sheet, uint startRow, uint endRow, double availableHeight)
     {
         if (startRow < 1 || endRow < startRow)
             return [];
@@ -98,6 +104,9 @@ public sealed partial class ViewportService
         var terminalRows = BuildTerminalRowMetrics(sheet, startRow, maxRow, availableHeight);
         if (terminalRows is not null)
             return terminalRows;
+
+        if (TryCreateDefaultRowMetrics(sheet, startRow, maxRow, availableHeight) is { } defaultRows)
+            return defaultRows;
 
         var rowMetrics = new List<RowMetric>(EstimateMetricCapacity(sheet.DefaultRowHeight, availableHeight));
         double topOffset = 0;
@@ -113,7 +122,7 @@ public sealed partial class ViewportService
         return rowMetrics;
     }
 
-    private static List<ColMetric> BuildColMetrics(Sheet sheet, uint startCol, uint endCol, double availableWidth)
+    private static IReadOnlyList<ColMetric> BuildColMetrics(Sheet sheet, uint startCol, uint endCol, double availableWidth)
     {
         if (startCol < 1 || endCol < startCol)
             return [];
@@ -124,6 +133,9 @@ public sealed partial class ViewportService
             return terminalColumns;
 
         var defaultColumnWidth = Math.Max(1, sheet.DefaultColumnWidth * 8);
+        if (TryCreateDefaultColMetrics(sheet, startCol, maxCol, availableWidth, defaultColumnWidth) is { } defaultColumns)
+            return defaultColumns;
+
         var colMetrics = new List<ColMetric>(EstimateMetricCapacity(defaultColumnWidth, availableWidth));
         double leftOffset = 0;
         for (uint col = startCol; col <= maxCol; col++)
@@ -136,6 +148,72 @@ public sealed partial class ViewportService
         }
 
         return colMetrics;
+    }
+
+    private static IReadOnlyList<RowMetric>? TryCreateDefaultRowMetrics(
+        Sheet sheet,
+        uint startRow,
+        uint endRow,
+        double availableHeight)
+    {
+        if (sheet.RowHeights.Count != 0 ||
+            sheet.HiddenRows.Count != 0 ||
+            sheet.FilterHiddenRows.Count != 0 ||
+            sheet.GroupHiddenRows.Count != 0 ||
+            sheet.DefaultRowHeight <= 0)
+        {
+            return null;
+        }
+
+        var count = CalculateDefaultMetricCount(startRow, endRow, availableHeight, sheet.DefaultRowHeight);
+        return count == 0 ? [] : new DefaultRowMetricList(startRow, count, sheet.DefaultRowHeight);
+    }
+
+    private static IReadOnlyList<ColMetric>? TryCreateDefaultColMetrics(
+        Sheet sheet,
+        uint startCol,
+        uint endCol,
+        double availableWidth,
+        double defaultColumnWidth)
+    {
+        if (sheet.ColumnWidths.Count != 0 ||
+            sheet.HiddenCols.Count != 0 ||
+            sheet.GroupHiddenCols.Count != 0)
+        {
+            return null;
+        }
+
+        var count = CalculateDefaultMetricCount(startCol, endCol, availableWidth, defaultColumnWidth);
+        return count == 0 ? [] : new DefaultColMetricList(startCol, count, defaultColumnWidth);
+    }
+
+    private static int CalculateDefaultMetricCount(
+        uint start,
+        uint end,
+        double availableExtent,
+        double defaultExtent)
+    {
+        if (start < 1 || end < start)
+            return 0;
+
+        var maxCount = (long)end - start + 1;
+        if (availableExtent <= 0)
+            return 1;
+
+        if (!double.IsFinite(availableExtent))
+            return (int)maxCount;
+
+        var estimate = Math.Floor(availableExtent / defaultExtent) + 1;
+        if (!double.IsFinite(estimate) || estimate >= maxCount)
+            return (int)maxCount;
+
+        var visibleCount = (long)estimate;
+        if (visibleCount < 1)
+            visibleCount = 1;
+        if (visibleCount > maxCount)
+            visibleCount = maxCount;
+
+        return (int)visibleCount;
     }
 
     private static int EstimateMetricCapacity(double defaultExtent, double availableExtent)
@@ -286,5 +364,75 @@ public sealed partial class ViewportService
         var firstTerminalColumn = CellAddress.MaxCol - (uint)visibleColumnCount + 1;
         var terminalThreshold = firstTerminalColumn > 1 ? firstTerminalColumn - 1 : 1;
         return requestedStartCol < terminalThreshold;
+    }
+
+    private sealed class DefaultRowMetricList : IReadOnlyList<RowMetric>
+    {
+        private readonly uint _startRow;
+        private readonly int _count;
+        private readonly double _height;
+
+        public DefaultRowMetricList(uint startRow, int count, double height)
+        {
+            _startRow = startRow;
+            _count = count;
+            _height = height;
+        }
+
+        public int Count => _count;
+
+        public RowMetric this[int index]
+        {
+            get
+            {
+                if ((uint)index >= (uint)_count)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
+                return new RowMetric(_startRow + (uint)index, _height, index * _height);
+            }
+        }
+
+        public IEnumerator<RowMetric> GetEnumerator()
+        {
+            for (var i = 0; i < _count; i++)
+                yield return this[i];
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    private sealed class DefaultColMetricList : IReadOnlyList<ColMetric>
+    {
+        private readonly uint _startCol;
+        private readonly int _count;
+        private readonly double _width;
+
+        public DefaultColMetricList(uint startCol, int count, double width)
+        {
+            _startCol = startCol;
+            _count = count;
+            _width = width;
+        }
+
+        public int Count => _count;
+
+        public ColMetric this[int index]
+        {
+            get
+            {
+                if ((uint)index >= (uint)_count)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
+                return new ColMetric(_startCol + (uint)index, _width, index * _width);
+            }
+        }
+
+        public IEnumerator<ColMetric> GetEnumerator()
+        {
+            for (var i = 0; i < _count; i++)
+                yield return this[i];
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
