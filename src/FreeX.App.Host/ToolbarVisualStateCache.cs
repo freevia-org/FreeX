@@ -10,7 +10,7 @@ public sealed class ToolbarVisualStateCache
     private readonly record struct Source(WorkbookId WorkbookId, StyleId StyleId);
 
     private readonly Dictionary<Source, ToolbarVisualState> _states = [];
-    private readonly Queue<Source> _stateOrder = [];
+    private readonly List<Source> _stateOrder = [];
     private Source? _lastSource;
     private ToolbarVisualState? _lastState;
     private Source? _previousSource;
@@ -52,9 +52,17 @@ public sealed class ToolbarVisualStateCache
         ToolbarVisualState state)
     {
         var source = new Source(workbookId, styleId);
+        if (_states.ContainsKey(source))
+        {
+            _stateOrder.Remove(source);
+        }
+        else
+        {
+            TrimCachedStatesForNewSource();
+        }
+
         _states[source] = state;
-        _stateOrder.Enqueue(source);
-        TrimCachedStates();
+        _stateOrder.Add(source);
         PromoteRecent(source, state);
         return state;
     }
@@ -107,9 +115,13 @@ public sealed class ToolbarVisualStateCache
         _lastState = state;
     }
 
-    private void TrimCachedStates()
+    private void TrimCachedStatesForNewSource()
     {
-        while (_states.Count > MaxCachedStates && _stateOrder.TryDequeue(out var source))
-            _states.Remove(source);
+        if (_states.Count < MaxCachedStates || _stateOrder.Count == 0)
+            return;
+
+        var source = _stateOrder[0];
+        _stateOrder.RemoveAt(0);
+        _states.Remove(source);
     }
 }

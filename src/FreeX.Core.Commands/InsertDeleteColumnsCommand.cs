@@ -1,3 +1,4 @@
+using System.Buffers;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -9,7 +10,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly uint _beforeCol;
     private readonly uint _count;
-    private List<(CellAddress Addr, Cell Snapshot, Cell? Original)>? _movedSnapshot;
+    private List<(CellAddress Addr, Cell Snapshot)>? _movedSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private Dictionary<uint, double>? _columnWidthSnapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
@@ -49,11 +50,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
 
         _movedSnapshot = movedSnapshot;
 
-        foreach (var (addr, _, _) in _movedSnapshot)
-            sheet.ClearCell(addr);
-
-        foreach (var (addr, _, original) in _movedSnapshot)
-            sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col + _count), original!);
+        MoveCellsForInsert(sheet, _movedSnapshot, _count);
 
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.HiddenCols, _beforeCol, _count);
 
@@ -101,10 +98,10 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
-        foreach (var (addr, _, _) in _movedSnapshot)
+        foreach (var (addr, _) in _movedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row, addr.Col + _count));
 
-        foreach (var (addr, snapshot, _) in _movedSnapshot)
+        foreach (var (addr, snapshot) in _movedSnapshot)
             sheet.SetCell(addr, snapshot.Clone());
 
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenCols, _beforeCol + _count, _count);
@@ -123,12 +120,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
-        ReleaseOriginalCells(_movedSnapshot);
     }
 
-    private (uint MaxOccupied, List<(CellAddress Addr, Cell Snapshot, Cell? Original)> Moved) CaptureMovedCells(Sheet sheet)
+    private (uint MaxOccupied, List<(CellAddress Addr, Cell Snapshot)> Moved) CaptureMovedCells(Sheet sheet)
     {
-        var moved = new List<(CellAddress Addr, Cell Snapshot, Cell? Original)>(sheet.CellCount);
+        var moved = new List<(CellAddress Addr, Cell Snapshot)>(sheet.CellCount);
         uint maxOccupied = 0;
 
         foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
@@ -139,18 +135,39 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
             if (col > maxOccupied)
                 maxOccupied = col;
 
-            moved.Add((new CellAddress(sheet.Id, row, col), cell.Clone(), cell));
+            moved.Add((new CellAddress(sheet.Id, row, col), cell.Clone()));
         }
 
         return (maxOccupied, moved);
     }
 
-    private static void ReleaseOriginalCells(List<(CellAddress Addr, Cell Snapshot, Cell? Original)> cells)
+    private static void MoveCellsForInsert(
+        Sheet sheet,
+        IReadOnlyList<(CellAddress Addr, Cell Snapshot)> movedCells,
+        uint count)
     {
-        for (var i = 0; i < cells.Count; i++)
+        if (movedCells.Count == 0)
+            return;
+
+        var originals = ArrayPool<Cell>.Shared.Rent(movedCells.Count);
+        try
         {
-            var cell = cells[i];
-            cells[i] = (cell.Addr, cell.Snapshot, null);
+            for (var i = 0; i < movedCells.Count; i++)
+                originals[i] = sheet.GetCell(movedCells[i].Addr)!;
+
+            for (var i = 0; i < movedCells.Count; i++)
+                sheet.ClearCell(movedCells[i].Addr);
+
+            for (var i = 0; i < movedCells.Count; i++)
+            {
+                var addr = movedCells[i].Addr;
+                sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col + count), originals[i]);
+            }
+        }
+        finally
+        {
+            Array.Clear(originals, 0, movedCells.Count);
+            ArrayPool<Cell>.Shared.Return(originals);
         }
     }
 }
@@ -162,7 +179,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private readonly uint _startCol;
     private readonly uint _count;
     private List<(CellAddress Addr, Cell Cell)>? _deletedSnapshot;
-    private List<(CellAddress Addr, Cell Snapshot, Cell? Original)>? _shiftedSnapshot;
+    private List<(CellAddress Addr, Cell Snapshot)>? _shiftedSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private Dictionary<uint, double>? _columnWidthSnapshot;
     private HashSet<uint>? _hiddenColsSnapshot;
@@ -202,10 +219,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
 
         foreach (var (addr, _) in _deletedSnapshot) sheet.ClearCell(addr);
 
-        foreach (var (addr, _, _) in _shiftedSnapshot)
-            sheet.ClearCell(addr);
-        foreach (var (addr, _, original) in _shiftedSnapshot)
-            sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - _count), original!);
+        MoveCellsForDelete(sheet, _shiftedSnapshot, _count);
 
         _hiddenColsSnapshot = [.. sheet.HiddenCols];
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.HiddenCols, _startCol, _count);
@@ -254,10 +268,10 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
-        foreach (var (addr, _, _) in _shiftedSnapshot)
+        foreach (var (addr, _) in _shiftedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - _count));
 
-        foreach (var (addr, snapshot, _) in _shiftedSnapshot)
+        foreach (var (addr, snapshot) in _shiftedSnapshot)
             sheet.SetCell(addr, snapshot.Clone());
 
         foreach (var (addr, cell) in _deletedSnapshot)
@@ -279,20 +293,19 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
-        ReleaseOriginalCells(_shiftedSnapshot);
     }
 
-    private (List<(CellAddress Addr, Cell Cell)> Deleted, List<(CellAddress Addr, Cell Snapshot, Cell? Original)> Shifted)
+    private (List<(CellAddress Addr, Cell Cell)> Deleted, List<(CellAddress Addr, Cell Snapshot)> Shifted)
         CaptureDeletedAndShiftedCells(Sheet sheet, uint endCol)
     {
         var deleted = new List<(CellAddress Addr, Cell Cell)>();
-        var shifted = new List<(CellAddress Addr, Cell Snapshot, Cell? Original)>(sheet.CellCount);
+        var shifted = new List<(CellAddress Addr, Cell Snapshot)>(sheet.CellCount);
 
         foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
         {
             if (col > endCol)
             {
-                shifted.Add((new CellAddress(sheet.Id, row, col), cell.Clone(), cell));
+                shifted.Add((new CellAddress(sheet.Id, row, col), cell.Clone()));
             }
             else if (col >= _startCol)
             {
@@ -303,12 +316,33 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         return (deleted, shifted);
     }
 
-    private static void ReleaseOriginalCells(List<(CellAddress Addr, Cell Snapshot, Cell? Original)> cells)
+    private static void MoveCellsForDelete(
+        Sheet sheet,
+        IReadOnlyList<(CellAddress Addr, Cell Snapshot)> shiftedCells,
+        uint count)
     {
-        for (var i = 0; i < cells.Count; i++)
+        if (shiftedCells.Count == 0)
+            return;
+
+        var originals = ArrayPool<Cell>.Shared.Rent(shiftedCells.Count);
+        try
         {
-            var cell = cells[i];
-            cells[i] = (cell.Addr, cell.Snapshot, null);
+            for (var i = 0; i < shiftedCells.Count; i++)
+                originals[i] = sheet.GetCell(shiftedCells[i].Addr)!;
+
+            for (var i = 0; i < shiftedCells.Count; i++)
+                sheet.ClearCell(shiftedCells[i].Addr);
+
+            for (var i = 0; i < shiftedCells.Count; i++)
+            {
+                var addr = shiftedCells[i].Addr;
+                sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - count), originals[i]);
+            }
+        }
+        finally
+        {
+            Array.Clear(originals, 0, shiftedCells.Count);
+            ArrayPool<Cell>.Shared.Return(originals);
         }
     }
 }
