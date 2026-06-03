@@ -26,7 +26,7 @@ public static partial class BuiltInFunctions
         return matcher.Matches(cellValue);
     }
 
-    private static CriteriaMatcher CompileCriteria(ScalarValue criteria) =>
+    internal static CriteriaMatcher CompileCriteria(ScalarValue criteria) =>
         CriteriaMatcher.Create(criteria);
 
     private enum CriteriaMatcherKind : byte
@@ -53,7 +53,7 @@ public static partial class BuiltInFunctions
         NotEqual
     }
 
-    private readonly struct CriteriaMatcher
+    internal readonly struct CriteriaMatcher
     {
         private readonly CriteriaMatcherKind _kind;
         private readonly CriteriaComparisonOp _op;
