@@ -101,8 +101,7 @@ internal static class XlsxPivotCacheReader
 
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageXmlEditor.LoadXml(entry);
     }
 
     private static IReadOnlyList<string> ReadSharedItemValues(XElement sharedItems, XNamespace workbookNs) =>
