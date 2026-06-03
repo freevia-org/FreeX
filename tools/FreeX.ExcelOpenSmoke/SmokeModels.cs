@@ -9,7 +9,16 @@ internal sealed record WorkbookSmokeInput(
     WorkbookValidationWorkflow Workflow,
     string Description,
     bool GenerateWithExcel = false,
-    CorpusManifestRow? CorpusRow = null);
+    CorpusManifestRow? CorpusRow = null,
+    WorkbookSmokeExpectations? Expectations = null);
+
+internal sealed record WorkbookSmokeExpectations(
+    int MinFreeXPreSavePivotTables = 0,
+    int MinFreeXPreSavePivotCaches = 0,
+    int MinExcelOpenedPivotTables = 0,
+    int MinExcelReopenedPivotTables = 0,
+    int MinFreeXReopenedPivotTables = 0,
+    int MinFreeXReopenedPivotCaches = 0);
 
 internal sealed record WorkbookSmokeResult(
     bool Success,

@@ -74,7 +74,8 @@ internal static class ExcelOpenSmoke
                     AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
                         generatedFile,
                         generatedWorkflow,
-                        DescribeGeneratedFixture("FreeX feature fixture", generatedWorkflow)));
+                        DescribeGeneratedFixture("FreeX feature fixture", generatedWorkflow),
+                        Expectations: ExpectationsForGeneratedFixture(generatedFile, options.SaveReopen, generatedWorkflow)));
                 }
             }
 
@@ -103,7 +104,8 @@ internal static class ExcelOpenSmoke
                     Path.Combine(runDirectory, "generated", "Excel_authored_smoke.xlsx"),
                     WorkbookValidationWorkflow.FreeXSaveThenExcel,
                     "Excel-authored fixture",
-                    GenerateWithExcel: true));
+                    GenerateWithExcel: true,
+                    Expectations: PivotTableExpectations(options.SaveReopen, expectFreeXPreSave: true)));
             }
 
             if (smokeInputs.Count == 0)
@@ -242,6 +244,7 @@ internal static class ExcelOpenSmoke
             if (!saveReopen)
             {
                 var opened = OpenWorkbook(workbooks, stagedPath, readOnly: true);
+                AssertSmokeExpectations(input, freeXPreSave, opened, null, null);
                 return WorkbookSmokeResult.Pass(
                     input,
                     stagedPath,
@@ -256,6 +259,7 @@ internal static class ExcelOpenSmoke
             var excelSavedPath = CreateDerivedOutputPath(excelSavedDirectory, stagedPath, "excel-saved");
             var saveReopenResult = OpenSaveCloseReopenWorkbook(workbooks, stagedPath, excelSavedPath);
             var freeXReopenedExcelSave = LoadWorkbookSummary(saveReopenResult.ExcelSavedPath);
+            AssertSmokeExpectations(input, freeXPreSave, saveReopenResult.Opened, saveReopenResult.Reopened, freeXReopenedExcelSave);
 
             return WorkbookSmokeResult.Pass(
                 input,
@@ -565,6 +569,90 @@ internal static class ExcelOpenSmoke
             ? $"{description} via FreeX resave"
             : description;
 
+    private static WorkbookSmokeExpectations? ExpectationsForGeneratedFixture(
+        string generatedFile,
+        bool saveReopen,
+        WorkbookValidationWorkflow workflow)
+    {
+        var fileName = Path.GetFileName(generatedFile);
+        if (!fileName.Contains("pivots", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return PivotTableExpectations(
+            saveReopen,
+            expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel);
+    }
+
+    private static WorkbookSmokeExpectations PivotTableExpectations(bool saveReopen, bool expectFreeXPreSave) =>
+        new(
+            MinFreeXPreSavePivotTables: expectFreeXPreSave ? 1 : 0,
+            MinFreeXPreSavePivotCaches: expectFreeXPreSave ? 1 : 0,
+            MinExcelOpenedPivotTables: 1,
+            MinExcelReopenedPivotTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedPivotTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedPivotCaches: saveReopen ? 1 : 0);
+
+    private static void AssertSmokeExpectations(
+        WorkbookSmokeInput input,
+        FreeXWorkbookSummary? freeXPreSave,
+        ExcelWorkbookSummary opened,
+        ExcelWorkbookSummary? reopened,
+        FreeXWorkbookSummary? freeXReopenedExcelSave)
+    {
+        var expectations = input.Expectations;
+        if (expectations is null)
+            return;
+
+        AssertMin(
+            "FreeX source load pivot tables",
+            freeXPreSave?.PivotTableCount,
+            expectations.MinFreeXPreSavePivotTables,
+            input);
+        AssertMin(
+            "FreeX source load pivot caches",
+            freeXPreSave?.PivotCacheCount,
+            expectations.MinFreeXPreSavePivotCaches,
+            input);
+        AssertMin(
+            "Excel open pivot tables",
+            opened.PivotTableCount,
+            expectations.MinExcelOpenedPivotTables,
+            input);
+        AssertMin(
+            "Excel reopen pivot tables",
+            reopened?.PivotTableCount,
+            expectations.MinExcelReopenedPivotTables,
+            input);
+        AssertMin(
+            "FreeX reopened Excel save pivot tables",
+            freeXReopenedExcelSave?.PivotTableCount,
+            expectations.MinFreeXReopenedPivotTables,
+            input);
+        AssertMin(
+            "FreeX reopened Excel save pivot caches",
+            freeXReopenedExcelSave?.PivotCacheCount,
+            expectations.MinFreeXReopenedPivotCaches,
+            input);
+    }
+
+    private static void AssertMin(string label, int? actual, int minimum, WorkbookSmokeInput input)
+    {
+        if (minimum <= 0)
+            return;
+
+        if (actual is null)
+        {
+            throw new InvalidDataException(
+                $"{label} expectation for {input.Description} was not measured; expected at least {minimum}.");
+        }
+
+        if (actual < minimum)
+        {
+            throw new InvalidDataException(
+                $"{label} expectation failed for {input.Description}: expected at least {minimum}, observed {actual}.");
+        }
+    }
+
     private static void WriteWorkbookReport(WorkbookSmokeResult result, bool saveReopen)
     {
         var status = result.Success
@@ -660,6 +748,7 @@ internal static class ExcelOpenSmoke
                 sourcePath = result.Input.SourcePath,
                 description = result.Input.Description,
                 workflow = FormatWorkflow(result.Input.Workflow),
+                expectations = result.Input.Expectations,
                 corpus = result.Input.CorpusRow is null
                     ? null
                     : new

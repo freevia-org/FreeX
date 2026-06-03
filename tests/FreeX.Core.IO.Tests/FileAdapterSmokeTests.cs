@@ -18905,6 +18905,37 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadsPivotTableMetadataWithZeroCacheId()
+    {
+        var workbook = new Workbook("PivotMetadataZeroCacheIdTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(
+            source,
+            pivotTableDefinitionXml: MinimalPivotTableDefinitionXml.Replace(
+                "cacheId=\"1\"",
+                "cacheId=\"0\"",
+                StringComparison.Ordinal),
+            pivotCacheId: "0");
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.PivotCaches.Should().ContainSingle().Which.CacheId.Should().Be(0);
+        loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Which.CacheId.Should().Be(0);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesPivotTablePackageReferencesAlongsideModelEdits()
     {
         var workbook = new Workbook("PivotPackageRetentionTest");
@@ -24172,7 +24203,8 @@ public partial class FileAdapterSmokeTests
         MemoryStream packageStream,
         bool includeCacheRecords = false,
         string? pivotCacheDefinitionXml = null,
-        string? pivotTableDefinitionXml = null)
+        string? pivotTableDefinitionXml = null,
+        string pivotCacheId = "1")
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -24193,7 +24225,7 @@ public partial class FileAdapterSmokeTests
             var sheetsElement = workbookXml.Root.Element(workbookNs + "sheets");
             var pivotCachesElement = new XElement(workbookNs + "pivotCaches",
                 new XElement(workbookNs + "pivotCache",
-                    new XAttribute("cacheId", "1"),
+                    new XAttribute("cacheId", pivotCacheId),
                     new XAttribute(relNs + "id", "rIdFreeXPivotCache")));
             if (sheetsElement is not null)
                 sheetsElement.AddBeforeSelf(pivotCachesElement);

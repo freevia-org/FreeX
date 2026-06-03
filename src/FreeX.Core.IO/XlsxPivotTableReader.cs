@@ -217,12 +217,17 @@ internal static partial class XlsxPivotTableReader
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var name = root.Attribute("name")?.Value ?? "";
-        var cacheId = XlsxXmlAttributeReader.ReadIntAttribute(root, "cacheId") ?? 0;
+        var cacheIdAttribute = XlsxXmlAttributeReader.ReadIntAttribute(root, "cacheId");
         var location = root.Element(workbookNs + "location");
         var targetReference = location?.Attribute("ref")?.Value ?? "";
-        if (string.IsNullOrWhiteSpace(name) || cacheId <= 0 || string.IsNullOrWhiteSpace(targetReference))
+        if (string.IsNullOrWhiteSpace(name) ||
+            cacheIdAttribute is null or < 0 ||
+            string.IsNullOrWhiteSpace(targetReference))
+        {
             return false;
+        }
 
+        var cacheId = cacheIdAttribute.Value;
         pivotCachesById.TryGetValue(cacheId, out var pivotCache);
         var pivotFieldsElement = root.Element(workbookNs + "pivotFields");
         var nativeFieldSelections = MergeMissing(

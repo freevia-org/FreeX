@@ -18,10 +18,14 @@ internal static class XlsxPivotCacheReader
                      .Element(workbookNs + "pivotCaches")?
                      .Elements(workbookNs + "pivotCache") ?? [])
         {
-            var cacheId = XlsxXmlAttributeReader.ReadIntAttribute(pivotCacheElement, "cacheId") ?? 0;
+            var cacheIdAttribute = XlsxXmlAttributeReader.ReadIntAttribute(pivotCacheElement, "cacheId");
             var relId = pivotCacheElement.Attribute(relNs + "id")?.Value;
-            if (cacheId <= 0 || string.IsNullOrWhiteSpace(relId) || !workbookRels.TryGetValue(relId, out var cachePath))
+            if (cacheIdAttribute is null or < 0 ||
+                string.IsNullOrWhiteSpace(relId) ||
+                !workbookRels.TryGetValue(relId, out var cachePath))
+            {
                 continue;
+            }
 
             var cacheEntry = archive.GetEntry(cachePath);
             if (cacheEntry is null)
@@ -39,7 +43,7 @@ internal static class XlsxPivotCacheReader
             var freeXProps = ReadFreeXCacheProps(root, workbookNs);
             var cache = new PivotCacheModel
             {
-                CacheId = cacheId,
+                CacheId = cacheIdAttribute.Value,
                 SourceType = GetSourceType(cacheSource, worksheetSource),
                 SourceSheetName = worksheetSource?.Attribute("sheet")?.Value,
                 SourceReference = worksheetSource?.Attribute("ref")?.Value,
