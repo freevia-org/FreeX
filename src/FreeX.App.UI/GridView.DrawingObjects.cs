@@ -59,8 +59,12 @@ public partial class GridView
     {
         uint lastRow = 0;
         foreach (var row in rows)
-            if (columnHeaderHeight + row.TopOffset < visibleBottom && row.Row > lastRow)
+        {
+            if (columnHeaderHeight + row.TopOffset >= visibleBottom)
+                break;
+            if (row.Row > lastRow)
                 lastRow = row.Row;
+        }
 
         return lastRow;
     }
@@ -72,8 +76,12 @@ public partial class GridView
     {
         uint lastColumn = 0;
         foreach (var column in columns)
-            if (rowHeaderWidth + column.LeftOffset < visibleRight && column.Col > lastColumn)
+        {
+            if (rowHeaderWidth + column.LeftOffset >= visibleRight)
+                break;
+            if (column.Col > lastColumn)
                 lastColumn = column.Col;
+        }
 
         return lastColumn;
     }

@@ -30,6 +30,25 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void DrawingObjectRenderableBounds_StopAtFirstMetricPastViewport()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var rowMethod = drawingObjects[
+            drawingObjects.IndexOf("private static uint FindLastRenderableDrawingRow", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private static uint FindLastRenderableDrawingColumn", StringComparison.Ordinal)];
+        var columnMethod = drawingObjects[
+            drawingObjects.IndexOf("private static uint FindLastRenderableDrawingColumn", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private static bool CanAnchoredObjectReachDrawingViewport", StringComparison.Ordinal)];
+
+        rowMethod.Should().Contain("if (columnHeaderHeight + row.TopOffset >= visibleBottom)");
+        rowMethod.Should().Contain("break;");
+        rowMethod.Should().NotContain("columnHeaderHeight + row.TopOffset < visibleBottom && row.Row > lastRow");
+        columnMethod.Should().Contain("if (rowHeaderWidth + column.LeftOffset >= visibleRight)");
+        columnMethod.Should().Contain("break;");
+        columnMethod.Should().NotContain("rowHeaderWidth + column.LeftOffset < visibleRight && column.Col > lastColumn");
+    }
+
+    [Fact]
     public void RenderTextBoxes_ReusesNamedClipRectForText()
     {
         var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));

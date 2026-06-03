@@ -221,18 +221,18 @@ jobs:
           $certificatePath = ""
           $env:FREEX_MSIX_CERTIFICATE_PASSWORD = "${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}"
           $certificateBase64 = "${{ secrets.FREEX_MSIX_CERTIFICATE_BASE64 }}"
-          $signArgs = @()
+          $signParameters = @{}
           if (-not [string]::IsNullOrWhiteSpace($certificateBase64)) {
             $certificatePath = Join-Path $env:RUNNER_TEMP "freex-msix-signing.pfx"
             [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($certificateBase64))
-            $signArgs += @("-MsixCertificatePath", $certificatePath)
+            $signParameters.MsixCertificatePath = $certificatePath
 
             $timestampUrl = "${{ vars.FREEX_MSIX_TIMESTAMP_URL }}"
             if (-not [string]::IsNullOrWhiteSpace($timestampUrl)) {
-              $signArgs += @("-MsixTimestampUrl", $timestampUrl)
+              $signParameters.MsixTimestampUrl = $timestampUrl
             }
           } else {
-            $signArgs += "-AllowUnsignedMsix"
+            $signParameters.AllowUnsignedMsix = $true
           }
 
           tools/Publish-UserTestBuild.ps1 `
@@ -241,7 +241,7 @@ jobs:
             -OutputRoot $outputRoot `
             -Version "${{ steps.meta.outputs.version }}" `
             -PublishMode Msix `
-            @signArgs
+            @signParameters
 
           $versionedMsix = Get-ChildItem -LiteralPath $outputRoot -Filter "freex-*-win-x64-msix.msix" |
             Sort-Object LastWriteTimeUtc -Descending |
