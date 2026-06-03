@@ -86,7 +86,7 @@ public static partial class BuiltInFunctions
         if (!TryTruncateToLong(db, out long bottom) || !TryTruncateToLong(dt, out long top))
             return ErrorValue.Num;
         if (bottom > top) return ErrorValue.Num;
-        // NextInt64(min, max) is [min, max) â€” add 1 to make top inclusive
+        // NextInt64(min, max) is [min, max); add 1 to make top inclusive.
         long exclusiveTop;
         try { exclusiveTop = checked(top + 1); }
         catch (OverflowException) { return ErrorValue.Num; }

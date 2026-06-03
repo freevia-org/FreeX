@@ -30,7 +30,7 @@ public static partial class BuiltInFunctions
 
         if (rangeLookup)
         {
-            // Approximate match â€“ table must be sorted ascending on first column
+            // Approximate match: table must be sorted ascending on first column.
             // Return last row where first-col value <= lookupValue
             int bestRow = -1;
             for (int r = 1; r <= table.RowCount; r++)
@@ -47,7 +47,7 @@ public static partial class BuiltInFunctions
         }
         else
         {
-            // Exact match â€” propagate errors encountered in the lookup column
+            // Exact match: propagate errors encountered in the lookup column.
             for (int r = 1; r <= table.RowCount; r++)
             {
                 var cv = table.At(r, 1);
@@ -100,7 +100,7 @@ public static partial class BuiltInFunctions
         }
         else
         {
-            // Exact match â€” propagate errors encountered in the lookup row
+            // Exact match: propagate errors encountered in the lookup row.
             for (int c = 1; c <= table.ColCount; c++)
             {
                 var cv = table.At(1, c);
@@ -194,7 +194,7 @@ public static partial class BuiltInFunctions
 
         if (matchType == 0)
         {
-            // Exact match â€” propagate errors encountered in the lookup array
+            // Exact match: propagate errors encountered in the lookup array.
             for (int i = 0; i < vector.Count; i++)
             {
                 var candidate = vector[i];
