@@ -108,10 +108,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var snapshot in _movedSnapshot)
-            sheet.ClearCell(new CellAddress(snapshot.Address.Sheet, snapshot.Address.Row + _count, snapshot.Address.Col));
+            sheet.ClearCell(snapshot.Row + _count, snapshot.Col);
 
         foreach (var snapshot in _movedSnapshot)
-            sheet.SetCell(snapshot.Address, snapshot.ToCell());
+            sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
 
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.FilterHiddenRows, _beforeRow + _count, _count);
@@ -163,15 +163,15 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         try
         {
             for (var i = 0; i < movedCells.Count; i++)
-                originals[i] = sheet.GetCell(movedCells[i].Address)!;
+                originals[i] = sheet.GetCell(movedCells[i].Row, movedCells[i].Col)!;
 
             for (var i = 0; i < movedCells.Count; i++)
-                sheet.ClearCell(movedCells[i].Address);
+                sheet.ClearCell(movedCells[i].Row, movedCells[i].Col);
 
             for (var i = 0; i < movedCells.Count; i++)
             {
-                var addr = movedCells[i].Address;
-                sheet.SetCell(new CellAddress(addr.Sheet, addr.Row + count, addr.Col), originals[i]);
+                var snapshot = movedCells[i];
+                sheet.SetCell(new CellAddress(sheet.Id, snapshot.Row + count, snapshot.Col), originals[i]);
             }
         }
         finally

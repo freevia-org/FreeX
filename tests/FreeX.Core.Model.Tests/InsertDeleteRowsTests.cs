@@ -842,6 +842,20 @@ public class InsertDeleteRowsTests
         source.Should().NotContain("sheet.RowPageBreaks.ToList()");
     }
 
+    [Fact]
+    public void CellStateSnapshot_StoresCoordinatesWithoutPerSnapshotSheetId()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src",
+            "FreeX.Core.Commands",
+            "CellStateSnapshot.cs"));
+
+        source.Should().Contain("uint Row");
+        source.Should().Contain("uint Col");
+        source.Should().Contain("ToAddress(SheetId sheetId)");
+        source.Should().NotContain("CellAddress Address");
+    }
+
     private const int DenseShiftRows = 500;
     private const int DenseShiftColumns = 80;
     private const uint DenseShiftBeforeRow = 2;

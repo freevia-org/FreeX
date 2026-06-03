@@ -3,7 +3,8 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 internal readonly record struct CellStateSnapshot(
-    CellAddress Address,
+    uint Row,
+    uint Col,
     ScalarValue Value,
     string? FormulaText,
     object? CachedAst,
@@ -11,7 +12,9 @@ internal readonly record struct CellStateSnapshot(
     StyleId StyleId)
 {
     public static CellStateSnapshot Capture(CellAddress address, Cell cell) =>
-        new(address, cell.Value, cell.FormulaText, cell.CachedAst, cell.IgnoreFormulaError, cell.StyleId);
+        new(address.Row, address.Col, cell.Value, cell.FormulaText, cell.CachedAst, cell.IgnoreFormulaError, cell.StyleId);
+
+    public CellAddress ToAddress(SheetId sheetId) => new(sheetId, Row, Col);
 
     public Cell ToCell()
     {
