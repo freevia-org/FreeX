@@ -170,7 +170,7 @@ internal static class XlsxDataValidationClosedXmlMapper
         }
     }
 
-    private static string NormalizeListFormulaForSave(string formula)
+    internal static string NormalizeListFormulaForSave(string formula)
     {
         if (string.IsNullOrWhiteSpace(formula))
             return formula;
