@@ -63,6 +63,25 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Fact]
+    public void DirectLookupFastPaths_ReuseResolvedSheetReader()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaEvaluator.LookupFastPaths.cs"));
+        var reader = source[
+            source.IndexOf("private readonly record struct DirectLookupRangeReader", StringComparison.Ordinal)..
+            source.IndexOf("private readonly record struct DirectLookupRangeVector", StringComparison.Ordinal)];
+
+        source.Should().Contain(
+            "CreateDirectLookupReader",
+            "direct lookup scans should resolve the sheet once before entering large vector loops");
+        reader.Should().Contain(
+            "if (Sheet is not null)",
+            "hot direct lookup reads should reuse the resolved Sheet instead of resolving per cell");
+        reader.Should().NotContain(
+            "ResolveSheetForFastRange",
+            "per-cell sheet resolution reintroduces CPU overhead in VLOOKUP, MATCH, LOOKUP, XMATCH, and XLOOKUP fast paths");
+    }
+
+    [Fact]
     public void RepeatedFormulaTextEvaluation_ReusesParsedAst()
     {
         var evaluator = new FormulaEvaluator();
