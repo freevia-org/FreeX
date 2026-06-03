@@ -305,8 +305,7 @@ public class ConditionalFormatTests
     [Fact]
     public void ConditionalFormatAggregates_OnlyAllocateRankAndCountCachesForRulesThatNeedThem()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
-            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var source = ReadViewportConditionalFormatEvaluatorSources();
 
         source.Should().Contain(
             "cf.RuleType == CfRuleType.Top10 ? [] : null",
@@ -325,8 +324,7 @@ public class ConditionalFormatTests
     [Fact]
     public void ConditionalFormatTopBottomRanking_SortsInPlaceWithoutLinqPipelines()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
-            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var source = ReadViewportConditionalFormatEvaluatorSources();
         var resolveTopBottom = source[
             source.IndexOf("private static IReadOnlySet<CellAddress>? ResolveTopBottomMatches", StringComparison.Ordinal)..
             source.IndexOf("private static IEnumerable<(CellAddress Address, ScalarValue Value)> EnumerateAggregateValues", StringComparison.Ordinal)];
@@ -344,8 +342,7 @@ public class ConditionalFormatTests
     [Fact]
     public void ConditionalFormatContext_NoRulesReusesStaticEmptyContext()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
-            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var source = ReadViewportConditionalFormatEvaluatorSources();
         var buildContext = source[
             source.IndexOf("public static CfEvaluationContext BuildContext", StringComparison.Ordinal)..
             source.IndexOf("var rulesByPriority", StringComparison.Ordinal)];
@@ -360,8 +357,7 @@ public class ConditionalFormatTests
     [Fact]
     public void ConditionalFormatContext_NonEmptyRulesAvoidsLinqArrayPipelines()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
-            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var source = ReadViewportConditionalFormatEvaluatorSources();
         var buildContext = source[
             source.IndexOf("public static CfEvaluationContext BuildContext", StringComparison.Ordinal)..
             source.IndexOf("public static CfStyleResult? Evaluate", StringComparison.Ordinal)];
@@ -405,8 +401,7 @@ public class ConditionalFormatTests
     [Fact]
     public void IconSetNumberThresholds_DoNotRequireAggregateScans()
     {
-        var evaluatorSource = File.ReadAllText(FindWorkspaceFile(
-            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var evaluatorSource = ReadViewportConditionalFormatEvaluatorSources();
         var iconsSource = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatIcons.cs"));
         var aggregateThresholds = evaluatorSource[
@@ -430,8 +425,7 @@ public class ConditionalFormatTests
     {
         var formulaSource = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatFormulas.cs"));
-        var evaluatorSource = File.ReadAllText(FindWorkspaceFile(
-            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var evaluatorSource = ReadViewportConditionalFormatEvaluatorSources();
 
         formulaSource.Should().NotContain(
             "FormulaSerializer.Serialize",
@@ -465,8 +459,7 @@ public class ConditionalFormatTests
     [Fact]
     public void ColorScaleThresholdResolution_ReusesCachedStaticThresholds()
     {
-        var evaluatorSource = File.ReadAllText(FindWorkspaceFile(
-            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var evaluatorSource = ReadViewportConditionalFormatEvaluatorSources();
         var colorScaleSource = evaluatorSource[
             evaluatorSource.IndexOf("private static CellStyle? ComputeColorScaleStyle", StringComparison.Ordinal)..
             evaluatorSource.IndexOf("internal static bool TryResolveThreshold", StringComparison.Ordinal)];
@@ -482,8 +475,7 @@ public class ConditionalFormatTests
     [Fact]
     public void ColorScaleStyleResolution_ReusesCachedFillStyles()
     {
-        var evaluatorSource = File.ReadAllText(FindWorkspaceFile(
-            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var evaluatorSource = ReadViewportConditionalFormatEvaluatorSources();
         var colorScaleSource = evaluatorSource[
             evaluatorSource.IndexOf("private static CellStyle? ComputeColorScaleStyle", StringComparison.Ordinal)..
             evaluatorSource.IndexOf("internal static bool TryResolveThreshold", StringComparison.Ordinal)];
@@ -1540,5 +1532,15 @@ public class ConditionalFormatTests
         }
 
         throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(parts));
+    }
+
+    private static string ReadViewportConditionalFormatEvaluatorSources()
+    {
+        var primaryFile = FindWorkspaceFile("src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs");
+        var directory = Path.GetDirectoryName(primaryFile)!;
+        var files = Directory.GetFiles(directory, "ViewportConditionalFormatEvaluator*.cs")
+            .OrderBy(static file => Path.GetFileName(file), StringComparer.Ordinal);
+
+        return string.Join(Environment.NewLine, files.Select(File.ReadAllText));
     }
 }
