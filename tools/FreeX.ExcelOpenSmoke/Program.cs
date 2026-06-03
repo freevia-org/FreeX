@@ -890,11 +890,49 @@ internal static class ExcelOpenSmoke
     }
 
     private static bool RequiresNoFreeXLoadWarnings(CorpusManifestRow row) =>
-        !string.Equals(row.SourceType, "public", StringComparison.OrdinalIgnoreCase) &&
         string.IsNullOrWhiteSpace(row.ExpectedWarnings) &&
         (string.Equals(row.ExpectedStatus, "supported-pass", StringComparison.OrdinalIgnoreCase) ||
-         string.Equals(row.ExpectedStatus, "supported-metadata-pass", StringComparison.OrdinalIgnoreCase) ||
-         string.Equals(row.ExpectedStatus, "supported-pivot-metadata-pass", StringComparison.OrdinalIgnoreCase));
+          string.Equals(row.ExpectedStatus, "supported-metadata-pass", StringComparison.OrdinalIgnoreCase) ||
+          string.Equals(row.ExpectedStatus, "supported-pivot-metadata-pass", StringComparison.OrdinalIgnoreCase) ||
+          (string.Equals(row.ExpectedStatus, "public-pass", StringComparison.OrdinalIgnoreCase) &&
+           !HasWarningToleratedFeatureTags(row)));
+
+    private static bool HasWarningToleratedFeatureTags(CorpusManifestRow row)
+    {
+        var tags = row.FeatureTags
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return
+            tags.Contains("unsupported-chart-family") ||
+            tags.Contains("embedded-objects") ||
+            tags.Contains("threaded-comments") ||
+            tags.Contains("track-changes") ||
+            tags.Contains("revision-history") ||
+            tags.Contains("form-controls") ||
+            tags.Contains("activex") ||
+            tags.Contains("digital-signatures") ||
+            tags.Contains("custom-ribbon-ui") ||
+            tags.Contains("office-addins") ||
+            tags.Contains("webextensions") ||
+            tags.Contains("live-web-queries") ||
+            tags.Contains("web-publish") ||
+            tags.Contains("sensitivity-labels") ||
+            tags.Contains("irm") ||
+            tags.Contains("smartart") ||
+            tags.Contains("diagrams") ||
+            tags.Contains("chart-sheets") ||
+            tags.Contains("dialog-sheets") ||
+            tags.Contains("macro-sheets") ||
+            tags.Contains("unsupported-sheet-types") ||
+            tags.Contains("macros") ||
+            tags.Contains("power-query") ||
+            tags.Contains("connections") ||
+            tags.Contains("data-model") ||
+            tags.Contains("power-pivot") ||
+            tags.Contains("linked-data-types") ||
+            tags.Contains("rich-data");
+    }
 
     private static WorkbookSmokeExpectations? SupportedCorpusExpectations(
         CorpusManifestRow row,
