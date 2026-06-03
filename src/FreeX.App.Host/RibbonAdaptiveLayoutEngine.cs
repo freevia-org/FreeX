@@ -17,7 +17,7 @@ internal static class RibbonAdaptiveLayoutEngine
         return Plan(availableWidth, groups, groupProfileKeys, fixedChromeWidth, selectedTabHeader);
     }
 
-    private static RibbonAdaptiveLayoutResult Plan(
+    public static RibbonAdaptiveLayoutResult Plan(
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroup> groups,
         IReadOnlyList<string> groupProfileKeys,
@@ -46,6 +46,15 @@ internal static class RibbonAdaptiveLayoutEngine
         string? selectedTabHeader = null)
     {
         var groupProfileKeys = GetGroupProfileKeys(groups);
+        return BuildResizeThresholds(groups, groupProfileKeys, fixedChromeWidth, selectedTabHeader);
+    }
+
+    public static IReadOnlyList<double> BuildResizeThresholds(
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        IReadOnlyList<string> groupProfileKeys,
+        double fixedChromeWidth,
+        string? selectedTabHeader = null)
+    {
         var thresholds = new SortedSet<double>(RibbonAdaptiveTabProfiles.GetBreakpointThresholds(groupProfileKeys, selectedTabHeader));
         foreach (var threshold in RibbonCollapsedGroupPresentationPlanner.BreakpointThresholds)
             thresholds.Add(threshold);
@@ -280,8 +289,7 @@ internal static class RibbonAdaptiveLayoutEngine
         string? selectedTabHeader)
     {
         var expandableIndexes = RibbonAdaptivePriorityPlanner
-            .GetExpandableGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader)
-            .ToHashSet();
+            .GetExpandableGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader);
         var protectedIndexes = RibbonAdaptivePriorityPlanner
             .GetFallbackProtectedGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader)
             .ToHashSet();
@@ -295,7 +303,7 @@ internal static class RibbonAdaptiveLayoutEngine
             madeProgress = false;
             for (var i = 0; i < states.Length; i++)
             {
-                if (!expandableIndexes.Contains(i))
+                if (!ContainsIndex(expandableIndexes, i))
                     continue;
 
                 var currentState = states[i];
