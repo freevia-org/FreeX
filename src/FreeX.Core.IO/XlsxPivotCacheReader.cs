@@ -88,7 +88,9 @@ internal static class XlsxPivotCacheReader
                     sharedItems is null ? null : XlsxXmlAttributeReader.ReadDoubleAttribute(sharedItems, "maxValue"),
                     sharedItems?.Attribute("minDate")?.Value,
                     sharedItems?.Attribute("maxDate")?.Value,
-                    sharedItems is null ? null : ReadSharedItemValues(sharedItems, workbookNs)));
+                    sharedItems is null ? null : ReadSharedItemValues(sharedItems, workbookNs),
+                    field.Attribute("formula")?.Value,
+                    XlsxXmlAttributeReader.ReadBoolAttribute(field, "databaseField", defaultValue: true)));
             }
 
             result.Add(cache);

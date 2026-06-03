@@ -640,7 +640,8 @@ public partial class XlsxCorpusRunnerTests
         IReadOnlyList<PivotFieldSummary> RowFields,
         IReadOnlyList<PivotFieldSummary> ColumnFields,
         IReadOnlyList<PivotFieldSummary> PageFields,
-        IReadOnlyList<PivotDataFieldSummary> DataFields);
+        IReadOnlyList<PivotDataFieldSummary> DataFields,
+        IReadOnlyList<PivotCalculatedFieldSummary> CalculatedFields);
 
     private sealed record PivotCacheSummary(
         int CacheId,
@@ -680,7 +681,9 @@ public partial class XlsxCorpusRunnerTests
         double? MaxValue,
         string MinDate,
         string MaxDate,
-        IReadOnlyList<string> SharedItems);
+        IReadOnlyList<string> SharedItems,
+        string Formula,
+        bool IsDatabaseField);
 
     private sealed record PivotFieldSummary(
         int SourceFieldIndex,
@@ -701,6 +704,8 @@ public partial class XlsxCorpusRunnerTests
         int? BaseFieldIndex,
         string BaseItem,
         string NumberFormatCode);
+
+    private sealed record PivotCalculatedFieldSummary(string Name, string Formula);
 
     private sealed record PivotTableStyleSummary(
         string Name,

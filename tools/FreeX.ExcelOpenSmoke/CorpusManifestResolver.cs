@@ -1,4 +1,6 @@
 using System.Text;
+using FreeX.Core.IO;
+using FreeX.Core.IO.Tests;
 
 internal static class CorpusManifestResolver
 {
@@ -8,6 +10,10 @@ internal static class CorpusManifestResolver
         "supported-metadata-pass",
         "supported-pivot-metadata-pass",
         "public-pass"
+    };
+    private static readonly HashSet<string> GeneratedFixtureDefaultStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "supported-pass"
     };
 
     public static CorpusManifestSelection Resolve(
@@ -66,6 +72,82 @@ internal static class CorpusManifestResolver
         }
 
         return new CorpusManifestSelection(manifestPath, inputs, skipped);
+    }
+
+    public static CorpusManifestSelection GenerateSupportedFixtures(
+        SmokeOptions options,
+        WorkbookValidationWorkflow workflow,
+        string outputDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(options.CorpusManifestPath))
+            throw new ArgumentException("--generate-supported-corpus-fixtures requires --corpus-manifest.");
+
+        var manifestPath = Path.GetFullPath(options.CorpusManifestPath);
+        if (!File.Exists(manifestPath))
+            throw new ArgumentException($"Corpus manifest was not found: {options.CorpusManifestPath}");
+
+        var sourceFilter = ToFilter(options.CorpusSources);
+        var statusFilter = options.CorpusStatuses.Count > 0
+            ? ToFilter(options.CorpusStatuses)
+            : GeneratedFixtureDefaultStatuses;
+
+        Directory.CreateDirectory(outputDirectory);
+        var inputs = new List<WorkbookSmokeInput>();
+        var skipped = new List<CorpusManifestSkip>();
+
+        foreach (var row in ReadRows(manifestPath))
+        {
+            if (sourceFilter.Count > 0 && !sourceFilter.Contains(row.SourceType))
+            {
+                skipped.Add(new CorpusManifestSkip(row, "source-filter", null));
+                continue;
+            }
+
+            if (!string.Equals(row.SourceType, "generated", StringComparison.OrdinalIgnoreCase))
+            {
+                skipped.Add(new CorpusManifestSkip(row, "not-generated-source", null));
+                continue;
+            }
+
+            if (!statusFilter.Contains(row.ExpectedStatus))
+            {
+                skipped.Add(new CorpusManifestSkip(row, "status-filter", null));
+                continue;
+            }
+
+            if (!string.Equals(Path.GetExtension(row.RelativePath), ".xlsx", StringComparison.OrdinalIgnoreCase))
+            {
+                skipped.Add(new CorpusManifestSkip(row, "not-xlsx", null));
+                continue;
+            }
+
+            if (!XlsxCorpusFixtureFactory.CanCreate(row.Id))
+            {
+                skipped.Add(new CorpusManifestSkip(row, "no-generated-fixture", null));
+                continue;
+            }
+
+            var outputPath = Path.Combine(outputDirectory, Path.GetFileName(row.RelativePath));
+            SaveGeneratedFixture(row.Id, outputPath);
+            Console.WriteLine($"Generated: {outputPath}");
+            inputs.Add(new WorkbookSmokeInput(
+                outputPath,
+                workflow,
+                $"Generated corpus row {row.Id}",
+                CorpusRow: row));
+        }
+
+        return new CorpusManifestSelection(manifestPath, inputs, skipped);
+    }
+
+    private static void SaveGeneratedFixture(string id, string outputPath)
+    {
+        if (File.Exists(outputPath))
+            File.Delete(outputPath);
+
+        var workbook = XlsxCorpusFixtureFactory.Create(id);
+        using var output = File.Create(outputPath);
+        new XlsxFileAdapter().Save(workbook, output);
     }
 
     private static HashSet<string> ToFilter(IEnumerable<string> values) =>
