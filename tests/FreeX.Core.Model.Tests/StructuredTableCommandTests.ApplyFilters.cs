@@ -53,6 +53,24 @@ public sealed partial class StructuredTableCommandTests
     }
 
     [Fact]
+    public void ApplyStructuredTableFiltersCommand_MatchesSingleValueFiltersCaseInsensitively()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        SeedTable(sheet);
+        var table = CreateSalesTable(sheet);
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["north"]));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(1, ["OPEN"], IncludeBlank: true));
+        sheet.StructuredTables.Add(table);
+        var ctx = new SimpleCtx(wb);
+
+        var outcome = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 4u]);
+    }
+
+    [Fact]
     public void ApplyStructuredTableFiltersCommand_ClearsRowsInTableWhenNoFilterColumnsRemain()
     {
         var wb = new Workbook("test");

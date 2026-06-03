@@ -70,7 +70,8 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
 
             filters.Add(new TableFilterState(
                 table.Range.Start.Col + (uint)tableColumnIndex,
-                new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
+                FilterAllowedValueMatcher.Create(filterColumn.Values),
+                filterColumn.Values.Count,
                 filterColumn.IncludeBlank));
         }
 
@@ -122,8 +123,12 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         return true;
     }
 
-    private sealed record TableFilterState(uint Column, HashSet<string> AllowedValues, bool IncludeBlank)
+    private sealed record TableFilterState(
+        uint Column,
+        FilterAllowedValueMatcher AllowedValues,
+        int AllowedValueCount,
+        bool IncludeBlank)
     {
-        public int EstimatedSelectivity => AllowedValues.Count + (IncludeBlank ? 1 : 0);
+        public int EstimatedSelectivity => AllowedValueCount + (IncludeBlank ? 1 : 0);
     }
 }
