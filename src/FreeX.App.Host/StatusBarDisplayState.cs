@@ -17,7 +17,13 @@ internal sealed record StatusBarDisplayState(
     public static StatusBarDisplayState Ready(string text) =>
         new(Visibility.Visible, Visibility.Collapsed, text, "", "", "", "", "", "");
 
-    public static StatusBarDisplayState Stats(StatusBarCalculator.Stats stats)
+    public static StatusBarDisplayState Stats(StatusBarCalculator.Stats stats) =>
+        Stats(stats, countText: null, numericalCountText: null);
+
+    internal static StatusBarDisplayState Stats(
+        StatusBarCalculator.Stats stats,
+        string? countText,
+        string? numericalCountText)
     {
         var averageNumber = stats.Average.HasValue
             ? StatusBarCalculator.FormatNumber(stats.Average.Value)
@@ -37,8 +43,8 @@ internal sealed record StatusBarDisplayState(
             Visibility.Visible,
             "",
             averageNumber is not null ? FormatStatusText("StatusBar_AverageFormat", averageNumber) : "",
-            FormatStatusText("StatusBar_CountFormat", stats.Count),
-            FormatStatusText("StatusBar_NumericalCountFormat", stats.NumericalCount),
+            countText ?? FormatStatusText("StatusBar_CountFormat", stats.Count),
+            numericalCountText ?? FormatStatusText("StatusBar_NumericalCountFormat", stats.NumericalCount),
             sumNumber is not null ? FormatStatusText("StatusBar_SumFormat", sumNumber) : "",
             minNumber is not null ? FormatStatusText("StatusBar_MinFormat", minNumber) : "",
             maxNumber is not null ? FormatStatusText("StatusBar_MaxFormat", maxNumber) : "");

@@ -42,11 +42,9 @@ internal static class RibbonAdaptivePriorityPlanner
         IReadOnlyList<string> groupNames,
         double availableWidth,
         string? selectedTabHeader = null) =>
-        GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader)
-            .Where(decision => decision.State != RibbonAdaptiveGroupState.Collapsed)
-            .Where(decision => decision.Index >= 0 && decision.Index < groupNames.Count)
-            .Select(decision => decision.Index)
-            .ToHashSet();
+        GetRuntimeVisibilityProtectedGroupIndexesCore(
+            groupNames,
+            GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader));
 
     public static IReadOnlyList<int> GetExpandableGroupIndexes(
         IReadOnlyList<string> groupNames,
@@ -129,6 +127,25 @@ internal static class RibbonAdaptivePriorityPlanner
         }
 
         return false;
+    }
+
+    private static IReadOnlySet<int> GetRuntimeVisibilityProtectedGroupIndexesCore(
+        IReadOnlyList<string> groupNames,
+        IReadOnlyList<RibbonAdaptiveRuntimeStateOverride> decisions)
+    {
+        var indexes = new HashSet<int>();
+        for (var decisionIndex = 0; decisionIndex < decisions.Count; decisionIndex++)
+        {
+            var decision = decisions[decisionIndex];
+            if (decision.State != RibbonAdaptiveGroupState.Collapsed &&
+                decision.Index >= 0 &&
+                decision.Index < groupNames.Count)
+            {
+                indexes.Add(decision.Index);
+            }
+        }
+
+        return indexes;
     }
 }
 

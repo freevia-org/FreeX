@@ -6,6 +6,8 @@ internal sealed class StatusBarDisplayStateCache
 {
     private CultureInfo? _culture;
     private CultureInfo? _uiCulture;
+    private readonly Dictionary<int, string> _countTexts = [];
+    private readonly Dictionary<int, string> _numericalCountTexts = [];
     private string? _lastReadyText;
     private StatusBarDisplayState? _lastReadyState;
     private StatusBarCalculator.Stats? _lastStats;
@@ -38,7 +40,10 @@ internal sealed class StatusBarDisplayStateCache
             return state;
         }
 
-        state = StatusBarDisplayState.Stats(stats);
+        state = StatusBarDisplayState.Stats(
+            stats,
+            GetOrCreateCountText(stats.Count),
+            GetOrCreateNumericalCountText(stats.NumericalCount));
         _lastStats = stats;
         _lastStatsState = state;
         return state;
@@ -50,6 +55,28 @@ internal sealed class StatusBarDisplayStateCache
         _lastReadyState = null;
         _lastStats = null;
         _lastStatsState = null;
+        _countTexts.Clear();
+        _numericalCountTexts.Clear();
+    }
+
+    private string GetOrCreateCountText(int count)
+    {
+        if (_countTexts.TryGetValue(count, out var text))
+            return text;
+
+        text = string.Format(CultureInfo.CurrentCulture, UiText.Get("StatusBar_CountFormat"), count);
+        _countTexts[count] = text;
+        return text;
+    }
+
+    private string GetOrCreateNumericalCountText(int count)
+    {
+        if (_numericalCountTexts.TryGetValue(count, out var text))
+            return text;
+
+        text = string.Format(CultureInfo.CurrentCulture, UiText.Get("StatusBar_NumericalCountFormat"), count);
+        _numericalCountTexts[count] = text;
+        return text;
     }
 
     private void RefreshCultureState()

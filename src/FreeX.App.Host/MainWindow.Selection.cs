@@ -14,8 +14,7 @@ public partial class MainWindow
 {
     private void SelectRow(uint row)
     {
-        HideValidationDropdown();
-        ClearCommentPreview();
+        ClearSelectionTransientOverlays();
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, row, 1);
         _selectionCursor = new CellAddress(_currentSheetId, row, maxCol);
@@ -31,8 +30,7 @@ public partial class MainWindow
 
     private void SelectColumn(uint col)
     {
-        HideValidationDropdown();
-        ClearCommentPreview();
+        ClearSelectionTransientOverlays();
         const uint maxRow = 1_048_576;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, col);
         _selectionCursor = new CellAddress(_currentSheetId, maxRow, col);
@@ -49,8 +47,7 @@ public partial class MainWindow
 
     private void SelectAll()
     {
-        HideValidationDropdown();
-        ClearCommentPreview();
+        ClearSelectionTransientOverlays();
         const uint maxRow = 1_048_576;
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, 1);
@@ -185,6 +182,7 @@ public partial class MainWindow
 
             if (TryApplyFormulaRangeSelection(newAddr, extendSelection: (Keyboard.Modifiers & ModifierKeys.Shift) != 0))
             {
+                _dragSelectionTransientOverlaysCleared = false;
                 _dragSelectActive = true;
                 SheetGrid.CaptureMouse();
                 e.Handled = true;
@@ -217,6 +215,7 @@ public partial class MainWindow
 
                 SetActiveCell(newAddr);
                 _formatPainterTargetSelectionActive = true;
+                _dragSelectionTransientOverlaysCleared = false;
                 _dragSelectActive = true;
                 SheetGrid.CaptureMouse();
                 e.Handled = true;
@@ -226,6 +225,7 @@ public partial class MainWindow
             if (_borderDrawMode != BorderDrawMode.None)
             {
                 SetActiveCell(newAddr);
+                _dragSelectionTransientOverlaysCleared = false;
                 _dragSelectActive = true;
                 SheetGrid.CaptureMouse();
                 e.Handled = true;
@@ -247,6 +247,7 @@ public partial class MainWindow
 
                 AddOrMoveAdditionalSelection(newAddr, extendSelection: false);
                 _dragSelectAddsAdditionalRange = true;
+                _dragSelectionTransientOverlaysCleared = false;
                 _dragSelectActive = true;
                 SheetGrid.CaptureMouse();
             }
@@ -262,6 +263,7 @@ public partial class MainWindow
                 else
                 {
                     // Start drag-select
+                    _dragSelectionTransientOverlaysCleared = false;
                     _dragSelectActive = true;
                     SheetGrid.CaptureMouse();
                 }
@@ -640,7 +642,9 @@ public partial class MainWindow
 
         // If the cell belongs to a merged region, select the whole region
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var merge = sheet?.GetMergeRegion(addr);
+        var merge = sheet is { MergedRegions.Count: > 0 }
+            ? sheet.GetMergeRegion(addr)
+            : null;
         if (merge.HasValue)
         {
             _selectionAnchor = merge.Value.Start;
@@ -840,8 +844,7 @@ public partial class MainWindow
         if (IsSelectionExtensionUnchanged(anchor, to))
             return;
 
-        HideValidationDropdown();
-        ClearCommentPreview();
+        ClearSelectionTransientOverlays();
 
         _selectionCursor = to;
         SetSelectedRangesIfChanged(null);
@@ -859,8 +862,7 @@ public partial class MainWindow
         if (IsAdditionalSelectionExtensionUnchanged(target, extendSelection))
             return;
 
-        HideValidationDropdown();
-        ClearCommentPreview();
+        ClearSelectionTransientOverlays();
 
         if (!extendSelection)
             _selectionAnchor = target;
@@ -929,6 +931,9 @@ public partial class MainWindow
     {
         if (_dragSelectActive)
         {
+            if (_dragSelectToolbarRefreshPending)
+                return;
+
             if (!CanSkipSelectionDragToolbarRefresh())
                 _dragSelectToolbarRefreshPending = true;
             return;
@@ -953,6 +958,9 @@ public partial class MainWindow
     {
         if (_dragSelectActive)
         {
+            if (_dragSelectStatusRefreshPending)
+                return;
+
             _dragSelectStatusRefreshPending = true;
             return;
         }
@@ -973,6 +981,7 @@ public partial class MainWindow
     {
         _dragHeaderSelectionTarget = target;
         _dragHeaderSelectionAnchor = index;
+        _dragSelectionTransientOverlaysCleared = false;
         _dragSelectActive = true;
         SheetGrid.CaptureMouse();
     }
@@ -995,8 +1004,7 @@ public partial class MainWindow
         if (IsHeaderSelectionExtensionUnchanged(target, anchorIndex, targetIndex))
             return;
 
-        HideValidationDropdown();
-        ClearCommentPreview();
+        ClearSelectionTransientOverlays();
         SetSelectedRangesIfChanged(null);
 
         if (target == GridHeaderContextMenuTarget.Column)
@@ -1088,6 +1096,20 @@ public partial class MainWindow
         }
     }
 
+    private void ClearSelectionTransientOverlays()
+    {
+        if (_dragSelectActive)
+        {
+            if (_dragSelectionTransientOverlaysCleared)
+                return;
+
+            _dragSelectionTransientOverlaysCleared = true;
+        }
+
+        HideValidationDropdown();
+        ClearCommentPreview();
+    }
+
     private CellAddress? HitTestCell(System.Windows.Point pos)
     {
         var viewport = SheetGrid.Viewport;
@@ -1112,6 +1134,7 @@ public partial class MainWindow
         {
             _formatPainterTargetSelectionActive = false;
             _dragSelectActive = false;
+            _dragSelectionTransientOverlaysCleared = false;
             _dragSelectAddsAdditionalRange = false;
             _dragHeaderSelectionTarget = null;
             _dragHeaderSelectionAnchor = 0;
@@ -1171,6 +1194,13 @@ public partial class MainWindow
             return;
         }
 
+        if (sheet.Comments.Count == 0 &&
+            sheet.ThreadedComments.Count == 0)
+        {
+            ClearCommentPreview();
+            return;
+        }
+
         var preview = CommentNavigationPlanner.FormatCellCommentPreview(
             sheet.Comments,
             sheet.ThreadedComments,
@@ -1198,6 +1228,7 @@ public partial class MainWindow
         {
             _formatPainterTargetSelectionActive = false;
             _dragSelectActive = false;
+            _dragSelectionTransientOverlaysCleared = false;
             _dragSelectAddsAdditionalRange = false;
             _dragHeaderSelectionTarget = null;
             _dragHeaderSelectionAnchor = 0;
@@ -1218,6 +1249,7 @@ public partial class MainWindow
 
         if (!_dragSelectActive) return;
         _dragSelectActive = false;
+        _dragSelectionTransientOverlaysCleared = false;
         _dragSelectAddsAdditionalRange = false;
         _dragHeaderSelectionTarget = null;
         _dragHeaderSelectionAnchor = 0;
@@ -1251,6 +1283,7 @@ public partial class MainWindow
         _formatPainterTargetSelectionActive = false;
         _dragSelectActive = false;
         _dragSelectAddsAdditionalRange = false;
+        _dragSelectionTransientOverlaysCleared = false;
         _dragHeaderSelectionTarget = null;
         _dragHeaderSelectionAnchor = 0;
         CompleteDragSelectionToolbarRefresh();

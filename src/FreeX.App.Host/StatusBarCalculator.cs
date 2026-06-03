@@ -12,11 +12,11 @@ public static class StatusBarCalculator
 
     public static Stats Calculate(Sheet sheet, GridRange range)
     {
-        if (sheet.GetUsedRange() is not { } usedRange || !usedRange.Overlaps(range))
-            return EmptyStats;
-
         if (range.Start == range.End)
             return CalculateSingleCell(sheet.GetValue(range.Start.Row, range.Start.Col));
+
+        if (sheet.GetUsedRange() is not { } usedRange || !usedRange.Overlaps(range))
+            return EmptyStats;
 
         double sum = 0;
         int count = 0;
