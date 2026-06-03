@@ -361,12 +361,12 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Theory]
-    [InlineData("=SUMIF(B1:B100000,\"A\",A1:A100000)", 2_500_050_000d, 2_500_000)]
-    [InlineData("=COUNTIF(B1:B100000,\"A\")", 50_000d, 1_500_000)]
-    [InlineData("=AVERAGEIF(B1:B100000,\"A\",A1:A100000)", 50_001d, 2_500_000)]
-    [InlineData("=SUMIFS(A1:A100000,B1:B100000,\"A\",C1:C100000,\">50000\")", 1_875_025_000d, 3_000_000)]
-    [InlineData("=COUNTIFS(B1:B100000,\"A\",C1:C100000,\">50000\")", 25_000d, 2_200_000)]
-    [InlineData("=AVERAGEIFS(A1:A100000,B1:B100000,\"A\",C1:C100000,\">50000\")", 75_001d, 3_000_000)]
+    [InlineData("=SUMIF(B1:B100000,\"A\",A1:A100000)", 2_500_050_000d, 8_000)]
+    [InlineData("=COUNTIF(B1:B100000,\"A\")", 50_000d, 8_000)]
+    [InlineData("=AVERAGEIF(B1:B100000,\"A\",A1:A100000)", 50_001d, 8_000)]
+    [InlineData("=SUMIFS(A1:A100000,B1:B100000,\"A\",C1:C100000,\">50000\")", 1_875_025_000d, 8_000)]
+    [InlineData("=COUNTIFS(B1:B100000,\"A\",C1:C100000,\">50000\")", 25_000d, 8_000)]
+    [InlineData("=AVERAGEIFS(A1:A100000,B1:B100000,\"A\",C1:C100000,\">50000\")", 75_001d, 8_000)]
     public void ConditionalAggregatesLargeRanges_AvoidFlatteningRangeLists(string formula, double expected, long maxAllocatedBytes)
     {
         var evaluator = new FormulaEvaluator();

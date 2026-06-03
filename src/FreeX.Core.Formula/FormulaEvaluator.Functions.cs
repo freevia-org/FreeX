@@ -82,6 +82,9 @@ public sealed partial class FormulaEvaluator
             TryEvaluateAggregateDirectRanges(node, context, out var directAggregateResult))
             return directAggregateResult;
 
+        if (TryEvaluateConditionalAggregateDirectRanges(functionName, node, context, out var directConditionalAggregateResult))
+            return directConditionalAggregateResult;
+
         bool isStructured = IsStructuredRangeFunction(functionName);
         bool isAggregate = IsAggregateFunction(functionName);
         bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
