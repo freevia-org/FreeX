@@ -1,0 +1,256 @@
+using FluentAssertions;
+using FreeX.App.UI;
+using FreeX.Core.Model;
+using System.IO;
+using System.Windows;
+
+namespace FreeX.App.UI.Tests;
+
+public sealed partial class GridViewSplitPaneLayoutTests
+{
+    [Fact]
+    public void CalculateSplitPaneCellLayouts_ExpandsMergedAnchorWithinSplitPaneMetrics()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)],
+                [
+                    Cell(1, 1, "merged"),
+                    Cell(1, 2, "covered"),
+                    Cell(20, 1, "left")
+                ]));
+        var mergedRegions = new[]
+        {
+            new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 1, 2))
+        };
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport, mergedRegions);
+
+        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height))
+            .Should().Equal(
+                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 144, 18),
+                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18));
+    }
+
+    [Fact]
+    public void CalculateSplitPaneCellLayouts_SuppressesCoveredMergeCellWhenAnchorIsOutsideVisiblePaneMetrics()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)],
+                [
+                    Cell(20, 1, "covered"),
+                    Cell(21, 1, "visible")
+                ]));
+        var mergedRegions = new[]
+        {
+            new GridRange(
+                new CellAddress(sheetId, 19, 1),
+                new CellAddress(sheetId, 20, 1))
+        };
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport, mergedRegions);
+
+        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Cell.DisplayText))
+            .Should().Equal((21u, 1u, "visible"));
+    }
+
+    [Fact]
+    public void SplitPaneCellLayoutPlanner_IndexesMergeRowsBySmallerIntersectedSide()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+        var addMergeRows = source[
+            source.IndexOf("private static void AddMergeRows", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddMergeRow(", StringComparison.Ordinal)];
+
+        addMergeRows.Should().Contain("var intersectedRowSpan = endRow - startRow + 1;");
+        addMergeRows.Should().Contain("if (intersectedRowSpan <= queryCells.Rows.Count)");
+        addMergeRows.Should().Contain("queryCells.Rows.Contains(row)");
+        addMergeRows.Should().Contain("foreach (var row in queryCells.Rows)");
+    }
+
+    [Fact]
+    public void SplitPaneCellLayoutPlanner_PrunesMergedRegionsOutsideQueriedPaneColumns()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+        var createIndex = source[
+            source.IndexOf("public static MergeRangeIndex Create", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddMergeRows", StringComparison.Ordinal)];
+
+        createIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
+        createIndex.Should().Contain("mergedRegion.End.Row < queryCells.MinRow");
+        createIndex.Should().Contain("mergedRegion.Start.Row > queryCells.MaxRow");
+        createIndex.Should().Contain("mergedRegion.End.Col < queryCells.MinCol");
+        createIndex.Should().Contain("mergedRegion.Start.Col > queryCells.MaxCol");
+        source.Should().Contain("uint MinCol,");
+        source.Should().Contain("uint MaxCol");
+    }
+
+    [Fact]
+    public void CalculateSplitPaneCellLayouts_AllowsTextOverflowAcrossEmptyCellsWithinSamePane()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)],
+                [
+                    Cell(1, 1, "overflow"),
+                    Cell(1, 3, "stop")
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 1).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 144, 18));
+    }
+
+    [Fact]
+    public void CalculateSplitPaneCellLayouts_AllowsTopRightTextOverflowWithinIndependentColumns()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64)],
+                [
+                    Cell(1, 12, "top-right overflow"),
+                    Cell(1, 14, "stop")
+                ],
+                [
+                    new ColMetric(12, 50, 0),
+                    new ColMetric(13, 70, 50),
+                    new ColMetric(14, 90, 120)
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 12).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth + 144, GridView.ColHeaderHeight, 120, 18));
+    }
+
+    [Fact]
+    public void CalculateSplitPaneCellLayouts_NormalizesOutOfOrderOverflowOccupiedCells()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0)],
+            [new ColMetric(10, 64, 0)],
+            SplitPanes: new SplitPaneState(
+                2,
+                2,
+                [new RowMetric(1, 18, 0)],
+                [
+                    new ColMetric(1, 40, 0),
+                    new ColMetric(2, 40, 40),
+                    new ColMetric(3, 40, 80),
+                    new ColMetric(4, 40, 120)
+                ],
+                [
+                    Cell(1, 4, "later"),
+                    Cell(1, 1, "overflow"),
+                    Cell(1, 3, "stop")
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 1).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 80, 18));
+    }
+
+    [Fact]
+    public void CalculateSplitPaneCellLayouts_TreatsEditingCellAsOverflowOccupied()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0)],
+                [
+                    new ColMetric(1, 64, 0),
+                    new ColMetric(2, 80, 64),
+                    new ColMetric(3, 64, 144)
+                ],
+                [
+                    Cell(1, 1, "overflow"),
+                    new DisplayCell(1, 2, BlankValue.Instance, "", null, StyleId.Default, null),
+                    Cell(1, 3, "stop")
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(
+            viewport,
+            editingCell: new CellAddress(sheetId, 1, 2));
+
+        layouts.Single(layout => layout.Cell.Col == 1).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18));
+    }
+
+    [Fact]
+    public void CalculateSplitPaneCellLayouts_DoesNotOverflowShrinkToFitTextAcrossEmptyCells()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)],
+                [
+                    Cell(1, 1, "shrink text", new CellStyle { ShrinkToFit = true }),
+                    Cell(1, 3, "stop")
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 1).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18));
+    }
+
+    [Fact]
+    public void RenderSplitPaneCells_DrawsCommentIndicatorsForCommentOnlyPaneCells()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = source[
+            source.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)..
+            source.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("if (cell.HasComment)");
+        renderSplitPaneCells.Should().Contain("DrawCommentIndicator(dc, rect);");
+        renderSplitPaneCells.IndexOf("DrawCommentIndicator(dc, rect);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSplitPaneCells.IndexOf("ShouldDrawCellContent(cell, EditingCell)", StringComparison.Ordinal));
+    }
+}
