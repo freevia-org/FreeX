@@ -329,7 +329,7 @@ public partial class MainWindow
 
     private async Task RequestNewWorkbookAsync()
     {
-        if (!await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")))
+        if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")) == SaveChangesConfirmation.Cancel)
             return;
 
         CreateNewWorkbook();
@@ -342,7 +342,7 @@ public partial class MainWindow
         var adapter = FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format);
         if (adapter == null) return;
         if (_isOpeningFile) return;
-        if (!await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")))
+        if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")) == SaveChangesConfirmation.Cancel)
             return;
 
         try

@@ -59,8 +59,11 @@ public sealed partial class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("VisitLayouts(viewport, arrows, sheetId, ref consumer);");
         visitLayouts.Should().Contain("where TConsumer : struct, IFormulaTraceArrowLayoutConsumer");
         visitLayouts.Should().Contain("var metrics = new FormulaTraceMetricLookup(viewport, GridView.CalculateRowHeaderWidth(viewport));");
+        visitLayouts.Should().Contain("for (var i = 0; i < arrows.Count; i++)");
+        visitLayouts.Should().Contain("var arrow = arrows[i];");
         visitLayouts.Should().Contain("metrics.TryGetCellRect");
         visitLayouts.Should().Contain("consumer.AcceptLayout(");
+        visitLayouts.Should().NotContain("foreach (var arrow in arrows)");
         visitLayouts.Should().NotContain("new List<FormulaTraceArrowLayout>");
         visitLayouts.Should().NotContain("new FormulaTraceArrowLayout");
         source.Should().NotContain("Dictionary<");

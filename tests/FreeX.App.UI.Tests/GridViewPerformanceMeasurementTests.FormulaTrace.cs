@@ -86,6 +86,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         materializedCount.Should().Be(arrowCount * iterations);
         visitedCount.Should().Be(materializedCount);
         visitedAllocatedBytes.Should().BeLessThan(materializedAllocatedBytes);
+        visitedAllocatedBytes.Should().BeLessThan(2_000);
     }
 
     [Fact]

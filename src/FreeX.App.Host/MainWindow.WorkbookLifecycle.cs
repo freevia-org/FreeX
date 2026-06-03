@@ -6,6 +6,13 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private enum SaveChangesConfirmation
+    {
+        Cancel,
+        Continue,
+        DiscardWithoutSaving
+    }
+
     private void MarkWorkbookDirty()
     {
         _workbookDirty = true;
@@ -18,10 +25,10 @@ public partial class MainWindow
         UpdateTitleBar();
     }
 
-    private async Task<bool> ConfirmSaveBeforeDestructiveActionAsync(string message)
+    private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(string message)
     {
         if (!_workbookDirty)
-            return true;
+            return SaveChangesConfirmation.Continue;
 
         var result = ShowOwnedMessage(
             message,
@@ -30,33 +37,73 @@ public partial class MainWindow
             MessageBoxImage.Warning);
 
         if (result == MessageBoxResult.Cancel)
-            return false;
+            return SaveChangesConfirmation.Cancel;
         if (result == MessageBoxResult.No)
-            return true;
+            return SaveChangesConfirmation.DiscardWithoutSaving;
 
         if (FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target))
-            return await SaveWorkbookToTargetAsync(target!);
+            return await SaveWorkbookToTargetAsync(target!)
+                ? SaveChangesConfirmation.Continue
+                : SaveChangesConfirmation.Cancel;
 
-        return await SaveWorkbookWithDialogAsync();
+        return await SaveWorkbookWithDialogAsync()
+            ? SaveChangesConfirmation.Continue
+            : SaveChangesConfirmation.Cancel;
     }
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
         if (_suppressClosePrompt || !_workbookDirty)
+        {
+            PrepareActiveWorkbookForFinalClose();
             return;
+        }
 
         e.Cancel = true;
         if (_closeAfterSaveInProgress)
             return;
 
         _closeAfterSaveInProgress = true;
-        var canClose = await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeClosingWorkbook"));
-        _closeAfterSaveInProgress = false;
+        SaveChangesConfirmation confirmation;
+        try
+        {
+            confirmation = await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeClosingWorkbook"));
+        }
+        finally
+        {
+            _closeAfterSaveInProgress = false;
+        }
 
-        if (!canClose)
+        if (confirmation == SaveChangesConfirmation.Cancel)
             return;
 
         _suppressClosePrompt = true;
-        Close();
+        PrepareActiveWorkbookForFinalClose();
+        _ = Dispatcher.BeginInvoke(new Action(Close));
+    }
+
+    private bool IsFinalWorkbookWindowClose() =>
+        _windowRegistry is null || _windowRegistry.Count <= 1;
+
+    private void PrepareActiveWorkbookForFinalClose()
+    {
+        if (!IsFinalWorkbookWindowClose())
+            return;
+
+        XlsxFileAdapter.ForgetLoadedPackageSnapshot(_workbook);
+        _currentXlsxFeatureReport = null;
+        _worksheetSelections.Clear();
+        _groupedSheetIds.Clear();
+        _formulaTraceArrows.Clear();
+        _splitPaneViewportOffsets.Clear();
+        _statusBarStatsCache.Clear();
+        _statusBarDisplayStateCache.Clear();
+        _sparklineValueCache.Clear();
+        _toolbarVisualStateCache.Clear();
+
+        var replacement = NewWorkbookFactory.Create(_options);
+        _workbook = replacement;
+        _workbookRef.Current = replacement;
+        _currentSheetId = replacement.Sheets[0].Id;
     }
 }
