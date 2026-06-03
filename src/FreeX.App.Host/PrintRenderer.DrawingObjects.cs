@@ -8,10 +8,12 @@ namespace FreeX.App.Host;
 
 public static partial class PrintRenderer
 {
+    private static readonly Typeface PrintedChartTypeface = new("Segoe UI");
     private static readonly Typeface PrintedTextBoxTypeface = new("Segoe UI");
 
     private static void DrawPrintedCharts(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         ViewportModel viewport,
         IReadOnlyList<ChartModel> charts,
         WorkbookTheme workbookTheme,
@@ -54,16 +56,176 @@ public static partial class PrintRenderer
             if (image is null)
                 continue;
 
-            dc.DrawImage(
-                image,
-                new Rect(
-                    bodyGridLeft + chart.Left - pageGridLeft,
-                    bodyGridTop + chart.Top - pageGridTop,
-                    chart.Width,
-                    chart.Height));
+            var chartRect = new Rect(
+                bodyGridLeft + chart.Left - pageGridLeft,
+                bodyGridTop + chart.Top - pageGridTop,
+                chart.Width,
+                chart.Height);
+            dc.DrawImage(image, chartRect);
+            if (bodyGridRect.Contains(chartRect))
+                AddPrintedChartTextOverlays(textOverlays, chart, workbookTheme, chartRect);
         }
         dc.Pop();
     }
+
+    private static void AddPrintedChartTextOverlays(
+        ICollection<PdfTextOverlay> textOverlays,
+        ChartModel chart,
+        WorkbookTheme workbookTheme,
+        Rect chartRect)
+    {
+        var textInset = Math.Min(8, Math.Max(0, chartRect.Width / 20));
+        AddPrintedChartCenteredOverlay(
+            textOverlays,
+            chart.Title,
+            chartRect.Left + chartRect.Width / 2,
+            chartRect.Top + textInset,
+            Math.Max(1, chartRect.Width - textInset * 2),
+            NormalizePrintedChartFontSize(chart.ChartTitleFontSize, 16),
+            ResolveChartTitleOverlayColor(chart, workbookTheme),
+            rotationDegrees: 0);
+
+        if (!ChartTypeSupport.SupportsAxes(chart.Type))
+            return;
+
+        var axisFontSize = NormalizePrintedChartFontSize(chart.AxisTitleFontSize, 12);
+        var axisColor = ResolveAxisTitleOverlayColor(chart, workbookTheme);
+        if (!chart.HideXAxis)
+        {
+            AddPrintedChartCenteredOverlay(
+                textOverlays,
+                chart.XAxisTitle,
+                chartRect.Left + chartRect.Width / 2,
+                chartRect.Bottom - axisFontSize - textInset,
+                Math.Max(1, chartRect.Width - textInset * 2),
+                axisFontSize,
+                axisColor,
+                rotationDegrees: 0);
+        }
+
+        if (!chart.HideYAxis)
+        {
+            AddPrintedChartVerticalAxisOverlay(
+                textOverlays,
+                chart.YAxisTitle,
+                chartRect.Left + textInset,
+                chartRect.Top + chartRect.Height / 2,
+                Math.Max(1, chartRect.Height - textInset * 2),
+                axisFontSize,
+                axisColor);
+        }
+    }
+
+    private static void AddPrintedChartCenteredOverlay(
+        ICollection<PdfTextOverlay> textOverlays,
+        string? text,
+        double centerX,
+        double y,
+        double maxWidth,
+        double fontSize,
+        CellColor color,
+        double rotationDegrees)
+    {
+        var bounded = BoundPrintedChartOverlayText(text, maxWidth, fontSize);
+        if (bounded.Length == 0)
+            return;
+
+        var textWidth = MeasurePrintedChartText(bounded, fontSize).WidthIncludingTrailingWhitespace;
+        var x = centerX - textWidth / 2;
+        textOverlays.Add(CreatePrintedChartTextOverlay(bounded, x, y, fontSize, color, rotationDegrees));
+    }
+
+    private static void AddPrintedChartVerticalAxisOverlay(
+        ICollection<PdfTextOverlay> textOverlays,
+        string? text,
+        double x,
+        double centerY,
+        double maxWidth,
+        double fontSize,
+        CellColor color)
+    {
+        var bounded = BoundPrintedChartOverlayText(text, maxWidth, fontSize);
+        if (bounded.Length == 0)
+            return;
+
+        var textWidth = MeasurePrintedChartText(bounded, fontSize).WidthIncludingTrailingWhitespace;
+        textOverlays.Add(CreatePrintedChartTextOverlay(
+            bounded,
+            x,
+            centerY + textWidth / 2 - fontSize,
+            fontSize,
+            color,
+            rotationDegrees: -90));
+    }
+
+    private static PdfTextOverlay CreatePrintedChartTextOverlay(
+        string text,
+        double x,
+        double y,
+        double fontSize,
+        CellColor color,
+        double rotationDegrees) =>
+        new(
+            text,
+            x,
+            y,
+            fontSize,
+            PrintedChartTypeface.FontFamily.Source,
+            Bold: false,
+            Italic: false,
+            Color.FromRgb(color.R, color.G, color.B))
+        {
+            RotationDegrees = rotationDegrees
+        };
+
+    private static string BoundPrintedChartOverlayText(string? text, double maxWidth, double fontSize)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return "";
+
+        const string ellipsis = "\u2026";
+        var boundedWidth = Math.Max(1, maxWidth);
+        var candidate = text.Trim().TrimEnd();
+        if (FitsPrintedChartVisibleWidth(candidate, boundedWidth, fontSize))
+            return candidate;
+
+        while (candidate.Length > 0 && !FitsPrintedChartOverlayWidth(candidate + ellipsis, boundedWidth, fontSize))
+            candidate = candidate[..^1].TrimEnd();
+
+        return candidate.Length == 0 ? ellipsis : candidate + ellipsis;
+    }
+
+    private static bool FitsPrintedChartVisibleWidth(string text, double maxWidth, double fontSize) =>
+        MeasurePrintedChartText(text, fontSize).Width <= Math.Max(1, maxWidth);
+
+    private static bool FitsPrintedChartOverlayWidth(string text, double maxWidth, double fontSize) =>
+        MeasurePrintedChartText(text, fontSize).WidthIncludingTrailingWhitespace <= Math.Max(1, maxWidth);
+
+    private static FormattedText MeasurePrintedChartText(string text, double fontSize) =>
+        new(
+            text,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            PrintedChartTypeface,
+            fontSize,
+            Brushes.Black,
+            1.0);
+
+    private static double NormalizePrintedChartFontSize(double fontSize, double fallback) =>
+        double.IsFinite(fontSize) && fontSize > 0 ? fontSize : fallback;
+
+    private static CellColor ResolveChartTitleOverlayColor(ChartModel chart, WorkbookTheme workbookTheme) =>
+        chart.ResolveChartTitleTextColor(workbookTheme) ??
+        ResolveChartDefaultOverlayColor(chart, workbookTheme);
+
+    private static CellColor ResolveAxisTitleOverlayColor(ChartModel chart, WorkbookTheme workbookTheme) =>
+        chart.ResolveAxisTitleTextColor(workbookTheme) ??
+        ResolveChartDefaultOverlayColor(chart, workbookTheme);
+
+    private static CellColor ResolveChartDefaultOverlayColor(ChartModel chart, WorkbookTheme workbookTheme) =>
+        chart.ChartDefaultTextThemeColor?.Resolve(workbookTheme) ??
+        chart.ChartDefaultTextColor ??
+        CellColor.Black;
 
     private static bool ShouldPrintChart(ChartModel chart, Rect pageGridRect)
     {

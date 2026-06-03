@@ -13,7 +13,10 @@ internal sealed record PdfTextOverlay(
     string FontFamily,
     bool Bold,
     bool Italic,
-    Color Color);
+    Color Color)
+{
+    public double RotationDegrees { get; init; }
+}
 
 internal static class PdfTextOverlayExtractor
 {

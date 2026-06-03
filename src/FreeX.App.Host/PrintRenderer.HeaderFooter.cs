@@ -120,6 +120,7 @@ public static partial class PrintRenderer
         {
             DrawPrintedCharts(
                 dc,
+                textOverlays,
                 viewport,
                 charts,
                 workbookTheme,
