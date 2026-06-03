@@ -1,0 +1,422 @@
+using System.Text;
+using System.Xml;
+using System.Xml.Linq;
+using System.Xml.Xsl;
+using FluentAssertions;
+
+namespace FreeX.Core.IO.Tests;
+
+public sealed partial class XsltWorkbookTransformTests
+{
+    [Fact]
+    public void TransformToSpreadsheetXml_MalformedStylesheet_ReportsStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("<xsl:stylesheet");
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_EmptyStylesheet_ReportsStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString(string.Empty);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_InvalidStylesheetExpression_ReportsStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:value-of select="count("/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetDtd_ReportsStylesheetXmlDiagnostic()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <!DOCTYPE xsl:stylesheet [ <!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini"> ]>
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_NullSource_ThrowsArgumentNullException()
+    {
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(null!, stylesheet);
+
+        act.Should().Throw<ArgumentNullException>()
+            .Where(exception => exception.ParamName == "sourceXml");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_NullStylesheet_ThrowsArgumentNullException()
+    {
+        using var source = StreamFromString("<rows />");
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .Where(exception => exception.ParamName == "stylesheet");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_Success_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = IdentityStylesheet();
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        transformed.Length.Should().BeGreaterThan(0);
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_UsesCurrentInputStreamPositions()
+    {
+        using var source = PositionedStreamFromString("ignored", "<rows><row name=\"Bravo\" /></rows>");
+        using var stylesheet = PositionedStreamFromString("ignored", """
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Data">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("Bravo");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_AcceptsNonSeekableInputStreams()
+    {
+        using var source = NonSeekableStreamFromString("<rows><row name=\"Charlie\" /></rows>");
+        using var stylesheet = NonSeekableStreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Data">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("Charlie");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_Failure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetFailure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("<xsl:stylesheet");
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetFailure_DoesNotReadSourceStream()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("<xsl:stylesheet");
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>();
+        source.Position.Should().Be(0);
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_SourceDtd_ReportsSourceDiagnostic()
+    {
+        using var source = StreamFromString("""
+            <!DOCTYPE rows [ <!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini"> ]>
+            <rows>&xxe;</rows>
+            """);
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*source XML*")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_MalformedSource_ReportsSourceDiagnostic()
+    {
+        using var source = StreamFromString("<rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*source XML*")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_EmptySource_ReportsSourceDiagnostic()
+    {
+        using var source = StreamFromString(string.Empty);
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*source XML*")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_DocumentFunction_ReportsDisabledExternalAccess()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:value-of select="document('file:///C:/Windows/win.ini')"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_RemoteDocumentFunction_ReportsDisabledExternalAccess()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:value-of select="document('https://example.invalid/freex.xml')"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_TerminatingMessage_ReportsTransformDiagnostic()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:message terminate="yes">stop</xsl:message>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*XSLT transform failed*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_TransformFailure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = TerminatingMessageStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetInclude_ReportsDisabledExternalAccess()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:include href="file:///C:/Windows/win.ini"/>
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_RemoteStylesheetInclude_ReportsDisabledExternalAccess()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:include href="https://example.invalid/freex.xsl"/>
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetImport_ReportsDisabledExternalAccess()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:import href="file:///C:/Windows/win.ini"/>
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_RemoteStylesheetImport_ReportsDisabledExternalAccess()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:import href="https://example.invalid/freex.xsl"/>
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetScript_ReportsDisabledFeatures()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:msxsl="urn:schemas-microsoft-com:xslt"
+                xmlns:user="urn:freex-test-script">
+              <msxsl:script language="C#" implements-prefix="user">
+                public string Value() { return "blocked"; }
+              </msxsl:script>
+              <xsl:template match="/">
+                <xsl:value-of select="user:Value()"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access and script are disabled*")
+            .WithInnerException<XsltException>();
+    }
+
+}
