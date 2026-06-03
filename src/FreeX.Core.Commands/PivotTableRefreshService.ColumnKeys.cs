@@ -112,10 +112,14 @@ public static partial class PivotTableRefreshService
             ? rows
             : Array.Empty<IReadOnlyList<ScalarValue>>();
 
-    private static List<IReadOnlyList<ScalarValue>> RowsForColumnKeys(
+    private static IReadOnlyList<IReadOnlyList<ScalarValue>> RowsForColumnKeys(
         PivotColumnRowMap rowsByColumnKey,
-        IReadOnlyList<PivotKey> columnKeys)
+        IReadOnlyList<PivotKey> columnKeys,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> allRows)
     {
+        if (ColumnKeysCoverAllRows(rowsByColumnKey, columnKeys))
+            return allRows;
+
         var visibleKeys = new HashSet<PivotKey>(columnKeys);
         var visibleRowCapacity = 0;
         foreach (var columnKey in columnKeys)
@@ -132,6 +136,22 @@ public static partial class PivotTableRefreshService
         }
 
         return visibleRows;
+    }
+
+    private static bool ColumnKeysCoverAllRows(
+        PivotColumnRowMap rowsByColumnKey,
+        IReadOnlyList<PivotKey> columnKeys)
+    {
+        if (columnKeys.Count != rowsByColumnKey.RowsByKey.Count)
+            return false;
+
+        foreach (var columnKey in columnKeys)
+        {
+            if (!rowsByColumnKey.RowsByKey.ContainsKey(columnKey))
+                return false;
+        }
+
+        return true;
     }
 
     private static List<PivotKey> BuildColumnKeys(
