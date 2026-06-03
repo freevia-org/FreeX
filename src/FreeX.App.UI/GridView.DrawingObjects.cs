@@ -661,37 +661,70 @@ public partial class GridView
 
     private void DrawTextBoxThemeEffect(DrawingContext dc, Rect rect, WorkbookThemeEffectStyle effect)
     {
-        if (!effect.HasShadow)
+        if (!effect.HasShadow && !effect.HasGlow)
             return;
 
-        var shadowRect = rect;
-        shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
-        var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
-        dc.DrawRectangle(GetDrawingObjectBrush(alpha, 0, 0, 0), null, shadowRect);
+        if (effect.HasShadow)
+        {
+            var shadowRect = rect;
+            shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
+            var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
+            dc.DrawRectangle(GetDrawingObjectBrush(alpha, 0, 0, 0), null, shadowRect);
+        }
+
+        if (effect.HasGlow)
+        {
+            var glowColor = effect.GlowColor ?? new CellColor(91, 155, 213);
+            var glowRect = rect;
+            glowRect.Inflate(effect.GlowRadius, effect.GlowRadius);
+            var alpha = (byte)Math.Clamp(Math.Round(255 * effect.GlowOpacity), 0, 255);
+            var thickness = Math.Max(2, effect.GlowRadius);
+            dc.DrawRectangle(null, GetDrawingObjectPen(alpha, glowColor, thickness), glowRect);
+        }
     }
 
     private void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookThemeEffectStyle effect)
     {
-        if (!effect.HasShadow)
+        if (!effect.HasShadow && !effect.HasGlow)
             return;
 
-        var shadowRect = rect;
-        shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
-        var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
-        var shadowBrush = GetDrawingObjectBrush(alpha, 0, 0, 0);
-        var shadowPen = GetDrawingObjectPen(alpha, 0, 0, 0, 2);
-
-        switch (kind)
+        if (effect.HasShadow)
         {
-            case DrawingShapeKind.Rectangle:
-                dc.DrawRectangle(shadowBrush, null, shadowRect);
-                break;
-            case DrawingShapeKind.Ellipse:
-                dc.DrawEllipse(shadowBrush, null, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
-                break;
-            case DrawingShapeKind.Line:
-                dc.DrawLine(shadowPen, shadowRect.TopLeft, shadowRect.BottomRight);
-                break;
+            var shadowRect = rect;
+            shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
+            var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
+            var shadowBrush = GetDrawingObjectBrush(alpha, 0, 0, 0);
+            var shadowPen = GetDrawingObjectPen(alpha, 0, 0, 0, 2);
+
+            switch (kind)
+            {
+                case DrawingShapeKind.Rectangle:
+                    dc.DrawRectangle(shadowBrush, null, shadowRect);
+                    break;
+                case DrawingShapeKind.Ellipse:
+                    dc.DrawEllipse(shadowBrush, null, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
+                    break;
+                case DrawingShapeKind.Line:
+                    dc.DrawLine(shadowPen, shadowRect.TopLeft, shadowRect.BottomRight);
+                    break;
+            }
+        }
+
+        if (effect.HasGlow)
+        {
+            var glowColor = effect.GlowColor ?? new CellColor(91, 155, 213);
+            var alpha = (byte)Math.Clamp(Math.Round(255 * effect.GlowOpacity), 0, 255);
+            var thickness = Math.Max(2, effect.GlowRadius);
+            DrawShapeOutlineEffect(
+                dc,
+                kind,
+                rect,
+                alpha,
+                glowColor.R,
+                glowColor.G,
+                glowColor.B,
+                thickness,
+                effect.GlowRadius);
         }
     }
 

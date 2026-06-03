@@ -15,6 +15,7 @@ public partial class GridView
 
     private readonly record struct PreSelectionLayerCacheKey(
         ViewportModel Viewport,
+        bool SkipHeavyLayers,
         double ActualWidth,
         double ActualHeight,
         double RowHeaderWidth,
@@ -56,7 +57,7 @@ public partial class GridView
             return;
         }
 
-        var key = CreatePreSelectionLayerCacheKey();
+        var key = CreatePreSelectionLayerCacheKey(skipHeavyLayers);
         if (_preSelectionLayerCache is { } cached &&
             _preSelectionLayerCacheKey == key)
         {
@@ -82,7 +83,6 @@ public partial class GridView
     }
 
     private static bool CanCachePreSelectionLayers(bool skipHeavyLayers, bool isLiveResizing) =>
-        !skipHeavyLayers &&
         !isLiveResizing;
 
     private bool ShouldBuildPreSelectionLayerCache(PreSelectionLayerCacheKey key) =>
@@ -107,7 +107,7 @@ public partial class GridView
         return group;
     }
 
-    private PreSelectionLayerCacheKey CreatePreSelectionLayerCacheKey()
+    private PreSelectionLayerCacheKey CreatePreSelectionLayerCacheKey(bool skipHeavyLayers)
     {
         var mergedRegions = MergedRegions;
         var rowPageBreaks = RowPageBreaks;
@@ -117,6 +117,7 @@ public partial class GridView
 
         return new PreSelectionLayerCacheKey(
             Viewport!,
+            skipHeavyLayers,
             ActualWidth,
             ActualHeight,
             ActualRowHeaderWidth,
