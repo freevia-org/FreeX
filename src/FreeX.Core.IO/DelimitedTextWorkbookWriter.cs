@@ -120,7 +120,7 @@ internal static class DelimitedTextWorkbookWriter
         foreach (var (col, cell) in cells)
         {
             WriteDelimiters(writer, delimiter, previousCol == 0 ? col - 1 : col - previousCol);
-            WriteField(writer, delimiter, FormatCell(cell), ShouldWriteAsText(cell.Value));
+            WriteCellField(writer, delimiter, cell);
             previousCol = col;
         }
 
@@ -200,6 +200,65 @@ internal static class DelimitedTextWorkbookWriter
         }
 
         writer.Write('"');
+    }
+
+    private static void WriteCellField(TextWriter writer, char delimiter, Cell cell)
+    {
+        if (cell.FormulaText is { } formulaText)
+        {
+            WriteField(
+                writer,
+                delimiter,
+                formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText : $"={formulaText}",
+                isTextValue: false);
+            return;
+        }
+
+        switch (cell.Value)
+        {
+            case NumberValue number:
+                WriteNumberValue(writer, number.Value);
+                return;
+            case DateTimeValue dateTime:
+                WriteDateTimeValue(writer, delimiter, dateTime);
+                return;
+            case BoolValue boolean:
+                writer.Write(boolean.Value ? "TRUE" : "FALSE");
+                return;
+            case TextValue text:
+                WriteField(writer, delimiter, text.Value, isTextValue: true);
+                return;
+            case ErrorValue error:
+                WriteField(writer, delimiter, error.Code, isTextValue: false);
+                return;
+        }
+    }
+
+    private static void WriteNumberValue(TextWriter writer, double value)
+    {
+        Span<char> buffer = stackalloc char[32];
+        if (value.TryFormat(buffer, out var charsWritten, provider: CultureInfo.InvariantCulture))
+        {
+            writer.Write(buffer[..charsWritten]);
+            return;
+        }
+
+        writer.Write(value.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static void WriteDateTimeValue(TextWriter writer, char delimiter, DateTimeValue value)
+    {
+        if (TryFormatDateTimeValue(value, out var formatted))
+        {
+            WriteField(writer, delimiter, formatted, isTextValue: false);
+            return;
+        }
+
+        WriteField(
+            writer,
+            delimiter,
+            value.Value.ToString("R", CultureInfo.InvariantCulture),
+            isTextValue: double.IsFinite(value.Value));
     }
 
     private static bool ShouldQuoteField(string value, char delimiter, bool isTextValue)
@@ -332,42 +391,6 @@ internal static class DelimitedTextWorkbookWriter
 
     private static bool IsErrorLikeText(string value) =>
         ErrorTextLiterals.Contains(value.Trim());
-
-    private static string FormatCell(Cell cell) =>
-        cell.FormulaText is { } formulaText
-            ? formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText : $"={formulaText}"
-            : FormatValue(cell.Value);
-
-    private static string FormatValue(ScalarValue value) => value switch
-    {
-        NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
-        DateTimeValue dt when TryFormatDateTimeValue(dt, out var formatted) => formatted,
-        DateTimeValue dt => dt.Value.ToString("R", CultureInfo.InvariantCulture),
-        BoolValue b => b.Value ? "TRUE" : "FALSE",
-        TextValue t => t.Value,
-        ErrorValue e => e.Code,
-        _ => "",
-    };
-
-    private static bool ShouldWriteAsText(ScalarValue value) =>
-        value is TextValue ||
-        value is DateTimeValue dt && double.IsFinite(dt.Value) && !CanFormatDateTimeValue(dt);
-
-    private static bool CanFormatDateTimeValue(DateTimeValue value)
-    {
-        if (!double.IsFinite(value.Value))
-            return false;
-
-        try
-        {
-            _ = value.ToDateTime();
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-    }
 
     private static bool TryFormatDateTimeValue(DateTimeValue value, out string text)
     {

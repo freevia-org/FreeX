@@ -45,6 +45,17 @@ public sealed partial class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Save_StreamsNumericValuesWithoutPerCellStringAllocation()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "DelimitedTextWorkbookWriter.cs"));
+
+        source.Should().Contain("WriteNumberValue(writer, number.Value);");
+        source.Should().Contain("value.TryFormat(buffer, out var charsWritten, provider: CultureInfo.InvariantCulture)");
+        source.Should().NotContain("NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture)");
+    }
+
+    [Fact]
     public void Save_UsesSinglePassDateTimeShapeProbeWithoutLinq()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
