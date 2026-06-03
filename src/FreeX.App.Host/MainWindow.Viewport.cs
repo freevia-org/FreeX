@@ -558,13 +558,27 @@ public partial class MainWindow
     private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet)
     {
         var frozenRows = sheet?.FrozenRows ?? 0;
-        return Math.Max(1, viewport.RowMetrics.Count(row => row.Row > frozenRows));
+        var count = 0;
+        foreach (var row in viewport.RowMetrics)
+        {
+            if (row.Row > frozenRows)
+                count++;
+        }
+
+        return Math.Max(1, count);
     }
 
     private static int CountScrollableColumns(ViewportModel viewport, Sheet? sheet)
     {
         var frozenCols = sheet?.FrozenCols ?? 0;
-        return Math.Max(1, viewport.ColMetrics.Count(column => column.Col > frozenCols));
+        var count = 0;
+        foreach (var column in viewport.ColMetrics)
+        {
+            if (column.Col > frozenCols)
+                count++;
+        }
+
+        return Math.Max(1, count);
     }
 
     public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
