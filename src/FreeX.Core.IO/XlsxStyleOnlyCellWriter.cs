@@ -117,11 +117,20 @@ internal static class XlsxStyleOnlyCellWriter
             .Select(row => (Element: row, Number: TryGetRowNumber(row, out var number) ? number : 0))
             .Where(pair => pair.Number > 0)
             .ToDictionary(pair => pair.Number, pair => pair.Element);
+        XElement? rowInsertionCursor = null;
+        uint rowInsertionCursorNumber = 0;
 
         for (var index = 0; index < styleOnlyCells.Count;)
         {
             var rowNumber = styleOnlyCells[index].Row;
-            var row = GetOrCreateRow(sheetData, rowName, rowsByNumber, rowNumber, ref changed);
+            var row = GetOrCreateRow(
+                sheetData,
+                rowName,
+                rowsByNumber,
+                rowNumber,
+                ref rowInsertionCursor,
+                ref rowInsertionCursorNumber,
+                ref changed);
             var cellsByReference = row
                 .Elements(cellName)
                 .Select(cell => (Element: cell, Reference: cell.Attribute("r")?.Value))
@@ -260,21 +269,48 @@ internal static class XlsxStyleOnlyCellWriter
         XName rowName,
         IDictionary<uint, XElement> rowsByNumber,
         uint rowNumber,
+        ref XElement? insertionCursor,
+        ref uint insertionCursorNumber,
         ref bool changed)
     {
         if (rowsByNumber.TryGetValue(rowNumber, out var row))
+        {
+            insertionCursor = row;
+            insertionCursorNumber = rowNumber;
             return row;
+        }
 
         row = new XElement(rowName, new XAttribute("r", rowNumber.ToString(CultureInfo.InvariantCulture)));
-        var insertBefore = sheetData
-            .Elements(rowName)
-            .FirstOrDefault(existing => TryGetRowNumber(existing, out var existingRow) && existingRow > rowNumber);
-        if (insertBefore is null)
-            sheetData.Add(row);
+        var rows = insertionCursor is not null && insertionCursorNumber < rowNumber
+            ? insertionCursor.ElementsAfterSelf(rowName)
+            : sheetData.Elements(rowName);
+        var lastSeen = insertionCursor is not null && insertionCursorNumber < rowNumber
+            ? insertionCursor
+            : null;
+
+        foreach (var existing in rows)
+        {
+            if (TryGetRowNumber(existing, out var existingRow) && existingRow > rowNumber)
+            {
+                existing.AddBeforeSelf(row);
+                rowsByNumber[rowNumber] = row;
+                insertionCursor = row;
+                insertionCursorNumber = rowNumber;
+                changed = true;
+                return row;
+            }
+
+            lastSeen = existing;
+        }
+
+        if (lastSeen is null)
+            sheetData.AddFirst(row);
         else
-            insertBefore.AddBeforeSelf(row);
+            lastSeen.AddAfterSelf(row);
 
         rowsByNumber[rowNumber] = row;
+        insertionCursor = row;
+        insertionCursorNumber = rowNumber;
         changed = true;
         return row;
     }
