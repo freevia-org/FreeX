@@ -22,7 +22,7 @@ public partial class MainWindow
         SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
         CellAddressBox.Text = $"{row}:{row}";
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
-        FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
@@ -39,7 +39,7 @@ public partial class MainWindow
         var colName = FormatColumnReference(col);
         CellAddressBox.Text = $"{colName}:{colName}";
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
-        FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
@@ -56,7 +56,7 @@ public partial class MainWindow
         SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
         CellAddressBox.Text = FormatCellReference(_selectionAnchor.Value);
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
-        FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
@@ -107,7 +107,7 @@ public partial class MainWindow
                             var c2 = FormatColumnReference(Math.Max(anchorCol, cm.Col));
                             CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
                             var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
-                            FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
+                            SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
                             SheetGrid.Focus();
                             RefreshToolbarAfterSelectionChange();
                             RefreshStatusBar();
@@ -144,7 +144,7 @@ public partial class MainWindow
                         var r2 = Math.Max(anchorRow, rm.Row);
                         CellAddressBox.Text = r1 == r2 ? $"{r1}:{r1}" : $"{r1}:{r2}";
                         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
-                        FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
+                        SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
                         SheetGrid.Focus();
                         RefreshToolbarAfterSelectionChange();
                         RefreshStatusBar();
@@ -619,7 +619,7 @@ public partial class MainWindow
         _selectionCursor = nextCorner;
         SheetGrid.SelectedRange = range;
         CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
-        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(nextCorner), nextCorner);
+        SetFormulaBarSelectionText(FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(nextCorner), nextCorner));
         EnsureCellVisible(nextCorner);
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterSelectionChange();
@@ -655,7 +655,7 @@ public partial class MainWindow
             SheetGrid.SelectedRange = merge.Value;
             CellAddressBox.Text = FormatCellReference(merge.Value.Start);
             var mergedCell = sheet!.GetCell(merge.Value.Start);
-            FormulaBar.Text = FormatFormulaBarText(mergedCell, merge.Value.Start);
+            SetFormulaBarSelectionText(FormatFormulaBarText(mergedCell, merge.Value.Start));
             FocusSheetGridIfNeeded();
             RefreshToolbarAfterSelectionChange();
             RefreshStatusBar();
@@ -677,7 +677,7 @@ public partial class MainWindow
         SetCellAddressBoxSelectionText(FormatCellReference(addr));
 
         var cell = sheet?.GetCell(addr);
-        FormulaBar.Text = FormatFormulaBarText(cell, addr);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, addr));
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
@@ -759,7 +759,7 @@ public partial class MainWindow
         CellAddressBox.Text = snapshot.PrimaryRange.Start == snapshot.PrimaryRange.End
             ? FormatCellReference(snapshot.Anchor)
             : FormatRangeReference(snapshot.Anchor, snapshot.Cursor);
-        FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(snapshot.Anchor), snapshot.Anchor);
+        SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(snapshot.Anchor), snapshot.Anchor));
 
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
@@ -782,7 +782,7 @@ public partial class MainWindow
             SheetGrid.SelectedRange = currentRegion;
             CellAddressBox.Text = FormatRangeReference(currentRegion.Start, currentRegion.End);
             var activeCellModel = sheet.GetCell(cell);
-            FormulaBar.Text = FormatFormulaBarText(activeCellModel, cell);
+            SetFormulaBarSelectionText(FormatFormulaBarText(activeCellModel, cell));
             SheetGrid.Focus();
             RefreshToolbarAfterSelectionChange();
             RefreshStatusBar();
@@ -805,7 +805,7 @@ public partial class MainWindow
             SetSelectedRangesIfChanged(null);
             SheetGrid.SelectedRange = currentRegion;
             CellAddressBox.Text = FormatRangeReference(currentRegion.Start, currentRegion.End);
-            FormulaBar.Text = FormatFormulaBarText(sheet.GetCell(cell), cell);
+            SetFormulaBarSelectionText(FormatFormulaBarText(sheet.GetCell(cell), cell));
             SheetGrid.Focus();
             RefreshToolbarAfterSelectionChange();
             RefreshStatusBar();
@@ -833,7 +833,7 @@ public partial class MainWindow
         SheetGrid.SelectedRange = range;
         CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
         var activeCellModel = sheet?.GetCell(activeCell);
-        FormulaBar.Text = FormatFormulaBarText(activeCellModel, activeCell);
+        SetFormulaBarSelectionText(FormatFormulaBarText(activeCellModel, activeCell));
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
@@ -886,7 +886,7 @@ public partial class MainWindow
         SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(target), target);
+        SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(target), target));
         FocusSheetGridIfNeeded();
         RefreshToolbarAfterDragSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();
@@ -1033,7 +1033,7 @@ public partial class MainWindow
         }
 
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
-        FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
         SheetGrid.Focus();
         RefreshToolbarAfterDragSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();
@@ -1093,6 +1093,28 @@ public partial class MainWindow
         finally
         {
             CellAddressBox.IsUndoEnabled = true;
+        }
+    }
+
+    private void SetFormulaBarSelectionText(string text)
+    {
+        if (FormulaBar.Text == text)
+            return;
+
+        if (FormulaBar.IsKeyboardFocusWithin || !FormulaBar.IsUndoEnabled)
+        {
+            FormulaBar.Text = text;
+            return;
+        }
+
+        FormulaBar.IsUndoEnabled = false;
+        try
+        {
+            FormulaBar.Text = text;
+        }
+        finally
+        {
+            FormulaBar.IsUndoEnabled = true;
         }
     }
 
