@@ -50,6 +50,10 @@ public sealed partial class FormulaEvaluator
             TryEvaluateXnpvDirectRanges(node, context, out var directXnpvResult))
             return directXnpvResult;
 
+        if (functionName == "IRR" &&
+            TryEvaluateIrrDirectRange(node, context, out var directIrrResult))
+            return directIrrResult;
+
         bool isStructured = IsStructuredRangeFunction(functionName);
         bool isAggregate = IsAggregateFunction(functionName);
         bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
