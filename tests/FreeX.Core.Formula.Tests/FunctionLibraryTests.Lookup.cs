@@ -262,6 +262,42 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=HLOOKUP(DATE(2026,5,16),A1:B2,2,FALSE)", sheet).Should().Be(new TextValue("match"));
     }
 
+    [Fact]
+    public void LegacyLookup_DirectCrossSheetTable_StreamsFromTargetSheet()
+    {
+        var workbook = new Workbook("T");
+        var formulaSheet = workbook.AddSheet("Formula");
+        var dataSheet = workbook.AddSheet("Data");
+
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 1), new NumberValue(10));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 2), new TextValue("ten"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 1), new NumberValue(20));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 2), new TextValue("twenty"));
+
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 4), new NumberValue(10));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 5), new NumberValue(20));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 4), new TextValue("ten"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 5), new TextValue("twenty"));
+
+        _eval.Evaluate("=VLOOKUP(20,Data!A1:B2,2,FALSE)", formulaSheet, workbook)
+            .Should().Be(new TextValue("twenty"));
+        _eval.Evaluate("=HLOOKUP(20,Data!D1:E2,2,FALSE)", formulaSheet, workbook)
+            .Should().Be(new TextValue("twenty"));
+        _eval.Evaluate("=VLOOKUP(20,Missing!A1:B2,2,FALSE)", formulaSheet, workbook)
+            .Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void LegacyLookup_InvalidRangeLookupWinsBeforeOutOfBoundsIndex()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)), (1, 2, new TextValue("ten")),
+            (2, 1, new TextValue("twenty")), (2, 2, new TextValue("other")));
+
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,3,\"not-bool\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=HLOOKUP(10,A1:B2,3,\"not-bool\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
     // ── INDEX ─────────────────────────────────────────────────────────────────
 
     [Fact]
