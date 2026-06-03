@@ -12,11 +12,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private readonly uint _count;
     private List<CellStateSnapshot>? _movedSnapshot;
     private List<GridRange>? _mergeSnapshot;
-    private Dictionary<uint, double>? _columnWidthSnapshot;
-    private Dictionary<CellAddress, string>? _commentSnapshot;
-    private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
-    private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
-    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
+    private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
+    private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
+    private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
@@ -54,16 +54,16 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.HiddenCols, _beforeCol, _count);
 
-        _columnWidthSnapshot = new Dictionary<uint, double>(sheet.ColumnWidths);
+        _columnWidthSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnWidths);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.ColumnWidths, _beforeCol, _count);
 
-        _commentSnapshot = new Dictionary<CellAddress, string>(sheet.Comments);
+        _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.Comments, _beforeCol, _count);
-        _threadedCommentSnapshot = new Dictionary<CellAddress, ThreadedComment>(sheet.ThreadedComments);
+        _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.ThreadedComments, _beforeCol, _count);
-        _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
+        _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.Hyperlinks, _beforeCol, _count);
-        _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
+        _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.HyperlinkMetadata, _beforeCol, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
@@ -72,7 +72,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftNamedRangeColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         _printAreaSnapshot = sheet.PrintArea;
         RowColumnShiftHelpers.ShiftPrintAreaColumnsUp(sheet, _beforeCol, _count);
-        _columnPageBreakSnapshot = sheet.ColumnPageBreaks.ToList();
+        _columnPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.ColumnPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.ColumnPageBreaks, _beforeCol, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
         RowColumnShiftHelpers.ShiftChartColumnsUp(sheet, _sheetId, _beforeCol, _count);
@@ -181,12 +181,12 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<CellStateSnapshot>? _deletedSnapshot;
     private List<CellStateSnapshot>? _shiftedSnapshot;
     private List<GridRange>? _mergeSnapshot;
-    private Dictionary<uint, double>? _columnWidthSnapshot;
-    private HashSet<uint>? _hiddenColsSnapshot;
-    private Dictionary<CellAddress, string>? _commentSnapshot;
-    private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
-    private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
-    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
+    private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;
+    private List<uint>? _hiddenColsSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
+    private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
+    private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
@@ -222,19 +222,19 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
 
         MoveCellsForDelete(sheet, _shiftedSnapshot, _count);
 
-        _hiddenColsSnapshot = [.. sheet.HiddenCols];
+        _hiddenColsSnapshot = RowColumnShiftHelpers.CaptureSet(sheet.HiddenCols);
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.HiddenCols, _startCol, _count);
 
-        _columnWidthSnapshot = new Dictionary<uint, double>(sheet.ColumnWidths);
+        _columnWidthSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnWidths);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.ColumnWidths, _startCol, _count);
 
-        _commentSnapshot = new Dictionary<CellAddress, string>(sheet.Comments);
+        _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.Comments, _startCol, _count);
-        _threadedCommentSnapshot = new Dictionary<CellAddress, ThreadedComment>(sheet.ThreadedComments);
+        _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.ThreadedComments, _startCol, _count);
-        _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
+        _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.Hyperlinks, _startCol, _count);
-        _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
+        _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.HyperlinkMetadata, _startCol, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
@@ -243,7 +243,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftNamedRangeColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
         _printAreaSnapshot = sheet.PrintArea;
         RowColumnShiftHelpers.ShiftPrintAreaColumnsDown(sheet, _startCol, _count);
-        _columnPageBreakSnapshot = sheet.ColumnPageBreaks.ToList();
+        _columnPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.ColumnPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.ColumnPageBreaks, _startCol, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
         RowColumnShiftHelpers.ShiftChartColumnsDown(sheet, _sheetId, _startCol, _count);
