@@ -331,6 +331,22 @@ public sealed class NativeJsonAdapterPerformanceTests
         adapterSource.Should().Contain("NativeJsonScalarValueMapper.Deserialize(cDto.Value, cDto.ParsedValueType)");
     }
 
+    [Fact]
+    public void LoadDenseCells_PreSizesSheetCellStorage()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.cs"));
+        var dtoSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.CellDto.cs"));
+
+        adapterSource.Should().Contain("sheet.EnsureCellCapacity(cellDtos.Count);");
+        dtoSource.Should().Contain("public int Count => _items?.Count ?? SourceSheet?.CellCount ?? 0;");
+    }
+
     private const int DenseSheetCount = 4;
     private const int DenseRowsPerSheet = 160;
     private const int DenseColumnsPerSheet = 80;
