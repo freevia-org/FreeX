@@ -199,9 +199,12 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
         var (values, err) = CollectRangeNumbers(valRange);
         if (err is not null) return err;
-        var cashflows = values!;
-        if (cashflows.Count < 2) return ErrorValue.Num;
+        return IrrCashFlows(values!, guess);
+    }
 
+    internal static ScalarValue IrrCashFlows(IReadOnlyList<double> cashflows, double guess)
+    {
+        if (cashflows.Count < 2) return ErrorValue.Num;
         // Excel requires at least one positive and one negative cashflow.
         bool hasPositive = false, hasNegative = false;
         for (int i = 0; i < cashflows.Count; i++)

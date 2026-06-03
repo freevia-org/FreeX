@@ -156,6 +156,57 @@ public sealed partial class FormulaEvaluator
         return true;
     }
 
+    private bool TryEvaluateIrrDirectRange(
+        FunctionCallNode node,
+        IEvalContext context,
+        out ScalarValue result)
+    {
+        result = BlankValue.Instance;
+        if (node.Arguments.Count is < 1 or > 2 ||
+            !TryAsRangeRef(node.Arguments[0], out var valueRange))
+            return false;
+
+        if (node.Arguments.Count == 2 && TryAsRangeRef(node.Arguments[1], out _))
+            return false;
+
+        double guess = 0.1;
+        if (node.Arguments.Count == 2)
+        {
+            var guessValue = EvaluateNode(node.Arguments[1], context);
+            if (guessValue is RangeValue)
+                return false;
+            if (guessValue is ErrorValue guessError)
+            {
+                result = guessError;
+                return true;
+            }
+
+            if (guessValue is not BlankValue && !TryCoerceToNumberValue(guessValue, out guess))
+            {
+                result = ErrorValue.Value;
+                return true;
+            }
+        }
+
+        if (!double.IsFinite(guess) || guess <= -1)
+        {
+            result = ErrorValue.Num;
+            return true;
+        }
+
+        if (!TryCreateDirectRangeCursor(valueRange, context, out var values, out result))
+            return true;
+
+        if (!TryCollectDirectRangeNumbers(values, context, out var cashflows, out var rangeError))
+        {
+            result = rangeError ?? ErrorValue.Num;
+            return true;
+        }
+
+        result = BuiltInFunctions.IrrCashFlows(cashflows, guess);
+        return true;
+    }
+
     private static ScalarValue EvaluateXnpvDirectRanges(
         double rate,
         DirectRangeCursor values,
@@ -357,6 +408,51 @@ public sealed partial class FormulaEvaluator
 
         error = ErrorValue.Value;
         return false;
+    }
+
+    private static bool TryCollectDirectRangeNumbers(
+        DirectRangeCursor cursor,
+        IEvalContext context,
+        out List<double> numbers,
+        out ErrorValue? error)
+    {
+        var count = 0;
+        for (var row = cursor.StartRow; row <= cursor.EndRow; row++)
+        {
+            for (var col = cursor.StartCol; col <= cursor.EndCol; col++)
+            {
+                var value = cursor.SheetName is null
+                    ? context.GetCellValue(row, col)
+                    : context.GetCellValue(cursor.SheetName, row, col);
+                if (value is ErrorValue cellError)
+                {
+                    numbers = [];
+                    error = cellError;
+                    return false;
+                }
+
+                if (value is NumberValue or DateTimeValue)
+                    count++;
+            }
+        }
+
+        numbers = new List<double>(count);
+        for (var row = cursor.StartRow; row <= cursor.EndRow; row++)
+        {
+            for (var col = cursor.StartCol; col <= cursor.EndCol; col++)
+            {
+                var value = cursor.SheetName is null
+                    ? context.GetCellValue(row, col)
+                    : context.GetCellValue(cursor.SheetName, row, col);
+                if (value is NumberValue n)
+                    numbers.Add(n.Value);
+                else if (value is DateTimeValue d)
+                    numbers.Add(d.Value);
+            }
+        }
+
+        error = null;
+        return true;
     }
 
     private static bool TryReadNextDirectRangeNumber(

@@ -276,10 +276,10 @@ public class XlsxCorpusScaffoldTests
         localPrivateRows.Should().HaveCountGreaterThan(0);
         localPrivateRows.Should().OnlyContain(
             row =>
-                row.Path.StartsWith("local-private/", StringComparison.Ordinal) &&
+                IsUserApprovedLocalPrivatePath(row.Path) &&
                 row.SourceUrl == "user-approved-local" &&
                 row.License == "private-local",
-            "local-private corpus rows should disclose capability coverage without leaking private workbook provenance");
+            "local-private corpus rows should use ignored relative paths unless the user explicitly approves a local absolute workbook path");
         report.Should().Contain($"| Local-private privacy metadata coverage | {localPrivateRows.Length}/{localPrivateRows.Length} rows use local-only source markers and private-local license |");
     }
 
@@ -556,6 +556,19 @@ public class XlsxCorpusScaffoldTests
             .Replace("**Last updated:**", string.Empty, StringComparison.Ordinal)
             .Trim()
             .TrimEnd();
+    }
+
+    private static bool IsUserApprovedLocalPrivatePath(string path)
+    {
+        if (path.StartsWith("local-private/", StringComparison.Ordinal))
+            return true;
+
+        if (path.Length < 3)
+            return false;
+
+        var first = path[0];
+        var isDriveLetter = (first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z');
+        return isDriveLetter && path[1] == ':' && (path[2] == '\\' || path[2] == '/');
     }
 
     private static IReadOnlyList<string> ExpectedWarningsFor(ManifestRow row)

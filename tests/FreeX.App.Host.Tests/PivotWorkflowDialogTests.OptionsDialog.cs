@@ -1,0 +1,639 @@
+using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using FluentAssertions;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed partial class PivotWorkflowDialogTests
+{
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_CapturesModeledLayoutAndStyleSettings()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: false,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Top,
+            repeatItemLabels: false,
+            blankLineAfterItems: true,
+            styleName: "  PivotStyleMedium9  ",
+            showRowHeaders: false,
+            showColumnHeaders: true,
+            showRowStripes: true,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Outline,
+            emptyValueText: "  N/A  ",
+            refreshOnOpen: true,
+            saveSourceData: false,
+            enableRefresh: false,
+            preserveSourceSortFilter: false,
+            missingItemsLimit: 42,
+            showExpandCollapseButtons: false,
+            autofitColumnsOnUpdate: false,
+            preserveFormattingOnUpdate: false,
+            showFieldHeaders: false,
+            showContextualTooltips: false,
+            showPropertiesInTooltips: false,
+            showClassicLayout: true,
+            mergeAndCenterLabels: true,
+            pageOverThenDown: true,
+            pageWrap: 4,
+            compactRowLabelIndent: 3,
+            enableDrill: false);
+
+        result.Should().BeEquivalentTo(new
+        {
+            ShowRowGrandTotals = true,
+            ShowColumnGrandTotals = false,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            RepeatItemLabels = false,
+            BlankLineAfterItems = true,
+            StyleName = "PivotStyleMedium9",
+            ShowRowHeaders = false,
+            ShowColumnHeaders = true,
+            ShowRowStripes = true,
+            ShowColumnStripes = false,
+            ReportLayout = PivotReportLayout.Outline,
+            EmptyValueText = "N/A",
+            ErrorValueText = (string?)null,
+            RefreshOnOpen = true,
+            SaveSourceData = false,
+            EnableRefresh = false,
+            PreserveSourceSortFilter = false,
+            MissingItemsLimit = 1_048_576,
+            ShowExpandCollapseButtons = false,
+            AutofitColumnsOnUpdate = false,
+            PreserveFormattingOnUpdate = false,
+            ShowFieldHeaders = false,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
+            PageOverThenDown = true,
+            PageWrap = 4,
+            CompactRowLabelIndent = 3,
+            EnableDrill = false
+        });
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_CapturesEmptyAndErrorValueText()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Tabular,
+            emptyValueText: "  N/A  ",
+            errorValueText: "  #VALUE!  ");
+
+        result.EmptyValueText.Should().Be("N/A");
+        result.ErrorValueText.Should().Be("#VALUE!");
+
+        var blankResult = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Tabular,
+            emptyValueText: " ",
+            errorValueText: " \t ");
+
+        blankResult.EmptyValueText.Should().BeNull();
+        blankResult.ErrorValueText.Should().BeNull();
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_KeepsExistingPositionalOptionalOrder()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            true,
+            true,
+            true,
+            PivotSubtotalPlacement.Bottom,
+            false,
+            false,
+            "PivotStyleLight16",
+            true,
+            true,
+            false,
+            false,
+            PivotReportLayout.Tabular,
+            "empty",
+            true,
+            false,
+            false,
+            false,
+            0,
+            true,
+            true,
+            "title",
+            "description",
+            2,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            7,
+            "error");
+
+        result.ErrorValueText.Should().Be("error");
+        result.EnableDrill.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_FromPivotTable_UsesConnectedCacheDataOptions()
+    {
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 7,
+            StyleName = "PivotStyleMedium4"
+        };
+        var cache = new PivotCacheModel
+        {
+            CacheId = 7,
+            RefreshOnLoad = true,
+            SaveData = false,
+            EnableRefresh = false,
+            PreserveSourceSortFilter = false,
+            MissingItemsLimit = 0
+        };
+
+        PivotTableOptionsDialog.FromPivotTable(pivotTable, cache)
+            .Should()
+            .Match<PivotTableOptionsDialogResult>(result =>
+                result.RefreshOnOpen &&
+                !result.SaveSourceData &&
+                !result.EnableRefresh &&
+                !result.PreserveSourceSortFilter &&
+                result.MissingItemsLimit == 0);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_FromPivotTable_UsesCurrentPivotSettings()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 4)),
+            TargetRange = new GridRange(new CellAddress(sheetId, 15, 1), new CellAddress(sheetId, 22, 4)),
+            ShowRowGrandTotals = false,
+            ShowColumnGrandTotals = true,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            RepeatItemLabels = false,
+            BlankLineAfterItems = true,
+            ReportLayout = PivotReportLayout.Compact,
+            StyleName = "PivotStyleDark4",
+            ShowRowHeaders = true,
+            ShowColumnHeaders = false,
+            ShowRowStripes = true,
+            ShowColumnStripes = true,
+            EmptyValueText = "-",
+            ErrorCaption = "(error)",
+            ShowExpandCollapseButtons = false,
+            PrintExpandCollapseButtons = true,
+            AutofitColumnsOnUpdate = false,
+            PreserveFormattingOnUpdate = false,
+            ShowFieldHeaders = false,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
+            PageOverThenDown = true,
+            PageWrap = 2,
+            CompactRowLabelIndent = 5,
+            EnableDrill = false
+        };
+
+        PivotTableOptionsDialog.FromPivotTable(pivotTable)
+            .Should()
+            .BeEquivalentTo(new
+            {
+                ShowRowGrandTotals = false,
+                ShowColumnGrandTotals = true,
+                ShowSubtotals = true,
+                SubtotalPlacement = PivotSubtotalPlacement.Top,
+                RepeatItemLabels = false,
+                BlankLineAfterItems = true,
+                StyleName = "PivotStyleDark4",
+                ShowRowHeaders = true,
+                ShowColumnHeaders = false,
+                ShowRowStripes = true,
+                ShowColumnStripes = true,
+                ReportLayout = PivotReportLayout.Compact,
+                EmptyValueText = "-",
+                ErrorValueText = "(error)",
+                PrintExpandCollapseButtons = true,
+                ShowExpandCollapseButtons = false,
+                AutofitColumnsOnUpdate = false,
+                PreserveFormattingOnUpdate = false,
+                ShowFieldHeaders = false,
+                ShowContextualTooltips = false,
+                ShowPropertiesInTooltips = false,
+                ShowClassicLayout = true,
+                MergeAndCenterLabels = true,
+                PageOverThenDown = true,
+                PageWrap = 2,
+                CompactRowLabelIndent = 5,
+                EnableDrill = false
+            });
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesBroaderPivotStyleGalleryAndPreservesCurrentStyle()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 4)),
+            TargetRange = new GridRange(new CellAddress(sheetId, 15, 1), new CellAddress(sheetId, 22, 4)),
+            StyleName = "PivotStyleMedium10"
+        };
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableOptionsDialog(pivotTable);
+            var styleBox = (ComboBox)typeof(PivotTableOptionsDialog)
+                .GetField("_styleBox", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleNames = styleBox.Items.Cast<object>().Select(item => item.ToString()).ToList();
+
+            styleNames.Should().Contain(["PivotStyleLight16", "PivotStyleMedium10", "PivotStyleDark7"]);
+            styleNames.Should().HaveCountGreaterThan(12);
+            styleBox.SelectedItem.Should().Be("PivotStyleMedium10");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void PivotStyleCatalog_ListsBuiltInLightMediumAndDarkStylesAndPreservesCustomCurrentStyle()
+    {
+        var styleNames = PivotStyleCatalog.GetStyleNames("  MyWorkbookPivotStyle  ");
+
+        styleNames.Should().HaveCount(85);
+        styleNames.Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"));
+        styleNames.Skip(28).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"));
+        styleNames.Skip(56).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}"));
+        styleNames[^1].Should().Be("MyWorkbookPivotStyle");
+    }
+
+    [Fact]
+    public void PivotStyleCatalog_DoesNotDuplicateBuiltInCurrentStyle()
+    {
+        PivotStyleCatalog.GetStyleNames("pivotstylemedium10")
+            .Should()
+            .HaveCount(84)
+            .And
+            .ContainSingle(styleName => string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_UsesCurrentStyleAsInitialSelectionAndPreservesCustomStyle()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotStyleGalleryDialog("CustomPivotStyle");
+            var styleGallery = (ListBox)typeof(PivotStyleGalleryDialog)
+                .GetField("_styleGallery", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleNames = styleGallery.Items.Cast<object>().Select(item => item.ToString()).ToList();
+
+            styleNames.Should().HaveCount(85);
+            styleNames.Should().Contain("CustomPivotStyle");
+            styleGallery.SelectedItem.Should().Be("CustomPivotStyle");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_LabelsStyleGalleryWithAccessKeyAndAutomationName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotStyleGalleryDialog.cs"));
+
+        source.Should().Contain("new Label { Content = UiText.Get(\"PivotStyleGallery_PivotTableStyle\"), Target = _styleGallery");
+        source.Should().Contain("AutomationProperties.SetName(_styleGallery, UiText.Get(\"PivotStyleGallery_PivotTableStyleGallery\"));");
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_CreateResult_NormalizesBlankStyleToDefault()
+    {
+        PivotStyleGalleryDialog.CreateResult("  PivotStyleDark28  ")
+            .Should()
+            .Be(new PivotStyleGalleryDialogResult("PivotStyleDark28"));
+
+        PivotStyleGalleryDialog.CreateResult("  ")
+            .Should()
+            .Be(new PivotStyleGalleryDialogResult("PivotStyleLight16"));
+    }
+
+    [Fact]
+    public void MainWindow_PivotStyleGalleryButton_OpensLightweightGalleryInsteadOfOptionsDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotDesignCommands.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void PivotStyleGalleryBtn_Click", StringComparison.Ordinal)..
+            source.IndexOf("private void PivotRowHeadersBtn_Click", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("ShowPivotStyleGalleryDialog();");
+        handlerSource.Should().NotContain("ShowPivotTableOptionsDialog();");
+        source.Should().Contain("private void ShowPivotStyleGalleryDialog()");
+        source.Should().Contain("new PivotStyleGalleryDialog(pivotTable.StyleName)");
+        source.Should().Contain("styleName: dialog.Result.StyleName");
+    }
+
+    [Fact]
+    public void MainWindow_PivotStyleOptionButtons_PreserveCurrentStyleAndToggleOnlyTargetFlag()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotDesignCommands.cs"));
+
+        AssertPivotStyleOptionHandler(source, "PivotRowHeadersBtn_Click", "!pivotTable.ShowRowHeaders");
+        AssertPivotStyleOptionHandler(source, "PivotColumnHeadersBtn_Click", "!pivotTable.ShowColumnHeaders");
+        AssertPivotStyleOptionHandler(source, "PivotBandedRowsBtn_Click", "!pivotTable.ShowRowStripes");
+        AssertPivotStyleOptionHandler(source, "PivotBandedColumnsBtn_Click", "!pivotTable.ShowColumnStripes");
+    }
+
+    private static void AssertPivotStyleOptionHandler(string source, string handlerName, string toggledFlag)
+    {
+        var start = source.IndexOf($"private void {handlerName}", StringComparison.Ordinal);
+        var end = source.IndexOf("    private void", start + 1, StringComparison.Ordinal);
+        var handlerSource = source[start..end];
+
+        handlerSource.Should().Contain("ApplyPivotOptions(");
+        handlerSource.Should().Contain("pivotTable.StyleName");
+        handlerSource.Should().Contain(toggledFlag);
+        handlerSource.Should().NotContain("PivotStyleLight16");
+        handlerSource.Should().NotContain("PivotStyleMedium");
+        handlerSource.Should().NotContain("PivotStyleDark");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_UsesExcelStyleTabbedOptionShell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableOptionsDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "UiText.Get(\"PivotTableOptions_LayoutAndFormat\")",
+            "UiText.Get(\"PivotTableOptions_TotalsAndFilters\")",
+            "UiText.Get(\"PivotTableOptions_Display\")",
+            "UiText.Get(\"PivotTableOptions_Data\")",
+            "UiText.Get(\"PivotTableOptions_Printing\")",
+            "UiText.Get(\"PivotTableOptions_AltText\")",
+            "_emptyCellsBox",
+            "_compactIndentBox",
+            "_autofitColumnsBox",
+            "_preserveFormattingBox",
+            "_refreshOnOpenBox",
+            "_enableRefreshBox",
+            "_preserveSourceSortFilterBox",
+            "_enableShowDetailsBox",
+            "_missingItemsLimitBox",
+            "_fieldHeadersBox",
+            "_showExpandCollapseBox",
+            "_printTitlesBox",
+            "_printExpandCollapseBox",
+            "_altTextTitleBox",
+            "_altTextDescriptionBox",
+            "Loaded += (_, _) => FocusInitialKeyboardTarget();",
+            "private void FocusInitialKeyboardTarget()",
+            "_reportLayoutBox.Focus();",
+            "Keyboard.Focus(_reportLayoutBox);"
+        })
+            source.Should().Contain(content);
+        source.Should().NotContain("Title and description metadata can be added in a future pass.");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesPrintingTab()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("Header = UiText.Get(\"PivotTableOptions_Printing\")");
+        source.Should().Contain("UiText.Get(\"PivotTableOptions_ShowExpandCollapseButtons\")");
+        source.Should().Contain("UiText.Get(\"PivotTableOptions_SetPrintTitles\")");
+        source.Should().Contain("UiText.Get(\"PivotTableOptions_PrintExpandCollapseButtonsWhenDisplayedOnPivotTable\")");
+        source.Should().NotContain("Print titles and print expand/collapse buttons are not yet available.");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesExcelLikeGroupsInsideTabs()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        foreach (var content in new[]
+        {
+            "UiText.Get(\"PivotTableOptions_LayoutSectionGroup\")",
+            "UiText.Get(\"PivotTableOptions_FormatSectionGroup\")",
+            "UiText.Get(\"PivotTableOptions_GrandTotalsGroup\")",
+            "UiText.Get(\"PivotTableOptions_PivotTableStyleOptionsGroup\")",
+            "UiText.Get(\"PivotTableOptions_DataOptionsGroup\")",
+            "UiText.Get(\"PivotTableOptions_PrintOptionsGroup\")",
+            "UiText.Get(\"PivotTableOptions_AltTextGroup\")",
+            "UiText.Get(\"PivotTableOptions_PreserveSourceSortAndFilterSettings\")",
+            "UiText.Get(\"PivotTableOptions_RetainItemsDeletedLabel\")",
+            "UiText.Get(\"PivotTableOptions_DisplayFieldCaptionsAndFilterDropDowns\")",
+            "UiText.Get(\"PivotTableOptions_ShowItemsWithNoDataOnRows\")",
+            "UiText.Get(\"PivotTableOptions_ShowItemsWithNoDataOnColumns\")"
+        })
+            source.Should().Contain(content);
+
+        source.Should().NotContain("Field list and buttons remain available");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ModelsPreserveSourceSortFilterOption()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("private readonly CheckBox _preserveSourceSortFilterBox");
+        source.Should().Contain("Content = UiText.Get(\"PivotTableOptions_PreserveSourceSortAndFilterSettings\")");
+        source.Should().Contain("PreserveSourceSortFilter");
+        source.Should().Contain("AddCheckBox(dataPanel, _preserveSourceSortFilterBox)");
+        source.Should().NotContain("IsEnabled = false");
+        source.Should().NotContain("changing this option is not modeled yet");
+        source.Should().NotContain("new CheckBox { Content = \"Preserve source sort and _filter settings\"");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_LabelsEditableOptionsWithAccessKeyTargets()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        foreach (var content in new[]
+        {
+            "AddLabeledControl(layoutPanel, UiText.Get(\"PivotTableOptions_ReportLayoutLabel\"), _reportLayoutBox",
+            "AddLabeledControl(layoutPanel, UiText.Get(\"PivotTableOptions_CompactIndentLabel\"), _compactIndentBox",
+            "AddLabeledControl(formatPanel, UiText.Get(\"PivotTableOptions_EmptyCellsLabel\"), _emptyCellsBox",
+            "AddLabeledControl(formatPanel, UiText.Get(\"PivotTableOptions_ErrorValuesLabel\"), _errorValuesBox",
+            "AddLabeledControl(dataPanel, UiText.Get(\"PivotTableOptions_RetainItemsDeletedLabel\"), _missingItemsLimitBox",
+            "AddLabeledControl(filtersPanel, UiText.Get(\"PivotTableOptions_SubtotalPlacementLabel\"), _subtotalPlacementBox",
+            "AddLabeledControl(stylePanel, UiText.Get(\"PivotTableOptions_PivotTableStyleLabel\"), _styleBox",
+            "new Label",
+            "Content = label",
+            "Target = control"
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialogInvalidNumericOptions_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotTableOptionsDialog.cs",
+            "public sealed partial class PivotTableOptionsDialog",
+            "");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTableOptions_EnterCompactIndent\"), _compactIndentBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTableOptions_EnterPageFieldsPerColumn\"), _pageWrapBox);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
+        source.Should().Contain("_tabs.SelectedItem = _layoutTab;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesAccessKeysForModeledCheckboxes()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        foreach (var content in new[]
+        {
+            "Content = UiText.Get(\"PivotTableOptions_ShowRowGrandTotals\")",
+            "Content = UiText.Get(\"PivotTableOptions_ShowColumnGrandTotals\")",
+            "Content = UiText.Get(\"PivotTableOptions_ShowSubtotals\")",
+            "Content = UiText.Get(\"PivotTableOptions_RepeatItemLabels\")",
+            "Content = UiText.Get(\"PivotTableOptions_InsertBlankLineAfterEachItem\")",
+            "Content = UiText.Get(\"PivotTableOptions_RowHeaders\")",
+            "Content = UiText.Get(\"PivotTableOptions_ColumnHeaders\")",
+            "Content = UiText.Get(\"PivotTableOptions_DisplayFieldCaptionsAndFilterDropDowns\")",
+            "Content = UiText.Get(\"PivotTableOptions_ShowItemsWithNoDataOnRows\")",
+            "Content = UiText.Get(\"PivotTableOptions_ShowItemsWithNoDataOnColumns\")",
+            "Content = UiText.Get(\"PivotTableOptions_BandedRows\")",
+            "Content = UiText.Get(\"PivotTableOptions_BandedColumns\")",
+            "Content = UiText.Get(\"PivotTableOptions_AutofitColumnWidthsOnUpdate\")",
+            "Content = UiText.Get(\"PivotTableOptions_PreserveCellFormattingOnUpdate\")",
+            "Content = UiText.Get(\"PivotTableOptions_RefreshDataWhenOpeningTheFile\")",
+            "Content = UiText.Get(\"PivotTableOptions_EnableRefresh\")",
+            "Content = UiText.Get(\"PivotTableOptions_EnableShowDetails\")",
+            "Content = UiText.Get(\"PivotTableOptions_ShowExpandCollapseButtons\")",
+            "Content = UiText.Get(\"PivotTableOptions_SetPrintTitles\")",
+            "Content = UiText.Get(\"PivotTableOptions_PrintExpandCollapseButtonsWhenDisplayedOnPivotTable\")"
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_DataTabAccessKeysAreUnique()
+    {
+        string[] dataTabLabels =
+        [
+            "_Refresh data when opening the file",
+            "_Save source data with file",
+            "_Enable refresh",
+            "Enable Show De_tails",
+            "Preserve source sort and _filter settings",
+            "Retain items _deleted from the data source"
+        ];
+
+        var accessKeys = dataTabLabels
+            .Select(label => char.ToUpperInvariant(label[label.IndexOf('_') + 1]))
+            .ToList();
+
+        accessKeys.Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ResultIncludesPrintingAndAltText()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: false,
+            showSubtotals: true,
+            PivotSubtotalPlacement.Top,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            " PivotStyleMedium4 ",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: true,
+            PivotReportLayout.Outline,
+            emptyValueText: " - ",
+            refreshOnOpen: true,
+            saveSourceData: false,
+            enableRefresh: false,
+            missingItemsLimit: 0,
+            compactRowLabelIndent: 6,
+            showExpandCollapseButtons: false,
+            autofitColumnsOnUpdate: false,
+            preserveFormattingOnUpdate: false,
+            showFieldHeaders: false,
+            showContextualTooltips: false,
+            showPropertiesInTooltips: false,
+            showClassicLayout: true,
+            mergeAndCenterLabels: true,
+            showItemsWithNoDataOnRows: true,
+            showItemsWithNoDataOnColumns: true,
+            printTitles: true,
+            printExpandCollapseButtons: true,
+            altTextTitle: "  Sales pivot ",
+            altTextDescription: " Quarterly sales summary ");
+
+        result.ShowExpandCollapseButtons.Should().BeFalse();
+        result.AutofitColumnsOnUpdate.Should().BeFalse();
+        result.PreserveFormattingOnUpdate.Should().BeFalse();
+        result.ShowFieldHeaders.Should().BeFalse();
+        result.ShowContextualTooltips.Should().BeFalse();
+        result.ShowPropertiesInTooltips.Should().BeFalse();
+        result.ShowClassicLayout.Should().BeTrue();
+        result.MergeAndCenterLabels.Should().BeTrue();
+        result.ShowItemsWithNoDataOnRows.Should().BeTrue();
+        result.ShowItemsWithNoDataOnColumns.Should().BeTrue();
+        result.EnableRefresh.Should().BeFalse();
+        result.MissingItemsLimit.Should().Be(0);
+        result.PrintTitles.Should().BeTrue();
+        result.PrintExpandCollapseButtons.Should().BeTrue();
+        result.CompactRowLabelIndent.Should().Be(6);
+        result.AltTextTitle.Should().Be("Sales pivot");
+        result.AltTextDescription.Should().Be("Quarterly sales summary");
+    }
+}
