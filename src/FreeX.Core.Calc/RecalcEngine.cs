@@ -15,7 +15,9 @@ public sealed class RecalcEngine
     private const long CompactRangeCellThreshold = 8;
     private const int MaxDependencyPlanCacheEntries = 1024;
     private static readonly IReadOnlySet<CellAddress> EmptyDependencyCells = FrozenSet<CellAddress>.Empty;
-    private static readonly RecalcReport EmptyReport = new([], [], []);
+    private static readonly IReadOnlyList<CellAddress> EmptyCells = [];
+    private static readonly IReadOnlyList<(CellAddress Cell, string Error)> EmptyErrors = [];
+    private static readonly RecalcReport EmptyReport = new(EmptyCells, EmptyErrors, EmptyCells);
 
     private readonly DependencyGraph _graph;
     private readonly FormulaEvaluator _evaluator;
@@ -52,13 +54,13 @@ public sealed class RecalcEngine
         }
 
         var recalculated = new List<CellAddress>();
-        var errors = new List<(CellAddress Cell, string Error)>();
-        var cyclicCells = new List<CellAddress>();
-        var seenCyclicCells = new HashSet<CellAddress>();
+        List<(CellAddress Cell, string Error)>? errors = null;
+        List<CellAddress>? cyclicCells = null;
+        HashSet<CellAddress>? seenCyclicCells = null;
 
         // Mark cyclic cells with error
         foreach (var cyclic in plan.CyclicCells)
-            AddCyclicCell(workbook, cyclic, cyclicCells, seenCyclicCells, errors);
+            AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
 
         var evaluationPlan = plan;
         if (_volatileCells.Count > 0 || changedFormulaCells is not null)
@@ -83,7 +85,7 @@ public sealed class RecalcEngine
 
             evaluationPlan = _graph.GetEvaluationOrder(dirtyCells);
             foreach (var cyclic in evaluationPlan.CyclicCells)
-                AddCyclicCell(workbook, cyclic, cyclicCells, seenCyclicCells, errors);
+                AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
         }
 
         foreach (var addr in evaluationPlan.OrderedCells)
@@ -111,7 +113,7 @@ public sealed class RecalcEngine
                     if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
                     {
                         cell.Value = ErrorValue.Spill;
-                        errors.Add((addr, "#SPILL!"));
+                        AddError(ref errors, addr, "#SPILL!");
                     }
                     else
                     {
@@ -133,12 +135,12 @@ public sealed class RecalcEngine
                 sheet.ClearSpillRange(addr);
                 ClearFormulaDependencies(addr);
                 cell.Value = ErrorValue.Value;
-                errors.Add((addr, "#VALUE!"));
+                AddError(ref errors, addr, "#VALUE!");
             }
             catch (FormulaEvalException ex)
             {
                 cell.Value = new ErrorValue(ex.ErrorCode);
-                errors.Add((addr, ex.ErrorCode));
+                AddError(ref errors, addr, ex.ErrorCode);
             }
             catch (Exception)
             {
@@ -150,12 +152,12 @@ public sealed class RecalcEngine
                 // Release: any unhandled exception from the evaluator (e.g. inverted range,
                 // overflow) must not crash the app — surface it as #VALUE! instead.
                 cell.Value = ErrorValue.Value;
-                errors.Add((addr, "#VALUE!"));
+                AddError(ref errors, addr, "#VALUE!");
 #endif
             }
         }
 
-        return new RecalcReport(recalculated, errors, cyclicCells);
+        return new RecalcReport(recalculated, errors ?? EmptyErrors, cyclicCells ?? EmptyCells);
     }
 
     private IEnumerable<CellAddress> BuildChangedSetForTraversal(IReadOnlyList<CellAddress> changedCells)
@@ -191,14 +193,15 @@ public sealed class RecalcEngine
     private static void AddCyclicCell(
         Workbook workbook,
         CellAddress cyclic,
-        List<CellAddress> cyclicCells,
-        HashSet<CellAddress> seenCyclicCells,
-        List<(CellAddress Cell, string Error)> errors)
+        ref List<CellAddress>? cyclicCells,
+        ref HashSet<CellAddress>? seenCyclicCells,
+        ref List<(CellAddress Cell, string Error)>? errors)
     {
+        seenCyclicCells ??= [];
         if (!seenCyclicCells.Add(cyclic))
             return;
 
-        cyclicCells.Add(cyclic);
+        (cyclicCells ??= []).Add(cyclic);
 
         var sheet = workbook.GetSheet(cyclic.Sheet);
         if (sheet is null) return;
@@ -207,7 +210,16 @@ public sealed class RecalcEngine
         if (cell is null) return;
 
         cell.Value = ErrorValue.Circular;
-        errors.Add((cyclic, "#CIRCULAR!"));
+        AddError(ref errors, cyclic, "#CIRCULAR!");
+    }
+
+    private static void AddError(
+        ref List<(CellAddress Cell, string Error)>? errors,
+        CellAddress cell,
+        string error)
+    {
+        errors ??= [];
+        errors.Add((cell, error));
     }
 
     /// <summary>

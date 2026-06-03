@@ -97,6 +97,23 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void RecalcEngine_LazilyAllocatesErrorAndCycleReportLists()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
+        var recalculate = source[
+            source.IndexOf("public RecalcReport Recalculate", StringComparison.Ordinal)..
+            source.IndexOf("private IEnumerable<CellAddress> BuildChangedSetForTraversal", StringComparison.Ordinal)];
+
+        recalculate.Should().Contain("List<(CellAddress Cell, string Error)>? errors = null;");
+        recalculate.Should().Contain("HashSet<CellAddress>? seenCyclicCells = null;");
+        recalculate.Should().Contain("errors ?? EmptyErrors");
+        recalculate.Should().Contain("cyclicCells ?? EmptyCells");
+        recalculate.Should().NotContain("new HashSet<CellAddress>();");
+        recalculate.Should().NotContain("new List<(CellAddress Cell, string Error)>();");
+    }
+
+    [Fact]
     public void RecalcEngine_CollectsReferencesAndVolatileFunctionsInSingleAstWalk()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
