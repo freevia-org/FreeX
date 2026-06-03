@@ -563,18 +563,6 @@ public partial class GridView
 
             bool canOverflow = CanOverflowCellText(style, cell.RawValue, cell.DisplayText, cellMerge);
 
-            if (canOverflow)
-            {
-                occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
-                uint nextCol = colMetric.Col + 1;
-                while (colLookup.TryGetValue(nextCol, out var nextMetric)
-                       && !occupied.Contains((cell.Row, nextCol)))
-                {
-                    renderWidth += nextMetric.Width;
-                    nextCol++;
-                }
-            }
-
             // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
             // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
             double fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
@@ -664,6 +652,20 @@ public partial class GridView
             textY = Math.Max(rect.Top, textY);
 
             var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
+            if (canOverflow && textX + text.Width > rect.Right)
+            {
+                occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
+                uint nextCol = colMetric.Col + 1;
+                while (colLookup.TryGetValue(nextCol, out var nextMetric)
+                       && !occupied.Contains((cell.Row, nextCol)))
+                {
+                    renderWidth += nextMetric.Width;
+                    nextCol++;
+                }
+
+                clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
+            }
+
             if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
 
