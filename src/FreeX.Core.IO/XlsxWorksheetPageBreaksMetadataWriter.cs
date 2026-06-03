@@ -8,6 +8,14 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetPageBreaksMetadataWriter
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private const uint RowBreakSpanMax = CellAddress.MaxCol - 1;
+    private const uint ColumnBreakSpanMax = CellAddress.MaxRow - 1;
+
+    public static bool HasModeledBreaksOrMetadata(Sheet sheet) =>
+        sheet.RowPageBreaks.Any(id => IsSupportedBreakId(id, CellAddress.MaxRow)) ||
+        sheet.ColumnPageBreaks.Any(id => IsSupportedBreakId(id, CellAddress.MaxCol)) ||
+        sheet.RowPageBreaksMetadata is not null ||
+        sheet.ColumnPageBreaksMetadata is not null;
 
     public static void Save(Stream xlsxStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
     {
@@ -22,31 +30,46 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
     {
         foreach (var sheet in workbook.Sheets)
         {
-            if (sheet.RowPageBreaksMetadata is null &&
-                sheet.ColumnPageBreaksMetadata is null)
-            {
+            if (!HasModeledBreaksOrMetadata(sheet))
                 continue;
-            }
 
             if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
                 continue;
 
             var root = worksheetEdit.Root;
             var changed = false;
-            changed |= ApplyMetadata(root, "rowBreaks", sheet.RowPageBreaks, sheet.RowPageBreaksMetadata);
-            changed |= ApplyMetadata(root, "colBreaks", sheet.ColumnPageBreaks, sheet.ColumnPageBreaksMetadata);
+            changed |= ApplyBreaks(
+                root,
+                "rowBreaks",
+                sheet.RowPageBreaks,
+                sheet.RowPageBreaksMetadata,
+                CellAddress.MaxRow,
+                RowBreakSpanMax);
+            changed |= ApplyBreaks(
+                root,
+                "colBreaks",
+                sheet.ColumnPageBreaks,
+                sheet.ColumnPageBreaksMetadata,
+                CellAddress.MaxCol,
+                ColumnBreakSpanMax);
             if (changed)
                 session.MarkDirty(worksheetEdit);
         }
     }
 
-    private static bool ApplyMetadata(
+    private static bool ApplyBreaks(
         XElement root,
         string elementName,
         IEnumerable<uint> modeledBreaks,
-        WorksheetPageBreaksMetadataModel? metadata)
+        WorksheetPageBreaksMetadataModel? metadata,
+        uint maxBreakId,
+        uint defaultSpanMax)
     {
-        if (metadata is null)
+        var validModeledBreaks = modeledBreaks
+            .Where(id => IsSupportedBreakId(id, maxBreakId))
+            .Distinct()
+            .ToArray();
+        if (metadata is null && validModeledBreaks.Length == 0)
             return false;
 
         var changed = false;
@@ -54,52 +77,126 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
         if (pageBreaks is null)
         {
             pageBreaks = new XElement(WorksheetNs + elementName);
-            root.Add(pageBreaks);
+            InsertPageBreaksInOrder(root, pageBreaks);
             changed = true;
         }
 
         var breaksById = BuildBreaksById(pageBreaks);
-        foreach (var id in modeledBreaks)
+        foreach (var id in validModeledBreaks)
         {
-            if (id < 2)
-                continue;
-
             var idText = id.ToString(CultureInfo.InvariantCulture);
-            if (breaksById.ContainsKey(idText))
-                continue;
-
-            var breakElement = new XElement(
-                WorksheetNs + "brk",
-                new XAttribute("id", idText),
-                new XAttribute("man", "1"));
-            pageBreaks.Add(breakElement);
-            breaksById[idText] = breakElement;
-            changed = true;
-        }
-
-        foreach (var attribute in metadata.NativeAttributes)
-        {
-            if (string.IsNullOrWhiteSpace(attribute.Key) || string.Equals(attribute.Key, "count", StringComparison.Ordinal))
-                continue;
-
-            changed |= TrySetNativeAttributeIfDifferent(pageBreaks, attribute.Key, attribute.Value);
-        }
-
-        foreach (var (breakId, attributes) in metadata.BreakNativeAttributes)
-        {
-            if (!breaksById.TryGetValue(breakId.ToString(CultureInfo.InvariantCulture), out var breakElement))
-                continue;
-
-            foreach (var attribute in attributes)
+            if (!breaksById.TryGetValue(idText, out var breakElement))
             {
-                if (string.IsNullOrWhiteSpace(attribute.Key) || string.Equals(attribute.Key, "id", StringComparison.Ordinal))
+                breakElement = new XElement(WorksheetNs + "brk", new XAttribute("id", idText));
+                pageBreaks.Add(breakElement);
+                breaksById[idText] = breakElement;
+                changed = true;
+            }
+
+            changed |= SetAttributeIfDifferent(
+                breakElement,
+                "max",
+                defaultSpanMax.ToString(CultureInfo.InvariantCulture));
+            changed |= SetAttributeIfDifferent(breakElement, "man", "1");
+        }
+
+        if (metadata is not null)
+        {
+            foreach (var attribute in metadata.NativeAttributes)
+            {
+                if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                    string.Equals(attribute.Key, "count", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                changed |= TrySetNativeAttributeIfDifferent(pageBreaks, attribute.Key, attribute.Value);
+            }
+
+            foreach (var (breakId, attributes) in metadata.BreakNativeAttributes)
+            {
+                if (!breaksById.TryGetValue(breakId.ToString(CultureInfo.InvariantCulture), out var breakElement))
                     continue;
 
-                changed |= TrySetNativeAttributeIfDifferent(breakElement, attribute.Key, attribute.Value);
+                foreach (var attribute in attributes)
+                {
+                    if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                        string.Equals(attribute.Key, "id", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    changed |= TrySetNativeAttributeIfDifferent(breakElement, attribute.Key, attribute.Value);
+                }
             }
         }
 
+        var breakCount = pageBreaks.Elements(WorksheetNs + "brk").Count();
+        changed |= SetAttributeIfDifferent(pageBreaks, "count", breakCount.ToString(CultureInfo.InvariantCulture));
+        if (metadata?.NativeAttributes.ContainsKey("manualBreakCount") != true)
+        {
+            var manualBreakCount = pageBreaks
+                .Elements(WorksheetNs + "brk")
+                .Count(element => !string.Equals(element.Attribute("man")?.Value, "0", StringComparison.Ordinal));
+            changed |= SetAttributeIfDifferent(
+                pageBreaks,
+                "manualBreakCount",
+                manualBreakCount.ToString(CultureInfo.InvariantCulture));
+        }
+
         return changed;
+    }
+
+    private static bool IsSupportedBreakId(uint id, uint maxBreakId) => id is >= 2 && id <= maxBreakId;
+
+    private static void InsertPageBreaksInOrder(XElement root, XElement pageBreaks)
+    {
+        var elementName = pageBreaks.Name.LocalName;
+        if (string.Equals(elementName, "rowBreaks", StringComparison.Ordinal))
+        {
+            var columnBreaks = root.Element(WorksheetNs + "colBreaks");
+            if (columnBreaks is not null)
+            {
+                columnBreaks.AddBeforeSelf(pageBreaks);
+                return;
+            }
+        }
+
+        if (string.Equals(elementName, "colBreaks", StringComparison.Ordinal))
+        {
+            var rowBreaks = root.Element(WorksheetNs + "rowBreaks");
+            if (rowBreaks is not null)
+            {
+                rowBreaks.AddAfterSelf(pageBreaks);
+                return;
+            }
+        }
+
+        string[] laterWorksheetElements =
+        [
+            "customProperties",
+            "cellWatches",
+            "ignoredErrors",
+            "smartTags",
+            "drawing",
+            "legacyDrawing",
+            "legacyDrawingHF",
+            "picture",
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts",
+            "extLst"
+        ];
+
+        var insertionPoint = root.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == WorksheetNs &&
+                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        if (insertionPoint is null)
+            root.Add(pageBreaks);
+        else
+            insertionPoint.AddBeforeSelf(pageBreaks);
     }
 
     private static Dictionary<string, XElement> BuildBreaksById(XElement pageBreaks)

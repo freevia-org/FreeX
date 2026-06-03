@@ -766,7 +766,7 @@ public sealed class XlsxBroaderRetentionChecksTests
         workbookText.Should().Contain("customFunctionGroupFlag=\"keep\"");
         workbookText.Should().Contain("FreeXNativeFunctions");
         workbookText.Should().Contain("nativeHiddenViewAttr=\"kept\"");
-        workbookText.Should().Contain("customWorkbookViewAttr=\"keep\"");
+        workbookXml.Root.Element(MainNs + "customWorkbookViews").Should().BeNull();
         workbookText.Should().Contain("{FREEX-WORKBOOK-EXT}");
         workbookText.Should().Contain("externalReferences");
 

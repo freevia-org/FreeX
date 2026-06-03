@@ -64,29 +64,29 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         var def = CellStyle.Default;
         var dxf = new XElement(
             workbookNs + "dxf",
-            style.NumberFormat != def.NumberFormat
-                ? new XElement(
-                    workbookNs + "numFmt",
-                    new XAttribute("numFmtId", (164 + numberFormatId).ToString(CultureInfo.InvariantCulture)),
-                    new XAttribute("formatCode", style.NumberFormat))
-                : null,
             HasDifferentialFont(style)
                 ? new XElement(
                     workbookNs + "font",
                     style.Bold != def.Bold ? new XElement(workbookNs + "b") : null,
                     style.Italic != def.Italic ? new XElement(workbookNs + "i") : null,
-                    style.Underline != def.Underline ? new XElement(workbookNs + "u") : null,
                     style.Strikethrough != def.Strikethrough ? new XElement(workbookNs + "strike") : null,
+                    style.Underline != def.Underline ? new XElement(workbookNs + "u") : null,
                     style.Superscript != def.Superscript
                         ? new XElement(workbookNs + "vertAlign", new XAttribute("val", "superscript"))
                         : style.Subscript != def.Subscript
                             ? new XElement(workbookNs + "vertAlign", new XAttribute("val", "subscript"))
                             : null,
-                    style.FontColor != def.FontColor ? new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(style.FontColor))) : null,
                     style.FontSize != def.FontSize && IsSupportedFontSize(style.FontSize)
                         ? new XElement(workbookNs + "sz", new XAttribute("val", style.FontSize.ToString(CultureInfo.InvariantCulture)))
                         : null,
+                    style.FontColor != def.FontColor ? new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(style.FontColor))) : null,
                     style.FontName != def.FontName ? new XElement(workbookNs + "name", new XAttribute("val", style.FontName)) : null)
+                : null,
+            style.NumberFormat != def.NumberFormat
+                ? new XElement(
+                    workbookNs + "numFmt",
+                    new XAttribute("numFmtId", (164 + numberFormatId).ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("formatCode", style.NumberFormat))
                 : null,
             HasDifferentialFill(style)
                 ? new XElement(
@@ -147,6 +147,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             }
         }
 
+        NormalizeDifferentialStyleOrder(dxf, workbookNs);
         return dxf;
     }
 
@@ -181,6 +182,72 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             }
         }
     }
+
+    internal static bool NormalizeDifferentialStyleOrder(XElement dxf, XNamespace workbookNs)
+    {
+        var changed = false;
+        var font = dxf.Element(workbookNs + "font");
+        if (font is not null)
+            changed |= NormalizeDifferentialFontOrder(font, workbookNs);
+
+        var orderedChildren = dxf.Elements()
+            .OrderBy(element => DifferentialStyleChildOrder(element, workbookNs))
+            .ToList();
+        if (orderedChildren.Count == 0)
+            return changed;
+
+        if (!dxf.Elements().Select(element => element.Name).SequenceEqual(orderedChildren.Select(element => element.Name)))
+        {
+            dxf.ReplaceNodes(orderedChildren);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static int DifferentialStyleChildOrder(XElement element, XNamespace workbookNs) =>
+        element.Name == workbookNs + "font" ? 0 :
+        element.Name == workbookNs + "numFmt" ? 1 :
+        element.Name == workbookNs + "fill" ? 2 :
+        element.Name == workbookNs + "alignment" ? 3 :
+        element.Name == workbookNs + "border" ? 4 :
+        element.Name == workbookNs + "protection" ? 5 :
+        element.Name == workbookNs + "extLst" ? 100 :
+        90;
+
+    private static bool NormalizeDifferentialFontOrder(XElement font, XNamespace workbookNs)
+    {
+        var changed = XlsxFontNameSanitizer.SanitizeValAttribute(font.Element(workbookNs + "name"));
+        var orderedChildren = font.Elements()
+            .OrderBy(element => DifferentialFontChildOrder(element, workbookNs))
+            .ToList();
+        if (orderedChildren.Count == 0 ||
+            font.Elements().Select(element => element.Name).SequenceEqual(orderedChildren.Select(element => element.Name)))
+        {
+            return changed;
+        }
+
+        font.ReplaceNodes(orderedChildren);
+        return true;
+    }
+
+    private static int DifferentialFontChildOrder(XElement element, XNamespace workbookNs) =>
+        element.Name == workbookNs + "b" ? 0 :
+        element.Name == workbookNs + "i" ? 1 :
+        element.Name == workbookNs + "strike" ? 2 :
+        element.Name == workbookNs + "condense" ? 3 :
+        element.Name == workbookNs + "extend" ? 4 :
+        element.Name == workbookNs + "outline" ? 5 :
+        element.Name == workbookNs + "shadow" ? 6 :
+        element.Name == workbookNs + "u" ? 7 :
+        element.Name == workbookNs + "vertAlign" ? 8 :
+        element.Name == workbookNs + "sz" ? 9 :
+        element.Name == workbookNs + "color" ? 10 :
+        element.Name == workbookNs + "name" ? 11 :
+        element.Name == workbookNs + "charset" ? 12 :
+        element.Name == workbookNs + "family" ? 13 :
+        element.Name == workbookNs + "scheme" ? 14 :
+        90;
 
     private static bool IsModeledDifferentialStyleElement(string localName) =>
         localName is "font" or "numFmt" or "fill" or "alignment" or "border" or "protection";

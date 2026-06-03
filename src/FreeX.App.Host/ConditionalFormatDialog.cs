@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -85,48 +86,7 @@ public partial class ConditionalFormatDialog : Window
         bool isDuplicateValues = ruleType is "Duplicate Values";
         bool isBetween = ruleType is "Between";
         var inner = new StackPanel { Margin = new Thickness(16) };
-        _iconSetStyleBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
-        foreach (var style in IconSetStyles) _iconSetStyleBox.Items.Add(style);
-        _iconSetStyleBox.SelectedIndex = 0;
-        _iconSetShowValueBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowValue"), Margin = new Thickness(0, 0, 0, 6), IsChecked = true };
-        _iconSetReverseBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ReverseIconOrder"), Margin = new Thickness(0, 0, 0, 12) };
-        _topBottomRankBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "10" };
-        _dataBarMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
-        _dataBarMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
-        _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _dataBarShowValueBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowBarOnly"), Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
-        _dataBarGradientBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_GradientFill"), Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
-        _dataBarColorButton = CreateDataBarColorButton();
-        _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _dataBarBorderBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowBorder"), Margin = new Thickness(0, 0, 0, 6) };
-        _dataBarAxisPositionBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
-        foreach (var p in DataBarAxisPositionLabels()) _dataBarAxisPositionBox.Items.Add(p);
-        _dataBarAxisPositionBox.SelectedItem = UiText.Get("ConditionalFormatDialog_AxisPosition_Automatic");
-        _dataBarAxisColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _dataBarAxisColorButton = CreateDataBarOptionalColorButton(_dataBarAxisColorBox, UiText.Get("ConditionalFormatDialog_ChooseAxisColorToolTip"));
-        _dataBarNegativeFillColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _dataBarNegativeFillColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeFillColorBox, UiText.Get("ConditionalFormatDialog_ChooseNegativeBarColorToolTip"));
-        _dataBarNegativeBorderColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
-        _dataBarNegativeBorderColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeBorderColorBox, UiText.Get("ConditionalFormatDialog_ChooseNegativeBarBorderColorToolTip"));
-        _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
-        _colorScaleMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _colorScaleMinColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(99, 190, 123)) };
-        _colorScaleMinColorButton = CreateColorScaleColorButton(_colorScaleMinColorBox, UiText.Get("ConditionalFormatDialog_ChooseMinimumColorToolTip"));
-        _colorScaleUseThreeColorBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_UseThreeColorScale"), Margin = new Thickness(0, 0, 0, 8) };
-        _colorScaleMidTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Percentile };
-        _colorScaleMidValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "50" };
-        _colorScaleMidColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(255, 235, 132)) };
-        _colorScaleMidColorButton = CreateColorScaleColorButton(_colorScaleMidColorBox, UiText.Get("ConditionalFormatDialog_ChooseMidpointColorToolTip"));
-        _colorScaleUseThreeColorBox.Checked += (_, _) => UpdateColorScaleMidpointState();
-        _colorScaleUseThreeColorBox.Unchecked += (_, _) => UpdateColorScaleMidpointState();
-        _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
-        _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
-        _colorScaleMaxColorButton = CreateColorScaleColorButton(_colorScaleMaxColorBox, UiText.Get("ConditionalFormatDialog_ChooseMaximumColorToolTip"));
-        _dateOccurringPeriodBox = CreateDateOccurringPeriodBox();
-        _duplicateValuesKindBox = CreateDuplicateValuesKindBox();
+        InitializeRuleSpecificControls();
 
         if (isFormula)
         {
@@ -139,88 +99,23 @@ public partial class ConditionalFormatDialog : Window
         }
         else if (isDataBar)
         {
-            Height = 600;
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumTypeLabel"), _dataBarMinTypeBox));
-            inner.Children.Add(_dataBarMinTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumValueLabel"), _dataBarMinValueBox));
-            inner.Children.Add(_dataBarMinValueBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumTypeLabel"), _dataBarMaxTypeBox));
-            inner.Children.Add(_dataBarMaxTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumValueLabel"), _dataBarMaxValueBox));
-            inner.Children.Add(_dataBarMaxValueBox);
-            inner.Children.Add(_dataBarShowValueBox);
-            inner.Children.Add(_dataBarGradientBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumBarLengthLabel"), _dataBarMinLengthBox));
-            inner.Children.Add(_dataBarMinLengthBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumBarLengthLabel"), _dataBarMaxLengthBox));
-            inner.Children.Add(_dataBarMaxLengthBox);
-            inner.Children.Add(_dataBarBorderBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_AxisPositionLabel"), _dataBarAxisPositionBox));
-            inner.Children.Add(_dataBarAxisPositionBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_AxisColorLabel"), _dataBarAxisColorBox));
-            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarAxisColorBox, _dataBarAxisColorButton));
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_NegativeBarColorLabel"), _dataBarNegativeFillColorBox));
-            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeFillColorBox, _dataBarNegativeFillColorButton));
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_NegativeBorderColorLabel"), _dataBarNegativeBorderColorBox));
-            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeBorderColorBox, _dataBarNegativeBorderColorButton));
-
-            ResetValueInputs();
+            BuildDataBarEditor(inner, initializeControls: false);
         }
         else if (isColorScale)
         {
-            Height = 520;
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumTypeLabel"), _colorScaleMinTypeBox));
-            inner.Children.Add(_colorScaleMinTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumValueLabel"), _colorScaleMinValueBox));
-            inner.Children.Add(_colorScaleMinValueBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumColorLabel"), _colorScaleMinColorBox));
-            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMinColorBox, _colorScaleMinColorButton));
-            inner.Children.Add(_colorScaleUseThreeColorBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MidpointTypeLabel"), _colorScaleMidTypeBox));
-            inner.Children.Add(_colorScaleMidTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MidpointValueLabel"), _colorScaleMidValueBox));
-            inner.Children.Add(_colorScaleMidValueBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MidpointColorLabel"), _colorScaleMidColorBox));
-            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMidColorBox, _colorScaleMidColorButton));
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumTypeLabel"), _colorScaleMaxTypeBox));
-            inner.Children.Add(_colorScaleMaxTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumValueLabel"), _colorScaleMaxValueBox));
-            inner.Children.Add(_colorScaleMaxValueBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumColorLabel"), _colorScaleMaxColorBox));
-            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMaxColorBox, _colorScaleMaxColorButton));
-
-            ResetValueInputs();
+            BuildColorScaleEditor(inner, initializeControls: false, updateMidpointState: false);
         }
         else if (isIconSet)
         {
-            _iconSetStyleBox.SelectionChanged += (_, _) => BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string);
-            _iconSetThresholdPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-            BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0]);
-
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_IconSetLabel"), _iconSetStyleBox));
-            inner.Children.Add(_iconSetStyleBox);
-            inner.Children.Add(_iconSetShowValueBox);
-            inner.Children.Add(_iconSetReverseBox);
-            inner.Children.Add(new TextBlock { Text = UiText.Get("ConditionalFormatDialog_ThresholdsHeader"), Margin = new Thickness(0, 4, 0, 2) });
-            inner.Children.Add(_iconSetThresholdPanel);
-
-            ResetValueInputs();
+            BuildIconSetEditor(inner, initializeControls: false);
         }
         else if (isDateOccurring && !IsContainsShellRuleType(ruleType))
         {
-            Height = 220;
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_DatePeriodLabel"), _dateOccurringPeriodBox));
-            inner.Children.Add(_dateOccurringPeriodBox);
-
-            ResetValueInputs();
+            BuildDateOccurringEditor(inner, initializeControls: false);
         }
         else if (isDuplicateValues)
         {
-            Height = 220;
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_FormatCellsThatContainLabel"), _duplicateValuesKindBox));
-            inner.Children.Add(_duplicateValuesKindBox);
-
-            ResetValueInputs();
+            BuildDuplicateValuesEditor(inner, initializeControls: false);
         }
         else
         {
@@ -442,6 +337,266 @@ public partial class ConditionalFormatDialog : Window
         return comboBox;
     }
 
+    [MemberNotNull(
+        nameof(_iconSetStyleBox),
+        nameof(_iconSetShowValueBox),
+        nameof(_iconSetReverseBox),
+        nameof(_topBottomRankBox),
+        nameof(_dataBarMinTypeBox),
+        nameof(_dataBarMinValueBox),
+        nameof(_dataBarMaxTypeBox),
+        nameof(_dataBarMaxValueBox),
+        nameof(_dataBarShowValueBox),
+        nameof(_dataBarGradientBox),
+        nameof(_dataBarColorButton),
+        nameof(_dataBarMinLengthBox),
+        nameof(_dataBarMaxLengthBox),
+        nameof(_dataBarBorderBox),
+        nameof(_dataBarAxisPositionBox),
+        nameof(_dataBarAxisColorBox),
+        nameof(_dataBarAxisColorButton),
+        nameof(_dataBarNegativeFillColorBox),
+        nameof(_dataBarNegativeFillColorButton),
+        nameof(_dataBarNegativeBorderColorBox),
+        nameof(_dataBarNegativeBorderColorButton),
+        nameof(_colorScaleMinTypeBox),
+        nameof(_colorScaleMinValueBox),
+        nameof(_colorScaleMinColorBox),
+        nameof(_colorScaleMinColorButton),
+        nameof(_colorScaleUseThreeColorBox),
+        nameof(_colorScaleMidTypeBox),
+        nameof(_colorScaleMidValueBox),
+        nameof(_colorScaleMidColorBox),
+        nameof(_colorScaleMidColorButton),
+        nameof(_colorScaleMaxTypeBox),
+        nameof(_colorScaleMaxValueBox),
+        nameof(_colorScaleMaxColorBox),
+        nameof(_colorScaleMaxColorButton),
+        nameof(_dateOccurringPeriodBox),
+        nameof(_duplicateValuesKindBox))]
+    private void InitializeRuleSpecificControls()
+    {
+        CreateIconSetControls(attachThresholdBuilder: false);
+        _topBottomRankBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "10" };
+        CreateDataBarControls();
+        CreateColorScaleControls();
+        CreateDateOccurringControls();
+        CreateDuplicateValuesControls();
+    }
+
+    [MemberNotNull(
+        nameof(_iconSetStyleBox),
+        nameof(_iconSetShowValueBox),
+        nameof(_iconSetReverseBox))]
+    private void CreateIconSetControls(bool attachThresholdBuilder)
+    {
+        _iconSetStyleBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
+        foreach (var style in IconSetStyles) _iconSetStyleBox.Items.Add(style);
+        _iconSetStyleBox.SelectedIndex = 0;
+        if (attachThresholdBuilder)
+            AttachIconSetStyleBoxThresholdBuilder();
+        _iconSetShowValueBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowValue"), Margin = new Thickness(0, 0, 0, 6), IsChecked = true };
+        _iconSetReverseBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ReverseIconOrder"), Margin = new Thickness(0, 0, 0, 12) };
+    }
+
+    private void AttachIconSetStyleBoxThresholdBuilder()
+    {
+        _iconSetStyleBox.SelectionChanged += (_, _) => BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string);
+    }
+
+    [MemberNotNull(
+        nameof(_dataBarMinTypeBox),
+        nameof(_dataBarMinValueBox),
+        nameof(_dataBarMaxTypeBox),
+        nameof(_dataBarMaxValueBox),
+        nameof(_dataBarShowValueBox),
+        nameof(_dataBarGradientBox),
+        nameof(_dataBarColorButton),
+        nameof(_dataBarMinLengthBox),
+        nameof(_dataBarMaxLengthBox),
+        nameof(_dataBarBorderBox),
+        nameof(_dataBarAxisPositionBox),
+        nameof(_dataBarAxisColorBox),
+        nameof(_dataBarAxisColorButton),
+        nameof(_dataBarNegativeFillColorBox),
+        nameof(_dataBarNegativeFillColorButton),
+        nameof(_dataBarNegativeBorderColorBox),
+        nameof(_dataBarNegativeBorderColorButton))]
+    private void CreateDataBarControls()
+    {
+        _dataBarMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
+        _dataBarMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
+        _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarShowValueBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowBarOnly"), Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
+        _dataBarGradientBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_GradientFill"), Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
+        _dataBarColorButton = CreateDataBarColorButton();
+        _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarBorderBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowBorder"), Margin = new Thickness(0, 0, 0, 6) };
+        _dataBarAxisPositionBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
+        foreach (var p in DataBarAxisPositionLabels()) _dataBarAxisPositionBox.Items.Add(p);
+        _dataBarAxisPositionBox.SelectedItem = UiText.Get("ConditionalFormatDialog_AxisPosition_Automatic");
+        _dataBarAxisColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarAxisColorButton = CreateDataBarOptionalColorButton(_dataBarAxisColorBox, UiText.Get("ConditionalFormatDialog_ChooseAxisColorToolTip"));
+        _dataBarNegativeFillColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarNegativeFillColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeFillColorBox, UiText.Get("ConditionalFormatDialog_ChooseNegativeBarColorToolTip"));
+        _dataBarNegativeBorderColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
+        _dataBarNegativeBorderColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeBorderColorBox, UiText.Get("ConditionalFormatDialog_ChooseNegativeBarBorderColorToolTip"));
+    }
+
+    [MemberNotNull(
+        nameof(_colorScaleMinTypeBox),
+        nameof(_colorScaleMinValueBox),
+        nameof(_colorScaleMinColorBox),
+        nameof(_colorScaleMinColorButton),
+        nameof(_colorScaleUseThreeColorBox),
+        nameof(_colorScaleMidTypeBox),
+        nameof(_colorScaleMidValueBox),
+        nameof(_colorScaleMidColorBox),
+        nameof(_colorScaleMidColorButton),
+        nameof(_colorScaleMaxTypeBox),
+        nameof(_colorScaleMaxValueBox),
+        nameof(_colorScaleMaxColorBox),
+        nameof(_colorScaleMaxColorButton))]
+    private void CreateColorScaleControls()
+    {
+        _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
+        _colorScaleMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _colorScaleMinColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(99, 190, 123)) };
+        _colorScaleMinColorButton = CreateColorScaleColorButton(_colorScaleMinColorBox, UiText.Get("ConditionalFormatDialog_ChooseMinimumColorToolTip"));
+        _colorScaleUseThreeColorBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_UseThreeColorScale"), Margin = new Thickness(0, 0, 0, 8) };
+        _colorScaleMidTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Percentile };
+        _colorScaleMidValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "50" };
+        _colorScaleMidColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(255, 235, 132)) };
+        _colorScaleMidColorButton = CreateColorScaleColorButton(_colorScaleMidColorBox, UiText.Get("ConditionalFormatDialog_ChooseMidpointColorToolTip"));
+        _colorScaleUseThreeColorBox.Checked += (_, _) => UpdateColorScaleMidpointState();
+        _colorScaleUseThreeColorBox.Unchecked += (_, _) => UpdateColorScaleMidpointState();
+        _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
+        _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
+        _colorScaleMaxColorButton = CreateColorScaleColorButton(_colorScaleMaxColorBox, UiText.Get("ConditionalFormatDialog_ChooseMaximumColorToolTip"));
+    }
+
+    [MemberNotNull(nameof(_dateOccurringPeriodBox))]
+    private void CreateDateOccurringControls()
+    {
+        _dateOccurringPeriodBox = CreateDateOccurringPeriodBox();
+    }
+
+    [MemberNotNull(nameof(_duplicateValuesKindBox))]
+    private void CreateDuplicateValuesControls()
+    {
+        _duplicateValuesKindBox = CreateDuplicateValuesKindBox();
+    }
+
+    private void BuildDataBarEditor(StackPanel inner, bool initializeControls = true)
+    {
+        if (initializeControls)
+            CreateDataBarControls();
+
+        Height = 600;
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumTypeLabel"), _dataBarMinTypeBox));
+        inner.Children.Add(_dataBarMinTypeBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumValueLabel"), _dataBarMinValueBox));
+        inner.Children.Add(_dataBarMinValueBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumTypeLabel"), _dataBarMaxTypeBox));
+        inner.Children.Add(_dataBarMaxTypeBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumValueLabel"), _dataBarMaxValueBox));
+        inner.Children.Add(_dataBarMaxValueBox);
+        inner.Children.Add(_dataBarShowValueBox);
+        inner.Children.Add(_dataBarGradientBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumBarLengthLabel"), _dataBarMinLengthBox));
+        inner.Children.Add(_dataBarMinLengthBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumBarLengthLabel"), _dataBarMaxLengthBox));
+        inner.Children.Add(_dataBarMaxLengthBox);
+        inner.Children.Add(_dataBarBorderBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_AxisPositionLabel"), _dataBarAxisPositionBox));
+        inner.Children.Add(_dataBarAxisPositionBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_AxisColorLabel"), _dataBarAxisColorBox));
+        inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarAxisColorBox, _dataBarAxisColorButton));
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_NegativeBarColorLabel"), _dataBarNegativeFillColorBox));
+        inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeFillColorBox, _dataBarNegativeFillColorButton));
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_NegativeBorderColorLabel"), _dataBarNegativeBorderColorBox));
+        inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeBorderColorBox, _dataBarNegativeBorderColorButton));
+        ResetValueInputs();
+    }
+
+    private void BuildColorScaleEditor(StackPanel inner, bool initializeControls = true, bool updateMidpointState = true)
+    {
+        if (initializeControls)
+            CreateColorScaleControls();
+
+        Height = 520;
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumTypeLabel"), _colorScaleMinTypeBox));
+        inner.Children.Add(_colorScaleMinTypeBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumValueLabel"), _colorScaleMinValueBox));
+        inner.Children.Add(_colorScaleMinValueBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumColorLabel"), _colorScaleMinColorBox));
+        inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMinColorBox, _colorScaleMinColorButton));
+        inner.Children.Add(_colorScaleUseThreeColorBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MidpointTypeLabel"), _colorScaleMidTypeBox));
+        inner.Children.Add(_colorScaleMidTypeBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MidpointValueLabel"), _colorScaleMidValueBox));
+        inner.Children.Add(_colorScaleMidValueBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MidpointColorLabel"), _colorScaleMidColorBox));
+        inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMidColorBox, _colorScaleMidColorButton));
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumTypeLabel"), _colorScaleMaxTypeBox));
+        inner.Children.Add(_colorScaleMaxTypeBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumValueLabel"), _colorScaleMaxValueBox));
+        inner.Children.Add(_colorScaleMaxValueBox);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumColorLabel"), _colorScaleMaxColorBox));
+        inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMaxColorBox, _colorScaleMaxColorButton));
+        ResetValueInputs();
+        if (updateMidpointState)
+            UpdateColorScaleMidpointState();
+    }
+
+    private void BuildIconSetEditor(StackPanel inner, bool initializeControls = true)
+    {
+        if (initializeControls)
+            CreateIconSetControls(attachThresholdBuilder: true);
+        else
+            AttachIconSetStyleBoxThresholdBuilder();
+
+        _iconSetThresholdPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0]);
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_IconSetLabel"), _iconSetStyleBox));
+        inner.Children.Add(_iconSetStyleBox);
+        inner.Children.Add(_iconSetShowValueBox);
+        inner.Children.Add(_iconSetReverseBox);
+        inner.Children.Add(new TextBlock { Text = UiText.Get("ConditionalFormatDialog_ThresholdsHeader"), Margin = new Thickness(0, 4, 0, 2) });
+        inner.Children.Add(_iconSetThresholdPanel);
+        ResetValueInputs();
+    }
+
+    private void BuildDateOccurringEditor(StackPanel inner, bool initializeControls = true)
+    {
+        if (initializeControls)
+            CreateDateOccurringControls();
+
+        Height = 220;
+        AddDateOccurringPeriodEditor(inner);
+        ResetValueInputs();
+    }
+
+    private void AddDateOccurringPeriodEditor(StackPanel inner)
+    {
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_DatePeriodLabel"), _dateOccurringPeriodBox));
+        inner.Children.Add(_dateOccurringPeriodBox);
+    }
+
+    private void BuildDuplicateValuesEditor(StackPanel inner, bool initializeControls = true)
+    {
+        if (initializeControls)
+            CreateDuplicateValuesControls();
+
+        Height = 220;
+        inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_FormatCellsThatContainLabel"), _duplicateValuesKindBox));
+        inner.Children.Add(_duplicateValuesKindBox);
+        ResetValueInputs();
+    }
+
     private void ResetValueInputs()
     {
         _value1Box = new TextBox();
@@ -489,124 +644,23 @@ public partial class ConditionalFormatDialog : Window
         }
         else if (isDataBar)
         {
-            Height = 600;
-            _dataBarMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
-            _dataBarMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
-            _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _dataBarShowValueBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowBarOnly"), Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
-            _dataBarGradientBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_GradientFill"), Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
-            _dataBarColorButton = CreateDataBarColorButton();
-            _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _dataBarBorderBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowBorder"), Margin = new Thickness(0, 0, 0, 6) };
-            _dataBarAxisPositionBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
-            foreach (var p in DataBarAxisPositionLabels()) _dataBarAxisPositionBox.Items.Add(p);
-            _dataBarAxisPositionBox.SelectedItem = UiText.Get("ConditionalFormatDialog_AxisPosition_Automatic");
-            _dataBarAxisColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _dataBarAxisColorButton = CreateDataBarOptionalColorButton(_dataBarAxisColorBox, UiText.Get("ConditionalFormatDialog_ChooseAxisColorToolTip"));
-            _dataBarNegativeFillColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _dataBarNegativeFillColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeFillColorBox, UiText.Get("ConditionalFormatDialog_ChooseNegativeBarColorToolTip"));
-            _dataBarNegativeBorderColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
-            _dataBarNegativeBorderColorButton = CreateDataBarOptionalColorButton(_dataBarNegativeBorderColorBox, UiText.Get("ConditionalFormatDialog_ChooseNegativeBarBorderColorToolTip"));
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumTypeLabel"), _dataBarMinTypeBox));
-            inner.Children.Add(_dataBarMinTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumValueLabel"), _dataBarMinValueBox));
-            inner.Children.Add(_dataBarMinValueBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumTypeLabel"), _dataBarMaxTypeBox));
-            inner.Children.Add(_dataBarMaxTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumValueLabel"), _dataBarMaxValueBox));
-            inner.Children.Add(_dataBarMaxValueBox);
-            inner.Children.Add(_dataBarShowValueBox);
-            inner.Children.Add(_dataBarGradientBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumBarLengthLabel"), _dataBarMinLengthBox));
-            inner.Children.Add(_dataBarMinLengthBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumBarLengthLabel"), _dataBarMaxLengthBox));
-            inner.Children.Add(_dataBarMaxLengthBox);
-            inner.Children.Add(_dataBarBorderBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_AxisPositionLabel"), _dataBarAxisPositionBox));
-            inner.Children.Add(_dataBarAxisPositionBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_AxisColorLabel"), _dataBarAxisColorBox));
-            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarAxisColorBox, _dataBarAxisColorButton));
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_NegativeBarColorLabel"), _dataBarNegativeFillColorBox));
-            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeFillColorBox, _dataBarNegativeFillColorButton));
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_NegativeBorderColorLabel"), _dataBarNegativeBorderColorBox));
-            inner.Children.Add(CreateDataBarOptionalColorEditor(_dataBarNegativeBorderColorBox, _dataBarNegativeBorderColorButton));
-            ResetValueInputs();
+            BuildDataBarEditor(inner);
         }
         else if (isColorScale)
         {
-            Height = 520;
-            _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
-            _colorScaleMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _colorScaleMinColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(99, 190, 123)) };
-            _colorScaleMinColorButton = CreateColorScaleColorButton(_colorScaleMinColorBox, UiText.Get("ConditionalFormatDialog_ChooseMinimumColorToolTip"));
-            _colorScaleUseThreeColorBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_UseThreeColorScale"), Margin = new Thickness(0, 0, 0, 8) };
-            _colorScaleUseThreeColorBox.Checked += (_, _) => UpdateColorScaleMidpointState();
-            _colorScaleUseThreeColorBox.Unchecked += (_, _) => UpdateColorScaleMidpointState();
-            _colorScaleMidTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Percentile };
-            _colorScaleMidValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "50" };
-            _colorScaleMidColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(255, 235, 132)) };
-            _colorScaleMidColorButton = CreateColorScaleColorButton(_colorScaleMidColorBox, UiText.Get("ConditionalFormatDialog_ChooseMidpointColorToolTip"));
-            _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
-            _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
-            _colorScaleMaxColorButton = CreateColorScaleColorButton(_colorScaleMaxColorBox, UiText.Get("ConditionalFormatDialog_ChooseMaximumColorToolTip"));
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumTypeLabel"), _colorScaleMinTypeBox));
-            inner.Children.Add(_colorScaleMinTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumValueLabel"), _colorScaleMinValueBox));
-            inner.Children.Add(_colorScaleMinValueBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MinimumColorLabel"), _colorScaleMinColorBox));
-            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMinColorBox, _colorScaleMinColorButton));
-            inner.Children.Add(_colorScaleUseThreeColorBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MidpointTypeLabel"), _colorScaleMidTypeBox));
-            inner.Children.Add(_colorScaleMidTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MidpointValueLabel"), _colorScaleMidValueBox));
-            inner.Children.Add(_colorScaleMidValueBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MidpointColorLabel"), _colorScaleMidColorBox));
-            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMidColorBox, _colorScaleMidColorButton));
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumTypeLabel"), _colorScaleMaxTypeBox));
-            inner.Children.Add(_colorScaleMaxTypeBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumValueLabel"), _colorScaleMaxValueBox));
-            inner.Children.Add(_colorScaleMaxValueBox);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_MaximumColorLabel"), _colorScaleMaxColorBox));
-            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMaxColorBox, _colorScaleMaxColorButton));
-            ResetValueInputs();
-            UpdateColorScaleMidpointState();
+            BuildColorScaleEditor(inner);
         }
         else if (isIconSet)
         {
-            _iconSetStyleBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
-            foreach (var style in IconSetStyles) _iconSetStyleBox.Items.Add(style);
-            _iconSetStyleBox.SelectedIndex = 0;
-            _iconSetStyleBox.SelectionChanged += (_, _) => BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string);
-            _iconSetShowValueBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ShowValue"), Margin = new Thickness(0, 0, 0, 6), IsChecked = true };
-            _iconSetReverseBox = new CheckBox { Content = UiText.Get("ConditionalFormatDialog_ReverseIconOrder"), Margin = new Thickness(0, 0, 0, 12) };
-            _iconSetThresholdPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-            BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0]);
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_IconSetLabel"), _iconSetStyleBox));
-            inner.Children.Add(_iconSetStyleBox);
-            inner.Children.Add(_iconSetShowValueBox);
-            inner.Children.Add(_iconSetReverseBox);
-            inner.Children.Add(new TextBlock { Text = UiText.Get("ConditionalFormatDialog_ThresholdsHeader"), Margin = new Thickness(0, 4, 0, 2) });
-            inner.Children.Add(_iconSetThresholdPanel);
-            ResetValueInputs();
+            BuildIconSetEditor(inner);
         }
         else if (isDuplicateValues)
         {
-            Height = 220;
-            _duplicateValuesKindBox = CreateDuplicateValuesKindBox();
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_FormatCellsThatContainLabel"), _duplicateValuesKindBox));
-            inner.Children.Add(_duplicateValuesKindBox);
-            ResetValueInputs();
+            BuildDuplicateValuesEditor(inner);
         }
         else if (isDateOccurring && !IsContainsShellRuleType(ruleType))
         {
-            Height = 220;
-            _dateOccurringPeriodBox = CreateDateOccurringPeriodBox();
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_DatePeriodLabel"), _dateOccurringPeriodBox));
-            inner.Children.Add(_dateOccurringPeriodBox);
-            ResetValueInputs();
+            BuildDateOccurringEditor(inner);
         }
         else
         {
@@ -705,9 +759,8 @@ public partial class ConditionalFormatDialog : Window
         }
         else if (kind == UiText.Get("ConditionalFormatDialog_ConditionKind_DatesOccurring"))
         {
-            _dateOccurringPeriodBox = CreateDateOccurringPeriodBox();
-            inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_DatePeriodLabel"), _dateOccurringPeriodBox));
-            inner.Children.Add(_dateOccurringPeriodBox);
+            CreateDateOccurringControls();
+            AddDateOccurringPeriodEditor(inner);
         }
     }
 

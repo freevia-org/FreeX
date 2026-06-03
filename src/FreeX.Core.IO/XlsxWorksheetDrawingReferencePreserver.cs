@@ -5,6 +5,8 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetDrawingReferencePreserver
 {
+    private const string DrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -81,7 +83,8 @@ internal static class XlsxWorksheetDrawingReferencePreserver
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing");
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
 
-            targetRoot.Add(new XElement(workbookNs + "drawing", new XAttribute(relNs + "id", targetRelId)));
+            targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
+            XlsxWorksheetDrawingPlacement.SetWorksheetDrawing(targetRoot, workbookNs, relNs, targetRelId);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
     }
@@ -138,7 +141,8 @@ internal static class XlsxWorksheetDrawingReferencePreserver
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing");
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
 
-            targetRoot.Add(new XElement(context.WorkbookNs + "drawing", new XAttribute(context.RelNs + "id", targetRelId)));
+            targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", context.RelNs.NamespaceName);
+            XlsxWorksheetDrawingPlacement.SetWorksheetDrawing(targetRoot, context.WorkbookNs, context.RelNs, targetRelId);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
     }
@@ -184,8 +188,103 @@ internal static class XlsxWorksheetDrawingReferencePreserver
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing");
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
 
-            targetRoot.Add(new XElement(context.WorkbookNs + "drawing", new XAttribute(context.RelNs + "id", targetRelId)));
+            targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", context.RelNs.NamespaceName);
+            XlsxWorksheetDrawingPlacement.SetWorksheetDrawing(targetRoot, context.WorkbookNs, context.RelNs, targetRelId);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+
+        var activeDrawingPaths = NormalizeWorksheetDrawingRelationships(targetArchive, context);
+        RemoveShadowedSourceDrawingParts(targetArchive, drawingPaths, activeDrawingPaths);
     }
+
+    private static HashSet<string> NormalizeWorksheetDrawingRelationships(
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context)
+    {
+        var activeDrawingPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var targetWorksheetPath in context.TargetSheets.Values)
+        {
+            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+            if (targetWorksheetEntry is null)
+                continue;
+
+            var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
+            var activeDrawingRelId = targetWorksheetXml.Root?
+                .Element(context.WorkbookNs + "drawing")?
+                .Attribute(context.RelNs + "id")?
+                .Value;
+            if (string.IsNullOrWhiteSpace(activeDrawingRelId))
+                continue;
+
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+            var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
+            if (targetWorksheetRelsEntry is null)
+                continue;
+
+            var targetWorksheetRelsXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetRelsEntry);
+            var root = targetWorksheetRelsXml.Root;
+            if (root is null)
+                continue;
+
+            var drawingRelationships = root
+                .Elements(context.PackageRelNs + "Relationship")
+                .Where(IsDrawingRelationship)
+                .ToList();
+            var activeDrawingRelationship = drawingRelationships.FirstOrDefault(relationship =>
+                string.Equals(relationship.Attribute("Id")?.Value, activeDrawingRelId, StringComparison.Ordinal));
+            if (activeDrawingRelationship is null)
+                continue;
+
+            var activeTarget = activeDrawingRelationship.Attribute("Target")?.Value;
+            if (!string.IsNullOrWhiteSpace(activeTarget))
+            {
+                activeDrawingPaths.Add(XlsxPackagePath.ResolveRelationshipTarget(targetWorksheetPath, activeTarget));
+            }
+
+            var redundantDrawingRelationships = drawingRelationships
+                .Where(relationship =>
+                    !string.Equals(relationship.Attribute("Id")?.Value, activeDrawingRelId, StringComparison.Ordinal))
+                .ToList();
+            if (redundantDrawingRelationships.Count == 0)
+                continue;
+
+            foreach (var redundantRelationship in redundantDrawingRelationships)
+                redundantRelationship.Remove();
+
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
+        }
+
+        return activeDrawingPaths;
+    }
+
+    private static void RemoveShadowedSourceDrawingParts(
+        ZipArchive targetArchive,
+        XlsxWorksheetDrawingPathMap drawingPaths,
+        IReadOnlySet<string> activeDrawingPaths)
+    {
+        foreach (var (sheetName, sourceDrawingPath) in drawingPaths.SourceDrawingPaths)
+        {
+            if (!drawingPaths.TargetDrawingPaths.TryGetValue(sheetName, out var targetDrawingPath))
+                continue;
+
+            var normalizedSourceDrawingPath = XlsxPackagePath.NormalizeZipPath(sourceDrawingPath.Replace('\\', '/'));
+            if (string.Equals(
+                    normalizedSourceDrawingPath,
+                    XlsxPackagePath.NormalizeZipPath(targetDrawingPath.Replace('\\', '/')),
+                    StringComparison.OrdinalIgnoreCase) ||
+                activeDrawingPaths.Contains(normalizedSourceDrawingPath))
+            {
+                continue;
+            }
+
+            targetArchive.GetEntry(normalizedSourceDrawingPath)?.Delete();
+            targetArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(normalizedSourceDrawingPath))?.Delete();
+        }
+    }
+
+    private static bool IsDrawingRelationship(XElement relationship) =>
+        string.Equals(
+            relationship.Attribute("Type")?.Value,
+            DrawingRelationshipType,
+            StringComparison.OrdinalIgnoreCase);
 }

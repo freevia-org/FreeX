@@ -16,9 +16,7 @@ public sealed class FilterCommand : IWorkbookCommand
     private readonly uint _filterColOffset;   // 0 = first column of the range
     private readonly IReadOnlyList<string> _allowedValues;
 
-    // Snapshot of previous hidden-row state for undo
-    private uint[]? _previousHiddenRows;
-    private uint[]? _previousFilterHiddenRows;
+    private FilterUndoSnapshot _undoSnapshot;
 
     public string Label => _allowedValues.Count == 0 ? "Clear Filter" : "Apply Filter";
 
@@ -42,8 +40,7 @@ public sealed class FilterCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenRows = null;
-        _previousFilterHiddenRows = null;
+        _undoSnapshot.Reset();
 
         uint filterCol  = _range.Start.Col + _filterColOffset;
         uint startRow   = _range.Start.Row;
@@ -54,7 +51,7 @@ public sealed class FilterCommand : IWorkbookCommand
             if (!FilterHiddenRowUpdater.ContainsAnyInRange(sheet.FilterHiddenRows, _range))
                 return new CommandOutcome(true);
 
-            SnapshotHiddenRows(sheet);
+            _undoSnapshot.CaptureIfNeeded(sheet);
             FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
             return new CommandOutcome(true);
         }
@@ -69,7 +66,7 @@ public sealed class FilterCommand : IWorkbookCommand
             if (sheet.FilterHiddenRows.Contains(row) == shouldHide)
                 continue;
 
-            SnapshotHiddenRows(sheet);
+            _undoSnapshot.CaptureIfNeeded(sheet);
             FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, shouldHide);
         }
 
@@ -78,22 +75,9 @@ public sealed class FilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previousHiddenRows is null) return;
+        if (!_undoSnapshot.HasSnapshot) return;
         var sheet = ctx.GetSheet(_sheetId);
-        sheet.HiddenRows.Clear();
-        sheet.HiddenRows.UnionWith(_previousHiddenRows);
-        sheet.FilterHiddenRows.Clear();
-        if (_previousFilterHiddenRows is not null)
-            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
-    }
-
-    private void SnapshotHiddenRows(Sheet sheet)
-    {
-        if (_previousHiddenRows is not null)
-            return;
-
-        _previousHiddenRows = [.. sheet.HiddenRows];
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _undoSnapshot.Restore(sheet);
     }
 }
 
@@ -103,8 +87,7 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
     private readonly CellColor _fillColor;
-    private uint[]? _previousHiddenRows;
-    private uint[]? _previousFilterHiddenRows;
+    private FilterUndoSnapshot _undoSnapshot;
 
     public string Label => "Filter by Cell Color";
 
@@ -128,8 +111,7 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenRows = [.. sheet.HiddenRows];
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _undoSnapshot.Capture(sheet);
 
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
@@ -146,15 +128,11 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previousHiddenRows is null)
+        if (!_undoSnapshot.HasSnapshot)
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        sheet.HiddenRows.Clear();
-        sheet.HiddenRows.UnionWith(_previousHiddenRows);
-        sheet.FilterHiddenRows.Clear();
-        if (_previousFilterHiddenRows is not null)
-            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+        _undoSnapshot.Restore(sheet);
     }
 }
 
@@ -163,8 +141,7 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
-    private uint[]? _previousHiddenRows;
-    private uint[]? _previousFilterHiddenRows;
+    private FilterUndoSnapshot _undoSnapshot;
 
     public string Label => "Filter by No Fill";
 
@@ -186,8 +163,7 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenRows = [.. sheet.HiddenRows];
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _undoSnapshot.Capture(sheet);
 
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
@@ -204,15 +180,11 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previousHiddenRows is null)
+        if (!_undoSnapshot.HasSnapshot)
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        sheet.HiddenRows.Clear();
-        sheet.HiddenRows.UnionWith(_previousHiddenRows);
-        sheet.FilterHiddenRows.Clear();
-        if (_previousFilterHiddenRows is not null)
-            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+        _undoSnapshot.Restore(sheet);
     }
 }
 
@@ -222,8 +194,7 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
     private readonly CellColor _fontColor;
-    private uint[]? _previousHiddenRows;
-    private uint[]? _previousFilterHiddenRows;
+    private FilterUndoSnapshot _undoSnapshot;
 
     public string Label => "Filter by Font Color";
 
@@ -247,8 +218,7 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenRows = [.. sheet.HiddenRows];
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _undoSnapshot.Capture(sheet);
 
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
@@ -265,15 +235,51 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previousHiddenRows is null)
+        if (!_undoSnapshot.HasSnapshot)
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        _undoSnapshot.Restore(sheet);
+    }
+}
+
+internal struct FilterUndoSnapshot
+{
+    private uint[]? _hiddenRows;
+    private uint[]? _filterHiddenRows;
+
+    public bool HasSnapshot => _hiddenRows is not null;
+
+    public void Reset()
+    {
+        _hiddenRows = null;
+        _filterHiddenRows = null;
+    }
+
+    public void Capture(Sheet sheet)
+    {
+        _hiddenRows = [.. sheet.HiddenRows];
+        _filterHiddenRows = [.. sheet.FilterHiddenRows];
+    }
+
+    public void CaptureIfNeeded(Sheet sheet)
+    {
+        if (HasSnapshot)
+            return;
+
+        Capture(sheet);
+    }
+
+    public void Restore(Sheet sheet)
+    {
+        if (_hiddenRows is null)
+            return;
+
         sheet.HiddenRows.Clear();
-        sheet.HiddenRows.UnionWith(_previousHiddenRows);
+        sheet.HiddenRows.UnionWith(_hiddenRows);
         sheet.FilterHiddenRows.Clear();
-        if (_previousFilterHiddenRows is not null)
-            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+        if (_filterHiddenRows is not null)
+            sheet.FilterHiddenRows.UnionWith(_filterHiddenRows);
     }
 }
 

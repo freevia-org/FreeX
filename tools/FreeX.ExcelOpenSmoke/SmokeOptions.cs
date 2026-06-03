@@ -3,19 +3,22 @@ internal sealed record SmokeOptions(
     bool SaveReopen,
     bool GenerateChartFixtures,
     bool GenerateFreexFixture,
+    bool GenerateFreexFeatureFixtures,
     bool GenerateExcelFixture,
     bool FreeXResaveBeforeExcel,
     string? OutputDirectory,
     string Pattern,
     IReadOnlyList<string> Inputs)
 {
-    public bool HasGeneratedFixtures => GenerateChartFixtures || GenerateFreexFixture || GenerateExcelFixture;
+    public bool HasGeneratedFixtures =>
+        GenerateChartFixtures || GenerateFreexFixture || GenerateFreexFeatureFixtures || GenerateExcelFixture;
 
     public static SmokeOptions Parse(string[] args)
     {
         var saveReopen = false;
         var generateChartFixtures = false;
         var generateFreexFixture = false;
+        var generateFreexFeatureFixtures = false;
         var generateExcelFixture = false;
         var freeXResaveBeforeExcel = false;
         string? outputDirectory = null;
@@ -29,7 +32,7 @@ internal sealed record SmokeOptions(
             {
                 case "--help":
                 case "-h":
-                    return new SmokeOptions(true, false, false, false, false, false, null, pattern, []);
+                    return new SmokeOptions(true, false, false, false, false, false, false, null, pattern, []);
                 case "--save-reopen":
                     saveReopen = true;
                     break;
@@ -38,6 +41,9 @@ internal sealed record SmokeOptions(
                     break;
                 case "--generate-freex-fixture":
                     generateFreexFixture = true;
+                    break;
+                case "--generate-freex-feature-fixtures":
+                    generateFreexFeatureFixtures = true;
                     break;
                 case "--generate-excel-fixture":
                     generateExcelFixture = true;
@@ -64,6 +70,7 @@ internal sealed record SmokeOptions(
             saveReopen,
             generateChartFixtures,
             generateFreexFixture,
+            generateFreexFeatureFixtures,
             generateExcelFixture,
             freeXResaveBeforeExcel,
             outputDirectory,

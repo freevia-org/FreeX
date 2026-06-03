@@ -43,13 +43,13 @@ internal static partial class XlsxChartXmlWriter
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
-                chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
-                    ? ToSeriesSmoothXml(chart, seriesIndex, chartNs)
-                    : null,
                 ToCategoryRangeXml(categoryRange, chartNs),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", valueRange))));
+                        new XElement(chartNs + "f", valueRange))),
+                chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
+                    ? ToSeriesSmoothXml(chart, seriesIndex, chartNs)
+                    : null);
             seriesIndex++;
         }
     }
@@ -108,13 +108,13 @@ internal static partial class XlsxChartXmlWriter
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
-                ToSeriesSmoothXml(chart, seriesIndex, chartNs),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", xValueRange))),
                 new XElement(chartNs + "yVal",
                     new XElement(chartNs + "numRef",
-                        new XElement(chartNs + "f", yValueRange))));
+                        new XElement(chartNs + "f", yValueRange))),
+                ToSeriesSmoothXml(chart, seriesIndex, chartNs));
             seriesIndex++;
         }
     }

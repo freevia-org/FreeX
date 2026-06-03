@@ -27,20 +27,7 @@ public static partial class ChartRenderer
         var (percentAxisMinimum, percentAxisMaximum) =
             GetStackedPercentAxisBounds(normalizeToPercent, positiveTotals, negativeTotals);
 
-        model.Axes.Add(new LinearAxis
-        {
-            Position = AxisPosition.Bottom,
-            Title = chart.XAxisTitle,
-            Minimum = -0.5,
-            Maximum = Math.Max(0.5, categories.Count - 0.5),
-            MajorStep = 1,
-            MinorStep = 1,
-            LabelFormatter = value =>
-            {
-                var index = (int)Math.Round(value);
-                return index >= 0 && index < categories.Count ? categories[index] : "";
-            }
-        });
+        model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
         model.Axes.Add(new LinearAxis
         {
             Position = AxisPosition.Left,
@@ -125,9 +112,7 @@ public static partial class ChartRenderer
         var (percentAxisMinimum, percentAxisMaximum) =
             GetStackedPercentAxisBounds(normalizeToPercent, positiveTotals, negativeTotals);
 
-        var categoryAxis = new CategoryAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle };
-        categoryAxis.Labels.AddRange(categories);
-        model.Axes.Add(categoryAxis);
+        model.Axes.Add(CreateCategoryAxis(AxisPosition.Left, chart.YAxisTitle, categories));
         model.Axes.Add(new LinearAxis
         {
             Position = AxisPosition.Bottom,

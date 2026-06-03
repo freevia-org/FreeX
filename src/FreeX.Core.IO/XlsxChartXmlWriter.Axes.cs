@@ -244,8 +244,10 @@ internal static partial class XlsxChartXmlWriter
             yield return ToSeriesAxisXml(chartNs);
     }
 
-    private static XElement ToCategoryAxisXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs) =>
-        new(chartNs + (chart.XAxisIsDateAxis ? "dateAx" : "catAx"),
+    private static XElement ToCategoryAxisXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        var isDateAxis = chart.XAxisIsDateAxis;
+        return new XElement(chartNs + (isDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "scaling",
                 new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(chart.XAxisReverseOrder)))),
@@ -257,18 +259,21 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(ToEffectiveAxisMajorTickStyle(chart.Type, chart.XAxisMajorTickStyle)))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels, chart.XAxisTickLabelPosition))),
-            ToUnsignedAxisValueXml("tickLblSkip", chart.XAxisLabelSkip, chartNs),
-            ToUnsignedAxisValueXml("tickMarkSkip", chart.XAxisTickMarkSkip, chartNs),
-            ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
-            ToBooleanAxisValueXml("noMultiLvlLbl", chart.XAxisNoMultiLevelLabels, chartNs),
-            ToAxisLabelAlignmentXml(chart.XAxisLabelAlignment, chartNs),
-            ToDateAxisUnitXml("baseTimeUnit", chart.XAxisIsDateAxis ? chart.XAxisBaseTimeUnit : null, chartNs),
-            ToDateAxisUnitXml("majorTimeUnit", chart.XAxisIsDateAxis ? chart.XAxisMajorTimeUnit : null, chartNs),
-            ToDateAxisUnitXml("minorTimeUnit", chart.XAxisIsDateAxis ? chart.XAxisMinorTimeUnit : null, chartNs),
-            ToAxisLabelTextProperties(chart.XAxisLabelTextThemeColor, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
+            ToAxisLabelTextProperties(chart.XAxisLabelTextThemeColor, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
-            new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")));
+            new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")),
+            isDateAxis ? null : ToAxisLabelAlignmentXml(chart.XAxisLabelAlignment, chartNs),
+            ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
+            isDateAxis ? ToDateAxisUnitXml("baseTimeUnit", chart.XAxisBaseTimeUnit, chartNs) : null,
+            isDateAxis ? ToAxisUnitXml("majorUnit", chart.XAxisMajorUnit, chartNs) : null,
+            isDateAxis ? ToDateAxisUnitXml("majorTimeUnit", chart.XAxisMajorTimeUnit, chartNs) : null,
+            isDateAxis ? ToAxisUnitXml("minorUnit", chart.XAxisMinorUnit, chartNs) : null,
+            isDateAxis ? ToDateAxisUnitXml("minorTimeUnit", chart.XAxisMinorTimeUnit, chartNs) : null,
+            isDateAxis ? null : ToUnsignedAxisValueXml("tickLblSkip", chart.XAxisLabelSkip, chartNs),
+            isDateAxis ? null : ToUnsignedAxisValueXml("tickMarkSkip", chart.XAxisTickMarkSkip, chartNs),
+            isDateAxis ? null : ToBooleanAxisValueXml("noMultiLvlLbl", chart.XAxisNoMultiLevelLabels, chartNs));
+    }
 
     private static XElement ToValueAxisXml(
         string? title,
@@ -328,17 +333,17 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "numFmt",
                 new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat, numberFormatCode)),
                 new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(numberFormat, numberFormatSourceLinked))),
-            ToAxisUnitXml("majorUnit", majorUnit, chartNs),
-            ToAxisUnitXml("minorUnit", minorUnit, chartNs),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(majorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(minorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels, tickLabelPosition))),
-            ToAxisDisplayUnitXml(displayUnit, customDisplayUnit, chartNs),
-            ToAxisLabelTextProperties(labelTextThemeColor, labelTextColor, labelFontSize, labelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(lineColor, lineThickness, chartNs, drawingNs),
+            ToAxisLabelTextProperties(labelTextThemeColor, labelTextColor, labelFontSize, labelAngle, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", crossAxisId)),
             ToAxisCrossesXml(crosses, crossesAt, chartNs),
-            ToAxisCrossBetweenXml(crossBetween, chartNs));
+            ToAxisCrossBetweenXml(crossBetween, chartNs),
+            ToAxisUnitXml("majorUnit", majorUnit, chartNs),
+            ToAxisUnitXml("minorUnit", minorUnit, chartNs),
+            ToAxisDisplayUnitXml(displayUnit, customDisplayUnit, chartNs));
 
     private static XElement ToSeriesAxisXml(XNamespace chartNs) =>
         new(chartNs + "serAx",

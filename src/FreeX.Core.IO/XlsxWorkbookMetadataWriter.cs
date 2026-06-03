@@ -180,17 +180,7 @@ internal static class XlsxWorkbookMetadataWriter
             "reservationPassword",
             string.IsNullOrWhiteSpace(workbook.FileSharing.ReservationPassword) ? null : workbook.FileSharing.ReservationPassword);
 
-        var workbookProtection = root.Element(WorkbookNs + "workbookProtection");
-        if (workbookProtection is not null)
-            workbookProtection.AddBeforeSelf(fileSharing);
-        else
-        {
-            var sheets = root.Element(WorkbookNs + "sheets");
-            if (sheets is not null)
-                sheets.AddBeforeSelf(fileSharing);
-            else
-                root.Add(fileSharing);
-        }
+        InsertFileSharingInOrder(root, fileSharing);
 
         return true;
     }
@@ -404,13 +394,47 @@ internal static class XlsxWorkbookMetadataWriter
         if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
             protection.SetAttributeValue("workbookPassword", XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(workbook.StructureProtectionPassword));
 
-        var sheets = root.Element(WorkbookNs + "sheets");
-        if (sheets is not null)
-            sheets.AddBeforeSelf(protection);
-        else
-            root.Add(protection);
+        InsertWorkbookProtectionInOrder(root, protection);
 
         return true;
+    }
+
+    private static void InsertFileSharingInOrder(XElement root, XElement fileSharing)
+    {
+        string[] laterWorkbookElements =
+        [
+            "workbookPr",
+            "workbookProtection",
+            "bookViews",
+            "sheets"
+        ];
+
+        var insertionPoint = root.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == WorkbookNs &&
+                laterWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        if (insertionPoint is null)
+            root.Add(fileSharing);
+        else
+            insertionPoint.AddBeforeSelf(fileSharing);
+    }
+
+    private static void InsertWorkbookProtectionInOrder(XElement root, XElement protection)
+    {
+        string[] laterWorkbookElements =
+        [
+            "bookViews",
+            "sheets"
+        ];
+
+        var insertionPoint = root.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == WorkbookNs &&
+                laterWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        if (insertionPoint is null)
+            root.Add(protection);
+        else
+            insertionPoint.AddBeforeSelf(protection);
     }
 
     public static void SaveCalculationProperties(Stream xlsxStream, Workbook workbook)

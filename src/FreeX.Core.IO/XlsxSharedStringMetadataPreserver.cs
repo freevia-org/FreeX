@@ -42,7 +42,9 @@ internal static class XlsxSharedStringMetadataPreserver
             if (!targetStringsByText.TryGetValue(plainText, out var targetString))
                 continue;
 
-            targetString.ReplaceWith(new XElement(sourceString));
+            var replacement = new XElement(sourceString);
+            SanitizeRichSharedStringFontNames(replacement, workbookNs);
+            targetString.ReplaceWith(replacement);
             changed = true;
         }
 
@@ -105,6 +107,12 @@ internal static class XlsxSharedStringMetadataPreserver
         sharedString.Elements(workbookNs + "r").Any() ||
         sharedString.Element(workbookNs + "rPh") is not null ||
         sharedString.Element(workbookNs + "phoneticPr") is not null;
+
+    private static void SanitizeRichSharedStringFontNames(XElement sharedString, XNamespace workbookNs)
+    {
+        foreach (var richTextFont in sharedString.Descendants(workbookNs + "rFont"))
+            XlsxFontNameSanitizer.SanitizeValAttribute(richTextFont);
+    }
 
     private static string ReadSharedStringPlainText(XElement sharedString, XNamespace workbookNs)
     {

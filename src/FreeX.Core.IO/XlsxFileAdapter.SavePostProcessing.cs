@@ -228,6 +228,7 @@ public sealed partial class XlsxFileAdapter
         if (!hasSourcePackage)
         {
             SaveSourcePackageIndependentPostProcessingMetadata();
+            NormalizeStylesheetForSchema();
             return;
         }
 
@@ -266,6 +267,9 @@ public sealed partial class XlsxFileAdapter
             XlsxNumberFormatCatalogWriter.RemapPivotTableNumberFormats(packageStream, numberFormatIdMap);
         }
 
+        NormalizeStylesheetForSchema();
+        NormalizeSourcePackageForExcelCompatibility();
+
         packageStream.Position = 0;
         SourcePackages.Remove(workbook);
         SourcePackages.Add(workbook, XlsxSourcePackage.Capture(
@@ -282,6 +286,18 @@ public sealed partial class XlsxFileAdapter
                 packageStream.Position = 0;
                 XlsxWorksheetSourceIndependentMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());
             }
+        }
+
+        void NormalizeStylesheetForSchema()
+        {
+            packageStream.Position = 0;
+            XlsxStylesheetSchemaNormalizer.Normalize(packageStream);
+        }
+
+        void NormalizeSourcePackageForExcelCompatibility()
+        {
+            packageStream.Position = 0;
+            XlsxExcelCompatibilityNormalizer.NormalizeSourcePackageSave(packageStream);
         }
     }
 

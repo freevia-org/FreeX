@@ -35,6 +35,13 @@ public static class FileSavePlanner
     {
         try
         {
+            if (path.Contains('\0', StringComparison.Ordinal) ||
+                path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            {
+                extension = "";
+                return false;
+            }
+
             extension = Path.GetExtension(path) ?? "";
             return !string.IsNullOrWhiteSpace(extension);
         }
