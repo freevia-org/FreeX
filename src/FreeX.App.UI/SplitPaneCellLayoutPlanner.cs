@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using System.Collections;
 using System.Windows;
 
 namespace FreeX.App.UI;
@@ -15,7 +16,11 @@ public static class SplitPaneCellLayoutPlanner
         IReadOnlyList<GridRange>? mergedRegions = null,
         CellAddress? editingCell = null)
     {
-        var consumer = new SplitPaneCellLayoutCollector(viewport.SplitPanes?.Cells?.Count ?? 0);
+        var cells = viewport.SplitPanes?.Cells ?? [];
+        if (cells.Count == 0)
+            return [];
+
+        var consumer = new SplitPaneCellLayoutCollector(cells);
         VisitLayouts(viewport, mergedRegions, editingCell, ref consumer);
         return consumer.ToLayouts();
     }
@@ -98,19 +103,105 @@ public static class SplitPaneCellLayoutPlanner
         }
     }
 
-    private struct SplitPaneCellLayoutCollector(int capacity) : ISplitPaneCellLayoutConsumer
+    private struct SplitPaneCellLayoutCollector(IReadOnlyList<DisplayCell> cells) : ISplitPaneCellLayoutConsumer
     {
-        private readonly int _capacity = capacity;
-        private List<SplitPaneCellLayout>? _layouts;
+        private readonly IReadOnlyList<DisplayCell> _cells = cells;
+        private int _nextCellIndex;
+        private int[]? _cellIndexes;
+        private Rect[]? _rects;
+        private Rect[]? _textClipRects;
+        private SplitPaneRegion[]? _regions;
+        private int _count;
 
         public void AcceptLayout(SplitPaneCellLayout layout)
         {
-            _layouts ??= new List<SplitPaneCellLayout>(_capacity);
-            _layouts.Add(layout);
+            EnsureCapacity();
+            _cellIndexes![_count] = FindCellIndex(layout.Cell.Row, layout.Cell.Col);
+            _rects![_count] = layout.Rect;
+            _textClipRects![_count] = layout.TextClipRect;
+            _regions![_count] = layout.Region;
+            _count++;
         }
 
         public readonly IReadOnlyList<SplitPaneCellLayout> ToLayouts() =>
-            _layouts is { Count: > 0 } layouts ? layouts : [];
+            _count == 0
+                ? []
+                : new SplitPaneCellLayoutList(
+                    _cells,
+                    _cellIndexes!,
+                    _rects!,
+                    _textClipRects!,
+                    _regions!,
+                    _count);
+
+        private void EnsureCapacity()
+        {
+            if (_cellIndexes is not null)
+                return;
+
+            var capacity = _cells.Count;
+            _cellIndexes = new int[capacity];
+            _rects = new Rect[capacity];
+            _textClipRects = new Rect[capacity];
+            _regions = new SplitPaneRegion[capacity];
+        }
+
+        private int FindCellIndex(uint row, uint col)
+        {
+            for (var i = _nextCellIndex; i < _cells.Count; i++)
+            {
+                var cell = _cells[i];
+                if (cell.Row != row || cell.Col != col)
+                    continue;
+
+                _nextCellIndex = i + 1;
+                return i;
+            }
+
+            for (var i = 0; i < _nextCellIndex; i++)
+            {
+                var cell = _cells[i];
+                if (cell.Row == row && cell.Col == col)
+                    return i;
+            }
+
+            throw new InvalidOperationException("Split pane layout cell was not found in the source viewport cells.");
+        }
+    }
+
+    private sealed class SplitPaneCellLayoutList(
+        IReadOnlyList<DisplayCell> cells,
+        int[] cellIndexes,
+        Rect[] rects,
+        Rect[] textClipRects,
+        SplitPaneRegion[] regions,
+        int count) : IReadOnlyList<SplitPaneCellLayout>
+    {
+        public int Count { get; } = count;
+
+        public SplitPaneCellLayout this[int index]
+        {
+            get
+            {
+                ArgumentOutOfRangeException.ThrowIfNegative(index);
+                if (index >= Count)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
+                return new SplitPaneCellLayout(
+                    cells[cellIndexes[index]],
+                    rects[index],
+                    textClipRects[index],
+                    regions[index]);
+            }
+        }
+
+        public IEnumerator<SplitPaneCellLayout> GetEnumerator()
+        {
+            for (var i = 0; i < Count; i++)
+                yield return this[i];
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private static SplitPaneRegion ResolveSplitPaneRegion(bool isTopPane, bool isLeftPane) =>
