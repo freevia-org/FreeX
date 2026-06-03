@@ -65,7 +65,7 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
-        result = EvaluateMatchDirectRange(lookupValue, vector, matchType, context);
+        result = EvaluateMatchDirectRange(lookupValue, CreateDirectLookupReader(vector, context), matchType);
         return true;
     }
 
@@ -133,7 +133,7 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
-        result = EvaluateXmatchDirectRange(lookupValue, vector, matchMode, searchMode, context);
+        result = EvaluateXmatchDirectRange(lookupValue, CreateDirectLookupReader(vector, context), matchMode, searchMode);
         return true;
     }
 
@@ -172,7 +172,9 @@ public sealed partial class FormulaEvaluator
         if (!TryCreateDirectXlookupReturnVector(returnRange, context, out var returnVector, out result, out var shouldFallback))
             return !shouldFallback;
 
-        if (returnVector.Count != lookupVector.Count)
+        var lookupReader = CreateDirectLookupReader(lookupVector, context);
+        var returnReader = CreateDirectLookupReader(returnVector, context);
+        if (returnReader.Count != lookupReader.Count)
         {
             result = ErrorValue.Value;
             return true;
@@ -231,10 +233,9 @@ public sealed partial class FormulaEvaluator
 
         var matchError = TryFindDirectLookupIndex(
             lookupValue,
-            lookupVector,
+            lookupReader,
             matchMode,
             searchMode,
-            context,
             out var matchIndex);
         if (matchError is not null)
         {
@@ -243,7 +244,7 @@ public sealed partial class FormulaEvaluator
         }
 
         result = matchIndex >= 0
-            ? GetDirectLookupValue(returnVector, matchIndex, context)
+            ? returnReader.GetValue(matchIndex)
             : ifNotFound;
         return true;
     }
@@ -357,7 +358,11 @@ public sealed partial class FormulaEvaluator
             ? new DirectLookupRangeVector(tableSheetName, startRow + (uint)lookupIndex - 1, startCol, 1, colCount)
             : new DirectLookupRangeVector(tableSheetName, startRow, startCol + (uint)lookupIndex - 1, rowCount, 1);
 
-        result = EvaluateLegacyLookupDirectTable(lookupValue, lookupVector, resultVector, approximate, context);
+        result = EvaluateLegacyLookupDirectTable(
+            lookupValue,
+            CreateDirectLookupReader(lookupVector, context),
+            CreateDirectLookupReader(resultVector, context),
+            approximate);
         return true;
     }
 
@@ -405,23 +410,25 @@ public sealed partial class FormulaEvaluator
                 return !resultShouldFallback;
         }
 
-        result = EvaluateLookupDirectVectors(lookupValue, lookupVector, resultVector, context);
+        result = EvaluateLookupDirectVectors(
+            lookupValue,
+            CreateDirectLookupReader(lookupVector, context),
+            CreateDirectLookupReader(resultVector, context));
         return true;
     }
 
     private static ScalarValue EvaluateLegacyLookupDirectTable(
         ScalarValue lookupValue,
-        DirectLookupRangeVector lookupVector,
-        DirectLookupRangeVector resultVector,
-        bool approximate,
-        IEvalContext context)
+        DirectLookupRangeReader lookupReader,
+        DirectLookupRangeReader resultReader,
+        bool approximate)
     {
         if (approximate)
         {
             var best = -1;
-            for (var index = 0; index < lookupVector.Count; index++)
+            for (var index = 0; index < lookupReader.Count; index++)
             {
-                var candidate = GetDirectLookupValue(lookupVector, index, context);
+                var candidate = lookupReader.GetValue(index);
                 if (candidate is ErrorValue error)
                     return error;
 
@@ -431,17 +438,17 @@ public sealed partial class FormulaEvaluator
                     break;
             }
 
-            return best >= 0 ? GetDirectLookupValue(resultVector, best, context) : ErrorValue.NA;
+            return best >= 0 ? resultReader.GetValue(best) : ErrorValue.NA;
         }
 
-        for (var index = 0; index < lookupVector.Count; index++)
+        for (var index = 0; index < lookupReader.Count; index++)
         {
-            var candidate = GetDirectLookupValue(lookupVector, index, context);
+            var candidate = lookupReader.GetValue(index);
             if (candidate is ErrorValue error)
                 return error;
 
             if (BuiltInFunctions.MatchExactValue(candidate, lookupValue))
-                return GetDirectLookupValue(resultVector, index, context);
+                return resultReader.GetValue(index);
         }
 
         return ErrorValue.NA;
@@ -449,15 +456,14 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue EvaluateMatchDirectRange(
         ScalarValue lookupValue,
-        DirectLookupRangeVector vector,
-        int matchType,
-        IEvalContext context)
+        DirectLookupRangeReader reader,
+        int matchType)
     {
         if (matchType == 0)
         {
-            for (var index = 0; index < vector.Count; index++)
+            for (var index = 0; index < reader.Count; index++)
             {
-                var candidate = GetDirectLookupValue(vector, index, context);
+                var candidate = reader.GetValue(index);
                 if (candidate is ErrorValue error)
                     return error;
 
@@ -471,9 +477,9 @@ public sealed partial class FormulaEvaluator
         if (matchType == 1)
         {
             var best = -1;
-            for (var index = 0; index < vector.Count; index++)
+            for (var index = 0; index < reader.Count; index++)
             {
-                var candidate = GetDirectLookupValue(vector, index, context);
+                var candidate = reader.GetValue(index);
                 if (candidate is ErrorValue error)
                     return error;
 
@@ -487,9 +493,9 @@ public sealed partial class FormulaEvaluator
         }
 
         var descendingBest = -1;
-        for (var index = 0; index < vector.Count; index++)
+        for (var index = 0; index < reader.Count; index++)
         {
-            var candidate = GetDirectLookupValue(vector, index, context);
+            var candidate = reader.GetValue(index);
             if (candidate is ErrorValue error)
                 return error;
 
@@ -504,17 +510,15 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue EvaluateXmatchDirectRange(
         ScalarValue lookupValue,
-        DirectLookupRangeVector vector,
+        DirectLookupRangeReader reader,
         int matchMode,
-        int searchMode,
-        IEvalContext context)
+        int searchMode)
     {
         var error = TryFindDirectLookupIndex(
             lookupValue,
-            vector,
+            reader,
             matchMode,
             searchMode,
-            context,
             out var matchIndex);
         if (error is not null)
             return error;
@@ -524,44 +528,41 @@ public sealed partial class FormulaEvaluator
 
     private static ErrorValue? TryFindDirectLookupIndex(
         ScalarValue lookupValue,
-        DirectLookupRangeVector vector,
+        DirectLookupRangeReader reader,
         int matchMode,
         int searchMode,
-        IEvalContext context,
         out int matchIndex)
     {
-        GetDirectLookupSearchBounds(vector.Count, searchMode, out var start, out var end, out var step);
+        GetDirectLookupSearchBounds(reader.Count, searchMode, out var start, out var end, out var step);
 
         if (matchMode == 0)
-            return TryFindDirectExactLookupIndex(lookupValue, vector, start, end, step, context, out matchIndex);
+            return TryFindDirectExactLookupIndex(lookupValue, reader, start, end, step, out matchIndex);
 
         if (matchMode == 2)
-            return TryFindDirectWildcardLookupIndex(lookupValue, vector, start, end, step, context, out matchIndex);
+            return TryFindDirectWildcardLookupIndex(lookupValue, reader, start, end, step, out matchIndex);
 
         return TryFindDirectApproximateXmatchIndex(
             lookupValue,
-            vector,
+            reader,
             start,
             end,
             step,
             nextSmaller: matchMode == -1,
-            context,
             out matchIndex);
     }
 
     private static ErrorValue? TryFindDirectExactLookupIndex(
         ScalarValue lookupValue,
-        DirectLookupRangeVector vector,
+        DirectLookupRangeReader reader,
         int start,
         int end,
         int step,
-        IEvalContext context,
         out int matchIndex)
     {
         matchIndex = -1;
         for (var index = start; index != end; index += step)
         {
-            var candidate = GetDirectLookupValue(vector, index, context);
+            var candidate = reader.GetValue(index);
             if (candidate is ErrorValue error)
                 return error;
 
@@ -577,18 +578,17 @@ public sealed partial class FormulaEvaluator
 
     private static ErrorValue? TryFindDirectWildcardLookupIndex(
         ScalarValue lookupValue,
-        DirectLookupRangeVector vector,
+        DirectLookupRangeReader reader,
         int start,
         int end,
         int step,
-        IEvalContext context,
         out int matchIndex)
     {
         matchIndex = -1;
         var pattern = BuiltInFunctions.ToText(lookupValue);
         for (var index = start; index != end; index += step)
         {
-            var candidate = GetDirectLookupValue(vector, index, context);
+            var candidate = reader.GetValue(index);
             if (candidate is ErrorValue error)
                 return error;
 
@@ -605,18 +605,17 @@ public sealed partial class FormulaEvaluator
 
     private static ErrorValue? TryFindDirectApproximateXmatchIndex(
         ScalarValue lookupValue,
-        DirectLookupRangeVector vector,
+        DirectLookupRangeReader reader,
         int start,
         int end,
         int step,
         bool nextSmaller,
-        IEvalContext context,
         out int matchIndex)
     {
         matchIndex = -1;
         for (var index = start; index != end; index += step)
         {
-            var candidate = GetDirectLookupValue(vector, index, context);
+            var candidate = reader.GetValue(index);
             if (candidate is ErrorValue error)
                 return error;
 
@@ -631,7 +630,7 @@ public sealed partial class FormulaEvaluator
         ScalarValue bestValue = BlankValue.Instance;
         for (var index = start; index != end; index += step)
         {
-            var candidate = GetDirectLookupValue(vector, index, context);
+            var candidate = reader.GetValue(index);
             if (candidate is ErrorValue error)
                 return error;
 
@@ -664,14 +663,13 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue EvaluateLookupDirectVectors(
         ScalarValue lookupValue,
-        DirectLookupRangeVector lookupVector,
-        DirectLookupRangeVector resultVector,
-        IEvalContext context)
+        DirectLookupRangeReader lookupReader,
+        DirectLookupRangeReader resultReader)
     {
         var matchIndex = -1;
-        for (var index = 0; index < lookupVector.Count; index++)
+        for (var index = 0; index < lookupReader.Count; index++)
         {
-            var candidate = GetDirectLookupValue(lookupVector, index, context);
+            var candidate = lookupReader.GetValue(index);
             if (candidate is ErrorValue)
                 continue;
 
@@ -682,8 +680,8 @@ public sealed partial class FormulaEvaluator
         if (matchIndex < 0)
             return ErrorValue.NA;
 
-        return matchIndex < resultVector.Count
-            ? GetDirectLookupValue(resultVector, matchIndex, context)
+        return matchIndex < resultReader.Count
+            ? resultReader.GetValue(matchIndex)
             : ErrorValue.NA;
     }
 
@@ -915,20 +913,39 @@ public sealed partial class FormulaEvaluator
         step = -1;
     }
 
-    private static ScalarValue GetDirectLookupValue(
+    private static DirectLookupRangeReader CreateDirectLookupReader(
         DirectLookupRangeVector vector,
-        int index,
         IEvalContext context)
     {
-        var row = vector.IsRow ? vector.StartRow : vector.StartRow + (uint)index;
-        var col = vector.IsRow ? vector.StartCol + (uint)index : vector.StartCol;
+        var sheet = context is SheetEvalContext sheetContext
+            ? sheetContext.ResolveSheetForFastRange(vector.SheetName)
+            : null;
 
-        if (context is SheetEvalContext sheetContext)
-            return sheetContext.ResolveSheetForFastRange(vector.SheetName)?.GetValue(row, col) ?? ErrorValue.Ref;
+        return new DirectLookupRangeReader(vector, context, sheet);
+    }
 
-        return vector.SheetName is null
-            ? context.GetCellValue(row, col)
-            : context.GetCellValue(vector.SheetName, row, col);
+    private readonly record struct DirectLookupRangeReader(
+        DirectLookupRangeVector Vector,
+        IEvalContext Context,
+        Sheet? Sheet)
+    {
+        public int Count => Vector.Count;
+
+        public ScalarValue GetValue(int index)
+        {
+            var row = Vector.IsRow ? Vector.StartRow : Vector.StartRow + (uint)index;
+            var col = Vector.IsRow ? Vector.StartCol + (uint)index : Vector.StartCol;
+
+            if (Sheet is not null)
+                return Sheet.GetValue(row, col);
+
+            if (Context is SheetEvalContext)
+                return ErrorValue.Ref;
+
+            return Vector.SheetName is null
+                ? Context.GetCellValue(row, col)
+                : Context.GetCellValue(Vector.SheetName, row, col);
+        }
     }
 
     private readonly record struct DirectLookupRangeVector(

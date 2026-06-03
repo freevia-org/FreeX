@@ -74,4 +74,28 @@ public sealed class NativeJsonSerializerOptionsTests
         NativeJsonAdapter.SaveOptionsForTest.WriteIndented.Should().BeFalse(
             "the native .fxl format must not use pretty-printed JSON");
     }
+
+    [Fact]
+    public void LoadScalarValue_ParsesSimpleIntegersWithoutChangingNumberFallbacks()
+    {
+        NativeJsonScalarValueMapper.Deserialize("12345", 'n')
+            .Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(12345);
+
+        NativeJsonScalarValueMapper.Deserialize("-42", 'n')
+            .Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(-42);
+
+        NativeJsonScalarValueMapper.Deserialize("1.25", 'n')
+            .Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(1.25);
+
+        NativeJsonScalarValueMapper.Deserialize("1E+3", 'n')
+            .Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(1000);
+
+        NativeJsonScalarValueMapper.Deserialize("NaN", 'n')
+            .Should().BeOfType<TextValue>()
+            .Which.Value.Should().Be("NaN");
+    }
 }

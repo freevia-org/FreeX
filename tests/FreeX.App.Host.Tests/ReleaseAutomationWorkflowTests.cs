@@ -51,8 +51,12 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("vars.FREEX_MSIX_TIMESTAMP_URL");
         workflow.Should().Contain("$env:FREEX_MSIX_CERTIFICATE_PASSWORD = \"${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}\"");
         workflow.Should().Contain("if (-not [string]::IsNullOrWhiteSpace($certificateBase64))");
-        workflow.Should().Contain("-MsixCertificatePath");
-        workflow.Should().Contain("-AllowUnsignedMsix");
+        workflow.Should().Contain("$signParameters = @{}");
+        workflow.Should().Contain("$signParameters.MsixCertificatePath = $certificatePath");
+        workflow.Should().Contain("$signParameters.MsixTimestampUrl = $timestampUrl");
+        workflow.Should().Contain("$signParameters.AllowUnsignedMsix = $true");
+        workflow.Should().Contain("@signParameters");
+        workflow.Should().NotContain("@signArgs");
         workflow.Should().NotContain("-MsixCertificatePassword\", $certificatePassword");
         workflow.Should().Contain("-PublishMode Msix");
         workflow.Should().Contain("FreeX-latest-win-x64.exe");

@@ -277,8 +277,8 @@ public class PerformanceBenchmarkTests
 
         sheet.GetValue(formula).Should().Be(new NumberValue(42));
         (allocated / iterations).Should().BeLessThan(
-            650,
-            "leaf formula roots without downstream dependents should not build dirty-set evaluation-order scaffolding");
+            260,
+            "leaf formula roots without downstream dependents should reuse the one-cell changed set and avoid list-backed report allocation");
     }
 
     [Fact]
@@ -294,10 +294,14 @@ public class PerformanceBenchmarkTests
 
         recalculate.Should().Contain("CanEvaluateChangedFormulaRootsDirectly(plan, changedFormulaCells, _volatileCells.Count)");
         recalculate.Should().Contain("directFormulaRoots = changedFormulaCells!.Count == 1");
+        recalculate.Should().NotContain("var recalculated = new List<CellAddress>();");
         recalculate.IndexOf("CanEvaluateChangedFormulaRootsDirectly", StringComparison.Ordinal)
             .Should()
             .BeLessThan(recalculate.IndexOf("var dirtyCells = new HashSet<CellAddress>", StringComparison.Ordinal));
 
+        source.Should().Contain("return sheet?.GetCell(addr)?.HasFormula == true ? changedCells : null;");
+        source.Should().Contain("private static IReadOnlyList<CellAddress> BuildRecalculatedCells(");
+        source.Should().Contain("BuildRecalculatedCells(recalculatedCount, singleRecalculated, recalculated)");
         fastPath.Should().Contain("volatileCellCount == 0");
         fastPath.Should().Contain("changedFormulaCells is { Count: > 0 }");
         fastPath.Should().Contain("dependencyPlan.OrderedCells.Count == 0");

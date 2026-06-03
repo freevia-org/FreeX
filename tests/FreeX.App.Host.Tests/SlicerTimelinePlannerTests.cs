@@ -208,6 +208,46 @@ public sealed class SlicerTimelinePlannerTests
     }
 
     [Fact]
+    public void NativeVisualFilters_ReusesCachedPairedResultForUnchangedWorkbookState()
+    {
+        var (workbook, activeSheet) = CreateLargeNativeVisualFilterWorkbook(visibleControlCount: 4);
+
+        var first = SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet);
+        var second = SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet);
+
+        second.Should().BeSameAs(first);
+        second.Slicers.Should().BeSameAs(first.Slicers);
+        second.Timelines.Should().BeSameAs(first.Timelines);
+    }
+
+    [Fact]
+    public void NativeVisualFilters_RebuildCachedPairedResultWhenControlConnectionChanges()
+    {
+        var workbook = new Workbook("NativeVisualFiltersConnectionInvalidation");
+        var activeSheet = workbook.AddSheet("Pivot");
+        activeSheet.PivotTables.Add(new PivotTableModel { Name = "PivotA" });
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 0, 1, 0),
+            new DrawingAnchorPoint(4, 0, 8, 0));
+        var slicer = new SlicerModel
+        {
+            Name = "Region Slicer",
+            SourcePivotTableName = "PivotA",
+            DrawingAnchor = anchor
+        };
+        workbook.Slicers.Add(slicer);
+
+        var visible = SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet);
+        visible.Slicers.Should().ContainSingle();
+
+        slicer.SourcePivotTableName = "PivotB";
+
+        var hidden = SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet);
+        hidden.Should().NotBeSameAs(visible);
+        hidden.Slicers.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Benchmark_NativeVisualFiltersEmptyWorkbookFastPath_ReportsTiming()
     {
         const int iterations = 20_000;
@@ -284,6 +324,7 @@ public sealed class SlicerTimelinePlannerTests
 
         slicers.Should().HaveCount(6000);
         timelines.Should().HaveCount(6000);
+        allocatedBytes.Should().BeLessThan(1_000_000);
         stopwatch.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 
@@ -301,6 +342,10 @@ public sealed class SlicerTimelinePlannerTests
         source.Should().Contain("visible ??= new List<SlicerModel>(slicers.Count);");
         source.Should().Contain("visible ??= new List<TimelineModel>(timelines.Count);");
         source.Should().Contain("ConditionalWeakTable<Sheet, ActivePivotNameSetCache>");
+        source.Should().Contain("ConditionalWeakTable<Sheet, NativeVisualFilterCache>");
+        source.Should().Contain("ReferenceEquals(_activePivotNames, activePivotNames)");
+        source.Should().Contain("SlicersMatch(workbook.Slicers)");
+        source.Should().Contain("TimelinesMatch(workbook.Timelines)");
         source.Should().Contain("new HashSet<string>(pivotTables.Count");
         source.Should().Contain("Matches(pivotTables)");
         source.Should().Contain("activePivotNames.Contains(pivotTableName)");

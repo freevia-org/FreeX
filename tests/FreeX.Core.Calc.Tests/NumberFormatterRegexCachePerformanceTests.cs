@@ -57,6 +57,28 @@ public sealed class NumberFormatterRegexCachePerformanceTests
             "theme color directives should avoid allocating normalized token strings on number-format hot paths");
     }
 
+    [Fact]
+    public void HotPlainNumericSingleSections_BypassDirectiveNormalizationPipeline()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Calc", "NumberFormatter.cs"));
+        var formatNumber = source[
+            source.IndexOf("private static FormatResult FormatNumber", StringComparison.Ordinal)..
+            source.IndexOf("private static string ApplyNumericFormat", StringComparison.Ordinal)];
+        var plainNumericGuard = source[
+            source.IndexOf("private static bool IsPlainNumericSection", StringComparison.Ordinal)..
+            source.IndexOf("private static string ApplyNumericFormat", StringComparison.Ordinal)];
+
+        formatNumber.Should().Contain("TryFormatPlainNumericSection(value, sections[0], out var plainNumericText)");
+        formatNumber.IndexOf("TryFormatPlainNumericSection", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(formatNumber.IndexOf("ApplyNumericFormat", StringComparison.Ordinal));
+        plainNumericGuard.Should().Contain("case '0':");
+        plainNumericGuard.Should().Contain("case '#':");
+        plainNumericGuard.Should().Contain("case '.':");
+        plainNumericGuard.Should().Contain("case ',':");
+        plainNumericGuard.Should().Contain("return hasPlaceholder && lastToken != ',';");
+    }
+
     private const string StaticRegexCallPattern = @"\bRegex\.(?:Match|IsMatch|Replace)\s*\(";
 
     private static string FindWorkspaceFile(params string[] relativeParts)

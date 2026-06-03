@@ -265,4 +265,74 @@ public sealed partial class GridViewPerformanceMeasurementTests
             lookupAllocatedBytes.Should().BeLessThanOrEqualTo(scanAllocatedBytes);
         });
     }
+
+    [Fact]
+    public void Benchmark_DrawingObjectRenderableBounds_ReportsTiming()
+    {
+        const int iterations = 128;
+        const int metricCount = 200_000;
+        const double rowHeight = 20;
+        const double columnWidth = 64;
+        const double columnHeaderHeight = 18;
+        const double rowHeaderWidth = 30;
+        const double visibleBottom = 900;
+        const double visibleRight = 1440;
+
+        var rows = Enumerable
+            .Range(0, metricCount)
+            .Select(index => new RowMetric((uint)(index + 1), rowHeight, index * rowHeight))
+            .ToArray();
+        var columns = Enumerable
+            .Range(0, metricCount)
+            .Select(index => new ColMetric((uint)(index + 1), columnWidth, index * columnWidth))
+            .ToArray();
+        var findRow = typeof(GridView)
+            .GetMethod("FindLastRenderableDrawingRow", BindingFlags.NonPublic | BindingFlags.Static)!
+            .CreateDelegate<FindRenderableRowDelegate>();
+        var findColumn = typeof(GridView)
+            .GetMethod("FindLastRenderableDrawingColumn", BindingFlags.NonPublic | BindingFlags.Static)!
+            .CreateDelegate<FindRenderableColumnDelegate>();
+
+        findRow(rows, columnHeaderHeight, visibleBottom).Should().Be(45);
+        findColumn(columns, rowHeaderWidth, visibleRight).Should().Be(23);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        uint rowResult = 0;
+        uint columnResult = 0;
+        for (var i = 0; i < iterations; i++)
+        {
+            rowResult ^= findRow(rows, columnHeaderHeight, visibleBottom);
+            columnResult ^= findColumn(columns, rowHeaderWidth, visibleRight);
+        }
+
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF DRAWING_OBJECT_RENDERABLE_BOUNDS " +
+            $"metrics={metricCount:N0} iterations={iterations} " +
+            $"total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={stopwatch.Elapsed.TotalMilliseconds / iterations:F4} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        rowResult.Should().Be(0);
+        columnResult.Should().Be(0);
+        stopwatch.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+        allocatedBytes.Should().BeLessThan(16_000);
+    }
+
+    private delegate uint FindRenderableRowDelegate(
+        IReadOnlyList<RowMetric> rows,
+        double columnHeaderHeight,
+        double visibleBottom);
+
+    private delegate uint FindRenderableColumnDelegate(
+        IReadOnlyList<ColMetric> columns,
+        double rowHeaderWidth,
+        double visibleRight);
 }
