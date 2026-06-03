@@ -13,7 +13,7 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private static readonly Brush SheetTabInactiveStrokeBrush = CreateFrozenSheetTabBrush(0xB8, 0xBE, 0xC4);
+    private static readonly Brush SheetTabSeparatorBrush = CreateFrozenSheetTabBrush(0xB8, 0xBE, 0xC4);
 
     private SheetTabViewportMeasureKey? _lastSheetTabViewportMeasureKey;
     private double _lastSheetTabViewportContentWidth;
@@ -222,7 +222,6 @@ public partial class MainWindow
     {
         UpdateSheetTabViewportWidth();
         UpdateSheetTabsScrollerClip();
-        UpdateSheetTabsChromeLayer();
         var canScroll = SheetTabsScroller.ScrollableWidth > SheetTabScrollEpsilon;
         var canScrollLeft = canScroll && SheetTabsScroller.HorizontalOffset > SheetTabScrollEpsilon;
         var canScrollRight = canScroll &&
@@ -230,83 +229,45 @@ public partial class MainWindow
 
         SheetNavLeftBtn.Visibility = canScroll ? Visibility.Visible : Visibility.Hidden;
         SheetNavRightBtn.Visibility = canScroll ? Visibility.Visible : Visibility.Hidden;
-        SheetTabsLeftEdgeMask.Visibility = canScrollLeft ? Visibility.Visible : Visibility.Hidden;
-        SheetTabsRightEdgeMask.Visibility = canScroll ? Visibility.Visible : Visibility.Hidden;
-        UpdateSheetTabsViewportEdgeMasks(canScrollLeft, canScrollRight);
         var activeNavigationBrush = (Brush)FindResource("FreeXAccentDarkBrush");
         var inactiveNavigationBrush = (Brush)FindResource("FreeXBorderStrongBrush");
         SheetNavLeftBtn.Foreground = canScrollLeft ? activeNavigationBrush : inactiveNavigationBrush;
         SheetNavRightBtn.Foreground = canScrollRight ? activeNavigationBrush : inactiveNavigationBrush;
         SheetNavLeftBtn.IsHitTestVisible = canScrollLeft;
         SheetNavRightBtn.IsHitTestVisible = canScrollRight;
+        UpdateAddSheetButtonInteractivity();
+        UpdateSheetTabsChromeLayer();
     }
 
-    private void UpdateSheetTabsViewportEdgeMasks(bool canScrollLeft, bool canScrollRight)
+    private double GetSheetTabsVisibleViewportRight()
     {
-        var leftMaskWidth = canScrollLeft ? Math.Min(MeasureLeftClippedSheetTabWidth(), 72) : 0;
-        var rightMaskWidth = canScrollRight ? MeasureRightClippedSheetTabWidth() : 0;
+        var viewportRight = Math.Max(0, SheetTabsScroller.ActualWidth);
+        if (SheetNavRightBtn.Visibility != Visibility.Visible)
+            return viewportRight;
 
-        SheetTabsLeftViewportMask.Width = leftMaskWidth;
-        SheetTabsLeftViewportMask.Visibility = leftMaskWidth > SheetTabScrollEpsilon
-            ? Visibility.Visible
-            : Visibility.Hidden;
-
-        SheetTabsRightViewportMask.Width = rightMaskWidth;
-        Canvas.SetLeft(
-            SheetTabsRightViewportMask,
-            Math.Max(0, SheetTabsScroller.ActualWidth - rightMaskWidth));
-        SheetTabsRightViewportMask.Visibility = rightMaskWidth > SheetTabScrollEpsilon
-            ? Visibility.Visible
-            : Visibility.Hidden;
+        var reserveWidth = SheetNavRightBtn.ActualWidth > 0
+            ? SheetNavRightBtn.ActualWidth
+            : SheetTabRightNavigationReserveWidth;
+        return Math.Max(0, viewportRight - reserveWidth);
     }
 
-    private double MeasureLeftClippedSheetTabWidth()
+    private Rect? TryGetAddSheetButtonViewportBounds()
     {
-        foreach (var bounds in EnumerateSheetTabViewportBounds())
-        {
-            if (bounds.Left < -SheetTabScrollEpsilon && bounds.Right > SheetTabScrollEpsilon)
-                return Math.Clamp(Math.Ceiling(bounds.Right), 0, SheetTabsScroller.ActualWidth);
-        }
+        if (AddSheetButton.ActualWidth <= 0 || AddSheetButton.ActualHeight <= 0)
+            return null;
 
-        return 0;
+        return AddSheetButton.TransformToAncestor(SheetTabsScroller)
+            .TransformBounds(new Rect(new Point(0, 0), AddSheetButton.RenderSize));
     }
 
-    private double MeasureRightClippedSheetTabWidth()
+    private void UpdateAddSheetButtonInteractivity()
     {
-        var viewportRight = SheetTabsScroller.ActualWidth;
-        if (viewportRight <= 0)
-            return 0;
+        var isFullyVisible = TryGetAddSheetButtonViewportBounds() is { } bounds &&
+                             bounds.Left >= -SheetTabScrollEpsilon &&
+                             bounds.Right <= GetSheetTabsVisibleViewportRight() + SheetTabScrollEpsilon;
 
-        foreach (var bounds in EnumerateSheetTabViewportBounds())
-        {
-            if (bounds.Left < viewportRight - SheetTabScrollEpsilon &&
-                bounds.Right > viewportRight + SheetTabScrollEpsilon)
-            {
-                return Math.Clamp(Math.Ceiling(viewportRight - bounds.Left), 0, viewportRight);
-            }
-        }
-
-        return 0;
-    }
-
-    private IEnumerable<Rect> EnumerateSheetTabViewportBounds()
-    {
-        foreach (var tab in _sheetTabs)
-        {
-            if (SheetTabsControl.ItemContainerGenerator.ContainerFromItem(tab) is FrameworkElement container &&
-                container.ActualWidth > 0 &&
-                container.ActualHeight > 0)
-            {
-                yield return container.TransformToAncestor(SheetTabsScroller)
-                    .TransformBounds(new Rect(new Point(0, 0), container.RenderSize));
-            }
-        }
-
-        if (AddSheetButton.ActualWidth > 0 && AddSheetButton.ActualHeight > 0)
-        {
-            yield return AddSheetButton.TransformToAncestor(SheetTabsScroller)
-                .TransformBounds(new Rect(new Point(0, 0), AddSheetButton.RenderSize));
-        }
+        AddSheetButton.IsHitTestVisible = isFullyVisible;
+        AddSheetButton.Focusable = isFullyVisible;
     }
 
     private void UpdateSheetTabViewportWidth()
@@ -326,6 +287,7 @@ public partial class MainWindow
 
         SheetTabsControl.Measure(new Size(double.PositiveInfinity, SheetTabsRowGrid.ActualHeight));
         AddSheetButton.Measure(new Size(double.PositiveInfinity, SheetTabsRowGrid.ActualHeight));
+        SheetTabsTrailingViewportReserve.Measure(new Size(double.PositiveInfinity, SheetTabsRowGrid.ActualHeight));
         var tabContentWidth = MeasureSheetTabContentWidth();
         if (tabContentWidth <= 0)
             return;
@@ -441,6 +403,8 @@ public partial class MainWindow
             .ToList();
         if (AddSheetButton.ActualWidth > 0 && AddSheetButton.ActualHeight > 0)
             measuredBounds.Add(SheetTabChromeBounds(AddSheetButton, SheetTabOverlapWidth));
+        if (SheetTabsTrailingViewportReserve.ActualWidth > 0 && SheetTabsTrailingViewportReserve.ActualHeight > 0)
+            measuredBounds.Add(SheetTabChromeBounds(SheetTabsTrailingViewportReserve, 0));
         if (measuredBounds.Count > 0)
         {
             var left = measuredBounds.Min(bounds => bounds.Left);
@@ -448,6 +412,8 @@ public partial class MainWindow
             var measuredWidth = Math.Max(0, right - left);
             if (AddSheetButton.ActualWidth <= 0 || AddSheetButton.ActualHeight <= 0)
                 measuredWidth += ResolveLayoutWidth(AddSheetButton);
+            if (SheetTabsTrailingViewportReserve.ActualWidth <= 0 || SheetTabsTrailingViewportReserve.ActualHeight <= 0)
+                measuredWidth += ResolveLayoutWidth(SheetTabsTrailingViewportReserve);
 
             return Math.Max(measuredWidth, EstimateSheetTabContentWidth());
         }
@@ -465,6 +431,7 @@ public partial class MainWindow
             measuredWidth += Math.Max(0, EstimateSheetTabWidth(tab) - SheetTabOverlapWidth);
 
         measuredWidth += ResolveLayoutWidth(AddSheetButton);
+        measuredWidth += ResolveLayoutWidth(SheetTabsTrailingViewportReserve);
         return measuredWidth;
     }
 
@@ -487,25 +454,30 @@ public partial class MainWindow
 
         var chromeWidth = SheetTabsChromeLayer.ActualWidth;
         var accentBrush = (Brush)FindResource("FreeXAccentBrush");
-        var inactiveStrokeBrush = SheetTabInactiveStrokeBrush;
-        var inactiveFillBrush = (Brush)FindResource("FreeXSheetSurfaceBrush");
-        var groupedFillBrush = (Brush)FindResource("FreeXAccentSoftBrush");
+        var separatorBrush = SheetTabSeparatorBrush;
 
         Rect? addRect = null;
+        Rect? addContentRect = null;
         if (AddSheetButton.ActualWidth > 0)
         {
             addRect = SheetTabChromeBounds(AddSheetButton, SheetTabOverlapWidth);
+            addContentRect = TryGetAddSheetButtonContentBounds();
         }
 
         var visibleTabs = _sheetTabs.ToList();
         var tabRects = visibleTabs
             .Select(tab => TryGetSheetTabChromeBounds(tab, chromeWidth))
             .ToArray();
+        var tabLabelRects = visibleTabs
+            .Select(TryGetSheetTabLabelBounds)
+            .ToArray();
         var renderKey = CreateSheetTabsChromeRenderKey(
             chromeWidth,
             addRect,
+            addContentRect,
             visibleTabs,
-            tabRects);
+            tabRects,
+            tabLabelRects);
         if (_lastSheetTabsChromeRenderKey == renderKey)
             return;
 
@@ -543,38 +515,31 @@ public partial class MainWindow
                 ClipSheetTabChromeBoundsToVisibleTabs(tabRects[tabIndex], addRect) is not { } tabRect)
                 return;
 
-            var isGrouped = tab.IsGrouped;
-            var tabFill = tab.TabColor is { } tabColor
-                ? CreatePastelTabBrush(tabColor)
-                : isGrouped
-                ? groupedFillBrush
-                : inactiveFillBrush;
-            var tabStroke = isGrouped ? accentBrush : inactiveStrokeBrush;
-            var tabStrokeOpacity = isGrouped || tab.TabColor is not null ? 0.76 : 0.58;
-            var isRightOfActive = activeTabIndex >= 0 && tabIndex > activeTabIndex;
-            var rightNeighborIsInactiveTab = tabIndex < visibleTabs.Count - 1 &&
-                                             visibleTabs[tabIndex + 1].Id != _currentSheetId;
-            var drawLeft = isRightOfActive ? false : !tab.IsLeftSideCoveredByActive;
-            var drawRight = isRightOfActive || (!tab.IsRightSideCoveredByActive && !rightNeighborIsInactiveTab);
-            SheetTabsChromeLayer.Children.Add(CreateSheetTabPath(
-                CreateSheetTabFillGeometry(tabRect, drawLeft: !isRightOfActive),
-                tabFill,
-                null,
-                0,
-                tabClipGeometry,
-                1));
+            var nextTabIsActive = tabIndex < visibleTabs.Count - 1 &&
+                                  visibleTabs[tabIndex + 1].Id == _currentSheetId;
+            if (nextTabIsActive)
+                return;
 
             SheetTabsChromeLayer.Children.Add(CreateSheetTabPath(
-                CreateSheetTabOutlineGeometry(
-                    tabRect,
-                    drawLeft: drawLeft,
-                    drawRight: drawRight),
+                CreateSheetTabSeparatorGeometry(ResolveSheetTabSeparatorX(tabIndex, tabRect)),
                 null,
-                tabStroke,
+                separatorBrush,
                 SheetTabGridRuleStrokeThickness,
                 tabClipGeometry,
-                tabStrokeOpacity));
+                0.68));
+        }
 
+        double ResolveSheetTabSeparatorX(int tabIndex, Rect tabRect)
+        {
+            var nextLabelBounds = tabIndex < visibleTabs.Count - 1
+                ? tabLabelRects[tabIndex + 1]
+                : addContentRect;
+            if (tabLabelRects[tabIndex] is { } currentLabelBounds &&
+                nextLabelBounds is { } nextLabel &&
+                currentLabelBounds.Right < nextLabel.Left - SheetTabScrollEpsilon)
+                return (currentLabelBounds.Right + nextLabel.Left) / 2.0;
+
+            return tabRect.Right;
         }
 
         if (activeRect is { } active)
@@ -599,8 +564,10 @@ public partial class MainWindow
     private SheetTabsChromeRenderKey CreateSheetTabsChromeRenderKey(
         double chromeWidth,
         Rect? addRect,
+        Rect? addContentRect,
         IReadOnlyList<SheetTabViewModel> visibleTabs,
-        IReadOnlyList<Rect?> tabRects)
+        IReadOnlyList<Rect?> tabRects,
+        IReadOnlyList<Rect?> tabLabelRects)
     {
         var tabHash = new HashCode();
         for (var i = 0; i < visibleTabs.Count; i++)
@@ -622,14 +589,17 @@ public partial class MainWindow
             }
 
             AddRectToHash(ref tabHash, tabRects[i]);
+            AddRectToHash(ref tabHash, tabLabelRects[i]);
         }
 
+        AddRectToHash(ref tabHash, addContentRect);
         return new SheetTabsChromeRenderKey(
             QuantizeSheetTabLayoutValue(chromeWidth),
             QuantizeSheetTabLayoutValue(SheetTabsRowGrid.ActualWidth),
             QuantizeSheetTabLayoutValue(SheetTabsScroller.HorizontalOffset),
             QuantizeSheetTabLayoutValue(SheetTabsScroller.ActualWidth),
             QuantizeSheetTabLayoutValue(SheetTabsScroller.ActualHeight),
+            QuantizeSheetTabLayoutValue(GetSheetTabsVisibleViewportRight()),
             QuantizeSheetTabLayoutValue(AddSheetButton.ActualWidth),
             QuantizeSheetTabLayoutValue(AddSheetButton.ActualHeight),
             QuantizeSheetTabLayoutValue(addRect?.Left ?? double.NaN),
@@ -676,11 +646,21 @@ public partial class MainWindow
 
     private Rect SheetTabChromeBounds(FrameworkElement element, double leftOverlap)
     {
+        var elementBounds = SheetTabsLayerBounds(element);
+        return new Rect(elementBounds.Left - leftOverlap, 0, elementBounds.Width + leftOverlap, SheetTabChromeHeight);
+    }
+
+    private Rect SheetTabsLayerBounds(FrameworkElement element)
+    {
         var elementBounds = element.TransformToAncestor(SheetTabsRowGrid)
             .TransformBounds(new Rect(new Point(0, 0), element.RenderSize));
         var layerBounds = SheetTabsChromeLayer.TransformToAncestor(SheetTabsRowGrid)
             .TransformBounds(new Rect(new Point(0, 0), SheetTabsChromeLayer.RenderSize));
-        return new Rect(elementBounds.Left - layerBounds.Left - leftOverlap, 0, elementBounds.Width + leftOverlap, 30);
+        return new Rect(
+            elementBounds.Left - layerBounds.Left,
+            elementBounds.Top - layerBounds.Top,
+            elementBounds.Width,
+            elementBounds.Height);
     }
 
     private Rect? TryGetSheetTabChromeBounds(SheetTabViewModel tab, double chromeWidth)
@@ -689,10 +669,36 @@ public partial class MainWindow
             container.ActualWidth <= 0)
             return null;
 
-        var tabRect = SheetTabChromeBounds(container, SheetTabOverlapWidth);
+        var chromeTarget = FindSheetTabContextMenuTarget(tab) ?? container;
+        var tabRect = SheetTabChromeBounds(chromeTarget, 0);
         return tabRect.Right < -16 || tabRect.Left > chromeWidth + 16
             ? null
             : tabRect;
+    }
+
+    private Rect? TryGetSheetTabLabelBounds(SheetTabViewModel tab)
+    {
+        if (SheetTabsControl.ItemContainerGenerator.ContainerFromItem(tab) is not DependencyObject container)
+            return null;
+
+        var label = FindVisualDescendant<TextBlock>(
+            container,
+            textBlock => ReferenceEquals(textBlock.DataContext, tab) &&
+                         string.Equals(textBlock.Text, tab.Name, StringComparison.Ordinal));
+        return label is { ActualWidth: > 0, ActualHeight: > 0 }
+            ? SheetTabsLayerBounds(label)
+            : null;
+    }
+
+    private Rect? TryGetAddSheetButtonContentBounds()
+    {
+        AddSheetButton.ApplyTemplate();
+        var label = FindVisualDescendant<TextBlock>(
+            AddSheetButton,
+            textBlock => string.Equals(textBlock.Text, "+", StringComparison.Ordinal));
+        return label is { ActualWidth: > 0, ActualHeight: > 0 }
+            ? SheetTabsLayerBounds(label)
+            : null;
     }
 
     private Rect? ClipSheetTabChromeBoundsToVisibleTabs(Rect? tabRect, Rect? addRect)
@@ -707,9 +713,9 @@ public partial class MainWindow
         if (rect.Right <= visibleRight)
             return rect;
 
-        var clippedWidth = visibleRight - rect.Left;
-        return clippedWidth >= 24
-            ? new Rect(rect.Left, rect.Top, clippedWidth, rect.Height)
+        var visibleWidth = visibleRight - rect.Left;
+        return visibleWidth >= 24
+            ? rect
             : null;
     }
 
@@ -719,7 +725,7 @@ public partial class MainWindow
         var left = Math.Clamp(scrollerBounds.Left, 0, SheetTabsChromeLayer.ActualWidth);
         var right = Math.Clamp(GetVisibleSheetTabsRight(addRect), 0, SheetTabsChromeLayer.ActualWidth);
 
-        var geometry = new RectangleGeometry(new Rect(left, -4, Math.Max(0, right - left), 38));
+        var geometry = new RectangleGeometry(new Rect(left, -3, Math.Max(0, right - left), SheetTabChromeHeight + 6));
         geometry.Freeze();
         return geometry;
     }
@@ -727,7 +733,9 @@ public partial class MainWindow
     private double GetVisibleSheetTabsRight(Rect? addRect)
     {
         var scrollerBounds = SheetTabChromeBounds(SheetTabsScroller, 0);
-        var right = scrollerBounds.Right;
+        var right = Math.Min(
+            scrollerBounds.Right,
+            scrollerBounds.Left + GetSheetTabsVisibleViewportRight());
         if (addRect is { } add)
             right = Math.Min(right, add.Left + SheetTabOverlapWidth);
 
@@ -756,12 +764,12 @@ public partial class MainWindow
     private static Geometry CreateActiveSheetTabGridRuleGeometry(double width, Rect tab)
     {
         const double top = SheetTabGridRuleTop;
-        const double sideTop = top + 7.5;
+        const double sideTop = top + 6.5;
         const double sideInset = 8.0;
-        const double sideBottom = top + 25.5;
-        const double sideBottomControl = top + 27.5;
+        const double sideBottom = top + 23.5;
+        const double sideBottomControl = top + 25.5;
         const double bottomInset = 12.0;
-        const double bottom = top + 29.5;
+        const double bottom = top + 27.0;
         var left = Math.Clamp(tab.Left, 0, width);
         var right = Math.Clamp(tab.Right, 0, width);
 
@@ -804,37 +812,13 @@ public partial class MainWindow
         return geometry;
     }
 
-    private static Geometry CreateSheetTabFillGeometry(Rect tab, double top = SheetTabGridRuleTop, bool drawLeft = true)
+    private static Geometry CreateSheetTabSeparatorGeometry(double x)
     {
-        var sideTop = top + 7.5;
-        const double sideInset = 8.0;
-        var sideBottom = top + 25.5;
-        var sideBottomControl = top + 27.5;
-        const double bottomInset = 12.0;
-        var bottom = top + 29.5;
-        var left = tab.Left;
-        var right = tab.Right;
-
         var geometry = new StreamGeometry();
         using (var context = geometry.Open())
         {
-            context.BeginFigure(new Point(left, top), true, true);
-            if (drawLeft)
-            {
-                context.BezierTo(new Point(left + sideInset, top), new Point(left + sideInset, sideTop), new Point(left + sideInset, sideTop), true, true);
-                context.LineTo(new Point(left + sideInset, sideBottom), true, true);
-                context.BezierTo(new Point(left + sideInset, sideBottomControl), new Point(left + bottomInset - 2, bottom), new Point(left + bottomInset, bottom), true, true);
-            }
-            else
-            {
-                context.LineTo(new Point(left, bottom), true, true);
-            }
-
-            context.LineTo(new Point(right - bottomInset, bottom), true, true);
-            context.BezierTo(new Point(right - bottomInset + 2, bottom), new Point(right - sideInset, sideBottomControl), new Point(right - sideInset, sideBottom), true, true);
-            context.LineTo(new Point(right - sideInset, sideTop), true, true);
-            context.BezierTo(new Point(right - sideInset, sideTop), new Point(right - sideInset, top), new Point(right, top), true, true);
-            context.LineTo(new Point(left, top), true, true);
+            context.BeginFigure(new Point(x, SheetTabGridRuleTop + 7.0), false, false);
+            context.LineTo(new Point(x, SheetTabGridRuleTop + 21.0), true, true);
         }
 
         geometry.Freeze();
@@ -844,21 +828,19 @@ public partial class MainWindow
     private static Geometry CreateActiveSheetTabFillGeometry(Rect tab)
     {
         const double top = SheetTabGridRuleTop;
-        const double hiddenTop = top - 6.0;
-        const double sideTop = top + 7.5;
+        const double sideTop = top + 6.5;
         const double sideInset = 8.0;
-        const double sideBottom = top + 25.5;
-        const double sideBottomControl = top + 27.5;
+        const double sideBottom = top + 23.5;
+        const double sideBottomControl = top + 25.5;
         const double bottomInset = 12.0;
-        const double bottom = top + 29.5;
+        const double bottom = top + 27.0;
         var left = tab.Left;
         var right = tab.Right;
 
         var geometry = new StreamGeometry();
         using (var context = geometry.Open())
         {
-            context.BeginFigure(new Point(left, hiddenTop), true, true);
-            context.LineTo(new Point(left, top), true, true);
+            context.BeginFigure(new Point(left, top), true, true);
             context.BezierTo(new Point(left + sideInset, top), new Point(left + sideInset, sideTop), new Point(left + sideInset, sideTop), true, true);
             context.LineTo(new Point(left + sideInset, sideBottom), true, true);
             context.BezierTo(new Point(left + sideInset, sideBottomControl), new Point(left + bottomInset - 2, bottom), new Point(left + bottomInset, bottom), true, true);
@@ -866,49 +848,7 @@ public partial class MainWindow
             context.BezierTo(new Point(right - bottomInset + 2, bottom), new Point(right - sideInset, sideBottomControl), new Point(right - sideInset, sideBottom), true, true);
             context.LineTo(new Point(right - sideInset, sideTop), true, true);
             context.BezierTo(new Point(right - sideInset, top), new Point(right - sideInset, top), new Point(right, top), true, true);
-            context.LineTo(new Point(right, hiddenTop), true, true);
-            context.LineTo(new Point(left, hiddenTop), true, true);
-        }
-
-        geometry.Freeze();
-        return geometry;
-    }
-
-    private static Geometry CreateSheetTabOutlineGeometry(Rect tab, bool drawLeft, bool drawRight)
-    {
-        const double top = SheetTabGridRuleTop;
-        const double sideTop = top + 7.5;
-        const double sideInset = 8.0;
-        const double sideBottom = top + 25.5;
-        const double sideBottomControl = top + 27.5;
-        const double bottomInset = 12.0;
-        const double bottom = top + 29.5;
-        var left = tab.Left;
-        var right = tab.Right;
-        var bottomStart = drawLeft ? left + bottomInset : left;
-        var bottomEnd = drawRight ? right - bottomInset : right;
-
-        var geometry = new StreamGeometry();
-        using (var context = geometry.Open())
-        {
-            if (drawLeft)
-            {
-                context.BeginFigure(new Point(left + sideInset, sideTop), false, false);
-                context.LineTo(new Point(left + sideInset, sideBottom), true, true);
-                context.BezierTo(new Point(left + sideInset, sideBottomControl), new Point(left + bottomInset - 2, bottom), new Point(bottomStart, bottom), true, true);
-            }
-            else
-            {
-                context.BeginFigure(new Point(bottomStart, bottom), false, false);
-            }
-
-            context.LineTo(new Point(bottomEnd, bottom), true, true);
-
-            if (drawRight)
-            {
-                context.BezierTo(new Point(right - bottomInset + 2, bottom), new Point(right - sideInset, sideBottomControl), new Point(right - sideInset, sideBottom), true, true);
-                context.LineTo(new Point(right - sideInset, sideTop), true, true);
-            }
+            context.LineTo(new Point(left, top), true, true);
         }
 
         geometry.Freeze();
@@ -952,7 +892,7 @@ public partial class MainWindow
         if (activeTab is null)
             return;
 
-        var visibleViewportRight = Math.Max(0, SheetTabsScroller.ActualWidth);
+        var visibleViewportRight = GetSheetTabsVisibleViewportRight();
         if (visibleViewportRight <= SheetTabScrollEpsilon)
             return;
 
@@ -965,6 +905,15 @@ public partial class MainWindow
 
         var activeContentLeft = currentOffset + activeBounds.Left;
         var activeContentRight = currentOffset + activeBounds.Right;
+        var contentRightToKeepVisible = activeContentRight;
+        if (activeIndex == visibleTabs.Count - 1 &&
+            TryGetAddSheetButtonViewportBounds() is { } addButtonBounds)
+        {
+            contentRightToKeepVisible = Math.Max(
+                contentRightToKeepVisible,
+                currentOffset + addButtonBounds.Right);
+        }
+
         var contextTabsBeforeActive = activeTab.Name.Length >= 7 ? 1 : 2;
         var anchorIndex = Math.Max(0, activeIndex - contextTabsBeforeActive);
         var targetOffset = activeContentLeft;
@@ -974,7 +923,7 @@ public partial class MainWindow
 
         while (anchorIndex < activeIndex &&
                tabViewportBounds[anchorIndex] is { } anchorCandidateBounds &&
-               activeContentRight - (currentOffset + anchorCandidateBounds.Left) > visibleViewportRight)
+               contentRightToKeepVisible - (currentOffset + anchorCandidateBounds.Left) > visibleViewportRight)
         {
             anchorIndex++;
         }
@@ -982,8 +931,8 @@ public partial class MainWindow
         if (tabViewportBounds[anchorIndex] is { } anchorBounds)
             targetOffset = currentOffset + anchorBounds.Left;
 
-        if (activeContentRight - targetOffset > visibleViewportRight)
-            targetOffset = activeContentRight - visibleViewportRight;
+        if (contentRightToKeepVisible - targetOffset > visibleViewportRight)
+            targetOffset = contentRightToKeepVisible - visibleViewportRight;
         if (activeContentLeft - targetOffset < 0)
             targetOffset = activeContentLeft;
 
@@ -1481,6 +1430,7 @@ public partial class MainWindow
         long HorizontalOffset,
         long ScrollerWidth,
         long ScrollerHeight,
+        long VisibleViewportRight,
         long AddButtonWidth,
         long AddButtonHeight,
         long AddButtonLeft,

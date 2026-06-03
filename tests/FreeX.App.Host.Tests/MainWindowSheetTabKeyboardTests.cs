@@ -84,9 +84,59 @@ public sealed class MainWindowSheetTabKeyboardTests
             AutomationProperties.GetName(addSheet).Should().Be(UiText.Get("MainWindow_AutomationName_InsertSheet"));
             AutomationProperties.GetHelpText(addSheet).Should().Be(UiText.Get("MainWindow_AutomationHelpText_AddANewSheetToTheWorkbook"));
             addBounds.Left.Should().BeGreaterThanOrEqualTo(scrollerBounds.Left);
-            addBounds.Left.Should().BeLessThan(scrollerBounds.Right, "the add-sheet button should be inside the clipped tab viewport so it can slide under the right arrow");
+            addBounds.Right.Should().BeLessThanOrEqualTo(scrollerBounds.Right + 0.5, "the add-sheet button should be inside the visible tab viewport when the single-sheet strip fits");
             addSheet.ActualWidth.Should().BeGreaterThan(34);
             addSheet.ActualHeight.Should().BeGreaterThan(20);
+        });
+    }
+
+    [Fact]
+    public void AddSheetButton_StaysVisibleBeforeRightNavigationAfterTrailingInsert()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 20, width: 760);
+            var window = harness.Window;
+
+            harness.UpdateSheetTabNavigation(iterations: 4);
+            window.UpdateLayout();
+            PumpDispatcher();
+            harness.UpdateSheetTabNavigation(iterations: 4);
+
+            var addSheet = (FrameworkElement)window.FindName("AddSheetButton");
+            var rightNav = (FrameworkElement)window.FindName("SheetNavRightBtn");
+            var scroller = (FrameworkElement)window.FindName("SheetTabsScroller");
+
+            var addBounds = BoundsRelativeToWindow(addSheet, window);
+            var rightNavBounds = BoundsRelativeToWindow(rightNav, window);
+            var scrollerBounds = BoundsRelativeToWindow(scroller, window);
+
+            rightNav.Visibility.Should().Be(Visibility.Visible);
+            addBounds.Left.Should().BeGreaterThanOrEqualTo(scrollerBounds.Left - 0.5);
+            addBounds.Right.Should().BeLessThanOrEqualTo(rightNavBounds.Left + 0.5, "the new-sheet button should scroll into the visible lane before the right navigation arrow");
+            addSheet.IsHitTestVisible.Should().BeTrue("the visible new-sheet button must remain clickable");
+            addSheet.Focusable.Should().BeTrue("the visible new-sheet button must remain keyboard reachable");
+        });
+    }
+
+    [Fact]
+    public void AddSheetButton_DisablesInputWhenScrolledOutOfVisibleTabViewport()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 20, width: 760);
+            var window = harness.Window;
+
+            var scroller = (ScrollViewer)window.FindName("SheetTabsScroller");
+            scroller.ScrollToHorizontalOffset(0);
+            window.UpdateLayout();
+            PumpDispatcher();
+            harness.UpdateSheetTabNavigation(iterations: 4);
+
+            var addSheet = (FrameworkElement)window.FindName("AddSheetButton");
+
+            addSheet.IsHitTestVisible.Should().BeFalse("the hidden new-sheet button should not receive pointer clicks outside the visible tab viewport");
+            addSheet.Focusable.Should().BeFalse("the hidden new-sheet button should not receive keyboard focus");
         });
     }
 
@@ -122,7 +172,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             scrollerBounds.Top.Should().BeLessThan(rowBounds.Top + 3.0, "the sheet-tab viewport should leave only the layout rounding needed for the tab chrome");
             chromeBounds.Top.Should().BeApproximately(rowBounds.Top, 0.5, "the drawn tab chrome layer should start at the grid edge so the blue rule is visually flush");
             overlayBounds.Top.Should().BeApproximately(chromeBounds.Top, 0.25);
-            scroller.ActualHeight.Should().BeGreaterThanOrEqualTo(32);
+            scroller.ActualHeight.Should().BeApproximately(28, 0.5);
             rowBounds.Height.Should().BeApproximately(scroller.ActualHeight, 0.5, "the sheet-tab row should not leave a shelf below the tab chrome");
             focusedTabBounds.Top.Should().BeGreaterThanOrEqualTo(scrollerBounds.Top - 0.5);
             focusedTabBounds.Bottom.Should().BeLessThanOrEqualTo(scrollerBounds.Bottom + 0.5, "the focused sheet tab chrome must fit inside the clipped viewport");
@@ -151,8 +201,6 @@ public sealed class MainWindowSheetTabKeyboardTests
             var leadingSpacer = (FrameworkElement)window.FindName("SheetTabsLeadingSpacer");
             var scroller = (ScrollViewer)window.FindName("SheetTabsScroller");
             var overlayLayer = (FrameworkElement)window.FindName("SheetTabsOverlayLayer");
-            var leftEdgeMask = (FrameworkElement)window.FindName("SheetTabsLeftEdgeMask");
-            var rightEdgeMask = (FrameworkElement)window.FindName("SheetTabsRightEdgeMask");
             var horizontalScroll = (ScrollBar)window.FindName("HorizontalScroll");
             var visibleNavButtons = new[]
                 {
@@ -164,10 +212,7 @@ public sealed class MainWindowSheetTabKeyboardTests
 
             var rowBounds = BoundsRelativeToWindow(row, window);
             var leadingSpacerBounds = BoundsRelativeToWindow(leadingSpacer, window);
-            var scrollerBounds = BoundsRelativeToWindow(scroller, window);
             var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
-            var leftEdgeMaskBounds = BoundsRelativeToWindow(leftEdgeMask, window);
-            var rightEdgeMaskBounds = BoundsRelativeToWindow(rightEdgeMask, window);
             var leftNavBounds = BoundsRelativeToWindow((FrameworkElement)window.FindName("SheetNavLeftBtn"), window);
             var rightNavBounds = BoundsRelativeToWindow((FrameworkElement)window.FindName("SheetNavRightBtn"), window);
             var horizontalScrollArrow = EnumerateVisualDescendants(horizontalScroll)
@@ -177,14 +222,6 @@ public sealed class MainWindowSheetTabKeyboardTests
                 .FirstOrDefault();
             overlayBounds.Top.Should().BeApproximately(rowBounds.Top, 0.5, "the blue sheet-tab rule layer should start at the grid edge without extra vertical space");
             horizontalScrollArrow.Should().NotBeNull("the worksheet horizontal scrollbar should expose a left arrow for alignment");
-            leftEdgeMask.Visibility.Should().Be(Visibility.Visible, "the left edge mask should cover clipped sheet chrome only under the row headers when the tab list can scroll left");
-            leftEdgeMaskBounds.Left.Should().BeApproximately(leadingSpacerBounds.Left, 0.5, "the mask should stay in the row-header gutter");
-            leftEdgeMaskBounds.Right.Should().BeLessThanOrEqualTo(scrollerBounds.Left + 0.5, "the mask must stop at the row-header boundary and not cover the sheet-tab viewport");
-            rightEdgeMask.Visibility.Should().Be(Visibility.Visible, "the right edge mask should cover clipped sheet chrome under the right navigation button when the tab list can scroll");
-            rightEdgeMaskBounds.Left.Should().BeApproximately(rightNavBounds.Left, 0.5, "the right mask should be limited to the right navigation button column");
-            rightEdgeMaskBounds.Right.Should().BeApproximately(rightNavBounds.Right, 0.5, "the right mask should cover the full right navigation button column");
-            rightEdgeMaskBounds.Top.Should().BeApproximately(overlayBounds.Top + 2.0, 0.75, "the right mask should begin below the internal blue rule");
-            rightEdgeMaskBounds.Bottom.Should().BeGreaterThanOrEqualTo(rowBounds.Bottom - 0.5, "the right mask should cover tab border fragments all the way to the footer");
             visibleNavButtons.Should().HaveCount(
                 2,
                 "the narrow many-sheet viewport must expose both navigation arrows so their rule clearance is covered; rowWidth={0:F1}, scrollerWidth={1:F1}, viewportWidth={2:F1}, extentWidth={3:F1}, scrollableWidth={4:F1}",
@@ -203,7 +240,7 @@ public sealed class MainWindowSheetTabKeyboardTests
 
             HorizontalCenter(leftNavBounds)
                 .Should()
-                .BeApproximately(HorizontalCenter(leadingSpacerBounds), 0.75, "the sheet-tab left arrow should be centered under the row headers, not the seam mask extension");
+                .BeApproximately(HorizontalCenter(leadingSpacerBounds), 0.75, "the sheet-tab left arrow should be centered under the row headers");
 
             var horizontalScrollArrowBounds = BoundsRelativeToWindow(horizontalScrollArrow!, window);
             VerticalCenter(rightNavBounds)

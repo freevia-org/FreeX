@@ -3662,7 +3662,7 @@
         <Border Grid.Row="5" Panel.ZIndex="5" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="{StaticResource FreeXBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
-                  MinHeight="32"
+                  MinHeight="28"
                   Background="{StaticResource FreeXSheetSurfaceBrush}"
                   SizeChanged="SheetTabsRowGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
@@ -3676,7 +3676,7 @@
 
                 <Border x:Name="SheetTabsLeadingSpacer" Grid.Column="0"
                         Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"
-                        Height="32"
+                        Height="28"
                         Margin="0"
                         VerticalAlignment="Top"
                         Panel.ZIndex="4"
@@ -3688,7 +3688,7 @@
                 <Canvas x:Name="SheetTabsChromeLayer"
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
-                        Height="32"
+                        Height="28"
                         Margin="0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
@@ -3697,10 +3697,10 @@
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Width="28" Height="28" Padding="0"
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Width="28" Height="26" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Center" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="9"
@@ -3742,8 +3742,8 @@
                 <!-- Sheet tabs in a clipped, scrollbar-free viewport -->
                 <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="1"
                               Grid.ColumnSpan="4"
-                              Height="32"
-                              MinHeight="32"
+                              Height="28"
+                              MinHeight="28"
                               Margin="0"
                               Panel.ZIndex="3"
                               ClipToBounds="True"
@@ -3796,7 +3796,7 @@
                                             <Style TargetType="Grid">
                                                 <Setter Property="Margin"       Value="-16,0,0,1"/>
                                                 <Setter Property="Panel.ZIndex" Value="0"/>
-                                                <Setter Property="MinHeight"    Value="31"/>
+                                                <Setter Property="MinHeight"    Value="27"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                                         <Setter Property="Margin"       Value="-16,0,0,1"/>
@@ -3828,7 +3828,7 @@
                                             </ContextMenu>
                                         </Grid.ContextMenu>
                                         <Border x:Name="TabBorder"
-                                                CornerRadius="0,0,4,4" Padding="12,5,12,1"
+                                                CornerRadius="0,0,4,4" Padding="12,4,12,0"
                                                 Margin="8,0,8,0"
                                                 Panel.ZIndex="2"
                                                 Background="Transparent"
@@ -3850,7 +3850,7 @@
                                             </Grid>
                                         </Border>
                                         <Border x:Name="TabFocusCue"
-                                                Margin="14,4,14,5"
+                                                Margin="14,3,14,4"
                                                 BorderBrush="{StaticResource FreeXAccentDarkBrush}"
                                                 BorderThickness="1"
                                                 CornerRadius="2"
@@ -3859,6 +3859,20 @@
                                                 IsHitTestVisible="False"/>
                                     </Grid>
                                     <DataTemplate.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsActive}" Value="False"/>
+                                                <Condition Binding="{Binding IsMouseOver, ElementName=TabChrome}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter TargetName="TabBorder" Property="Background" Value="#E6F6FA"/>
+                                        </MultiDataTrigger>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsActive}" Value="False"/>
+                                                <Condition Binding="{Binding IsMouseCaptureWithin, ElementName=TabChrome}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter TargetName="TabBorder" Property="Background" Value="#CCEAF2"/>
+                                        </MultiDataTrigger>
                                         <DataTrigger Binding="{Binding IsKeyboardFocusWithin, ElementName=TabChrome}" Value="True">
                                             <Setter TargetName="TabFocusCue" Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
@@ -3866,7 +3880,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <Button x:Name="AddSheetButton" Content="+" Width="44" MinWidth="44" MinHeight="31"
+                        <Button x:Name="AddSheetButton" Content="+" Width="44" MinWidth="44" Height="27" MinHeight="27"
                                 FontSize="16" FontWeight="SemiBold" Margin="0,0,0,1" Padding="0"
                                 Background="Transparent" BorderBrush="Transparent" BorderThickness="0"
                                 Foreground="{StaticResource FreeXAccentBrush}" Opacity="1"
@@ -3886,10 +3900,10 @@
                                     <Grid Background="Transparent"
                                           Opacity="{TemplateBinding Opacity}">
                                         <Border x:Name="AddSheetHitVisual"
-                                                Width="28"
-                                                Height="24"
+                                                Width="44"
+                                                Height="27"
                                                 Background="Transparent"
-                                                CornerRadius="3"
+                                                CornerRadius="0,0,4,4"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 SnapsToDevicePixels="True">
@@ -3914,64 +3928,18 @@
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
+                        <Border x:Name="SheetTabsTrailingViewportReserve"
+                                Width="28"
+                                Height="28"
+                                Background="Transparent"
+                                IsHitTestVisible="False"/>
                     </StackPanel>
                 </ScrollViewer>
-
-                <Canvas x:Name="SheetTabsViewportMaskLayer"
-                        Grid.Column="1"
-                        Grid.ColumnSpan="4"
-                        Width="{Binding ActualWidth, ElementName=SheetTabsScroller}"
-                        Height="32"
-                        HorizontalAlignment="Left"
-                        VerticalAlignment="Top"
-                        Panel.ZIndex="8"
-                        ClipToBounds="True"
-                        SnapsToDevicePixels="True"
-                        IsHitTestVisible="False">
-                    <Border x:Name="SheetTabsLeftViewportMask"
-                            Canvas.Left="0"
-                            Canvas.Top="2"
-                            Width="0"
-                            Height="30"
-                            Background="{StaticResource FreeXSheetSurfaceBrush}"
-                            Visibility="Hidden"
-                            IsHitTestVisible="False"/>
-                    <Border x:Name="SheetTabsRightViewportMask"
-                            Canvas.Top="2"
-                            Width="0"
-                            Height="30"
-                            Background="{StaticResource FreeXSheetSurfaceBrush}"
-                            Visibility="Hidden"
-                            IsHitTestVisible="False"/>
-                </Canvas>
-
-                <Border x:Name="SheetTabsLeftEdgeMask"
-                        Grid.Column="0"
-                        Height="30"
-                        Margin="0,2,0,0"
-                        HorizontalAlignment="Stretch"
-                        VerticalAlignment="Top"
-                        Panel.ZIndex="8"
-                        Background="{StaticResource FreeXSheetSurfaceBrush}"
-                        Visibility="Hidden"
-                        IsHitTestVisible="False"/>
-
-                <Border x:Name="SheetTabsRightEdgeMask"
-                        Grid.Column="3"
-                        Width="28"
-                        Height="30"
-                        Margin="0,2,0,0"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Top"
-                        Panel.ZIndex="8"
-                        Background="{StaticResource FreeXSheetSurfaceBrush}"
-                        Visibility="Hidden"
-                        IsHitTestVisible="False"/>
 
                 <Canvas x:Name="SheetTabsOverlayLayer"
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
-                        Height="32"
+                        Height="28"
                         Margin="0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
@@ -3981,10 +3949,10 @@
                         IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="3"
-                        Width="28" Height="28" Padding="0"
+                        Width="28" Height="26" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,2,0,0"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="9"
