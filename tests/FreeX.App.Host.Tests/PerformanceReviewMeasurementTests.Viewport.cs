@@ -39,6 +39,20 @@ public sealed partial class PerformanceReviewMeasurementTests
     }
 
     [Fact]
+    public void ViewportScrollableMetricCounts_AvoidCapturedLinqPredicates()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.Viewport.cs"));
+
+        source.Should().Contain("foreach (var row in viewport.RowMetrics)");
+        source.Should().Contain("foreach (var column in viewport.ColMetrics)");
+        source.Should().NotContain("viewport.RowMetrics.Count(row =>");
+        source.Should().NotContain("viewport.ColMetrics.Count(column =>");
+    }
+
+    [Fact]
     public void Benchmark_ViewportNoCommentsFastPath_ReportsTiming()
     {
         var workbook = new Workbook("Book1");
