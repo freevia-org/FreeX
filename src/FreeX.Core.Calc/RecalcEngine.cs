@@ -554,7 +554,7 @@ public sealed class RecalcEngine
 
             case FunctionCallNode func:
             {
-                var containsVolatileFunction = BuiltInFunctions.IsVolatile(func.FunctionName);
+                var containsVolatileFunction = IsVolatileFunctionName(func.FunctionName);
                 var arguments = func.Arguments;
                 for (var i = 0; i < arguments.Count; i++)
                 {
@@ -568,6 +568,9 @@ public sealed class RecalcEngine
 
         return false;
     }
+
+    private static bool IsVolatileFunctionName(string name) =>
+        name is "NOW" or "TODAY" or "RAND" or "RANDBETWEEN" or "RANDARRAY" or "INDIRECT" or "OFFSET" or "CELL" or "INFO";
 
     private static GridRange CreateGridRange(SheetId sheetId, RangeRefNode range)
     {
