@@ -291,6 +291,22 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void SaveValueStreaming_FormatsNumericHotPathWithoutPerValueStringAllocation()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "SpreadsheetXmlFileAdapter.Write.cs"));
+
+        source.Should().Contain("[ThreadStatic]");
+        source.Should().Contain("WriteRoundTripDoubleText(writer, number.Value);");
+        source.Should().Contain("value.TryFormat(buffer.AsSpan(), out var charsWritten, \"R\", CultureInfo.InvariantCulture)");
+        source.Should().Contain("writer.WriteChars(buffer, 0, charsWritten);");
+        source.Should().Contain("value.TryFormat(buffer.AsSpan(), out var charsWritten, provider: CultureInfo.InvariantCulture)");
+        source.Should().NotContain("NumberValue number when double.IsFinite(number.Value) => (\"Number\", number.Value.ToString");
+    }
+
+    [Fact]
     public void Save_WritesMergeAcrossAndMergeDownForMergedRegions()
     {
         var workbook = new Workbook("XmlMerges");

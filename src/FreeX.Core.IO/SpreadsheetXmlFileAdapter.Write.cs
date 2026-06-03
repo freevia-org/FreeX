@@ -8,6 +8,9 @@ namespace FreeX.Core.IO;
 
 public sealed partial class SpreadsheetXmlFileAdapter
 {
+    [ThreadStatic]
+    private static char[]? spreadsheetMlFormatBuffer;
+
     private static void WriteWorkbook(
         XmlWriter writer,
         Workbook workbook,
@@ -313,21 +316,42 @@ public sealed partial class SpreadsheetXmlFileAdapter
 
     private static void WriteDataElement(XmlWriter writer, ScalarValue value)
     {
-        var (type, text) = value switch
-        {
-            NumberValue number when double.IsFinite(number.Value) => ("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
-            NumberValue number => ("String", number.Value.ToString("R", CultureInfo.InvariantCulture)),
-            DateTimeValue dateTime when TryFormatSpreadsheetDateTime(dateTime, out var formatted) => ("DateTime", formatted),
-            DateTimeValue dateTime => ("String", dateTime.Value.ToString("R", CultureInfo.InvariantCulture)),
-            BoolValue boolean => ("Boolean", boolean.Value ? "1" : "0"),
-            ErrorValue error => ("Error", error.Code),
-            TextValue textValue => ("String", textValue.Value),
-            _ => ("String", "")
-        };
-
         WriteSpreadsheetStartElement(writer, "Data");
-        WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, type);
-        writer.WriteString(text);
+        switch (value)
+        {
+            case NumberValue number when double.IsFinite(number.Value):
+                WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "Number");
+                WriteRoundTripDoubleText(writer, number.Value);
+                break;
+            case NumberValue number:
+                WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "String");
+                WriteRoundTripDoubleText(writer, number.Value);
+                break;
+            case DateTimeValue dateTime when TryFormatSpreadsheetDateTime(dateTime, out var formatted):
+                WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "DateTime");
+                writer.WriteString(formatted);
+                break;
+            case DateTimeValue dateTime:
+                WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "String");
+                WriteRoundTripDoubleText(writer, dateTime.Value);
+                break;
+            case BoolValue boolean:
+                WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "Boolean");
+                writer.WriteString(boolean.Value ? "1" : "0");
+                break;
+            case ErrorValue error:
+                WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "Error");
+                writer.WriteString(error.Code);
+                break;
+            case TextValue textValue:
+                WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "String");
+                writer.WriteString(textValue.Value);
+                break;
+            default:
+                WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, "String");
+                break;
+        }
+
         writer.WriteEndElement();
     }
 
@@ -341,8 +365,43 @@ public sealed partial class SpreadsheetXmlFileAdapter
         writer.WriteEndElement();
     }
 
-    private static void WriteSpreadsheetAttribute(XmlWriter writer, XName name, uint value) =>
+    private static void WriteRoundTripDoubleText(XmlWriter writer, double value)
+    {
+        var buffer = GetSpreadsheetMlFormatBuffer(32);
+        if (value.TryFormat(buffer.AsSpan(), out var charsWritten, "R", CultureInfo.InvariantCulture))
+        {
+            writer.WriteChars(buffer, 0, charsWritten);
+            return;
+        }
+
+        writer.WriteString(value.ToString("R", CultureInfo.InvariantCulture));
+    }
+
+    private static void WriteSpreadsheetAttribute(XmlWriter writer, XName name, uint value)
+    {
+        var buffer = GetSpreadsheetMlFormatBuffer(10);
+        if (value.TryFormat(buffer.AsSpan(), out var charsWritten, provider: CultureInfo.InvariantCulture))
+        {
+            writer.WriteStartAttribute("ss", name.LocalName, SpreadsheetNs.NamespaceName);
+            writer.WriteChars(buffer, 0, charsWritten);
+            writer.WriteEndAttribute();
+            return;
+        }
+
         WriteSpreadsheetAttribute(writer, name, value.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static char[] GetSpreadsheetMlFormatBuffer(int length)
+    {
+        var buffer = spreadsheetMlFormatBuffer;
+        if (buffer is null || buffer.Length < length)
+        {
+            buffer = new char[length];
+            spreadsheetMlFormatBuffer = buffer;
+        }
+
+        return buffer;
+    }
 
     private static void WriteSpreadsheetAttribute(XmlWriter writer, XName name, string value) =>
         writer.WriteAttributeString("ss", name.LocalName, SpreadsheetNs.NamespaceName, value);
