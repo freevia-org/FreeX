@@ -141,6 +141,24 @@ internal static class XlsxClosedXmlCellMapper
     public static void ApplyStyle(IXLCell xlCell, CellStyle style) =>
         ApplyStyle(xlCell.Style, style);
 
+    // ClosedXML's SetHyperlink stamps its built-in Hyperlink style (theme-10 blue font + single underline)
+    // onto the cell, overriding the modelled font. Re-apply the modelled font afterward, forcing every
+    // property unconditionally — ApplyStyle skips values equal to the default (e.g. a black font colour),
+    // which would otherwise leave the theme-10 colour and the forced underline in place.
+    public static void ApplyHyperlinkFontOverride(IXLCell xlCell, CellStyle style)
+    {
+        var font = xlCell.Style.Font;
+        font.Bold = style.Bold;
+        font.Italic = style.Italic;
+        font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
+        font.Strikethrough = style.Strikethrough;
+        if (IsSupportedFontSize(style.FontSize))
+            font.FontSize = style.FontSize;
+        if (!string.IsNullOrEmpty(style.FontName))
+            font.FontName = style.FontName;
+        font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
+    }
+
     public static void ApplyStyle(IXLStyle xlStyle, CellStyle style)
     {
         var def = CellStyle.Default;

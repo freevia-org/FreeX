@@ -133,8 +133,18 @@ public sealed partial class XlsxFileAdapter
                 try
                 {
                     sheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
-                    xlSheet.Cell((int)address.Row, (int)address.Col)
-                        .SetHyperlink(CreateXlsxHyperlink(target, metadata));
+                    var xlCell = xlSheet.Cell((int)address.Row, (int)address.Col);
+                    xlCell.SetHyperlink(CreateXlsxHyperlink(target, metadata));
+
+                    // SetHyperlink replaces the cell font with ClosedXML's Hyperlink style; restore the
+                    // modelled font so explicit colours and underline choices round-trip.
+                    var styledCell = sheet.GetCell(address);
+                    if (styledCell is not null && styledCell.StyleId != StyleId.Default)
+                    {
+                        var style = GetCachedStyle(workbook, styleCache, styledCell.StyleId);
+                        if (!style.Equals(CellStyle.Default))
+                            XlsxClosedXmlCellMapper.ApplyHyperlinkFontOverride(xlCell, style);
+                    }
                 }
                 catch
                 {
