@@ -54,7 +54,7 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<PivotFieldModel> columnFields)
     {
         var rowCapacity = rows is ICollection<IReadOnlyList<ScalarValue>> collection ? collection.Count : 0;
-        var map = new PivotColumnRowMap(rowCapacity);
+        var map = new PivotColumnRowMap();
         if (columnFields.Count == 1)
         {
             BuildSingleColumnRowsByKey(rows, columnFields[0], map, rowCapacity);
@@ -71,7 +71,6 @@ public static partial class PivotTableRefreshService
             }
 
             keyRows.Add(row);
-            map.RowsInSourceOrder.Add((row, key));
         }
 
         return map;
@@ -101,7 +100,6 @@ public static partial class PivotTableRefreshService
             }
 
             bucket.Rows.Add(row);
-            map.RowsInSourceOrder.Add((row, bucket.Key));
         }
     }
 
@@ -120,7 +118,6 @@ public static partial class PivotTableRefreshService
         if (ColumnKeysCoverAllRows(rowsByColumnKey, columnKeys))
             return allRows;
 
-        var visibleKeys = new HashSet<PivotKey>(columnKeys);
         var visibleRowCapacity = 0;
         foreach (var columnKey in columnKeys)
         {
@@ -128,10 +125,20 @@ public static partial class PivotTableRefreshService
                 visibleRowCapacity += rows.Count;
         }
 
-        var visibleRows = new List<IReadOnlyList<ScalarValue>>(visibleRowCapacity);
-        foreach (var (row, key) in rowsByColumnKey.RowsInSourceOrder)
+        var visibleRowSet = new HashSet<IReadOnlyList<ScalarValue>>(visibleRowCapacity);
+        foreach (var columnKey in columnKeys)
         {
-            if (visibleKeys.Contains(key))
+            if (!rowsByColumnKey.RowsByKey.TryGetValue(columnKey, out var rows))
+                continue;
+
+            foreach (var row in rows)
+                visibleRowSet.Add(row);
+        }
+
+        var visibleRows = new List<IReadOnlyList<ScalarValue>>(visibleRowCapacity);
+        foreach (var row in allRows)
+        {
+            if (visibleRowSet.Contains(row))
                 visibleRows.Add(row);
         }
 
@@ -275,14 +282,7 @@ public static partial class PivotTableRefreshService
 
     private sealed class PivotColumnRowMap
     {
-        public PivotColumnRowMap(int rowCapacity)
-        {
-            RowsInSourceOrder = new List<(IReadOnlyList<ScalarValue> Row, PivotKey Key)>(rowCapacity);
-        }
-
         public Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>> RowsByKey { get; } = [];
-
-        public List<(IReadOnlyList<ScalarValue> Row, PivotKey Key)> RowsInSourceOrder { get; }
     }
 
     private sealed class PivotColumnBucket(PivotKey key, List<IReadOnlyList<ScalarValue>> rows)
