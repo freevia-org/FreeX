@@ -4,6 +4,32 @@ public sealed record FileSaveTarget(string Path, IFileAdapter Adapter);
 
 public static class FileSavePlanner
 {
+    public static bool CanSkipCleanSave(
+        bool workbookDirty,
+        string? currentFilePath,
+        FileSaveTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return CanSkipCleanSave(workbookDirty, currentFilePath, target.Path);
+    }
+
+    public static bool CanSkipCleanSave(
+        bool workbookDirty,
+        string? currentFilePath,
+        string targetPath)
+    {
+        if (workbookDirty ||
+            string.IsNullOrWhiteSpace(currentFilePath) ||
+            string.IsNullOrWhiteSpace(targetPath))
+        {
+            return false;
+        }
+
+        return TryNormalizePath(currentFilePath, out var current) &&
+               TryNormalizePath(targetPath, out var target) &&
+               string.Equals(current, target, PathComparison);
+    }
+
     public static bool TryResolveExistingPath(
         string? currentFilePath,
         IEnumerable<IFileAdapter> adapters,
@@ -61,4 +87,36 @@ public static class FileSavePlanner
             return false;
         }
     }
+
+    private static bool TryNormalizePath(string path, out string normalized)
+    {
+        normalized = "";
+        try
+        {
+            var trimmed = path.Trim();
+            if (trimmed.Contains('\0', StringComparison.Ordinal) ||
+                trimmed.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            {
+                return false;
+            }
+
+            normalized = Path.GetFullPath(trimmed);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 }

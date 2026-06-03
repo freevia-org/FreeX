@@ -742,6 +742,9 @@ public partial class MainWindow
         if (_isSavingFile)
             return false;
 
+        if (FileSavePlanner.CanSkipCleanSave(_workbookDirty, _currentFilePath, target))
+            return true;
+
         var ext = System.IO.Path.GetExtension(target.Path).ToLowerInvariant();
         if (ext == ".xlsx" && !ConfirmUnsupportedXlsxFeatureSave())
             return false;
