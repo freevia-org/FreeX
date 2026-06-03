@@ -108,7 +108,7 @@ public partial class OptionsDialog : Window
             UiText.Get("Options_DefaultFormatXlsx"),
             UiText.Get("Options_DefaultFormatJson")
         };
-        OptDefaultFormat.SelectedIndex = _opts.DefaultFormat == ".json" ? 1 : 0;
+        OptDefaultFormat.SelectedIndex = FreeXOptions.NormalizeDefaultFormat(_opts.DefaultFormat) == FreeXOptions.FreeXWorkbookDefaultFormat ? 1 : 0;
         OptCrashAnalytics.IsChecked = _opts.CrashAnalyticsEnabled;
 
         OptRecentFilesPath.Text = Path.Combine(
@@ -421,7 +421,7 @@ public partial class OptionsDialog : Window
                 2 => FreeXObjectDisplay.Nothing,
                 _ => FreeXObjectDisplay.All
             },
-            DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
+            DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? FreeXOptions.FreeXWorkbookDefaultFormat : FreeXOptions.XlsxDefaultFormat,
             QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true,
             QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
             AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),

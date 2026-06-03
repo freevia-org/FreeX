@@ -9461,7 +9461,7 @@ Sende krasjrapporter for dette testbygget?</value>
     <value>XLSX arbeidsbok (.xlsx)</value>
   </data>
   <data name="Options_DefaultFormatJson" xml:space="preserve">
-    <value>FreeX JSON (.json)</value>
+    <value>FreeX Workbook (.fxl)</value>
   </data>
   <data name="Options_InvalidDefaultFontSizeMessage" xml:space="preserve">
     <value>Skriv inn en positiv standardskriftstørrelse.</value>

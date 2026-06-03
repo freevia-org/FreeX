@@ -142,6 +142,39 @@ public sealed class FileDialogFilterBuilderTests
         filter.Should().NotContain("XLT 97-2003 Template (*.xlt)|*.xlt");
     }
 
+    [Theory]
+    [InlineData(".xlsx", 1)]
+    [InlineData("csv", 2)]
+    [InlineData(" .FXL ", 3)]
+    [InlineData(".xlsm", 1)]
+    [InlineData("", 1)]
+    public void FindSaveFilterIndex_ReturnsOneBasedSaveFormatIndexOrDefault(string extension, int expected)
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new FakeAdapter([
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+                new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+            ]),
+            new FakeAdapter([
+                new FileFormatDescriptor(".csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true),
+                new FileFormatDescriptor(".fxl", "FreeX Workbook", CanOpen: true, CanSave: true)
+            ])
+        };
+
+        FileDialogFilterBuilder.FindSaveFilterIndex(adapters, extension).Should().Be(expected);
+    }
+
+    [Fact]
+    public void FindSaveFilterIndex_RealAdaptersSelectsFreexWorkbookFilter()
+    {
+        var index = FileDialogFilterBuilder.FindSaveFilterIndex(
+            [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter()],
+            ".fxl");
+
+        index.Should().Be(4);
+    }
+
     [Fact]
     public void FindOpenAdapter_ResolvesAliasesCaseInsensitively()
     {

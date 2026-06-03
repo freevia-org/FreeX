@@ -151,6 +151,18 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_DefaultFormatUsesNativeFreexWorkbookExtension()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+
+        UiText.Get("Options_DefaultFormatJson").Should().Be("FreeX Workbook (.fxl)");
+        source.Should().Contain("FreeXOptions.NormalizeDefaultFormat(_opts.DefaultFormat)");
+        source.Should().Contain("FreeXOptions.FreeXWorkbookDefaultFormat");
+        source.Should().NotContain("DefaultFormat == \".json\"");
+        source.Should().NotContain("? \".json\"");
+    }
+
+    [Fact]
     public void OptionsDialogOpenedFromKeyboard_FocusesCategoryList()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));

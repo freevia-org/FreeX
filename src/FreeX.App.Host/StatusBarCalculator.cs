@@ -15,6 +15,9 @@ public static class StatusBarCalculator
         if (sheet.GetUsedRange() is not { } usedRange || !usedRange.Overlaps(range))
             return EmptyStats;
 
+        if (range.Start == range.End)
+            return CalculateSingleCell(sheet.GetValue(range.Start.Row, range.Start.Col));
+
         double sum = 0;
         int count = 0;
         int numericalCount = 0;
@@ -45,6 +48,14 @@ public static class StatusBarCalculator
         double? average = numericalCount > 0 ? sum / numericalCount : null;
         return new Stats(sum, count, numericalCount, average, min, max);
     }
+
+    private static Stats CalculateSingleCell(ScalarValue value) =>
+        value switch
+        {
+            BlankValue => EmptyStats,
+            NumberValue number => new Stats(number.Value, 1, 1, number.Value, number.Value, number.Value),
+            _ => new Stats(0, 1, 0, null, null, null)
+        };
 
     public static Stats Combine(Stats left, Stats right)
     {

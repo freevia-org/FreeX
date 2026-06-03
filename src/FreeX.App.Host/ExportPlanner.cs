@@ -138,6 +138,12 @@ internal static partial class ExportPlanner
 
     private static bool TryGetExtension(string path, out string extension)
     {
+        if (HasInvalidPathChars(path))
+        {
+            extension = "";
+            return false;
+        }
+
         try
         {
             extension = Path.GetExtension(path) ?? "";
@@ -162,6 +168,12 @@ internal static partial class ExportPlanner
 
     private static bool TryChangeExtension(string path, string extension, out string normalizedPath)
     {
+        if (HasInvalidPathChars(path))
+        {
+            normalizedPath = path;
+            return false;
+        }
+
         try
         {
             normalizedPath = Path.ChangeExtension(path, extension) ?? path;
@@ -183,6 +195,9 @@ internal static partial class ExportPlanner
             return false;
         }
     }
+
+    private static bool HasInvalidPathChars(string path) =>
+        path.IndexOf('\0') >= 0;
 
     public static string NormalizePdfLanguage(string? pdfLanguage)
     {

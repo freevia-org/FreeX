@@ -4298,9 +4298,13 @@
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Open}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button HorizontalAlignment="Stretch"
+                    <Button x:Name="SsShareNavBtn"
+                            HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsShareBtn_Click"
+                            AutomationProperties.AutomationId="BackstageShareButton"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Share}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile}"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Share}"
                             local:RibbonTooltip.KeyTip="SH"
                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile}" local:RibbonMetadata.CommandName="Share">
@@ -4316,6 +4320,9 @@
                             HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsInfoBtn_Click"
+                            AutomationProperties.AutomationId="BackstageInfoButton"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Info}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_Text_ReviewLocalFileStatusAndUnsupportedWorkbookFeatureWarnings}"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Info}"
                             local:RibbonTooltip.KeyTip="I" local:RibbonMetadata.CommandName="Info">
                         <StackPanel Orientation="Horizontal">
@@ -4357,9 +4364,13 @@
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Print}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button HorizontalAlignment="Stretch"
+                    <Button x:Name="SsExportNavBtn"
+                            HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="ExportPdfButton_Click"
+                            AutomationProperties.AutomationId="BackstageExportButton"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_ExportPDFXPS}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage}"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ExportPDFXPS}"
                             local:RibbonTooltip.KeyTip="E"
                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage}" local:RibbonMetadata.CommandName="Export PDF/XPS">
