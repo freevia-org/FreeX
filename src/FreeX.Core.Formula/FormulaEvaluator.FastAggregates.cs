@@ -164,7 +164,7 @@ public sealed partial class FormulaEvaluator
             }
         }
 
-        return double.IsFinite(total) ? new NumberValue(total) : ErrorValue.Num;
+        return double.IsFinite(total) ? NumberValueFor(total) : ErrorValue.Num;
     }
 
     private static ScalarValue EvaluateFastRangeOnlyAverage(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
@@ -220,7 +220,7 @@ public sealed partial class FormulaEvaluator
 
         return count == 0
             ? ErrorValue.DivByZero
-            : double.IsFinite(total / count) ? new NumberValue(total / count) : ErrorValue.Num;
+            : double.IsFinite(total / count) ? NumberValueFor(total / count) : ErrorValue.Num;
     }
 
     private static ScalarValue EvaluateFastRangeOnlyMinMax(
@@ -283,8 +283,8 @@ public sealed partial class FormulaEvaluator
         }
 
         return result is null
-            ? new NumberValue(0)
-            : double.IsFinite(result.Value) ? new NumberValue(result.Value) : ErrorValue.Num;
+            ? NumberValueFor(0)
+            : double.IsFinite(result.Value) ? NumberValueFor(result.Value) : ErrorValue.Num;
     }
 
     private static ScalarValue EvaluateFastRangeOnlyCount(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
@@ -323,7 +323,7 @@ public sealed partial class FormulaEvaluator
             }
         }
 
-        return new NumberValue(count);
+        return NumberValueFor(count);
     }
 
     private static ScalarValue EvaluateFastRangeOnlyCountBlank(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
@@ -364,7 +364,7 @@ public sealed partial class FormulaEvaluator
             }
         }
 
-        return new NumberValue(count);
+        return NumberValueFor(count);
     }
 
     private static ScalarValue EvaluateFastRangeOnlyVariance(
@@ -414,7 +414,7 @@ public sealed partial class FormulaEvaluator
 
         var variance = m2 / (sample ? count - 1 : count);
         var result = squareRoot ? Math.Sqrt(variance) : variance;
-        return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
+        return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }
 
     private static bool AccumulateFastVarianceValue(
@@ -642,7 +642,7 @@ public sealed partial class FormulaEvaluator
                 value = boolean.Value ? TrueValue : FalseValue;
                 return true;
             case NumberNode number:
-                value = new NumberValue(number.Value);
+                value = NumberValueFor(number.Value);
                 return true;
             case OmittedArgumentNode:
                 value = BlankValue.Instance;

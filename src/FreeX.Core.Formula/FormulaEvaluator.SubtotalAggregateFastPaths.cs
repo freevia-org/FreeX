@@ -204,7 +204,7 @@ public sealed partial class FormulaEvaluator
         }
 
         result = funcNum == 3
-            ? new NumberValue(countA)
+            ? NumberValueFor(countA)
             : EvaluateSubtotalAggregateNumericResult(funcNum, numeric, countA: 0);
         return true;
     }
@@ -217,7 +217,7 @@ public sealed partial class FormulaEvaluator
         switch (node)
         {
             case NumberNode number:
-                value = new NumberValue(number.Value);
+                value = NumberValueFor(number.Value);
                 return DirectRangeFastPathState.Success;
             case StringNode text:
                 value = new TextValue(text.Value);
@@ -374,8 +374,8 @@ public sealed partial class FormulaEvaluator
         return functionNumber switch
         {
             1 => numeric.Count == 0 ? ErrorValue.DivByZero : FastNumberResult(numeric.Average),
-            2 => new NumberValue(numeric.Count),
-            3 => new NumberValue(countA),
+            2 => NumberValueFor(numeric.Count),
+            3 => NumberValueFor(countA),
             4 => numeric.Count == 0 ? ErrorValue.DivByZero : FastNumberResult(numeric.Max),
             5 => numeric.Count == 0 ? ErrorValue.DivByZero : FastNumberResult(numeric.Min),
             6 => FastNumberResult(numeric.Count == 0 ? 0 : numeric.Product),
@@ -389,7 +389,7 @@ public sealed partial class FormulaEvaluator
     }
 
     private static ScalarValue FastNumberResult(double value) =>
-        double.IsFinite(value) ? new NumberValue(value) : ErrorValue.Num;
+        double.IsFinite(value) ? NumberValueFor(value) : ErrorValue.Num;
 
     private static bool ShouldSkipFastSubtotalRow(
         IEvalContext context,

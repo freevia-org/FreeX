@@ -26,8 +26,36 @@ public sealed partial class FormulaEvaluator
     [ThreadStatic]
     private static int _evalDepth;
 
+    private const int CachedIntegerNumberMax = 16;
     private static readonly BoolValue TrueValue = new(true);
     private static readonly BoolValue FalseValue = new(false);
+    private static readonly NumberValue[] CachedIntegerNumberValues = CreateCachedIntegerNumberValues();
+
+    private static NumberValue NumberValueFor(double value)
+    {
+        if (value == 0d)
+            return BitConverter.DoubleToInt64Bits(value) == 0L
+                ? CachedIntegerNumberValues[0]
+                : new NumberValue(value);
+
+        if (value > 0d && value <= CachedIntegerNumberMax)
+        {
+            var integer = (int)value;
+            if (integer == value)
+                return CachedIntegerNumberValues[integer];
+        }
+
+        return new NumberValue(value);
+    }
+
+    private static NumberValue[] CreateCachedIntegerNumberValues()
+    {
+        var values = new NumberValue[CachedIntegerNumberMax + 1];
+        for (var value = 0; value < values.Length; value++)
+            values[value] = new NumberValue(value);
+        return values;
+    }
+
 
     /// <summary>
     /// Parse and evaluate a formula string against a sheet.
@@ -98,7 +126,7 @@ public sealed partial class FormulaEvaluator
         {
             return node switch
             {
-                NumberNode n => new NumberValue(n.Value),
+                NumberNode n => NumberValueFor(n.Value),
                 StringNode s => new TextValue(s.Value),
                 BooleanNode b => b.Value ? TrueValue : FalseValue,
                 OmittedArgumentNode => BlankValue.Instance,
