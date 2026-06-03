@@ -32,6 +32,10 @@ public sealed class LocalizationUsageTests
         @"(?s)\bAutomationProperties\.Set(?<kind>Name|HelpText)\(\s*[^,]+,\s*(?:\$@?|@?\$?)""",
         RegexOptions.Compiled);
 
+    private static readonly Regex RawMessageServiceStringRegex = new(
+        @"(?s)_messageService\.(?<call>ShowInfo|ShowWarning|ShowError|AskYesNo)\(\s*(?:\$@?|@?\$?)""",
+        RegexOptions.Compiled);
+
     private static readonly HashSet<string> AllowedRawXamlAttributeValues = new(StringComparer.Ordinal)
     {
         "A",
@@ -129,6 +133,24 @@ public sealed class LocalizationUsageTests
         offenders.Should().BeEmpty("automation names and help text are user-facing and should flow through UiText resources");
     }
 
+    [Fact]
+    public void HomeRibbonMessageServicePrompts_UseLocalizationResources()
+    {
+        var sourceRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var checkedFiles = new[]
+        {
+            Path.Combine(sourceRoot, "MainWindow.CellsCommands.cs"),
+            Path.Combine(sourceRoot, "MainWindow.HomeEditing.cs")
+        };
+
+        var offenders = checkedFiles
+            .SelectMany(FindRawMessageServiceText)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        offenders.Should().BeEmpty("Home ribbon message-service prompts are user-facing and should flow through UiText resources");
+    }
+
     private static IEnumerable<string> FindLocalizationKeys(string path)
     {
         var source = File.ReadAllText(path);
@@ -205,6 +227,13 @@ public sealed class LocalizationUsageTests
         var source = File.ReadAllText(path);
         foreach (Match match in RawAutomationPropertyStringRegex.Matches(source))
             yield return $"{Path.GetFileName(path)}:{LineNumber(source, match.Index)} AutomationProperties.Set{match.Groups["kind"].Value}";
+    }
+
+    private static IEnumerable<string> FindRawMessageServiceText(string path)
+    {
+        var source = File.ReadAllText(path);
+        foreach (Match match in RawMessageServiceStringRegex.Matches(source))
+            yield return $"{Path.GetFileName(path)}:{LineNumber(source, match.Index)} _messageService.{match.Groups["call"].Value}";
     }
 
     private static int GetLine(XObject node) =>

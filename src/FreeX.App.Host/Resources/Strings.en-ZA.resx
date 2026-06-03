@@ -15286,4 +15286,13 @@ and {0} more.</value>
   <data name="MainWindowMessage_SaveChangesBeforeOpeningWorkbook" xml:space="preserve">
     <value>Save changes before opening another workbook?</value>
   </data>
+  <data name="FillSeriesStep_SelectNumericOrDateStartMessage" xml:space="preserve">
+    <value>Select a numeric or date cell to start a series.</value>
+  </data>
+  <data name="MainWindowMessage_ExportNormalizedOverwritePrompt" xml:space="preserve">
+    <value>The selected export name resolves to &quot;{0}&quot;, which already exists. Do you want to replace it?</value>
+  </data>
+  <data name="GoToSpecial_NoCellsFoundMessage" xml:space="preserve">
+    <value>No cells found.</value>
+  </data>
 </root>

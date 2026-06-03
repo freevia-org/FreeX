@@ -296,12 +296,15 @@ public sealed partial class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("Multiselect = false");
         dataCommandsSource.Should().Contain("if (dialog.ShowDialog() != true) return;");
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
+        dataCommandsSource.Should().Contain("private async void GetDataBtn_Click(object sender, RoutedEventArgs e)");
+        dataCommandsSource.Should().Contain("await Task.Run(() =>");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_completed\"");
         dataCommandsSource.Should().Contain("new ImportSheetCommand(_currentSheetId, destination, imported.Sheets[0])");
         dataCommandsSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");
+        dataCommandsSource.Should().Contain("UpdateViewport();");
         dataCommandsSource.Should().Contain("RefreshStatusBar();");
         dataCommandsSource.Should().Contain("UiText.Get(\"MainWindowMessage_NoImportAdapters\")");
         dataCommandsSource.Should().Contain("ImportFailureDiagnosticFactory.FromException(ext, ex)");

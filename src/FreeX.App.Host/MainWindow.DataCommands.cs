@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -12,7 +13,7 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private void GetDataBtn_Click(object sender, RoutedEventArgs e)
+    private async void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
         string[] dataExtensions = [".csv", ".txt", ".tsv", ".tab", ".xml"];
         var adapters = _fileAdapters
@@ -51,8 +52,13 @@ public partial class MainWindow
 
         try
         {
-            using var stream = System.IO.File.OpenRead(dialog.FileName);
-            var imported = adapter.Load(stream);
+            var importPath = dialog.FileName;
+            var imported = await Task.Run(() =>
+            {
+                using var stream = System.IO.File.OpenRead(importPath);
+                return adapter.Load(stream);
+            });
+
             if (imported.Sheets.Count == 0)
             {
                 RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "empty_workbook", imported.Sheets.Count));
@@ -70,6 +76,7 @@ public partial class MainWindow
             SetActiveCell(destination);
             EnsureCellVisible(destination);
             UpdateViewport();
+            RefreshStatusBar();
             RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, null, imported.Sheets.Count));
         }
         catch (Exception ex)

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Media;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -60,8 +61,122 @@ public partial class GridView : FrameworkElement
     /// </summary>
     protected override AutomationPeer OnCreateAutomationPeer() => new GridViewAutomationPeer(this);
 
-    private sealed class GridViewAutomationPeer(GridView owner) : FrameworkElementAutomationPeer(owner)
+    private sealed class GridViewAutomationPeer(GridView owner) :
+        FrameworkElementAutomationPeer(owner),
+        IGridProvider,
+        ISelectionProvider
     {
+        private readonly Dictionary<(uint Row, uint Col), GridViewCellAutomationPeer> _cellPeers = [];
+
+        private GridView OwnerGrid => (GridView)Owner;
+
+        public int RowCount => GetVisibleRows(OwnerGrid.Viewport).Count;
+
+        public int ColumnCount => GetVisibleColumns(OwnerGrid.Viewport).Count;
+
+        public bool CanSelectMultiple => true;
+
+        public bool IsSelectionRequired => false;
+
+        public IRawElementProviderSimple GetItem(int row, int column)
+        {
+            var rows = GetVisibleRows(OwnerGrid.Viewport);
+            var columns = GetVisibleColumns(OwnerGrid.Viewport);
+            if (row < 0 || row >= rows.Count)
+                throw new ArgumentOutOfRangeException(nameof(row));
+            if (column < 0 || column >= columns.Count)
+                throw new ArgumentOutOfRangeException(nameof(column));
+
+            return ProviderFromPeer(GetOrCreateCellPeer(rows[row], columns[column]));
+        }
+
+        public IRawElementProviderSimple[] GetSelection()
+        {
+            var rows = GetVisibleRows(OwnerGrid.Viewport);
+            var columns = GetVisibleColumns(OwnerGrid.Viewport);
+            if (rows.Count == 0 || columns.Count == 0)
+                return [];
+
+            var selected = new List<IRawElementProviderSimple>();
+            foreach (var row in rows)
+            {
+                foreach (var column in columns)
+                {
+                    if (IsCellSelected(row, column))
+                        selected.Add(ProviderFromPeer(GetOrCreateCellPeer(row, column)));
+                }
+            }
+
+            return [.. selected];
+        }
+
+        internal int GetRowIndex(uint row) => IndexOf(GetVisibleRows(OwnerGrid.Viewport), row);
+
+        internal int GetColumnIndex(uint column) => IndexOf(GetVisibleColumns(OwnerGrid.Viewport), column);
+
+        internal bool IsCellSelected(uint row, uint column)
+        {
+            if (OwnerGrid.SelectedRanges is { Count: > 0 } ranges)
+                return ranges.Any(range => ContainsCell(range, row, column));
+
+            return OwnerGrid.SelectedRange is { } range && ContainsCell(range, row, column);
+        }
+
+        internal string GetCellDisplayText(uint row, uint column) =>
+            TryGetDisplayCell(row, column, out var cell)
+                ? cell.DisplayText
+                : string.Empty;
+
+        internal Rect GetCellBoundingRectangle(uint row, uint column)
+        {
+            if (!TryGetMetric(OwnerGrid.Viewport?.RowMetrics, row, out var rowMetric) ||
+                !TryGetMetric(OwnerGrid.Viewport?.ColMetrics, column, out var columnMetric))
+            {
+                return Rect.Empty;
+            }
+
+            var bounds = new Rect(
+                OwnerGrid.ActualRowHeaderWidth + columnMetric.LeftOffset,
+                OwnerGrid.EffectiveColHeaderHeight + rowMetric.TopOffset,
+                columnMetric.Width,
+                rowMetric.Height);
+            try
+            {
+                var topLeft = OwnerGrid.PointToScreen(bounds.TopLeft);
+                var bottomRight = OwnerGrid.PointToScreen(bounds.BottomRight);
+                return new Rect(topLeft, bottomRight);
+            }
+            catch (InvalidOperationException)
+            {
+                return bounds;
+            }
+        }
+
+        public override object? GetPattern(PatternInterface patternInterface) =>
+            patternInterface switch
+            {
+                PatternInterface.Grid => this,
+                PatternInterface.Selection => this,
+                _ => base.GetPattern(patternInterface)
+            };
+
+        protected override List<AutomationPeer> GetChildrenCore()
+        {
+            var rows = GetVisibleRows(OwnerGrid.Viewport);
+            var columns = GetVisibleColumns(OwnerGrid.Viewport);
+            if (rows.Count == 0 || columns.Count == 0)
+                return [];
+
+            var children = new List<AutomationPeer>(rows.Count * columns.Count);
+            foreach (var row in rows)
+            {
+                foreach (var column in columns)
+                    children.Add(GetOrCreateCellPeer(row, column));
+            }
+
+            return children;
+        }
+
         protected override AutomationControlType GetAutomationControlTypeCore() =>
             AutomationControlType.DataGrid;
 
@@ -70,6 +185,259 @@ public partial class GridView : FrameworkElement
         protected override bool IsContentElementCore() => true;
 
         protected override bool IsControlElementCore() => true;
+
+        private GridViewCellAutomationPeer GetOrCreateCellPeer(uint row, uint column)
+        {
+            var key = (row, column);
+            if (_cellPeers.TryGetValue(key, out var peer))
+                return peer;
+
+            peer = new GridViewCellAutomationPeer(this, row, column);
+            _cellPeers[key] = peer;
+            return peer;
+        }
+
+        private bool TryGetDisplayCell(uint row, uint column, out DisplayCell cell)
+        {
+            if (TryGetDisplayCell(OwnerGrid.Viewport?.Cells, row, column, out cell))
+                return true;
+
+            return TryGetDisplayCell(OwnerGrid.Viewport?.SplitPanes?.Cells, row, column, out cell);
+        }
+
+        private static bool TryGetDisplayCell(IReadOnlyList<DisplayCell>? cells, uint row, uint column, out DisplayCell cell)
+        {
+            if (cells is not null)
+            {
+                foreach (var candidate in cells)
+                {
+                    if (candidate.Row == row && candidate.Col == column)
+                    {
+                        cell = candidate;
+                        return true;
+                    }
+                }
+            }
+
+            cell = default;
+            return false;
+        }
+
+        private static IReadOnlyList<uint> GetVisibleRows(ViewportModel? viewport)
+        {
+            if (viewport is null)
+                return [];
+
+            var rows = new List<uint>();
+            AddRows(rows, viewport.RowMetrics);
+            AddRows(rows, viewport.SplitPanes?.TopRows);
+            AddRows(rows, viewport.SplitPanes?.BottomLeftRows);
+            return rows;
+        }
+
+        private static IReadOnlyList<uint> GetVisibleColumns(ViewportModel? viewport)
+        {
+            if (viewport is null)
+                return [];
+
+            var columns = new List<uint>();
+            AddColumns(columns, viewport.ColMetrics);
+            AddColumns(columns, viewport.SplitPanes?.LeftColumns);
+            AddColumns(columns, viewport.SplitPanes?.TopRightColumns);
+            return columns;
+        }
+
+        private static void AddRows(List<uint> rows, IReadOnlyList<RowMetric>? metrics)
+        {
+            if (metrics is null)
+                return;
+
+            foreach (var metric in metrics)
+            {
+                if (!rows.Contains(metric.Row))
+                    rows.Add(metric.Row);
+            }
+        }
+
+        private static void AddColumns(List<uint> columns, IReadOnlyList<ColMetric>? metrics)
+        {
+            if (metrics is null)
+                return;
+
+            foreach (var metric in metrics)
+            {
+                if (!columns.Contains(metric.Col))
+                    columns.Add(metric.Col);
+            }
+        }
+
+        private static bool TryGetMetric(IReadOnlyList<RowMetric>? metrics, uint row, out RowMetric metric)
+        {
+            if (metrics is not null)
+            {
+                foreach (var candidate in metrics)
+                {
+                    if (candidate.Row == row)
+                    {
+                        metric = candidate;
+                        return true;
+                    }
+                }
+            }
+
+            metric = null!;
+            return false;
+        }
+
+        private static bool TryGetMetric(IReadOnlyList<ColMetric>? metrics, uint column, out ColMetric metric)
+        {
+            if (metrics is not null)
+            {
+                foreach (var candidate in metrics)
+                {
+                    if (candidate.Col == column)
+                    {
+                        metric = candidate;
+                        return true;
+                    }
+                }
+            }
+
+            metric = null!;
+            return false;
+        }
+
+        private static int IndexOf(IReadOnlyList<uint> values, uint value)
+        {
+            for (var i = 0; i < values.Count; i++)
+            {
+                if (values[i] == value)
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static bool ContainsCell(GridRange range, uint row, uint column) =>
+            row >= range.Start.Row &&
+            row <= range.End.Row &&
+            column >= range.Start.Col &&
+            column <= range.End.Col;
+    }
+
+    private sealed class GridViewCellAutomationPeer(
+        GridViewAutomationPeer parent,
+        uint row,
+        uint column) :
+        AutomationPeer,
+        IGridItemProvider,
+        IValueProvider,
+        ISelectionItemProvider
+    {
+        public int Row => parent.GetRowIndex(row);
+
+        public int Column => parent.GetColumnIndex(column);
+
+        public int RowSpan => 1;
+
+        public int ColumnSpan => 1;
+
+        public IRawElementProviderSimple ContainingGrid => ProviderFromPeer(parent);
+
+        public bool IsReadOnly => true;
+
+        public string Value => parent.GetCellDisplayText(row, column);
+
+        public bool IsSelected => parent.IsCellSelected(row, column);
+
+        public IRawElementProviderSimple SelectionContainer => ProviderFromPeer(parent);
+
+        public void SetValue(string value) =>
+            throw new InvalidOperationException("Grid cells are edited through the worksheet editor.");
+
+        public void Select() =>
+            throw new InvalidOperationException("Grid cell selection is owned by the worksheet surface.");
+
+        public void AddToSelection() =>
+            throw new InvalidOperationException("Grid cell selection is owned by the worksheet surface.");
+
+        public void RemoveFromSelection() =>
+            throw new InvalidOperationException("Grid cell selection is owned by the worksheet surface.");
+
+        public override object? GetPattern(PatternInterface patternInterface) =>
+            patternInterface switch
+            {
+                PatternInterface.GridItem => this,
+                PatternInterface.Value => this,
+                PatternInterface.SelectionItem => this,
+                _ => null
+            };
+
+        protected override AutomationControlType GetAutomationControlTypeCore() =>
+            AutomationControlType.DataItem;
+
+        protected override string GetClassNameCore() => "GridViewCell";
+
+        protected override string GetAutomationIdCore() =>
+            $"Cell_{CellAddress.NumberToColumnName(column)}{row}";
+
+        protected override string GetNameCore()
+        {
+            var address = $"{CellAddress.NumberToColumnName(column)}{row}";
+            return string.IsNullOrWhiteSpace(Value)
+                ? address
+                : $"{address}: {Value}";
+        }
+
+        protected override Rect GetBoundingRectangleCore() =>
+            parent.GetCellBoundingRectangle(row, column);
+
+        protected override List<AutomationPeer> GetChildrenCore() => [];
+
+        protected override Point GetClickablePointCore()
+        {
+            var bounds = GetBoundingRectangleCore();
+            return bounds.IsEmpty
+                ? new Point(double.NaN, double.NaN)
+                : new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2);
+        }
+
+        protected override string GetAcceleratorKeyCore() => string.Empty;
+
+        protected override string GetAccessKeyCore() => string.Empty;
+
+        protected override string GetHelpTextCore() => string.Empty;
+
+        protected override string GetItemStatusCore() => string.Empty;
+
+        protected override string GetItemTypeCore() => string.Empty;
+
+        protected override AutomationPeer? GetLabeledByCore() => null;
+
+        protected override string GetLocalizedControlTypeCore() => "cell";
+
+        protected override AutomationOrientation GetOrientationCore() => AutomationOrientation.None;
+
+        protected override bool HasKeyboardFocusCore() => false;
+
+        protected override bool IsEnabledCore() => true;
+
+        protected override bool IsKeyboardFocusableCore() => false;
+
+        protected override bool IsOffscreenCore() =>
+            GetBoundingRectangleCore().IsEmpty;
+
+        protected override bool IsPasswordCore() => false;
+
+        protected override bool IsRequiredForFormCore() => false;
+
+        protected override bool IsContentElementCore() => true;
+
+        protected override bool IsControlElementCore() => true;
+
+        protected override void SetFocusCore()
+        {
+        }
     }
 
     public const double ColHeaderHeight = 18;

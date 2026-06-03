@@ -14426,4 +14426,13 @@ Kayıtlı XPS dosyası:
   <data name="QuickAnalysis_SelectRangeStatus" xml:space="preserve">
     <value>Hızlı Çözümlemei kullanmak için bir aralık seçin.</value>
   </data>
+  <data name="FillSeriesStep_SelectNumericOrDateStartMessage" xml:space="preserve">
+    <value>Select a numeric or date cell to start a series.</value>
+  </data>
+  <data name="MainWindowMessage_ExportNormalizedOverwritePrompt" xml:space="preserve">
+    <value>The selected export name resolves to &quot;{0}&quot;, which already exists. Do you want to replace it?</value>
+  </data>
+  <data name="GoToSpecial_NoCellsFoundMessage" xml:space="preserve">
+    <value>No cells found.</value>
+  </data>
 </root>

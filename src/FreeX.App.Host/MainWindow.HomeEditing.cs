@@ -98,7 +98,9 @@ public partial class MainWindow
         var startValue = sheet.GetValue(range.Start.Row, range.Start.Col);
         if (startValue is not NumberValue and not DateTimeValue)
         {
-            _messageService.ShowWarning("Select a numeric or date cell to start a series.", "Fill Series");
+            _messageService.ShowWarning(
+                UiText.Get("FillSeriesStep_SelectNumericOrDateStartMessage"),
+                UiText.Get("FillSeriesStep_Title"));
             return;
         }
 
@@ -242,7 +244,12 @@ public partial class MainWindow
         if (matches.Count == 0)
         {
             if (showEmptyMessage)
-                _messageService.ShowInfo("No cells found.", "Go To Special");
+            {
+                _messageService.ShowInfo(
+                    UiText.Get("GoToSpecial_NoCellsFoundMessage"),
+                    UiText.Get("GoToSpecial_GoToSpecial"));
+            }
+
             return;
         }
 

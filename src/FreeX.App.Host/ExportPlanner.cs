@@ -123,6 +123,17 @@ internal static partial class ExportPlanner
         return new ExportRequest(normalizedPath, format, options, null);
     }
 
+    public static bool ShouldPromptForNormalizedOverwrite(
+        string requestedPath,
+        ExportRequest request,
+        Func<string, bool> pathExists)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(pathExists);
+
+        return !PathsEqual(requestedPath, request.Path) && pathExists(request.Path);
+    }
+
     public static string GetFallbackXpsPath(string requestedPath) =>
         Path.ChangeExtension(requestedPath, ".xps");
 
@@ -198,6 +209,26 @@ internal static partial class ExportPlanner
 
     private static bool HasInvalidPathChars(string path) =>
         path.IndexOf('\0') >= 0;
+
+    private static bool PathsEqual(string left, string right)
+    {
+        try
+        {
+            left = Path.GetFullPath(left);
+            right = Path.GetFullPath(right);
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (NotSupportedException)
+        {
+        }
+        catch (PathTooLongException)
+        {
+        }
+
+        return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+    }
 
     public static string NormalizePdfLanguage(string? pdfLanguage)
     {

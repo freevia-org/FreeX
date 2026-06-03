@@ -18,6 +18,8 @@ public partial class ExportPlannerTests
         printExport.Should().Contain("_options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;");
         printExport.Should().Contain("_options.Save();");
         printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
+        printExport.Should().Contain("ExportPlanner.ShouldPromptForNormalizedOverwrite(saveDlg.FileName, request, File.Exists)");
+        printExport.Should().Contain("UiText.Format(\"MainWindowMessage_ExportNormalizedOverwritePrompt\", request.Path)");
         printExport.Should().Contain("RenderExportDocument(options)");
         printExport.Should().Contain("ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf)");
         printExport.Should().Contain("ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Xps)");
