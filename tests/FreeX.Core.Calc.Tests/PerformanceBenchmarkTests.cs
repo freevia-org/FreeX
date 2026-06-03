@@ -202,8 +202,8 @@ public class PerformanceBenchmarkTests
             $"{allocated / iterations:N0} bytes/iteration");
 
         (allocated / iterations).Should().BeLessThan(
-            240_000,
-            "exact-only formula chains should not allocate a dedupe HashSet for each formula precedent");
+            80_000,
+            "single-root exact-only formula chains should use the linear recalc-order fast path");
     }
 
     [Fact]
