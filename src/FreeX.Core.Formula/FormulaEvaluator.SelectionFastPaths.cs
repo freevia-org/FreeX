@@ -1,3 +1,4 @@
+using System.Buffers;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Formula;
@@ -56,7 +57,7 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
-        var numbers = CreateDirectSelectionBuffer([range]);
+        using var numbers = CreateDirectSelectionBuffer([range]);
         var collectError = CollectDirectRangeNumbers(context, range, numbers);
         if (collectError is not null)
         {
@@ -148,7 +149,7 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
-        var numbers = CreateDirectSelectionBuffer(ranges);
+        using var numbers = CreateDirectSelectionBuffer(ranges);
         foreach (var range in ranges)
         {
             var collectError = CollectDirectAggregateNumbers(
@@ -179,7 +180,7 @@ public sealed partial class FormulaEvaluator
         return true;
     }
 
-    private static List<double> CreateDirectSelectionBuffer(IReadOnlyList<DirectRangeArgument> ranges)
+    private static DirectSelectionBuffer CreateDirectSelectionBuffer(IReadOnlyList<DirectRangeArgument> ranges)
     {
         long cellCount = 0;
         foreach (var range in ranges)
@@ -191,28 +192,42 @@ public sealed partial class FormulaEvaluator
                 range.EndCol);
         }
 
-        return cellCount is > 0 and <= FormulaSafetyLimits.MaxMaterializedRangeCells
-            ? new List<double>((int)cellCount)
-            : [];
+        return new DirectSelectionBuffer(
+            cellCount is > 0 and <= FormulaSafetyLimits.MaxMaterializedRangeCells
+                ? (int)cellCount
+                : 0);
     }
 
     private static ErrorValue? CollectDirectRangeNumbers(
         IEvalContext context,
         DirectRangeArgument range,
-        List<double> numbers)
+        DirectSelectionBuffer numbers)
     {
+        var values = numbers.Values;
+        var count = numbers.Count;
         for (var row = range.StartRow; row <= range.EndRow; row++)
         {
             for (var col = range.StartCol; col <= range.EndCol; col++)
             {
                 var value = GetFastRangeCellValue(context, range, row, col);
                 if (TryDirectRangeNumber(value, out var number, out var error))
-                    numbers.Add(number);
+                {
+                    if (count == values.Length)
+                    {
+                        values = numbers.Grow();
+                    }
+
+                    values[count++] = number;
+                }
                 else if (error is not null)
+                {
+                    numbers.Count = count;
                     return error;
+                }
             }
         }
 
+        numbers.Count = count;
         return null;
     }
 
@@ -222,8 +237,10 @@ public sealed partial class FormulaEvaluator
         bool ignoreErrors,
         bool ignoreHiddenRows,
         bool ignoreNestedAggregates,
-        List<double> numbers)
+        DirectSelectionBuffer numbers)
     {
+        var values = numbers.Values;
+        var count = numbers.Count;
         for (var row = range.StartRow; row <= range.EndRow; row++)
         {
             if (ignoreHiddenRows && IsFastAggregateRowHidden(context, range, row))
@@ -236,17 +253,26 @@ public sealed partial class FormulaEvaluator
 
                 var value = GetFastRangeCellValue(context, range, row, col);
                 if (TryDirectRangeNumber(value, out var number, out var error))
-                    numbers.Add(number);
+                {
+                    if (count == values.Length)
+                    {
+                        values = numbers.Grow();
+                    }
+
+                    values[count++] = number;
+                }
                 else if (error is not null)
                 {
                     if (ignoreErrors)
                         continue;
 
+                    numbers.Count = count;
                     return error;
                 }
             }
         }
 
+        numbers.Count = count;
         return null;
     }
 
@@ -308,7 +334,7 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue EvaluateDirectSelectionFunction(
         string functionName,
-        List<double> numbers,
+        DirectSelectionBuffer numbers,
         double k,
         bool topLevelFunction)
     {
@@ -324,7 +350,7 @@ public sealed partial class FormulaEvaluator
         };
     }
 
-    private static ScalarValue EvaluateDirectMedian(List<double> numbers)
+    private static ScalarValue EvaluateDirectMedian(DirectSelectionBuffer numbers)
     {
         if (numbers.Count == 0)
             return ErrorValue.Num;
@@ -338,7 +364,7 @@ public sealed partial class FormulaEvaluator
         return FastNumberResult((lower + upper) / 2.0);
     }
 
-    private static ScalarValue EvaluateDirectLarge(List<double> numbers, double k, bool topLevelFunction)
+    private static ScalarValue EvaluateDirectLarge(DirectSelectionBuffer numbers, double k, bool topLevelFunction)
     {
         var ordinal = (int)k;
         if (ordinal < 1 || ordinal > numbers.Count)
@@ -348,7 +374,7 @@ public sealed partial class FormulaEvaluator
         return topLevelFunction ? new NumberValue(value) : FastNumberResult(value);
     }
 
-    private static ScalarValue EvaluateDirectSmall(List<double> numbers, double k, bool topLevelFunction)
+    private static ScalarValue EvaluateDirectSmall(DirectSelectionBuffer numbers, double k, bool topLevelFunction)
     {
         var ordinal = (int)k;
         if (ordinal < 1 || ordinal > numbers.Count)
@@ -358,13 +384,13 @@ public sealed partial class FormulaEvaluator
         return topLevelFunction ? new NumberValue(value) : FastNumberResult(value);
     }
 
-    private static ScalarValue EvaluateDirectPercentileInc(List<double> numbers, double percentile)
+    private static ScalarValue EvaluateDirectPercentileInc(DirectSelectionBuffer numbers, double percentile)
     {
         if (numbers.Count == 0 || percentile < 0 || percentile > 1)
             return ErrorValue.Num;
 
         if (numbers.Count == 1)
-            return FastNumberResult(numbers[0]);
+            return FastNumberResult(numbers.Values[0]);
 
         var position = percentile * (numbers.Count - 1);
         var lowerIndex = (int)Math.Floor(position);
@@ -377,7 +403,7 @@ public sealed partial class FormulaEvaluator
         return FastNumberResult(lower + (position - lowerIndex) * (upper - lower));
     }
 
-    private static ScalarValue EvaluateDirectPercentileExc(List<double> numbers, double percentile)
+    private static ScalarValue EvaluateDirectPercentileExc(DirectSelectionBuffer numbers, double percentile)
     {
         if (numbers.Count == 0 || percentile <= 0 || percentile >= 1)
             return ErrorValue.Num;
@@ -396,7 +422,7 @@ public sealed partial class FormulaEvaluator
         return FastNumberResult(lower + (position - lowerIndex) * (upper - lower));
     }
 
-    private static ScalarValue EvaluateDirectQuartileInc(List<double> numbers, double quartile)
+    private static ScalarValue EvaluateDirectQuartileInc(DirectSelectionBuffer numbers, double quartile)
     {
         var rawQuartile = (int)Math.Truncate(quartile);
         if (rawQuartile < 0 || rawQuartile > 4)
@@ -405,7 +431,7 @@ public sealed partial class FormulaEvaluator
         return EvaluateDirectPercentileInc(numbers, rawQuartile / 4.0);
     }
 
-    private static ScalarValue EvaluateDirectQuartileExc(List<double> numbers, double quartile)
+    private static ScalarValue EvaluateDirectQuartileExc(DirectSelectionBuffer numbers, double quartile)
     {
         var rawQuartile = (int)Math.Truncate(quartile);
         if (rawQuartile < 1 || rawQuartile > 3)
@@ -414,8 +440,9 @@ public sealed partial class FormulaEvaluator
         return EvaluateDirectPercentileExc(numbers, rawQuartile / 4.0);
     }
 
-    private static double SelectDirectKthSmallest(List<double> values, int k)
+    private static double SelectDirectKthSmallest(DirectSelectionBuffer values, int k)
     {
+        var items = values.Values;
         var left = 0;
         var right = values.Count - 1;
         var comparer = Comparer<double>.Default;
@@ -423,7 +450,7 @@ public sealed partial class FormulaEvaluator
         while (left < right)
         {
             var pivotIndex = left + ((right - left) / 2);
-            var (equalStart, equalEnd) = PartitionDirectSelection(values, left, right, pivotIndex, comparer);
+            var (equalStart, equalEnd) = PartitionDirectSelection(items, left, right, pivotIndex, comparer);
 
             if (k < equalStart)
                 right = equalStart - 1;
@@ -433,11 +460,11 @@ public sealed partial class FormulaEvaluator
                 break;
         }
 
-        return values[k];
+        return items[k];
     }
 
     private static (int EqualStart, int EqualEnd) PartitionDirectSelection(
-        List<double> values,
+        double[] values,
         int left,
         int right,
         int pivotIndex,
@@ -471,12 +498,64 @@ public sealed partial class FormulaEvaluator
         return (less, greater);
     }
 
-    private static void SwapDirectSelection(List<double> values, int first, int second)
+    private static void SwapDirectSelection(double[] values, int first, int second)
     {
         if (first == second)
             return;
 
         (values[first], values[second]) = (values[second], values[first]);
+    }
+
+    private sealed class DirectSelectionBuffer : IDisposable
+    {
+        private double[] _values;
+        private bool _pooled;
+
+        public DirectSelectionBuffer(int capacity)
+        {
+            if (capacity > 0)
+            {
+                _values = ArrayPool<double>.Shared.Rent(capacity);
+                _pooled = true;
+            }
+            else
+            {
+                _values = [];
+            }
+        }
+
+        public int Count { get; set; }
+
+        public double[] Values => _values;
+
+        public void Dispose()
+        {
+            ReturnArray();
+            Count = 0;
+        }
+
+        public double[] Grow()
+        {
+            var newCapacity = _values.Length == 0 ? 4 : _values.Length * 2;
+            var newValues = ArrayPool<double>.Shared.Rent(newCapacity);
+            if (Count > 0)
+                Array.Copy(_values, newValues, Count);
+
+            ReturnArray();
+            _values = newValues;
+            _pooled = true;
+            return _values;
+        }
+
+        private void ReturnArray()
+        {
+            if (!_pooled)
+                return;
+
+            ArrayPool<double>.Shared.Return(_values);
+            _values = [];
+            _pooled = false;
+        }
     }
 
     private sealed class DirectRangeModeAccumulator
@@ -537,4 +616,5 @@ public sealed partial class FormulaEvaluator
             FirstOrdinal = firstOrdinal;
         }
     }
+
 }

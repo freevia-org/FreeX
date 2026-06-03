@@ -491,20 +491,20 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Theory]
-    [InlineData("=LARGE(A1:A100000,10)", 99_991d, 1_000_000)]
-    [InlineData("=SMALL(A1:A100000,10)", 10d, 1_000_000)]
-    [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 1_000_000)]
+    [InlineData("=LARGE(A1:A100000,10)", 99_991d, 16_000)]
+    [InlineData("=SMALL(A1:A100000,10)", 10d, 16_000)]
+    [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 16_000)]
     public void StatisticalSelectionLargeRanges_AvoidExcessAllocationChurn(string formula, double expected, long maxAllocatedBytes)
     {
         AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
     }
 
     [Theory]
-    [InlineData("=AGGREGATE(12,4,A1:A100000)", 50_000.5d, 1_000_000)]
-    [InlineData("=AGGREGATE(14,4,A1:A100000,10)", 99_991d, 1_000_000)]
-    [InlineData("=AGGREGATE(15,4,A1:A100000,10)", 10d, 1_000_000)]
-    [InlineData("=AGGREGATE(16,4,A1:A100000,0.5)", 50_000.5d, 1_000_000)]
-    [InlineData("=AGGREGATE(18,4,A1:A100000,0.5)", 50_000.5d, 1_000_000)]
+    [InlineData("=AGGREGATE(12,4,A1:A100000)", 50_000.5d, 16_000)]
+    [InlineData("=AGGREGATE(14,4,A1:A100000,10)", 99_991d, 16_000)]
+    [InlineData("=AGGREGATE(15,4,A1:A100000,10)", 10d, 16_000)]
+    [InlineData("=AGGREGATE(16,4,A1:A100000,0.5)", 50_000.5d, 16_000)]
+    [InlineData("=AGGREGATE(18,4,A1:A100000,0.5)", 50_000.5d, 16_000)]
     public void AggregateStatisticalSelectionLargeRanges_AvoidExcessAllocationChurn(
         string formula,
         double expected,
