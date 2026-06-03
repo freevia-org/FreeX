@@ -5,8 +5,6 @@ namespace FreeX.Core.Formula;
 
 public sealed partial class FormulaEvaluator
 {
-    private const int MaxDirectRangeModeCapacity = 50_000;
-
     private static bool IsDirectSelectionFunction(string functionName) =>
         functionName is "LARGE" or "SMALL" or
             "PERCENTILE" or "PERCENTILE.INC" or "PERCENTILE.EXC" or
@@ -285,7 +283,7 @@ public sealed partial class FormulaEvaluator
         bool ignoreHiddenRows,
         bool ignoreNestedAggregates)
     {
-        var mode = new DirectRangeModeAccumulator(EstimateDirectRangeModeCapacity(ranges));
+        using var mode = CreateDirectRangeModeBuffer(ranges);
         foreach (var range in ranges)
         {
             for (var row = range.StartRow; row <= range.EndRow; row++)
@@ -317,21 +315,22 @@ public sealed partial class FormulaEvaluator
             : ErrorValue.NA;
     }
 
-    private static int EstimateDirectRangeModeCapacity(IReadOnlyList<DirectRangeArgument> ranges)
+    private static DirectRangeModeBuffer CreateDirectRangeModeBuffer(IReadOnlyList<DirectRangeArgument> ranges)
     {
-        long count = 0;
+        long cellCount = 0;
         foreach (var range in ranges)
         {
-            count += FormulaSafetyLimits.GetRangeCellCount(
+            cellCount += FormulaSafetyLimits.GetRangeCellCount(
                 range.StartRow,
                 range.StartCol,
                 range.EndRow,
                 range.EndCol);
-            if (count >= MaxDirectRangeModeCapacity)
-                return MaxDirectRangeModeCapacity;
         }
 
-        return (int)count;
+        return new DirectRangeModeBuffer(
+            cellCount is > 0 and <= FormulaSafetyLimits.MaxMaterializedRangeCells
+                ? (int)cellCount
+                : 0);
     }
 
     private static ScalarValue EvaluateDirectSelectionFunction(
@@ -560,43 +559,35 @@ public sealed partial class FormulaEvaluator
         }
     }
 
-    private sealed class DirectRangeModeAccumulator
+    // Pooled open-addressing table avoids allocating Dictionary buckets on repeated large MODE/AGGREGATE scans.
+    private sealed class DirectRangeModeBuffer : IDisposable
     {
-        private readonly int _capacity;
-        private Dictionary<double, DirectRangeModeCount>? _counts;
+        private double[] _keys = [];
+        private int[] _counts = [];
+        private int[] _firstOrdinals = [];
+        private int _capacity;
+        private int _mask;
+        private int _used;
         private int _ordinal;
         private int _bestCount;
-        private int _bestOrdinal;
+        private int _bestOrdinal = int.MaxValue;
         private double _bestValue;
 
-        public DirectRangeModeAccumulator(int capacity)
+        public DirectRangeModeBuffer(int capacity)
         {
-            _capacity = capacity;
+            if (capacity > 0)
+                RentTable(GetDirectRangeModeTableCapacity(capacity));
         }
 
         public void Add(double value)
         {
-            var counts = _counts ??= _capacity > 0
-                ? new Dictionary<double, DirectRangeModeCount>(_capacity)
-                : [];
-            ref var entry = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(
-                counts,
-                value,
-                out var exists);
-            if (exists)
-                entry.Count++;
-            else
-                entry = new DirectRangeModeCount(1, _ordinal);
+            if (_capacity == 0)
+                RentTable(4);
 
-            if (entry.Count >= 2 &&
-                (entry.Count > _bestCount ||
-                 (entry.Count == _bestCount && entry.FirstOrdinal < _bestOrdinal)))
-            {
-                _bestCount = entry.Count;
-                _bestOrdinal = entry.FirstOrdinal;
-                _bestValue = value;
-            }
+            if ((_used + 1) * 4 >= _capacity * 3)
+                Grow();
 
+            AddToTable(value, _ordinal);
             _ordinal++;
         }
 
@@ -605,17 +596,122 @@ public sealed partial class FormulaEvaluator
             value = _bestValue;
             return _bestCount >= 2;
         }
-    }
 
-    private struct DirectRangeModeCount
-    {
-        public int Count;
-        public int FirstOrdinal;
-
-        public DirectRangeModeCount(int count, int firstOrdinal)
+        public void Dispose()
         {
-            Count = count;
-            FirstOrdinal = firstOrdinal;
+            if (_capacity == 0)
+                return;
+
+            ArrayPool<double>.Shared.Return(_keys);
+            ArrayPool<int>.Shared.Return(_counts);
+            ArrayPool<int>.Shared.Return(_firstOrdinals);
+            _keys = [];
+            _counts = [];
+            _firstOrdinals = [];
+            _capacity = 0;
+            _mask = 0;
+            _used = 0;
+        }
+
+        private void Grow()
+        {
+            var oldKeys = _keys;
+            var oldCounts = _counts;
+            var oldFirstOrdinals = _firstOrdinals;
+            var oldCapacity = _capacity;
+
+            RentTable(_capacity == 0 ? 4 : _capacity * 2);
+
+            for (var i = 0; i < oldCapacity; i++)
+            {
+                var count = oldCounts[i];
+                if (count == 0)
+                    continue;
+
+                AddExistingToTable(oldKeys[i], count, oldFirstOrdinals[i]);
+            }
+
+            if (oldCapacity == 0)
+                return;
+
+            ArrayPool<double>.Shared.Return(oldKeys);
+            ArrayPool<int>.Shared.Return(oldCounts);
+            ArrayPool<int>.Shared.Return(oldFirstOrdinals);
+        }
+
+        private void RentTable(int capacity)
+        {
+            _keys = ArrayPool<double>.Shared.Rent(capacity);
+            _counts = ArrayPool<int>.Shared.Rent(capacity);
+            _firstOrdinals = ArrayPool<int>.Shared.Rent(capacity);
+            _capacity = capacity;
+            _mask = capacity - 1;
+            _used = 0;
+            Array.Clear(_counts, 0, capacity);
+        }
+
+        private void AddToTable(double value, int ordinal)
+        {
+            var slot = value.GetHashCode() & _mask;
+            while (true)
+            {
+                var count = _counts[slot];
+                if (count == 0)
+                {
+                    _keys[slot] = value;
+                    _counts[slot] = 1;
+                    _firstOrdinals[slot] = ordinal;
+                    _used++;
+                    return;
+                }
+
+                if (_keys[slot].Equals(value))
+                {
+                    count++;
+                    _counts[slot] = count;
+                    UpdateBest(value, count, _firstOrdinals[slot]);
+                    return;
+                }
+
+                slot = (slot + 1) & _mask;
+            }
+        }
+
+        private void AddExistingToTable(double value, int count, int firstOrdinal)
+        {
+            var slot = value.GetHashCode() & _mask;
+            while (_counts[slot] != 0)
+                slot = (slot + 1) & _mask;
+
+            _keys[slot] = value;
+            _counts[slot] = count;
+            _firstOrdinals[slot] = firstOrdinal;
+            _used++;
+        }
+
+        private void UpdateBest(double value, int count, int firstOrdinal)
+        {
+            if (count >= 2 &&
+                (count > _bestCount ||
+                 (count == _bestCount && firstOrdinal < _bestOrdinal)))
+            {
+                _bestCount = count;
+                _bestOrdinal = firstOrdinal;
+                _bestValue = value;
+            }
+        }
+
+        private static int GetDirectRangeModeTableCapacity(int valueCount)
+        {
+            var desired = Math.Max(4, valueCount * 2);
+            desired--;
+            desired |= desired >> 1;
+            desired |= desired >> 2;
+            desired |= desired >> 4;
+            desired |= desired >> 8;
+            desired |= desired >> 16;
+            desired++;
+            return desired;
         }
     }
 
