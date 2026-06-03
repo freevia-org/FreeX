@@ -6,19 +6,17 @@ internal static partial class RowColumnShiftHelpers
 {
     internal static AddressBearingStateSnapshot CaptureAddressBearingState(Workbook workbook, Sheet sheet) =>
         new(
-            sheet.GetStyleOnlyEntries()
-                .Select(entry => new StyleOnlyEntry(entry.Key.Row, entry.Key.Col, entry.StyleId))
-                .ToList(),
-            new Dictionary<uint, int>(sheet.RowOutlineLevels),
-            new Dictionary<uint, int>(sheet.ColOutlineLevels),
-            [.. sheet.GroupHiddenRows],
-            [.. sheet.GroupHiddenCols],
-            sheet.AllowEditRanges.ToList(),
+            CaptureStyleOnlyEntries(sheet),
+            CaptureUIntIntDictionary(sheet.RowOutlineLevels),
+            CaptureUIntIntDictionary(sheet.ColOutlineLevels),
+            CaptureUIntSet(sheet.GroupHiddenRows),
+            CaptureUIntSet(sheet.GroupHiddenCols),
+            CaptureList(sheet.AllowEditRanges),
             sheet.PrintTitleRows,
             sheet.PrintTitleColumns,
             ClonePageBreaksMetadata(sheet.RowPageBreaksMetadata),
             ClonePageBreaksMetadata(sheet.ColumnPageBreaksMetadata),
-            workbook.WatchedCells.ToList(),
+            CaptureList(workbook.WatchedCells),
             CloneCellWatchesMetadata(sheet.CellWatchesMetadata),
             CloneIgnoredErrorsMetadata(sheet.IgnoredErrorsMetadata),
             sheet.AutoFilter,
@@ -26,24 +24,118 @@ internal static partial class RowColumnShiftHelpers
             sheet.DataConsolidation,
             sheet.SortState,
             sheet.SingleXmlCells,
-            sheet.TextBoxes.Select(textBox => new TextBoxAddressSnapshot(textBox, textBox.Anchor)).ToList(),
-            sheet.DrawingShapes.Select(shape => new DrawingShapeAddressSnapshot(shape, shape.Anchor)).ToList(),
-            sheet.Pictures.Select(picture => new PictureAddressSnapshot(
+            CaptureTextBoxes(sheet),
+            CaptureDrawingShapes(sheet),
+            CapturePictures(sheet),
+            CaptureSparklines(sheet),
+            CapturePivotTables(sheet),
+            CaptureList(sheet.StructuredTables),
+            CapturePivotCaches(workbook),
+            CaptureList(workbook.Scenarios));
+
+    private static IReadOnlyList<StyleOnlyEntry> CaptureStyleOnlyEntries(Sheet sheet)
+    {
+        if (!sheet.HasStyleOnlyCells)
+            return [];
+
+        var entries = new List<StyleOnlyEntry>(sheet.StyleOnlyCellCount);
+        foreach (var entry in sheet.GetStyleOnlyEntries())
+            entries.Add(new StyleOnlyEntry(entry.Key.Row, entry.Key.Col, entry.StyleId));
+
+        return entries;
+    }
+
+    private static IReadOnlyDictionary<uint, int> CaptureUIntIntDictionary(IReadOnlyDictionary<uint, int> source) =>
+        source.Count == 0 ? EmptyUIntIntDictionary.Instance : new Dictionary<uint, int>(source);
+
+    private static IReadOnlyCollection<uint> CaptureUIntSet(IReadOnlyCollection<uint> source) =>
+        source.Count == 0 ? [] : [.. source];
+
+    private static IReadOnlyList<T> CaptureList<T>(IReadOnlyCollection<T> source) =>
+        source.Count == 0 ? [] : [.. source];
+
+    private static IReadOnlyList<TextBoxAddressSnapshot> CaptureTextBoxes(Sheet sheet)
+    {
+        if (sheet.TextBoxes.Count == 0)
+            return [];
+
+        var snapshots = new List<TextBoxAddressSnapshot>(sheet.TextBoxes.Count);
+        foreach (var textBox in sheet.TextBoxes)
+            snapshots.Add(new TextBoxAddressSnapshot(textBox, textBox.Anchor));
+
+        return snapshots;
+    }
+
+    private static IReadOnlyList<DrawingShapeAddressSnapshot> CaptureDrawingShapes(Sheet sheet)
+    {
+        if (sheet.DrawingShapes.Count == 0)
+            return [];
+
+        var snapshots = new List<DrawingShapeAddressSnapshot>(sheet.DrawingShapes.Count);
+        foreach (var shape in sheet.DrawingShapes)
+            snapshots.Add(new DrawingShapeAddressSnapshot(shape, shape.Anchor));
+
+        return snapshots;
+    }
+
+    private static IReadOnlyList<PictureAddressSnapshot> CapturePictures(Sheet sheet)
+    {
+        if (sheet.Pictures.Count == 0)
+            return [];
+
+        var snapshots = new List<PictureAddressSnapshot>(sheet.Pictures.Count);
+        foreach (var picture in sheet.Pictures)
+        {
+            snapshots.Add(new PictureAddressSnapshot(
                 picture,
                 picture.Anchor,
                 picture.LinkedSourceRange,
-                picture.IsLinkedToSourceRange)).ToList(),
-            sheet.Sparklines.Select(sparkline => new SparklineAddressSnapshot(
-                sparkline,
-                sparkline.DataRange,
-                sparkline.Location)).ToList(),
-            sheet.PivotTables.Select(pivotTable => new PivotTableAddressSnapshot(
-                pivotTable,
-                pivotTable.SourceRange,
-                pivotTable.TargetRange)).ToList(),
-            sheet.StructuredTables.ToList(),
-            workbook.PivotCaches.Select(cache => new PivotCacheSourceSnapshot(cache, cache.SourceSheetName, cache.SourceReference)).ToList(),
-            workbook.Scenarios.ToList());
+                picture.IsLinkedToSourceRange));
+        }
+
+        return snapshots;
+    }
+
+    private static IReadOnlyList<SparklineAddressSnapshot> CaptureSparklines(Sheet sheet)
+    {
+        if (sheet.Sparklines.Count == 0)
+            return [];
+
+        var snapshots = new List<SparklineAddressSnapshot>(sheet.Sparklines.Count);
+        foreach (var sparkline in sheet.Sparklines)
+            snapshots.Add(new SparklineAddressSnapshot(sparkline, sparkline.DataRange, sparkline.Location));
+
+        return snapshots;
+    }
+
+    private static IReadOnlyList<PivotTableAddressSnapshot> CapturePivotTables(Sheet sheet)
+    {
+        if (sheet.PivotTables.Count == 0)
+            return [];
+
+        var snapshots = new List<PivotTableAddressSnapshot>(sheet.PivotTables.Count);
+        foreach (var pivotTable in sheet.PivotTables)
+            snapshots.Add(new PivotTableAddressSnapshot(pivotTable, pivotTable.SourceRange, pivotTable.TargetRange));
+
+        return snapshots;
+    }
+
+    private static IReadOnlyList<PivotCacheSourceSnapshot> CapturePivotCaches(Workbook workbook)
+    {
+        if (workbook.PivotCaches.Count == 0)
+            return [];
+
+        var snapshots = new List<PivotCacheSourceSnapshot>(workbook.PivotCaches.Count);
+        foreach (var cache in workbook.PivotCaches)
+            snapshots.Add(new PivotCacheSourceSnapshot(cache, cache.SourceSheetName, cache.SourceReference));
+
+        return snapshots;
+    }
+
+    private static class EmptyUIntIntDictionary
+    {
+        internal static readonly IReadOnlyDictionary<uint, int> Instance = new Dictionary<uint, int>();
+    }
 
     internal static void RestoreAddressBearingState(
         Workbook workbook,
