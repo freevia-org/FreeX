@@ -1206,8 +1206,13 @@ public sealed class GridViewRenderPerformanceTests
         cache.Should().Contain("private DrawingGroup? _drawingObjectLayerCache;");
         cache.Should().Contain("private readonly record struct DrawingObjectLayerCacheKey");
         cache.Should().Contain("dc.DrawDrawing(cached);");
+        cache.Should().Contain("ShouldBuildDrawingObjectLayerCache(key)");
+        cache.Should().Contain("RenderDrawingObjectLayers(dc);");
+        cache.Should().Contain("RememberDrawingObjectLayerRenderKey(key);");
+        cache.Should().Contain("BuildDrawingObjectLayerCache()");
         cache.Should().Contain("RenderDrawingObjectLayers(groupContext);");
         cache.Should().Contain("group.Freeze();");
+        cache.Should().Contain("_hasLastDrawingObjectLayerRenderKey && _lastDrawingObjectLayerRenderKey == key");
         cache.Should().Contain("GridRange? SelectedRange");
         cache.Should().Contain("IReadOnlyList<DrawingShapeModel>? DrawingShapes");
         cache.Should().Contain("IReadOnlyList<TextBoxModel>? TextBoxes");
