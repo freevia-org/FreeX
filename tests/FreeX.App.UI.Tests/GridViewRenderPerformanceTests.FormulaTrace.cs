@@ -1,0 +1,142 @@
+using System;
+using System.IO;
+using System.Reflection;
+using FreeX.App.UI;
+using FreeX.Core.Model;
+using FluentAssertions;
+using System.Windows;
+
+namespace FreeX.App.UI.Tests;
+
+public sealed partial class GridViewRenderPerformanceTests
+{
+    [Fact]
+    public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var renderManualPageBreaks = source[
+            source.IndexOf("private void RenderManualPageBreaks", StringComparison.Ordinal)..
+            source.IndexOf("public enum FormulaTraceArrowLayoutKind", StringComparison.Ordinal)];
+
+        renderManualPageBreaks.Should().Contain("GetPageBreakLookup(rowPageBreaks, ref _rowPageBreakLookupCache)");
+        renderManualPageBreaks.Should().Contain("GetPageBreakLookup(columnPageBreaks, ref _columnPageBreakLookupCache)");
+        renderManualPageBreaks.Should().Contain("pageBreaks is IReadOnlySet<uint> set");
+        renderManualPageBreaks.Should().Contain("CalculatePageBreakFingerprint(pageBreaks)");
+        renderManualPageBreaks.Should().Contain("cache.Fingerprint == fingerprint");
+        renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.RowMetrics)");
+        renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.ColMetrics)");
+        renderManualPageBreaks.Should().NotContain("FirstOrDefault");
+        gridViewSource.Should().Contain("private PageBreakLookupCache? _rowPageBreakLookupCache;");
+        propertiesSource.Should().Contain("OnRowPageBreaksChanged");
+        propertiesSource.Should().Contain("OnColumnPageBreaksChanged");
+    }
+
+    [Fact]
+    public void FormulaTraceLayoutPlanner_AvoidsPerArrowLinqMetricScansAndLookupAllocations()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "FormulaTraceLayoutPlanner.cs"));
+        var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var calculateLayouts = source[
+            source.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateLayouts", StringComparison.Ordinal)..
+            source.IndexOf("public static void VisitLayouts<TConsumer>", StringComparison.Ordinal)];
+        var visitLayouts = source[
+            source.IndexOf("public static void VisitLayouts<TConsumer>", StringComparison.Ordinal)..
+            source.IndexOf("public static CellAddress? HitTestMarker", StringComparison.Ordinal)];
+        var metricLookup = source[
+            source.IndexOf("private readonly struct FormulaTraceMetricLookup", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryGetMarkerHit", StringComparison.Ordinal)];
+        var renderFormulaTrace = overlaysSource[
+            overlaysSource.IndexOf("private void RenderFormulaTraceArrows", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateFormulaTraceArrowLayouts", StringComparison.Ordinal)];
+
+        source.Should().Contain("public interface IFormulaTraceArrowLayoutConsumer");
+        calculateLayouts.Should().Contain("var consumer = new FormulaTraceArrowLayoutCollector(arrows.Count);");
+        calculateLayouts.Should().Contain("VisitLayouts(viewport, arrows, sheetId, ref consumer);");
+        visitLayouts.Should().Contain("where TConsumer : struct, IFormulaTraceArrowLayoutConsumer");
+        visitLayouts.Should().Contain("var metrics = new FormulaTraceMetricLookup(viewport, GridView.CalculateRowHeaderWidth(viewport));");
+        visitLayouts.Should().Contain("metrics.TryGetCellRect");
+        visitLayouts.Should().Contain("consumer.AcceptLayout(");
+        visitLayouts.Should().NotContain("new List<FormulaTraceArrowLayout>");
+        visitLayouts.Should().NotContain("new FormulaTraceArrowLayout");
+        source.Should().NotContain("Dictionary<");
+        source.Should().NotContain("BuildRowMetricLookup");
+        source.Should().NotContain("BuildColMetricLookup");
+        metricLookup.Should().Contain("_rowArray = _rows as RowMetric[];");
+        metricLookup.Should().Contain("_rowList = _rows as List<RowMetric>;");
+        metricLookup.Should().Contain("_colArray = _columns as ColMetric[];");
+        metricLookup.Should().Contain("_colList = _columns as List<ColMetric>;");
+        renderFormulaTrace.Should().Contain("FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, FormulaTraceSheetId, ref consumer);");
+        renderFormulaTrace.Should().NotContain("CalculateFormulaTraceArrowLayouts");
+        renderFormulaTrace.Should().NotContain("foreach");
+        overlaysSource.Should().Contain("private readonly struct FormulaTraceArrowDrawingConsumer");
+        metricLookup.Should().Contain("var row = FindRowMetric(address.Row);");
+        metricLookup.Should().Contain("var col = FindColMetric(address.Col);");
+        metricLookup.Should().Contain("_firstRow = _hasRows ? _rows[0].Row : 0;");
+        metricLookup.Should().Contain("_lastRow = _hasRows ? _rows[^1].Row : 0;");
+        metricLookup.Should().Contain("_firstCol = _hasColumns ? _columns[0].Col : 0;");
+        metricLookup.Should().Contain("_lastCol = _hasColumns ? _columns[^1].Col : 0;");
+        metricLookup.Should().Contain("row < _firstRow || row > _lastRow");
+        metricLookup.Should().Contain("col < _firstCol || col > _lastCol");
+        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindRowMetric(_rowArray, row, _firstRow)");
+        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindColMetric(_colArray, col, _firstCol)");
+        metricLookup.Should().NotContain("TryGetValue");
+        metricLookup.Should().NotContain("FirstOrDefault");
+        source.Should().Contain("private static RowMetric? FindRowMetric");
+        source.Should().Contain("private static ColMetric? FindColMetric");
+        source.Should().Contain("var index = row - firstRow;");
+        source.Should().Contain("var index = col - firstCol;");
+        source.Should().Contain("while (low <= high)");
+    }
+
+    [Fact]
+    public void DrawFormulaTraceArrow_ReusesCachedFrozenArrowDrawingsAndArrowHeadGeometry()
+    {
+        var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var drawFormulaTraceArrow = overlaysSource[
+            overlaysSource.IndexOf("private void DrawFormulaTraceArrow", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private Drawing GetFormulaTraceArrowDrawing", StringComparison.Ordinal)];
+        var getArrowDrawing = overlaysSource[
+            overlaysSource.IndexOf("private Drawing GetFormulaTraceArrowDrawing", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private Drawing CreateFormulaTraceArrowDrawing", StringComparison.Ordinal)];
+        var createArrowDrawing = overlaysSource[
+            overlaysSource.IndexOf("private Drawing CreateFormulaTraceArrowDrawing", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private Geometry GetFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)];
+        var getArrowHeadGeometry = overlaysSource[
+            overlaysSource.IndexOf("private Geometry GetFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private static Geometry CreateFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)];
+        var createArrowHeadGeometry = overlaysSource[
+            overlaysSource.IndexOf("private static Geometry CreateFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private void ClearFormulaTraceArrowHeadGeometryCache", StringComparison.Ordinal)];
+
+        overlaysSource.Should().Contain("private const int FormulaTraceArrowHeadGeometryCacheLimit = 4096;");
+        overlaysSource.Should().Contain("private const int FormulaTraceArrowDrawingCacheLimit = 4096;");
+        overlaysSource.Should().Contain("private readonly Dictionary<FormulaTraceArrowHeadGeometryKey, Geometry> _formulaTraceArrowHeadGeometryCache = new();");
+        overlaysSource.Should().Contain("private readonly Dictionary<FormulaTraceArrowDrawingKey, Drawing> _formulaTraceArrowDrawingCache = new();");
+        overlaysSource.Should().Contain("private readonly record struct FormulaTraceArrowHeadGeometryKey(Point Start, Point End);");
+        overlaysSource.Should().Contain("private readonly record struct FormulaTraceArrowDrawingKey(Point Start, Point End);");
+        drawFormulaTraceArrow.Should().Contain("GetFormulaTraceArrowDrawing(start, end)");
+        drawFormulaTraceArrow.Should().NotContain("CreateFormulaTraceArrowHeadGeometry");
+        getArrowDrawing.Should().Contain("_formulaTraceArrowDrawingCache.TryGetValue(key, out var cached)");
+        getArrowDrawing.Should().Contain("_formulaTraceArrowDrawingCache.Count >= FormulaTraceArrowDrawingCacheLimit");
+        getArrowDrawing.Should().Contain("_formulaTraceArrowDrawingCache.Clear();");
+        getArrowDrawing.Should().Contain("_formulaTraceArrowDrawingCache.Add(key, drawing);");
+        createArrowDrawing.Should().Contain("new DrawingGroup()");
+        createArrowDrawing.Should().Contain("GetFormulaTraceArrowHeadGeometry(start, end, vector, perpendicular)");
+        createArrowDrawing.Should().Contain("drawing.Freeze();");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.TryGetValue(key, out var cached)");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Count >= FormulaTraceArrowHeadGeometryCacheLimit");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Clear();");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Add(key, geometry);");
+        createArrowHeadGeometry.Should().Contain("new StreamGeometry()");
+        createArrowHeadGeometry.Should().Contain("geometry.Freeze();");
+        overlaysSource.Should().Contain("_formulaTraceArrowHeadGeometryCache.Clear();");
+        overlaysSource.Should().Contain("_formulaTraceArrowDrawingCache.Clear();");
+        propertiesSource.Should().Contain("OnFormulaTraceRenderCacheInputChanged");
+        propertiesSource.Should().Contain("grid.ClearFormulaTraceArrowHeadGeometryCache();");
+        propertiesSource.Should().Contain("FormulaTraceArrowsProperty");
+        propertiesSource.Should().Contain("FormulaTraceSheetIdProperty");
+    }
+}
