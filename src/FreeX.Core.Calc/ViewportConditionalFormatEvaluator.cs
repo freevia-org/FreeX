@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -21,7 +22,8 @@ internal sealed record CfEvaluationContext(
     Dictionary<ConditionalFormat, CfColorScaleThresholdCache> ColorScaleThresholds,
     Dictionary<ConditionalFormat, CfIconSetThresholdCache> IconSetThresholds,
     Dictionary<ConditionalFormat, CellStyle> DefaultMergedFormatStyles,
-    CfColorScaleStyleCache? ColorScaleStyles);
+    CfColorScaleStyleCache? ColorScaleStyles,
+    CfStackedStyleCache? StackedStyles);
 
 internal sealed record CfColorScaleThresholdCache(double Min, double Max, double? Mid);
 internal sealed record CfIconSetThresholdCache(double[] Values, bool[] GreaterThanOrEqual);
@@ -39,6 +41,47 @@ internal sealed class CfColorScaleStyleCache
         (_styles ??= new Dictionary<CellColor, CellStyle>(128)).Add(fillColor, style);
         return style;
     }
+}
+
+internal sealed class CfStackedStyleCache
+{
+    private Dictionary<CfStackedStyleKey, CellStyle>? _styles;
+
+    public bool TryGet(CellStyle accumulatedStyle, CellStyle cfStyle, out CellStyle stackedStyle)
+    {
+        stackedStyle = null!;
+        return _styles is not null &&
+               _styles.TryGetValue(new CfStackedStyleKey(accumulatedStyle, cfStyle), out stackedStyle!);
+    }
+
+    public void Add(CellStyle accumulatedStyle, CellStyle cfStyle, CellStyle stackedStyle)
+    {
+        (_styles ??= new Dictionary<CfStackedStyleKey, CellStyle>(8))
+            .Add(new CfStackedStyleKey(accumulatedStyle, cfStyle), stackedStyle);
+    }
+}
+
+internal readonly struct CfStackedStyleKey : IEquatable<CfStackedStyleKey>
+{
+    private readonly CellStyle _accumulatedStyle;
+    private readonly CellStyle _cfStyle;
+
+    public CfStackedStyleKey(CellStyle accumulatedStyle, CellStyle cfStyle)
+    {
+        _accumulatedStyle = accumulatedStyle;
+        _cfStyle = cfStyle;
+    }
+
+    public bool Equals(CfStackedStyleKey other) =>
+        ReferenceEquals(_accumulatedStyle, other._accumulatedStyle) &&
+        ReferenceEquals(_cfStyle, other._cfStyle);
+
+    public override bool Equals(object? obj) => obj is CfStackedStyleKey other && Equals(other);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            RuntimeHelpers.GetHashCode(_accumulatedStyle),
+            RuntimeHelpers.GetHashCode(_cfStyle));
 }
 
 internal sealed record CfFormulaCache(
@@ -107,6 +150,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         EmptyColorScaleThresholds,
         EmptyIconSetThresholds,
         EmptyDefaultMergedFormatStyles,
+        null,
         null);
 
     public static CfEvaluationContext BuildContext(Sheet sheet, Workbook workbook)
@@ -130,7 +174,8 @@ internal static partial class ViewportConditionalFormatEvaluator
             PrecomputeColorScaleThresholdCaches(sheet, aggregates, staticThresholdFormulaValues),
             PrecomputeIconSetThresholdCaches(sheet, aggregates, staticThresholdFormulaValues),
             PrecomputeDefaultMergedFormatStyles(rulesByPriority),
-            CreateColorScaleStyleCache(rulesByPriority));
+            CreateColorScaleStyleCache(rulesByPriority),
+            CreateStackedStyleCache(rulesByPriority));
     }
 
     private static CfColorScaleStyleCache? CreateColorScaleStyleCache(IReadOnlyList<ConditionalFormat> rulesByPriority)
@@ -143,6 +188,26 @@ internal static partial class ViewportConditionalFormatEvaluator
 
         return null;
     }
+
+    private static CfStackedStyleCache? CreateStackedStyleCache(IReadOnlyList<ConditionalFormat> rulesByPriority)
+    {
+        var styleRuleCount = 0;
+        for (var i = 0; i < rulesByPriority.Count; i++)
+        {
+            if (!CanProduceConditionalStyle(rulesByPriority[i]))
+                continue;
+
+            styleRuleCount++;
+            if (styleRuleCount > 1)
+                return new CfStackedStyleCache();
+        }
+
+        return null;
+    }
+
+    private static bool CanProduceConditionalStyle(ConditionalFormat rule) =>
+        rule.RuleType != CfRuleType.IconSet &&
+        (rule.RuleType is CfRuleType.ColorScale or CfRuleType.DataBar || rule.FormatIfTrue is not null);
 
     private static ConditionalFormat[] CopyRulesByPriority(IReadOnlyList<ConditionalFormat> rules)
     {
@@ -264,7 +329,7 @@ internal static partial class ViewportConditionalFormatEvaluator
                 result = result is null
                     ? styleResult
                     : new CfStyleResult(
-                        StackDifferentialStyle(result.Value.Style, styleResult.Style),
+                        GetStackedDifferentialStyle(cfContext, result.Value.Style, styleResult.Style),
                         CanUseAsDefaultMergedStyle: true);
             }
 
@@ -273,6 +338,22 @@ internal static partial class ViewportConditionalFormatEvaluator
         }
 
         return result;
+    }
+
+    private static CellStyle GetStackedDifferentialStyle(
+        CfEvaluationContext cfContext,
+        CellStyle accumulatedStyle,
+        CellStyle cfStyle)
+    {
+        if (cfContext.StackedStyles is null)
+            return StackDifferentialStyle(accumulatedStyle, cfStyle);
+
+        if (cfContext.StackedStyles.TryGet(accumulatedStyle, cfStyle, out var cached))
+            return cached;
+
+        var stacked = StackDifferentialStyle(accumulatedStyle, cfStyle);
+        cfContext.StackedStyles.Add(accumulatedStyle, cfStyle, stacked);
+        return stacked;
     }
 
     private static Dictionary<ConditionalFormat, CellStyle> PrecomputeDefaultMergedFormatStyles(
