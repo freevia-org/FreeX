@@ -51,12 +51,41 @@ public sealed class XlsxWorksheetIgnoredErrorsPerformanceTests
     }
 
     [Fact]
+    public void Save_CoalescesOutOfOrderIgnoredErrorsAfterSortingPrimitiveCoordinates()
+    {
+        var workbook = new Workbook("Ignored error out-of-order coalescing");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("B1"));
+        sheet.GetCell(1, 2)!.IgnoreFormulaError = true;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredError = worksheetXml.Root!
+            .Element(worksheetNs + "ignoredErrors")!
+            .Elements(worksheetNs + "ignoredError")
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        ignoredError.Attribute("sqref")!.Value.Should().Be("A1:B1");
+    }
+
+    [Fact]
     public void SaveIgnoredErrors_BuildsRectangularRunsWithoutAddressListOrLinqFlagScan()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxWorksheetDiagnosticsMapper.IgnoredErrors.cs"));
 
         source.Should().Contain("new List<(uint Row, uint Col)>(ignoredCellCount)");
+        source.Should().Contain("ignoredCellsAreRowMajor");
+        source.Should().Contain("if (!ignoredCellsAreRowMajor)");
         source.Should().Contain("AddMergedIgnoredErrorRun(runs, currentRun)");
         source.Should().Contain("previous.EndRow + 1 == run.StartRow");
         source.Should().NotContain(
