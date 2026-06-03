@@ -18,6 +18,7 @@ return ExcelOpenSmoke.Run(args);
 internal static class ExcelOpenSmoke
 {
     private const uint ExcelOpenRejectedHResult = 0x800A03ECu;
+    private const int ExcelCellTypeFormulas = -4123;
 
     public static int Run(string[] args)
     {
@@ -105,7 +106,7 @@ internal static class ExcelOpenSmoke
                     WorkbookValidationWorkflow.FreeXSaveThenExcel,
                     "Excel-authored fixture",
                     GenerateWithExcel: true,
-                    Expectations: PivotTableExpectations(options.SaveReopen, expectFreeXPreSave: true)));
+                    Expectations: ExcelAuthoredFixtureExpectations(options.SaveReopen)));
             }
 
             if (smokeInputs.Count == 0)
@@ -413,34 +414,62 @@ internal static class ExcelOpenSmoke
             worksheets = ((dynamic)workbook).Worksheets;
             var worksheetCount = Convert.ToInt32(((dynamic)worksheets).Count, CultureInfo.InvariantCulture);
             var shapeCount = 0;
+            var formulaCellCount = 0;
+            var structuredTableCount = 0;
             var pivotTableCount = 0;
 
             for (var index = 1; index <= worksheetCount; index++)
             {
                 object? worksheet = null;
                 object? shapes = null;
+                object? listObjects = null;
                 object? pivotTables = null;
                 try
                 {
                     worksheet = ((dynamic)worksheets)[index];
                     shapes = ((dynamic)worksheet).Shapes;
                     shapeCount += Convert.ToInt32(((dynamic)shapes).Count, CultureInfo.InvariantCulture);
+                    formulaCellCount += CountWorksheetFormulaCells(worksheet);
+                    listObjects = ((dynamic)worksheet).ListObjects;
+                    structuredTableCount += Convert.ToInt32(((dynamic)listObjects).Count, CultureInfo.InvariantCulture);
                     pivotTables = ((dynamic)worksheet).PivotTables();
                     pivotTableCount += Convert.ToInt32(((dynamic)pivotTables).Count, CultureInfo.InvariantCulture);
                 }
                 finally
                 {
                     ReleaseComObject(pivotTables);
+                    ReleaseComObject(listObjects);
                     ReleaseComObject(shapes);
                     ReleaseComObject(worksheet);
                 }
             }
 
-            return new ExcelWorkbookSummary(worksheetCount, shapeCount, pivotTableCount);
+            return new ExcelWorkbookSummary(worksheetCount, shapeCount, formulaCellCount, structuredTableCount, pivotTableCount);
         }
         finally
         {
             ReleaseComObject(worksheets);
+        }
+    }
+
+    private static int CountWorksheetFormulaCells(object worksheet)
+    {
+        object? usedRange = null;
+        object? formulaCells = null;
+        try
+        {
+            usedRange = ((dynamic)worksheet).UsedRange;
+            formulaCells = ((dynamic)usedRange).SpecialCells(ExcelCellTypeFormulas);
+            return Convert.ToInt32(((dynamic)formulaCells).Count, CultureInfo.InvariantCulture);
+        }
+        catch (COMException ex) when ((uint)ex.HResult == ExcelOpenRejectedHResult)
+        {
+            return 0;
+        }
+        finally
+        {
+            ReleaseComObject(formulaCells);
+            ReleaseComObject(usedRange);
         }
     }
 
@@ -575,13 +604,56 @@ internal static class ExcelOpenSmoke
         WorkbookValidationWorkflow workflow)
     {
         var fileName = Path.GetFileName(generatedFile);
-        if (!fileName.Contains("pivots", StringComparison.OrdinalIgnoreCase))
-            return null;
+        var expectFreeXPreSave = workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel;
 
-        return PivotTableExpectations(
-            saveReopen,
-            expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel);
+        if (fileName.Contains("grid_formulas", StringComparison.OrdinalIgnoreCase))
+            return FormulaExpectations(saveReopen, expectFreeXPreSave, minFormulaCells: 4);
+
+        if (fileName.Contains("tables", StringComparison.OrdinalIgnoreCase))
+            return StructuredTableExpectations(saveReopen, expectFreeXPreSave, minStructuredTables: 1);
+
+        if (fileName.Contains("pivots", StringComparison.OrdinalIgnoreCase))
+            return PivotTableExpectations(saveReopen, expectFreeXPreSave);
+
+        return null;
     }
+
+    private static WorkbookSmokeExpectations ExcelAuthoredFixtureExpectations(bool saveReopen) =>
+        new(
+            MinFreeXPreSaveFormulaCells: 1,
+            MinFreeXPreSaveStructuredTables: 1,
+            MinExcelOpenedFormulaCells: 1,
+            MinExcelOpenedStructuredTables: 1,
+            MinExcelReopenedFormulaCells: saveReopen ? 1 : 0,
+            MinExcelReopenedStructuredTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedFormulaCells: saveReopen ? 1 : 0,
+            MinFreeXReopenedStructuredTables: saveReopen ? 1 : 0,
+            MinFreeXPreSavePivotTables: 1,
+            MinFreeXPreSavePivotCaches: 1,
+            MinExcelOpenedPivotTables: 1,
+            MinExcelReopenedPivotTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedPivotTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedPivotCaches: saveReopen ? 1 : 0);
+
+    private static WorkbookSmokeExpectations FormulaExpectations(
+        bool saveReopen,
+        bool expectFreeXPreSave,
+        int minFormulaCells) =>
+        new(
+            MinFreeXPreSaveFormulaCells: expectFreeXPreSave ? minFormulaCells : 0,
+            MinExcelOpenedFormulaCells: minFormulaCells,
+            MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
+            MinFreeXReopenedFormulaCells: saveReopen ? minFormulaCells : 0);
+
+    private static WorkbookSmokeExpectations StructuredTableExpectations(
+        bool saveReopen,
+        bool expectFreeXPreSave,
+        int minStructuredTables) =>
+        new(
+            MinFreeXPreSaveStructuredTables: expectFreeXPreSave ? minStructuredTables : 0,
+            MinExcelOpenedStructuredTables: minStructuredTables,
+            MinExcelReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
+            MinFreeXReopenedStructuredTables: saveReopen ? minStructuredTables : 0);
 
     private static WorkbookSmokeExpectations PivotTableExpectations(bool saveReopen, bool expectFreeXPreSave) =>
         new(
@@ -603,6 +675,46 @@ internal static class ExcelOpenSmoke
         if (expectations is null)
             return;
 
+        AssertMin(
+            "FreeX source load formula cells",
+            freeXPreSave?.FormulaCellCount,
+            expectations.MinFreeXPreSaveFormulaCells,
+            input);
+        AssertMin(
+            "FreeX source load structured tables",
+            freeXPreSave?.StructuredTableCount,
+            expectations.MinFreeXPreSaveStructuredTables,
+            input);
+        AssertMin(
+            "Excel open formula cells",
+            opened.FormulaCellCount,
+            expectations.MinExcelOpenedFormulaCells,
+            input);
+        AssertMin(
+            "Excel open structured tables",
+            opened.StructuredTableCount,
+            expectations.MinExcelOpenedStructuredTables,
+            input);
+        AssertMin(
+            "Excel reopen formula cells",
+            reopened?.FormulaCellCount,
+            expectations.MinExcelReopenedFormulaCells,
+            input);
+        AssertMin(
+            "Excel reopen structured tables",
+            reopened?.StructuredTableCount,
+            expectations.MinExcelReopenedStructuredTables,
+            input);
+        AssertMin(
+            "FreeX reopened Excel save formula cells",
+            freeXReopenedExcelSave?.FormulaCellCount,
+            expectations.MinFreeXReopenedFormulaCells,
+            input);
+        AssertMin(
+            "FreeX reopened Excel save structured tables",
+            freeXReopenedExcelSave?.StructuredTableCount,
+            expectations.MinFreeXReopenedStructuredTables,
+            input);
         AssertMin(
             "FreeX source load pivot tables",
             freeXPreSave?.PivotTableCount,
@@ -680,9 +792,15 @@ internal static class ExcelOpenSmoke
         }
 
         if (result.Opened is { } opened)
-            Console.WriteLine($"  Excel open: worksheets {opened.WorksheetCount}; worksheet shapes {opened.ShapeCount}; pivots {opened.PivotTableCount}");
+        {
+            Console.WriteLine(
+                $"  Excel open: worksheets {opened.WorksheetCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; worksheet shapes {opened.ShapeCount}; pivots {opened.PivotTableCount}");
+        }
         if (result.Reopened is { } reopened)
-            Console.WriteLine($"  Excel reopen: worksheets {reopened.WorksheetCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
+        {
+            Console.WriteLine(
+                $"  Excel reopen: worksheets {reopened.WorksheetCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
+        }
         if (result.FreeXReopenedExcelSave is { } freeXReopened)
         {
             Console.WriteLine(

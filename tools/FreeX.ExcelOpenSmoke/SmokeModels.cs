@@ -13,6 +13,14 @@ internal sealed record WorkbookSmokeInput(
     WorkbookSmokeExpectations? Expectations = null);
 
 internal sealed record WorkbookSmokeExpectations(
+    int MinFreeXPreSaveFormulaCells = 0,
+    int MinFreeXPreSaveStructuredTables = 0,
+    int MinExcelOpenedFormulaCells = 0,
+    int MinExcelOpenedStructuredTables = 0,
+    int MinExcelReopenedFormulaCells = 0,
+    int MinExcelReopenedStructuredTables = 0,
+    int MinFreeXReopenedFormulaCells = 0,
+    int MinFreeXReopenedStructuredTables = 0,
     int MinFreeXPreSavePivotTables = 0,
     int MinFreeXPreSavePivotCaches = 0,
     int MinExcelOpenedPivotTables = 0,
@@ -57,7 +65,12 @@ internal sealed record WorkbookSmokeResult(
         new(false, input, null, freeXSavedPath, null, null, null, null, null, error);
 }
 
-internal sealed record ExcelWorkbookSummary(int WorksheetCount, int ShapeCount, int PivotTableCount);
+internal sealed record ExcelWorkbookSummary(
+    int WorksheetCount,
+    int ShapeCount,
+    int FormulaCellCount,
+    int StructuredTableCount,
+    int PivotTableCount);
 internal sealed record FreeXWorkbookSummary(
     int SheetCount,
     int CellCount,
