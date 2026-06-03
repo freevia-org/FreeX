@@ -227,7 +227,7 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("Margin=\"0\"");
         xaml.Should().Contain("Padding=\"12,5,12,1\"");
         xaml.Should().NotContain("<TranslateTransform Y=\"-2\"/>");
-        xamlCodeBehind.Should().Contain("private const double SheetTabGridRuleTop = 1.0;");
+        xamlCodeBehind.Should().Contain("private const double SheetTabGridRuleTop = 0.5;");
         source.Should().Contain("elementBounds.Width + leftOverlap, 30");
         source.Should().Contain("SheetTabInactiveStrokeBrush");
         source.Should().Contain("new Rect(left, -4, Math.Max(0, right - left), 38)");
