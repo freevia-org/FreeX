@@ -107,12 +107,7 @@ public partial class App : Application
         services.AddSingleton<IFileAdapter, NativeJsonAdapter>();
 
         // Workbook (single workbook for now, will expand later)
-        services.AddSingleton(sp =>
-        {
-            var workbook = new Workbook("Book1");
-            workbook.AddSheet("Sheet1");
-            return workbook;
-        });
+        services.AddSingleton(_ => NewWorkbookFactory.Create(options.DefaultSheetCount));
 
         // Mutable reference wrapper — updated whenever a new file is loaded.
         services.AddSingleton(sp =>
