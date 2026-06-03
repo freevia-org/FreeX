@@ -170,13 +170,13 @@ public partial class MainWindow
                 SheetGrid.Viewport,
                 SheetGrid.ActualWidth,
                 SheetGrid.ActualHeight);
-            if (chrome.HorizontalTopRight is null)
+            if (chrome.HorizontalTopRight is not { } horizontalTopRightScrollbar)
                 return false;
             var current = _splitPaneViewportOffsets.TryGetValue(_currentSheetId, out var offsets)
                 ? offsets.TopRightLeftCol
                 : null;
             var target = FreeX.App.UI.GridView.CalculateSplitPaneScrollbarWheelTarget(
-                chrome.HorizontalTopRight,
+                horizontalTopRightScrollbar,
                 current ?? Math.Max(1, (uint)HorizontalScroll.Value),
                 notches);
             _splitPaneViewportOffsets[_currentSheetId] = (offsets ?? new SplitPaneViewportOffsets()) with { TopRightLeftCol = target.Index };
@@ -190,13 +190,13 @@ public partial class MainWindow
                 SheetGrid.Viewport,
                 SheetGrid.ActualWidth,
                 SheetGrid.ActualHeight);
-            if (chrome.VerticalBottomLeft is null)
+            if (chrome.VerticalBottomLeft is not { } verticalBottomLeftScrollbar)
                 return false;
             var current = _splitPaneViewportOffsets.TryGetValue(_currentSheetId, out var offsets)
                 ? offsets.BottomLeftTopRow
                 : null;
             var target = FreeX.App.UI.GridView.CalculateSplitPaneScrollbarWheelTarget(
-                chrome.VerticalBottomLeft,
+                verticalBottomLeftScrollbar,
                 current ?? Math.Max(1, (uint)VerticalScroll.Value),
                 notches);
             _splitPaneViewportOffsets[_currentSheetId] = (offsets ?? new SplitPaneViewportOffsets()) with { BottomLeftTopRow = target.Index };
