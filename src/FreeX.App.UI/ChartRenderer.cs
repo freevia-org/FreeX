@@ -74,7 +74,8 @@ public static partial class ChartRenderer
         uint dataStartRow = chart.FirstRowIsHeader ? startRow + 1 : startRow;
         uint dataStartCol = chart.FirstColIsCategories ? startCol + 1 : startCol;
 
-        var categories = new List<string>();
+        var dataPointCapacity = GetDataPointCapacity(dataStartRow, endRow);
+        var categories = new List<string>(chart.FirstColIsCategories ? dataPointCapacity : 0);
         if (chart.FirstColIsCategories)
             for (uint r = dataStartRow; r <= endRow; r++)
                 categories.Add(cellLookup.TryGetValue((r, startCol), out var c) ? c.DisplayText : "");
@@ -113,7 +114,7 @@ public static partial class ChartRenderer
             var pieFormat = GetSeriesFormat(chart, 0);
             ApplyPieFormat(pieSeries, pieFormat, theme);
             ApplyPieDataLabelStyle(pieSeries, chart, theme);
-            var pieLabelPoints = new List<PieDataLabelPoint>();
+            var pieLabelPoints = new List<PieDataLabelPoint>(dataPointCapacity);
             for (uint r = dataStartRow; r <= endRow; r++)
             {
                 if (!cellLookup.TryGetValue((r, dataStartCol), out var cell)) continue;
@@ -436,7 +437,8 @@ public static partial class ChartRenderer
 
     private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup(ChartModel chart, ViewportModel viewport)
     {
-        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>();
+        var capacity = viewport.Cells.Count + (viewport.ChartDataCells?.Count ?? 0);
+        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>(capacity);
         if (viewport.ChartDataCells is { Count: > 0 })
         {
             var sheetId = chart.DataRange.Start.Sheet;
@@ -460,6 +462,15 @@ public static partial class ChartRenderer
             lookup.TryAdd((cell.Row, cell.Col), cell);
 
         return lookup;
+    }
+
+    private static int GetDataPointCapacity(uint dataStartRow, uint endRow)
+    {
+        if (endRow < dataStartRow)
+            return 0;
+
+        var count = endRow - dataStartRow + 1;
+        return count > int.MaxValue ? int.MaxValue : (int)count;
     }
 
     private static bool TryGetChartNumericValue(DisplayCell cell, out double value)

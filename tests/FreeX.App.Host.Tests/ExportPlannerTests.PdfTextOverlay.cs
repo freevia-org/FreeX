@@ -156,10 +156,14 @@ public partial class ExportPlannerTests
                 YAxisTitle = "Sales Axis PDF Text",
                 Left = 24,
                 Top = 24,
-                Width = 300,
+                Width = 380,
                 Height = 210,
                 ShowLegend = true,
                 LegendPosition = ChartLegendPosition.Right,
+                YAxisMinimum = 0,
+                YAxisMaximum = 20,
+                YAxisMajorUnit = 10,
+                YAxisNumberFormat = ChartDataLabelNumberFormat.Currency,
                 ShowDataLabels = true,
                 ShowDataLabelCategoryName = true,
                 ShowDataLabelValue = true
@@ -181,6 +185,7 @@ public partial class ExportPlannerTests
                 pdfText.Should().Contain("Sales Axis PDF Text");
                 pdfText.Should().Contain("PDF Rev");
                 pdfText.Should().Contain("PDF tick Jan");
+                pdfText.Should().Contain("$10.00");
                 pdfText.Should().Contain("PDF tick Jan, 8");
             }
             finally

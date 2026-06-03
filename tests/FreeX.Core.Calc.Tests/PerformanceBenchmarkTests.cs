@@ -726,6 +726,9 @@ public class PerformanceBenchmarkTests
             $"PERF SPARSE_OCCUPIED_VIEWPORT iterations={iterations:N0} total_ms={sw.Elapsed.TotalMilliseconds:F2} " +
             $"allocated_bytes={allocated:N0} bytes_per_iteration={allocated / iterations:N0}");
 
+        (allocated / iterations).Should().BeLessThan(
+            20_000,
+            "default row/column viewport metrics should be exposed lazily instead of allocating one object per visible slot");
         (sw.Elapsed.TotalMilliseconds / iterations).Should().BeLessThan(
             25.0,
             "sparse viewport construction should avoid repeated linear metric scans for every occupied cell");

@@ -9,11 +9,14 @@ namespace FreeX.App.Host;
 public static partial class PrintRenderer
 {
     private const int MaxPrintedChartLegendEntries = 12;
+    private const int MaxPrintedChartValueAxisTickLabels = 6;
     private const int MaxPrintedChartDataLabelOverlays = 80;
 
     private readonly record struct PrintedChartSeries(string Name, int Index, IReadOnlyList<PrintedChartPoint> Points);
 
     private readonly record struct PrintedChartPoint(string Category, int Index, double Value);
+
+    private readonly record struct PrintedChartValueRange(double Minimum, double Maximum);
 
     private static void AddPrintedChartNonTitleTextOverlays(
         ICollection<PdfTextOverlay> textOverlays,
@@ -33,9 +36,14 @@ public static partial class PrintRenderer
             return;
 
         var plotRect = EstimatePrintedChartPlotRect(chart, chartRect);
+        var valueRange = GetPrintedChartValueRange(chart, series);
         AddPrintedChartLegendEntryOverlays(textOverlays, chart, workbookTheme, chartRect, series);
         AddPrintedChartCategoryTickLabelOverlays(textOverlays, chart, workbookTheme, chartRect, plotRect, categories);
-        AddPrintedChartDataLabelOverlays(textOverlays, chart, workbookTheme, plotRect, series);
+        if (valueRange is { } range)
+        {
+            AddPrintedChartValueAxisTickLabelOverlays(textOverlays, chart, workbookTheme, chartRect, plotRect, range);
+            AddPrintedChartDataLabelOverlays(textOverlays, chart, workbookTheme, plotRect, range, series);
+        }
     }
 
     private static bool SupportsPrintedChartNonTitleTextOverlays(ChartType chartType) =>
@@ -205,6 +213,37 @@ public static partial class PrintRenderer
         return new Rect(chartRect.Left + leftReserve, chartRect.Top + topReserve, width, height);
     }
 
+    private static PrintedChartValueRange? GetPrintedChartValueRange(
+        ChartModel chart,
+        IReadOnlyList<PrintedChartSeries> series)
+    {
+        var allValues = series.SelectMany(item => item.Points).Select(point => point.Value).ToList();
+        if (allValues.Count == 0)
+            return null;
+
+        var isHorizontalValueAxis = IsPrintedChartHorizontalBar(chart.Type);
+        var axisMinimum = isHorizontalValueAxis ? chart.XAxisMinimum : chart.YAxisMinimum;
+        var axisMaximum = isHorizontalValueAxis ? chart.XAxisMaximum : chart.YAxisMaximum;
+        var minimum = axisMinimum is { } explicitMinimum && double.IsFinite(explicitMinimum)
+            ? explicitMinimum
+            : Math.Min(0, allValues.Min());
+        var maximum = axisMaximum is { } explicitMaximum && double.IsFinite(explicitMaximum)
+            ? explicitMaximum
+            : Math.Max(0, allValues.Max());
+
+        if (!double.IsFinite(minimum) || !double.IsFinite(maximum))
+            return null;
+        if (maximum < minimum)
+            (minimum, maximum) = (maximum, minimum);
+        if (Math.Abs(maximum - minimum) < 0.000001)
+        {
+            maximum += 1;
+            minimum -= 1;
+        }
+
+        return new PrintedChartValueRange(minimum, maximum);
+    }
+
     private static void AddPrintedChartLegendEntryOverlays(
         ICollection<PdfTextOverlay> textOverlays,
         ChartModel chart,
@@ -275,6 +314,139 @@ public static partial class PrintRenderer
 
     private static bool IsPrintedChartLegendEntryDeleted(ChartModel chart, int index) =>
         chart.LegendEntries.FirstOrDefault(entry => entry.Index == index) is { IsDeleted: true };
+
+    private static void AddPrintedChartValueAxisTickLabelOverlays(
+        ICollection<PdfTextOverlay> textOverlays,
+        ChartModel chart,
+        WorkbookTheme workbookTheme,
+        Rect chartRect,
+        Rect plotRect,
+        PrintedChartValueRange valueRange)
+    {
+        if (IsPrintedChartHorizontalBar(chart.Type))
+            AddPrintedChartHorizontalValueAxisTickLabelOverlays(textOverlays, chart, workbookTheme, plotRect, valueRange);
+        else
+            AddPrintedChartVerticalValueAxisTickLabelOverlays(textOverlays, chart, workbookTheme, chartRect, plotRect, valueRange);
+    }
+
+    private static void AddPrintedChartVerticalValueAxisTickLabelOverlays(
+        ICollection<PdfTextOverlay> textOverlays,
+        ChartModel chart,
+        WorkbookTheme workbookTheme,
+        Rect chartRect,
+        Rect plotRect,
+        PrintedChartValueRange valueRange)
+    {
+        if (chart.HideYAxis || !chart.ShowYAxisLabels || chart.YAxisLogScale)
+            return;
+
+        var fontSize = NormalizePrintedChartFontSize(chart.YAxisLabelFontSize, chart.ChartDefaultFontSize);
+        var color = chart.ResolveYAxisLabelTextColor(workbookTheme) ?? ResolveChartDefaultOverlayColor(chart, workbookTheme);
+        var maxWidth = Math.Max(1, plotRect.Left - chartRect.Left - 8);
+        foreach (var tick in BuildPrintedChartValueTicks(chart, valueRange, useHorizontalAxis: false))
+        {
+            var text = FormatPrintedChartAxisValue(chart.YAxisNumberFormat, tick);
+            var bounded = BoundPrintedChartOverlayText(text, maxWidth, fontSize);
+            if (bounded.Length == 0)
+                continue;
+
+            var textWidth = MeasurePrintedChartText(bounded, fontSize).WidthIncludingTrailingWhitespace;
+            var normalized = NormalizePrintedChartValue(tick, valueRange.Minimum, valueRange.Maximum);
+            if (chart.YAxisReverseOrder)
+                normalized = 1 - normalized;
+
+            textOverlays.Add(CreatePrintedChartTextOverlay(
+                bounded,
+                plotRect.Left - textWidth - 4,
+                plotRect.Bottom - normalized * plotRect.Height - fontSize / 2,
+                fontSize,
+                color,
+                chart.YAxisLabelAngle));
+        }
+    }
+
+    private static void AddPrintedChartHorizontalValueAxisTickLabelOverlays(
+        ICollection<PdfTextOverlay> textOverlays,
+        ChartModel chart,
+        WorkbookTheme workbookTheme,
+        Rect plotRect,
+        PrintedChartValueRange valueRange)
+    {
+        if (chart.HideXAxis || !chart.ShowXAxisLabels || chart.XAxisLogScale)
+            return;
+
+        var ticks = BuildPrintedChartValueTicks(chart, valueRange, useHorizontalAxis: true);
+        if (ticks.Count == 0)
+            return;
+
+        var fontSize = NormalizePrintedChartFontSize(chart.XAxisLabelFontSize, chart.ChartDefaultFontSize);
+        var color = chart.ResolveXAxisLabelTextColor(workbookTheme) ?? ResolveChartDefaultOverlayColor(chart, workbookTheme);
+        var slotWidth = Math.Max(1, plotRect.Width / ticks.Count);
+        foreach (var tick in ticks)
+        {
+            var normalized = NormalizePrintedChartValue(tick, valueRange.Minimum, valueRange.Maximum);
+            if (chart.XAxisReverseOrder)
+                normalized = 1 - normalized;
+
+            AddPrintedChartCenteredOverlay(
+                textOverlays,
+                FormatPrintedChartAxisValue(chart.XAxisNumberFormat, tick),
+                plotRect.Left + normalized * plotRect.Width,
+                plotRect.Bottom + 3,
+                slotWidth,
+                fontSize,
+                color,
+                chart.XAxisLabelAngle);
+        }
+    }
+
+    private static IReadOnlyList<double> BuildPrintedChartValueTicks(
+        ChartModel chart,
+        PrintedChartValueRange valueRange,
+        bool useHorizontalAxis)
+    {
+        var majorUnit = useHorizontalAxis ? chart.XAxisMajorUnit : chart.YAxisMajorUnit;
+        if (majorUnit is { } explicitMajorUnit &&
+            double.IsFinite(explicitMajorUnit) &&
+            explicitMajorUnit > 0.000001)
+        {
+            var ticks = new List<double>();
+            for (var value = valueRange.Minimum;
+                 value <= valueRange.Maximum + 0.000001 && ticks.Count < MaxPrintedChartValueAxisTickLabels;
+                 value += explicitMajorUnit)
+            {
+                ticks.Add(NormalizePrintedChartAxisZero(value));
+            }
+
+            if (ticks.Count == 0 ||
+                (Math.Abs(ticks[^1] - valueRange.Maximum) > 0.000001 &&
+                 ticks.Count < MaxPrintedChartValueAxisTickLabels))
+            {
+                ticks.Add(NormalizePrintedChartAxisZero(valueRange.Maximum));
+            }
+
+            return ticks;
+        }
+
+        var intervalCount = Math.Min(MaxPrintedChartValueAxisTickLabels - 1, 4);
+        var step = (valueRange.Maximum - valueRange.Minimum) / intervalCount;
+        var automaticTicks = new List<double>(intervalCount + 1);
+        for (var i = 0; i <= intervalCount; i++)
+            automaticTicks.Add(NormalizePrintedChartAxisZero(valueRange.Minimum + step * i));
+        return automaticTicks;
+    }
+
+    private static string FormatPrintedChartAxisValue(ChartDataLabelNumberFormat format, double value) =>
+        format switch
+        {
+            ChartDataLabelNumberFormat.Number => value.ToString("0.00", CultureInfo.InvariantCulture),
+            ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", CultureInfo.InvariantCulture),
+            ChartDataLabelNumberFormat.Percent => value.ToString("0%", CultureInfo.InvariantCulture),
+            _ => value.ToString("0.###", CultureInfo.InvariantCulture)
+        };
+
+    private static double NormalizePrintedChartAxisZero(double value) =>
+        Math.Abs(value) < 0.000001 ? 0 : value;
 
     private static void AddPrintedChartCategoryTickLabelOverlays(
         ICollection<PdfTextOverlay> textOverlays,
@@ -360,22 +532,11 @@ public static partial class PrintRenderer
         ChartModel chart,
         WorkbookTheme workbookTheme,
         Rect plotRect,
+        PrintedChartValueRange valueRange,
         IReadOnlyList<PrintedChartSeries> series)
     {
         if (!chart.ShowDataLabels || chart.ShowDataLabelPercentage)
             return;
-
-        var allValues = series.SelectMany(item => item.Points).Select(point => point.Value).ToList();
-        if (allValues.Count == 0)
-            return;
-
-        var min = Math.Min(0, allValues.Min());
-        var max = Math.Max(0, allValues.Max());
-        if (Math.Abs(max - min) < 0.000001)
-        {
-            max += 1;
-            min -= 1;
-        }
 
         var fontSize = NormalizePrintedChartFontSize(chart.DataLabelFontSize, chart.ChartDefaultFontSize);
         var color = chart.ResolveDataLabelTextColor(workbookTheme) ?? ResolveChartDefaultOverlayColor(chart, workbookTheme);
@@ -396,8 +557,8 @@ public static partial class PrintRenderer
                     continue;
 
                 var (x, y) = IsPrintedChartHorizontalBar(chart.Type)
-                    ? GetPrintedChartHorizontalDataLabelPoint(plotRect, point, pointCount, min, max, fontSize)
-                    : GetPrintedChartVerticalDataLabelPoint(plotRect, point, pointCount, min, max, fontSize, offset);
+                    ? GetPrintedChartHorizontalDataLabelPoint(plotRect, point, pointCount, valueRange.Minimum, valueRange.Maximum, fontSize)
+                    : GetPrintedChartVerticalDataLabelPoint(plotRect, point, pointCount, valueRange.Minimum, valueRange.Maximum, fontSize, offset);
 
                 if (!plotRect.Contains(new Point(Math.Clamp(x, plotRect.Left, plotRect.Right), Math.Clamp(y, plotRect.Top, plotRect.Bottom))))
                     continue;

@@ -179,8 +179,8 @@ public class ViewportStyleTests
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.Core.Calc", "ViewportService.Metrics.cs"));
         var frozenMetricHelpers = source[
-            source.IndexOf("private static List<RowMetric> BuildFrozenAwareRowMetrics", StringComparison.Ordinal)..
-            source.IndexOf("private static List<RowMetric> BuildRowMetrics", StringComparison.Ordinal)];
+            source.IndexOf("private static IReadOnlyList<RowMetric> BuildFrozenAwareRowMetrics", StringComparison.Ordinal)..
+            source.IndexOf("private static IReadOnlyList<RowMetric> BuildRowMetrics", StringComparison.Ordinal)];
 
         frozenMetricHelpers.Should().Contain("CombineRowsWithOffset(");
         frozenMetricHelpers.Should().Contain("CombineColumnsWithOffset(");
@@ -194,6 +194,40 @@ public class ViewportStyleTests
         frozenMetricHelpers.Should().NotContain(".Sum(");
         frozenMetricHelpers.Should().NotContain(".Select(");
         frozenMetricHelpers.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
+    public void DefaultViewportMetrics_UseLazyListsBeforeAllocatingMetricObjects()
+    {
+        var metricsSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportService.Metrics.cs"));
+        var viewportSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportService.cs"));
+        var rowMetrics = metricsSource[
+            metricsSource.IndexOf("private static IReadOnlyList<RowMetric> BuildRowMetrics", StringComparison.Ordinal)..
+            metricsSource.IndexOf("private static IReadOnlyList<ColMetric> BuildColMetrics", StringComparison.Ordinal)];
+        var colMetrics = metricsSource[
+            metricsSource.IndexOf("private static IReadOnlyList<ColMetric> BuildColMetrics", StringComparison.Ordinal)..
+            metricsSource.IndexOf("private static IReadOnlyList<RowMetric>? TryCreateDefaultRowMetrics", StringComparison.Ordinal)];
+        var getViewport = viewportSource[
+            viewportSource.IndexOf("public ViewportModel GetViewport", StringComparison.Ordinal)..
+            viewportSource.IndexOf("private static IReadOnlyList<RowMetric> MaterializeRowMetrics", StringComparison.Ordinal)];
+
+        rowMetrics.Should().Contain("TryCreateDefaultRowMetrics(");
+        rowMetrics.IndexOf("TryCreateDefaultRowMetrics", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(rowMetrics.IndexOf("new List<RowMetric>", StringComparison.Ordinal));
+        colMetrics.Should().Contain("TryCreateDefaultColMetrics(");
+        colMetrics.IndexOf("TryCreateDefaultColMetrics", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(colMetrics.IndexOf("new List<ColMetric>", StringComparison.Ordinal));
+        metricsSource.Should().Contain("private sealed class DefaultRowMetricList : IReadOnlyList<RowMetric>");
+        metricsSource.Should().Contain("private sealed class DefaultColMetricList : IReadOnlyList<ColMetric>");
+        getViewport.Should().Contain("MaterializeRowMetrics(rowMetrics)");
+        getViewport.Should().Contain("MaterializeColMetrics(colMetrics)");
+        getViewport.IndexOf("UsedRangeOverlapsVisibleMetrics", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(getViewport.IndexOf("MaterializeRowMetrics(rowMetrics)", StringComparison.Ordinal));
     }
 
     [Fact]

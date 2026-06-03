@@ -109,7 +109,7 @@ public sealed partial class PrintRendererPageSetupTests
     }
 
     [Fact]
-    public void RenderWorksheet_AttachesSelectableLegendTickAndDataLabelOverlaysToPrintedCharts()
+    public void RenderWorksheet_AttachesSelectableLegendTickDataLabelAndValueAxisOverlaysToPrintedCharts()
     {
         StaTestRunner.Run(() =>
         {
@@ -136,10 +136,14 @@ public sealed partial class PrintRendererPageSetupTests
                 XAxisTitle = "Printable chart label axis",
                 Left = 24,
                 Top = 24,
-                Width = 300,
+                Width = 380,
                 Height = 210,
                 ShowLegend = true,
                 LegendPosition = ChartLegendPosition.Right,
+                YAxisMinimum = 0,
+                YAxisMaximum = 20,
+                YAxisMajorUnit = 10,
+                YAxisNumberFormat = ChartDataLabelNumberFormat.Currency,
                 ShowDataLabels = true,
                 ShowDataLabelCategoryName = true,
                 ShowDataLabelValue = true
@@ -154,6 +158,7 @@ public sealed partial class PrintRendererPageSetupTests
 
             overlayTexts.Should().Contain("PDF Rev");
             overlayTexts.Should().Contain("PDF tick Jan");
+            overlayTexts.Should().Contain("$10.00");
             overlayTexts.Should().Contain("PDF tick Jan, 8");
         });
     }
