@@ -186,6 +186,21 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void SaveSourcePackageCompatibilityNormalization_SkipsUnneededWorksheetScans()
+    {
+        var postProcessingSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var normalizerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxExcelCompatibilityNormalizer.cs"));
+
+        postProcessingSource.Should().Contain("CreateExcelCompatibilityNormalizationPlan(sourcePackage, sourceParts, featurePlan)");
+        postProcessingSource.Should().Contain("sourcePackage?.WorksheetsWithPreservableSourceMetadata is null");
+        postProcessingSource.Should().Contain("sourceParts.HasDrawings");
+        postProcessingSource.Should().Contain("featurePlan.HasCellFormulas");
+        normalizerSource.Should().Contain("plan.RequiresWorksheetScan");
+        normalizerSource.Should().Contain("plan.ScanWorksheetFormulaText");
+        normalizerSource.Should().Contain("plan.ScanWorksheetDrawingTargets");
+    }
+
+    [Fact]
     public void Load_FromCallerOwnedMemoryStream_KeepsSourceSnapshotIndependent()
     {
         var package = CreateDenseXlsxPackage();

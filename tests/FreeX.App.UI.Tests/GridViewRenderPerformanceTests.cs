@@ -1210,7 +1210,7 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void FormulaTraceLayoutPlanner_AvoidsPerArrowLinqMetricScans()
+    public void FormulaTraceLayoutPlanner_AvoidsPerArrowLinqMetricScansAndLookupAllocations()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "FormulaTraceLayoutPlanner.cs"));
         var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
@@ -1220,8 +1220,8 @@ public sealed class GridViewRenderPerformanceTests
         var visitLayouts = source[
             source.IndexOf("public static void VisitLayouts<TConsumer>", StringComparison.Ordinal)..
             source.IndexOf("public static CellAddress? HitTestMarker", StringComparison.Ordinal)];
-        var tryGetCellRect = source[
-            source.IndexOf("private static bool TryGetCellRect", StringComparison.Ordinal)..
+        var metricLookup = source[
+            source.IndexOf("private readonly struct FormulaTraceMetricLookup", StringComparison.Ordinal)..
             source.IndexOf("private static bool TryGetMarkerHit", StringComparison.Ordinal)];
         var renderFormulaTrace = overlaysSource[
             overlaysSource.IndexOf("private void RenderFormulaTraceArrows", StringComparison.Ordinal)..
@@ -1231,18 +1231,39 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("var consumer = new FormulaTraceArrowLayoutCollector(arrows.Count);");
         calculateLayouts.Should().Contain("VisitLayouts(viewport, arrows, sheetId, ref consumer);");
         visitLayouts.Should().Contain("where TConsumer : struct, IFormulaTraceArrowLayoutConsumer");
+        visitLayouts.Should().Contain("var metrics = new FormulaTraceMetricLookup(viewport, GridView.CalculateRowHeaderWidth(viewport));");
+        visitLayouts.Should().Contain("metrics.TryGetCellRect");
         visitLayouts.Should().Contain("consumer.AcceptLayout(");
         visitLayouts.Should().NotContain("new List<FormulaTraceArrowLayout>");
         visitLayouts.Should().NotContain("new FormulaTraceArrowLayout");
+        source.Should().NotContain("Dictionary<");
+        source.Should().NotContain("BuildRowMetricLookup");
+        source.Should().NotContain("BuildColMetricLookup");
+        metricLookup.Should().Contain("_rowArray = _rows as RowMetric[];");
+        metricLookup.Should().Contain("_rowList = _rows as List<RowMetric>;");
+        metricLookup.Should().Contain("_colArray = _columns as ColMetric[];");
+        metricLookup.Should().Contain("_colList = _columns as List<ColMetric>;");
         renderFormulaTrace.Should().Contain("FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, FormulaTraceSheetId, ref consumer);");
         renderFormulaTrace.Should().NotContain("CalculateFormulaTraceArrowLayouts");
         renderFormulaTrace.Should().NotContain("foreach");
         overlaysSource.Should().Contain("private readonly struct FormulaTraceArrowDrawingConsumer");
-        tryGetCellRect.Should().Contain("FindRowMetric(viewport.RowMetrics, address.Row)");
-        tryGetCellRect.Should().Contain("FindColMetric(viewport.ColMetrics, address.Col)");
-        tryGetCellRect.Should().NotContain("FirstOrDefault");
+        metricLookup.Should().Contain("var row = FindRowMetric(address.Row);");
+        metricLookup.Should().Contain("var col = FindColMetric(address.Col);");
+        metricLookup.Should().Contain("_firstRow = _hasRows ? _rows[0].Row : 0;");
+        metricLookup.Should().Contain("_lastRow = _hasRows ? _rows[^1].Row : 0;");
+        metricLookup.Should().Contain("_firstCol = _hasColumns ? _columns[0].Col : 0;");
+        metricLookup.Should().Contain("_lastCol = _hasColumns ? _columns[^1].Col : 0;");
+        metricLookup.Should().Contain("row < _firstRow || row > _lastRow");
+        metricLookup.Should().Contain("col < _firstCol || col > _lastCol");
+        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindRowMetric(_rowArray, row, _firstRow)");
+        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindColMetric(_colArray, col, _firstCol)");
+        metricLookup.Should().NotContain("TryGetValue");
+        metricLookup.Should().NotContain("FirstOrDefault");
         source.Should().Contain("private static RowMetric? FindRowMetric");
         source.Should().Contain("private static ColMetric? FindColMetric");
+        source.Should().Contain("var index = row - firstRow;");
+        source.Should().Contain("var index = col - firstCol;");
+        source.Should().Contain("while (low <= high)");
     }
 
     [Fact]
