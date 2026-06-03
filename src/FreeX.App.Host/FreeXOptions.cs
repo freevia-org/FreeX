@@ -23,6 +23,9 @@ public enum FreeXObjectDisplay
 public sealed class FreeXOptions
 {
     internal const string OptionsPathEnvironmentVariable = "FREEX_OPTIONS_PATH";
+    internal const string DefaultFontNameFallback = "Calibri";
+    internal const int DefaultFontSizeFallback = 11;
+    internal const int MaxDefaultFontSize = 409;
     internal const int MinDefaultSheetCount = 1;
     internal const int MaxDefaultSheetCount = 255;
     public const string XlsxDefaultFormat = ".xlsx";
@@ -35,8 +38,8 @@ public sealed class FreeXOptions
     };
 
     // General — new workbooks
-    public string DefaultFontName  { get; set; } = "Calibri";
-    public int    DefaultFontSize  { get; set; } = 11;
+    public string DefaultFontName  { get; set; } = DefaultFontNameFallback;
+    public int    DefaultFontSize  { get; set; } = DefaultFontSizeFallback;
     public int    DefaultSheetCount{ get; set; } = 1;
     public string UserName         { get; set; } = Environment.UserName;
     public bool CollapseRibbonAutomatically { get; set; }
@@ -151,9 +154,25 @@ public sealed class FreeXOptions
 
     internal void NormalizePersistedCollections()
     {
+        DefaultFontName = NormalizeDefaultFontName(DefaultFontName);
+        DefaultFontSize = NormalizeDefaultFontSize(DefaultFontSize);
         DefaultFormat = NormalizeDefaultFormat(DefaultFormat);
         DefaultSheetCount = NormalizeDefaultSheetCount(DefaultSheetCount);
         SpellCheckCustomDictionaryWords = NormalizeSpellCheckCustomDictionaryWords(SpellCheckCustomDictionaryWords);
+    }
+
+    internal static string NormalizeDefaultFontName(string? fontName)
+    {
+        var normalized = fontName?.Trim();
+        return string.IsNullOrEmpty(normalized) ? DefaultFontNameFallback : normalized;
+    }
+
+    internal static int NormalizeDefaultFontSize(int fontSize)
+    {
+        if (fontSize <= 0)
+            return DefaultFontSizeFallback;
+
+        return Math.Min(fontSize, MaxDefaultFontSize);
     }
 
     internal static int NormalizeDefaultSheetCount(int sheetCount) =>

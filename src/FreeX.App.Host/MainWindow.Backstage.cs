@@ -309,7 +309,7 @@ public partial class MainWindow
 
     private void CreateNewWorkbook()
     {
-        var wb = NewWorkbookFactory.Create(_options.DefaultSheetCount);
+        var wb = NewWorkbookFactory.Create(_options);
         _workbook = wb;
         _workbookRef.Current = wb;
         InvalidateToolbarVisualState();
