@@ -88,6 +88,7 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("Select a numeric or date cell to start a series.");
         source.Should().Contain("private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();");
         source.Should().Contain("currentRange => CreateFlashFillCommand(sheet, currentRange)");
+        source.Should().Contain("FlashFillRangePlanner.Plan(sheet, range)");
         source.Should().Contain("private void SortAZMenuItem_Click(object sender, RoutedEventArgs e)    => SortAscButton_Click(sender, e);");
         source.Should().Contain("private void SortZAMenuItem_Click(object sender, RoutedEventArgs e)    => SortDescButton_Click(sender, e);");
         source.Should().Contain("private void SortCustomMenuItem_Click(object sender, RoutedEventArgs e) => SortCustomButton_Click(sender, e);");
