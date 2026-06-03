@@ -158,6 +158,7 @@ public sealed class FreeXOptions
         DefaultFontSize = NormalizeDefaultFontSize(DefaultFontSize);
         DefaultFormat = NormalizeDefaultFormat(DefaultFormat);
         DefaultSheetCount = NormalizeDefaultSheetCount(DefaultSheetCount);
+        UserName = NormalizeUserName(UserName);
         SpellCheckCustomDictionaryWords = NormalizeSpellCheckCustomDictionaryWords(SpellCheckCustomDictionaryWords);
     }
 
@@ -177,6 +178,12 @@ public sealed class FreeXOptions
 
     internal static int NormalizeDefaultSheetCount(int sheetCount) =>
         Math.Clamp(sheetCount, MinDefaultSheetCount, MaxDefaultSheetCount);
+
+    internal static string NormalizeUserName(string? userName)
+    {
+        var normalized = userName?.Trim();
+        return string.IsNullOrEmpty(normalized) ? Environment.UserName : normalized;
+    }
 
     internal static string NormalizeDefaultFormat(string? extension)
     {

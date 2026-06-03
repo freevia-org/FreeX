@@ -4,6 +4,9 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using static ExcelSmokeCom;
@@ -19,6 +22,7 @@ internal static class ExcelOpenSmoke
 {
     private const uint ExcelOpenRejectedHResult = 0x800A03ECu;
     private const int ExcelCellTypeFormulas = -4123;
+    private const int MaxOpenXmlValidationErrorsToReport = 20;
 
     public static int Run(string[] args)
     {
@@ -236,6 +240,7 @@ internal static class ExcelOpenSmoke
             if (input.Workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel)
             {
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
+                AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
                 sourceForExcel = freeXSave.SavedPath;
                 freeXSavedPath = freeXSave.SavedPath;
                 freeXPreSave = freeXSave.Summary;
@@ -288,10 +293,23 @@ internal static class ExcelOpenSmoke
         try
         {
             workbook = OpenExcelWorkbook(workbooks, stagedPath, readOnly);
-            var contents = CountWorkbookContents(workbook);
+            ExcelWorkbookSummary contents;
+            try
+            {
+                contents = CountWorkbookContents(workbook);
+            }
+            catch (COMException ex)
+            {
+                throw new InvalidDataException($"Excel content count failed for '{stagedPath}'", ex);
+            }
+
             ((dynamic)workbook).Close(false);
             closed = true;
             return contents;
+        }
+        catch (COMException ex)
+        {
+            throw new InvalidDataException($"Excel open failed for '{stagedPath}'", ex);
         }
         finally
         {
@@ -322,26 +340,56 @@ internal static class ExcelOpenSmoke
         try
         {
             workbook = OpenExcelWorkbook(workbooks, stagedPath, readOnly: false);
-            var opened = CountWorkbookContents(workbook);
+            ExcelWorkbookSummary opened;
+            try
+            {
+                opened = CountWorkbookContents(workbook);
+            }
+            catch (COMException ex)
+            {
+                throw new InvalidDataException($"Excel content count failed after opening '{stagedPath}'", ex);
+            }
 
             Directory.CreateDirectory(Path.GetDirectoryName(excelSavedPath)!);
             if (File.Exists(excelSavedPath))
                 File.Delete(excelSavedPath);
 
-            ((dynamic)workbook).SaveCopyAs(excelSavedPath);
+            try
+            {
+                ((dynamic)workbook).SaveCopyAs(excelSavedPath);
+            }
+            catch (COMException ex)
+            {
+                throw new InvalidDataException($"Excel SaveCopyAs failed for '{stagedPath}'", ex);
+            }
+
             AssertNoExcelRecoveryLog(excelSavedPath);
             ((dynamic)workbook).Close(false);
             workbookClosed = true;
             ReleaseComObject(workbook);
             workbook = null;
             CollectComReferences();
+            AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
 
             reopenedWorkbook = OpenExcelWorkbook(workbooks, excelSavedPath, readOnly: true);
-            var reopened = CountWorkbookContents(reopenedWorkbook);
+            ExcelWorkbookSummary reopened;
+            try
+            {
+                reopened = CountWorkbookContents(reopenedWorkbook);
+            }
+            catch (COMException ex)
+            {
+                throw new InvalidDataException($"Excel content count failed after reopening '{excelSavedPath}'", ex);
+            }
+
             ((dynamic)reopenedWorkbook).Close(false);
             reopenedClosed = true;
 
             return new ExcelSaveReopenResult(excelSavedPath, opened, reopened);
+        }
+        catch (COMException ex)
+        {
+            throw new InvalidDataException($"Excel open failed for '{stagedPath}'", ex);
         }
         finally
         {
@@ -374,19 +422,7 @@ internal static class ExcelOpenSmoke
         workbooks.Open(
             path,
             0,
-            readOnly,
-            Missing.Value,
-            Missing.Value,
-            Missing.Value,
-            true,
-            Missing.Value,
-            Missing.Value,
-            false,
-            false,
-            Missing.Value,
-            false,
-            true,
-            0);
+            readOnly);
 
     private static void AssertNoExcelRecoveryLog(string xlsxPath)
     {
@@ -404,6 +440,46 @@ internal static class ExcelOpenSmoke
             throw new InvalidDataException(
                 $"Excel saved copy contains repair/recovery log parts: {string.Join(", ", recoveryLogs)}");
         }
+    }
+
+    private static void AssertOpenXmlValid(string xlsxPath, string label)
+    {
+        try
+        {
+            using var document = SpreadsheetDocument.Open(xlsxPath, false);
+            var errors = new OpenXmlValidator(FileFormatVersions.Microsoft365)
+                .Validate(document)
+                .ToArray();
+
+            if (errors.Length == 0)
+                return;
+
+            var sample = string.Join(
+                "; ",
+                errors
+                    .Take(MaxOpenXmlValidationErrorsToReport)
+                    .Select(FormatOpenXmlValidationError));
+            var suffix = errors.Length > MaxOpenXmlValidationErrorsToReport
+                ? $"; ... {errors.Length - MaxOpenXmlValidationErrorsToReport} more"
+                : string.Empty;
+
+            throw new InvalidDataException(
+                $"{label} failed Open XML SDK validation with {errors.Length} error(s): {sample}{suffix}");
+        }
+        catch (OpenXmlPackageException ex)
+        {
+            throw new InvalidDataException(
+                $"{label} could not be opened by Open XML SDK validation: {ex.Message}",
+                ex);
+        }
+    }
+
+    private static string FormatOpenXmlValidationError(ValidationErrorInfo error)
+    {
+        var path = string.IsNullOrWhiteSpace(error.Path?.XPath)
+            ? "<unknown path>"
+            : error.Path.XPath;
+        return $"{path}: {error.Description}";
     }
 
     private static ExcelWorkbookSummary CountWorkbookContents(object workbook)
@@ -427,13 +503,44 @@ internal static class ExcelOpenSmoke
                 try
                 {
                     worksheet = ((dynamic)worksheets)[index];
-                    shapes = ((dynamic)worksheet).Shapes;
-                    shapeCount += Convert.ToInt32(((dynamic)shapes).Count, CultureInfo.InvariantCulture);
-                    formulaCellCount += CountWorksheetFormulaCells(worksheet);
-                    listObjects = ((dynamic)worksheet).ListObjects;
-                    structuredTableCount += Convert.ToInt32(((dynamic)listObjects).Count, CultureInfo.InvariantCulture);
-                    pivotTables = ((dynamic)worksheet).PivotTables();
-                    pivotTableCount += Convert.ToInt32(((dynamic)pivotTables).Count, CultureInfo.InvariantCulture);
+                    try
+                    {
+                        shapes = ((dynamic)worksheet).Shapes;
+                        shapeCount += Convert.ToInt32(((dynamic)shapes).Count, CultureInfo.InvariantCulture);
+                    }
+                    catch (COMException ex)
+                    {
+                        throw new InvalidDataException($"Excel shape count failed for worksheet index {index}", ex);
+                    }
+
+                    try
+                    {
+                        formulaCellCount += CountWorksheetFormulaCells(worksheet);
+                    }
+                    catch (COMException ex)
+                    {
+                        throw new InvalidDataException($"Excel formula count failed for worksheet index {index}", ex);
+                    }
+
+                    try
+                    {
+                        listObjects = ((dynamic)worksheet).ListObjects;
+                        structuredTableCount += Convert.ToInt32(((dynamic)listObjects).Count, CultureInfo.InvariantCulture);
+                    }
+                    catch (COMException ex)
+                    {
+                        throw new InvalidDataException($"Excel structured-table count failed for worksheet index {index}", ex);
+                    }
+
+                    try
+                    {
+                        pivotTables = ((dynamic)worksheet).PivotTables();
+                        pivotTableCount += Convert.ToInt32(((dynamic)pivotTables).Count, CultureInfo.InvariantCulture);
+                    }
+                    catch (COMException ex)
+                    {
+                        throw new InvalidDataException($"Excel PivotTable count failed for worksheet index {index}", ex);
+                    }
                 }
                 finally
                 {
@@ -455,23 +562,87 @@ internal static class ExcelOpenSmoke
     private static int CountWorksheetFormulaCells(object worksheet)
     {
         object? usedRange = null;
-        object? formulaCells = null;
         try
         {
             usedRange = ((dynamic)worksheet).UsedRange;
+            var specialCellsCount = TryCountWorksheetFormulaSpecialCells(usedRange);
+            if (specialCellsCount > 0)
+                return specialCellsCount;
+
+            var evaluatedCount = TryCountWorksheetFormulaIsFormula(worksheet, usedRange);
+            if (evaluatedCount >= 0)
+                return evaluatedCount;
+
+            try
+            {
+                return CountFormulaPropertyValues(((dynamic)usedRange).Formula);
+            }
+            catch (COMException)
+            {
+                return 0;
+            }
+        }
+        finally
+        {
+            ReleaseComObject(usedRange);
+        }
+    }
+
+    private static int TryCountWorksheetFormulaSpecialCells(object usedRange)
+    {
+        object? formulaCells = null;
+        try
+        {
             formulaCells = ((dynamic)usedRange).SpecialCells(ExcelCellTypeFormulas);
             return Convert.ToInt32(((dynamic)formulaCells).Count, CultureInfo.InvariantCulture);
         }
-        catch (COMException ex) when ((uint)ex.HResult == ExcelOpenRejectedHResult)
+        catch (COMException)
         {
             return 0;
         }
         finally
         {
             ReleaseComObject(formulaCells);
-            ReleaseComObject(usedRange);
         }
     }
+
+    private static int TryCountWorksheetFormulaIsFormula(object worksheet, object usedRange)
+    {
+        try
+        {
+            var address = Convert.ToString(((dynamic)usedRange).Address(false, false), CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(address))
+                return 0;
+
+            var result = ((dynamic)worksheet).Evaluate($"SUMPRODUCT(--ISFORMULA({address}))");
+            return Convert.ToInt32(result, CultureInfo.InvariantCulture);
+        }
+        catch (COMException)
+        {
+            return -1;
+        }
+    }
+
+    private static int CountFormulaPropertyValues(object? formulas)
+    {
+        if (formulas is string formula)
+            return IsFormulaText(formula) ? 1 : 0;
+
+        if (formulas is not Array formulaArray)
+            return 0;
+
+        var count = 0;
+        foreach (var item in formulaArray)
+        {
+            if (item is string value && IsFormulaText(value))
+                count++;
+        }
+
+        return count;
+    }
+
+    private static bool IsFormulaText(string value) =>
+        value.StartsWith("=", StringComparison.Ordinal);
 
     private static FreeXSaveResult SaveThroughFreeX(string sourcePath, string outputDirectory)
     {
@@ -709,6 +880,8 @@ internal static class ExcelOpenSmoke
             MinFreeXPreSaveHyperlinks: 1,
             MinFreeXPreSaveComments: 1,
             MinFreeXPreSaveTextBoxes: 1,
+            MinFreeXPreSaveProtectedSheets: 1,
+            MinFreeXPreSaveStructureProtection: 1,
             MinExcelOpenedFormulaCells: 1,
             MinExcelOpenedStructuredTables: 1,
             MinExcelOpenedShapes: 2,
@@ -722,6 +895,8 @@ internal static class ExcelOpenSmoke
             MinFreeXReopenedHyperlinks: saveReopen ? 1 : 0,
             MinFreeXReopenedComments: saveReopen ? 1 : 0,
             MinFreeXReopenedTextBoxes: saveReopen ? 1 : 0,
+            MinFreeXReopenedProtectedSheets: saveReopen ? 1 : 0,
+            MinFreeXReopenedStructureProtection: saveReopen ? 1 : 0,
             MinFreeXPreSavePivotTables: 1,
             MinFreeXPreSavePivotCaches: 1,
             MinExcelOpenedPivotTables: 1,
@@ -1031,6 +1206,12 @@ internal static class ExcelOpenSmoke
 
     private static string FormatFailure(Exception ex)
     {
+        if (ex is InvalidDataException invalidDataException &&
+            invalidDataException.InnerException is COMException innerComException)
+        {
+            return $"{invalidDataException.Message}: COMException 0x{(uint)innerComException.HResult:X8}: {innerComException.Message}";
+        }
+
         if (ex is COMException comException && (uint)comException.HResult == ExcelOpenRejectedHResult)
         {
             return $"Excel rejected the workbook with 0x{(uint)comException.HResult:X8}: {comException.Message}";

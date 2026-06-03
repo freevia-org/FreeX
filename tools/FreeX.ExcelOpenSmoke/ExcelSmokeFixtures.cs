@@ -127,6 +127,7 @@ internal static class ExcelSmokeFixtures
             AddExcelTextBox(worksheet, "Excel-authored text box");
             AddExcelPivotTable(workbook, worksheet);
             AutoFitExcelColumns(worksheet, "A:D");
+            ProtectExcelWorksheetAndWorkbook(workbook, worksheet);
 
             ((dynamic)workbook).SaveAs(
                 outputPath,
@@ -937,6 +938,12 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(shape);
             ReleaseComObject(shapes);
         }
+    }
+
+    private static void ProtectExcelWorksheetAndWorkbook(object workbook, object worksheet)
+    {
+        ((dynamic)worksheet).Protect("fixture");
+        ((dynamic)workbook).Protect("structure", true, false);
     }
 
     private static void AddExcelPivotTable(object workbook, object sourceWorksheet)

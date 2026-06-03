@@ -17,10 +17,13 @@ internal sealed record PdfDocumentProperties(
 
         return new PdfDocumentProperties(
             Normalize(workbook.Name),
-            "FreeX",
+            ResolveWorkbookUserName(workbook),
             "FreeX workbook export",
             "FreeX, spreadsheet");
     }
+
+    private static string ResolveWorkbookUserName(Workbook workbook) =>
+        Normalize(workbook.FileSharing?.UserName) ?? "FreeX";
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
