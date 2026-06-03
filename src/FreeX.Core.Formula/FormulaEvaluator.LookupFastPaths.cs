@@ -248,6 +248,119 @@ public sealed partial class FormulaEvaluator
         return true;
     }
 
+    private bool TryEvaluateLegacyLookupDirectTable(
+        FunctionCallNode node,
+        IEvalContext context,
+        bool horizontal,
+        out ScalarValue result)
+    {
+        result = BlankValue.Instance;
+        if (node.Arguments.Count is < 3 or > 4)
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+
+        if (!TryAsRangeRef(node.Arguments[1], out var rawTableRange))
+            return false;
+
+        if (TryAsRangeRef(node.Arguments[0], out _) ||
+            TryAsRangeRef(node.Arguments[2], out _) ||
+            (node.Arguments.Count > 3 && TryAsRangeRef(node.Arguments[3], out _)))
+            return false;
+
+        if (!TryCreateDirectLegacyLookupTable(
+                rawTableRange,
+                context,
+                out var tableSheetName,
+                out var startRow,
+                out var startCol,
+                out var rowCount,
+                out var colCount,
+                out result))
+        {
+            return true;
+        }
+
+        var lookupValue = EvaluateNode(node.Arguments[0], context);
+        if (lookupValue is ErrorValue lookupError)
+        {
+            result = lookupError;
+            return true;
+        }
+        if (lookupValue is RangeValue)
+            return false;
+
+        var indexValue = EvaluateNode(node.Arguments[2], context);
+        if (indexValue is ErrorValue indexError)
+        {
+            result = indexError;
+            return true;
+        }
+        if (indexValue is RangeValue)
+            return false;
+
+        var rangeLookupValue = node.Arguments.Count > 3
+            ? EvaluateNode(node.Arguments[3], context)
+            : BlankValue.Instance;
+        if (rangeLookupValue is ErrorValue rangeLookupError)
+        {
+            result = rangeLookupError;
+            return true;
+        }
+        if (rangeLookupValue is RangeValue)
+            return false;
+
+        var indexCoerced = CoerceToNumber(indexValue);
+        if (indexCoerced is ErrorValue indexCoerceError)
+        {
+            result = indexCoerceError;
+            return true;
+        }
+
+        var rawIndex = ((NumberValue)indexCoerced).Value;
+        if (!double.IsFinite(rawIndex) || rawIndex < int.MinValue || rawIndex > int.MaxValue)
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+
+        var lookupIndex = (int)rawIndex;
+        bool approximate;
+        try
+        {
+            approximate = rangeLookupValue is BlankValue || BuiltInFunctions.ToBool(rangeLookupValue);
+        }
+        catch (FormulaEvalException ex)
+        {
+            result = ErrorFromCode(ex.ErrorCode);
+            return true;
+        }
+
+        if (lookupIndex < 1)
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+
+        var maxIndex = horizontal ? rowCount : colCount;
+        if (lookupIndex > maxIndex)
+        {
+            result = ErrorValue.Ref;
+            return true;
+        }
+
+        var lookupVector = horizontal
+            ? new DirectLookupRangeVector(tableSheetName, startRow, startCol, 1, colCount)
+            : new DirectLookupRangeVector(tableSheetName, startRow, startCol, rowCount, 1);
+        var resultVector = horizontal
+            ? new DirectLookupRangeVector(tableSheetName, startRow + (uint)lookupIndex - 1, startCol, 1, colCount)
+            : new DirectLookupRangeVector(tableSheetName, startRow, startCol + (uint)lookupIndex - 1, rowCount, 1);
+
+        result = EvaluateLegacyLookupDirectTable(lookupValue, lookupVector, resultVector, approximate, context);
+        return true;
+    }
+
     private bool TryEvaluateLookupDirectRanges(FunctionCallNode node, IEvalContext context, out ScalarValue result)
     {
         result = BlankValue.Instance;
@@ -294,6 +407,44 @@ public sealed partial class FormulaEvaluator
 
         result = EvaluateLookupDirectVectors(lookupValue, lookupVector, resultVector, context);
         return true;
+    }
+
+    private static ScalarValue EvaluateLegacyLookupDirectTable(
+        ScalarValue lookupValue,
+        DirectLookupRangeVector lookupVector,
+        DirectLookupRangeVector resultVector,
+        bool approximate,
+        IEvalContext context)
+    {
+        if (approximate)
+        {
+            var best = -1;
+            for (var index = 0; index < lookupVector.Count; index++)
+            {
+                var candidate = GetDirectLookupValue(lookupVector, index, context);
+                if (candidate is ErrorValue error)
+                    return error;
+
+                if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
+                    best = index;
+                else
+                    break;
+            }
+
+            return best >= 0 ? GetDirectLookupValue(resultVector, best, context) : ErrorValue.NA;
+        }
+
+        for (var index = 0; index < lookupVector.Count; index++)
+        {
+            var candidate = GetDirectLookupValue(lookupVector, index, context);
+            if (candidate is ErrorValue error)
+                return error;
+
+            if (BuiltInFunctions.MatchExactValue(candidate, lookupValue))
+                return GetDirectLookupValue(resultVector, index, context);
+        }
+
+        return ErrorValue.NA;
     }
 
     private static ScalarValue EvaluateMatchDirectRange(
@@ -586,6 +737,48 @@ public sealed partial class FormulaEvaluator
 
         lookupVector = new DirectLookupRangeVector(range.SheetName, startRow, startCol, rowCount, colCount);
         resultVector = lookupVector;
+        return true;
+    }
+
+    private static bool TryCreateDirectLegacyLookupTable(
+        RangeRefNode rawRange,
+        IEvalContext context,
+        out string? sheetName,
+        out uint startRow,
+        out uint startCol,
+        out uint rowCount,
+        out uint colCount,
+        out ScalarValue result)
+    {
+        sheetName = null;
+        startRow = 0;
+        startCol = 0;
+        rowCount = 0;
+        colCount = 0;
+        result = BlankValue.Instance;
+
+        if (rawRange.SheetName is not null && !context.SheetExists(rawRange.SheetName))
+        {
+            result = ErrorValue.Ref;
+            return false;
+        }
+
+        var range = ClampOpenEndedRangeToUsed(rawRange, context);
+        var endRow = Math.Max(range.Start.Row, range.End.Row);
+        var endCol = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+        startRow = Math.Min(range.Start.Row, range.End.Row);
+        startCol = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        rowCount = endRow - startRow + 1;
+        colCount = endCol - startCol + 1;
+
+        if (FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol) >
+            FormulaSafetyLimits.MaxMaterializedRangeCells)
+        {
+            result = ErrorValue.Ref;
+            return false;
+        }
+
+        sheetName = range.SheetName;
         return true;
     }
 

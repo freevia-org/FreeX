@@ -47,6 +47,10 @@ public sealed partial class FormulaEvaluator
         if (!isAggregate && node.Arguments.Count > maxArgs)
             return ErrorValue.Value;
 
+        if (functionName == "TEXTJOIN" &&
+            TryEvaluateTextjoinDirectRanges(node, context, out var directTextjoinResult))
+            return directTextjoinResult;
+
         if (functionName == "INDEX" &&
             TryEvaluateIndexDirectRange(node, context, out var directIndexResult))
             return directIndexResult;
@@ -61,6 +65,10 @@ public sealed partial class FormulaEvaluator
         if (functionName == "XMATCH" &&
             TryEvaluateXmatchDirectRange(node, context, out var directXmatchResult))
             return directXmatchResult;
+
+        if ((functionName == "VLOOKUP" || functionName == "HLOOKUP") &&
+            TryEvaluateLegacyLookupDirectTable(node, context, horizontal: functionName == "HLOOKUP", out var directLegacyLookupResult))
+            return directLegacyLookupResult;
 
         if (functionName == "XLOOKUP" &&
             TryEvaluateXlookupDirectRanges(node, context, out var directXlookupResult))

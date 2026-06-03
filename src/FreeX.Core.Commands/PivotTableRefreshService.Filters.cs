@@ -114,8 +114,9 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<PivotFieldModel> fields,
         PivotColumnAggregateCache? aggregateCache)
     {
-        foreach (var filter in pivotTable.ValueFilters)
+        for (var filterIndex = 0; filterIndex < pivotTable.ValueFilters.Count; filterIndex++)
         {
+            var filter = pivotTable.ValueFilters[filterIndex];
             if (filter.SourceFieldIndex is null ||
                 IndexOfSourceField(fields, filter.SourceFieldIndex.Value) < 0)
             {
@@ -156,7 +157,9 @@ public static partial class PivotTableRefreshService
                 PivotValueFilterKind.BelowAverage => aggregates.Where(item => item.Value < average).Select(item => item.Key).ToList(),
                 _ => keys
             };
-            keys = keys.Order(PivotKeyComparer.Instance).ToList();
+
+            if (filterIndex < pivotTable.ValueFilters.Count - 1)
+                keys = keys.Order(PivotKeyComparer.Instance).ToList();
         }
 
         return keys;

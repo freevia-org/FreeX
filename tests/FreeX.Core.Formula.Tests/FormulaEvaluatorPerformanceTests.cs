@@ -623,6 +623,60 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
+    [Fact]
+    public void VlookupLargeDirectTable_AvoidsTableMaterialization()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeVlookupSheet();
+        const string formula = "=VLOOKUP(100000,A1:C100000,3,FALSE)";
+        const double expected = 300_000d;
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        Console.WriteLine(
+            $"PERF VLOOKUP_LARGE_DIRECT_TABLE elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes}");
+        allocatedBytes.Should().BeLessThan(8_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Fact]
+    public void HlookupLargeDirectTable_AvoidsTableMaterialization()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeHorizontalLookupSheet();
+        const string formula = "=HLOOKUP(16384,A1:XFD3,3,FALSE)";
+        const double expected = 32_768d;
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        Console.WriteLine(
+            $"PERF HLOOKUP_LARGE_DIRECT_TABLE elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes}");
+        allocatedBytes.Should().BeLessThan(8_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
     [Theory]
     [InlineData("=XMATCH(100000,A1:A100000,0,1)", 100_000d)]
     [InlineData("=XMATCH(1,A1:A100000,0,-1)", 1d)]
@@ -826,6 +880,31 @@ public sealed class FormulaEvaluatorPerformanceTests
         {
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
             sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 2));
+        }
+
+        return sheet;
+    }
+
+    private static Sheet MakeVlookupSheet()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= RowCount; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 2));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(row * 3));
+        }
+
+        return sheet;
+    }
+
+    private static Sheet MakeHorizontalLookupSheet()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint col = 1; col <= CellAddress.MaxCol; col++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, 1, col), new NumberValue(col));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, col), new NumberValue(col * 2));
         }
 
         return sheet;

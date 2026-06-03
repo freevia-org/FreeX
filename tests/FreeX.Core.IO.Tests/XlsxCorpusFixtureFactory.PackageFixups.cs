@@ -59,7 +59,7 @@ internal static partial class XlsxCorpusFixtureFactory
                 archive,
                 "Timeline Date",
                 "../timelines/timeline1.xml",
-                "http://schemas.microsoft.com/office/2011/relationships/timeline");
+                "http://schemas.microsoft.com/office/2010/relationships/Timeline");
             return;
         }
 
@@ -544,6 +544,7 @@ internal static partial class XlsxCorpusFixtureFactory
     private static void ApplySmartArtDiagramsFixup(ZipArchive archive)
     {
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
@@ -765,16 +766,34 @@ internal static partial class XlsxCorpusFixtureFactory
         string nativeRelationshipType)
     {
         XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+        XNamespace slicerNs = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace timelineNs = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
 
         var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
         var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
         if (contentTypesEntry is null || worksheetEntry is null)
             return;
+
+        var isSlicer = nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase);
+        var nativePartName = isSlicer ? "/xl/slicers/slicer1.xml" : "/xl/timelines/timeline1.xml";
+        var cachePartName = isSlicer ? "/xl/slicerCaches/slicerCache1.xml" : "/xl/timelineCaches/timelineCache1.xml";
+        var cacheRelationshipId = isSlicer ? "rIdFreeXSlicerCache1" : "rIdFreeXTimelineCache1";
+        var nativeRelationshipId = isSlicer ? "rIdFreeXSlicerView1" : "rIdFreeXTimelineView1";
+        var cacheRelationshipType = isSlicer
+            ? "http://schemas.microsoft.com/office/2007/relationships/slicerCache"
+            : "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
+        var cacheRelationshipTarget = isSlicer ? "slicerCaches/slicerCache1.xml" : "timelineCaches/timelineCache1.xml";
+        var nativeContentType = isSlicer ? "application/vnd.ms-excel.slicer+xml" : "application/vnd.ms-excel.Timeline+xml";
+        var cacheContentType = isSlicer ? "application/vnd.ms-excel.slicerCache+xml" : "application/vnd.ms-excel.TimelineCache+xml";
+        var extensionNs = isSlicer ? slicerNs : timelineNs;
+        var extensionPrefix = isSlicer ? "x14" : "x15";
 
         XDocument contentTypes;
         using (var stream = contentTypesEntry.Open())
@@ -787,23 +806,34 @@ internal static partial class XlsxCorpusFixtureFactory
                 new XAttribute("PartName", "/xl/drawings/drawing1.xml"),
                 new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.drawing+xml")));
         }
-        EnsureContentTypeOverride(
-            contentTypes,
-            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
-                ? "/xl/slicers/slicer1.xml"
-                : "/xl/timelines/timeline1.xml",
-            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
-                ? "application/vnd.ms-excel.slicer+xml"
-                : "application/vnd.ms-excel.timeline+xml");
-        EnsureContentTypeOverride(
-            contentTypes,
-            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
-                ? "/xl/slicerCaches/slicerCache1.xml"
-                : "/xl/timelineCaches/timelineCache1.xml",
-            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
-                ? "application/vnd.ms-excel.slicerCache+xml"
-                : "application/vnd.ms-excel.timelineCache+xml");
+        EnsureContentTypeOverride(contentTypes, nativePartName, nativeContentType);
+        EnsureContentTypeOverride(contentTypes, cachePartName, cacheContentType);
         ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is not null)
+        {
+            var workbookXml = LoadPackageXml(workbookEntry);
+            EnsureSlicerTimelineWorkbookExtensionRef(
+                workbookXml,
+                extensionNs,
+                extensionPrefix,
+                isSlicer ? "{BBE1A952-AA13-448E-AADC-164F8A28A991}" : "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}",
+                isSlicer ? "slicerCaches" : "timelineCacheRefs",
+                isSlicer ? "slicerCache" : "timelineCacheRef",
+                cacheRelationshipId,
+                officeRelNs,
+                markupCompatNs,
+                workbookNs);
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(workbookRelsXml, cacheRelationshipId, cacheRelationshipType, cacheRelationshipTarget);
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
 
         var drawingRelId = "rIdFreeXFloatingDrawing1";
         XDocument worksheetXml;
@@ -812,6 +842,17 @@ internal static partial class XlsxCorpusFixtureFactory
         var root = worksheetXml.Root;
         if (root is not null && root.Element(worksheetNs + "drawing") is null)
             root.Add(new XElement(worksheetNs + "drawing", new XAttribute(officeRelNs + "id", drawingRelId)));
+        EnsureSlicerTimelineWorksheetExtensionRef(
+            worksheetXml,
+            extensionNs,
+            extensionPrefix,
+            isSlicer ? "{A8765BA9-456A-4DAB-B4F3-ACF838C121DE}" : "{7E03D99C-DC04-49D9-9315-930204A7B6E9}",
+            isSlicer ? "slicerList" : "timelineRefs",
+            isSlicer ? "slicer" : "timelineRef",
+            nativeRelationshipId,
+            officeRelNs,
+            markupCompatNs,
+            worksheetNs);
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
 
         var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
@@ -823,6 +864,7 @@ internal static partial class XlsxCorpusFixtureFactory
             drawingRelId,
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
             "../drawings/drawing1.xml");
+        EnsureRelationship(worksheetRelsXml, nativeRelationshipId, nativeRelationshipType, nativePartTarget);
         ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
 
         ReplacePackageXml(archive, "xl/drawings/drawing1.xml", new XDocument(
@@ -861,8 +903,119 @@ internal static partial class XlsxCorpusFixtureFactory
                     new XElement(spreadsheetDrawingNs + "clientData")))));
 
         var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
-        EnsureRelationship(drawingRelsXml, "rIdFreeXNativeControl1", nativeRelationshipType, nativePartTarget);
+        if (!isSlicer)
+            EnsureRelationship(drawingRelsXml, "rIdFreeXNativeControl1", nativeRelationshipType, nativePartTarget);
         ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", drawingRelsXml);
+    }
+
+    private static void EnsureSlicerTimelineWorkbookExtensionRef(
+        XDocument workbookXml,
+        XNamespace extensionNs,
+        string prefix,
+        string extensionUri,
+        string containerName,
+        string childName,
+        string relationshipId,
+        XNamespace officeRelNs,
+        XNamespace markupCompatNs,
+        XNamespace workbookNs)
+    {
+        EnsureSlicerTimelineExtensionRef(
+            workbookXml,
+            extensionNs,
+            prefix,
+            extensionUri,
+            containerName,
+            childName,
+            relationshipId,
+            officeRelNs,
+            markupCompatNs,
+            workbookNs);
+    }
+
+    private static void EnsureSlicerTimelineWorksheetExtensionRef(
+        XDocument worksheetXml,
+        XNamespace extensionNs,
+        string prefix,
+        string extensionUri,
+        string containerName,
+        string childName,
+        string relationshipId,
+        XNamespace officeRelNs,
+        XNamespace markupCompatNs,
+        XNamespace worksheetNs)
+    {
+        EnsureSlicerTimelineExtensionRef(
+            worksheetXml,
+            extensionNs,
+            prefix,
+            extensionUri,
+            containerName,
+            childName,
+            relationshipId,
+            officeRelNs,
+            markupCompatNs,
+            worksheetNs);
+    }
+
+    private static void EnsureSlicerTimelineExtensionRef(
+        XDocument document,
+        XNamespace extensionNs,
+        string prefix,
+        string extensionUri,
+        string containerName,
+        string childName,
+        string relationshipId,
+        XNamespace officeRelNs,
+        XNamespace markupCompatNs,
+        XNamespace mainNs)
+    {
+        var root = document.Root;
+        if (root is null)
+            return;
+
+        root.SetAttributeValue(XNamespace.Xmlns + "r", officeRelNs.NamespaceName);
+        root.SetAttributeValue(XNamespace.Xmlns + prefix, extensionNs.NamespaceName);
+        root.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
+        var ignorable = root.Attribute(markupCompatNs + "Ignorable")?.Value ?? "";
+        var prefixes = ignorable.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (!prefixes.Any(value => string.Equals(value, prefix, StringComparison.OrdinalIgnoreCase)))
+            prefixes.Add(prefix);
+        root.SetAttributeValue(markupCompatNs + "Ignorable", string.Join(" ", prefixes));
+
+        var extensionList = root.Element(mainNs + "extLst");
+        if (extensionList is null)
+        {
+            extensionList = new XElement(mainNs + "extLst");
+            root.Add(extensionList);
+        }
+
+        var extension = extensionList.Elements(mainNs + "ext")
+            .FirstOrDefault(element => string.Equals(element.Attribute("uri")?.Value, extensionUri, StringComparison.OrdinalIgnoreCase));
+        if (extension is null)
+        {
+            extension = new XElement(
+                mainNs + "ext",
+                new XAttribute("uri", extensionUri),
+                new XAttribute(XNamespace.Xmlns + prefix, extensionNs.NamespaceName));
+            extensionList.Add(extension);
+        }
+        else
+        {
+            extension.SetAttributeValue(XNamespace.Xmlns + prefix, extensionNs.NamespaceName);
+        }
+
+        var container = extension.Element(extensionNs + containerName);
+        if (container is null)
+        {
+            container = new XElement(extensionNs + containerName);
+            extension.Add(container);
+        }
+
+        container.Elements(extensionNs + childName)
+            .Where(element => string.Equals(element.Attribute(officeRelNs + "id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        container.Add(new XElement(extensionNs + childName, new XAttribute(officeRelNs + "id", relationshipId)));
     }
 
     private static void ApplyPrinterSettingsReferenceFixup(ZipArchive archive)
@@ -954,22 +1107,16 @@ internal static partial class XlsxCorpusFixtureFactory
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
         }
 
-        var packageRelsPath = "_rels/.rels";
-        var packageRelsXml = archive.GetEntry(packageRelsPath) is { } packageRelsEntry
-            ? LoadPackageXml(packageRelsEntry)
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
             : new XDocument(new XElement(packageRelNs + "Relationships"));
         EnsureRelationship(
-            packageRelsXml,
+            workbookRelsXml,
             "rIdFreeXCustomXml1",
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
-            "customXml/item1.xml");
-        EnsureRelationship(
-            packageRelsXml,
-            "rIdFreeXCustomXmlExternalSchema1",
-            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
-            "https://schemas.freex.example/customXml/schema1.xsd",
-            "External");
-        ReplacePackageXml(archive, packageRelsPath, packageRelsXml);
+            "../customXml/item1.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
     }
 
     private static void ApplyCustomDocumentPropertiesReferenceFixup(ZipArchive archive)

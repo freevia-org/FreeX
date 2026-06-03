@@ -329,11 +329,22 @@ public sealed partial class GridViewRenderPerformanceTests
         renderSparklines.Should().Contain("GetRenderCellLookups(Viewport)");
         renderSparklines.Should().Contain("var rowLookup = lookups.Rows;");
         renderSparklines.Should().Contain("var colLookup = lookups.Columns;");
+        renderSparklines.Should().Contain("var visibleLeft = ActualRowHeaderWidth;");
+        renderSparklines.Should().Contain("var visibleTop = EffectiveColHeaderHeight;");
+        renderSparklines.Should().Contain("var visibleRight = ActualWidth;");
+        renderSparklines.Should().Contain("var visibleBottom = ActualHeight;");
+        renderSparklines.Should().Contain("IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom)");
         source.Should().Contain("private static readonly SolidColorBrush SparklinePositiveBrush");
         source.Should().Contain("private static readonly Pen SparklineLinePen");
         renderSparklines.Should().Contain("DrawLineSparkline(dc, values, rect, SparklineLinePen)");
         renderSparklines.Should().Contain("DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, SparklinePositiveBrush, SparklineNegativeBrush)");
         renderSparklines.Should().Contain("dc.PushClip(GetCellClipGeometry(rect));");
+        renderSparklines.IndexOf("IntersectsVisibleGrid(rect", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSparklines.IndexOf("dc.PushClip(GetCellClipGeometry(rect));", StringComparison.Ordinal));
+        renderSparklines.IndexOf("IntersectsVisibleGrid(rect", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSparklines.IndexOf("DrawLineSparkline(dc, values, rect, SparklineLinePen)", StringComparison.Ordinal));
         renderSparklines.Should().NotContain("new RectangleGeometry(rect)");
         source.Should().Contain("SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer)");
         source.Should().Contain("SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer)");

@@ -63,32 +63,42 @@ public sealed class RecalcEngine
             AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
 
         var evaluationPlan = plan;
+        IReadOnlyCollection<CellAddress>? directFormulaRoots = null;
         if (_volatileCells.Count > 0 || changedFormulaCells is not null)
         {
-            // Directly-changed formula cells, volatile cells, and downstream dependents
-            // share one dirty set. Topologically order that set so changed formula roots
-            // do not run before dirty formula precedents.
-            var dirtyCells = new HashSet<CellAddress>(
-                plan.OrderedCells.Count + _volatileCells.Count + (changedFormulaCells?.Count ?? 0));
-
-            if (changedFormulaCells is not null)
+            if (CanEvaluateChangedFormulaRootsDirectly(plan, changedFormulaCells, _volatileCells.Count))
             {
-                foreach (var addr in changedFormulaCells)
-                    dirtyCells.Add(addr);
+                directFormulaRoots = changedFormulaCells!.Count == 1
+                    ? changedFormulaCells
+                    : new HashSet<CellAddress>(changedFormulaCells);
             }
+            else
+            {
+                // Directly-changed formula cells, volatile cells, and downstream dependents
+                // share one dirty set. Topologically order that set so changed formula roots
+                // do not run before dirty formula precedents.
+                var dirtyCells = new HashSet<CellAddress>(
+                    plan.OrderedCells.Count + _volatileCells.Count + (changedFormulaCells?.Count ?? 0));
 
-            foreach (var addr in _volatileCells)
-                dirtyCells.Add(addr);
+                if (changedFormulaCells is not null)
+                {
+                    foreach (var addr in changedFormulaCells)
+                        dirtyCells.Add(addr);
+                }
 
-            foreach (var addr in plan.OrderedCells)
-                dirtyCells.Add(addr);
+                foreach (var addr in _volatileCells)
+                    dirtyCells.Add(addr);
 
-            evaluationPlan = _graph.GetEvaluationOrder(dirtyCells);
-            foreach (var cyclic in evaluationPlan.CyclicCells)
-                AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
+                foreach (var addr in plan.OrderedCells)
+                    dirtyCells.Add(addr);
+
+                evaluationPlan = _graph.GetEvaluationOrder(dirtyCells);
+                foreach (var cyclic in evaluationPlan.CyclicCells)
+                    AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
+            }
         }
 
-        foreach (var addr in evaluationPlan.OrderedCells)
+        foreach (var addr in directFormulaRoots ?? evaluationPlan.OrderedCells)
         {
             var sheet = workbook.GetSheet(addr.Sheet);
             if (sheet is null) continue;
@@ -189,6 +199,15 @@ public sealed class RecalcEngine
 
         return formulaCells;
     }
+
+    private static bool CanEvaluateChangedFormulaRootsDirectly(
+        RecalcPlan dependencyPlan,
+        List<CellAddress>? changedFormulaCells,
+        int volatileCellCount) =>
+        volatileCellCount == 0 &&
+        changedFormulaCells is { Count: > 0 } &&
+        dependencyPlan.OrderedCells.Count == 0 &&
+        dependencyPlan.CyclicCells.Count == 0;
 
     private static void AddCyclicCell(
         Workbook workbook,

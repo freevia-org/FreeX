@@ -23,6 +23,10 @@ public partial class GridView
         var lookups = GetRenderCellLookups(Viewport);
         var rowLookup = lookups.Rows;
         var colLookup = lookups.Columns;
+        var visibleLeft = ActualRowHeaderWidth;
+        var visibleTop = EffectiveColHeaderHeight;
+        var visibleRight = ActualWidth;
+        var visibleBottom = ActualHeight;
 
         foreach (var sparkline in Sparklines)
         {
@@ -39,6 +43,9 @@ public partial class GridView
                 row.TopOffset + EffectiveColHeaderHeight + 3,
                 Math.Max(1, col.Width - 6),
                 Math.Max(1, row.Height - 6));
+
+            if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
+                continue;
 
             dc.PushClip(GetCellClipGeometry(rect));
             if (sparkline.Kind == SparklineKind.Line)

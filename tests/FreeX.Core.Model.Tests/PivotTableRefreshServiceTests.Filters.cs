@@ -356,7 +356,7 @@ public sealed partial class PivotTableRefreshServiceTests
             $"PERF PIVOT_REFRESH_COLUMN_VALUE_FILTER_SORT rows={rowCount} column_items={columnItemCount} iterations={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={meanMs:F2} max_ms={timings.Max():F2} allocated_bytes={allocatedBytes}");
 
         Text(sheet, "E2").Should().NotBeEmpty();
-        allocatedBytes.Should().BeLessThan(18_000_000);
+        allocatedBytes.Should().BeLessThan(9_000_000);
         total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 

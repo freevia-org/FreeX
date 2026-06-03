@@ -620,11 +620,47 @@ internal static partial class XlsxCorpusFixtureFactory
                 </Relationships>
                 """)),
         "generated-slicers-001" => CreatePackage(
-            ("xl/slicers/slicer1.xml", "<slicer/>"),
-            ("xl/slicerCaches/slicerCache1.xml", "<slicerCacheDefinition/>")),
+            ("xl/slicers/slicer1.xml", """
+                <slicers xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                         mc:Ignorable="x"
+                         xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <slicer name="Region Slicer"
+                          cache="Slicer_Region"
+                          caption="Region"
+                          style="SlicerStyleLight2"
+                          rowHeight="228600"/>
+                </slicers>
+                """),
+            ("xl/slicerCaches/slicerCache1.xml", """
+                <slicerCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                                       name="Slicer_Region"
+                                       sourceName="Region">
+                  <pivotTables>
+                    <pivotTable name="PivotTable1" tabId="1"/>
+                  </pivotTables>
+                </slicerCacheDefinition>
+                """)),
         "generated-timelines-001" => CreatePackage(
-            ("xl/timelines/timeline1.xml", "<timeline/>"),
-            ("xl/timelineCaches/timelineCache1.xml", "<timelineCacheDefinition/>")),
+            ("xl/timelines/timeline1.xml", """
+                <timelines xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main">
+                  <timeline name="Date Timeline"
+                            cache="Timeline_Date"
+                            caption="Order Date"
+                            style="TimeSlicerStyleLight1"/>
+                </timelines>
+                """),
+            ("xl/timelineCaches/timelineCache1.xml", """
+                <timelineCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                                         name="Timeline_Date"
+                                         sourceName="Date"
+                                         startDate="2026-01-01"
+                                         endDate="2026-03-31">
+                  <pivotTables>
+                    <pivotTable name="PivotTable1"/>
+                  </pivotTables>
+                </timelineCacheDefinition>
+                """)),
         "generated-external-links-001" => CreatePackage(
             ("xl/workbook.xml", """
                 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -1030,8 +1066,8 @@ internal static partial class XlsxCorpusFixtureFactory
             "xl/richData/richValueRel.xml" => "application/vnd.ms-excel.richvaluerel+xml",
             "xl/slicers/slicer1.xml" => "application/vnd.ms-excel.slicer+xml",
             "xl/slicerCaches/slicerCache1.xml" => "application/vnd.ms-excel.slicerCache+xml",
-            "xl/timelines/timeline1.xml" => "application/vnd.ms-excel.timeline+xml",
-            "xl/timelineCaches/timelineCache1.xml" => "application/vnd.ms-excel.timelineCache+xml",
+            "xl/timelines/timeline1.xml" => "application/vnd.ms-excel.Timeline+xml",
+            "xl/timelineCaches/timelineCache1.xml" => "application/vnd.ms-excel.TimelineCache+xml",
             "xl/externalLinks/externalLink1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml",
             "xl/embeddings/oleObject1.bin" => "application/vnd.openxmlformats-officedocument.oleObject",
             "customXml/item1.xml" => "application/xml",
