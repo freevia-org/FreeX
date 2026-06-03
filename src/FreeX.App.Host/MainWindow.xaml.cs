@@ -25,6 +25,8 @@ public partial class MainWindow : Window, IWorkbookWindow
     private const double SheetTabPreferredHorizontalScrollbarRatio = 0.36;
     private const double SheetTabPreferredHorizontalScrollbarMaxWidth = 420.0;
     private const double SheetTabOverlapWidth = 16.0;
+    private const double SheetTabRightNavigationReserveWidth = 28.0;
+    private const double SheetTabChromeHeight = 28.0;
     private const double SheetTabGridRuleTop = 0.5;
     private const double SheetTabGridRuleStrokeThickness = 1.0;
     private const int ResizeViewportRefreshDelayMilliseconds = 140;
