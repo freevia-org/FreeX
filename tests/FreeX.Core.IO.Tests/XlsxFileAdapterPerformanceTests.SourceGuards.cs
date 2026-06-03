@@ -189,6 +189,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         writerSource.Should().Contain("ReadSeedStyleIndexes");
         writerSource.Should().Contain("ApplyStyleOnlyCells");
         writerSource.Should().Contain("UpdateDimension");
+        writerSource.Should().NotContain(
+            ".ToDictionary(",
+            "style-only worksheet post-processing walks cells row-by-row and should avoid a temporary reference map per row");
     }
 
     [Fact]
