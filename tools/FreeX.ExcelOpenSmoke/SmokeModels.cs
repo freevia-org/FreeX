@@ -48,7 +48,8 @@ internal sealed record WorkbookSmokeExpectations(
     int MinExcelOpenedPivotTables = 0,
     int MinExcelReopenedPivotTables = 0,
     int MinFreeXReopenedPivotTables = 0,
-    int MinFreeXReopenedPivotCaches = 0);
+    int MinFreeXReopenedPivotCaches = 0,
+    bool RequireNoFreeXLoadWarnings = false);
 
 internal sealed record WorkbookSmokeResult(
     bool Success,
@@ -59,7 +60,9 @@ internal sealed record WorkbookSmokeResult(
     ExcelWorkbookSummary? Opened,
     ExcelWorkbookSummary? Reopened,
     FreeXWorkbookSummary? FreeXPreSave,
+    IReadOnlyList<string> FreeXPreSaveWarnings,
     FreeXWorkbookSummary? FreeXReopenedExcelSave,
+    IReadOnlyList<string> FreeXReopenedExcelSaveWarnings,
     string? Error)
 {
     public static WorkbookSmokeResult Pass(
@@ -70,7 +73,9 @@ internal sealed record WorkbookSmokeResult(
         ExcelWorkbookSummary opened,
         ExcelWorkbookSummary? Reopened,
         FreeXWorkbookSummary? freeXPreSave,
-        FreeXWorkbookSummary? FreeXReopenedExcelSave) =>
+        IReadOnlyList<string> freeXPreSaveWarnings,
+        FreeXWorkbookSummary? FreeXReopenedExcelSave,
+        IReadOnlyList<string> freeXReopenedExcelSaveWarnings) =>
         new(
             true,
             input,
@@ -80,11 +85,13 @@ internal sealed record WorkbookSmokeResult(
             opened,
             Reopened,
             freeXPreSave,
+            freeXPreSaveWarnings,
             FreeXReopenedExcelSave,
+            freeXReopenedExcelSaveWarnings,
             null);
 
     public static WorkbookSmokeResult Fail(WorkbookSmokeInput input, string? freeXSavedPath, string error) =>
-        new(false, input, null, freeXSavedPath, null, null, null, null, null, error);
+        new(false, input, null, freeXSavedPath, null, null, null, null, Array.Empty<string>(), null, Array.Empty<string>(), error);
 }
 
 internal sealed record ExcelWorkbookSummary(
@@ -110,7 +117,8 @@ internal sealed record FreeXWorkbookSummary(
     int StructureProtectionCount,
     int PivotTableCount,
     int PivotCacheCount);
-internal sealed record FreeXSaveResult(string SavedPath, FreeXWorkbookSummary Summary);
+internal sealed record FreeXLoadSummaryResult(FreeXWorkbookSummary Summary, IReadOnlyList<string> Warnings);
+internal sealed record FreeXSaveResult(string SavedPath, FreeXWorkbookSummary Summary, IReadOnlyList<string> LoadWarnings);
 internal sealed record ExcelSaveReopenResult(
     string ExcelSavedPath,
     ExcelWorkbookSummary Opened,
