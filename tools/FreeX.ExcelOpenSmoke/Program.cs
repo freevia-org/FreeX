@@ -824,10 +824,9 @@ internal static class ExcelOpenSmoke
                 expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel);
         }
 
-        if (string.Equals(row.SourceType, "generated", StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(row.ExpectedStatus, "supported-pass", StringComparison.OrdinalIgnoreCase))
+        if (HasSupportedFeatureExpectations(row))
         {
-            return GeneratedCorpusExpectations(
+            return SupportedCorpusExpectations(
                 row,
                 saveReopen,
                 expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel);
@@ -836,7 +835,12 @@ internal static class ExcelOpenSmoke
         return null;
     }
 
-    private static WorkbookSmokeExpectations? GeneratedCorpusExpectations(
+    private static bool HasSupportedFeatureExpectations(CorpusManifestRow row) =>
+        string.Equals(row.ExpectedStatus, "supported-pass", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(row.ExpectedStatus, "public-pass", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(row.ExpectedStatus, "supported-pivot-metadata-pass", StringComparison.OrdinalIgnoreCase);
+
+    private static WorkbookSmokeExpectations? SupportedCorpusExpectations(
         CorpusManifestRow row,
         bool saveReopen,
         bool expectFreeXPreSave)
