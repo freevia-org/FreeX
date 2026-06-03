@@ -504,6 +504,30 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_IncludesCommentsAtEndPagesInHeaderFooterTotalPages()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Comment total pages");
+            var sheet = workbook.AddSheet("Sheet1");
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(address, new TextValue("Printed"));
+            sheet.Comments[address] = "Summary note";
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+            sheet.PageFooter = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", "");
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var firstPage = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlayTexts = PdfTextOverlayExtractor.Extract(firstPage)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            document.Pages.Should().HaveCount(2);
+            overlayTexts.Should().Contain("Page 1 of 2");
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_UsesLandscapeLetterPageSetupForExport()
     {
         StaTestRunner.Run(() =>

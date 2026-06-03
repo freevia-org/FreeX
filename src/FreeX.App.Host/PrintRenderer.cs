@@ -109,7 +109,11 @@ public static partial class PrintRenderer
             sheet.PrintTitleColumns,
             columnsPerPage,
             sheet.ColumnPageBreaks);
-        var totalPages = rowPlans.Count * columnPlans.Count;
+        IReadOnlyList<IReadOnlyList<KeyValuePair<CellAddress, string>>> commentSummaryPages =
+            sheet.PrintComments == WorksheetPrintComments.AtEnd
+                ? BuildCommentSummaryPages(sheet.Comments, sheet.ThreadedComments, pageH, marginTop)
+                : [];
+        var totalPages = rowPlans.Count * columnPlans.Count + commentSummaryPages.Count;
         var pageNumber = sheet.FirstPageNumber ?? 1;
         var printableHyperlinks = BuildPrintableHyperlinkLookup(sheet);
 
@@ -130,17 +134,10 @@ public static partial class PrintRenderer
             }
         }
 
-        if (sheet.PrintComments == WorksheetPrintComments.AtEnd &&
-            (sheet.Comments.Count > 0 || sheet.ThreadedComments.Count > 0))
+        if (commentSummaryPages.Count > 0)
         {
-            foreach (var commentsForPage in BuildCommentSummaryPages(
-                         sheet.Comments,
-                         sheet.ThreadedComments,
-                         pageH,
-                         marginTop))
-            {
+            foreach (var commentsForPage in commentSummaryPages)
                 AddCommentSummaryPage(commentsForPage);
-            }
         }
 
         void AddPrintPage(PrintPageRowPlan rowPlan, PrintPageColumnPlan columnPlan)
