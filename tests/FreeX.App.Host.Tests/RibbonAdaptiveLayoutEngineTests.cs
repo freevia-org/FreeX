@@ -270,10 +270,11 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     public void Plan_SourceAppliesProfileOverridesInPlace()
     {
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+        var planStart = source.IndexOf("public static RibbonAdaptiveLayoutResult Plan(", StringComparison.Ordinal);
+        planStart = source.IndexOf("public static RibbonAdaptiveLayoutResult Plan(", planStart + 1, StringComparison.Ordinal);
         var method = source.Substring(
-            source.IndexOf("private static RibbonAdaptiveLayoutResult Plan(", StringComparison.Ordinal),
-            source.IndexOf("public static IReadOnlyList<double> BuildResizeThresholds", StringComparison.Ordinal) -
-            source.IndexOf("private static RibbonAdaptiveLayoutResult Plan(", StringComparison.Ordinal));
+            planStart,
+            source.IndexOf("public static IReadOnlyList<double> BuildResizeThresholds", StringComparison.Ordinal) - planStart);
 
         method.Should().Contain("ApplyPlanOverridesInPlace(");
         method.Should().NotContain("ApplyBreakpointOverrides(");
