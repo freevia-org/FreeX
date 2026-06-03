@@ -23,6 +23,8 @@ public enum FreeXObjectDisplay
 public sealed class FreeXOptions
 {
     internal const string OptionsPathEnvironmentVariable = "FREEX_OPTIONS_PATH";
+    internal const int MinDefaultSheetCount = 1;
+    internal const int MaxDefaultSheetCount = 255;
     public const string XlsxDefaultFormat = ".xlsx";
     public const string FreeXWorkbookDefaultFormat = ".fxl";
     private const string LegacyJsonDefaultFormat = ".json";
@@ -150,8 +152,12 @@ public sealed class FreeXOptions
     internal void NormalizePersistedCollections()
     {
         DefaultFormat = NormalizeDefaultFormat(DefaultFormat);
+        DefaultSheetCount = NormalizeDefaultSheetCount(DefaultSheetCount);
         SpellCheckCustomDictionaryWords = NormalizeSpellCheckCustomDictionaryWords(SpellCheckCustomDictionaryWords);
     }
+
+    internal static int NormalizeDefaultSheetCount(int sheetCount) =>
+        Math.Clamp(sheetCount, MinDefaultSheetCount, MaxDefaultSheetCount);
 
     internal static string NormalizeDefaultFormat(string? extension)
     {

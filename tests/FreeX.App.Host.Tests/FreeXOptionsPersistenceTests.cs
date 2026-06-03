@@ -47,6 +47,23 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         options.DefaultFormat.Should().Be(FreeXOptions.FreeXWorkbookDefaultFormat);
     }
 
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(12, 12)]
+    [InlineData(300, 255)]
+    public void LoadFromPath_NormalizesDefaultSheetCountToExcelOptionsRange(
+        int persistedSheetCount,
+        int expectedSheetCount)
+    {
+        Directory.CreateDirectory(_tempDirectory);
+        var path = Path.Combine(_tempDirectory, "options.json");
+        File.WriteAllText(path, $$"""{ "DefaultSheetCount": {{persistedSheetCount}} }""");
+
+        var options = FreeXOptions.LoadFromPath(path);
+
+        options.DefaultSheetCount.Should().Be(expectedSheetCount);
+    }
+
     [Fact]
     public void Save_WhenStorePathCannotBeWritten_ReturnsFalseWithObservableError()
     {
