@@ -19,7 +19,11 @@ internal static class XlsxChartDataLabelReader
         var numberFormatElement = dataLabels.Element(ChartNs + "numFmt");
         var numberFormatCode = numberFormatElement?.Attribute("formatCode")?.Value;
         chart.DataLabelNumberFormat = XlsxChartAxisReader.FromXlsxNumberFormatCode(numberFormatCode);
-        chart.DataLabelNumberFormatCode = numberFormatCode;
+        // The writer always emits the required numFmt with formatCode="General" for the default format, so
+        // treat that as "no explicit code" — otherwise an unformatted chart's data-label format drifts from
+        // <none> to "General" on round-trip.
+        chart.DataLabelNumberFormatCode =
+            string.Equals(numberFormatCode, "General", StringComparison.Ordinal) ? null : numberFormatCode;
         chart.DataLabelNumberFormatSourceLinked = ReadNullableBool(numberFormatElement?.Attribute("sourceLinked")?.Value);
         chart.ShowDataLabelValue = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showVal")?.Attribute("val")?.Value);
         chart.ShowDataLabelLegendKey = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showLegendKey")?.Attribute("val")?.Value);
