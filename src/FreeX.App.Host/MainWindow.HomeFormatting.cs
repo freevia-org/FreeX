@@ -49,30 +49,48 @@ public partial class MainWindow
     private void AlignLeftBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        AlignCenterBtn.IsChecked = false;
-        AlignRightBtn.IsChecked  = false;
-        ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Left));
+        ApplyHorizontalAlignment(CellHAlign.Left);
     }
 
     private void AlignCenterBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        AlignLeftBtn.IsChecked  = false;
-        AlignRightBtn.IsChecked = false;
-        ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Center));
+        ApplyHorizontalAlignment(CellHAlign.Center);
     }
 
     private void AlignRightBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        AlignLeftBtn.IsChecked   = false;
-        AlignCenterBtn.IsChecked = false;
-        ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Right));
+        ApplyHorizontalAlignment(CellHAlign.Right);
+    }
+
+    private void ApplyHorizontalAlignment(CellHAlign alignment)
+    {
+        switch (alignment)
+        {
+            case CellHAlign.Left:
+                SetToolbarToggleStates(center: false, right: false);
+                ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Left));
+                break;
+
+            case CellHAlign.Center:
+                SetToolbarToggleStates(left: false, right: false);
+                ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Center));
+                break;
+
+            case CellHAlign.Right:
+                SetToolbarToggleStates(left: false, center: false);
+                ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Right));
+                break;
+        }
     }
 
     private void SetToolbarToggleStates(
         bool? underline = null,
         bool? strike = null,
+        bool? left = null,
+        bool? center = null,
+        bool? right = null,
         bool? top = null,
         bool? middle = null,
         bool? bottom = null)
@@ -82,6 +100,9 @@ public partial class MainWindow
         {
             if (underline.HasValue) UnderlineButton.IsChecked = underline.Value;
             if (strike.HasValue) StrikeButton.IsChecked = strike.Value;
+            if (left.HasValue) AlignLeftBtn.IsChecked = left.Value;
+            if (center.HasValue) AlignCenterBtn.IsChecked = center.Value;
+            if (right.HasValue) AlignRightBtn.IsChecked = right.Value;
             if (top.HasValue) AlignTopBtn.IsChecked = top.Value;
             if (middle.HasValue) AlignMiddleBtn.IsChecked = middle.Value;
             if (bottom.HasValue) AlignBottomBtn.IsChecked = bottom.Value;
@@ -483,22 +504,40 @@ public partial class MainWindow
     private void AlignTopBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        SetToolbarToggleStates(top: true, middle: false, bottom: false);
-        ApplyStyleDiff(new StyleDiff(VAlign: CellVAlign.Top));
+        ApplyVerticalAlignment(CellVAlign.Top);
     }
 
     private void AlignMiddleBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        SetToolbarToggleStates(top: false, middle: true, bottom: false);
-        ApplyStyleDiff(new StyleDiff(VAlign: CellVAlign.Center));
+        ApplyVerticalAlignment(CellVAlign.Center);
     }
 
     private void AlignBottomBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        SetToolbarToggleStates(top: false, middle: false, bottom: true);
-        ApplyStyleDiff(new StyleDiff(VAlign: CellVAlign.Bottom));
+        ApplyVerticalAlignment(CellVAlign.Bottom);
+    }
+
+    private void ApplyVerticalAlignment(CellVAlign alignment)
+    {
+        switch (alignment)
+        {
+            case CellVAlign.Top:
+                SetToolbarToggleStates(top: true, middle: false, bottom: false);
+                ApplyStyleDiff(new StyleDiff(VAlign: CellVAlign.Top));
+                break;
+
+            case CellVAlign.Center:
+                SetToolbarToggleStates(top: false, middle: true, bottom: false);
+                ApplyStyleDiff(new StyleDiff(VAlign: CellVAlign.Center));
+                break;
+
+            case CellVAlign.Bottom:
+                SetToolbarToggleStates(top: false, middle: false, bottom: true);
+                ApplyStyleDiff(new StyleDiff(VAlign: CellVAlign.Bottom));
+                break;
+        }
     }
 
     private void IndentIncBtn_Click(object sender, RoutedEventArgs e)
