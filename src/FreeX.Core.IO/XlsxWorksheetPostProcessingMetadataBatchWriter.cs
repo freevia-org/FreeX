@@ -1,5 +1,4 @@
 using System.IO;
-using System.Linq;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -42,8 +41,19 @@ internal static class XlsxWorksheetPostProcessingMetadataBatchWriter
 
         using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
         SaveWorksheetElementMetadata(session, workbook);
-        if (workbook.Sheets.Any(XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes))
+        if (HasModeledPrinterAttributes(workbook))
             XlsxWorksheetPageSetupMetadataWriter.Save(session, workbook);
+    }
+
+    private static bool HasModeledPrinterAttributes(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes(sheet))
+                return true;
+        }
+
+        return false;
     }
 
     private static void SaveWorksheetElementMetadata(XlsxWorksheetXmlEditSession session, Workbook workbook)

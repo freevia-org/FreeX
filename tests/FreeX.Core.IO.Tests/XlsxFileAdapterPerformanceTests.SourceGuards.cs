@@ -299,5 +299,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         batchSource.Should().Contain("XlsxWorksheetDataConsolidationMapper.Save(session, workbook);");
         batchSource.Should().Contain("XlsxWorksheetSingleXmlCellMapper.Save(session, workbook);");
         batchSource.Should().Contain("XlsxWorksheetPageSetupMetadataWriter.Save(session, workbook);");
+        batchSource.Should().Contain("private static bool HasModeledPrinterAttributes(Workbook workbook)");
+        batchSource.Should().Contain("foreach (var sheet in workbook.Sheets)");
+        batchSource.Should().NotContain(
+            "workbook.Sheets.Any(",
+            "source-package replay metadata save should avoid allocating a LINQ predicate iterator while checking page-setup metadata");
     }
 }
