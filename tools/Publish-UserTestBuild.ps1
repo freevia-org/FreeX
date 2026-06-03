@@ -7,7 +7,8 @@ param(
     [string]$PublishMode = "SingleFile",
     [string]$MsixCertificatePath = $env:FREEX_MSIX_CERTIFICATE_PATH,
     [string]$MsixCertificatePassword = $env:FREEX_MSIX_CERTIFICATE_PASSWORD,
-    [string]$MsixTimestampUrl = $env:FREEX_MSIX_TIMESTAMP_URL
+    [string]$MsixTimestampUrl = $env:FREEX_MSIX_TIMESTAMP_URL,
+    [switch]$AllowUnsignedMsix
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,6 +65,20 @@ function Assert-MsixSigningOptions {
     }
 }
 
+function Assert-MsixPublishSigningMode {
+    param(
+        [string]$PublishMode,
+        [string]$CertificatePath,
+        [bool]$AllowUnsigned
+    )
+
+    if ($PublishMode -eq "Msix" -and
+        [string]::IsNullOrWhiteSpace($CertificatePath) -and
+        -not $AllowUnsigned) {
+        throw "MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation."
+    }
+}
+
 function Import-MsixSigningCertificate {
     param(
         [Parameter(Mandatory = $true)]
@@ -105,15 +120,72 @@ function Remove-MsixSigningCertificate {
     }
 }
 
+function Get-MsBuildPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectPath,
+        [Parameter(Mandatory = $true)]
+        [string]$PropertyName
+    )
+
+    $output = @(dotnet msbuild $ProjectPath -nologo "-getProperty:$PropertyName")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not evaluate MSBuild property '$PropertyName' from $ProjectPath."
+    }
+
+    $value = $output |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -First 1
+
+    if ($null -eq $value) {
+        return ""
+    }
+
+    return $value.Trim()
+}
+
+function ConvertTo-MsBuildVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DisplayVersion
+    )
+
+    $numericParts = [regex]::Matches($DisplayVersion, '\d+') | ForEach-Object { [int64]$_.Value }
+    if ($numericParts.Count -eq 0) {
+        throw "Assembly version metadata requires a numeric version, but '$DisplayVersion' contains no numeric parts."
+    }
+
+    $major = $numericParts[0]
+    $minor = if ($numericParts.Count -gt 1) { $numericParts[1] } else { 0 }
+    $patch = if ($numericParts.Count -gt 2) { $numericParts[2] } else { 0 }
+    return "$major.$minor.$patch"
+}
+
+function ConvertTo-XmlAttributeValue {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    return [System.Security.SecurityElement]::Escape($Value)
+}
+
+function Get-MsixManifestPublisher {
+    param([Parameter(Mandatory = $true)][object]$Certificate)
+
+    $publisher = [string]$Certificate.Subject
+    if ([string]::IsNullOrWhiteSpace($publisher)) {
+        throw "MSIX signing certificate subject is empty; cannot derive manifest Publisher."
+    }
+
+    return $publisher
+}
+
 Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label "RuntimeIdentifier"
 Assert-SafeTimestampUrl -Value $MsixTimestampUrl
 Assert-MsixCertificatePath -Value $MsixCertificatePath
 Assert-MsixSigningOptions -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword -TimestampUrl $MsixTimestampUrl
+Assert-MsixPublishSigningMode -PublishMode $PublishMode -CertificatePath $MsixCertificatePath -AllowUnsigned ([bool]$AllowUnsignedMsix)
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "src\FreeX.App.Host\FreeX.App.Host.csproj"
-$appInfoPath = Join-Path $repoRoot "src\FreeX.App.Host\AppInfo.cs"
-$appInfo = Get-Content -LiteralPath $appInfoPath -Raw
 
 function ConvertTo-MsixPackageVersion {
     param(
@@ -151,12 +223,14 @@ function ConvertTo-MsixPackageVersion {
 }
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $versionMatch = [regex]::Match($appInfo, 'VersionText\s*=\s*"(?<version>[^"]+)"')
-    if (-not $versionMatch.Success) {
-        throw "Could not read VersionText from $appInfoPath"
+    $Version = Get-MsBuildPropertyValue -ProjectPath $projectPath -PropertyName "InformationalVersion"
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        $Version = Get-MsBuildPropertyValue -ProjectPath $projectPath -PropertyName "Version"
     }
 
-    $Version = $versionMatch.Groups["version"].Value
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        throw "Could not read app version metadata from $projectPath"
+    }
 }
 
 $versionSlug = $Version.ToLowerInvariant()
@@ -173,6 +247,8 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commitId)) {
     throw "Could not determine git commit id."
 }
 
+$assemblyVersion = ConvertTo-MsBuildVersion -DisplayVersion $Version
+$informationalVersion = "$assemblyVersion+$commitId"
 $buildStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $modeSlug = $PublishMode.ToLowerInvariant()
 $artifactName = "freex-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug"
@@ -227,6 +303,8 @@ $publishArgs = @(
     "-p:DebugSymbols=false",
     "-p:UseSharedCompilation=false",
     "-p:NodeReuse=false",
+    "-p:Version=$assemblyVersion",
+    "-p:InformationalVersion=$informationalVersion",
     "/nr:false",
     "-m:1",
     "-o", $publishDir
@@ -285,6 +363,16 @@ if ($PublishMode -eq "Msix") {
 
     $msixVersion = ConvertTo-MsixPackageVersion -DisplayVersion $Version
     $msixExeName = Split-Path -Leaf $launchExePath
+    $importedSigningCertificate = $null
+
+    try {
+        $msixPublisher = "CN=FreeXLocal"
+        if (-not [string]::IsNullOrWhiteSpace($MsixCertificatePath)) {
+            $importedSigningCertificate = Import-MsixSigningCertificate -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword
+            $msixPublisher = Get-MsixManifestPublisher -Certificate $importedSigningCertificate
+        }
+
+        $msixPublisherAttribute = ConvertTo-XmlAttributeValue -Value $msixPublisher
 
     $manifestPath = Join-Path $publishDir "AppxManifest.xml"
     $manifest = @"
@@ -294,7 +382,7 @@ if ($PublishMode -eq "Msix") {
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap rescap">
-  <Identity Name="FreeX.Tester" Publisher="CN=FreeXLocal" Version="$msixVersion" />
+  <Identity Name="FreeX.Tester" Publisher="$msixPublisherAttribute" Version="$msixVersion" />
   <Properties>
     <DisplayName>FreeX</DisplayName>
     <PublisherDisplayName>FreeX</PublisherDisplayName>
@@ -340,7 +428,6 @@ if ($PublishMode -eq "Msix") {
         throw "makeappx did not create $artifactMsixPath"
     }
 
-    $importedSigningCertificate = $null
     if (-not [string]::IsNullOrWhiteSpace($MsixCertificatePath)) {
         if (-not (Test-Path -LiteralPath $MsixCertificatePath)) {
             throw "MSIX signing certificate was not found at $MsixCertificatePath"
@@ -360,24 +447,22 @@ if ($PublishMode -eq "Msix") {
             throw "signtool.exe was not found. Install the Windows SDK to sign MSIX packages."
         }
 
-        try {
-            $importedSigningCertificate = Import-MsixSigningCertificate -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword
-            $signArgs = @("sign", "/fd", "SHA256", "/sha1", $importedSigningCertificate.Thumbprint, "/s", "My")
-            if (-not [string]::IsNullOrWhiteSpace($MsixTimestampUrl)) {
-                $signArgs += @("/tr", $MsixTimestampUrl, "/td", "SHA256")
-            }
-            $signArgs += $artifactMsixPath
+        $signArgs = @("sign", "/fd", "SHA256", "/sha1", $importedSigningCertificate.Thumbprint, "/s", "My")
+        if (-not [string]::IsNullOrWhiteSpace($MsixTimestampUrl)) {
+            $signArgs += @("/tr", $MsixTimestampUrl, "/td", "SHA256")
+        }
+        $signArgs += $artifactMsixPath
 
-            & $signToolPath @signArgs
-            if ($LASTEXITCODE -ne 0) {
-                throw "signtool sign failed with exit code $LASTEXITCODE"
-            }
-        } finally {
-            Remove-MsixSigningCertificate -Certificate $importedSigningCertificate
+        & $signToolPath @signArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "signtool sign failed with exit code $LASTEXITCODE"
         }
         Write-Host "Signed $artifactMsixPath"
     } else {
         Write-Host "Created unsigned local MSIX; pass -MsixCertificatePath to sign it."
+    }
+    } finally {
+        Remove-MsixSigningCertificate -Certificate $importedSigningCertificate
     }
 
     $hash = Get-FileHash -LiteralPath $artifactMsixPath -Algorithm SHA256
