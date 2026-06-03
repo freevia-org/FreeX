@@ -137,6 +137,24 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void DependencyGraph_UsesLinearFastPathForSingleRootExactChains()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
+        var getRecalcOrder = source[
+            source.IndexOf("public RecalcPlan GetRecalcOrder", StringComparison.Ordinal)..
+            source.IndexOf("var toRecalc = new HashSet<CellAddress>();", StringComparison.Ordinal)];
+        var fastPath = source[
+            source.IndexOf("private bool TryBuildSingleRootExactChainPlan", StringComparison.Ordinal)..
+            source.IndexOf("public RecalcPlan GetEvaluationOrder", StringComparison.Ordinal)];
+
+        getRecalcOrder.Should().Contain("TryBuildSingleRootExactChainPlan(changedList, out var chainPlan)");
+        fastPath.Should().Contain("TryCountSingleRootExactChain");
+        fastPath.Should().Contain("new List<CellAddress>(count)");
+        fastPath.Should().NotContain("new HashSet<CellAddress>");
+    }
+
+    [Fact]
     public void SetDependencies_TracksDependents()
     {
         var graph = new DependencyGraph();

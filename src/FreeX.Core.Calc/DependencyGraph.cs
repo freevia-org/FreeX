@@ -224,6 +224,9 @@ public sealed class DependencyGraph
     {
         if (changedCells is IReadOnlyList<CellAddress> changedList)
         {
+            if (TryBuildSingleRootExactChainPlan(changedList, out var chainPlan))
+                return chainPlan;
+
             if (changedList.Count == 0 || !HasAnyDependents(changedList))
                 return EmptyPlan;
         }
@@ -277,6 +280,58 @@ public sealed class DependencyGraph
         }
 
         return new RecalcPlan(sorted, cycles ?? []);
+    }
+
+    private bool TryBuildSingleRootExactChainPlan(
+        IReadOnlyList<CellAddress> changedCells,
+        out RecalcPlan plan)
+    {
+        plan = EmptyPlan;
+        if (changedCells.Count != 1 || _rangeDependentsBySheet.Count != 0)
+            return false;
+
+        var root = changedCells[0];
+        if (!_dependents.TryGetValue(root, out var dependents) || dependents.Count == 0)
+            return true;
+
+        if (dependents.Count != 1)
+            return false;
+
+        var first = dependents[0];
+        if (!TryCountSingleRootExactChain(first, out var count))
+            return false;
+
+        var ordered = new List<CellAddress>(count);
+        var current = first;
+        for (var i = 0; i < count; i++)
+        {
+            ordered.Add(current);
+            if (i + 1 < count)
+                current = _dependents[current][0];
+        }
+
+        plan = new RecalcPlan(ordered, []);
+        return true;
+    }
+
+    private bool TryCountSingleRootExactChain(CellAddress first, out int count)
+    {
+        count = 0;
+        var current = first;
+        var maxSteps = Math.Max(_precedents.Count, _dependents.Count) + 1;
+        while (true)
+        {
+            if (++count > maxSteps)
+                return false;
+
+            if (!_dependents.TryGetValue(current, out var dependents) || dependents.Count == 0)
+                return true;
+
+            if (dependents.Count != 1)
+                return false;
+
+            current = dependents[0];
+        }
     }
 
     /// <summary>
