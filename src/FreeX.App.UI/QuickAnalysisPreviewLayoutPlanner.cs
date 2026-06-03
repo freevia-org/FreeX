@@ -24,7 +24,7 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        if (!TryCalculateDataBarPreviewMax(viewport, range, out var max))
+        if (!TryCalculateDataBarPreviewMax(viewport, range, out var max) || max <= 0)
             return [];
 
         var rows = BuildRowMetricLookup(viewport.RowMetrics);
@@ -53,7 +53,7 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         ref TConsumer consumer)
         where TConsumer : struct, IQuickAnalysisPreviewRectConsumer
     {
-        if (!TryCalculateDataBarPreviewMax(viewport, range, out var max))
+        if (!TryCalculateDataBarPreviewMax(viewport, range, out var max) || max <= 0)
             return;
 
         VisitDataBarPreviewRects(

@@ -306,6 +306,10 @@ public sealed class GridViewSelectionLayoutTests
         source.Should().Contain("double.IsFinite(value)");
         dataBars.Should().Contain("foreach (var cell in viewport.Cells)");
         dataBars.Should().Contain("IsCellInRange(cell, range)");
+        publicDataBars.Should().Contain("max <= 0");
+        publicDataBars.IndexOf("max <= 0", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(publicDataBars.IndexOf("BuildRowMetricLookup(viewport.RowMetrics)", StringComparison.Ordinal));
         publicDataBars.Should().Contain("BuildRowMetricLookup(viewport.RowMetrics)");
         publicDataBars.Should().Contain("BuildColMetricLookup(viewport.ColMetrics)");
         publicDataBars.Should().Contain("VisitDataBarPreviewRects(");
