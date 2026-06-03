@@ -245,6 +245,10 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().NotContain("Canvas.SetLeft(");
         source.Should().Contain("context.BeginFigure(new Point(x, SheetTabGridRuleTop + 7.0)");
         source.Should().Contain("SheetTabsOverlayLayer.Children.Add(CreateSheetTabPath(");
+        source.Should().Contain("CreateSheetTabTopRuleGeometry");
+        source.Should().Contain("CreateActiveSheetTabContourGeometry");
+        source.Should().Contain("tabClipGeometry");
+        source.Should().NotContain("CreateActiveSheetTabGridRuleGeometry");
         source.Should().NotContain("CreateActiveSheetTabTopScrubGeometry");
         source.Should().NotContain("activeTop.Left");
         source.Should().NotContain("activeTop.Right");

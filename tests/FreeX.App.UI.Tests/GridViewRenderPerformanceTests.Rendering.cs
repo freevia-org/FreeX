@@ -541,8 +541,20 @@ public sealed partial class GridViewRenderPerformanceTests
         renderCells.Should().Contain("var hasCellSurfaces = styleLookup.Count > 0;");
         renderCells.Should().Contain("var hasMergedSurfaces = _mergeLookup.Count > 0;");
         renderCells.Should().Contain("if (hasCellSurfaces || hasMergedSurfaces)");
-        renderCells.Should().Contain("if (bg is null && !merge.HasValue)");
-        renderCells.Should().Contain("continue;");
+        renderCells.Should().Contain("RenderStyledAndMergedCellSurfaces(");
+        renderCells.Should().NotContain("foreach (var rowMetric in viewport.RowMetrics)");
+        renderCells.Should().NotContain("foreach (var colMetric in viewport.ColMetrics)");
+
+        var surfacePass = source[
+            source.IndexOf("private void RenderStyledAndMergedCellSurfaces", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawCellSurface", StringComparison.Ordinal)];
+        surfacePass.Should().Contain("foreach (var entry in styleLookup)");
+        surfacePass.Should().Contain("FindMerge(row, column).HasValue");
+        surfacePass.Should().Contain("foreach (var entry in _mergeLookup)");
+        surfacePass.Should().Contain("entry.Key.Row != merge.Start.Row");
+        surfacePass.Should().Contain("styleLookup.TryGetValue((merge.Start.Row, merge.Start.Col), out var bg)");
+        surfacePass.Should().NotContain("foreach (var rowMetric in viewport.RowMetrics)");
+        surfacePass.Should().NotContain("foreach (var colMetric in viewport.ColMetrics)");
         backgroundBase.Should().Contain("var visibleRight = Math.Min(right, ActualWidth);");
         backgroundBase.Should().Contain("var visibleBottom = Math.Min(bottom, ActualHeight);");
         backgroundBase.Should().Contain("dc.DrawRectangle(Brushes.White, null, rect);");

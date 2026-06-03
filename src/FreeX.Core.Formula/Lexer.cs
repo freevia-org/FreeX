@@ -438,7 +438,16 @@ public sealed class Lexer
         while (i < value.Length && char.IsDigit(value[i]))
             i++;
 
-        return i == value.Length && digitStart < value.Length;
+        if (i != value.Length || digitStart >= value.Length)
+            return false;
+
+        var columnName = value[colStart..(digitStart > colStart && value[digitStart - 1] == '$' ? digitStart - 1 : digitStart)];
+        var columnNumber = FreeX.Core.Model.CellAddress.ColumnNameToNumber(columnName.ToString());
+        if (columnNumber is 0 || columnNumber > FreeX.Core.Model.CellAddress.MaxCol)
+            return false;
+
+        return uint.TryParse(value[digitStart..], out var row) &&
+               row is >= 1 and <= FreeX.Core.Model.CellAddress.MaxRow;
     }
 
     private static string ToUpperInvariantIfNeeded(ReadOnlySpan<char> value)

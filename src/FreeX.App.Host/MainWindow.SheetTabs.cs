@@ -554,11 +554,11 @@ public partial class MainWindow
                 0,
                 tabClipGeometry,
                 1));
-            RenderSheetTabsOverlay(activeRect, accentBrush);
+            RenderSheetTabsOverlay(activeRect, addRect, tabClipGeometry, accentBrush);
             return;
         }
 
-        RenderSheetTabsOverlay(activeRect, accentBrush);
+        RenderSheetTabsOverlay(activeRect, addRect, tabClipGeometry, accentBrush);
     }
 
     private SheetTabsChromeRenderKey CreateSheetTabsChromeRenderKey(
@@ -629,18 +629,35 @@ public partial class MainWindow
 
     private void RenderSheetTabsOverlay(
         Rect? activeRect,
+        Rect? addRect,
+        Geometry tabClipGeometry,
         Brush gridRuleBrush)
     {
         var chromeWidth = SheetTabsChromeLayer.ActualWidth;
-        var gridRuleGeometry = activeRect is { } active
-            ? CreateActiveSheetTabGridRuleGeometry(chromeWidth, active)
-            : new LineGeometry(new Point(0, SheetTabGridRuleTop), new Point(chromeWidth, SheetTabGridRuleTop));
+        var visibleTabsLeft = Math.Clamp(SheetTabChromeBounds(SheetTabsScroller, 0).Left, 0, chromeWidth);
+        var visibleTabsRight = Math.Clamp(GetVisibleSheetTabsRight(addRect), 0, chromeWidth);
+        var gridRuleGeometry = CreateSheetTabTopRuleGeometry(
+            chromeWidth,
+            activeRect,
+            visibleTabsLeft,
+            visibleTabsRight);
         SheetTabsOverlayLayer.Children.Add(CreateSheetTabPath(
             gridRuleGeometry,
             null,
             gridRuleBrush,
             SheetTabGridRuleStrokeThickness,
             null,
+            1));
+
+        if (activeRect is not { } active)
+            return;
+
+        SheetTabsOverlayLayer.Children.Add(CreateSheetTabPath(
+            CreateActiveSheetTabContourGeometry(active),
+            null,
+            gridRuleBrush,
+            SheetTabGridRuleStrokeThickness,
+            tabClipGeometry,
             1));
     }
 
@@ -761,7 +778,49 @@ public partial class MainWindow
     private static byte BlendColorComponent(byte background, byte foreground, double foregroundWeight)
         => (byte)Math.Round(background + (foreground - background) * foregroundWeight);
 
-    private static Geometry CreateActiveSheetTabGridRuleGeometry(double width, Rect tab)
+    private static Geometry CreateSheetTabTopRuleGeometry(
+        double width,
+        Rect? activeTab,
+        double visibleTabsLeft,
+        double visibleTabsRight)
+    {
+        const double top = SheetTabGridRuleTop;
+        if (activeTab is not { } tab)
+            return CreateFrozenLineGeometry(new Point(0, top), new Point(width, top));
+
+        var gapLeft = Math.Clamp(Math.Max(tab.Left, visibleTabsLeft), 0, width);
+        var gapRight = Math.Clamp(Math.Min(tab.Right, visibleTabsRight), 0, width);
+        if (gapRight <= gapLeft + SheetTabScrollEpsilon)
+            return CreateFrozenLineGeometry(new Point(0, top), new Point(width, top));
+
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            if (gapLeft > SheetTabScrollEpsilon)
+            {
+                context.BeginFigure(new Point(0, top), false, false);
+                context.LineTo(new Point(gapLeft, top), true, true);
+            }
+
+            if (gapRight < width - SheetTabScrollEpsilon)
+            {
+                context.BeginFigure(new Point(gapRight, top), false, false);
+                context.LineTo(new Point(width, top), true, true);
+            }
+        }
+
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static LineGeometry CreateFrozenLineGeometry(Point start, Point end)
+    {
+        var geometry = new LineGeometry(start, end);
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static Geometry CreateActiveSheetTabContourGeometry(Rect tab)
     {
         const double top = SheetTabGridRuleTop;
         const double sideTop = top + 6.5;
@@ -770,14 +829,13 @@ public partial class MainWindow
         const double sideBottomControl = top + 25.5;
         const double bottomInset = 12.0;
         const double bottom = top + 27.0;
-        var left = Math.Clamp(tab.Left, 0, width);
-        var right = Math.Clamp(tab.Right, 0, width);
+        var left = tab.Left;
+        var right = tab.Right;
 
         var geometry = new StreamGeometry();
         using (var context = geometry.Open())
         {
-            context.BeginFigure(new Point(0, top), false, false);
-            context.LineTo(new Point(left, top), true, true);
+            context.BeginFigure(new Point(left, top), false, false);
             context.BezierTo(
                 new Point(left + sideInset, top),
                 new Point(left + sideInset, sideTop),
@@ -805,7 +863,6 @@ public partial class MainWindow
                 new Point(right, top),
                 true,
                 true);
-            context.LineTo(new Point(width, top), true, true);
         }
 
         geometry.Freeze();

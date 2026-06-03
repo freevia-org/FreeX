@@ -462,21 +462,29 @@ public class ShortCircuitEvaluationTests
     // ── Parser row-bounds protection ──────────────────────────────────────
 
     [Fact]
-    public void CellRef_WithRowBeyondMaxRow_ReturnsRefError()
+    public void NonAggregateFunction_WithTooManyArguments_ReturnsValueBeforeRangeExpansion()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
-        // Row 2000000 is beyond the 1048576 limit
-        var result = _evaluator.Evaluate("=A2000000", sheet, wb);
-        result.Should().Be(ErrorValue.Ref);
+
+        var result = _evaluator.Evaluate("=ABS(1,A1:XFD1048576)", sheet, wb);
+
+        result.Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void CellRef_WithRowZero_ReturnsRefError()
+    public void CellRef_WithRowBeyondMaxRow_ReturnsNameError()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
-        // "A0" is not a valid cell reference
+        var result = _evaluator.Evaluate("=A2000000", sheet, wb);
+        result.Should().Be(ErrorValue.Name);
+    }
+
+    [Fact]
+    public void CellRef_WithRowZero_ReturnsNameError()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
         var result = _evaluator.Evaluate("=A0", sheet, wb);
-        result.Should().Be(ErrorValue.Ref);
+        result.Should().Be(ErrorValue.Name);
     }
 
     // ── Recursion depth guard (Issue E) ──

@@ -161,6 +161,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue UniqueSingleColumnAllOccurrences(RangeValue arr)
     {
+        if (TryReuseStrictlyMonotonicNumericSingleColumn(arr, out var monotonicResult))
+            return monotonicResult;
+
         var seen = new HashSet<ScalarValue>(arr.RowCount, UniqueScalarComparer.Instance);
         var result = new ScalarValue[arr.RowCount, 1];
         var selectedCount = 0;
@@ -181,6 +184,60 @@ public static partial class BuiltInFunctions
         var trimmed = new ScalarValue[selectedCount, 1];
         Array.Copy(result, trimmed, selectedCount);
         return new RangeValue(trimmed);
+    }
+
+    private static bool TryReuseStrictlyMonotonicNumericSingleColumn(RangeValue arr, out ScalarValue result)
+    {
+        result = BlankValue.Instance;
+        if (arr.RowCount == 0)
+            return false;
+
+        if (arr.RowCount == 1)
+        {
+            result = new RangeValue(arr.Cells);
+            return true;
+        }
+
+        if (!TryGetUniqueNumericValue(arr.Cells[0, 0], out var previous) || !double.IsFinite(previous))
+            return false;
+
+        var direction = 0;
+        for (var row = 1; row < arr.RowCount; row++)
+        {
+            if (!TryGetUniqueNumericValue(arr.Cells[row, 0], out var current) || !double.IsFinite(current))
+                return false;
+
+            var comparison = current.CompareTo(previous);
+            if (comparison == 0)
+                return false;
+
+            var currentDirection = comparison > 0 ? 1 : -1;
+            if (direction == 0)
+                direction = currentDirection;
+            else if (direction != currentDirection)
+                return false;
+
+            previous = current;
+        }
+
+        result = new RangeValue(arr.Cells);
+        return true;
+    }
+
+    private static bool TryGetUniqueNumericValue(ScalarValue value, out double number)
+    {
+        switch (value)
+        {
+            case NumberValue n:
+                number = n.Value;
+                return true;
+            case DateTimeValue dt:
+                number = dt.Value;
+                return true;
+            default:
+                number = 0d;
+                return false;
+        }
     }
 
     private sealed class UniqueScalarComparer : IEqualityComparer<ScalarValue>

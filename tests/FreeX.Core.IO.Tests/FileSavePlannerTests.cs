@@ -7,6 +7,56 @@ namespace FreeX.Core.IO.Tests;
 public sealed class FileSavePlannerTests
 {
     [Fact]
+    public void CanSkipCleanSave_ReturnsTrueForCleanWorkbookAndSameTargetPath()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Book.xlsx");
+
+        var skip = FileSavePlanner.CanSkipCleanSave(
+            workbookDirty: false,
+            currentFilePath: $"  {path}  ",
+            targetPath: path);
+
+        skip.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CanSkipCleanSave_ReturnsFalseForDirtyWorkbook()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Book.xlsx");
+
+        var skip = FileSavePlanner.CanSkipCleanSave(
+            workbookDirty: true,
+            currentFilePath: path,
+            targetPath: path);
+
+        skip.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CanSkipCleanSave_ReturnsFalseForSaveAsTarget()
+    {
+        var directory = Path.GetTempPath();
+
+        var skip = FileSavePlanner.CanSkipCleanSave(
+            workbookDirty: false,
+            currentFilePath: Path.Combine(directory, "Book.xlsx"),
+            targetPath: Path.Combine(directory, "Copy.xlsx"));
+
+        skip.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CanSkipCleanSave_ReturnsFalseForMalformedPaths()
+    {
+        var skip = FileSavePlanner.CanSkipCleanSave(
+            workbookDirty: false,
+            currentFilePath: "bad\0Book.xlsx",
+            targetPath: "bad\0Book.xlsx");
+
+        skip.Should().BeFalse();
+    }
+
+    [Fact]
     public void TryResolveExistingPath_UsesOnlySaveCapableFormats()
     {
         var adapter = new FakeAdapter([

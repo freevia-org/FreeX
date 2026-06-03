@@ -127,6 +127,62 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedCharts()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable chart export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(8));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(14));
+            sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+            sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(11));
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 20, 8));
+            sheet.Charts.Add(new ChartModel
+            {
+                Type = ChartType.Column,
+                DataRange = new GridRange(
+                    new CellAddress(sheet.Id, 1, 1),
+                    new CellAddress(sheet.Id, 4, 2)),
+                Title = "Chart Title PDF Text",
+                XAxisTitle = "Month Axis PDF Text",
+                YAxisTitle = "Sales Axis PDF Text",
+                Left = 24,
+                Top = 24,
+                Width = 260,
+                Height = 180
+            });
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Chart Title PDF Text");
+                pdfText.Should().Contain("Month Axis PDF Text");
+                pdfText.Should().Contain("Sales Axis PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedHeaderFooter()
     {
         StaTestRunner.Run(() =>

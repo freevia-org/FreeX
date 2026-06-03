@@ -2396,7 +2396,7 @@ public partial class XlsxCorpusRunnerTests
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
                 string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(rel.Attribute("Target")?.Value, "calcChain.xml", StringComparison.OrdinalIgnoreCase))
+                string.Equals(rel.Attribute("Target")?.Value, "/xl/calcChain.xml", StringComparison.OrdinalIgnoreCase))
             .Should()
             .ContainSingle(because);
     }

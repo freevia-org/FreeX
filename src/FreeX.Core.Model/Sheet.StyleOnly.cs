@@ -5,6 +5,9 @@ public sealed partial class Sheet
     /// <summary>Whether any empty cells carry style-only overrides.</summary>
     public bool HasStyleOnlyCells => _styleOnly.Count != 0;
 
+    /// <summary>Number of empty cells that carry style-only overrides.</summary>
+    public int StyleOnlyCellCount => _styleOnly.Count;
+
     /// <summary>Returns the style-only override for an empty cell, or null if none exists.</summary>
     public StyleId? GetStyleOnly(uint row, uint col)
         => _styleOnly.TryGetValue((row, col), out var s) ? s : null;

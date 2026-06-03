@@ -127,6 +127,10 @@ public sealed partial class MainWindowSourceHygieneTests
         saveAsMethod.Should().Contain("HideStartScreen();");
 
         var saveTargetMethod = ExtractMethodSource(backstageSource, "private async Task<bool> SaveWorkbookToTargetAsync(");
+        saveTargetMethod.Should().Contain("FileSavePlanner.CanSkipCleanSave(_workbookDirty, _currentFilePath, target)");
+        saveTargetMethod.IndexOf("FileSavePlanner.CanSkipCleanSave", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(saveTargetMethod.IndexOf("ConfirmUnsupportedXlsxFeatureSave()", StringComparison.Ordinal));
         saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingWorkbook\")");
         saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingFilePreparing\")");
         saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
@@ -149,8 +153,27 @@ public sealed partial class MainWindowSourceHygieneTests
         closingMethod.Should().Contain("_ = Dispatcher.BeginInvoke(new Action(Close));");
 
         var finalCloseMethod = ExtractMethodSource(lifecycleSource, "private void PrepareActiveWorkbookForFinalClose()");
+        finalCloseMethod.Should().Contain("ReleaseWorkbookUiStateForClose();");
+        finalCloseMethod.IndexOf("ReleaseWorkbookUiStateForClose();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(finalCloseMethod.IndexOf("if (!IsFinalWorkbookWindowClose())", StringComparison.Ordinal));
         finalCloseMethod.Should().Contain("XlsxFileAdapter.ForgetLoadedPackageSnapshot(_workbook);");
         finalCloseMethod.Should().Contain("_workbookRef.Current = replacement;");
+
+        var releaseUiMethod = ExtractMethodSource(lifecycleSource, "private void ReleaseWorkbookUiStateForClose()");
+        releaseUiMethod.Should().Contain("ClearFormulaReferenceHighlights();");
+        releaseUiMethod.Should().Contain("ClearClipboardVisualState();");
+        releaseUiMethod.Should().Contain("_internalClipboard = null;");
+        releaseUiMethod.Should().Contain("SheetGrid.Viewport = null;");
+        releaseUiMethod.Should().Contain("SheetGrid.Charts = null;");
+        releaseUiMethod.Should().Contain("SheetGrid.Pictures = null;");
+        releaseUiMethod.Should().Contain("SheetGrid.NativeSlicers = null;");
+        releaseUiMethod.Should().Contain("_sheetTabs.Clear();");
+        releaseUiMethod.Should().Contain("SheetTabsControl.ItemsSource = null;");
+        releaseUiMethod.Should().Contain("PivotAvailableFieldsList.ItemsSource = null;");
+        releaseUiMethod.Should().Contain("SlicerItemsControl.ItemsSource = null;");
+        releaseUiMethod.Should().Contain("TimelineItemsControl.ItemsSource = null;");
+        releaseUiMethod.Should().Contain("_lastViewportSlicerTimelineRefreshKey = null;");
 
         keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewWorkbook, async (_, _) => await RequestNewWorkbookAsync());");
         keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveWorkbook, SaveButton_Click);");
