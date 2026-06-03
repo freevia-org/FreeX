@@ -276,6 +276,29 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void DataValidationNativeMetadataSave_UsesCachedXmlNamesAndDirectAnchorScan()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "XlsxDataValidationNativeMetadataMapper.cs"));
+
+        source.Should().Contain("private static readonly XName DataValidationsName");
+        source.Should().Contain("private static readonly XName DataValidationName");
+        source.Should().Contain("private static bool IsElementAfterDataValidations");
+        source.Should().Contain("foreach (var element in root.Elements())");
+        source.Should().NotContain(
+            "new XElement(WorksheetNs + \"dataValidation\")",
+            "data-validation native metadata save should reuse cached XML names in its per-rule path");
+        source.Should().NotContain(
+            ".FirstOrDefault(element =>",
+            "data-validation insertion should avoid LINQ iterator allocation while scanning worksheet children");
+        source.Should().NotContain(
+            "ElementsAfterDataValidations",
+            "a switch keeps the fixed worksheet-order anchor set allocation-free");
+    }
+
+    [Fact]
     public void SavePostProcessing_BatchesSourcePackageReplayWorksheetMetadataXmlWrites()
     {
         var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
