@@ -2,6 +2,44 @@ namespace FreeX.Core.Commands;
 
 internal static partial class RowColumnShiftHelpers
 {
+    internal static List<KeyValuePair<TKey, TValue>>? CaptureDictionary<TKey, TValue>(
+        Dictionary<TKey, TValue> source)
+        where TKey : notnull
+    {
+        if (source.Count == 0)
+            return null;
+
+        var snapshot = new List<KeyValuePair<TKey, TValue>>(source.Count);
+        foreach (var pair in source)
+            snapshot.Add(pair);
+
+        return snapshot;
+    }
+
+    internal static List<uint>? CaptureSet(HashSet<uint> source)
+    {
+        if (source.Count == 0)
+            return null;
+
+        var snapshot = new List<uint>(source.Count);
+        foreach (var value in source)
+            snapshot.Add(value);
+
+        return snapshot;
+    }
+
+    internal static List<uint>? CaptureSortedSet(SortedSet<uint> source)
+    {
+        if (source.Count == 0)
+            return null;
+
+        var snapshot = new List<uint>(source.Count);
+        foreach (var value in source)
+            snapshot.Add(value);
+
+        return snapshot;
+    }
+
     internal static void ShiftIndexesUp(Dictionary<uint, double> values, uint start, uint count)
     {
         if (values.Count == 0)
@@ -190,18 +228,44 @@ internal static partial class RowColumnShiftHelpers
             target[key] = value;
     }
 
-    internal static void RestoreSet(HashSet<uint> target, HashSet<uint>? snapshot)
+    internal static void RestoreDictionary(
+        Dictionary<uint, double> target,
+        IReadOnlyList<KeyValuePair<uint, double>>? snapshot)
     {
         if (snapshot is null)
             return;
 
         target.Clear();
-        target.UnionWith(snapshot);
+        foreach (var (key, value) in snapshot)
+            target[key] = value;
+    }
+
+    internal static void RestoreSet(HashSet<uint> target, IReadOnlyCollection<uint>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        target.Clear();
+        foreach (var value in snapshot)
+            target.Add(value);
     }
 
     internal static void RestoreDictionary<TKey, TValue>(
         Dictionary<TKey, TValue> target,
         Dictionary<TKey, TValue>? snapshot)
+        where TKey : notnull
+    {
+        if (snapshot is null)
+            return;
+
+        target.Clear();
+        foreach (var (key, value) in snapshot)
+            target[key] = value;
+    }
+
+    internal static void RestoreDictionary<TKey, TValue>(
+        Dictionary<TKey, TValue> target,
+        IReadOnlyList<KeyValuePair<TKey, TValue>>? snapshot)
         where TKey : notnull
     {
         if (snapshot is null)

@@ -809,6 +809,22 @@ public class InsertDeleteRowsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void DeleteRowsCommand_UsesCompactMetadataSnapshotsForUndo()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src",
+            "FreeX.Core.Commands",
+            "DeleteRowsCommand.cs"));
+
+        source.Should().Contain("CaptureDictionary(sheet.RowHeights)");
+        source.Should().Contain("CaptureSet(sheet.HiddenRows)");
+        source.Should().Contain("CaptureSortedSet(sheet.RowPageBreaks)");
+        source.Should().NotContain("new Dictionary<uint, double>(sheet.RowHeights)");
+        source.Should().NotContain("[.. sheet.HiddenRows]");
+        source.Should().NotContain("sheet.RowPageBreaks.ToList()");
+    }
+
     private const int DenseShiftRows = 500;
     private const int DenseShiftColumns = 80;
     private const uint DenseShiftBeforeRow = 2;
@@ -849,6 +865,21 @@ public class InsertDeleteRowsTests
         }
 
         return (workbook, sheet, new SimpleCtx(workbook));
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = dir.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file {Path.Combine(parts)}");
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
