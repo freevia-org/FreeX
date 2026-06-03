@@ -1246,12 +1246,18 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void DrawFormulaTraceArrow_ReusesCachedFrozenArrowHeadGeometry()
+    public void DrawFormulaTraceArrow_ReusesCachedFrozenArrowDrawingsAndArrowHeadGeometry()
     {
         var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
         var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
         var drawFormulaTraceArrow = overlaysSource[
             overlaysSource.IndexOf("private void DrawFormulaTraceArrow", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private Drawing GetFormulaTraceArrowDrawing", StringComparison.Ordinal)];
+        var getArrowDrawing = overlaysSource[
+            overlaysSource.IndexOf("private Drawing GetFormulaTraceArrowDrawing", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private Drawing CreateFormulaTraceArrowDrawing", StringComparison.Ordinal)];
+        var createArrowDrawing = overlaysSource[
+            overlaysSource.IndexOf("private Drawing CreateFormulaTraceArrowDrawing", StringComparison.Ordinal)..
             overlaysSource.IndexOf("private Geometry GetFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)];
         var getArrowHeadGeometry = overlaysSource[
             overlaysSource.IndexOf("private Geometry GetFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)..
@@ -1261,17 +1267,28 @@ public sealed class GridViewRenderPerformanceTests
             overlaysSource.IndexOf("private void ClearFormulaTraceArrowHeadGeometryCache", StringComparison.Ordinal)];
 
         overlaysSource.Should().Contain("private const int FormulaTraceArrowHeadGeometryCacheLimit = 4096;");
+        overlaysSource.Should().Contain("private const int FormulaTraceArrowDrawingCacheLimit = 4096;");
         overlaysSource.Should().Contain("private readonly Dictionary<FormulaTraceArrowHeadGeometryKey, Geometry> _formulaTraceArrowHeadGeometryCache = new();");
+        overlaysSource.Should().Contain("private readonly Dictionary<FormulaTraceArrowDrawingKey, Drawing> _formulaTraceArrowDrawingCache = new();");
         overlaysSource.Should().Contain("private readonly record struct FormulaTraceArrowHeadGeometryKey(Point Start, Point End);");
-        drawFormulaTraceArrow.Should().Contain("GetFormulaTraceArrowHeadGeometry(start, end, vector, perpendicular)");
+        overlaysSource.Should().Contain("private readonly record struct FormulaTraceArrowDrawingKey(Point Start, Point End);");
+        drawFormulaTraceArrow.Should().Contain("GetFormulaTraceArrowDrawing(start, end)");
         drawFormulaTraceArrow.Should().NotContain("CreateFormulaTraceArrowHeadGeometry");
+        getArrowDrawing.Should().Contain("_formulaTraceArrowDrawingCache.TryGetValue(key, out var cached)");
+        getArrowDrawing.Should().Contain("_formulaTraceArrowDrawingCache.Count >= FormulaTraceArrowDrawingCacheLimit");
+        getArrowDrawing.Should().Contain("_formulaTraceArrowDrawingCache.Clear();");
+        getArrowDrawing.Should().Contain("_formulaTraceArrowDrawingCache.Add(key, drawing);");
+        createArrowDrawing.Should().Contain("new DrawingGroup()");
+        createArrowDrawing.Should().Contain("GetFormulaTraceArrowHeadGeometry(start, end, vector, perpendicular)");
+        createArrowDrawing.Should().Contain("drawing.Freeze();");
         getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.TryGetValue(key, out var cached)");
         getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Count >= FormulaTraceArrowHeadGeometryCacheLimit");
         getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Clear();");
         getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Add(key, geometry);");
         createArrowHeadGeometry.Should().Contain("new StreamGeometry()");
         createArrowHeadGeometry.Should().Contain("geometry.Freeze();");
-        overlaysSource.Should().Contain("private void ClearFormulaTraceArrowHeadGeometryCache() => _formulaTraceArrowHeadGeometryCache.Clear();");
+        overlaysSource.Should().Contain("_formulaTraceArrowHeadGeometryCache.Clear();");
+        overlaysSource.Should().Contain("_formulaTraceArrowDrawingCache.Clear();");
         propertiesSource.Should().Contain("OnFormulaTraceRenderCacheInputChanged");
         propertiesSource.Should().Contain("grid.ClearFormulaTraceArrowHeadGeometryCache();");
         propertiesSource.Should().Contain("FormulaTraceArrowsProperty");
