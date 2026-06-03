@@ -82,6 +82,22 @@ public static partial class PrintRenderer
         if (rowsPerPage < 1) rowsPerPage = 1;
         uint columnsPerPage = (uint)Math.Floor(printableW / MinimumPrintColumnWidth);
         if (columnsPerPage < 1) columnsPerPage = 1;
+        rowsPerPage = ApplyScaleToFitCapacity(
+            rowsPerPage,
+            usedRange.Value.Start.Row,
+            usedRange.Value.End.Row,
+            sheet.PrintTitleRows,
+            CellAddress.MaxRow,
+            sheet.ScaleToFit.ScalePercent,
+            sheet.ScaleToFit.FitToPagesTall);
+        columnsPerPage = ApplyScaleToFitCapacity(
+            columnsPerPage,
+            usedRange.Value.Start.Col,
+            usedRange.Value.End.Col,
+            sheet.PrintTitleColumns,
+            CellAddress.MaxCol,
+            sheet.ScaleToFit.ScalePercent,
+            sheet.ScaleToFit.FitToPagesWide);
 
         var rowPlans = PrintLayoutPlanner.BuildRowPlans(
             usedRange.Value,
@@ -294,6 +310,54 @@ public static partial class PrintRenderer
             WorksheetPaperSize.Legal => (8.5, 14.0),
             _ => (8.27, 11.69)
         };
+
+    private static uint ApplyScaleToFitCapacity(
+        uint baseItemsPerPage,
+        uint start,
+        uint end,
+        WorksheetRepeatRange? repeat,
+        uint maxItem,
+        int? scalePercent,
+        int? fitToPages)
+    {
+        if (scalePercent is { } percent and >= 10 and <= 400)
+            return Math.Max(1, (uint)Math.Floor(baseItemsPerPage * (100d / percent)));
+
+        if (fitToPages is not { } pageCount || pageCount < 1)
+            return baseItemsPerPage;
+
+        var titleCount = CountRepeatItems(repeat, maxItem);
+        var bodyCount = CountBodyItems(start, end, repeat);
+        if (bodyCount == 0)
+            return Math.Max(1, titleCount);
+
+        var bodyItemsPerPage = (uint)Math.Ceiling(bodyCount / (double)pageCount);
+        return Math.Max(1, bodyItemsPerPage + titleCount);
+    }
+
+    private static uint CountRepeatItems(WorksheetRepeatRange? repeat, uint maxItem)
+    {
+        if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
+            return 0;
+
+        return Math.Min(range.End, maxItem) - range.Start + 1;
+    }
+
+    private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat)
+    {
+        if (end < start)
+            return 0;
+
+        var count = end - start + 1;
+        if (repeat is not { } range || range.End < start || range.Start > end)
+            return count;
+
+        var overlapStart = Math.Max(start, range.Start);
+        var overlapEnd = Math.Min(end, range.End);
+        return overlapEnd >= overlapStart
+            ? count - (overlapEnd - overlapStart + 1)
+            : count;
+    }
 
     private sealed record PdfLinkTarget(string Target, HyperlinkTargetKind TargetKind);
 
