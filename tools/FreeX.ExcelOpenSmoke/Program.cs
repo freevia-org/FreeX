@@ -1063,33 +1063,32 @@ internal static class ExcelOpenSmoke
     {
         var fileName = Path.GetFileName(generatedFile);
         var expectFreeXPreSave = workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel;
+        WorkbookSmokeExpectations? expectations = null;
 
         if (fileName.Contains("grid_formulas", StringComparison.OrdinalIgnoreCase))
-            return FormulaExpectations(saveReopen, expectFreeXPreSave, minFormulaCells: 4);
+            expectations = FormulaExpectations(saveReopen, expectFreeXPreSave, minFormulaCells: 4);
+        else if (fileName.Contains("validation_cf", StringComparison.OrdinalIgnoreCase))
+            expectations = ValidationCfExpectations(saveReopen, expectFreeXPreSave);
+        else if (fileName.Contains("tables", StringComparison.OrdinalIgnoreCase))
+            expectations = StructuredTableExpectations(saveReopen, expectFreeXPreSave, minStructuredTables: 1);
+        else if (fileName.Contains("objects_links", StringComparison.OrdinalIgnoreCase))
+            expectations = ObjectsLinksExpectations(saveReopen, expectFreeXPreSave);
+        else if (fileName.Contains("images_sparklines", StringComparison.OrdinalIgnoreCase))
+            expectations = ImagesSparklinesExpectations(saveReopen, expectFreeXPreSave);
+        else if (fileName.Contains("shapes_text", StringComparison.OrdinalIgnoreCase))
+            expectations = ShapesTextExpectations(saveReopen, expectFreeXPreSave);
+        else if (fileName.Contains("pivots", StringComparison.OrdinalIgnoreCase))
+            expectations = PivotTableExpectations(saveReopen, expectFreeXPreSave);
+        else if (fileName.Contains("protection_page", StringComparison.OrdinalIgnoreCase))
+            expectations = ProtectionPageExpectations(saveReopen, expectFreeXPreSave);
 
-        if (fileName.Contains("validation_cf", StringComparison.OrdinalIgnoreCase))
-            return ValidationCfExpectations(saveReopen, expectFreeXPreSave);
-
-        if (fileName.Contains("tables", StringComparison.OrdinalIgnoreCase))
-            return StructuredTableExpectations(saveReopen, expectFreeXPreSave, minStructuredTables: 1);
-
-        if (fileName.Contains("objects_links", StringComparison.OrdinalIgnoreCase))
-            return ObjectsLinksExpectations(saveReopen, expectFreeXPreSave);
-
-        if (fileName.Contains("images_sparklines", StringComparison.OrdinalIgnoreCase))
-            return ImagesSparklinesExpectations(saveReopen, expectFreeXPreSave);
-
-        if (fileName.Contains("shapes_text", StringComparison.OrdinalIgnoreCase))
-            return ShapesTextExpectations(saveReopen, expectFreeXPreSave);
-
-        if (fileName.Contains("pivots", StringComparison.OrdinalIgnoreCase))
-            return PivotTableExpectations(saveReopen, expectFreeXPreSave);
-
-        if (fileName.Contains("protection_page", StringComparison.OrdinalIgnoreCase))
-            return ProtectionPageExpectations(saveReopen, expectFreeXPreSave);
-
-        return null;
+        return RequireNoFreeXLoadWarnings(expectations);
     }
+
+    private static WorkbookSmokeExpectations? RequireNoFreeXLoadWarnings(WorkbookSmokeExpectations? expectations) =>
+        expectations is null
+            ? null
+            : expectations with { RequireNoFreeXLoadWarnings = true };
 
     private static WorkbookSmokeExpectations ExcelAuthoredFixtureExpectations(bool saveReopen) =>
         new(
@@ -1122,7 +1121,8 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedPivotTables: 1,
             MinExcelReopenedPivotTables: saveReopen ? 1 : 0,
             MinFreeXReopenedPivotTables: saveReopen ? 1 : 0,
-            MinFreeXReopenedPivotCaches: saveReopen ? 1 : 0);
+            MinFreeXReopenedPivotCaches: saveReopen ? 1 : 0,
+            RequireNoFreeXLoadWarnings: true);
 
     private static WorkbookSmokeExpectations FormulaExpectations(
         bool saveReopen,
