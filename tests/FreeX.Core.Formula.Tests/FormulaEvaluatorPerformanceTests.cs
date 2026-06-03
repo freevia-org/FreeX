@@ -150,7 +150,9 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(expected);
         _output.WriteLine(
             $"PERF repeated boolean coercion formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(4_000_000);
+        allocatedBytes.Should().BeLessThan(
+            1_024,
+            "boolean arithmetic should reuse cached small integer NumberValue results instead of allocating one result per evaluation");
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 

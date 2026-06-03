@@ -103,7 +103,10 @@ public class DependencyGraphTests
         source.Should().NotContain(
             "private static bool ContainsVolatileFunction",
             "volatile detection should stay fused with reference collection on the registration hot path");
-        referenceCollection.Should().Contain("BuiltInFunctions.IsVolatile(func.FunctionName)");
+        referenceCollection.Should().Contain("IsVolatileFunctionName(func.FunctionName)");
+        referenceCollection.Should().NotContain(
+            "BuiltInFunctions.IsVolatile(",
+            "dependency-only rebuild should not initialize the full built-in function registry just to detect volatile names");
         referenceCollection.Should().Contain("for (var i = 0; i < arguments.Count; i++)");
         referenceCollection.Should().Contain("CollectReferences(arguments[i]");
         referenceCollection.Should().NotContain(
