@@ -853,9 +853,11 @@ internal static class ExcelOpenSmoke
     {
         if (string.Equals(row.Id, "local-private-sample-dashboard-20250116", StringComparison.OrdinalIgnoreCase))
         {
-            return PartnerDashboardExpectations(
-                saveReopen,
-                expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel);
+            return ApplyFreeXLoadWarningExpectation(
+                row,
+                PartnerDashboardExpectations(
+                    saveReopen,
+                    expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel));
         }
 
         if (HasSupportedFeatureExpectations(row))
