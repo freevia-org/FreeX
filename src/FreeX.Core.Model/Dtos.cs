@@ -13,7 +13,7 @@ public readonly record struct DisplayCell(
     ConditionalFormatIcon? ConditionalIcon = null,
     bool HasComment = false);
 
-public sealed record ConditionalFormatIcon(
+public readonly record struct ConditionalFormatIcon(
     string Style,
     int IconIndex,
     int IconCount,
