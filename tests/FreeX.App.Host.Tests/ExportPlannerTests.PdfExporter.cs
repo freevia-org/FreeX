@@ -874,6 +874,30 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentProperties_FromWorkbook_UsesWorkbookUserNameWhenAvailable()
+    {
+        var workbook = new Workbook("Budget Model")
+        {
+            FileSharing = new WorkbookFileSharingModel
+            {
+                UserName = "  Analyst  "
+            }
+        };
+
+        PdfDocumentProperties.FromWorkbook(
+                workbook,
+                new ExportOptions(
+                    ExportContentScope.ActiveSheet,
+                    IncludeDocumentProperties: true,
+                    OpenAfterPublish: false))
+            .Should().Be(new PdfDocumentProperties(
+                Title: "Budget Model",
+                Author: "Analyst",
+                Subject: "FreeX workbook export",
+                Keywords: "FreeX, spreadsheet"));
+    }
+
+    [Fact]
     public void XpsDocumentProperties_ApplyToPackageProperties_WhenOptionIsRequested()
     {
         var workbook = new Workbook("Budget Model");
@@ -893,6 +917,31 @@ public partial class ExportPlannerTests
         package.PackageProperties.Creator.Should().Be("FreeX");
         package.PackageProperties.Subject.Should().Be("FreeX workbook export");
         package.PackageProperties.Keywords.Should().Be("FreeX, spreadsheet");
+    }
+
+    [Fact]
+    public void XpsDocumentProperties_FromWorkbook_UsesWorkbookUserNameWhenAvailable()
+    {
+        var workbook = new Workbook("Budget Model")
+        {
+            FileSharing = new WorkbookFileSharingModel
+            {
+                UserName = "  Analyst  "
+            }
+        };
+        using var stream = new MemoryStream();
+        using var package = System.IO.Packaging.Package.Open(stream, FileMode.Create, FileAccess.ReadWrite);
+
+        XpsDocumentProperties.ApplyToPackage(
+            package,
+            XpsDocumentProperties.FromWorkbook(
+                workbook,
+                new ExportOptions(
+                    ExportContentScope.ActiveSheet,
+                    IncludeDocumentProperties: true,
+                    OpenAfterPublish: false)));
+
+        package.PackageProperties.Creator.Should().Be("Analyst");
     }
 
     [Fact]

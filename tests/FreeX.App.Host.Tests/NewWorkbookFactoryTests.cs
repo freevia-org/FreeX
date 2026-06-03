@@ -49,6 +49,21 @@ public sealed class NewWorkbookFactoryTests
     }
 
     [Fact]
+    public void Create_FromOptions_HonorsNormalizedUserNameMetadata()
+    {
+        var workbook = NewWorkbookFactory.Create(new FreeXOptions
+        {
+            UserName = "  Analyst  ",
+            DefaultSheetCount = 1
+        });
+
+        workbook.FileSharing.Should().BeEquivalentTo(new WorkbookFileSharingModel
+        {
+            UserName = "Analyst"
+        });
+    }
+
+    [Fact]
     public void AppAndFileNew_RouteFullOptionsIntoFactory()
     {
         var appSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs"));
