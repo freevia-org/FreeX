@@ -63,6 +63,22 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Fact]
+    public void ParsedReferenceNodes_CacheColumnNumbers()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaNode.cs"));
+
+        source.Should().Contain(
+            "public uint ColumnNumber { get; } = Model.CellAddress.ColumnNameToNumber(ColumnName);",
+            "parsed cell references should not recompute column names on every evaluation");
+        source.Should().Contain(
+            "public uint StartColumnNumber { get; } = Model.CellAddress.ColumnNameToNumber(StartColumnName);",
+            "parsed whole-column references should cache their start column number");
+        source.Should().Contain(
+            "public uint EndColumnNumber { get; } = Model.CellAddress.ColumnNameToNumber(EndColumnName);",
+            "parsed whole-column references should cache their end column number");
+    }
+
+    [Fact]
     public void DirectLookupFastPaths_ReuseResolvedSheetReader()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaEvaluator.LookupFastPaths.cs"));

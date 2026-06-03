@@ -28,7 +28,7 @@ public sealed record CellRefNode(
 ) : FormulaNode
 {
     /// <summary>Get the column as a 1-based number.</summary>
-    public uint ColumnNumber => Model.CellAddress.ColumnNameToNumber(ColumnName);
+    public uint ColumnNumber { get; } = Model.CellAddress.ColumnNameToNumber(ColumnName);
 }
 
 /// <summary>A range reference (e.g. A1:C3, Sheet2!A1:A10).</summary>
@@ -43,8 +43,8 @@ public sealed record FullColumnRangeRefNode(
     string? SheetName = null
 ) : FormulaNode
 {
-    public uint StartColumnNumber => Model.CellAddress.ColumnNameToNumber(StartColumnName);
-    public uint EndColumnNumber => Model.CellAddress.ColumnNameToNumber(EndColumnName);
+    public uint StartColumnNumber { get; } = Model.CellAddress.ColumnNameToNumber(StartColumnName);
+    public uint EndColumnNumber { get; } = Model.CellAddress.ColumnNameToNumber(EndColumnName);
 }
 
 /// <summary>A whole-row range reference (e.g. 1:1, Sheet2!1:2).</summary>
