@@ -228,6 +228,9 @@ public sealed class DependencyGraph
             if (TryBuildSingleRootExactChainPlan(changedList, out var chainPlan))
                 return chainPlan;
 
+            if (TryBuildSingleLeafExactDependentPlan(changedList, out var leafPlan))
+                return leafPlan;
+
             if (changedList.Count == 0 || !HasAnyDependents(changedList))
                 return EmptyPlan;
         }
@@ -333,6 +336,46 @@ public sealed class DependencyGraph
 
             current = dependents[0];
         }
+    }
+
+    private bool TryBuildSingleLeafExactDependentPlan(
+        IReadOnlyList<CellAddress> changedCells,
+        out RecalcPlan plan)
+    {
+        plan = EmptyPlan;
+        if (changedCells.Count == 0 || _rangeDependentsBySheet.Count != 0)
+            return false;
+
+        var hasDependent = false;
+        var leaf = default(CellAddress);
+        for (var i = 0; i < changedCells.Count; i++)
+        {
+            if (!_dependents.TryGetValue(changedCells[i], out var dependents) || dependents.Count == 0)
+                continue;
+
+            for (var depIndex = 0; depIndex < dependents.Count; depIndex++)
+            {
+                var dependent = dependents[depIndex];
+                if (!hasDependent)
+                {
+                    leaf = dependent;
+                    hasDependent = true;
+                    continue;
+                }
+
+                if (!dependent.Equals(leaf))
+                    return false;
+            }
+        }
+
+        if (!hasDependent)
+            return false;
+
+        if (_dependents.TryGetValue(leaf, out var downstream) && downstream.Count != 0)
+            return false;
+
+        plan = new RecalcPlan([leaf], []);
+        return true;
     }
 
     /// <summary>

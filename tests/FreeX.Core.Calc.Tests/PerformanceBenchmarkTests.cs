@@ -162,8 +162,8 @@ public class PerformanceBenchmarkTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(3));
         allocated.Should().BeGreaterThan(0);
         (allocated / iterations).Should().BeLessThan(
-            2_250,
-            "exact-only recalc traversal should not allocate a HashSet for every dependency step");
+            600,
+            "multi-root exact edits that invalidate one leaf formula should skip BFS and topological scaffolding");
     }
 
     [Fact]
