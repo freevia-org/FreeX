@@ -243,6 +243,15 @@ internal static class XlsxStylesheetMetadataPreserver
                 continue;
             }
 
+            // Source and target dxf lists are aligned by raw index, but a rebuild reorders dxfs (ClosedXML's
+            // dxfs plus FreeX's appended advanced-conditional-format dxfs land in a different order than the
+            // source). Merging native font/fill/border content into a dxf that renders a different style would
+            // corrupt it (e.g. inject a red font into an unrelated green-fill rule), so only merge when the two
+            // dxfs render the same visible style. Genuinely corresponding dxfs still recover their native
+            // metadata; for the rest, FreeX's model has already re-emitted that metadata into the rebuilt dxf.
+            if (!RendersEquivalentDifferentialStyle(sourceStyle, targetStyles[index], workbookNs))
+                continue;
+
             if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceStyle, targetStyles[index]))
                 changed = true;
             if (XlsxAdvancedConditionalFormatWriter.NormalizeDifferentialStyleOrder(targetStyles[index], workbookNs))
@@ -253,6 +262,25 @@ internal static class XlsxStylesheetMetadataPreserver
             "count",
             targetDifferentialStyles.Elements(workbookNs + "dxf").Count().ToString(CultureInfo.InvariantCulture));
         return changed;
+    }
+
+    // Two dxfs "render the same style" when their modeled font/fill/border/number-format produce an equal
+    // CellStyle. Native (unmodeled) metadata is intentionally ignored here — that is precisely what the merge
+    // recovers — so it is cleared before comparing.
+    private static bool RendersEquivalentDifferentialStyle(XElement sourceDxf, XElement targetDxf, XNamespace workbookNs)
+    {
+        var sourceStyle = XlsxDifferentialStyleReader.ReadDifferentialStyle(sourceDxf, workbookNs);
+        var targetStyle = XlsxDifferentialStyleReader.ReadDifferentialStyle(targetDxf, workbookNs);
+        ClearNativeDifferentialMetadata(sourceStyle);
+        ClearNativeDifferentialMetadata(targetStyle);
+        return sourceStyle.Equals(targetStyle);
+    }
+
+    private static void ClearNativeDifferentialMetadata(FreeX.Core.Model.CellStyle style)
+    {
+        style.NativeDifferentialAttributes = null;
+        style.NativeDifferentialChildXmls = null;
+        style.NativeDifferentialElementXmls = null;
     }
 
     private static bool MergeDifferentialStyleContainerAttributes(XElement sourceDifferentialStyles, XElement targetDifferentialStyles)

@@ -41,6 +41,10 @@ internal static class XlsxDifferentialStyleReader
         }
     }
 
+    // Reads a single <dxf> into its modeled CellStyle (including captured native metadata). Exposed so
+    // the stylesheet metadata preserver can compare two dxfs' visible styles before merging them.
+    internal static CellStyle ReadDifferentialStyle(XElement dxf, XNamespace workbookNs) => Read(dxf, workbookNs);
+
     private static CellStyle Read(XElement dxf, XNamespace workbookNs)
     {
         var style = new CellStyle();
