@@ -4,6 +4,7 @@ using System.Diagnostics;
 
 namespace FreeX.Core.Model.Tests;
 
+[Collection("CellAddress performance")]
 public partial class CellAddressTests
 {
     [Fact]
@@ -219,3 +220,6 @@ public partial class CellAddressTests
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
     }
 }
+
+[CollectionDefinition("CellAddress performance", DisableParallelization = true)]
+public sealed class CellAddressPerformanceCollection;
