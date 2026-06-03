@@ -205,6 +205,54 @@ public sealed partial class GridViewPerformanceMeasurementTests
         return grid;
     }
 
+    private static GridView CreateCommentIndicatorGrid(double width, double height)
+    {
+        const int rowCount = 120;
+        const int columnCount = 80;
+        const double rowHeight = 20;
+        const double columnWidth = 64;
+
+        var sheetId = SheetId.New();
+        var rows = Enumerable
+            .Range(0, rowCount)
+            .Select(index => new RowMetric((uint)(index + 1), rowHeight, index * rowHeight))
+            .ToArray();
+        var columns = Enumerable
+            .Range(0, columnCount)
+            .Select(index => new ColMetric((uint)(index + 1), columnWidth, index * columnWidth))
+            .ToArray();
+        var cells = new List<DisplayCell>(rowCount * columnCount);
+        foreach (var row in rows)
+        {
+            foreach (var column in columns)
+            {
+                cells.Add(new DisplayCell(
+                    row.Row,
+                    column.Col,
+                    BlankValue.Instance,
+                    "",
+                    null,
+                    StyleId.Default,
+                    null,
+                    HasComment: true));
+            }
+        }
+
+        var grid = new GridView
+        {
+            Width = width,
+            Height = height,
+            Viewport = new ViewportModel(cells, rows, columns),
+            SelectedRange = new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 1, 1))
+        };
+        grid.Measure(new Size(width, height));
+        grid.Arrange(new Rect(0, 0, width, height));
+        grid.UpdateLayout();
+        return grid;
+    }
+
     private static GridView CreateSparklineGrid(double width, double height)
     {
         const int rowCount = 80;

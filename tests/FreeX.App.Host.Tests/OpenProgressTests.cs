@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Diagnostics;
 
 namespace FreeX.App.Host.Tests;
 
@@ -35,5 +36,45 @@ public sealed class OpenProgressTests
             .Should().Be("Loading file (reading worksheets)");
         OpenWorkbookProgressPlanner.FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(6))
             .Should().Be("Loading file (building workbook)");
+    }
+
+    [Fact]
+    public void FormatLoadingFileDetail_PreservesTrimmedCaseInsensitivePhaseMatching()
+    {
+        OpenWorkbookProgressPlanner.FormatLoadingFileDetail(" Parsing ", TimeSpan.FromSeconds(9))
+            .Should().Be("Loading file (loading styles)");
+    }
+
+    [Fact]
+    public void Benchmark_FormatLoadingFileDetail_RepeatedTimerTicksReportsAllocation()
+    {
+        const int iterations = 200_000;
+
+        OpenWorkbookProgressPlanner.FormatLoadingFileDetail("parsing", TimeSpan.Zero).Should().NotBeEmpty();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            if (!OpenWorkbookProgressPlanner.FormatLoadingFileDetail("parsing", TimeSpan.FromSeconds(i % 12))
+                    .StartsWith("Loading file", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("The progress detail should remain localized.");
+            }
+        }
+
+        stopwatch.Stop();
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        Console.WriteLine(
+            "PERF OPEN_PROGRESS_DETAIL_FORMAT " +
+            $"steps={iterations} total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        allocatedBytes.Should().BeLessThan(50_000);
     }
 }

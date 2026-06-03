@@ -901,6 +901,7 @@ public partial class GridView
     }
 
     private const int CellClipGeometryCacheLimit = 16384;
+    private const int CommentIndicatorGeometryCacheLimit = 16384;
 
     private RectangleGeometry GetCellClipGeometry(Rect rect)
     {
@@ -934,7 +935,23 @@ public partial class GridView
         return lookup;
     }
 
-    private static void DrawCommentIndicator(DrawingContext dc, Rect rect)
+    private void DrawCommentIndicator(DrawingContext dc, Rect rect) =>
+        dc.DrawGeometry(Brushes.Red, null, GetCommentIndicatorGeometry(rect));
+
+    private Geometry GetCommentIndicatorGeometry(Rect rect)
+    {
+        if (_commentIndicatorGeometryCache.TryGetValue(rect, out var cached))
+            return cached;
+
+        if (_commentIndicatorGeometryCache.Count >= CommentIndicatorGeometryCacheLimit)
+            _commentIndicatorGeometryCache.Clear();
+
+        var geometry = CreateCommentIndicatorGeometry(rect);
+        _commentIndicatorGeometryCache.Add(rect, geometry);
+        return geometry;
+    }
+
+    private static Geometry CreateCommentIndicatorGeometry(Rect rect)
     {
         const double size = 7;
         var geometry = new StreamGeometry();
@@ -945,7 +962,7 @@ public partial class GridView
             context.LineTo(new Point(rect.Right, rect.Top + size), isStroked: true, isSmoothJoin: false);
         }
         geometry.Freeze();
-        dc.DrawGeometry(Brushes.Red, null, geometry);
+        return geometry;
     }
 
     private static bool ShouldClipText(

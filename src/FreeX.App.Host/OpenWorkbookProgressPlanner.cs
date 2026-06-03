@@ -24,8 +24,58 @@ public static class OpenWorkbookProgressPlanner
     public static string FormatLoadingFileDetail(string phase, TimeSpan elapsed)
     {
         var normalizedPhase = NormalizePhase(phase);
-        var messages = GetPhaseMessages(normalizedPhase);
-        return messages[CalculateDetailIndex(elapsed, messages.Length)];
+        if (string.Equals(normalizedPhase, "reading", StringComparison.OrdinalIgnoreCase))
+        {
+            return SelectPhaseMessage(
+                elapsed,
+                "Progress_LoadingFileReading",
+                "Progress_LoadingFileReadingBytes",
+                "Progress_LoadingFileCheckingPackage");
+        }
+
+        if (string.Equals(normalizedPhase, "inspecting", StringComparison.OrdinalIgnoreCase))
+        {
+            return SelectPhaseMessage(
+                elapsed,
+                "Progress_LoadingFileInspecting",
+                "Progress_LoadingFileCheckingWorkbookParts",
+                "Progress_LoadingFileDetectingFeatures");
+        }
+
+        if (string.Equals(normalizedPhase, "parsing", StringComparison.OrdinalIgnoreCase))
+        {
+            return SelectPhaseMessage(
+                elapsed,
+                "Progress_LoadingFileParsing",
+                "Progress_LoadingFileReadingWorksheets",
+                "Progress_LoadingFileBuildingWorkbook",
+                "Progress_LoadingFileLoadingStyles");
+        }
+
+        if (string.Equals(normalizedPhase, "calculating", StringComparison.OrdinalIgnoreCase))
+        {
+            return SelectPhaseMessage(
+                elapsed,
+                "Progress_LoadingFileCalculating",
+                "Progress_LoadingFileEvaluatingFormulas",
+                "Progress_LoadingFileRefreshingValues");
+        }
+
+        if (string.Equals(normalizedPhase, "preparing view", StringComparison.OrdinalIgnoreCase))
+        {
+            return SelectPhaseMessage(
+                elapsed,
+                "Progress_LoadingFilePreparingView",
+                "Progress_LoadingFileLayingOutWorksheet",
+                "Progress_LoadingFileRestoringSelection");
+        }
+
+        if (string.Equals(normalizedPhase, "preparing", StringComparison.OrdinalIgnoreCase))
+            return UiText.Get("Progress_LoadingFilePreparing");
+
+        return string.Equals(normalizedPhase, "done", StringComparison.OrdinalIgnoreCase)
+            ? UiText.Get("Progress_LoadingFileDone")
+            : UiText.Get("Progress_LoadingFileWorking");
     }
 
     public static string ProgressTitle() => UiText.Get("Progress_OpeningWorkbook");
@@ -35,44 +85,27 @@ public static class OpenWorkbookProgressPlanner
             ? string.Empty
             : phase.Trim();
 
-    private static string[] GetPhaseMessages(string normalizedPhase) =>
-        normalizedPhase.ToLowerInvariant() switch
+    private static string SelectPhaseMessage(TimeSpan elapsed, string firstKey, string secondKey, string thirdKey) =>
+        UiText.Get(CalculateDetailIndex(elapsed, 3) switch
         {
-            "reading" =>
-            [
-                UiText.Get("Progress_LoadingFileReading"),
-                UiText.Get("Progress_LoadingFileReadingBytes"),
-                UiText.Get("Progress_LoadingFileCheckingPackage")
-            ],
-            "inspecting" =>
-            [
-                UiText.Get("Progress_LoadingFileInspecting"),
-                UiText.Get("Progress_LoadingFileCheckingWorkbookParts"),
-                UiText.Get("Progress_LoadingFileDetectingFeatures")
-            ],
-            "parsing" =>
-            [
-                UiText.Get("Progress_LoadingFileParsing"),
-                UiText.Get("Progress_LoadingFileReadingWorksheets"),
-                UiText.Get("Progress_LoadingFileBuildingWorkbook"),
-                UiText.Get("Progress_LoadingFileLoadingStyles")
-            ],
-            "calculating" =>
-            [
-                UiText.Get("Progress_LoadingFileCalculating"),
-                UiText.Get("Progress_LoadingFileEvaluatingFormulas"),
-                UiText.Get("Progress_LoadingFileRefreshingValues")
-            ],
-            "preparing view" =>
-            [
-                UiText.Get("Progress_LoadingFilePreparingView"),
-                UiText.Get("Progress_LoadingFileLayingOutWorksheet"),
-                UiText.Get("Progress_LoadingFileRestoringSelection")
-            ],
-            "preparing" => [UiText.Get("Progress_LoadingFilePreparing")],
-            "done" => [UiText.Get("Progress_LoadingFileDone")],
-            _ => [UiText.Get("Progress_LoadingFileWorking")]
-        };
+            0 => firstKey,
+            1 => secondKey,
+            _ => thirdKey
+        });
+
+    private static string SelectPhaseMessage(
+        TimeSpan elapsed,
+        string firstKey,
+        string secondKey,
+        string thirdKey,
+        string fourthKey) =>
+        UiText.Get(CalculateDetailIndex(elapsed, 4) switch
+        {
+            0 => firstKey,
+            1 => secondKey,
+            2 => thirdKey,
+            _ => fourthKey
+        });
 
     private static int CalculateDetailIndex(TimeSpan elapsed, int messageCount) =>
         (int)Math.Floor(Math.Max(0, elapsed.TotalSeconds) / DetailRotationIntervalSeconds) % messageCount;
