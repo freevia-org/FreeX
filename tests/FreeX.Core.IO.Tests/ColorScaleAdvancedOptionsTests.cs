@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
@@ -31,7 +30,7 @@ public sealed class ColorScaleAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, saved);
 
-        var colorScale = ReadWorksheetXml(saved)
+        var colorScale = XlsxPackageTestHelper.ReadWorksheetXml(saved)
             .Descendants(MainNs + "colorScale")
             .Should()
             .ContainSingle()
@@ -66,7 +65,7 @@ public sealed class ColorScaleAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, saved);
 
-        var colors = ReadWorksheetXml(saved)
+        var colors = XlsxPackageTestHelper.ReadWorksheetXml(saved)
             .Descendants(MainNs + "colorScale")
             .Should()
             .ContainSingle()
@@ -102,7 +101,7 @@ public sealed class ColorScaleAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, saved);
 
-        var colors = ReadWorksheetXml(saved)
+        var colors = XlsxPackageTestHelper.ReadWorksheetXml(saved)
             .Descendants(MainNs + "colorScale")
             .Should()
             .ContainSingle()
@@ -117,7 +116,7 @@ public sealed class ColorScaleAdvancedOptionsTests
 
     private static MemoryStream CreateXlsxWithColorScaleGteThresholds()
     {
-        return CreateXlsxWithPatchedWorksheet(root =>
+        return XlsxPackageTestHelper.CreatePackageWithPatchedWorksheet(root =>
         {
             root.Add(
                 new XElement(MainNs + "conditionalFormatting",
@@ -146,7 +145,7 @@ public sealed class ColorScaleAdvancedOptionsTests
 
     private static MemoryStream CreateXlsxWithThemeColorScaleColors()
     {
-        return CreateXlsxWithPatchedWorksheet(root =>
+        return XlsxPackageTestHelper.CreatePackageWithPatchedWorksheet(root =>
         {
             root.Add(
                 new XElement(MainNs + "conditionalFormatting",
@@ -166,7 +165,7 @@ public sealed class ColorScaleAdvancedOptionsTests
 
     private static MemoryStream CreateXlsxWithIndexedColorScaleColors()
     {
-        using var sourcePackage = CreateXlsxWithPatchedWorksheet(root =>
+        using var sourcePackage = XlsxPackageTestHelper.CreatePackageWithPatchedWorksheet(root =>
         {
             root.Add(
                 new XElement(MainNs + "conditionalFormatting",
@@ -197,44 +196,10 @@ public sealed class ColorScaleAdvancedOptionsTests
         return package;
     }
 
-    private static MemoryStream CreateXlsxWithPatchedWorksheet(Action<XElement> patchRoot)
-    {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
-        using var package = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, package);
-        package.Position = 0;
-
-        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
-            XDocument xml;
-            using (var reader = new StreamReader(entry.Open()))
-                xml = XDocument.Load(reader);
-
-            patchRoot(xml.Root!);
-
-            entry.Delete();
-            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var writer = new StreamWriter(replacement.Open());
-            xml.Save(writer);
-        }
-
-        package.Position = 0;
-        return new MemoryStream(package.ToArray());
-    }
-
     private static void ReplaceIndexedColors(MemoryStream package, params string[] argbColors)
     {
-        package.Position = 0;
-        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        XlsxPackageTestHelper.PatchPackageXml(package, "xl/styles.xml", xml =>
         {
-            var entry = archive.GetEntry("xl/styles.xml")!;
-            XDocument xml;
-            using (var reader = new StreamReader(entry.Open()))
-                xml = XDocument.Load(reader);
-
             var colors = xml.Root!.Element(MainNs + "colors");
             if (colors is null)
             {
@@ -246,22 +211,7 @@ public sealed class ColorScaleAdvancedOptionsTests
             colors.Add(new XElement(
                 MainNs + "indexedColors",
                 argbColors.Select(color => new XElement(MainNs + "rgbColor", new XAttribute("rgb", color)))));
-
-            entry.Delete();
-            var replacement = archive.CreateEntry("xl/styles.xml");
-            using var writer = new StreamWriter(replacement.Open());
-            xml.Save(writer);
-        }
-
-        package.Position = 0;
-    }
-
-    private static XDocument ReadWorksheetXml(MemoryStream stream)
-    {
-        stream.Position = 0;
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
-        return XDocument.Load(reader);
+        });
     }
 
     private static string ToArgb(CellColor color) =>

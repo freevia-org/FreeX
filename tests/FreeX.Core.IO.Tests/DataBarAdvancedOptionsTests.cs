@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
@@ -38,7 +37,7 @@ public sealed class DataBarAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, stream);
 
-        var worksheet = ReadWorksheetXml(stream);
+        var worksheet = XlsxPackageTestHelper.ReadWorksheetXml(stream);
         var x14DataBar = worksheet.Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         x14DataBar.Attribute("border")?.Value.Should().Be("1");
         x14DataBar.Attribute("axisPosition")?.Value.Should().Be("middle");
@@ -56,7 +55,7 @@ public sealed class DataBarAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, stream);
 
-        var worksheet = ReadWorksheetXml(stream);
+        var worksheet = XlsxPackageTestHelper.ReadWorksheetXml(stream);
         var x14DataBar = worksheet.Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         x14DataBar.Attribute("gradient")?.Value.Should().Be("1");
         x14DataBar.Attribute("border")?.Value.Should().Be("1");
@@ -71,7 +70,7 @@ public sealed class DataBarAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, stream);
 
-        var x14DataBar = ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
+        var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         var thresholds = x14DataBar.Elements(X14Ns + "cfvo").ToArray();
         thresholds.Should().HaveCount(2);
         thresholds[0].Attribute("type")?.Value.Should().Be("num");
@@ -115,7 +114,7 @@ public sealed class DataBarAdvancedOptionsTests
         using var saved = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, saved);
 
-        var worksheet = ReadWorksheetXml(saved);
+        var worksheet = XlsxPackageTestHelper.ReadWorksheetXml(saved);
         var x14DataBar = worksheet.Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         x14DataBar.Attributes("border").Should().ContainSingle();
         x14DataBar.Attributes("axisPosition").Should().ContainSingle();
@@ -136,7 +135,7 @@ public sealed class DataBarAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, saved);
 
-        var worksheet = ReadWorksheetXml(saved);
+        var worksheet = XlsxPackageTestHelper.ReadWorksheetXml(saved);
         var x14Rule = worksheet.Descendants(X14Ns + "cfRule")
             .Single(ruleXml => ruleXml.Attribute("id")?.Value == "{11111111-2222-3333-4444-555555555555}");
         var maybeX14DataBar = x14Rule.Element(X14Ns + "dataBar");
@@ -162,7 +161,7 @@ public sealed class DataBarAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, saved);
 
-        var x14DataBar = ReadWorksheetXml(saved).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
+        var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(saved).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         x14DataBar.Attribute("gradient")?.Value.Should().Be("1");
         x14DataBar.Attribute("border").Should().BeNull();
         x14DataBar.Attribute("axisPosition").Should().BeNull();
@@ -185,7 +184,7 @@ public sealed class DataBarAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, saved);
 
-        var axisColor = ReadWorksheetXml(saved).Descendants(MainNs + "axisColor").Should().ContainSingle().Subject;
+        var axisColor = XlsxPackageTestHelper.ReadWorksheetXml(saved).Descendants(MainNs + "axisColor").Should().ContainSingle().Subject;
         axisColor.Attribute("theme")?.Value.Should().Be("1");
         axisColor.Attribute("rgb").Should().BeNull();
     }
@@ -209,7 +208,7 @@ public sealed class DataBarAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, saved);
 
-        var x14DataBar = ReadWorksheetXml(saved).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
+        var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(saved).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         x14DataBar.Attribute("border")?.Value.Should().Be("1");
         var maybeAxisColor = x14DataBar.Element(X14Ns + "axisColor");
         maybeAxisColor.Should().NotBeNull();
@@ -240,11 +239,11 @@ public sealed class DataBarAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, stream);
 
-        var x14DataBar = ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
+        var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         x14DataBar.Attribute("gradient")?.Value.Should().Be("1");
         x14DataBar.Element(X14Ns + "axisColor")?.Attribute("theme")?.Value.Should().Be("1");
         x14DataBar.Element(X14Ns + "fillColor")?.Attribute("theme")?.Value.Should().Be("2");
-        ReadWorksheetXml(stream).Descendants(X14Ns + "id").Should().ContainSingle();
+        XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(X14Ns + "id").Should().ContainSingle();
     }
 
     [Fact]
@@ -273,7 +272,7 @@ public sealed class DataBarAdvancedOptionsTests
 
         new XlsxFileAdapter().Save(workbook, stream);
 
-        var dataBar = ReadWorksheetXml(stream).Descendants(MainNs + "dataBar").Should().ContainSingle().Subject;
+        var dataBar = XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(MainNs + "dataBar").Should().ContainSingle().Subject;
         dataBar.Attribute("border")?.Value.Should().Be("1");
         dataBar.Attribute("axisPosition")?.Value.Should().Be("middle");
         dataBar.Element(MainNs + "axisColor")?.Attribute("rgb")?.Value.Should().Be("FF010203");
@@ -321,20 +320,9 @@ public sealed class DataBarAdvancedOptionsTests
 
     private static MemoryStream CreateXlsxWithAdvancedDataBarXml()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
-        using var package = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, package);
-        package.Position = 0;
-
-        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        XlsxPackageTestHelper.PatchWorksheetXml(package, xml =>
         {
-            var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
-            XDocument xml;
-            using (var reader = new StreamReader(entry.Open()))
-                xml = XDocument.Load(reader);
-
             var root = xml.Root!;
             root.Add(
                 new XElement(MainNs + "conditionalFormatting",
@@ -379,33 +367,16 @@ public sealed class DataBarAdvancedOptionsTests
                                         new XElement(X14Ns + "axisColor", new XAttribute("rgb", "FF010203")),
                                         new XElement(X14Ns + "negativeFillColor", new XAttribute("rgb", "FF040506")),
                                         new XElement(X14Ns + "negativeBorderColor", new XAttribute("rgb", "FF070809")))))))));
+        });
 
-            entry.Delete();
-            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var writer = new StreamWriter(replacement.Open());
-            xml.Save(writer);
-        }
-
-        package.Position = 0;
-        return new MemoryStream(package.ToArray());
+        return package;
     }
 
     private static MemoryStream CreateXlsxWithMainAdvancedDataBarXml()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
-        using var package = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, package);
-        package.Position = 0;
-
-        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        XlsxPackageTestHelper.PatchWorksheetXml(package, xml =>
         {
-            var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
-            XDocument xml;
-            using (var reader = new StreamReader(entry.Open()))
-                xml = XDocument.Load(reader);
-
             xml.Root!.Add(
                 new XElement(MainNs + "conditionalFormatting",
                     new XAttribute("sqref", "A1:A5"),
@@ -428,33 +399,16 @@ public sealed class DataBarAdvancedOptionsTests
                             new XElement(MainNs + "axisColor", new XAttribute("rgb", "FF010203")),
                             new XElement(MainNs + "negativeFillColor", new XAttribute("rgb", "FF040506")),
                             new XElement(MainNs + "negativeBorderColor", new XAttribute("rgb", "FF070809"))))));
+        });
 
-            entry.Delete();
-            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var writer = new StreamWriter(replacement.Open());
-            xml.Save(writer);
-        }
-
-        package.Position = 0;
-        return new MemoryStream(package.ToArray());
+        return package;
     }
 
     private static MemoryStream CreateXlsxWithMainNativeOnlyDataBarXml()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
-        using var package = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, package);
-        package.Position = 0;
-
-        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        XlsxPackageTestHelper.PatchWorksheetXml(package, xml =>
         {
-            var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
-            XDocument xml;
-            using (var reader = new StreamReader(entry.Open()))
-                xml = XDocument.Load(reader);
-
             xml.Root!.Add(
                 new XElement(MainNs + "conditionalFormatting",
                     new XAttribute("sqref", "A1:A5"),
@@ -467,33 +421,16 @@ public sealed class DataBarAdvancedOptionsTests
                             new XElement(MainNs + "cfvo", new XAttribute("type", "max")),
                             new XElement(MainNs + "color", new XAttribute("rgb", "FF0A141E")),
                             new XElement(MainNs + "axisColor", new XAttribute("theme", "1"))))));
+        });
 
-            entry.Delete();
-            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var writer = new StreamWriter(replacement.Open());
-            xml.Save(writer);
-        }
-
-        package.Position = 0;
-        return new MemoryStream(package.ToArray());
+        return package;
     }
 
     private static MemoryStream CreateXlsxWithX14NativeOnlyColorDataBarXml()
     {
-        var workbook = new Workbook("Book1");
-        var sheet = workbook.AddSheet("Sheet1");
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
-        using var package = new MemoryStream();
-        new XlsxFileAdapter().Save(workbook, package);
-        package.Position = 0;
-
-        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        XlsxPackageTestHelper.PatchWorksheetXml(package, xml =>
         {
-            var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
-            XDocument xml;
-            using (var reader = new StreamReader(entry.Open()))
-                xml = XDocument.Load(reader);
-
             xml.Root!.Add(
                 new XElement(MainNs + "conditionalFormatting",
                     new XAttribute("sqref", "A1:A5"),
@@ -529,23 +466,9 @@ public sealed class DataBarAdvancedOptionsTests
                                         new XElement(X14Ns + "axisColor", new XAttribute("theme", "1")),
                                         new XElement(X14Ns + "fillColor", new XAttribute("theme", "2")),
                                         new XElement(X14Ns + "borderColor", new XAttribute("theme", "3")))))))));
+        });
 
-            entry.Delete();
-            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var writer = new StreamWriter(replacement.Open());
-            xml.Save(writer);
-        }
-
-        package.Position = 0;
-        return new MemoryStream(package.ToArray());
-    }
-
-    private static XDocument ReadWorksheetXml(MemoryStream stream)
-    {
-        stream.Position = 0;
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
-        return XDocument.Load(reader);
+        return package;
     }
 
     private static readonly XNamespace MainNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
