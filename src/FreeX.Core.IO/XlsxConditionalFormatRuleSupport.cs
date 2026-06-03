@@ -69,6 +69,21 @@ internal static class XlsxConditionalFormatRuleSupport
         block.Elements(worksheetNs + "cfRule")
             .Any(rule => !IsSupportedRuleType(rule.Attribute("type")?.Value, allowBlankType, comparison));
 
+    public static bool HasUnsupportedRule(
+        XDocument worksheetXml,
+        XNamespace worksheetNs,
+        bool allowBlankType,
+        StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+    {
+        foreach (var block in worksheetXml.Root?.Elements(worksheetNs + "conditionalFormatting") ?? [])
+        {
+            if (ConditionalFormattingHasUnsupportedRule(block, worksheetNs, allowBlankType, comparison))
+                return true;
+        }
+
+        return false;
+    }
+
     public static bool IsSupportedRuleType(
         string? type,
         bool allowBlankType,

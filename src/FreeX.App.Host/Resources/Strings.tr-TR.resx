@@ -9461,7 +9461,7 @@ Bu test cihazı yapısı için kilitlenme raporları gönderilsin mi?</value>
     <value>XLSX Çalışma Kitabı (.xlsx)</value>
   </data>
   <data name="Options_DefaultFormatJson" xml:space="preserve">
-    <value>FreeX JSON (.json)</value>
+    <value>FreeX Workbook (.fxl)</value>
   </data>
   <data name="Options_InvalidDefaultFontSizeMessage" xml:space="preserve">
     <value>Pozitif bir varsayılan yazı tipi boyutu girin.</value>

@@ -93,9 +93,9 @@ public sealed partial class XlsxFileAdapter
         if (featurePlan.HasHeaderFooterPictures)
         {
             IReadOnlySet<string>? sheetsToPreserve = null;
-            if (SourcePackages.TryGetValue(workbook, out var sourcePackage))
+            if (SourcePackages.TryGetValue(workbook, out var headerFooterSourcePackage))
             {
-                using var sourceStream = sourcePackage.OpenRead();
+                using var sourceStream = headerFooterSourcePackage.OpenRead();
                 sheetsToPreserve = XlsxHeaderFooterPictureReaderWriter.FindSheetsWithUnchangedSourcePictures(
                     sourceStream,
                     workbook);
@@ -209,7 +209,7 @@ public sealed partial class XlsxFileAdapter
             numberFormatIdMap = XlsxNumberFormatCatalogWriter.Save(packageStream, workbook);
         }
 
-        var hasSourcePackage = SourcePackages.TryGetValue(workbook, out _);
+        var hasSourcePackage = SourcePackages.TryGetValue(workbook, out var sourcePackage);
         if (!hasSourcePackage &&
             workbook.PivotCaches.Count > 0 &&
             featurePlan.HasPivotTables)
@@ -272,7 +272,12 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream, workbook, currentModelFingerprint));
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(
+            packageStream,
+            workbook,
+            currentModelFingerprint,
+            sourcePackage?.WorksheetsWithPreservableSourceMetadata,
+            sourcePackage?.HasUnsupportedConditionalFormatting));
 
         void SaveSourcePackageIndependentPostProcessingMetadata()
         {

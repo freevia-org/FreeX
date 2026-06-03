@@ -9399,7 +9399,7 @@
     <value>XLSX Работна тетрадка (.xlsx)</value>
   </data>
   <data name="Options_DefaultFormatJson" xml:space="preserve">
-    <value>FreeX JSON (.json)</value>
+    <value>FreeX Workbook (.fxl)</value>
   </data>
   <data name="Options_InvalidDefaultFontSizeMessage" xml:space="preserve">
     <value>Въведете положителен размер на шрифта по подразбиране.</value>

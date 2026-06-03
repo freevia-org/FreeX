@@ -36,6 +36,18 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     }
 
     [Fact]
+    public void LoadFromPath_NormalizesLegacyJsonDefaultFormatToFreexWorkbook()
+    {
+        Directory.CreateDirectory(_tempDirectory);
+        var path = Path.Combine(_tempDirectory, "options.json");
+        File.WriteAllText(path, """{ "DefaultFormat": ".json" }""");
+
+        var options = FreeXOptions.LoadFromPath(path);
+
+        options.DefaultFormat.Should().Be(FreeXOptions.FreeXWorkbookDefaultFormat);
+    }
+
+    [Fact]
     public void Save_WhenStorePathCannotBeWritten_ReturnsFalseWithObservableError()
     {
         Directory.CreateDirectory(_tempDirectory);

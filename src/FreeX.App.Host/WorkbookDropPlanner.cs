@@ -28,11 +28,19 @@ public static class WorkbookDropPlanner
     }
 
     private static bool IsFilePathCandidate(string? path) =>
-        !string.IsNullOrWhiteSpace(path) && !Directory.Exists(path);
+        !string.IsNullOrWhiteSpace(path) &&
+        !HasInvalidPathChars(path) &&
+        !Directory.Exists(path);
 
     private static bool TryGetExtension(string? path, out string extension)
     {
         if (string.IsNullOrWhiteSpace(path))
+        {
+            extension = "";
+            return false;
+        }
+
+        if (HasInvalidPathChars(path))
         {
             extension = "";
             return false;
@@ -59,4 +67,7 @@ public static class WorkbookDropPlanner
             return false;
         }
     }
+
+    private static bool HasInvalidPathChars(string path) =>
+        path.IndexOf('\0') >= 0;
 }

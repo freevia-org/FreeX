@@ -6,6 +6,48 @@ namespace FreeX.Core.IO;
 
 internal static partial class XlsxWorksheetMetadataPreserver
 {
+    internal static bool HasPreservableSourceWorksheetMetadata(XDocument sourceWorksheetXml, XNamespace workbookNs)
+    {
+        var retainedChildNames = GetRetainedWorksheetChildNames(workbookNs);
+        var sourceBlocks = retainedChildNames
+            .Select(name => sourceWorksheetXml.Root?.Element(name))
+            .Where(element => element is not null)
+            .Cast<XElement>()
+            .ToList();
+        var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
+        var sourceSheetFormatProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetFormatPr");
+        var sourceDimension = sourceWorksheetXml.Root?.Element(workbookNs + "dimension");
+        var sourcePrintOptions = sourceWorksheetXml.Root?.Element(workbookNs + "printOptions");
+        var sourcePageMargins = sourceWorksheetXml.Root?.Element(workbookNs + "pageMargins");
+        var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
+        var sourceHeaderFooter = sourceWorksheetXml.Root?.Element(workbookNs + "headerFooter");
+        var sourceMergeCells = sourceWorksheetXml.Root?.Element(workbookNs + "mergeCells");
+        var sourceColumns = sourceWorksheetXml.Root?.Element(workbookNs + "cols");
+        var sourceSheetData = sourceWorksheetXml.Root?.Element(workbookNs + "sheetData");
+        var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
+        var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
+        var sourceHyperlinks = sourceWorksheetXml.Root?.Element(workbookNs + "hyperlinks");
+        var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
+
+        return HasPreservableSourceWorksheetMetadata(
+            sourceBlocks,
+            sourceSheetProperties,
+            sourceSheetFormatProperties,
+            sourceDimension,
+            sourcePrintOptions,
+            sourcePageMargins,
+            sourcePageSetup,
+            sourceHeaderFooter,
+            sourceMergeCells,
+            sourceColumns,
+            sourceSheetData,
+            sourceSheetProtection,
+            sourceSheetViews,
+            sourceHyperlinks,
+            sourceExtensionList,
+            workbookNs);
+    }
+
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive, Workbook workbook)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -296,7 +338,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
         Workbook workbook,
-        XlsxSourcePackagePreservationContext? context)
+        XlsxSourcePackagePreservationContext? context,
+        IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata = null)
     {
         if (context is null)
         {
@@ -315,7 +358,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
             context.RelNs,
             context.SourceSheets,
             context.TargetSheets,
-            context);
+            context,
+            worksheetsWithPreservableSourceMetadata);
     }
 
     private static void PreserveWorksheetMetadata(
@@ -327,19 +371,28 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XNamespace relNs,
         IReadOnlyDictionary<string, string> sourceSheets,
         IReadOnlyDictionary<string, string> targetSheets,
-        XlsxSourcePackagePreservationContext? context = null)
+        XlsxSourcePackagePreservationContext? context = null,
+        IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata = null)
     {
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
         {
             if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
+            if (worksheetsWithPreservableSourceMetadata is not null &&
+                !worksheetsWithPreservableSourceMetadata.Contains(sheetName))
+            {
+                continue;
+            }
 
             var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
             if (sourceWorksheetEntry is null)
                 continue;
 
-            if (!HasPreservableSourceWorksheetMetadata(sourceWorksheetEntry, workbookNs))
+            if (worksheetsWithPreservableSourceMetadata is null &&
+                !HasPreservableSourceWorksheetMetadata(sourceWorksheetEntry, workbookNs))
+            {
                 continue;
+            }
 
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
             var sourceWorksheetXml = context?.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);

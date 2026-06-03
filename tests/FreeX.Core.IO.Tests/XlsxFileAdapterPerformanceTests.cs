@@ -133,7 +133,8 @@ public sealed class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("CanReuseBufferForSnapshot: false");
         adapterSource.Should().Contain("CanReuseBufferForSnapshot: true");
         snapshotSource.Should().Contain("allowBufferReuse &&");
-        snapshotSource.Should().Contain("return new XlsxSourcePackage(buffer.Array, buffer.Offset, (int)stream.Length, fingerprint);");
+        snapshotSource.Should().Contain("buffer.Array,");
+        snapshotSource.Should().Contain("worksheetsWithPreservableSourceMetadata");
     }
 
     [Fact]
@@ -163,9 +164,25 @@ public sealed class XlsxFileAdapterPerformanceTests
 
         saveSource.Should().Contain("string? currentModelFingerprint = null;");
         saveSource.Should().Contain("sourcePackage.Matches(workbook, out currentModelFingerprint)");
-        postProcessingSource.Should().Contain("XlsxSourcePackage.Capture(packageStream, workbook, currentModelFingerprint)");
+        postProcessingSource.Should().Contain("currentModelFingerprint,");
+        postProcessingSource.Should().Contain("sourcePackage?.WorksheetsWithPreservableSourceMetadata");
         snapshotSource.Should().Contain("public bool Matches(Workbook workbook, out string? currentModelFingerprint)");
         snapshotSource.Should().Contain("GetModelFingerprint(workbook, currentModelFingerprint)");
+    }
+
+    [Fact]
+    public void SaveSourcePackagePreservation_ReusesLoadTimePlainWorksheetPreflight()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var layoutSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+        var sourcePackageSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"));
+        var preserverSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.cs"));
+
+        adapterSource.Should().Contain("GetWorksheetsWithPreservableSourceMetadata(");
+        layoutSource.Should().Contain("HasPreservableSourceWorksheetMetadata(worksheetXml, worksheetNs)");
+        sourcePackageSource.Should().Contain("sourcePackage.WorksheetsWithPreservableSourceMetadata");
+        preserverSource.Should().Contain("worksheetsWithPreservableSourceMetadata is not null");
+        preserverSource.Should().Contain("!worksheetsWithPreservableSourceMetadata.Contains(sheetName)");
     }
 
     [Fact]
@@ -877,6 +894,21 @@ public sealed class XlsxFileAdapterPerformanceTests
         source.Should().NotContain(
             "sheet.EnumerateCells().Any",
             "ignored-error detection should avoid nested LINQ and cell-address iterator allocation");
+    }
+
+    [Fact]
+    public void StylesheetMetadataPreserver_PreflightsPlainStylesheetBeforeLoadingXml()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStylesheetMetadataPreserver.cs"));
+
+        source.Should().Contain("HasPreservableStylesheetMetadata(sourceStylesEntry)");
+        source.Should().Contain("case \"colors\":");
+        source.Should().Contain("case \"extLst\":");
+        source.Should().Contain("case \"dxfs\":");
+        source.Should().Contain("case \"tableStyles\":");
+        source.Should().Contain("TableStyleMedium2");
+        source.Should().Contain("PivotStyleLight16");
+        source.Should().Contain("return true;");
     }
 
     [Fact]

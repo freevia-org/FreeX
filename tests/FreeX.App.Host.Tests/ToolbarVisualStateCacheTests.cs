@@ -103,6 +103,31 @@ public sealed class ToolbarVisualStateCacheTests
     }
 
     [Fact]
+    public void AddOrUpdate_KeepsRefreshedSourceAfterCacheTrimming()
+    {
+        var cache = new ToolbarVisualStateCache();
+        var workbookId = WorkbookId.New();
+        var refreshedStyle = new StyleId(1);
+
+        for (var style = 1; style <= 16; style++)
+        {
+            cache.AddOrUpdate(
+                workbookId,
+                new StyleId(style),
+                ToolbarVisualState.From(CellStyle.Default));
+        }
+
+        var refreshedState = ToolbarVisualState.From(new CellStyle { Bold = true });
+        cache.AddOrUpdate(workbookId, refreshedStyle, refreshedState);
+        cache.AddOrUpdate(workbookId, new StyleId(17), ToolbarVisualState.From(CellStyle.Default));
+        cache.AddOrUpdate(workbookId, new StyleId(18), ToolbarVisualState.From(CellStyle.Default));
+
+        cache.TryGet(workbookId, refreshedStyle, out var cached).Should().BeTrue();
+        cached.Should().Be(refreshedState);
+        cache.TryGet(workbookId, new StyleId(2), out _).Should().BeFalse();
+    }
+
+    [Fact]
     public void TryGet_ReusesRecentlySeenStateWithoutCreateCallback()
     {
         var cache = new ToolbarVisualStateCache();

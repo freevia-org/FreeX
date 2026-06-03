@@ -10143,7 +10143,7 @@ Trimiteți rapoarte de blocare pentru această versiune de tester?</value>
   </data>
 
 <data name="Options_DefaultFormatJson" xml:space="preserve">
-    <value>FreeX JSON (.json)</value>
+    <value>FreeX Workbook (.fxl)</value>
   </data>
 
 <data name="Options_InvalidDefaultFontSizeMessage" xml:space="preserve">

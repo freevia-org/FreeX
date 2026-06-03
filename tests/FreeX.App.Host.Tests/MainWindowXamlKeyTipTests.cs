@@ -485,6 +485,50 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageShareInfoAndExportButtons_ExposeStableAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var expectedButtons = new[]
+        {
+            (
+                Name: "SsShareNavBtn",
+                Click: "SsShareBtn_Click",
+                AutomationId: "BackstageShareButton",
+                AutomationName: "Share",
+                HelpTextFragment: "Windows Share"),
+            (
+                Name: "SsInfoNavBtn",
+                Click: "SsInfoBtn_Click",
+                AutomationId: "BackstageInfoButton",
+                AutomationName: "Info",
+                HelpTextFragment: "unsupported workbook feature warnings"),
+            (
+                Name: "SsExportNavBtn",
+                Click: "ExportPdfButton_Click",
+                AutomationId: "BackstageExportButton",
+                AutomationName: "Export PDF/XPS",
+                HelpTextFragment: "XPS")
+        };
+
+        foreach (var expected in expectedButtons)
+        {
+            var button = document
+                .Descendants(presentation + "Button")
+                .Single(element => element.Attribute(x + "Name")?.Value == expected.Name);
+
+            button.Attribute("Click")?.Value.Should().Be(expected.Click);
+            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(expected.AutomationId);
+            LocalizedAttribute(button, "AutomationProperties.Name").Should().Be(expected.AutomationName);
+            LocalizedAttribute(button, "AutomationProperties.HelpText")
+                .Should()
+                .Contain(expected.HelpTextFragment);
+        }
+    }
+
+    [Fact]
     public void BackstageInfoVersion_MatchesAboutDialogVersion()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
