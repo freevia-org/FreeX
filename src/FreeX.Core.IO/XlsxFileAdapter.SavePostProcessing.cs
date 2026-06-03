@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using System.Xml.Linq;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -182,7 +183,8 @@ public sealed partial class XlsxFileAdapter
                 XlsxChartXmlWriter.IsSupportedXlsxChart,
                 XlsxChartXmlWriter.ToChartXml,
                 XlsxChartXmlWriter.GetContentType,
-                XlsxChartXmlWriter.GetRelationshipType);
+                XlsxChartXmlWriter.GetRelationshipType,
+                GetSourceDrawingPathsBySheet(workbook));
         }
 
         if (featurePlan.HasSupportedDrawingObjects)
@@ -336,6 +338,68 @@ public sealed partial class XlsxFileAdapter
                 featurePlan.HasSupportedCharts ||
                 featurePlan.HasSupportedDrawingObjects);
     }
+
+    // Maps each source-package sheet to the drawing part it owns. The rebuilt chart writer reuses a chart
+    // sheet's own drawing part (so its charts stay on that sheet) and avoids every other sheet's drawing,
+    // which the source preservation restores at its original path. Without this, a chart sheet's rebuilt
+    // drawing could claim the part name another sheet's source drawing owns and steal its charts.
+    private static IReadOnlyDictionary<string, string> GetSourceDrawingPathsBySheet(Workbook workbook)
+    {
+        if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
+            return EmptyDrawingPathsBySheet;
+
+        try
+        {
+            using var sourceStream = sourcePackage.OpenRead();
+            using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var workbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return EmptyDrawingPathsBySheet;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var workbookRels = XlsxRelationshipReader.LoadTargets(
+                sourceArchive, "xl/_rels/workbook.xml.rels", "xl/workbook.xml", packageRelNs);
+
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (sheetName, worksheetPath) in
+                     XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs))
+            {
+                if (result.ContainsKey(sheetName))
+                    continue;
+
+                var worksheetEntry = sourceArchive.GetEntry(worksheetPath);
+                if (worksheetEntry is null)
+                    continue;
+
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var drawingRelId = worksheetXml.Root?
+                    .Element(workbookNs + "drawing")?
+                    .Attribute(relNs + "id")?
+                    .Value;
+                if (string.IsNullOrWhiteSpace(drawingRelId))
+                    continue;
+
+                var worksheetRels = XlsxRelationshipReader.LoadTargets(
+                    sourceArchive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
+                if (worksheetRels.TryGetValue(drawingRelId, out var drawingPath))
+                    result[sheetName] = XlsxPackagePath.NormalizeZipPath(drawingPath);
+            }
+
+            return result;
+        }
+        catch
+        {
+            return EmptyDrawingPathsBySheet;
+        }
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> EmptyDrawingPathsBySheet =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     private static bool HasIgnoredFormulaErrors(Sheet sheet)
     {

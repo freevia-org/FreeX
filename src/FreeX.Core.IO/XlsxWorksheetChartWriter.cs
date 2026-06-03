@@ -42,7 +42,8 @@ internal static class XlsxWorksheetChartWriter
         Func<ChartModel, bool> isSupportedChart,
         Func<ChartModel, Sheet, XDocument> createChartXml,
         Func<ChartModel, string> getChartContentType,
-        Func<ChartModel, string> getChartRelationshipType)
+        Func<ChartModel, string> getChartRelationshipType,
+        IReadOnlyDictionary<string, string>? sourceDrawingPathsBySheet = null)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -67,7 +68,11 @@ internal static class XlsxWorksheetChartWriter
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-        var drawingIndex = 1;
+        var sourceDrawingPaths = sourceDrawingPathsBySheet ?? EmptyDrawingPathsBySheet;
+        // Every drawing part the source assigns to a sheet is off-limits for a *fresh* allocation; a sheet
+        // reuses only its own.
+        var reservedDrawingPaths = sourceDrawingPaths.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var usedDrawingPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var chartIndex = 1;
         foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
         {
@@ -85,7 +90,36 @@ internal static class XlsxWorksheetChartWriter
             if (!relTargets.TryGetValue(relId, out var worksheetPath))
                 continue;
 
-            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingIndex++, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType);
+            // Reuse the sheet's own source drawing part when it has one (so its rebuilt charts and any
+            // preserved drawing content stay on the same sheet); otherwise allocate a drawing name that
+            // collides with neither another sheet's source drawing nor an already-claimed part.
+            var drawingPath = sourceDrawingPaths.TryGetValue(name, out var ownDrawingPath) &&
+                              usedDrawingPaths.Add(ownDrawingPath)
+                ? ownDrawingPath
+                : AllocateFreshDrawingPath(archive, reservedDrawingPaths, usedDrawingPaths);
+            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingPath, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType);
+        }
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> EmptyDrawingPathsBySheet =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    // Picks the next xl/drawings/drawingN.xml part name that is free: not reserved by a source-package
+    // drawing (those get restored at their original paths for the sheets that own them), not already present
+    // in the package, and not already claimed by another sheet's chart drawing in this pass.
+    private static string AllocateFreshDrawingPath(ZipArchive archive, IReadOnlySet<string> reserved, HashSet<string> used)
+    {
+        var index = 1;
+        while (true)
+        {
+            var path = $"xl/drawings/drawing{index}.xml";
+            if (!reserved.Contains(path) && !used.Contains(path) && archive.GetEntry(path) is null)
+            {
+                used.Add(path);
+                return path;
+            }
+
+            index++;
         }
     }
 
@@ -94,7 +128,7 @@ internal static class XlsxWorksheetChartWriter
         string worksheetPath,
         Sheet sheet,
         IReadOnlyList<ChartModel> charts,
-        int drawingIndex,
+        string drawingPath,
         ref int chartIndex,
         Func<ChartModel, Sheet, XDocument> createChartXml,
         Func<ChartModel, string> getChartContentType,
@@ -113,7 +147,6 @@ internal static class XlsxWorksheetChartWriter
         XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
         XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
-        var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
         var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();
