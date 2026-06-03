@@ -17,6 +17,10 @@ public sealed partial class NativeJsonAdapter
         public ulong ParsedAddress { get; set; }
         [JsonIgnore]
         public char ParsedValueType { get; set; }
+        [JsonIgnore]
+        public bool HasParsedNumericValue { get; set; }
+        [JsonIgnore]
+        public double ParsedNumericValue { get; set; }
         public string? Value { get; set; }
         public string? ValueType { get; set; }
         public string? Formula { get; set; }
@@ -310,7 +314,20 @@ public sealed partial class NativeJsonAdapter
                 else if (reader.ValueTextEquals(ValueProperty))
                 {
                     reader.Read();
-                    dto.Value = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
+                    if (reader.TokenType == JsonTokenType.Null)
+                    {
+                        dto.Value = null;
+                    }
+                    else if ((dto.ParsedValueType is 'n' or 'd') &&
+                        TryReadFiniteNumberToken(ref reader, out var number))
+                    {
+                        dto.HasParsedNumericValue = true;
+                        dto.ParsedNumericValue = number;
+                    }
+                    else
+                    {
+                        dto.Value = reader.GetString();
+                    }
                 }
                 else if (reader.ValueTextEquals(ValueTypeProperty))
                 {
@@ -355,6 +372,53 @@ public sealed partial class NativeJsonAdapter
             }
 
             throw new JsonException();
+        }
+
+        private static bool TryReadFiniteNumberToken(ref Utf8JsonReader reader, out double number)
+        {
+            number = 0;
+            if (reader.TokenType != JsonTokenType.String || reader.HasValueSequence)
+                return false;
+
+            var value = reader.ValueSpan;
+            if (TryParseIntegerNumber(value, out number))
+                return true;
+
+            return Utf8Parser.TryParse(value, out number, out var bytesConsumed) &&
+                bytesConsumed == value.Length &&
+                double.IsFinite(number);
+        }
+
+        private static bool TryParseIntegerNumber(ReadOnlySpan<byte> value, out double number)
+        {
+            number = 0;
+            if (value.Length == 0)
+                return false;
+
+            var index = 0;
+            var negative = false;
+            if (value[index] is (byte)'-' or (byte)'+')
+            {
+                negative = value[index] == (byte)'-';
+                index++;
+                if (index == value.Length)
+                    return false;
+            }
+
+            ulong integer = 0;
+            for (; index < value.Length; index++)
+            {
+                var digit = (uint)(value[index] - (byte)'0');
+                if (digit > 9)
+                    return false;
+                if (integer > (ulong.MaxValue - digit) / 10)
+                    return false;
+
+                integer = integer * 10 + digit;
+            }
+
+            number = negative ? -(double)integer : integer;
+            return double.IsFinite(number);
         }
 
         private static char ReadValueTypeToken(ref Utf8JsonReader reader, out string? valueType)
@@ -456,26 +520,26 @@ public sealed partial class NativeJsonAdapter
                 case BlankValue:
                     return;
                 case NumberValue number:
+                    writer.WriteString(ValueTypeName, double.IsFinite(number.Value) ? "n" : "t");
                     writer.WritePropertyName(ValueName);
                     WriteNumberStringValue(writer, number.Value);
-                    writer.WriteString(ValueTypeName, double.IsFinite(number.Value) ? "n" : "t");
                     return;
                 case DateTimeValue dateTime:
+                    writer.WriteString(ValueTypeName, double.IsFinite(dateTime.Value) ? "d" : "t");
                     writer.WritePropertyName(ValueName);
                     WriteNumberStringValue(writer, dateTime.Value);
-                    writer.WriteString(ValueTypeName, double.IsFinite(dateTime.Value) ? "d" : "t");
                     return;
                 case BoolValue boolean:
-                    writer.WriteString(ValueName, boolean.Value ? "TRUE" : "FALSE");
                     writer.WriteString(ValueTypeName, "b");
+                    writer.WriteString(ValueName, boolean.Value ? "TRUE" : "FALSE");
                     return;
                 case TextValue text:
-                    writer.WriteString(ValueName, text.Value);
                     writer.WriteString(ValueTypeName, "t");
+                    writer.WriteString(ValueName, text.Value);
                     return;
                 case ErrorValue error:
-                    writer.WriteString(ValueName, error.Code);
                     writer.WriteString(ValueTypeName, "e");
+                    writer.WriteString(ValueName, error.Code);
                     return;
             }
         }

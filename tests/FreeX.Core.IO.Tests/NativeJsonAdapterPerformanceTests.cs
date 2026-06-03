@@ -350,6 +350,26 @@ public sealed class NativeJsonAdapterPerformanceTests
     }
 
     [Fact]
+    public void LoadCellReader_ParsesNumericValuesWithoutAllocatingPerCellStrings()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.cs"));
+        var dtoSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.CellDto.cs"));
+
+        dtoSource.Should().Contain("TryReadFiniteNumberToken(ref reader, out var number)");
+        dtoSource.Should().Contain("dto.HasParsedNumericValue = true;");
+        dtoSource.Should().Contain("writer.WriteString(ValueTypeName, double.IsFinite(number.Value) ? \"n\" : \"t\");");
+        dtoSource.Should().Contain("writer.WriteString(ValueTypeName, double.IsFinite(dateTime.Value) ? \"d\" : \"t\");");
+        adapterSource.Should().Contain("cDto.HasParsedNumericValue && cDto.ParsedValueType == 'n'");
+        adapterSource.Should().Contain("cDto.HasParsedNumericValue && cDto.ParsedValueType == 'd'");
+    }
+
+    [Fact]
     public void LoadDenseCells_PreSizesSheetCellStorage()
     {
         var adapterSource = File.ReadAllText(FindRepoFile(

@@ -162,6 +162,9 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
 
     private CommandOutcome? GetLockedCopyDestination(Workbook workbook, Sheet sheet, CopyOutputPlan plan)
     {
+        if (!sheet.IsProtected)
+            return null;
+
         for (uint r = 0; r < plan.ProtectionCheckRowsToReplace; r++)
         {
             for (uint c = 0; c < plan.ProtectionCheckWidth; c++)
