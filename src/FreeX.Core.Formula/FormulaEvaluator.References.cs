@@ -454,118 +454,94 @@ public sealed partial class FormulaEvaluator
     private ScalarValue EvaluateIsFormula(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 1) return ErrorValue.Value;
-        var arg = node.Arguments[0];
-        if (arg is NamedRangeNode nm)
-        {
-            var range = context.TryResolveNamedRange(nm.Name);
-            if (range is null) return ErrorValue.Name;
-            var r = range.Value;
-            var sheetName = context.TryGetSheetName(r.Start.Sheet);
-            var cell = sheetName is not null
-                ? context.TryGetCell(sheetName, r.Start.Row, r.Start.Col)
-                : context.TryGetCell(r.Start.Row, r.Start.Col);
-            return cell?.HasFormula == true ? TrueValue : FalseValue;
-        }
-        if (arg is CellRefNode cellRef)
-        {
-            if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
-                return ErrorValue.Ref;
-            var cell = cellRef.SheetName is not null
-                ? context.TryGetCell(cellRef.SheetName, cellRef.Row, cellRef.ColumnNumber)
-                : context.TryGetCell(cellRef.Row, cellRef.ColumnNumber);
-            return cell?.HasFormula == true ? TrueValue : FalseValue;
-        }
-        if (arg is RangeRefNode rangeRef)
-        {
-            if (rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName))
-                return ErrorValue.Ref;
-            var cell = rangeRef.SheetName is not null
-                ? context.TryGetCell(rangeRef.SheetName, rangeRef.Start.Row, rangeRef.Start.ColumnNumber)
-                : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
-            return cell?.HasFormula == true ? TrueValue : FalseValue;
-        }
-        if (arg is FullColumnRangeRefNode fullColumnRangeRef)
-            return EvaluateIsFormula(new FunctionCallNode(node.FunctionName, [ToRangeRef(fullColumnRangeRef)]), context);
-        if (arg is FullRowRangeRefNode fullRowRangeRef)
-            return EvaluateIsFormula(new FunctionCallNode(node.FunctionName, [ToRangeRef(fullRowRangeRef)]), context);
-        if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
-        {
-            var reference = EvaluateReferenceReturningFunction(fn, context);
-            if (reference is ErrorValue error) return error;
-            var range = (RangeValue)reference;
-            var cell = range.SheetName is not null
-                ? context.TryGetCell(range.SheetName, range.StartRow, range.StartCol)
-                : context.TryGetCell(range.StartRow, range.StartCol);
-            return cell?.HasFormula == true ? TrueValue : FalseValue;
-        }
-        return ErrorValue.Value;
+        var error = TryResolveReferenceTopLeftCell(
+            node.Arguments[0],
+            context,
+            unsupportedReferenceError: ErrorValue.Value,
+            mapReferenceFunctionValueErrorToNA: false,
+            out var cell);
+
+        return error is not null ? error : cell?.HasFormula == true ? TrueValue : FalseValue;
     }
 
     private ScalarValue EvaluateFormulaText(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 1) return ErrorValue.NA;
-        var arg = node.Arguments[0];
-        FreeX.Core.Model.Cell? cell = null;
-        if (arg is CellRefNode cellRef)
-        {
-            if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
-                return ErrorValue.Ref;
-            cell = cellRef.SheetName is not null
-                ? context.TryGetCell(cellRef.SheetName, cellRef.Row, cellRef.ColumnNumber)
-                : context.TryGetCell(cellRef.Row, cellRef.ColumnNumber);
-        }
-        else if (arg is RangeRefNode rangeRef)
-        {
-            if (rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName))
-                return ErrorValue.Ref;
-            cell = rangeRef.SheetName is not null
-                ? context.TryGetCell(rangeRef.SheetName, rangeRef.Start.Row, rangeRef.Start.ColumnNumber)
-                : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
-        }
-        else if (arg is FullColumnRangeRefNode fullColumnRangeRef)
-        {
-            var range = ToRangeRef(fullColumnRangeRef);
-            if (range.SheetName is not null && !context.SheetExists(range.SheetName))
-                return ErrorValue.Ref;
-            cell = range.SheetName is not null
-                ? context.TryGetCell(range.SheetName, range.Start.Row, range.Start.ColumnNumber)
-                : context.TryGetCell(range.Start.Row, range.Start.ColumnNumber);
-        }
-        else if (arg is FullRowRangeRefNode fullRowRangeRef)
-        {
-            var range = ToRangeRef(fullRowRangeRef);
-            if (range.SheetName is not null && !context.SheetExists(range.SheetName))
-                return ErrorValue.Ref;
-            cell = range.SheetName is not null
-                ? context.TryGetCell(range.SheetName, range.Start.Row, range.Start.ColumnNumber)
-                : context.TryGetCell(range.Start.Row, range.Start.ColumnNumber);
-        }
-        else if (arg is NamedRangeNode nm)
-        {
-            var range = context.TryResolveNamedRange(nm.Name);
-            if (range is null) return ErrorValue.Name;
-            var r = range.Value;
-            var sheetName = context.TryGetSheetName(r.Start.Sheet);
-            cell = sheetName is not null
-                ? context.TryGetCell(sheetName, r.Start.Row, r.Start.Col)
-                : context.TryGetCell(r.Start.Row, r.Start.Col);
-        }
-        else if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
-        {
-            var reference = EvaluateReferenceReturningFunction(fn, context);
-            if (reference is ErrorValue error) return error == ErrorValue.Value ? ErrorValue.NA : error;
-            var range = (RangeValue)reference;
-            cell = range.SheetName is not null
-                ? context.TryGetCell(range.SheetName, range.StartRow, range.StartCol)
-                : context.TryGetCell(range.StartRow, range.StartCol);
-        }
-        else
-        {
-            return ErrorValue.NA;
-        }
+        var error = TryResolveReferenceTopLeftCell(
+            node.Arguments[0],
+            context,
+            unsupportedReferenceError: ErrorValue.NA,
+            mapReferenceFunctionValueErrorToNA: true,
+            out var cell);
+
+        if (error is not null) return error;
         if (cell is null || !cell.HasFormula) return ErrorValue.NA;
         var formulaText = cell.FormulaText!;
         return new TextValue(formulaText.StartsWith('=') ? formulaText : "=" + formulaText);
+    }
+
+    private ErrorValue? TryResolveReferenceTopLeftCell(
+        FormulaNode node,
+        IEvalContext context,
+        ErrorValue unsupportedReferenceError,
+        bool mapReferenceFunctionValueErrorToNA,
+        out Cell? cell)
+    {
+        cell = null;
+
+        if (TryAsRangeRef(node, out var rangeRef))
+            return TryGetTopLeftCell(rangeRef, context, out cell);
+
+        if (node is CellRefNode cellRef)
+            return TryGetCell(cellRef.SheetName, cellRef.Row, cellRef.ColumnNumber, context, out cell);
+
+        if (node is NamedRangeNode named)
+        {
+            var range = context.TryResolveNamedRange(named.Name);
+            if (range is null) return ErrorValue.Name;
+
+            var modelRange = range.Value;
+            return TryGetCell(
+                context.TryGetSheetName(modelRange.Start.Sheet),
+                modelRange.Start.Row,
+                modelRange.Start.Col,
+                context,
+                out cell);
+        }
+
+        if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
+        {
+            var reference = EvaluateReferenceReturningFunction(fn, context);
+            if (reference is ErrorValue error)
+                return mapReferenceFunctionValueErrorToNA && error == ErrorValue.Value ? ErrorValue.NA : error;
+
+            var range = (RangeValue)reference;
+            return TryGetCell(range.SheetName, range.StartRow, range.StartCol, context, out cell);
+        }
+
+        return unsupportedReferenceError;
+    }
+
+    private static ErrorValue? TryGetTopLeftCell(RangeRefNode range, IEvalContext context, out Cell? cell) =>
+        TryGetCell(range.SheetName, range.Start.Row, range.Start.ColumnNumber, context, out cell);
+
+    private static ErrorValue? TryGetCell(
+        string? sheetName,
+        uint row,
+        uint column,
+        IEvalContext context,
+        out Cell? cell)
+    {
+        if (sheetName is not null && !context.SheetExists(sheetName))
+        {
+            cell = null;
+            return ErrorValue.Ref;
+        }
+
+        cell = sheetName is not null
+            ? context.TryGetCell(sheetName, row, column)
+            : context.TryGetCell(row, column);
+        return null;
     }
 
     private ScalarValue EvaluateCellInfo(FunctionCallNode node, IEvalContext context)
