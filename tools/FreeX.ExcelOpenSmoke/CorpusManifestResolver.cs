@@ -11,10 +11,7 @@ internal static class CorpusManifestResolver
         "supported-pivot-metadata-pass",
         "public-pass"
     };
-    private static readonly HashSet<string> GeneratedFixtureDefaultStatuses = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "supported-pass"
-    };
+    private static readonly HashSet<string> GeneratedFixtureDefaultStatuses = new(DefaultStatuses, StringComparer.OrdinalIgnoreCase);
 
     public static CorpusManifestSelection Resolve(
         SmokeOptions options,
