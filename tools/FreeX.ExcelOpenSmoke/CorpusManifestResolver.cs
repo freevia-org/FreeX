@@ -121,14 +121,14 @@ internal static class CorpusManifestResolver
                 continue;
             }
 
-            if (!XlsxCorpusFixtureFactory.CanCreate(row.Id))
+            if (!CanCreateGeneratedFixture(row))
             {
                 skipped.Add(new CorpusManifestSkip(row, "no-generated-fixture", null));
                 continue;
             }
 
             var outputPath = Path.Combine(outputDirectory, Path.GetFileName(row.RelativePath));
-            SaveGeneratedFixture(row.Id, outputPath);
+            SaveGeneratedFixture(row, outputPath);
             Console.WriteLine($"Generated: {outputPath}");
             inputs.Add(new WorkbookSmokeInput(
                 outputPath,
@@ -140,14 +140,26 @@ internal static class CorpusManifestResolver
         return new CorpusManifestSelection(manifestPath, inputs, skipped);
     }
 
-    private static void SaveGeneratedFixture(string id, string outputPath)
+    private static bool CanCreateGeneratedFixture(CorpusManifestRow row) =>
+        XlsxCorpusFixtureFactory.CanCreate(row.Id) ||
+        (string.Equals(row.ExpectedStatus, "supported-metadata-pass", StringComparison.OrdinalIgnoreCase) &&
+         XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
+
+    private static void SaveGeneratedFixture(CorpusManifestRow row, string outputPath)
     {
         if (File.Exists(outputPath))
             File.Delete(outputPath);
 
-        var workbook = XlsxCorpusFixtureFactory.Create(id);
         using var output = File.Create(outputPath);
-        new XlsxFileAdapter().Save(workbook, output);
+        if (XlsxCorpusFixtureFactory.CanCreate(row.Id))
+        {
+            var workbook = XlsxCorpusFixtureFactory.Create(row.Id);
+            new XlsxFileAdapter().Save(workbook, output);
+            return;
+        }
+
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
+        package.CopyTo(output);
     }
 
     private static HashSet<string> ToFilter(IEnumerable<string> values) =>
