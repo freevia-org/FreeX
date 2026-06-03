@@ -370,6 +370,41 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_ExposesStableQuickAccessToolbarAutomationMetadata()
+    {
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
+
+        foreach (var expected in new[]
+        {
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarBelowRibbonCheckBox\"",
+            "AutomationProperties.HelpText=\"Show the Quick Access Toolbar below the ribbon instead of above it.\"",
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarCommandSearchBox\"",
+            "AutomationProperties.HelpText=\"Filter available Quick Access Toolbar commands.\"",
+            "AutomationProperties.Name=\"Available commands\"",
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarAvailableCommandsList\"",
+            "AutomationProperties.HelpText=\"Commands that can be added to the Quick Access Toolbar. Press Enter or double-click to add the selected command.\"",
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarAddCommandButton\"",
+            "AutomationProperties.HelpText=\"Add the selected command to the Quick Access Toolbar.\"",
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarRemoveCommandButton\"",
+            "AutomationProperties.HelpText=\"Remove the selected command from the Quick Access Toolbar.\"",
+            "AutomationProperties.Name=\"Quick Access Toolbar commands\"",
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarSelectedCommandsList\"",
+            "AutomationProperties.HelpText=\"Commands currently shown on the Quick Access Toolbar. Press Delete to remove or Ctrl+Up/Ctrl+Down to reorder.\"",
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarMoveUpButton\"",
+            "AutomationProperties.HelpText=\"Move the selected Quick Access Toolbar command up.\"",
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarMoveDownButton\"",
+            "AutomationProperties.HelpText=\"Move the selected Quick Access Toolbar command down.\"",
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarResetButton\"",
+            "AutomationProperties.HelpText=\"Restore the default Quick Access Toolbar commands.\"",
+            "AutomationProperties.AutomationId=\"QuickAccessToolbarImportExportButton\"",
+            "AutomationProperties.HelpText=\"Import or export FreeX Quick Access Toolbar customization.\""
+        })
+        {
+            xaml.Should().Contain(expected);
+        }
+    }
+
+    [Fact]
     public void OptionsDialog_RuntimeQuickAccessToolbarSearchFiltersAvailableCommandsAndKeepsAddFlow()
     {
         StaTestRunner.Run(() =>
