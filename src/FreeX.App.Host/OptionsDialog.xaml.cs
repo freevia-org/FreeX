@@ -47,11 +47,12 @@ public partial class OptionsDialog : Window
     {
         // General
         OptDefaultFont.ItemsSource = Fonts;
-        OptDefaultFont.SelectedItem = Fonts.Contains(_opts.DefaultFontName)
-            ? _opts.DefaultFontName : "Calibri";
+        var defaultFontName = FreeXOptions.NormalizeDefaultFontName(_opts.DefaultFontName);
+        OptDefaultFont.SelectedItem = Fonts.Contains(defaultFontName)
+            ? defaultFontName : FreeXOptions.DefaultFontNameFallback;
 
         OptDefaultFontSize.ItemsSource = Sizes;
-        OptDefaultFontSize.Text = _opts.DefaultFontSize.ToString();
+        OptDefaultFontSize.Text = FreeXOptions.NormalizeDefaultFontSize(_opts.DefaultFontSize).ToString();
 
         OptSheetCount.Text = _opts.DefaultSheetCount.ToString();
         OptUserName.Text   = _opts.UserName;
