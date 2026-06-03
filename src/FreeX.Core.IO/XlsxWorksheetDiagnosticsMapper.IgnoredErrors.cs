@@ -183,20 +183,36 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             return [];
 
         var ignoredCells = new List<(uint Row, uint Col)>(ignoredCellCount);
+        var ignoredCellsAreRowMajor = true;
+        var hasPreviousIgnoredCell = false;
+        uint previousRow = 0;
+        uint previousCol = 0;
         foreach (var pair in occupiedCells)
         {
             if (!pair.Value.IgnoreFormulaError)
                 continue;
 
             var (row, col) = pair.Key;
+            if (hasPreviousIgnoredCell &&
+                (row < previousRow || (row == previousRow && col < previousCol)))
+            {
+                ignoredCellsAreRowMajor = false;
+            }
+
             ignoredCells.Add((row, col));
+            hasPreviousIgnoredCell = true;
+            previousRow = row;
+            previousCol = col;
         }
 
-        ignoredCells.Sort(static (left, right) =>
+        if (!ignoredCellsAreRowMajor)
         {
-            var rowCompare = left.Row.CompareTo(right.Row);
-            return rowCompare != 0 ? rowCompare : left.Col.CompareTo(right.Col);
-        });
+            ignoredCells.Sort(static (left, right) =>
+            {
+                var rowCompare = left.Row.CompareTo(right.Row);
+                return rowCompare != 0 ? rowCompare : left.Col.CompareTo(right.Col);
+            });
+        }
 
         var nativeAttributeLookup = IgnoredErrorNativeAttributeLookup.Create(sheet.IgnoredErrorsMetadata);
         var runs = new List<IgnoredErrorRun>(Math.Min(ignoredCells.Count, 1024));
