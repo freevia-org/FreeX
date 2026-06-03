@@ -44,14 +44,17 @@ internal static class ExcelOpenSmoke
 
             var smokeInputs = new List<WorkbookSmokeInput>();
             CorpusManifestSelection? corpusSelection = null;
+            var generatedWorkflow = options.FreeXResaveBeforeExcel
+                ? WorkbookValidationWorkflow.FreeXSaveThenExcel
+                : WorkbookValidationWorkflow.DirectExcel;
             if (options.GenerateChartFixtures)
             {
                 foreach (var generatedFile in GenerateChartFixtures(Path.Combine(runDirectory, "generated")))
                 {
                     AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
                         generatedFile,
-                        WorkbookValidationWorkflow.DirectExcel,
-                        "FreeX chart fixture"));
+                        generatedWorkflow,
+                        DescribeGeneratedFixture("FreeX chart fixture", generatedWorkflow)));
                 }
             }
 
@@ -60,8 +63,8 @@ internal static class ExcelOpenSmoke
                 var generatedFile = GenerateFreeXNonChartFixture(Path.Combine(runDirectory, "generated"));
                 AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
                     generatedFile,
-                    WorkbookValidationWorkflow.DirectExcel,
-                    "FreeX non-chart fixture"));
+                    generatedWorkflow,
+                    DescribeGeneratedFixture("FreeX non-chart fixture", generatedWorkflow)));
             }
 
             if (options.GenerateFreexFeatureFixtures)
@@ -70,8 +73,8 @@ internal static class ExcelOpenSmoke
                 {
                     AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
                         generatedFile,
-                        WorkbookValidationWorkflow.DirectExcel,
-                        "FreeX feature fixture"));
+                        generatedWorkflow,
+                        DescribeGeneratedFixture("FreeX feature fixture", generatedWorkflow)));
                 }
             }
 
@@ -548,6 +551,11 @@ internal static class ExcelOpenSmoke
 
         inputs.Add(candidate);
     }
+
+    private static string DescribeGeneratedFixture(string description, WorkbookValidationWorkflow workflow) =>
+        workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel
+            ? $"{description} via FreeX resave"
+            : description;
 
     private static void WriteWorkbookReport(WorkbookSmokeResult result, bool saveReopen)
     {

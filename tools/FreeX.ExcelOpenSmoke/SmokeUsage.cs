@@ -15,7 +15,8 @@ internal static class SmokeUsage
                                             Generate representative FreeX feature XLSX smoke files, including PivotTables.
               --generate-chart-fixtures     Generate FreeX histogram and waterfall XLSX smoke files.
               --generate-excel-fixture      Generate an Excel-authored XLSX fixture through COM, then load/save it through FreeX.
-              --freex-resave-before-excel   For user inputs, load/save through FreeX before Excel validation.
+              --freex-resave-before-excel   For user inputs, corpus rows, and generated FreeX fixtures,
+                                            load/save through FreeX before Excel validation.
               --corpus-manifest <csv>       Add existing .xlsx rows from the XLSX corpus manifest.
               --corpus-source <source_type> Filter corpus rows by source_type. Repeatable.
               --corpus-status <status>      Filter corpus rows by expected_status. Repeatable.
@@ -28,6 +29,7 @@ internal static class SmokeUsage
             Examples:
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-freex-fixture --generate-excel-fixture
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-freex-feature-fixtures
+              dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel --generate-freex-feature-fixtures
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-chart-fixtures
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel --corpus-manifest test-corpus\manifest.csv --corpus-source public --corpus-source regression
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel C:\Users\quinn\freex-xlsx-verify\excel-authored.xlsx
