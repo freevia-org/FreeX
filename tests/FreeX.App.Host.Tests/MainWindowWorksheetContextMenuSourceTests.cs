@@ -79,4 +79,19 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
             .Should()
             .BeLessThan(contextMenuRequested.IndexOf("var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void ContextMenuStateSkipsValidationLookupWhenSheetHasNoValidationRules()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        var stateMethod = source[
+            source.IndexOf("private WorksheetContextMenuState GetWorksheetContextMenuState", StringComparison.Ordinal)..];
+
+        stateMethod.Should().Contain("sheet.DataValidations.Count > 0 &&");
+        stateMethod.IndexOf("sheet.DataValidations.Count > 0 &&", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(stateMethod.IndexOf("DataValidationService.GetApplicable(sheet, address)", StringComparison.Ordinal));
+    }
 }

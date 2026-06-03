@@ -440,7 +440,7 @@ public static partial class ChartRenderer
 
     private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup(ChartModel chart, ViewportModel viewport)
     {
-        var capacity = viewport.Cells.Count + (viewport.ChartDataCells?.Count ?? 0);
+        var capacity = GetChartCellLookupCapacity(chart.DataRange, viewport);
         var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>(capacity);
         if (viewport.ChartDataCells is { Count: > 0 })
         {
@@ -448,6 +448,8 @@ public static partial class ChartRenderer
             foreach (var cell in viewport.ChartDataCells)
             {
                 if (cell.SheetId != sheetId)
+                    continue;
+                if (!IsInChartDataRange(cell.Row, cell.Col, chart.DataRange))
                     continue;
 
                 lookup[(cell.Row, cell.Col)] = new DisplayCell(
@@ -462,10 +464,48 @@ public static partial class ChartRenderer
         }
 
         foreach (var cell in viewport.Cells)
+        {
+            if (!IsInChartDataRange(cell.Row, cell.Col, chart.DataRange))
+                continue;
+
             lookup.TryAdd((cell.Row, cell.Col), cell);
+        }
 
         return lookup;
     }
+
+    private static int GetChartCellLookupCapacity(GridRange dataRange, ViewportModel viewport)
+    {
+        var dataRangeCells = GetChartDataRangeCellCount(dataRange);
+        var visibleCapacity = dataRangeCells > int.MaxValue
+            ? viewport.Cells.Count
+            : Math.Min(viewport.Cells.Count, (int)dataRangeCells);
+        var chartDataCapacity = dataRangeCells > int.MaxValue
+            ? viewport.ChartDataCells?.Count ?? 0
+            : Math.Min(viewport.ChartDataCells?.Count ?? 0, (int)dataRangeCells);
+        return SaturatingAdd(visibleCapacity, chartDataCapacity);
+    }
+
+    private static ulong GetChartDataRangeCellCount(GridRange dataRange)
+    {
+        if (dataRange.End.Row < dataRange.Start.Row || dataRange.End.Col < dataRange.Start.Col)
+            return 0;
+
+        return ((ulong)dataRange.End.Row - dataRange.Start.Row + 1) *
+               ((ulong)dataRange.End.Col - dataRange.Start.Col + 1);
+    }
+
+    private static int SaturatingAdd(int left, int right)
+    {
+        var sum = (long)left + right;
+        return sum > int.MaxValue ? int.MaxValue : (int)sum;
+    }
+
+    private static bool IsInChartDataRange(uint row, uint column, GridRange dataRange) =>
+        row >= dataRange.Start.Row &&
+        row <= dataRange.End.Row &&
+        column >= dataRange.Start.Col &&
+        column <= dataRange.End.Col;
 
     private static int GetDataPointCapacity(uint dataStartRow, uint endRow)
     {

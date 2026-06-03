@@ -408,22 +408,26 @@ public static class SplitPaneCellLayoutPlanner
         CellAddress? editingCell)
     {
         var spansByRow = new Dictionary<uint, OccupiedColumnSpans>(EstimateRowSpanCapacity(cells));
-        var needsNormalize = false;
+        HashSet<uint>? rowsNeedingNormalize = null;
         foreach (var cell in cells)
         {
             if (!GridView.IsOverflowOccupied(cell, editingCell))
                 continue;
 
             var hasRow = spansByRow.TryGetValue(cell.Row, out var spans);
+            var needsNormalize = false;
             AddOccupiedColumn(ref spans, cell.Col, ref needsNormalize);
+            if (needsNormalize)
+                (rowsNeedingNormalize ??= []).Add(cell.Row);
+
             if (hasRow)
                 spansByRow[cell.Row] = spans;
             else
                 spansByRow.Add(cell.Row, spans);
         }
 
-        if (needsNormalize)
-            NormalizeOccupiedColumnSpans(spansByRow);
+        if (rowsNeedingNormalize is not null)
+            NormalizeOccupiedColumnSpans(spansByRow, rowsNeedingNormalize);
 
         return new SplitPaneOccupiedCellMap(spansByRow);
     }
@@ -451,9 +455,11 @@ public static class SplitPaneCellLayoutPlanner
     private static void AddOccupiedColumn(ref OccupiedColumnSpans spans, uint col, ref bool needsNormalize) =>
         spans.Add(col, ref needsNormalize);
 
-    private static void NormalizeOccupiedColumnSpans(Dictionary<uint, OccupiedColumnSpans> spansByRow)
+    private static void NormalizeOccupiedColumnSpans(
+        Dictionary<uint, OccupiedColumnSpans> spansByRow,
+        HashSet<uint> rowsNeedingNormalize)
     {
-        foreach (var row in spansByRow.Keys.ToArray())
+        foreach (var row in rowsNeedingNormalize)
         {
             var spans = spansByRow[row];
             if (spans.Count <= 1)
