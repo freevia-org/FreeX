@@ -13,13 +13,13 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<CellStateSnapshot>? _deletedSnapshot;
     private List<CellStateSnapshot>? _shiftedSnapshot;
     private List<GridRange>? _mergeSnapshot;
-    private Dictionary<uint, double>? _rowHeightSnapshot;
-    private HashSet<uint>? _hiddenRowsSnapshot;
-    private HashSet<uint>? _filterHiddenRowsSnapshot;
-    private Dictionary<CellAddress, string>? _commentSnapshot;
-    private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
-    private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
-    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
+    private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
+    private List<uint>? _hiddenRowsSnapshot;
+    private List<uint>? _filterHiddenRowsSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
+    private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
+    private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
@@ -55,22 +55,22 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         MoveCellsForDelete(sheet, _shiftedSnapshot, _count);
 
-        _hiddenRowsSnapshot = [.. sheet.HiddenRows];
+        _hiddenRowsSnapshot = RowColumnShiftHelpers.CaptureSet(sheet.HiddenRows);
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.HiddenRows, _startRow, _count);
 
-        _filterHiddenRowsSnapshot = [.. sheet.FilterHiddenRows];
+        _filterHiddenRowsSnapshot = RowColumnShiftHelpers.CaptureSet(sheet.FilterHiddenRows);
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.FilterHiddenRows, _startRow, _count);
 
-        _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
+        _rowHeightSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.RowHeights, _startRow, _count);
 
-        _commentSnapshot = new Dictionary<CellAddress, string>(sheet.Comments);
+        _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.Comments, _startRow, _count);
-        _threadedCommentSnapshot = new Dictionary<CellAddress, ThreadedComment>(sheet.ThreadedComments);
+        _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.ThreadedComments, _startRow, _count);
-        _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
+        _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.Hyperlinks, _startRow, _count);
-        _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
+        _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.HyperlinkMetadata, _startRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
@@ -79,7 +79,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftNamedRangeRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         _printAreaSnapshot = sheet.PrintArea;
         RowColumnShiftHelpers.ShiftPrintAreaRowsDown(sheet, _startRow, _count);
-        _rowPageBreakSnapshot = sheet.RowPageBreaks.ToList();
+        _rowPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.RowPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
         RowColumnShiftHelpers.ShiftChartRowsDown(sheet, _sheetId, _startRow, _count);

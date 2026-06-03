@@ -87,7 +87,7 @@ internal static class ExcelOpenSmoke
             {
                 corpusSelection = CorpusManifestResolver.Resolve(options, inputWorkflow);
                 foreach (var input in corpusSelection.Inputs)
-                    AddUniqueInput(smokeInputs, input);
+                    AddUniqueInput(smokeInputs, WithCorpusExpectations(input, options.SaveReopen));
             }
 
             var inputFiles = ResolveInputFiles(options.Inputs, options.Pattern);
@@ -607,6 +607,63 @@ internal static class ExcelOpenSmoke
         workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel
             ? $"{description} via FreeX resave"
             : description;
+
+    private static WorkbookSmokeInput WithCorpusExpectations(WorkbookSmokeInput input, bool saveReopen)
+    {
+        if (input.CorpusRow is not { } corpusRow)
+            return input;
+
+        var expectations = ExpectationsForCorpusRow(corpusRow, saveReopen, input.Workflow);
+        return expectations is null
+            ? input
+            : input with { Expectations = expectations };
+    }
+
+    private static WorkbookSmokeExpectations? ExpectationsForCorpusRow(
+        CorpusManifestRow row,
+        bool saveReopen,
+        WorkbookValidationWorkflow workflow)
+    {
+        if (string.Equals(row.Id, "local-private-sample-dashboard-20250116", StringComparison.OrdinalIgnoreCase))
+        {
+            return PartnerDashboardExpectations(
+                saveReopen,
+                expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel);
+        }
+
+        return null;
+    }
+
+    private static WorkbookSmokeExpectations PartnerDashboardExpectations(
+        bool saveReopen,
+        bool expectFreeXPreSave) =>
+        new(
+            MinFreeXPreSaveFormulaCells: expectFreeXPreSave ? 16000 : 0,
+            MinFreeXPreSaveStructuredTables: expectFreeXPreSave ? 1 : 0,
+            MinFreeXPreSaveDataValidations: expectFreeXPreSave ? 5 : 0,
+            MinFreeXPreSaveConditionalFormats: expectFreeXPreSave ? 100 : 0,
+            MinFreeXPreSaveHyperlinks: expectFreeXPreSave ? 47 : 0,
+            MinFreeXPreSaveComments: expectFreeXPreSave ? 117 : 0,
+            MinFreeXPreSavePictures: expectFreeXPreSave ? 1 : 0,
+            MinExcelOpenedFormulaCells: 16000,
+            MinExcelOpenedStructuredTables: 1,
+            MinExcelOpenedShapes: 120,
+            MinExcelReopenedFormulaCells: saveReopen ? 16000 : 0,
+            MinExcelReopenedStructuredTables: saveReopen ? 1 : 0,
+            MinExcelReopenedShapes: saveReopen ? 120 : 0,
+            MinFreeXReopenedFormulaCells: saveReopen ? 16000 : 0,
+            MinFreeXReopenedStructuredTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedDataValidations: saveReopen ? 5 : 0,
+            MinFreeXReopenedConditionalFormats: saveReopen ? 66 : 0,
+            MinFreeXReopenedHyperlinks: saveReopen ? 47 : 0,
+            MinFreeXReopenedComments: saveReopen ? 117 : 0,
+            MinFreeXReopenedPictures: saveReopen ? 1 : 0,
+            MinFreeXPreSavePivotTables: expectFreeXPreSave ? 3 : 0,
+            MinFreeXPreSavePivotCaches: expectFreeXPreSave ? 1 : 0,
+            MinExcelOpenedPivotTables: 3,
+            MinExcelReopenedPivotTables: saveReopen ? 3 : 0,
+            MinFreeXReopenedPivotTables: saveReopen ? 3 : 0,
+            MinFreeXReopenedPivotCaches: saveReopen ? 1 : 0);
 
     private static WorkbookSmokeExpectations? ExpectationsForGeneratedFixture(
         string generatedFile,

@@ -6,7 +6,7 @@ namespace FreeX.Core.Formula;
 
 public static partial class BuiltInFunctions
 {
-    private static bool MatchExactValue(ScalarValue candidate, ScalarValue lookupValue)
+    internal static bool MatchExactValue(ScalarValue candidate, ScalarValue lookupValue)
     {
         if (lookupValue is TextValue pattern && candidate is TextValue text)
             return WildcardMatch(text.Value, pattern.Value, ignoreCase: true);
@@ -276,7 +276,7 @@ public static partial class BuiltInFunctions
     }
 
     /// <summary>Simple Excel-style wildcard match (* = any chars, ? = any single char).</summary>
-    private static bool WildcardMatch(string text, string pattern, bool ignoreCase)
+    internal static bool WildcardMatch(string text, string pattern, bool ignoreCase)
     {
         var key = (pattern, ignoreCase);
         if (!WildcardCache.ContainsKey(key) &&
