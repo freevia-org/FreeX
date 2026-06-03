@@ -710,6 +710,54 @@ public class InsertDeleteRowsTests
     }
 
     [Fact]
+    public void Benchmark_InsertRowsWithDenseTailMovedCells_ReportsTiming()
+    {
+        const int iterations = 3;
+        const uint beforeRow = DenseShiftRows - 9;
+        var (workbook, sheet, ctx) = SetupDenseShiftWorkbook();
+
+        var warmup = new InsertRowsCommand(sheet.Id, beforeRow);
+        warmup.Apply(ctx).Success.Should().BeTrue();
+        warmup.Revert(ctx);
+        sheet.CellCount.Should().Be(DenseShiftRows * DenseShiftColumns);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var command = new InsertRowsCommand(sheet.Id, beforeRow);
+            var step = Stopwatch.StartNew();
+            command.Apply(ctx).Success.Should().BeTrue();
+            command.Revert(ctx);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        workbook.SheetCount.Should().Be(1);
+        sheet.CellCount.Should().Be(DenseShiftRows * DenseShiftColumns);
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1001));
+        sheet.GetValue(DenseShiftRows, DenseShiftColumns).Should().Be(new NumberValue(DenseShiftRows * 1000 + DenseShiftColumns));
+        Console.WriteLine(
+            "PERF INSERT_ROWS_DENSE_TAIL_SHIFT " +
+            $"rows={DenseShiftRows} cols={DenseShiftColumns} before_row={beforeRow} " +
+            $"moved_cells={(DenseShiftRows - beforeRow + 1) * DenseShiftColumns} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_InsertRowsWithDenseRowMetadata_ReportsTiming()
     {
         const int iterations = 3;
@@ -840,6 +888,28 @@ public class InsertDeleteRowsTests
         source.Should().NotContain("new Dictionary<uint, double>(sheet.RowHeights)");
         source.Should().NotContain("new Dictionary<CellAddress, string>(sheet.Comments)");
         source.Should().NotContain("sheet.RowPageBreaks.ToList()");
+    }
+
+    [Fact]
+    public void RowCommands_PrecountTailCellSnapshotsBeforeAllocatingLists()
+    {
+        var insertSource = File.ReadAllText(FindWorkspaceFile(
+            "src",
+            "FreeX.Core.Commands",
+            "InsertDeleteRowsCommand.cs"));
+        var deleteSource = File.ReadAllText(FindWorkspaceFile(
+            "src",
+            "FreeX.Core.Commands",
+            "DeleteRowsCommand.cs"));
+
+        insertSource.Should().Contain("FullSnapshotCapacityThreshold");
+        insertSource.Should().Contain("CaptureMovedCellsWithFullCapacity(sheet)");
+        insertSource.Should().Contain("CountMovedCells(sheet, out var maxOccupied)");
+        insertSource.Should().Contain("new List<CellStateSnapshot>(movedCount)");
+        deleteSource.Should().Contain("FullSnapshotCapacityThreshold");
+        deleteSource.Should().Contain("CaptureDeletedAndShiftedCellsWithFullCapacity(sheet, endRow)");
+        deleteSource.Should().Contain("CountDeletedAndShiftedCells(sheet, endRow)");
+        deleteSource.Should().Contain("new List<CellStateSnapshot>(shiftedCount)");
     }
 
     [Fact]
