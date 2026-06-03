@@ -156,6 +156,17 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void LoadPath_BoundsStyleOnlyStripperToLargeStyleOnlyLayouts()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+
+        adapterSource.Should().Contain("private const int ClosedXmlStyleOnlyStripCellThreshold = 16_384;");
+        adapterSource.Should().Contain("if (sheetXmlLayoutHadWarnings || sheetXmlLayout.Count == 0)");
+        adapterSource.Should().Contain("explicitStyleOnlyCellCount += layout.ExplicitStyleOnlyCells.Count;");
+        adapterSource.Should().Contain("explicitStyleOnlyCellCount > ClosedXmlStyleOnlyStripCellThreshold");
+    }
+
+    [Fact]
     public void SaveSourcePackageCapture_ReusesSaveFingerprintForSnapshot()
     {
         var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
