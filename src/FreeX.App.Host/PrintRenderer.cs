@@ -83,8 +83,16 @@ public static partial class PrintRenderer
         uint columnsPerPage = (uint)Math.Floor(printableW / MinimumPrintColumnWidth);
         if (columnsPerPage < 1) columnsPerPage = 1;
 
-        var rowPlans = PrintLayoutPlanner.BuildRowPlans(usedRange.Value, sheet.PrintTitleRows, rowsPerPage);
-        var columnPlans = PrintLayoutPlanner.BuildColumnPlans(usedRange.Value, sheet.PrintTitleColumns, columnsPerPage);
+        var rowPlans = PrintLayoutPlanner.BuildRowPlans(
+            usedRange.Value,
+            sheet.PrintTitleRows,
+            rowsPerPage,
+            sheet.RowPageBreaks);
+        var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
+            usedRange.Value,
+            sheet.PrintTitleColumns,
+            columnsPerPage,
+            sheet.ColumnPageBreaks);
         var totalPages = rowPlans.Count * columnPlans.Count;
         var pageNumber = sheet.FirstPageNumber ?? 1;
         var printableHyperlinks = BuildPrintableHyperlinkLookup(sheet);

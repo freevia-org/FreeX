@@ -635,6 +635,46 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_UsesManualRowPageBreaksForPrintPagination()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Manual row break");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Top"));
+            sheet.SetCell(new CellAddress(sheet.Id, 10, 1), new TextValue("Bottom"));
+
+            var automaticDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            sheet.RowPageBreaks.Add(6);
+            var manualBreakDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            automaticDocument.Pages.Should().HaveCount(1);
+            manualBreakDocument.Pages.Should().HaveCount(2);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_UsesManualColumnPageBreaksForPrintPagination()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Manual column break");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Left"));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 10), new TextValue("Right"));
+
+            var automaticDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            sheet.ColumnPageBreaks.Add(6);
+            var manualBreakDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            automaticDocument.Pages.Should().HaveCount(1);
+            manualBreakDocument.Pages.Should().HaveCount(2);
+        });
+    }
+
+    [Fact]
     public void RenderWorkbook_CombinesVisibleWorksheetsAndSkipsHiddenSheets()
     {
         StaTestRunner.Run(() =>
