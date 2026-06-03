@@ -76,26 +76,7 @@ public partial class GridView
         RenderResizeLine(dc);
         if (!skipHeavyLayers)
         {
-            if (ObjectDisplayMode == GridObjectDisplayMode.Placeholders)
-            {
-                RenderObjectPlaceholders(dc);
-            }
-            else if (ObjectDisplayMode == GridObjectDisplayMode.All)
-            {
-                RenderCharts(dc);
-                if (HasExplicitDrawingObjectZOrder())
-                {
-                    RenderNativeSlicerTimelineControls(dc);
-                    RenderDrawingObjectsByZOrder(dc);
-                }
-                else
-                {
-                    RenderDrawingShapes(dc);
-                    RenderNativeSlicerTimelineControls(dc);
-                    RenderPictures(dc);
-                    RenderTextBoxes(dc);
-                }
-            }
+            RenderDrawingObjectLayersWithCache(dc);
 
             var selectedRect = GetSelectedObjectRect();
             if (!selectedRect.IsEmpty)

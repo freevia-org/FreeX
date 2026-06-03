@@ -508,7 +508,7 @@ public sealed class GridViewRenderPerformanceTests
             .Should().BeLessThan(onRender.IndexOf("RenderWorksheetViewOverlay(dc);", StringComparison.Ordinal));
         onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal)
             .Should().BeLessThan(onRender.IndexOf("RenderFormulaTraceArrows(dc);", StringComparison.Ordinal));
-        onRender.IndexOf("if (ObjectDisplayMode == GridObjectDisplayMode.Placeholders)", StringComparison.Ordinal)
+        onRender.IndexOf("RenderDrawingObjectLayersWithCache(dc);", StringComparison.Ordinal)
             .Should().BeGreaterThan(onRender.LastIndexOf("if (!skipHeavyLayers)", StringComparison.Ordinal));
     }
 
@@ -556,6 +556,10 @@ public sealed class GridViewRenderPerformanceTests
         renderWithCache.Should().Contain("dc.DrawDrawing(cached);");
         renderWithCache.Should().Contain("ShouldBuildPreSelectionLayerCache(key)");
         renderWithCache.Should().Contain("RememberPreSelectionLayerRenderKey(key);");
+        cache.Should().Contain("bool SkipHeavyLayers");
+        cache.Should().Contain("private static bool CanCachePreSelectionLayers(bool skipHeavyLayers, bool isLiveResizing) =>");
+        cache.Should().Contain("!isLiveResizing;");
+        cache.Should().NotContain("!skipHeavyLayers &&");
         cache.Should().Contain("_hasLastPreSelectionLayerRenderKey && _lastPreSelectionLayerRenderKey == key");
         cache.Should().Contain("_selectionVisualOnlyChangePending ||");
         cache.Should().Contain("_hasLastPreSelectionLayerRenderKey = false;");
@@ -1184,6 +1188,34 @@ public sealed class GridViewRenderPerformanceTests
         drawObjectPlaceholder.Should().NotContain("VisualTreeHelper.GetDpi(this)");
         drawObjectPlaceholder.Should().NotContain("new RectangleGeometry");
         drawObjectPlaceholder.Should().NotContain("GetDrawingObjectClipGeometry(new Rect");
+    }
+
+    [Fact]
+    public void DrawingObjectLayers_ReuseFrozenDrawingLayerAcrossStableRepaints()
+    {
+        var dispatch = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var cache = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjectLayerCache.cs"));
+        var properties = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var renderPostSelectionLayers = dispatch[
+            dispatch.IndexOf("private void RenderPostSelectionLayers", StringComparison.Ordinal)..
+            dispatch.IndexOf("private bool HasPostSelectionLayerWork", StringComparison.Ordinal)];
+
+        renderPostSelectionLayers.Should().Contain("RenderDrawingObjectLayersWithCache(dc);");
+        renderPostSelectionLayers.Should().NotContain("RenderDrawingShapes(dc);");
+        renderPostSelectionLayers.Should().NotContain("RenderTextBoxes(dc);");
+        cache.Should().Contain("private DrawingGroup? _drawingObjectLayerCache;");
+        cache.Should().Contain("private readonly record struct DrawingObjectLayerCacheKey");
+        cache.Should().Contain("dc.DrawDrawing(cached);");
+        cache.Should().Contain("RenderDrawingObjectLayers(groupContext);");
+        cache.Should().Contain("group.Freeze();");
+        cache.Should().Contain("GridRange? SelectedRange");
+        cache.Should().Contain("IReadOnlyList<DrawingShapeModel>? DrawingShapes");
+        cache.Should().Contain("IReadOnlyList<TextBoxModel>? TextBoxes");
+        cache.Should().Contain("IReadOnlyList<PictureModel>? Pictures");
+        cache.Should().Contain("private void ClearDrawingObjectLayerCache()");
+        properties.Should().Contain("OnDrawingObjectLayerInputChanged");
+        properties.Should().Contain("grid.ClearDrawingObjectLayerCache();");
+        properties.Should().Contain("new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged)");
     }
 
     [Fact]

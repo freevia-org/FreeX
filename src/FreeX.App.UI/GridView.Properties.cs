@@ -117,7 +117,7 @@ public partial class GridView
 
     public static readonly DependencyProperty TextBoxesProperty =
         DependencyProperty.Register(nameof(TextBoxes), typeof(IReadOnlyList<TextBoxModel>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged));
     public IReadOnlyList<TextBoxModel>? TextBoxes
     {
         get => (IReadOnlyList<TextBoxModel>?)GetValue(TextBoxesProperty);
@@ -126,7 +126,7 @@ public partial class GridView
 
     public static readonly DependencyProperty DrawingShapesProperty =
         DependencyProperty.Register(nameof(DrawingShapes), typeof(IReadOnlyList<DrawingShapeModel>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged));
     public IReadOnlyList<DrawingShapeModel>? DrawingShapes
     {
         get => (IReadOnlyList<DrawingShapeModel>?)GetValue(DrawingShapesProperty);
@@ -144,7 +144,7 @@ public partial class GridView
 
     public static readonly DependencyProperty PicturesProperty =
         DependencyProperty.Register(nameof(Pictures), typeof(IReadOnlyList<PictureModel>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged));
     public IReadOnlyList<PictureModel>? Pictures
     {
         get => (IReadOnlyList<PictureModel>?)GetValue(PicturesProperty);
@@ -153,7 +153,7 @@ public partial class GridView
 
     public static readonly DependencyProperty DrawingObjectZOrderProperty =
         DependencyProperty.Register(nameof(DrawingObjectZOrder), typeof(IReadOnlyList<DrawingObjectZOrderEntry>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged));
     public IReadOnlyList<DrawingObjectZOrderEntry>? DrawingObjectZOrder
     {
         get => (IReadOnlyList<DrawingObjectZOrderEntry>?)GetValue(DrawingObjectZOrderProperty);
@@ -162,7 +162,7 @@ public partial class GridView
 
     public static readonly DependencyProperty NativeSlicersProperty =
         DependencyProperty.Register(nameof(NativeSlicers), typeof(IReadOnlyList<SlicerModel>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged));
     public IReadOnlyList<SlicerModel>? NativeSlicers
     {
         get => (IReadOnlyList<SlicerModel>?)GetValue(NativeSlicersProperty);
@@ -171,7 +171,7 @@ public partial class GridView
 
     public static readonly DependencyProperty NativeTimelinesProperty =
         DependencyProperty.Register(nameof(NativeTimelines), typeof(IReadOnlyList<TimelineModel>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged));
     public IReadOnlyList<TimelineModel>? NativeTimelines
     {
         get => (IReadOnlyList<TimelineModel>?)GetValue(NativeTimelinesProperty);
@@ -180,7 +180,7 @@ public partial class GridView
 
     public static readonly DependencyProperty ObjectDisplayModeProperty =
         DependencyProperty.Register(nameof(ObjectDisplayMode), typeof(GridObjectDisplayMode), typeof(GridView),
-            new FrameworkPropertyMetadata(GridObjectDisplayMode.All, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(GridObjectDisplayMode.All, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged));
     public GridObjectDisplayMode ObjectDisplayMode
     {
         get => (GridObjectDisplayMode)GetValue(ObjectDisplayModeProperty);
@@ -380,7 +380,16 @@ public partial class GridView
     private static void OnChartRenderCacheInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is GridView grid)
+        {
             grid.ClearChartRenderCache();
+            grid.ClearDrawingObjectLayerCache();
+        }
+    }
+
+    private static void OnDrawingObjectLayerInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+            grid.ClearDrawingObjectLayerCache();
     }
 
     private static void OnFormulaTraceRenderCacheInputChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -410,6 +419,7 @@ public partial class GridView
         grid.ClearFormulaTraceArrowHeadGeometryCache();
         grid.ClearRenderLookupCache();
         grid.ClearPreSelectionLayerCache();
+        grid.ClearDrawingObjectLayerCache();
     }
 
     private static void OnSelectionVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
