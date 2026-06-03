@@ -83,10 +83,18 @@ public sealed partial class GridViewRenderPerformanceTests
         var buildLookup = source[
             source.IndexOf("private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup", StringComparison.Ordinal)..
             source.IndexOf("private static LineSeries CreateLineSeries", StringComparison.Ordinal)];
+        var buildPlotModel = source[
+            source.IndexOf("private static PlotModel? BuildPlotModel", StringComparison.Ordinal)..
+            source.IndexOf("private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup", StringComparison.Ordinal)];
 
+        buildPlotModel.Should().Contain("var dataPointCapacity = GetDataPointCapacity(dataStartRow, endRow);");
+        buildPlotModel.Should().Contain("new List<string>(chart.FirstColIsCategories ? dataPointCapacity : 0)");
+        buildPlotModel.Should().Contain("new List<PieDataLabelPoint>(dataPointCapacity)");
         buildLookup.Should().Contain("foreach (var cell in viewport.ChartDataCells)");
         buildLookup.Should().Contain("if (cell.SheetId != sheetId)");
         buildLookup.Should().Contain("cell.RawValue");
+        buildLookup.Should().Contain("var capacity = viewport.Cells.Count + (viewport.ChartDataCells?.Count ?? 0);");
+        buildLookup.Should().Contain("new Dictionary<(uint Row, uint Col), DisplayCell>(capacity)");
         buildLookup.Should().NotContain(".Where(");
         buildLookup.Should().NotContain(".Select(");
     }
