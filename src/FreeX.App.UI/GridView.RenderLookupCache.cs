@@ -5,18 +5,21 @@ namespace FreeX.App.UI;
 public partial class GridView
 {
     private sealed record RenderCellLookupCache(
-        ViewportModel Viewport,
+        IReadOnlyList<DisplayCell> Cells,
+        IReadOnlyList<RowMetric> RowMetrics,
+        IReadOnlyList<ColMetric> ColMetrics,
         Dictionary<(uint Row, uint Col), CellStyle> Styles,
         Dictionary<uint, RowMetric> Rows,
         Dictionary<uint, ColMetric> Columns);
 
     private sealed record RenderMetricLookupCache(
-        ViewportModel Viewport,
+        IReadOnlyList<RowMetric> RowMetrics,
+        IReadOnlyList<ColMetric> ColMetrics,
         Dictionary<uint, RowMetric> Rows,
         Dictionary<uint, ColMetric> Columns);
 
     private sealed record OccupiedCellLookupCache(
-        ViewportModel Viewport,
+        IReadOnlyList<DisplayCell> Cells,
         CellAddress? EditingCell,
         HashSet<(uint Row, uint Col)> Occupied);
 

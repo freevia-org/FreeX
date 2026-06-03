@@ -10,6 +10,29 @@ namespace FreeX.App.UI.Tests;
 
 public sealed partial class GridViewRenderPerformanceTests
 {
+    private static void RunOnStaThread(Action action)
+    {
+        Exception? exception = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                exception = ex;
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        if (exception is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception).Throw();
+    }
+
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

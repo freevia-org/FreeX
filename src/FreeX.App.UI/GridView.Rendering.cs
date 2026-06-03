@@ -853,12 +853,19 @@ public partial class GridView
 
     private RenderCellLookupCache GetRenderCellLookups(ViewportModel viewport)
     {
-        if (_renderCellLookupCache is { } cached && ReferenceEquals(cached.Viewport, viewport))
+        if (_renderCellLookupCache is { } cached &&
+            ReferenceEquals(cached.Cells, viewport.Cells) &&
+            ReferenceEquals(cached.RowMetrics, viewport.RowMetrics) &&
+            ReferenceEquals(cached.ColMetrics, viewport.ColMetrics))
+        {
             return cached;
+        }
 
         var metricLookups = GetRenderMetricLookups(viewport);
         var lookups = new RenderCellLookupCache(
-            viewport,
+            viewport.Cells,
+            viewport.RowMetrics,
+            viewport.ColMetrics,
             BuildRenderCellStyleLookup(viewport.Cells),
             metricLookups.Rows,
             metricLookups.Columns);
@@ -868,11 +875,16 @@ public partial class GridView
 
     private RenderMetricLookupCache GetRenderMetricLookups(ViewportModel viewport)
     {
-        if (_renderMetricLookupCache is { } cached && ReferenceEquals(cached.Viewport, viewport))
+        if (_renderMetricLookupCache is { } cached &&
+            ReferenceEquals(cached.RowMetrics, viewport.RowMetrics) &&
+            ReferenceEquals(cached.ColMetrics, viewport.ColMetrics))
+        {
             return cached;
+        }
 
         var lookups = new RenderMetricLookupCache(
-            viewport,
+            viewport.RowMetrics,
+            viewport.ColMetrics,
             BuildRenderRowMetricLookup(viewport.RowMetrics),
             BuildRenderColumnMetricLookup(viewport.ColMetrics));
         _renderMetricLookupCache = lookups;
@@ -882,14 +894,14 @@ public partial class GridView
     private HashSet<(uint Row, uint Col)> GetOccupiedCellLookup(ViewportModel viewport, CellAddress? editingCell)
     {
         if (_occupiedCellLookupCache is { } cached &&
-            ReferenceEquals(cached.Viewport, viewport) &&
+            ReferenceEquals(cached.Cells, viewport.Cells) &&
             cached.EditingCell == editingCell)
         {
             return cached.Occupied;
         }
 
         var occupied = BuildOccupiedCellSet(viewport.Cells, editingCell);
-        _occupiedCellLookupCache = new OccupiedCellLookupCache(viewport, editingCell, occupied);
+        _occupiedCellLookupCache = new OccupiedCellLookupCache(viewport.Cells, editingCell, occupied);
         return occupied;
     }
 

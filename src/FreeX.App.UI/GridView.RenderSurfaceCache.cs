@@ -14,7 +14,13 @@ public partial class GridView
     private bool _selectionVisualOnlyChangePending;
 
     private readonly record struct PreSelectionLayerCacheKey(
-        ViewportModel Viewport,
+        IReadOnlyList<DisplayCell> Cells,
+        IReadOnlyList<RowMetric> RowMetrics,
+        IReadOnlyList<ColMetric> ColMetrics,
+        FrozenPaneState? FrozenPanes,
+        IReadOnlyList<OverlayPrimitive>? Overlays,
+        SplitPaneState? SplitPanes,
+        IReadOnlyList<ChartDataCell>? ChartDataCells,
         bool SkipHeavyLayers,
         double ActualWidth,
         double ActualHeight,
@@ -114,9 +120,16 @@ public partial class GridView
         var columnPageBreaks = ColumnPageBreaks;
         var sparklines = Sparklines;
         var sparklineValues = SparklineValues;
+        var viewport = Viewport!;
 
         return new PreSelectionLayerCacheKey(
-            Viewport!,
+            viewport.Cells,
+            viewport.RowMetrics,
+            viewport.ColMetrics,
+            viewport.FrozenPanes,
+            viewport.Overlays,
+            viewport.SplitPanes,
+            viewport.ChartDataCells,
             skipHeavyLayers,
             ActualWidth,
             ActualHeight,
