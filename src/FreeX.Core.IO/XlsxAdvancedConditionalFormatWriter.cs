@@ -197,7 +197,8 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 break;
             case CfRuleType.IconSet:
             {
-                var thresholdXmls = GetIconSetThresholds(cf)
+                var iconSetStyle = string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle.Trim();
+                var thresholdXmls = GetIconSetThresholds(cf, iconSetStyle)
                     .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value, threshold.GreaterThanOrEqual));
                 var overrideXmls = cf.IconOverrides
                     .Where(IsValidIconOverride)
@@ -207,7 +208,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                         new XAttribute("iconId", o.IconId.ToString(CultureInfo.InvariantCulture))));
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
                     worksheetNs + "iconSet",
-                    new XAttribute("iconSet", string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle.Trim()),
+                    new XAttribute("iconSet", iconSetStyle),
                     new XAttribute("showValue", cf.IconSetShowValue ? "1" : "0"),
                     new XAttribute("reverse", cf.IconSetReverse ? "1" : "0"),
                     thresholdXmls,
@@ -322,15 +323,24 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         return payload;
     }
 
-    private static IReadOnlyList<CfThresholdModel> GetIconSetThresholds(ConditionalFormat cf) =>
-        cf.IconSetThresholds.Count > 0
+    private static IReadOnlyList<CfThresholdModel> GetIconSetThresholds(ConditionalFormat cf, string iconSetStyle) =>
+        cf.IconSetThresholds.Count >= GetIconSetCount(iconSetStyle)
             ? cf.IconSetThresholds
-            :
-            [
-                new CfThresholdModel(CfThresholdType.Percent, "0"),
-                new CfThresholdModel(CfThresholdType.Percent, "33"),
-                new CfThresholdModel(CfThresholdType.Percent, "67")
-            ];
+            : CreateDefaultIconSetThresholds(iconSetStyle);
+
+    private static IReadOnlyList<CfThresholdModel> CreateDefaultIconSetThresholds(string iconSetStyle)
+    {
+        var iconCount = GetIconSetCount(iconSetStyle);
+        var step = 100 / iconCount;
+        return Enumerable.Range(0, iconCount)
+            .Select(index => new CfThresholdModel(CfThresholdType.Percent, (index * step).ToString(CultureInfo.InvariantCulture)))
+            .ToList();
+    }
+
+    private static int GetIconSetCount(string iconSetStyle) =>
+        iconSetStyle.StartsWith("5", StringComparison.Ordinal) ? 5 :
+        iconSetStyle.StartsWith("4", StringComparison.Ordinal) ? 4 :
+        3;
 
     private static bool IsValidIconOverride(CfIconOverride icon) =>
         !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;

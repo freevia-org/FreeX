@@ -26,6 +26,11 @@ internal static partial class XlsxPivotTableWriter
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         var cachePartById = new Dictionary<int, string>();
+        var cacheById = workbook.PivotCaches
+            .Where(cache => cache.CacheId > 0)
+            .ToDictionary(cache => cache.CacheId);
+        var calculatedFieldsByCacheId = GetCalculatedFieldsByCacheId(workbook);
+        var calculatedFieldIndexesByCacheId = new Dictionary<int, IReadOnlyDictionary<string, int>>();
         var pivotCacheElements = new List<XElement>();
         var cacheIndex = 1;
         foreach (var cache in workbook.PivotCaches.OrderBy(cache => cache.CacheId))
@@ -37,8 +42,12 @@ internal static partial class XlsxPivotTableWriter
             var cachePath = $"xl/pivotCache/pivotCacheDefinition{cacheOrdinal}.xml";
             var recordsPath = $"xl/pivotCache/pivotCacheRecords{cacheOrdinal}.xml";
             var recordsRelId = "rIdPivotCacheRecords";
+            var calculatedFields = calculatedFieldsByCacheId.TryGetValue(cache.CacheId, out var cacheCalculatedFields)
+                ? cacheCalculatedFields
+                : [];
+            calculatedFieldIndexesByCacheId[cache.CacheId] = CreateCalculatedFieldIndexMap(cache, calculatedFields);
             var cacheRecords = ToPivotCacheRecordsXml(cache, workbook, workbookNs);
-            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, workbookNs, relNs, recordsRelId, cacheRecords.RecordCount));
+            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, calculatedFields, workbookNs, relNs, recordsRelId, cacheRecords.RecordCount));
             XlsxPackageXmlEditor.ReplaceXml(archive, recordsPath, cacheRecords.Document);
             XlsxPackageXmlEditor.ReplaceXml(archive, XlsxPackagePath.GetRelationshipPartPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs, cachePath, recordsPath, recordsRelId));
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml");
@@ -99,8 +108,40 @@ internal static partial class XlsxPivotTableWriter
                 continue;
             }
 
-            WriteWorksheetPivotTables(archive, worksheetPath, sheet, cachePartById, numberFormatIdMap, ref pivotIndex, workbookNs, relNs, packageRelNs);
+            WriteWorksheetPivotTables(archive, worksheetPath, sheet, cachePartById, cacheById, calculatedFieldIndexesByCacheId, numberFormatIdMap, ref pivotIndex, workbookNs, relNs, packageRelNs);
         }
+    }
+
+    private static Dictionary<int, IReadOnlyList<PivotCalculatedFieldModel>> GetCalculatedFieldsByCacheId(Workbook workbook)
+    {
+        var result = new Dictionary<int, List<PivotCalculatedFieldModel>>();
+        foreach (var pivot in workbook.Sheets.SelectMany(sheet => sheet.PivotTables))
+        {
+            if (pivot.CacheId <= 0 || pivot.CalculatedFields.Count == 0)
+                continue;
+
+            if (!result.TryGetValue(pivot.CacheId, out var fields))
+            {
+                fields = [];
+                result[pivot.CacheId] = fields;
+            }
+
+            foreach (var field in pivot.CalculatedFields)
+            {
+                if (string.IsNullOrWhiteSpace(field.Name) ||
+                    string.IsNullOrWhiteSpace(field.Formula) ||
+                    fields.Any(existing => string.Equals(existing.Name, field.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                fields.Add(field);
+            }
+        }
+
+        return result.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<PivotCalculatedFieldModel>)pair.Value);
     }
 
     // CT_Workbook elements that must come after <pivotCaches>. The element is inserted immediately
@@ -128,6 +169,8 @@ internal static partial class XlsxPivotTableWriter
         string worksheetPath,
         Sheet sheet,
         IReadOnlyDictionary<int, string> cachePartById,
+        IReadOnlyDictionary<int, PivotCacheModel> cacheById,
+        IReadOnlyDictionary<int, IReadOnlyDictionary<string, int>> calculatedFieldIndexesByCacheId,
         IReadOnlyDictionary<int, int> numberFormatIdMap,
         ref int pivotIndex,
         XNamespace workbookNs,
@@ -150,9 +193,14 @@ internal static partial class XlsxPivotTableWriter
             if (!cachePartById.TryGetValue(pivot.CacheId, out var cachePath))
                 continue;
 
+            var calculatedFieldIndexes = calculatedFieldIndexesByCacheId.TryGetValue(pivot.CacheId, out var indexes)
+                ? indexes
+                : cacheById.TryGetValue(pivot.CacheId, out var cache)
+                    ? CreateCalculatedFieldIndexMap(cache, pivot.CalculatedFields)
+                    : CreateCalculatedFieldIndexMap(pivot);
             var pivotPath = $"xl/pivotTables/pivotTable{pivotIndex++}.xml";
             var cacheRelId = "rIdPivotCache";
-            XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, ToPivotTableDefinitionXml(pivot, workbookNs, cacheRelId, numberFormatIdMap));
+            XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, ToPivotTableDefinitionXml(pivot, calculatedFieldIndexes, workbookNs, cacheRelId, numberFormatIdMap));
             XlsxPackageXmlEditor.ReplaceXml(archive, XlsxPackagePath.GetRelationshipPartPath(pivotPath), new XDocument(
                 new XElement(packageRelNs + "Relationships",
                     new XElement(packageRelNs + "Relationship",
@@ -185,10 +233,12 @@ internal static partial class XlsxPivotTableWriter
 
     private static XDocument ToPivotTableDefinitionXml(
         PivotTableModel pivot,
+        IReadOnlyDictionary<string, int> calculatedFieldIndexes,
         XNamespace workbookNs,
         string cacheRelId,
-        IReadOnlyDictionary<int, int> numberFormatIdMap) =>
-        new(new XElement(
+        IReadOnlyDictionary<int, int> numberFormatIdMap)
+    {
+        return new XDocument(new XElement(
             workbookNs + "pivotTableDefinition",
             new XAttribute("name", string.IsNullOrWhiteSpace(pivot.Name) ? "PivotTable" : pivot.Name),
             new XAttribute("cacheId", pivot.CacheId.ToString(CultureInfo.InvariantCulture)),
@@ -233,8 +283,6 @@ internal static partial class XlsxPivotTableWriter
             new XAttribute("fieldPrintTitles", pivot.PrintTitles ? "1" : "0"),
             new XAttribute("printDrill", pivot.PrintExpandCollapseButtons ? "1" : "0"),
             new XAttribute("indent", Math.Clamp(pivot.CompactRowLabelIndent, 0, 15).ToString(CultureInfo.InvariantCulture)),
-            OptionalAttribute("altText", pivot.AltTextTitle),
-            OptionalAttribute("altTextSummary", pivot.AltTextDescription),
             // dataCaption is a REQUIRED attribute on CT_pivotTableDefinition; Excel defaults it to
             // "Values" when unspecified. Omitting it produces schema-invalid OOXML.
             new XAttribute("dataCaption", string.IsNullOrWhiteSpace(pivot.DataCaption) ? "Values" : pivot.DataCaption),
@@ -250,12 +298,11 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute("firstDataCol", Math.Max(0, pivot.FirstDataColumn).ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("firstDataRow", Math.Max(0, pivot.FirstDataRow).ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("firstHeaderRow", Math.Max(0, pivot.FirstHeaderRow).ToString(CultureInfo.InvariantCulture))),
-            ToPivotFieldsXml(pivot, workbookNs),
+            ToPivotFieldsXml(pivot, calculatedFieldIndexes, workbookNs),
             ToPivotFieldCollectionXml("rowFields", pivot.RowFields, workbookNs),
             ToPivotFieldCollectionXml("colFields", pivot.ColumnFields, workbookNs),
             ToPivotPageFieldsXml(pivot.PageFields, workbookNs),
-            ToPivotDataFieldsXml(pivot.DataFields, workbookNs, numberFormatIdMap),
-            ToPivotCalculatedFieldsXml(pivot.CalculatedFields, workbookNs),
+            ToPivotDataFieldsXml(pivot.DataFields, calculatedFieldIndexes, workbookNs, numberFormatIdMap),
             ToPivotCalculatedItemsXml(pivot.CalculatedItems, workbookNs),
             ToPivotValueFiltersXml(pivot.ValueFilters, workbookNs),
             ToPivotLabelFiltersXml(pivot.LabelFilters, workbookNs),
@@ -268,6 +315,7 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute("showColStripes", pivot.ShowColumnStripes ? "1" : "0"),
                 new XAttribute("showLastColumn", "1")),
             FreeXPivotTableExtension(pivot, workbookNs)));
+    }
 
     // Persists pivot-table flags with no base-schema attribute (repeatItemLabels only exists in the x14
     // extension) and FreeX-authored field selection/grouping state inside a schema-valid extLst/ext block.
@@ -278,6 +326,10 @@ internal static partial class XlsxPivotTableWriter
         var tableProps = new XElement(freeXNs + "tableProps");
         if (!pivot.RepeatItemLabels)
             tableProps.SetAttributeValue("repeatItemLabels", "0");
+        if (!string.IsNullOrWhiteSpace(pivot.AltTextTitle))
+            tableProps.SetAttributeValue("altTextTitle", pivot.AltTextTitle);
+        if (!string.IsNullOrWhiteSpace(pivot.AltTextDescription))
+            tableProps.SetAttributeValue("altTextDescription", pivot.AltTextDescription);
 
         var fields = new XElement(
             freeXNs + "fields",
@@ -322,17 +374,22 @@ internal static partial class XlsxPivotTableWriter
                 field.GroupEnd is null ? null : new XAttribute("groupEnd", FormatInvariant(field.GroupEnd.Value)),
                 field.GroupInterval is null ? null : new XAttribute("groupInterval", FormatInvariant(field.GroupInterval.Value))));
 
-    private static XElement ToPivotFieldsXml(PivotTableModel pivot, XNamespace workbookNs)
+    private static XElement ToPivotFieldsXml(
+        PivotTableModel pivot,
+        IReadOnlyDictionary<string, int> calculatedFieldIndexes,
+        XNamespace workbookNs)
     {
         var maxFieldIndex = pivot.RowFields
             .Concat(pivot.ColumnFields)
             .Concat(pivot.PageFields)
             .Select(field => field.SourceFieldIndex)
-            .Concat(pivot.DataFields.Select(field => field.SourceFieldIndex))
+            .Concat(pivot.DataFields.Select(field => ResolvePivotDataFieldIndex(field, calculatedFieldIndexes)))
+            .Concat(calculatedFieldIndexes.Values)
             .DefaultIfEmpty(-1)
             .Max();
         var dataFieldIndexes = pivot.DataFields
-            .Select(field => field.SourceFieldIndex)
+            .Select(field => ResolvePivotDataFieldIndex(field, calculatedFieldIndexes))
+            .Where(index => index >= 0)
             .ToHashSet();
 
         return new XElement(
@@ -401,6 +458,7 @@ internal static partial class XlsxPivotTableWriter
 
     private static XElement? ToPivotDataFieldsXml(
         IReadOnlyList<PivotDataFieldModel> fields,
+        IReadOnlyDictionary<string, int> calculatedFieldIndexes,
         XNamespace workbookNs,
         IReadOnlyDictionary<int, int> numberFormatIdMap) =>
         fields.Count == 0
@@ -411,9 +469,8 @@ internal static partial class XlsxPivotTableWriter
                 fields.Select(field => new XElement(
                     workbookNs + "dataField",
                     new XAttribute("name", string.IsNullOrWhiteSpace(field.Name) ? "Values" : field.Name),
-                    new XAttribute("fld", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("fld", ResolvePivotDataFieldIndex(field, calculatedFieldIndexes).ToString(CultureInfo.InvariantCulture)),
                     new XAttribute("subtotal", string.IsNullOrWhiteSpace(field.SummaryFunction) ? "sum" : field.SummaryFunction),
-                    string.IsNullOrWhiteSpace(field.CalculatedFieldName) ? null : new XAttribute("calculatedField", field.CalculatedFieldName),
                     field.ShowValuesAs == PivotShowValuesAs.None ? null : new XAttribute("showValuesAs", ToPivotShowValuesAsText(field.ShowValuesAs)),
                     field.BaseFieldIndex is { } baseField ? new XAttribute("baseField", baseField.ToString(CultureInfo.InvariantCulture)) : null,
                     string.IsNullOrWhiteSpace(field.BaseItem) ? null : new XAttribute("baseItem", field.BaseItem),
@@ -432,17 +489,62 @@ internal static partial class XlsxPivotTableWriter
         return new XAttribute("numFmtId", mappedId.ToString(CultureInfo.InvariantCulture));
     }
 
-    private static XElement? ToPivotCalculatedFieldsXml(IReadOnlyList<PivotCalculatedFieldModel> fields, XNamespace workbookNs) =>
-        fields.Count == 0
-            ? null
-            : new XElement(
-                workbookNs + "calculatedFields",
-                new XAttribute("count", fields.Count.ToString(CultureInfo.InvariantCulture)),
-                fields.Select((field, index) => new XElement(
-                    workbookNs + "calculatedField",
-                    new XAttribute("name", field.Name),
-                    new XAttribute("fld", index.ToString(CultureInfo.InvariantCulture)),
-                    new XAttribute("formula", field.Formula))));
+    private static Dictionary<string, int> CreateCalculatedFieldIndexMap(
+        PivotCacheModel cache,
+        IReadOnlyList<PivotCalculatedFieldModel> calculatedFields)
+    {
+        var fields = GetEffectivePivotCacheFields(cache, calculatedFields);
+        var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < fields.Count; index++)
+        {
+            var field = fields[index];
+            if ((field.IsDatabaseField && string.IsNullOrWhiteSpace(field.Formula)) ||
+                string.IsNullOrWhiteSpace(field.Name))
+            {
+                continue;
+            }
+
+            result.TryAdd(field.Name.Trim(), index);
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, int> CreateCalculatedFieldIndexMap(PivotTableModel pivot)
+    {
+        var maxSourceFieldIndex = pivot.RowFields
+            .Concat(pivot.ColumnFields)
+            .Concat(pivot.PageFields)
+            .Select(field => field.SourceFieldIndex)
+            .Concat(pivot.DataFields.Select(field => field.SourceFieldIndex))
+            .Where(index => index >= 0)
+            .DefaultIfEmpty(-1)
+            .Max();
+        var nextIndex = maxSourceFieldIndex + 1;
+        var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var field in pivot.CalculatedFields)
+        {
+            if (string.IsNullOrWhiteSpace(field.Name))
+                continue;
+
+            result.TryAdd(field.Name.Trim(), nextIndex++);
+        }
+
+        return result;
+    }
+
+    private static int ResolvePivotDataFieldIndex(
+        PivotDataFieldModel field,
+        IReadOnlyDictionary<string, int> calculatedFieldIndexes)
+    {
+        if (!string.IsNullOrWhiteSpace(field.CalculatedFieldName) &&
+            calculatedFieldIndexes.TryGetValue(field.CalculatedFieldName.Trim(), out var calculatedFieldIndex))
+        {
+            return calculatedFieldIndex;
+        }
+
+        return Math.Max(0, field.SourceFieldIndex);
+    }
 
     private static XElement? ToPivotCalculatedItemsXml(IReadOnlyList<PivotCalculatedItemModel> items, XNamespace workbookNs) =>
         items.Count == 0

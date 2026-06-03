@@ -87,12 +87,24 @@ internal static class XlsxStructuredTableWriter
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetRelsPath, worksheetRelsXml);
             worksheetRoot.Elements(workbookNs + "tableParts").Remove();
-            worksheetRoot.Add(new XElement(
+            InsertWorksheetTablePartsInOrder(worksheetRoot, workbookNs, new XElement(
                 workbookNs + "tableParts",
                 new XAttribute("count", tableParts.Count.ToString(CultureInfo.InvariantCulture)),
                 tableParts));
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
+    }
+
+    private static void InsertWorksheetTablePartsInOrder(
+        XElement worksheetRoot,
+        XNamespace workbookNs,
+        XElement tableParts)
+    {
+        var extLst = worksheetRoot.Elements(workbookNs + "extLst").FirstOrDefault();
+        if (extLst is null)
+            worksheetRoot.Add(tableParts);
+        else
+            extLst.AddBeforeSelf(tableParts);
     }
 
     private static XDocument ToXml(StructuredTableModel table, string tablePath)

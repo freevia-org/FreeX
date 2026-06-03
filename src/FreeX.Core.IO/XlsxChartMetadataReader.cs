@@ -103,21 +103,51 @@ internal static class XlsxChartMetadataReader
 
         var masterMapping = colorMapOverride.Element(DrawingNs + "masterClrMapping");
         var overrideMapping = colorMapOverride.Element(DrawingNs + "overrideClrMapping");
-        if (masterMapping is null && overrideMapping is null)
+        var directMappings = colorMapOverride.Attributes()
+            .Where(attribute => !attribute.IsNamespaceDeclaration)
+            .ToList();
+        if (masterMapping is null && overrideMapping is null && directMappings.Count == 0)
             return null;
 
         var result = new ChartColorMapOverrideModel
         {
             UseMasterColorMapping = masterMapping is not null
         };
+        foreach (var attribute in directMappings)
+        {
+            var name = attribute.Name.LocalName;
+            if (!DefaultChartColorMappings.TryGetValue(name, out var defaultValue) ||
+                !string.Equals(attribute.Value, defaultValue, StringComparison.Ordinal))
+            {
+                result.OverrideMappings[name] = attribute.Value;
+            }
+        }
+
         if (overrideMapping is not null)
         {
             foreach (var attribute in overrideMapping.Attributes())
                 result.OverrideMappings[attribute.Name.LocalName] = attribute.Value;
         }
 
-        return result;
+        return !result.UseMasterColorMapping && result.OverrideMappings.Count == 0 ? null : result;
     }
+
+    private static readonly IReadOnlyDictionary<string, string> DefaultChartColorMappings =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["bg1"] = "lt1",
+            ["tx1"] = "dk1",
+            ["bg2"] = "lt2",
+            ["tx2"] = "dk2",
+            ["accent1"] = "accent1",
+            ["accent2"] = "accent2",
+            ["accent3"] = "accent3",
+            ["accent4"] = "accent4",
+            ["accent5"] = "accent5",
+            ["accent6"] = "accent6",
+            ["hlink"] = "hlink",
+            ["folHlink"] = "folHlink"
+        };
 
     private static ChartExternalDataModel? ReadExternalData(XElement? externalData)
     {

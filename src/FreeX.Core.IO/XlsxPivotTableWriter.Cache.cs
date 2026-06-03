@@ -10,11 +10,13 @@ internal static partial class XlsxPivotTableWriter
 
     private static XDocument ToPivotCacheDefinitionXml(
         PivotCacheModel cache,
+        IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
         XNamespace workbookNs,
         XNamespace relNs,
         string recordsRelId,
         int recordCount)
     {
+        var cacheFields = GetEffectivePivotCacheFields(cache, calculatedFields);
         var source = new XElement(workbookNs + "worksheetSource");
         if (!string.IsNullOrWhiteSpace(cache.SourceTableName))
             source.SetAttributeValue("name", cache.SourceTableName);
@@ -50,13 +52,36 @@ internal static partial class XlsxPivotTableWriter
             cacheSource,
             new XElement(
                 workbookNs + "cacheFields",
-                new XAttribute("count", cache.Fields.Count.ToString(CultureInfo.InvariantCulture)),
-                cache.Fields.Select(field => new XElement(
-                    workbookNs + "cacheField",
-                    new XAttribute("name", string.IsNullOrWhiteSpace(field.Name) ? "Field" : field.Name),
-                    field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null,
-                    ToPivotCacheSharedItemsXml(field, workbookNs)))),
+                new XAttribute("count", cacheFields.Count.ToString(CultureInfo.InvariantCulture)),
+                cacheFields.Select(field => ToPivotCacheFieldXml(field, workbookNs))),
             FreeXPivotCacheExtension(cache, workbookNs)));
+    }
+
+    private static List<PivotCacheFieldModel> GetEffectivePivotCacheFields(
+        PivotCacheModel cache,
+        IReadOnlyList<PivotCalculatedFieldModel> calculatedFields)
+    {
+        var result = cache.Fields.ToList();
+        var names = result
+            .Select(field => field.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var calculatedField in calculatedFields)
+        {
+            if (string.IsNullOrWhiteSpace(calculatedField.Name) ||
+                string.IsNullOrWhiteSpace(calculatedField.Formula) ||
+                !names.Add(calculatedField.Name))
+            {
+                continue;
+            }
+
+            result.Add(new PivotCacheFieldModel(
+                calculatedField.Name,
+                Formula: calculatedField.Formula,
+                IsDatabaseField: false));
+        }
+
+        return result;
     }
 
     // FreeX-private namespace + extension URI for pivot flags that have no home in the base OOXML schema.
@@ -86,6 +111,15 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute(XNamespace.Xmlns + "fx", FreeXPivotExtensionNamespace),
                 payload));
     }
+
+    private static XElement ToPivotCacheFieldXml(PivotCacheFieldModel field, XNamespace workbookNs) =>
+        new(
+            workbookNs + "cacheField",
+            new XAttribute("name", string.IsNullOrWhiteSpace(field.Name) ? "Field" : field.Name),
+            field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null,
+            field.IsDatabaseField ? null : new XAttribute("databaseField", "0"),
+            string.IsNullOrWhiteSpace(field.Formula) ? null : new XAttribute("formula", field.Formula),
+            ToPivotCacheSharedItemsXml(field, workbookNs));
 
     private static XElement ToPivotCacheSharedItemsXml(PivotCacheFieldModel field, XNamespace workbookNs) =>
         new(

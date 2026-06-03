@@ -9,6 +9,7 @@ internal static partial class XlsxPivotTableReader
         XElement? dataFieldsElement,
         XNamespace workbookNs,
         IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
+        IReadOnlyDictionary<int, string> calculatedFieldNamesByIndex,
         IReadOnlyDictionary<int, string> numberFormatCatalog)
     {
         if (dataFieldsElement is null)
@@ -21,6 +22,7 @@ internal static partial class XlsxPivotTableReader
                 var fieldIndex = XlsxXmlAttributeReader.ReadIntAttribute(field, "fld") ?? -1;
                 var numberFormatId = XlsxXmlAttributeReader.ReadIntAttribute(field, "numFmtId");
                 var calculatedFieldName = field.Attribute("calculatedField")?.Value ??
+                    (calculatedFieldNamesByIndex.TryGetValue(fieldIndex, out var indexedCalculatedFieldName) ? indexedCalculatedFieldName : null) ??
                     calculatedFields.FirstOrDefault(calculated => string.Equals(calculated.Name, field.Attribute("name")?.Value, StringComparison.OrdinalIgnoreCase))?.Name;
                 return new PivotDataFieldModel(
                     calculatedFieldName is null ? fieldIndex : -1,
@@ -39,17 +41,79 @@ internal static partial class XlsxPivotTableReader
             .ToList();
     }
 
-    private static List<PivotCalculatedFieldModel> ReadPivotCalculatedFields(XElement? calculatedFieldsElement, XNamespace workbookNs)
+    private static Dictionary<int, string> ReadPivotCalculatedFieldNamesByIndex(
+        XElement? calculatedFieldsElement,
+        XNamespace workbookNs,
+        PivotCacheModel? pivotCache)
     {
+        var result = ReadPivotCacheCalculatedFieldNamesByIndex(pivotCache);
         if (calculatedFieldsElement is null)
+            return result;
+
+        foreach (var field in calculatedFieldsElement.Elements(workbookNs + "calculatedField"))
+        {
+            var index = XlsxXmlAttributeReader.ReadIntAttribute(field, "fld");
+            var name = field.Attribute("name")?.Value;
+            if (index is null || index < 0 || string.IsNullOrWhiteSpace(name))
+                continue;
+
+            result.TryAdd(index.Value, name);
+        }
+
+        return result;
+    }
+
+    private static Dictionary<int, string> ReadPivotCacheCalculatedFieldNamesByIndex(PivotCacheModel? pivotCache)
+    {
+        if (pivotCache is null || pivotCache.Fields.Count == 0)
             return [];
 
-        return calculatedFieldsElement
+        var result = new Dictionary<int, string>();
+        for (var index = 0; index < pivotCache.Fields.Count; index++)
+        {
+            var field = pivotCache.Fields[index];
+            if ((field.IsDatabaseField && string.IsNullOrWhiteSpace(field.Formula)) ||
+                string.IsNullOrWhiteSpace(field.Name))
+            {
+                continue;
+            }
+
+            result[index] = field.Name;
+        }
+
+        return result;
+    }
+
+    private static List<PivotCalculatedFieldModel> ReadPivotCalculatedFields(
+        XElement? calculatedFieldsElement,
+        XNamespace workbookNs,
+        PivotCacheModel? pivotCache)
+    {
+        var fields = ReadPivotCacheCalculatedFields(pivotCache);
+        var names = fields
+            .Select(field => field.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (calculatedFieldsElement is null)
+            return fields;
+
+        fields.AddRange(calculatedFieldsElement
             .Elements(workbookNs + "calculatedField")
             .Select(field => new PivotCalculatedFieldModel(
                 field.Attribute("name")?.Value ?? "",
                 field.Attribute("formula")?.Value ?? ""))
-            .Where(field => !string.IsNullOrWhiteSpace(field.Name))
+            .Where(field => !string.IsNullOrWhiteSpace(field.Name) && names.Add(field.Name)));
+        return fields;
+    }
+
+    private static List<PivotCalculatedFieldModel> ReadPivotCacheCalculatedFields(PivotCacheModel? pivotCache)
+    {
+        if (pivotCache is null || pivotCache.Fields.Count == 0)
+            return [];
+
+        return pivotCache.Fields
+            .Where(field => (!field.IsDatabaseField || !string.IsNullOrWhiteSpace(field.Formula)) &&
+                            !string.IsNullOrWhiteSpace(field.Name))
+            .Select(field => new PivotCalculatedFieldModel(field.Name, field.Formula ?? ""))
             .ToList();
     }
 
