@@ -163,6 +163,35 @@ public sealed class BuiltInFunctionsPerformanceTests
     }
 
     [Fact]
+    public void Textjoin_LargeDirectRangeAvoidsRangeAndListMaterialization()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 20_000; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue("x"));
+
+        evaluator.Evaluate("=TEXTJOIN(\"\",TRUE,A1:A20000)", sheet)
+            .Should().Be(new TextValue(new string('x', 20_000)));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate("=TEXTJOIN(\"\",TRUE,A1:A20000)", sheet);
+        stopwatch.Stop();
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        result.Should().Be(new TextValue(new string('x', 20_000)));
+        _output.WriteLine(
+            $"TEXTJOIN large direct range elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(
+            120_000,
+            "TEXTJOIN should avoid materializing direct text ranges into RangeValue arrays and intermediate string lists");
+    }
+
+    [Fact]
     public void Irr_LargeCashFlowRangeAvoidsRangeMaterializationChurn()
     {
         var evaluator = new FormulaEvaluator();

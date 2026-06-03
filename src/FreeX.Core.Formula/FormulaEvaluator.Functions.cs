@@ -47,6 +47,10 @@ public sealed partial class FormulaEvaluator
         if (!isAggregate && node.Arguments.Count > maxArgs)
             return ErrorValue.Value;
 
+        if (functionName == "TEXTJOIN" &&
+            TryEvaluateTextjoinDirectRanges(node, context, out var directTextjoinResult))
+            return directTextjoinResult;
+
         if (functionName == "INDEX" &&
             TryEvaluateIndexDirectRange(node, context, out var directIndexResult))
             return directIndexResult;
