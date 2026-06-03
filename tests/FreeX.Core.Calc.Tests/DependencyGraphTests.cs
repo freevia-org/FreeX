@@ -10,6 +10,19 @@ namespace FreeX.Core.Calc.Tests;
 public class DependencyGraphTests
 {
     [Fact]
+    public void DependencyGraph_PreSizesRangePrecedentStorageForFormulaRebuilds()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
+        var ensureCapacity = source[
+            source.IndexOf("internal void EnsureFormulaCapacity", StringComparison.Ordinal)..
+            source.IndexOf("private static readonly IReadOnlySet<CellAddress> EmptySet", StringComparison.Ordinal)];
+
+        ensureCapacity.Should().Contain("_precedents.EnsureCapacity(formulaCount);");
+        ensureCapacity.Should().Contain("_rangePrecedents.EnsureCapacity(formulaCount);");
+    }
+
+    [Fact]
     public void RecalcEngine_ScansFormulaCellsWithoutCopyingUsedCellDictionaries()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
