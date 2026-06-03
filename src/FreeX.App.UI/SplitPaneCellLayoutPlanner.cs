@@ -43,10 +43,10 @@ public static class SplitPaneCellLayoutPlanner
         var leftColumns = splitPanes.LeftColumns ?? [];
         var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
         var bottomLeftRows = splitPanes.BottomLeftRows ?? viewport.RowMetrics;
-        var topRowLookup = BuildRowLookup(topRows);
-        var bottomLeftRowLookup = BuildRowLookup(bottomLeftRows);
-        var leftColumnLookup = BuildColumnLookup(leftColumns);
-        var topRightColumnLookup = BuildColumnLookup(topRightColumns);
+        var topRowLookup = new SplitPaneRowMetricLookup(topRows);
+        var bottomLeftRowLookup = new SplitPaneRowMetricLookup(bottomLeftRows);
+        var leftColumnLookup = new SplitPaneColumnMetricLookup(leftColumns);
+        var topRightColumnLookup = new SplitPaneColumnMetricLookup(topRightColumns);
         var mergeLookup = MergeRangeIndex.Create(mergedRegions, cells);
         var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
         var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
@@ -64,11 +64,15 @@ public static class SplitPaneCellLayoutPlanner
             var isLeftPane = leftColumnLookup.TryGetValue(cell.Col, out var leftColumn);
             var region = ResolveSplitPaneRegion(isTopPane, isLeftPane);
             var row = isTopPane
-                ? topRow!
-                : bottomLeftRowLookup.GetValueOrDefault(cell.Row);
+                ? topRow
+                : bottomLeftRowLookup.TryGetValue(cell.Row, out var bottomLeftRow)
+                    ? bottomLeftRow
+                    : null;
             var column = isLeftPane
-                ? leftColumn!
-                : topRightColumnLookup.GetValueOrDefault(cell.Col);
+                ? leftColumn
+                : topRightColumnLookup.TryGetValue(cell.Col, out var topRightColumn)
+                    ? topRightColumn
+                    : null;
 
             if (row is null || column is null)
                 continue;
@@ -213,22 +217,172 @@ public static class SplitPaneCellLayoutPlanner
             _ => SplitPaneRegion.BottomRight
         };
 
-    private static Dictionary<uint, RowMetric> BuildRowLookup(IReadOnlyList<RowMetric> rows)
+    private readonly struct SplitPaneRowMetricLookup
     {
-        var lookup = new Dictionary<uint, RowMetric>(rows.Count);
-        foreach (var row in rows)
-            lookup.Add(row.Row, row);
+        private readonly IReadOnlyList<RowMetric> _rows;
+        private readonly bool _isSorted;
+        private readonly uint _firstRow;
+        private readonly uint _lastRow;
 
-        return lookup;
+        public SplitPaneRowMetricLookup(IReadOnlyList<RowMetric> rows)
+        {
+            _rows = rows;
+            _isSorted = AreRowsSorted(rows);
+            _firstRow = rows.Count > 0 ? rows[0].Row : 0;
+            _lastRow = rows.Count > 0 ? rows[^1].Row : 0;
+        }
+
+        public int Count => _rows.Count;
+
+        public RowMetric this[int index] => _rows[index];
+
+        public bool TryGetValue(uint row, out RowMetric? metric)
+        {
+            metric = _isSorted
+                ? FindSortedRowMetric(_rows, row, _firstRow, _lastRow)
+                : FindRowMetric(_rows, row);
+            return metric is not null;
+        }
     }
 
-    private static Dictionary<uint, ColMetric> BuildColumnLookup(IReadOnlyList<ColMetric> columns)
+    private readonly struct SplitPaneColumnMetricLookup
     {
-        var lookup = new Dictionary<uint, ColMetric>(columns.Count);
-        foreach (var column in columns)
-            lookup.Add(column.Col, column);
+        private readonly IReadOnlyList<ColMetric> _columns;
+        private readonly bool _isSorted;
+        private readonly uint _firstColumn;
+        private readonly uint _lastColumn;
 
-        return lookup;
+        public SplitPaneColumnMetricLookup(IReadOnlyList<ColMetric> columns)
+        {
+            _columns = columns;
+            _isSorted = AreColumnsSorted(columns);
+            _firstColumn = columns.Count > 0 ? columns[0].Col : 0;
+            _lastColumn = columns.Count > 0 ? columns[^1].Col : 0;
+        }
+
+        public int Count => _columns.Count;
+
+        public ColMetric this[int index] => _columns[index];
+
+        public bool TryGetValue(uint column, out ColMetric? metric)
+        {
+            metric = _isSorted
+                ? FindSortedColumnMetric(_columns, column, _firstColumn, _lastColumn)
+                : FindColumnMetric(_columns, column);
+            return metric is not null;
+        }
+    }
+
+    private static bool AreRowsSorted(IReadOnlyList<RowMetric> rows)
+    {
+        for (var i = 1; i < rows.Count; i++)
+        {
+            if (rows[i].Row < rows[i - 1].Row)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool AreColumnsSorted(IReadOnlyList<ColMetric> columns)
+    {
+        for (var i = 1; i < columns.Count; i++)
+        {
+            if (columns[i].Col < columns[i - 1].Col)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static RowMetric? FindSortedRowMetric(
+        IReadOnlyList<RowMetric> rows,
+        uint row,
+        uint firstRow,
+        uint lastRow)
+    {
+        if (rows.Count == 0 || row < firstRow || row > lastRow)
+            return null;
+
+        var directIndex = row - firstRow;
+        if (directIndex < rows.Count)
+        {
+            var candidate = rows[(int)directIndex];
+            if (candidate.Row == row)
+                return candidate;
+        }
+
+        var low = 0;
+        var high = rows.Count - 1;
+        while (low <= high)
+        {
+            var mid = low + ((high - low) / 2);
+            var metric = rows[mid];
+            if (metric.Row == row)
+                return metric;
+            if (metric.Row < row)
+                low = mid + 1;
+            else
+                high = mid - 1;
+        }
+
+        return null;
+    }
+
+    private static ColMetric? FindSortedColumnMetric(
+        IReadOnlyList<ColMetric> columns,
+        uint column,
+        uint firstColumn,
+        uint lastColumn)
+    {
+        if (columns.Count == 0 || column < firstColumn || column > lastColumn)
+            return null;
+
+        var directIndex = column - firstColumn;
+        if (directIndex < columns.Count)
+        {
+            var candidate = columns[(int)directIndex];
+            if (candidate.Col == column)
+                return candidate;
+        }
+
+        var low = 0;
+        var high = columns.Count - 1;
+        while (low <= high)
+        {
+            var mid = low + ((high - low) / 2);
+            var metric = columns[mid];
+            if (metric.Col == column)
+                return metric;
+            if (metric.Col < column)
+                low = mid + 1;
+            else
+                high = mid - 1;
+        }
+
+        return null;
+    }
+
+    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> rows, uint row)
+    {
+        foreach (var metric in rows)
+        {
+            if (metric.Row == row)
+                return metric;
+        }
+
+        return null;
+    }
+
+    private static ColMetric? FindColumnMetric(IReadOnlyList<ColMetric> columns, uint column)
+    {
+        foreach (var metric in columns)
+        {
+            if (metric.Col == column)
+                return metric;
+        }
+
+        return null;
     }
 
     private static bool CanOverflowSplitPaneText(DisplayCell cell, GridRange? merge) =>
@@ -236,24 +390,16 @@ public static class SplitPaneCellLayoutPlanner
 
     private readonly record struct OccupiedColumnSpan(uint Start, uint End);
 
-    private readonly struct SplitPaneOccupiedCellMap(Dictionary<uint, List<OccupiedColumnSpan>> spansByRow)
+    private readonly struct SplitPaneOccupiedCellMap(Dictionary<uint, OccupiedColumnSpans> spansByRow)
     {
-        private readonly Dictionary<uint, List<OccupiedColumnSpan>> _spansByRow = spansByRow;
+        private readonly Dictionary<uint, OccupiedColumnSpans> _spansByRow = spansByRow;
 
         public bool Contains(uint row, uint col)
         {
             if (!_spansByRow.TryGetValue(row, out var spans))
                 return false;
 
-            foreach (var span in spans)
-            {
-                if (col < span.Start)
-                    return false;
-                if (col <= span.End)
-                    return true;
-            }
-
-            return false;
+            return spans.Contains(col);
         }
     }
 
@@ -261,20 +407,19 @@ public static class SplitPaneCellLayoutPlanner
         IReadOnlyList<DisplayCell> cells,
         CellAddress? editingCell)
     {
-        var spansByRow = new Dictionary<uint, List<OccupiedColumnSpan>>();
+        var spansByRow = new Dictionary<uint, OccupiedColumnSpans>(EstimateRowSpanCapacity(cells));
         var needsNormalize = false;
         foreach (var cell in cells)
         {
             if (!GridView.IsOverflowOccupied(cell, editingCell))
                 continue;
 
-            if (!spansByRow.TryGetValue(cell.Row, out var spans))
-            {
-                spans = [];
+            var hasRow = spansByRow.TryGetValue(cell.Row, out var spans);
+            AddOccupiedColumn(ref spans, cell.Col, ref needsNormalize);
+            if (hasRow)
+                spansByRow[cell.Row] = spans;
+            else
                 spansByRow.Add(cell.Row, spans);
-            }
-
-            AddOccupiedColumn(spans, cell.Col, ref needsNormalize);
         }
 
         if (needsNormalize)
@@ -283,69 +428,229 @@ public static class SplitPaneCellLayoutPlanner
         return new SplitPaneOccupiedCellMap(spansByRow);
     }
 
-    private static void AddOccupiedColumn(List<OccupiedColumnSpan> spans, uint col, ref bool needsNormalize)
+    private static int EstimateRowSpanCapacity(IReadOnlyList<DisplayCell> cells)
     {
-        if (spans.Count == 0)
+        if (cells.Count == 0)
+            return 0;
+
+        var rowCount = 1;
+        var lastRow = cells[0].Row;
+        for (var i = 1; i < cells.Count; i++)
         {
-            spans.Add(new OccupiedColumnSpan(col, col));
-            return;
+            var row = cells[i].Row;
+            if (row == lastRow)
+                continue;
+
+            rowCount++;
+            lastRow = row;
         }
 
-        var last = spans[^1];
-        if (last.End < uint.MaxValue && col == last.End + 1)
-        {
-            spans[^1] = new OccupiedColumnSpan(last.Start, col);
-            return;
-        }
-
-        if (col > last.End)
-        {
-            spans.Add(new OccupiedColumnSpan(col, col));
-            return;
-        }
-
-        if (col >= last.Start)
-            return;
-
-        needsNormalize = true;
-        spans.Add(new OccupiedColumnSpan(col, col));
+        return rowCount;
     }
 
-    private static void NormalizeOccupiedColumnSpans(Dictionary<uint, List<OccupiedColumnSpan>> spansByRow)
+    private static void AddOccupiedColumn(ref OccupiedColumnSpans spans, uint col, ref bool needsNormalize) =>
+        spans.Add(col, ref needsNormalize);
+
+    private static void NormalizeOccupiedColumnSpans(Dictionary<uint, OccupiedColumnSpans> spansByRow)
     {
-        foreach (var spans in spansByRow.Values)
+        foreach (var row in spansByRow.Keys.ToArray())
         {
+            var spans = spansByRow[row];
             if (spans.Count <= 1)
                 continue;
 
-            spans.Sort(static (left, right) => left.Start.CompareTo(right.Start));
-            var writeIndex = 0;
-            for (var readIndex = 1; readIndex < spans.Count; readIndex++)
+            var normalized = spans;
+            normalized.Normalize();
+            spansByRow[row] = normalized;
+        }
+    }
+
+    private struct OccupiedColumnSpans
+    {
+        private OccupiedColumnSpan _first;
+        private OccupiedColumnSpan _second;
+        private List<OccupiedColumnSpan>? _overflow;
+        private int _count;
+
+        public readonly int Count => _count;
+
+        public void Add(uint col, ref bool needsNormalize)
+        {
+            if (_count == 0)
             {
-                var current = spans[readIndex];
-                var merged = spans[writeIndex];
-                if (current.Start <= merged.End ||
-                    (merged.End < uint.MaxValue && current.Start == merged.End + 1))
+                _first = new OccupiedColumnSpan(col, col);
+                _count = 1;
+                return;
+            }
+
+            if (TryAddToExisting(col))
+                return;
+
+            var span = new OccupiedColumnSpan(col, col);
+            if (_count == 1)
+            {
+                if (col < _first.Start)
+                    needsNormalize = true;
+
+                _second = span;
+                _count = 2;
+                return;
+            }
+
+            if (col < LastSpan.End)
+                needsNormalize = true;
+
+            _overflow ??= [];
+            _overflow.Add(span);
+            _count++;
+        }
+
+        public readonly bool Contains(uint col)
+        {
+            if (_count == 0 || col < _first.Start)
+                return false;
+
+            if (col <= _first.End)
+                return true;
+
+            if (_count == 1 || col < _second.Start)
+                return false;
+
+            if (col <= _second.End)
+                return true;
+
+            if (_overflow is null)
+                return false;
+
+            foreach (var span in _overflow)
+            {
+                if (col < span.Start)
+                    return false;
+
+                if (col <= span.End)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public void Normalize()
+        {
+            if (_count == 2 && _overflow is null)
+            {
+                NormalizePair();
+                return;
+            }
+
+            if (_overflow is null)
+                return;
+
+            _overflow.Add(_first);
+            _overflow.Add(_second);
+            _overflow.Sort(static (left, right) => left.Start.CompareTo(right.Start));
+
+            var writeIndex = 0;
+            for (var readIndex = 1; readIndex < _overflow.Count; readIndex++)
+            {
+                var current = _overflow[readIndex];
+                var merged = _overflow[writeIndex];
+                if (CanMerge(merged, current))
                 {
-                    spans[writeIndex] = new OccupiedColumnSpan(
-                        merged.Start,
-                        Math.Max(merged.End, current.End));
+                    _overflow[writeIndex] = Merge(merged, current);
                     continue;
                 }
 
                 writeIndex++;
-                spans[writeIndex] = current;
+                _overflow[writeIndex] = current;
             }
 
             var keepCount = writeIndex + 1;
-            if (keepCount < spans.Count)
-                spans.RemoveRange(keepCount, spans.Count - keepCount);
+            if (keepCount < _overflow.Count)
+                _overflow.RemoveRange(keepCount, _overflow.Count - keepCount);
+
+            _first = _overflow[0];
+            _count = _overflow.Count;
+            if (_count > 1)
+                _second = _overflow[1];
+
+            _overflow.RemoveRange(0, Math.Min(2, _overflow.Count));
+            if (_overflow.Count == 0)
+                _overflow = null;
         }
+
+        private readonly OccupiedColumnSpan LastSpan =>
+            _overflow is { Count: > 0 } overflow ? overflow[^1] :
+            _count > 1 ? _second :
+            _first;
+
+        private bool TryAddToExisting(uint col)
+        {
+            if (TryAddToSpan(ref _first, col))
+                return true;
+
+            if (_count > 1 && TryAddToSpan(ref _second, col))
+                return true;
+
+            if (_overflow is null)
+                return false;
+
+            for (var i = 0; i < _overflow.Count; i++)
+            {
+                var span = _overflow[i];
+                if (!TryAddToSpan(ref span, col))
+                    continue;
+
+                _overflow[i] = span;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void NormalizePair()
+        {
+            if (_second.Start < _first.Start)
+                (_first, _second) = (_second, _first);
+
+            if (!CanMerge(_first, _second))
+                return;
+
+            _first = Merge(_first, _second);
+            _second = default;
+            _count = 1;
+        }
+
+        private static bool TryAddToSpan(ref OccupiedColumnSpan span, uint col)
+        {
+            if (col >= span.Start && col <= span.End)
+                return true;
+
+            if (span.End < uint.MaxValue && col == span.End + 1)
+            {
+                span = new OccupiedColumnSpan(span.Start, col);
+                return true;
+            }
+
+            if (span.Start > 0 && col == span.Start - 1)
+            {
+                span = new OccupiedColumnSpan(col, span.End);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool CanMerge(OccupiedColumnSpan left, OccupiedColumnSpan right) =>
+            right.Start <= left.End ||
+            (left.End < uint.MaxValue && right.Start == left.End + 1);
+
+        private static OccupiedColumnSpan Merge(OccupiedColumnSpan left, OccupiedColumnSpan right) =>
+            new(left.Start, Math.Max(left.End, right.End));
     }
 
     private static double SumEmptyOverflowColumnWidths(
         DisplayCell cell,
-        IReadOnlyDictionary<uint, ColMetric> columns,
+        SplitPaneColumnMetricLookup columns,
         SplitPaneOccupiedCellMap occupied)
     {
         double width = 0;
@@ -353,18 +658,19 @@ public static class SplitPaneCellLayoutPlanner
         while (columns.TryGetValue(nextCol, out var nextMetric) &&
                !occupied.Contains(cell.Row, nextCol))
         {
-            width += nextMetric.Width;
+            width += nextMetric!.Width;
             nextCol++;
         }
 
         return width;
     }
 
-    private static double SumMergedColumnWidths(GridRange merge, IReadOnlyDictionary<uint, ColMetric> columns, uint anchorCol)
+    private static double SumMergedColumnWidths(GridRange merge, SplitPaneColumnMetricLookup columns, uint anchorCol)
     {
         double width = 0;
-        foreach (var metric in columns.Values)
+        for (var i = 0; i < columns.Count; i++)
         {
+            var metric = columns[i];
             if (metric.Col > anchorCol && metric.Col <= merge.End.Col)
                 width += metric.Width;
         }
@@ -372,11 +678,12 @@ public static class SplitPaneCellLayoutPlanner
         return width;
     }
 
-    private static double SumMergedRowHeights(GridRange merge, IReadOnlyDictionary<uint, RowMetric> rows, uint anchorRow)
+    private static double SumMergedRowHeights(GridRange merge, SplitPaneRowMetricLookup rows, uint anchorRow)
     {
         double height = 0;
-        foreach (var metric in rows.Values)
+        for (var i = 0; i < rows.Count; i++)
         {
+            var metric = rows[i];
             if (metric.Row > anchorRow && metric.Row <= merge.End.Row)
                 height += metric.Height;
         }

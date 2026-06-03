@@ -20,7 +20,7 @@ public partial class GridView
         double ZoomFactor,
         GridObjectDisplayMode ObjectDisplayMode,
         WorkbookTheme WorkbookTheme,
-        GridRange? SelectedRange,
+        CellAddress? PictureSelectionAnchor,
         IReadOnlyList<ChartModel>? Charts,
         int ChartCount,
         IReadOnlyList<DrawingShapeModel>? DrawingShapes,
@@ -120,7 +120,7 @@ public partial class GridView
             ZoomFactor,
             ObjectDisplayMode,
             WorkbookTheme,
-            SelectedRange,
+            GetPictureSelectionAnchorForLayerCache(),
             Charts,
             Charts?.Count ?? 0,
             DrawingShapes,
@@ -135,6 +135,21 @@ public partial class GridView
             NativeTimelines?.Count ?? 0,
             DrawingObjectZOrder,
             DrawingObjectZOrder?.Count ?? 0);
+
+    private CellAddress? GetPictureSelectionAnchorForLayerCache()
+    {
+        if (Pictures is not { Count: > 0 } || SelectedRange is not { } selectedRange)
+            return null;
+
+        var anchor = selectedRange.Start;
+        foreach (var picture in Pictures)
+        {
+            if (picture.IsVisible && picture.Anchor == anchor)
+                return anchor;
+        }
+
+        return null;
+    }
 
     private void ClearDrawingObjectLayerCache()
     {

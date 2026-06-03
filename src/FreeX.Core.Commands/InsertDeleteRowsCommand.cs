@@ -12,11 +12,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private readonly uint _count;
     private List<CellStateSnapshot>? _movedSnapshot;
     private List<GridRange>? _mergeSnapshot;
-    private Dictionary<uint, double>? _rowHeightSnapshot;
-    private Dictionary<CellAddress, string>? _commentSnapshot;
-    private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
-    private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
-    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
+    private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
+    private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
+    private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
+    private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
@@ -55,16 +55,16 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.HiddenRows, _beforeRow, _count);
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.FilterHiddenRows, _beforeRow, _count);
 
-        _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
+        _rowHeightSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.RowHeights, _beforeRow, _count);
 
-        _commentSnapshot = new Dictionary<CellAddress, string>(sheet.Comments);
+        _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.Comments, _beforeRow, _count);
-        _threadedCommentSnapshot = new Dictionary<CellAddress, ThreadedComment>(sheet.ThreadedComments);
+        _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.ThreadedComments, _beforeRow, _count);
-        _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
+        _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.Hyperlinks, _beforeRow, _count);
-        _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
+        _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.HyperlinkMetadata, _beforeRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
@@ -73,7 +73,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftNamedRangeRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         _printAreaSnapshot = sheet.PrintArea;
         RowColumnShiftHelpers.ShiftPrintAreaRowsUp(sheet, _beforeRow, _count);
-        _rowPageBreakSnapshot = sheet.RowPageBreaks.ToList();
+        _rowPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.RowPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.RowPageBreaks, _beforeRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
         RowColumnShiftHelpers.ShiftChartRowsUp(sheet, _sheetId, _beforeRow, _count);
@@ -108,10 +108,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var snapshot in _movedSnapshot)
-            sheet.ClearCell(new CellAddress(snapshot.Address.Sheet, snapshot.Address.Row + _count, snapshot.Address.Col));
+            sheet.ClearCell(snapshot.Row + _count, snapshot.Col);
 
         foreach (var snapshot in _movedSnapshot)
-            sheet.SetCell(snapshot.Address, snapshot.ToCell());
+            sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
 
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.FilterHiddenRows, _beforeRow + _count, _count);
@@ -163,15 +163,15 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         try
         {
             for (var i = 0; i < movedCells.Count; i++)
-                originals[i] = sheet.GetCell(movedCells[i].Address)!;
+                originals[i] = sheet.GetCell(movedCells[i].Row, movedCells[i].Col)!;
 
             for (var i = 0; i < movedCells.Count; i++)
-                sheet.ClearCell(movedCells[i].Address);
+                sheet.ClearCell(movedCells[i].Row, movedCells[i].Col);
 
             for (var i = 0; i < movedCells.Count; i++)
             {
-                var addr = movedCells[i].Address;
-                sheet.SetCell(new CellAddress(addr.Sheet, addr.Row + count, addr.Col), originals[i]);
+                var snapshot = movedCells[i];
+                sheet.SetCell(new CellAddress(sheet.Id, snapshot.Row + count, snapshot.Col), originals[i]);
             }
         }
         finally

@@ -8,10 +8,15 @@ internal static class NewWorkbookFactory
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        return Create(
+        var workbook = Create(
             options.DefaultSheetCount,
             options.DefaultFontName,
             options.DefaultFontSize);
+        workbook.FileSharing = new WorkbookFileSharingModel
+        {
+            UserName = FreeXOptions.NormalizeUserName(options.UserName)
+        };
+        return workbook;
     }
 
     public static Workbook Create(int defaultSheetCount)

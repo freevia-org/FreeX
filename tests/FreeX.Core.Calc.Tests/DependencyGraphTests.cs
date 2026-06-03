@@ -103,7 +103,10 @@ public class DependencyGraphTests
         source.Should().NotContain(
             "private static bool ContainsVolatileFunction",
             "volatile detection should stay fused with reference collection on the registration hot path");
-        referenceCollection.Should().Contain("BuiltInFunctions.IsVolatile(func.FunctionName)");
+        referenceCollection.Should().Contain("IsVolatileFunctionName(func.FunctionName)");
+        referenceCollection.Should().NotContain(
+            "BuiltInFunctions.IsVolatile(",
+            "dependency-only rebuild should not initialize the full built-in function registry just to detect volatile names");
         referenceCollection.Should().Contain("for (var i = 0; i < arguments.Count; i++)");
         referenceCollection.Should().Contain("CollectReferences(arguments[i]");
         referenceCollection.Should().NotContain(
@@ -134,6 +137,24 @@ public class DependencyGraphTests
         var a1 = new CellAddress(sheet, 1, 1);
 
         graph.GetRecalcOrder([a1]).Should().BeSameAs(graph.GetRecalcOrder([a1]));
+    }
+
+    [Fact]
+    public void DependencyGraph_UsesLinearFastPathForSingleRootExactChains()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
+        var getRecalcOrder = source[
+            source.IndexOf("public RecalcPlan GetRecalcOrder", StringComparison.Ordinal)..
+            source.IndexOf("var toRecalc = new HashSet<CellAddress>();", StringComparison.Ordinal)];
+        var fastPath = source[
+            source.IndexOf("private bool TryBuildSingleRootExactChainPlan", StringComparison.Ordinal)..
+            source.IndexOf("public RecalcPlan GetEvaluationOrder", StringComparison.Ordinal)];
+
+        getRecalcOrder.Should().Contain("TryBuildSingleRootExactChainPlan(changedList, out var chainPlan)");
+        fastPath.Should().Contain("TryCountSingleRootExactChain");
+        fastPath.Should().Contain("new List<CellAddress>(count)");
+        fastPath.Should().NotContain("new HashSet<CellAddress>");
     }
 
     [Fact]

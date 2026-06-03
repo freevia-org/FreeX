@@ -10,7 +10,7 @@ internal static class XlsxPackageXmlEditor
         archive.GetEntry(entryName)?.Delete();
         var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
         using var stream = entry.Open();
-        document.Save(stream);
+        document.Save(stream, SaveOptions.DisableFormatting);
     }
 
     public static XDocument LoadXml(ZipArchiveEntry entry)

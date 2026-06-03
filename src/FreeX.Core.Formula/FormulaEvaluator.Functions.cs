@@ -42,6 +42,26 @@ public sealed partial class FormulaEvaluator
         if (TryEvaluateReferenceDimensionFunction(functionName, node, context, out var dimensionResult))
             return dimensionResult;
 
+        if (functionName == "MATCH" &&
+            TryEvaluateMatchDirectRange(node, context, out var directMatchResult))
+            return directMatchResult;
+
+        if (functionName == "XMATCH" &&
+            TryEvaluateXmatchDirectRange(node, context, out var directXmatchResult))
+            return directXmatchResult;
+
+        if (functionName == "XLOOKUP" &&
+            TryEvaluateXlookupDirectRanges(node, context, out var directXlookupResult))
+            return directXlookupResult;
+
+        if (functionName == "LOOKUP" &&
+            TryEvaluateLookupDirectRanges(node, context, out var directLookupResult))
+            return directLookupResult;
+
+        if (IsDirectSelectionFunction(functionName) &&
+            TryEvaluateStatisticalSelectionDirectRange(functionName, node, context, out var directSelectionResult))
+            return directSelectionResult;
+
         if (functionName == "NPV" &&
             TryEvaluateNpvDirectRanges(node, context, out var directNpvResult))
             return directNpvResult;
@@ -53,6 +73,14 @@ public sealed partial class FormulaEvaluator
         if (functionName == "IRR" &&
             TryEvaluateIrrDirectRange(node, context, out var directIrrResult))
             return directIrrResult;
+
+        if (functionName == "SUBTOTAL" &&
+            TryEvaluateSubtotalDirectRanges(node, context, out var directSubtotalResult))
+            return directSubtotalResult;
+
+        if (functionName == "AGGREGATE" &&
+            TryEvaluateAggregateDirectRanges(node, context, out var directAggregateResult))
+            return directAggregateResult;
 
         bool isStructured = IsStructuredRangeFunction(functionName);
         bool isAggregate = IsAggregateFunction(functionName);

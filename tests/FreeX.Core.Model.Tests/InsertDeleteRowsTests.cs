@@ -809,6 +809,53 @@ public class InsertDeleteRowsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void DeleteRowsCommand_UsesCompactMetadataSnapshotsForUndo()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src",
+            "FreeX.Core.Commands",
+            "DeleteRowsCommand.cs"));
+
+        source.Should().Contain("CaptureDictionary(sheet.RowHeights)");
+        source.Should().Contain("CaptureSet(sheet.HiddenRows)");
+        source.Should().Contain("CaptureSortedSet(sheet.RowPageBreaks)");
+        source.Should().NotContain("new Dictionary<uint, double>(sheet.RowHeights)");
+        source.Should().NotContain("[.. sheet.HiddenRows]");
+        source.Should().NotContain("sheet.RowPageBreaks.ToList()");
+    }
+
+    [Fact]
+    public void InsertRowsCommand_UsesCompactMetadataSnapshotsForUndo()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src",
+            "FreeX.Core.Commands",
+            "InsertDeleteRowsCommand.cs"));
+
+        source.Should().Contain("private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;");
+        source.Should().Contain("CaptureDictionary(sheet.RowHeights)");
+        source.Should().Contain("CaptureDictionary(sheet.Comments)");
+        source.Should().Contain("CaptureSortedSet(sheet.RowPageBreaks)");
+        source.Should().NotContain("new Dictionary<uint, double>(sheet.RowHeights)");
+        source.Should().NotContain("new Dictionary<CellAddress, string>(sheet.Comments)");
+        source.Should().NotContain("sheet.RowPageBreaks.ToList()");
+    }
+
+    [Fact]
+    public void CellStateSnapshot_StoresCoordinatesWithoutPerSnapshotSheetId()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src",
+            "FreeX.Core.Commands",
+            "CellStateSnapshot.cs"));
+
+        source.Should().Contain("uint Row");
+        source.Should().Contain("uint Col");
+        source.Should().Contain("ToAddress(SheetId sheetId)");
+        source.Should().NotContain("CellAddress Address");
+    }
+
     private const int DenseShiftRows = 500;
     private const int DenseShiftColumns = 80;
     private const uint DenseShiftBeforeRow = 2;
@@ -849,6 +896,21 @@ public class InsertDeleteRowsTests
         }
 
         return (workbook, sheet, new SimpleCtx(workbook));
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = dir.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file {Path.Combine(parts)}");
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext

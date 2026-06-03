@@ -435,6 +435,7 @@ public partial class FunctionLibraryTests
             (2, 1, new NumberValue(3)), (2, 2, new NumberValue(4)));
 
         _eval.Evaluate("=MATCH(3,A1:B2,0)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=MATCH(3,A1:B2,1/0)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
@@ -531,6 +532,16 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
+    public void Match_TextMatchTypeCoercionFailure_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)));
+
+        _eval.Evaluate("=MATCH(20,A1:A2,\"not-a-number\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Match_DateCell_ExactMatchesDateSerial()
     {
         var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
@@ -550,6 +561,41 @@ public partial class FunctionLibraryTests
             (2, 1, date));
 
         _eval.Evaluate("=MATCH(DATE(2026,5,17),A1:A2,1)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Match_DirectHorizontalRange_StreamsWithoutChangingPosition()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new NumberValue(20)),
+            (1, 3, new NumberValue(30)));
+
+        _eval.Evaluate("=MATCH(20,A1:C1,0)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Match_DirectCrossSheetRange_StreamsFromTargetSheet()
+    {
+        var workbook = new Workbook("T");
+        var formulaSheet = workbook.AddSheet("Formula");
+        var dataSheet = workbook.AddSheet("Data");
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 1), new NumberValue(10));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 1), new NumberValue(20));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 3, 1), new NumberValue(30));
+
+        _eval.Evaluate("=MATCH(20,Data!A1:A3,0)", formulaSheet, workbook).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=MATCH(20,Missing!A1:A3,0)", formulaSheet, workbook).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void Match_DirectRangeElementError_PropagatesBeforeLaterMatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.DivByZero),
+            (2, 1, new NumberValue(20)));
+
+        _eval.Evaluate("=MATCH(20,A1:A2,0)", sheet).Should().Be(ErrorValue.DivByZero);
     }
 
 
@@ -758,6 +804,21 @@ public partial class FunctionLibraryTests
             (1, 1, new TextValue("A")), (2, 1, new TextValue("B")), (3, 1, new TextValue("C")));
 
         _eval.Evaluate("=XMATCH(\"B\",A1:A3)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Xmatch_DirectCrossSheetRange_StreamsFromTargetSheet()
+    {
+        var workbook = new Workbook("T");
+        var formulaSheet = workbook.AddSheet("Formula");
+        var dataSheet = workbook.AddSheet("Data");
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 1), new TextValue("A"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 1), new TextValue("B"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 3, 1), new TextValue("C"));
+
+        _eval.Evaluate("=XMATCH(\"B\",Data!A1:A3)", formulaSheet, workbook).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=XMATCH(1/0,Missing!A1:A3)", formulaSheet, workbook).Should().Be(ErrorValue.DivByZero);
+        _eval.Evaluate("=XMATCH(\"B\",Missing!A1:A3)", formulaSheet, workbook).Should().Be(ErrorValue.Ref);
     }
 
     [Fact]
