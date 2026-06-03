@@ -99,10 +99,10 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var snapshot in _movedSnapshot)
-            sheet.ClearCell(new CellAddress(snapshot.Address.Sheet, snapshot.Address.Row, snapshot.Address.Col + _count));
+            sheet.ClearCell(snapshot.Row, snapshot.Col + _count);
 
         foreach (var snapshot in _movedSnapshot)
-            sheet.SetCell(snapshot.Address, snapshot.ToCell());
+            sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
 
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenCols, _beforeCol + _count, _count);
 
@@ -153,15 +153,15 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         try
         {
             for (var i = 0; i < movedCells.Count; i++)
-                originals[i] = sheet.GetCell(movedCells[i].Address)!;
+                originals[i] = sheet.GetCell(movedCells[i].Row, movedCells[i].Col)!;
 
             for (var i = 0; i < movedCells.Count; i++)
-                sheet.ClearCell(movedCells[i].Address);
+                sheet.ClearCell(movedCells[i].Row, movedCells[i].Col);
 
             for (var i = 0; i < movedCells.Count; i++)
             {
-                var addr = movedCells[i].Address;
-                sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col + count), originals[i]);
+                var snapshot = movedCells[i];
+                sheet.SetCell(new CellAddress(sheet.Id, snapshot.Row, snapshot.Col + count), originals[i]);
             }
         }
         finally
@@ -218,7 +218,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         (_deletedSnapshot, _shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endCol);
 
         foreach (var snapshot in _deletedSnapshot)
-            sheet.ClearCell(snapshot.Address);
+            sheet.ClearCell(snapshot.Row, snapshot.Col);
 
         MoveCellsForDelete(sheet, _shiftedSnapshot, _count);
 
@@ -270,13 +270,13 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var snapshot in _shiftedSnapshot)
-            sheet.ClearCell(new CellAddress(snapshot.Address.Sheet, snapshot.Address.Row, snapshot.Address.Col - _count));
+            sheet.ClearCell(snapshot.Row, snapshot.Col - _count);
 
         foreach (var snapshot in _shiftedSnapshot)
-            sheet.SetCell(snapshot.Address, snapshot.ToCell());
+            sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
 
         foreach (var snapshot in _deletedSnapshot)
-            sheet.SetCell(snapshot.Address, snapshot.ToCell());
+            sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
 
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
@@ -329,15 +329,15 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         try
         {
             for (var i = 0; i < shiftedCells.Count; i++)
-                originals[i] = sheet.GetCell(shiftedCells[i].Address)!;
+                originals[i] = sheet.GetCell(shiftedCells[i].Row, shiftedCells[i].Col)!;
 
             for (var i = 0; i < shiftedCells.Count; i++)
-                sheet.ClearCell(shiftedCells[i].Address);
+                sheet.ClearCell(shiftedCells[i].Row, shiftedCells[i].Col);
 
             for (var i = 0; i < shiftedCells.Count; i++)
             {
-                var addr = shiftedCells[i].Address;
-                sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - count), originals[i]);
+                var snapshot = shiftedCells[i];
+                sheet.SetCell(new CellAddress(sheet.Id, snapshot.Row, snapshot.Col - count), originals[i]);
             }
         }
         finally

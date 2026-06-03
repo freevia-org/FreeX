@@ -51,7 +51,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         (_deletedSnapshot, _shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endRow);
 
         foreach (var snapshot in _deletedSnapshot)
-            sheet.ClearCell(snapshot.Address);
+            sheet.ClearCell(snapshot.Row, snapshot.Col);
 
         MoveCellsForDelete(sheet, _shiftedSnapshot, _count);
 
@@ -132,13 +132,13 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var snapshot in _shiftedSnapshot)
-            sheet.ClearCell(new CellAddress(snapshot.Address.Sheet, snapshot.Address.Row - _count, snapshot.Address.Col));
+            sheet.ClearCell(snapshot.Row - _count, snapshot.Col);
 
         foreach (var snapshot in _shiftedSnapshot)
-            sheet.SetCell(snapshot.Address, snapshot.ToCell());
+            sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
 
         foreach (var snapshot in _deletedSnapshot)
-            sheet.SetCell(snapshot.Address, snapshot.ToCell());
+            sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
 
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
@@ -194,15 +194,15 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         try
         {
             for (var i = 0; i < shiftedCells.Count; i++)
-                originals[i] = sheet.GetCell(shiftedCells[i].Address)!;
+                originals[i] = sheet.GetCell(shiftedCells[i].Row, shiftedCells[i].Col)!;
 
             for (var i = 0; i < shiftedCells.Count; i++)
-                sheet.ClearCell(shiftedCells[i].Address);
+                sheet.ClearCell(shiftedCells[i].Row, shiftedCells[i].Col);
 
             for (var i = 0; i < shiftedCells.Count; i++)
             {
-                var addr = shiftedCells[i].Address;
-                sheet.SetCell(new CellAddress(addr.Sheet, addr.Row - count, addr.Col), originals[i]);
+                var snapshot = shiftedCells[i];
+                sheet.SetCell(new CellAddress(sheet.Id, snapshot.Row - count, snapshot.Col), originals[i]);
             }
         }
         finally
