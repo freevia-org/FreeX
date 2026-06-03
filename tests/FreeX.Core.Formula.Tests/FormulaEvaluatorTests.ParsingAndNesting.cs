@@ -68,12 +68,12 @@ public partial class FormulaEvaluatorTests
     }
 
     [Fact]
-    public void Parse_CellRefBeyondWorksheetRows_ReturnsRefError()
+    public void Parse_CellRefBeyondWorksheetRows_ReturnsNamedRange()
     {
         var tokens = new Lexer("=A1048577").Tokenize();
         var ast = new Parser(tokens).Parse();
 
-        var error = ast.Should().BeOfType<ErrorNode>().Subject;
-        error.Error.Should().Be(ErrorValue.Ref);
+        ast.Should().BeOfType<NamedRangeNode>()
+            .Subject.Name.Should().Be("A1048577");
     }
 }

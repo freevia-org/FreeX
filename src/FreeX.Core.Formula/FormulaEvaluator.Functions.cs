@@ -35,6 +35,18 @@ public sealed partial class FormulaEvaluator
 
         var (func, minArgs, maxArgs) = entry;
 
+        bool isStructured = IsStructuredRangeFunction(functionName);
+        bool isAggregate = IsAggregateFunction(functionName);
+        bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
+        bool preservesReferenceProvenance = IsReferenceProvenanceAggregate(functionName);
+        bool isSingleCellReferenceRangeFunction = IsSingleCellReferenceRangeFunction(functionName);
+
+        // Enforce ordinary function arity before evaluating or expanding range arguments.
+        if (node.Arguments.Count < minArgs)
+            return ErrorValue.Value;
+        if (!isAggregate && node.Arguments.Count > maxArgs)
+            return ErrorValue.Value;
+
         if (functionName == "INDEX" &&
             TryEvaluateIndexDirectRange(node, context, out var directIndexResult))
             return directIndexResult;
@@ -85,12 +97,6 @@ public sealed partial class FormulaEvaluator
         if (TryEvaluateConditionalAggregateDirectRanges(functionName, node, context, out var directConditionalAggregateResult))
             return directConditionalAggregateResult;
 
-        bool isStructured = IsStructuredRangeFunction(functionName);
-        bool isAggregate = IsAggregateFunction(functionName);
-        bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
-        bool preservesReferenceProvenance = IsReferenceProvenanceAggregate(functionName);
-        bool isSingleCellReferenceRangeFunction = IsSingleCellReferenceRangeFunction(functionName);
-
         if (node.Arguments.Count >= minArgs &&
             (isAggregate || node.Arguments.Count <= maxArgs) &&
             TryEvaluateRangeOnlyFastAggregate(functionName, node.Arguments, context, out var fastAggregate))
@@ -138,6 +144,20 @@ public sealed partial class FormulaEvaluator
             else if (arg is StringNode directText && isDirectTextCoercingAggregate)
             {
                 expandedArgs.Add(new DirectTextLiteralValue(directText.Value));
+            }
+            else if (isAggregate &&
+                     !isStructured &&
+                     functionName != "COUNTBLANK" &&
+                     arg is FunctionCallNode { FunctionName: "INDIRECT" } indirect &&
+                     TryExpandLiteralIndirectAggregateRange(
+                         indirect,
+                         context,
+                         expandedArgs,
+                         preservesReferenceProvenance,
+                         out var indirectError))
+            {
+                if (indirectError is not null)
+                    return indirectError;
             }
             else if (arg is CellRefNode structuredCell && IsConditionalAggregateRangeArgument(functionName, argIndex))
             {
@@ -231,13 +251,6 @@ public sealed partial class FormulaEvaluator
                 return rangeError.Error;
         }
 
-        // Always enforce minimum arg count for every function, including aggregates.
-        if (node.Arguments.Count < minArgs)
-            return ErrorValue.Value;
-        // Enforce maximum only for non-aggregate functions (aggregates accept unbounded ranges).
-        if (!isAggregate && node.Arguments.Count > maxArgs)
-            return ErrorValue.Value;
-
         try
         {
             return func(expandedArgs, context);
@@ -258,6 +271,64 @@ public sealed partial class FormulaEvaluator
         {
             return ErrorValue.Ref;
         }
+    }
+
+    private static bool TryExpandLiteralIndirectAggregateRange(
+        FunctionCallNode indirect,
+        IEvalContext context,
+        List<ScalarValue> expandedArgs,
+        bool preservesReferenceProvenance,
+        out ErrorValue? error)
+    {
+        error = null;
+        if (!TryBuildLiteralIndirectArguments(indirect, out var indirectArgs, out error))
+            return error is not null;
+
+        if (!BuiltInFunctions.TryResolveIndirectRangeReference(indirectArgs, context, out var indirectRange, out var indirectError))
+        {
+            error = indirectError as ErrorValue;
+            return error is not null;
+        }
+
+        var range = ToRangeRef(indirectRange);
+        if (indirectRange.IsFullColumnRange || indirectRange.IsFullRowRange)
+            range = ClampOpenEndedRangeToUsed(range, context);
+
+        if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+        {
+            error = ErrorValue.Ref;
+            return true;
+        }
+
+        var values = range.SheetName is not null
+            ? context.GetRangeValues(
+                range.SheetName,
+                range.Start.Row,
+                range.Start.ColumnNumber,
+                range.End.Row,
+                range.End.ColumnNumber)
+            : context.GetRangeValues(
+                range.Start.Row,
+                range.Start.ColumnNumber,
+                range.End.Row,
+                range.End.ColumnNumber);
+        AddRangeValues(expandedArgs, values, preservesReferenceProvenance);
+        return true;
+    }
+
+    private static RangeRefNode ToRangeRef(BuiltInFunctions.IndirectRangeReference range)
+    {
+        var startCol = Math.Min(range.StartCol, range.EndCol);
+        var endCol = Math.Max(range.StartCol, range.EndCol);
+        var start = new CellRefNode(
+            FreeX.Core.Model.CellAddress.NumberToColumnName(startCol),
+            Math.Min(range.StartRow, range.EndRow),
+            SheetName: range.SheetName);
+        var end = new CellRefNode(
+            FreeX.Core.Model.CellAddress.NumberToColumnName(endCol),
+            Math.Max(range.StartRow, range.EndRow),
+            SheetName: range.SheetName);
+        return new RangeRefNode(start, end, range.SheetName);
     }
 
     private static ErrorValue ErrorFromCode(string code) => code.ToUpperInvariant() switch
