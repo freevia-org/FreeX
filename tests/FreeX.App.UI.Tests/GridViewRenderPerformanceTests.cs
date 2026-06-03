@@ -189,6 +189,30 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderHeaders_CachesHeaderTextDrawingAcrossSelectionRepaints()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var drawColumnHeader = source[
+            source.IndexOf("private void DrawColumnHeader", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawRowHeader", StringComparison.Ordinal)];
+        var drawRowHeader = source[
+            source.IndexOf("private void DrawRowHeader", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawHeaderText", StringComparison.Ordinal)];
+        var drawHeaderText = source[
+            source.IndexOf("private void DrawHeaderText", StringComparison.Ordinal)..
+            source.IndexOf("private static IReadOnlyList<HeaderSelectionInterval>", StringComparison.Ordinal)];
+
+        source.Should().Contain("private readonly Dictionary<HeaderTextDrawingKey, DrawingGroup> _headerTextDrawingCache = new();");
+        drawColumnHeader.Should().Contain("DrawHeaderText(dc, textValue, text, 11, pixelsPerDip");
+        drawRowHeader.Should().Contain("DrawHeaderText(dc, textValue, text, 11, pixelsPerDip");
+        drawColumnHeader.Should().NotContain("dc.DrawText");
+        drawRowHeader.Should().NotContain("dc.DrawText");
+        drawHeaderText.Should().Contain("_headerTextDrawingCache.TryGetValue(key");
+        drawHeaderText.Should().Contain("groupContext.DrawText(formattedText, origin);");
+        drawHeaderText.Should().Contain("dc.DrawDrawing(drawing);");
+    }
+
+    [Fact]
     public void RenderHeaders_WalksSelectionIntervalsInsteadOfScanningRangesPerHeader()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));

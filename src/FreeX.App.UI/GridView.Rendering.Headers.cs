@@ -9,8 +9,10 @@ namespace FreeX.App.UI;
 
 public partial class GridView
 {
+    private const int HeaderTextDrawingCacheLimit = 4096;
     private static readonly ConcurrentDictionary<uint, string> ColumnHeaderCache = new();
     private static readonly ConcurrentDictionary<uint, string> RowHeaderCache = new();
+    private readonly Dictionary<HeaderTextDrawingKey, DrawingGroup> _headerTextDrawingCache = new();
     private DrawingGroup? _headerBaseLayerCache;
     private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;
     private DrawingGroup? _selectedHeaderLayerCache;
@@ -25,6 +27,14 @@ public partial class GridView
         bool UseR1C1ReferenceStyle,
         string CultureName,
         double PixelsPerDip);
+
+    private readonly record struct HeaderTextDrawingKey(
+        string Text,
+        string CultureName,
+        double FontSize,
+        double PixelsPerDip,
+        double X,
+        double Y);
 
     private readonly record struct SelectedHeaderLayerCacheKey(
         ViewportModel Viewport,
@@ -342,12 +352,10 @@ public partial class GridView
         var rect = new Rect(col.LeftOffset + rowHeaderWidth, 0, col.Width, columnHeaderHeight);
         dc.DrawRectangle(background, GridPen, rect);
 
-        var text = GetDefaultFormattedText(
-            FormatColumnHeader(col.Col, UseR1C1ReferenceStyle),
-            11,
-            pixelsPerDip);
+        var textValue = FormatColumnHeader(col.Col, UseR1C1ReferenceStyle);
+        var text = GetDefaultFormattedText(textValue, 11, pixelsPerDip);
 
-        dc.DrawText(text, new Point(
+        DrawHeaderText(dc, textValue, text, 11, pixelsPerDip, new Point(
             rect.Left + (rect.Width - text.Width) / 2,
             rect.Top + (rect.Height - text.Height) / 2));
     }
@@ -363,14 +371,46 @@ public partial class GridView
         var rect = new Rect(0, row.TopOffset + columnHeaderHeight, rowHeaderWidth, row.Height);
         dc.DrawRectangle(background, GridPen, rect);
 
-        var text = GetDefaultFormattedText(
-            FormatRowHeader(row.Row),
-            11,
-            pixelsPerDip);
+        var textValue = FormatRowHeader(row.Row);
+        var text = GetDefaultFormattedText(textValue, 11, pixelsPerDip);
 
-        dc.DrawText(text, new Point(
+        DrawHeaderText(dc, textValue, text, 11, pixelsPerDip, new Point(
             rect.Left + (rect.Width - text.Width) / 2,
             rect.Top + (rect.Height - text.Height) / 2));
+    }
+
+    private void DrawHeaderText(
+        DrawingContext dc,
+        string text,
+        FormattedText formattedText,
+        double fontSize,
+        double pixelsPerDip,
+        Point origin)
+    {
+        var key = new HeaderTextDrawingKey(
+            text,
+            CultureInfo.CurrentCulture.Name,
+            fontSize,
+            pixelsPerDip,
+            origin.X,
+            origin.Y);
+        if (!_headerTextDrawingCache.TryGetValue(key, out var drawing))
+        {
+            if (_headerTextDrawingCache.Count >= HeaderTextDrawingCacheLimit)
+                _headerTextDrawingCache.Clear();
+
+            var group = new DrawingGroup();
+            using (var groupContext = group.Open())
+                groupContext.DrawText(formattedText, origin);
+
+            if (group.CanFreeze)
+                group.Freeze();
+
+            drawing = group;
+            _headerTextDrawingCache.Add(key, drawing);
+        }
+
+        dc.DrawDrawing(drawing);
     }
 
     private static IReadOnlyList<HeaderSelectionInterval> BuildColumnHeaderSelectionIntervals(
