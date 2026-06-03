@@ -71,6 +71,42 @@ public sealed class XlsxExcelCompatibilityNormalizerTests
         pivotTableXml.Root!.Element(WorkbookNs + "pivotTableStyleInfo").Should().NotBeNull();
     }
 
+    [Fact]
+    public void NormalizeSourcePackageSave_WithWorksheetScansDisabled_KeepsWorksheetRepairsDeferred()
+    {
+        using var package = CreatePackageWithExcelOpenBlockers();
+
+        XlsxExcelCompatibilityNormalizer.NormalizeSourcePackageSave(
+            package,
+            new XlsxExcelCompatibilityNormalizationPlan(
+                ScanWorksheetCustomViews: false,
+                ScanWorksheetFormulaText: false,
+                ScanWorksheetDrawingTargets: false));
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
+        workbookXml.Root!.Element(WorkbookNs + "customWorkbookViews").Should().BeNull();
+
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        contentTypesXml.Root!
+            .Elements(ContentTypeNs + "Override")
+            .Select(element => element.Attribute("PartName")?.Value)
+            .Should()
+            .NotContain("/xl/calcChain.xml")
+            .And
+            .Contain("/xl/pivotCache/pivotCacheRecords1.xml");
+
+        var sheet5Xml = LoadPackageXml(archive, "xl/worksheets/sheet5.xml");
+        sheet5Xml.Root!.Element(WorkbookNs + "customSheetViews").Should().NotBeNull();
+        sheet5Xml.Root!.Element(WorkbookNs + "drawing").Should().NotBeNull();
+
+        var sheet17Xml = LoadPackageXml(archive, "xl/worksheets/sheet17.xml");
+        var phoneCell = sheet17Xml.Root!
+            .Descendants(WorkbookNs + "c")
+            .Single(cell => cell.Attribute("r")?.Value == "N38");
+        phoneCell.Element(WorkbookNs + "f").Should().NotBeNull();
+    }
+
     private static MemoryStream CreatePackageWithExcelOpenBlockers() =>
         CreatePackage(
             ("[Content_Types].xml", """
