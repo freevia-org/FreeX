@@ -36,9 +36,10 @@ public partial class FunctionLibraryTests
     [Fact]
     public void ArrayConstant_RejectsRaggedRows()
     {
-        Action act = () => _eval.Evaluate("={1,2;3}", MakeSheet());
-
-        act.Should().Throw<FormulaParseException>();
+        // A ragged array constant is rejected as an error value (Excel returns #VALUE!), not by
+        // throwing out of Evaluate. The strict parser still throws — see ParserSafetyTests — but the
+        // Evaluate entry point maps a parse failure to #VALUE!, matching a recalc.
+        _eval.Evaluate("={1,2;3}", MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
