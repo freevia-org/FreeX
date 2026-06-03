@@ -262,6 +262,12 @@ public static partial class SpellCheckService
 
     private static string ApplyCorrectionOccurrences(SpellingIssue issue, string replacement, bool replaceAll)
     {
+        if (replaceAll &&
+            TryGetRepeatedWordReplacement(issue, replacement, out var repeatedWord))
+        {
+            return ApplyRepeatedWordRunCorrection(issue.CellText, repeatedWord, replacement);
+        }
+
         var regex = new Regex(
             $@"\b{Regex.Escape(issue.Word)}\b",
             RegexOptions.IgnoreCase,
@@ -291,6 +297,86 @@ public static partial class SpellCheckService
 
         builder.Append(issue.CellText, appendStart, issue.CellText.Length - appendStart);
         return builder.ToString();
+    }
+
+    private static bool TryGetRepeatedWordReplacement(SpellingIssue issue, string replacement, out string repeatedWord)
+    {
+        repeatedWord = string.Empty;
+        if (!TryReadNextWord(issue.Word, 0, out var first) ||
+            !TryReadNextWord(issue.Word, first.End, out var second) ||
+            TryReadNextWord(issue.Word, second.End, out _) ||
+            !IsWhitespaceOnly(issue.Word, first.End, second.Start))
+        {
+            return false;
+        }
+
+        var firstWord = issue.Word.AsSpan(first.Start, first.Length);
+        var secondWord = issue.Word.AsSpan(second.Start, second.Length);
+        if (!EqualWordsIgnoreCase(firstWord, secondWord) ||
+            !EqualWordsIgnoreCase(firstWord, replacement.AsSpan()))
+        {
+            return false;
+        }
+
+        repeatedWord = firstWord.ToString();
+        return true;
+    }
+
+    private static string ApplyRepeatedWordRunCorrection(string text, string repeatedWord, string replacement)
+    {
+        var ignoredSpans = FindIgnoredSpans(text);
+        StringBuilder? builder = null;
+        var appendStart = 0;
+        WordToken? runFirst = null;
+        WordToken? runLast = null;
+        var runCount = 0;
+        var index = 0;
+
+        while (TryReadNextWord(text, index, out var word))
+        {
+            index = word.End;
+            if (OverlapsIgnoredSpan(word.Start, word.Length, ignoredSpans) ||
+                !EqualWordsIgnoreCase(text.AsSpan(word.Start, word.Length), repeatedWord.AsSpan()))
+            {
+                FlushRepeatedRun();
+                continue;
+            }
+
+            if (runLast is { } previous &&
+                IsWhitespaceOnly(text, previous.End, word.Start))
+            {
+                runLast = word;
+                runCount++;
+                continue;
+            }
+
+            FlushRepeatedRun();
+            runFirst = word;
+            runLast = word;
+            runCount = 1;
+        }
+
+        FlushRepeatedRun();
+        if (builder is null)
+            return text;
+
+        builder.Append(text, appendStart, text.Length - appendStart);
+        return builder.ToString();
+
+        void FlushRepeatedRun()
+        {
+            if (runCount >= 2 && runFirst is { } first && runLast is { } last)
+            {
+                builder ??= new StringBuilder(text.Length);
+                builder.Append(text, appendStart, first.Start - appendStart);
+                builder.Append(MatchCapitalization(text.AsSpan(first.Start, first.Length), replacement));
+                appendStart = last.End;
+            }
+
+            runFirst = null;
+            runLast = null;
+            runCount = 0;
+        }
     }
 
     private static string ApplyKnownCorrections(string text, out int replacementCount)
