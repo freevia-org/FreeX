@@ -149,7 +149,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void DataTableBtn_Click(");
         dataSource.Should().NotContain("private void ScenariosBtn_Click(");
 
-        dataSource.Should().Contain("private void GetDataBtn_Click(");
+        dataSource.Should().Contain("private async void GetDataBtn_Click(");
         dataSource.Should().Contain("private void TextToColumnsBtn_Click(");
         dataSource.Should().Contain("private void AdvancedFilterBtn_Click(");
         dataSource.Should().Contain("private void DataTableBtn_Click(");
@@ -630,9 +630,9 @@ public sealed partial class MainWindowSourceHygieneTests
         adoptSharedWorkbook.Should().NotContain("RefreshToolbar();");
         adoptSharedWorkbook.Should().NotContain("RefreshStatusBar();");
 
-        ExtractMethodSource(dataSource, "private void GetDataBtn_Click(")
+        ExtractMethodSource(dataSource, "private async void GetDataBtn_Click(")
             .Should()
-            .NotContain("RefreshStatusBar();");
+            .Contain("RefreshStatusBar();");
         ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(")
             .Should()
             .Contain("if (!refreshedSelectionUi)");
