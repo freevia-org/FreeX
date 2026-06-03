@@ -876,6 +876,17 @@ public static partial class FormulaAuditingService
                 range = NormalizeRange(start, end);
                 return true;
 
+            case NamedRangeNode namedRange:
+                if (!workbook.TryGetNamedRange(namedRange.Name, out var resolvedRange) ||
+                    resolvedRange.Start.Sheet != sheetId ||
+                    resolvedRange.End.Sheet != sheetId)
+                {
+                    return false;
+                }
+
+                range = NormalizeRange(resolvedRange.Start, resolvedRange.End);
+                return true;
+
             default:
                 return false;
         }
