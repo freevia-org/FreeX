@@ -17,6 +17,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace ContentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace X14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
 
     public static void NormalizeSourcePackageSave(Stream packageStream)
     {
@@ -27,6 +28,8 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         if (changedWorkbook)
             RemoveCalcChain(archive);
 
+        RemoveInvalidWorkbookExtensionAttributes(archive);
+
         var changedWorksheets = RemoveWorksheetCustomViews(archive);
         changedWorksheets |= ConvertPhoneLikeFormulaText(archive);
         changedWorksheets |= RemoveDuplicateWorksheetDrawingTargets(archive);
@@ -35,6 +38,34 @@ internal static partial class XlsxExcelCompatibilityNormalizer
 
         PruneMissingContentTypeOverrides(archive);
     }
+
+    private static void RemoveInvalidWorkbookExtensionAttributes(ZipArchive archive)
+    {
+        var workbookXml = LoadXml(archive, "xl/workbook.xml");
+        var root = workbookXml?.Root;
+        if (root is null)
+            return;
+
+        var changed = false;
+        foreach (var workbookProperties in root
+                     .Element(WorkbookNs + "extLst")?
+                     .Elements(WorkbookNs + "ext")
+                     .Elements(X14Ns + "workbookPr") ?? [])
+        {
+            var defaultImageDpi = workbookProperties.Attribute("defaultImageDpi");
+            if (defaultImageDpi is null || IsValidDefaultImageDpi(defaultImageDpi.Value))
+                continue;
+
+            defaultImageDpi.Remove();
+            changed = true;
+        }
+
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml!);
+    }
+
+    private static bool IsValidDefaultImageDpi(string value) =>
+        value is "96" or "150" or "220";
 
     private static bool RemoveWorkbookCustomViews(ZipArchive archive)
     {

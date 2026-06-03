@@ -43,10 +43,14 @@ internal static class XlsxSlicerTimelineWriter
             .Select(element => (Name: element.Attribute("name")?.Value, Element: element))
             .Where(pair => !string.IsNullOrWhiteSpace(pair.Name))
             .ToDictionary(pair => pair.Name!, pair => pair.Element, StringComparer.OrdinalIgnoreCase);
+        var differentialStyleCount = targetRoot
+            .Element(workbookNs + "dxfs")?
+            .Elements(workbookNs + "dxf")
+            .Count() ?? 0;
 
         foreach (var style in workbook.PivotTableStyles.Where(style => !string.IsNullOrWhiteSpace(style.Name)))
         {
-            var styleXml = ToPivotTableStyleXml(style, workbookNs);
+            var styleXml = ToPivotTableStyleXml(style, workbookNs, differentialStyleCount);
             if (existingStylesByName.TryGetValue(style.Name, out var existingStyle))
                 existingStyle.ReplaceWith(styleXml);
             else
@@ -59,20 +63,36 @@ internal static class XlsxSlicerTimelineWriter
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
     }
 
-    private static XElement ToPivotTableStyleXml(PivotTableStyleModel style, XNamespace workbookNs) =>
-        new(
+    private static XElement ToPivotTableStyleXml(
+        PivotTableStyleModel style,
+        XNamespace workbookNs,
+        int differentialStyleCount)
+    {
+        var elements = style.Elements
+            .Where(element => !string.IsNullOrWhiteSpace(element.Type))
+            .Select(element => ToPivotTableStyleElementXml(element, workbookNs, differentialStyleCount))
+            .ToList();
+
+        return new XElement(
             workbookNs + "tableStyle",
             new XAttribute("name", style.Name),
             new XAttribute("pivot", style.AppliesToPivotTables ? "1" : "0"),
             new XAttribute("table", style.AppliesToTables ? "1" : "0"),
-            new XAttribute("count", style.Elements.Count.ToString(CultureInfo.InvariantCulture)),
-            style.Elements
-                .Where(element => !string.IsNullOrWhiteSpace(element.Type))
-                .Select(element => new XElement(
-                    workbookNs + "tableStyleElement",
-                    new XAttribute("type", element.Type),
-                    element.DifferentialFormatId is { } dxfId ? new XAttribute("dxfId", dxfId.ToString(CultureInfo.InvariantCulture)) : null,
-                    element.Size is { } size ? new XAttribute("size", size.ToString(CultureInfo.InvariantCulture)) : null)));
+            new XAttribute("count", elements.Count.ToString(CultureInfo.InvariantCulture)),
+            elements);
+    }
+
+    private static XElement ToPivotTableStyleElementXml(
+        PivotTableStyleElementModel element,
+        XNamespace workbookNs,
+        int differentialStyleCount) =>
+        new(
+            workbookNs + "tableStyleElement",
+            new XAttribute("type", element.Type),
+            element.DifferentialFormatId is { } dxfId && dxfId >= 0 && dxfId < differentialStyleCount
+                ? new XAttribute("dxfId", dxfId.ToString(CultureInfo.InvariantCulture))
+                : null,
+            element.Size is { } size ? new XAttribute("size", size.ToString(CultureInfo.InvariantCulture)) : null);
 
     private static void SaveSlicerTimelines(ZipArchive archive, Workbook workbook)
     {

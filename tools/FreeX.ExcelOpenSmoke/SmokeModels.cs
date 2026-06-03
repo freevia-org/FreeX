@@ -8,7 +8,8 @@ internal sealed record WorkbookSmokeInput(
     string SourcePath,
     WorkbookValidationWorkflow Workflow,
     string Description,
-    bool GenerateWithExcel = false);
+    bool GenerateWithExcel = false,
+    CorpusManifestRow? CorpusRow = null);
 
 internal sealed record WorkbookSmokeResult(
     bool Success,
@@ -54,4 +55,30 @@ internal sealed record ExcelSaveReopenResult(
     string ExcelSavedPath,
     ExcelWorkbookSummary Opened,
     ExcelWorkbookSummary Reopened);
-internal sealed record ExcelSmokeSummary(int Total, int Passed, int Failed);
+internal sealed record ExcelSmokeSummary(
+    int Total,
+    int Passed,
+    int Failed,
+    IReadOnlyList<WorkbookSmokeResult> Results);
+
+internal sealed record CorpusManifestRow(
+    string Id,
+    string RelativePath,
+    string SourceType,
+    string SourceUrl,
+    string RetrievedOn,
+    string License,
+    string FeatureTags,
+    string ExpectedWarnings,
+    string ExpectedStatus,
+    string Notes);
+
+internal sealed record CorpusManifestSkip(
+    CorpusManifestRow Row,
+    string Reason,
+    string? FullPath);
+
+internal sealed record CorpusManifestSelection(
+    string ManifestPath,
+    IReadOnlyList<WorkbookSmokeInput> Inputs,
+    IReadOnlyList<CorpusManifestSkip> Skipped);

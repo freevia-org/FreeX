@@ -13,6 +13,7 @@ public sealed class XlsxExcelCompatibilityNormalizerTests
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace ContentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace X14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
 
     [Fact]
     public void NormalizeSourcePackageSave_RemovesExcelOpenBlockersAndKeepsRefreshablePivots()
@@ -24,6 +25,12 @@ public sealed class XlsxExcelCompatibilityNormalizerTests
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
         workbookXml.Root!.Element(WorkbookNs + "customWorkbookViews").Should().BeNull();
+        var x14WorkbookProperties = workbookXml.Root!
+            .Element(WorkbookNs + "extLst")!
+            .Element(WorkbookNs + "ext")!
+            .Element(X14Ns + "workbookPr")!;
+        x14WorkbookProperties.Attribute("defaultImageDpi").Should().BeNull();
+        x14WorkbookProperties.Attribute("discardImageEditData")!.Value.Should().Be("1");
         archive.GetEntry("xl/calcChain.xml").Should().BeNull();
 
         var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
@@ -98,6 +105,11 @@ public sealed class XlsxExcelCompatibilityNormalizerTests
                   <pivotCaches>
                     <pivotCache cacheId="0" r:id="rIdPivotCache" />
                   </pivotCaches>
+                  <extLst>
+                    <ext uri="{79F54976-1DA5-4618-B147-4CDE4B953A38}" xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">
+                      <x14:workbookPr defaultImageDpi="32767" discardImageEditData="1" />
+                    </ext>
+                  </extLst>
                 </workbook>
                 """),
             ("xl/_rels/workbook.xml.rels", RelationshipsXml(

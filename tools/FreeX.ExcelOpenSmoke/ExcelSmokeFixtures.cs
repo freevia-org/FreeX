@@ -54,6 +54,7 @@ internal static class ExcelSmokeFixtures
             ("FreeX_feature_objects_links_smoke.xlsx", CreateFeatureObjectsAndLinksWorkbook),
             ("FreeX_feature_images_sparklines_smoke.xlsx", CreateFeatureImagesAndSparklinesWorkbook),
             ("FreeX_feature_shapes_text_smoke.xlsx", CreateFeatureShapesAndTextWorkbook),
+            ("FreeX_feature_pivots_smoke.xlsx", CreateFeaturePivotWorkbook),
             ("FreeX_feature_protection_page_smoke.xlsx", CreateFeatureProtectionAndPageSetupWorkbook),
         ];
 
@@ -562,6 +563,84 @@ internal static class ExcelSmokeFixtures
         var hidden = workbook.AddSheet("Hidden Meta");
         Set(hidden, "A1", new TextValue("Hidden metadata fixture"));
         hidden.IsHidden = true;
+        return workbook;
+    }
+
+    private static Workbook CreateFeaturePivotWorkbook()
+    {
+        var workbook = new Workbook("FreeXFeaturePivotsSmoke");
+        workbook.NumberFormatCatalog[165] = "#,##0.0 \"kg\"";
+        var sheet = workbook.AddSheet("Pivot Data");
+
+        Set(sheet, "A1", new TextValue("Region"));
+        Set(sheet, "B1", new TextValue("Category"));
+        Set(sheet, "C1", new TextValue("Amount"));
+        Set(sheet, "A2", new TextValue("North"));
+        Set(sheet, "B2", new TextValue("Hardware"));
+        Set(sheet, "C2", new NumberValue(100));
+        Set(sheet, "A3", new TextValue("South"));
+        Set(sheet, "B3", new TextValue("Software"));
+        Set(sheet, "C3", new NumberValue(125));
+        Set(sheet, "A4", new TextValue("North"));
+        Set(sheet, "B4", new TextValue("Services"));
+        Set(sheet, "C4", new NumberValue(80));
+
+        Set(sheet, "E1", new TextValue("Region"));
+        Set(sheet, "F1", new TextValue("Sum of Amount"));
+        Set(sheet, "E2", new TextValue("North"));
+        Set(sheet, "F2", new NumberValue(180));
+        Set(sheet, "E3", new TextValue("Grand Total"));
+        Set(sheet, "F3", new NumberValue(180));
+
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = "A1:C4",
+            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml",
+            RefreshOnLoad = true,
+            PreserveSourceSortFilter = false,
+            RecordCount = 3,
+            CreatedVersion = 8,
+            MinRefreshableVersion = 4,
+            RefreshedVersion = 8,
+            RefreshedBy = "FreeX Smoke",
+            RefreshedDateIso = "2026-06-03T00:00:00Z"
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["North", "South"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Category", ContainsString: true, SharedItems: ["Hardware", "Software", "Services"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", 165, ContainsNumber: true, MinValue: 80, MaxValue: 125));
+        workbook.PivotCaches.Add(cache);
+
+        var style = new PivotTableStyleModel
+        {
+            Name = "FreeXSmokePivotStyle",
+            AppliesToPivotTables = true,
+            AppliesToTables = false
+        };
+        style.Elements.Add(new PivotTableStyleElementModel("wholeTable", 0));
+        style.Elements.Add(new PivotTableStyleElementModel("headerRow", 1));
+        workbook.PivotTableStyles.Add(style);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "FreeXSmokePivot",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C4"),
+            TargetRange = Range(sheet, "E1", "F3"),
+            PackagePart = "xl/pivotTables/pivotTable1.xml",
+            StyleName = style.Name,
+            ShowRowStripes = true,
+            RepeatItemLabels = false,
+            DataCaption = "Values",
+            GrandTotalCaption = "Grand Total",
+            MissingCaption = "(blank)"
+        };
+        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Hardware"));
+        pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["North"]));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", 165, null, PivotShowValuesAs.None, null, null, "#,##0.0 \"kg\""));
+        sheet.PivotTables.Add(pivot);
         return workbook;
     }
 

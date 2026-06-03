@@ -394,6 +394,78 @@ public sealed class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void StylesheetSchemaNormalizer_OrdersTopLevelElementsAndColorChildren()
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var stylesXml = new XDocument(new XElement(
+            workbookNs + "styleSheet",
+            new XElement(workbookNs + "numFmts"),
+            new XElement(workbookNs + "fonts"),
+            new XElement(workbookNs + "fills"),
+            new XElement(workbookNs + "borders"),
+            new XElement(workbookNs + "cellStyleXfs"),
+            new XElement(workbookNs + "cellXfs"),
+            new XElement(workbookNs + "cellStyles"),
+            new XElement(
+                workbookNs + "colors",
+                new XElement(workbookNs + "mruColors"),
+                new XElement(workbookNs + "indexedColors")),
+            new XElement(workbookNs + "dxfs"),
+            new XElement(workbookNs + "tableStyles"),
+            new XElement(workbookNs + "extLst")));
+
+        XlsxStylesheetSchemaNormalizer.NormalizeStylesheet(stylesXml, workbookNs).Should().BeTrue();
+
+        stylesXml.Root!.Elements().Select(element => element.Name.LocalName).Should().ContainInOrder(
+            "numFmts",
+            "fonts",
+            "fills",
+            "borders",
+            "cellStyleXfs",
+            "cellXfs",
+            "cellStyles",
+            "dxfs",
+            "tableStyles",
+            "colors",
+            "extLst");
+        stylesXml.Root.Element(workbookNs + "colors")!
+            .Elements()
+            .Select(element => element.Name.LocalName)
+            .Should()
+            .ContainInOrder("indexedColors", "mruColors");
+    }
+
+    [Fact]
+    public void WorkbookSchemaNormalizer_OrdersWorkbookPropertiesBeforeProtection()
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = new XDocument(new XElement(
+            workbookNs + "workbook",
+            new XElement(workbookNs + "fileVersion"),
+            new XElement(workbookNs + "workbookProtection"),
+            new XElement(workbookNs + "workbookPr"),
+            new XElement(workbookNs + "bookViews"),
+            new XElement(workbookNs + "sheets"),
+            new XElement(workbookNs + "definedNames"),
+            new XElement(workbookNs + "calcPr"),
+            new XElement(workbookNs + "revisionPtr"),
+            new XElement(workbookNs + "extLst")));
+
+        XlsxWorkbookSchemaNormalizer.NormalizeWorkbook(workbookXml, workbookNs).Should().BeTrue();
+
+        workbookXml.Root!.Elements().Select(element => element.Name.LocalName).Should().ContainInOrder(
+            "revisionPtr",
+            "fileVersion",
+            "workbookPr",
+            "workbookProtection",
+            "bookViews",
+            "sheets",
+            "definedNames",
+            "calcPr",
+            "extLst");
+    }
+
+    [Fact]
     public void LoadedWorkbookSave_SanitizesRichSharedStringFontFamiliesForSchemaValidity()
     {
         var workbook = new Workbook("RichSharedStringFonts");

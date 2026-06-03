@@ -1,6 +1,8 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -28,7 +30,7 @@ internal static class ExcelOpenSmoke
                 return 0;
             }
 
-            if (!options.HasGeneratedFixtures && options.Inputs.Count == 0)
+            if (!options.HasRequestedInputs)
             {
                 Console.Error.WriteLine("No XLSX inputs or generated fixtures were requested.");
                 WriteUsage();
@@ -41,6 +43,7 @@ internal static class ExcelOpenSmoke
             Directory.CreateDirectory(runDirectory);
 
             var smokeInputs = new List<WorkbookSmokeInput>();
+            CorpusManifestSelection? corpusSelection = null;
             if (options.GenerateChartFixtures)
             {
                 foreach (var generatedFile in GenerateChartFixtures(Path.Combine(runDirectory, "generated")))
@@ -72,10 +75,17 @@ internal static class ExcelOpenSmoke
                 }
             }
 
-            var inputFiles = ResolveInputFiles(options.Inputs, options.Pattern);
             var inputWorkflow = options.FreeXResaveBeforeExcel
                 ? WorkbookValidationWorkflow.FreeXSaveThenExcel
                 : WorkbookValidationWorkflow.DirectExcel;
+            if (options.CorpusManifestPath is not null)
+            {
+                corpusSelection = CorpusManifestResolver.Resolve(options, inputWorkflow);
+                foreach (var input in corpusSelection.Inputs)
+                    AddUniqueInput(smokeInputs, input);
+            }
+
+            var inputFiles = ResolveInputFiles(options.Inputs, options.Pattern);
             foreach (var inputFile in inputFiles)
             {
                 AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
@@ -103,8 +113,14 @@ internal static class ExcelOpenSmoke
             Console.WriteLine($"Run directory: {runDirectory}");
             Console.WriteLine($"Input count: {smokeInputs.Count}");
             Console.WriteLine($"Validation mode: {(options.SaveReopen ? "open -> SaveCopyAs -> close -> reopen" : "open only")}");
+            if (corpusSelection is not null)
+            {
+                Console.WriteLine($"Corpus manifest: {corpusSelection.ManifestPath}");
+                Console.WriteLine($"Corpus selected: {corpusSelection.Inputs.Count}; skipped: {corpusSelection.Skipped.Count}");
+            }
 
             var result = RunExcelSmoke(smokeInputs, runDirectory, options.SaveReopen);
+            WriteMachineReadableReport(runDirectory, options, result, corpusSelection);
             Console.WriteLine(result.Failed == 0
                 ? $"PASS: Excel validated {result.Passed}/{result.Total} workbook(s)."
                 : $"FAIL: Excel validated {result.Passed}/{result.Total} workbook(s); {result.Failed} failed.");
@@ -190,7 +206,8 @@ internal static class ExcelOpenSmoke
         return new ExcelSmokeSummary(
             results.Count,
             results.Count(result => result.Success),
-            results.Count(result => !result.Success));
+            results.Count(result => !result.Success),
+            results);
     }
 
     private static WorkbookSmokeResult ValidateWorkbook(
@@ -304,6 +321,7 @@ internal static class ExcelOpenSmoke
                 File.Delete(excelSavedPath);
 
             ((dynamic)workbook).SaveCopyAs(excelSavedPath);
+            AssertNoExcelRecoveryLog(excelSavedPath);
             ((dynamic)workbook).Close(false);
             workbookClosed = true;
             ReleaseComObject(workbook);
@@ -361,6 +379,24 @@ internal static class ExcelOpenSmoke
             false,
             true,
             0);
+
+    private static void AssertNoExcelRecoveryLog(string xlsxPath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var recoveryLogs = archive.Entries
+            .Where(entry =>
+                entry.FullName.Contains("recovery", StringComparison.OrdinalIgnoreCase) &&
+                entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Select(entry => entry.FullName)
+            .OrderBy(entry => entry, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (recoveryLogs.Length > 0)
+        {
+            throw new InvalidDataException(
+                $"Excel saved copy contains repair/recovery log parts: {string.Join(", ", recoveryLogs)}");
+        }
+    }
 
     private static ExcelWorkbookSummary CountWorkbookContents(object workbook)
     {
@@ -521,6 +557,11 @@ internal static class ExcelOpenSmoke
 
         Console.WriteLine($"{status}: {result.Input.SourcePath}");
         Console.WriteLine($"  Source: {result.Input.Description}; workflow: {FormatWorkflow(result.Input.Workflow)}");
+        if (result.Input.CorpusRow is { } corpusRow)
+        {
+            Console.WriteLine(
+                $"  Corpus: {corpusRow.Id}; source {corpusRow.SourceType}; status {corpusRow.ExpectedStatus}; tags {corpusRow.FeatureTags}");
+        }
         if (result.FreeXSavedPath is not null)
             Console.WriteLine($"  FreeX saved: {result.FreeXSavedPath}");
         if (result.StagedPath is not null)
@@ -562,6 +603,74 @@ internal static class ExcelOpenSmoke
 
         var hresult = (uint)ex.HResult;
         return $"{ex.GetType().Name} 0x{hresult:X8}: {ex.Message}";
+    }
+
+    private static void WriteMachineReadableReport(
+        string runDirectory,
+        SmokeOptions options,
+        ExcelSmokeSummary summary,
+        CorpusManifestSelection? corpusSelection)
+    {
+        var reportPath = Path.Combine(runDirectory, "excel-smoke-report.json");
+        var report = new
+        {
+            generatedAt = DateTimeOffset.Now.ToString("O", CultureInfo.InvariantCulture),
+            runDirectory,
+            validationMode = options.SaveReopen ? "save-reopen" : "open-only",
+            freeXResaveBeforeExcel = options.FreeXResaveBeforeExcel,
+            total = summary.Total,
+            passed = summary.Passed,
+            failed = summary.Failed,
+            corpus = corpusSelection is null
+                ? null
+                : new
+                {
+                    manifestPath = corpusSelection.ManifestPath,
+                    selected = corpusSelection.Inputs.Count,
+                    skipped = corpusSelection.Skipped.Count,
+                    skippedRows = corpusSelection.Skipped.Select(skip => new
+                    {
+                        id = skip.Row.Id,
+                        path = skip.Row.RelativePath,
+                        sourceType = skip.Row.SourceType,
+                        expectedStatus = skip.Row.ExpectedStatus,
+                        reason = skip.Reason,
+                        fullPath = skip.FullPath
+                    })
+                },
+            results = summary.Results.Select(result => new
+            {
+                success = result.Success,
+                sourcePath = result.Input.SourcePath,
+                description = result.Input.Description,
+                workflow = FormatWorkflow(result.Input.Workflow),
+                corpus = result.Input.CorpusRow is null
+                    ? null
+                    : new
+                    {
+                        id = result.Input.CorpusRow.Id,
+                        sourceType = result.Input.CorpusRow.SourceType,
+                        expectedStatus = result.Input.CorpusRow.ExpectedStatus,
+                        featureTags = result.Input.CorpusRow.FeatureTags,
+                        expectedWarnings = result.Input.CorpusRow.ExpectedWarnings
+                    },
+                stagedPath = result.StagedPath,
+                freeXSavedPath = result.FreeXSavedPath,
+                excelSavedPath = result.ExcelSavedPath,
+                opened = result.Opened,
+                reopened = result.Reopened,
+                freeXPreSave = result.FreeXPreSave,
+                freeXReopenedExcelSave = result.FreeXReopenedExcelSave,
+                error = result.Error
+            })
+        };
+
+        var json = JsonSerializer.Serialize(report, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
+        File.WriteAllText(reportPath, json);
+        Console.WriteLine($"Report: {reportPath}");
     }
 
     private static string GetUserProfile()

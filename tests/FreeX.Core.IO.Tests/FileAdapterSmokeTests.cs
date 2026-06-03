@@ -14415,6 +14415,7 @@ public partial class FileAdapterSmokeTests
             tableStyle.Attribute("pivot")!.Value.Should().Be("1");
             tableStyle.Attribute("table")!.Value.Should().Be("0");
             tableStyle.Attribute("count")!.Value.Should().Be("2");
+            tableStyle.ToString().Should().NotContain("dxfId=");
             tableStyle.ToString().Should().Contain("type=\"firstRowStripe\"");
             tableStyle.ToString().Should().Contain("size=\"1\"");
         }
@@ -20300,6 +20301,8 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
         {
             archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/pivotCache/pivotCacheRecords1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels").Should().NotBeNull();
             archive.GetEntry("xl/pivotTables/pivotTable1.xml").Should().NotBeNull();
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.ToString().Should().Contain("pivotCaches");
@@ -20309,6 +20312,19 @@ public partial class FileAdapterSmokeTests
             worksheetRelsXml.ToString().Should().Contain("relationships/pivotTable");
             var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            contentTypesXml.ToString().Should().Contain("/xl/pivotCache/pivotCacheRecords1.xml");
+            var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!);
+            cacheXml.Root!.Attribute(relNs + "id")!.Value.Should().Be("rIdPivotCacheRecords");
+            cacheXml.Root!.Attribute("recordCount")!.Value.Should().Be("2");
+            var cacheRelsXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels")!);
+            cacheRelsXml.ToString().Should().Contain("pivotCacheRecords");
+            cacheRelsXml.ToString().Should().Contain("Target=\"pivotCacheRecords1.xml\"");
+            var recordsXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheRecords1.xml")!);
+            recordsXml.Root!.Attribute("count")!.Value.Should().Be("2");
+            recordsXml.ToString().Should().Contain("<s v=\"A\"");
+            recordsXml.ToString().Should().Contain("<n v=\"10\"");
             pivotXml.ToString().Should().Contain("rowFields");
             pivotXml.ToString().Should().Contain("dataFields");
             pivotXml.Root!.Attribute("dataOnRows")!.Value.Should().Be("0");
@@ -20349,9 +20365,10 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("grandTotalCaption")!.Value.Should().Be("Overall Total");
             pivotXml.Root!.Attribute("missingCaption")!.Value.Should().Be("(missing)");
             pivotXml.Root!.Attribute("errorCaption")!.Value.Should().Be("(error)");
-            var firstPivotField = pivotXml.Root!.Element(workbookNs + "pivotFields")!
+            var pivotFields = pivotXml.Root!.Element(workbookNs + "pivotFields")!
                 .Elements(workbookNs + "pivotField")
-                .First();
+                .ToList();
+            var firstPivotField = pivotFields.First();
             firstPivotField.Attribute("showAll")!.Value.Should().Be("1");
             firstPivotField.Attribute("includeNewItemsInFilter")!.Value.Should().Be("1");
             firstPivotField.Attribute("multipleItemSelectionAllowed")!.Value.Should().Be("0");
@@ -20359,6 +20376,7 @@ public partial class FileAdapterSmokeTests
             firstPivotField.Attribute("dragToCol")!.Value.Should().Be("0");
             firstPivotField.Attribute("dragToPage")!.Value.Should().Be("1");
             firstPivotField.Attribute("dragToData")!.Value.Should().Be("0");
+            pivotFields[1].Attribute("dataField")!.Value.Should().Be("1");
         }
 
         saved.Position = 0;
@@ -20624,7 +20642,7 @@ public partial class FileAdapterSmokeTests
             EnableRefresh = false,
             PreserveSourceSortFilter = false,
             MissingItemsLimit = 0,
-            RecordCount = 2,
+            RecordCount = 1,
             CreatedVersion = 8,
             MinRefreshableVersion = 4,
             RefreshedVersion = 7,
@@ -20657,7 +20675,7 @@ public partial class FileAdapterSmokeTests
             cacheXml.Should().Contain("saveData=\"0\"");
             cacheXml.Should().Contain("enableRefresh=\"0\"");
             cacheXml.Should().Contain("missingItemsLimit=\"0\"");
-            cacheXml.Should().Contain("recordCount=\"2\"");
+            cacheXml.Should().Contain("recordCount=\"1\"");
             cacheXml.Should().Contain("createdVersion=\"8\"");
             cacheXml.Should().Contain("minRefreshableVersion=\"4\"");
             cacheXml.Should().Contain("refreshedVersion=\"7\"");
@@ -20677,7 +20695,7 @@ public partial class FileAdapterSmokeTests
         loadedCache.EnableRefresh.Should().BeFalse();
         loadedCache.PreserveSourceSortFilter.Should().BeFalse();
         loadedCache.MissingItemsLimit.Should().Be(0);
-        loadedCache.RecordCount.Should().Be(2);
+        loadedCache.RecordCount.Should().Be(1);
         loadedCache.CreatedVersion.Should().Be(8);
         loadedCache.MinRefreshableVersion.Should().Be(4);
         loadedCache.RefreshedVersion.Should().Be(7);

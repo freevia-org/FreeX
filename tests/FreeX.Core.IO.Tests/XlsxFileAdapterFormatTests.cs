@@ -263,7 +263,7 @@ public sealed class XlsxFileAdapterFormatTests
             "var hasSourcePackage = SourcePackages.TryGetValue(workbook, out var sourcePackage);",
             StringComparison.Ordinal);
         var freshSaveReturn = savePostProcessingSource.IndexOf(
-            "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            NormalizeStylesheetForSchema();\n            return;\n        }",
+            "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            NormalizeStylesheetForSchema();\n            NormalizeWorkbookForSchema();\n            return;\n        }",
             StringComparison.Ordinal);
         var sourceReplay = savePostProcessingSource.IndexOf(
             "var sourceParts = PreserveSourcePackageParts(workbook, packageStream);",

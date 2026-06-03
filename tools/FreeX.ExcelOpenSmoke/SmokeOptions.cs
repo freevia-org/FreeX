@@ -6,12 +6,19 @@ internal sealed record SmokeOptions(
     bool GenerateFreexFeatureFixtures,
     bool GenerateExcelFixture,
     bool FreeXResaveBeforeExcel,
+    string? CorpusManifestPath,
+    IReadOnlyList<string> CorpusSources,
+    IReadOnlyList<string> CorpusStatuses,
     string? OutputDirectory,
     string Pattern,
     IReadOnlyList<string> Inputs)
 {
     public bool HasGeneratedFixtures =>
         GenerateChartFixtures || GenerateFreexFixture || GenerateFreexFeatureFixtures || GenerateExcelFixture;
+
+    public bool HasCorpusManifest => !string.IsNullOrWhiteSpace(CorpusManifestPath);
+
+    public bool HasRequestedInputs => HasGeneratedFixtures || HasCorpusManifest || Inputs.Count > 0;
 
     public static SmokeOptions Parse(string[] args)
     {
@@ -21,6 +28,9 @@ internal sealed record SmokeOptions(
         var generateFreexFeatureFixtures = false;
         var generateExcelFixture = false;
         var freeXResaveBeforeExcel = false;
+        string? corpusManifestPath = null;
+        var corpusSources = new List<string>();
+        var corpusStatuses = new List<string>();
         string? outputDirectory = null;
         var pattern = "*.xlsx";
         var inputs = new List<string>();
@@ -32,7 +42,7 @@ internal sealed record SmokeOptions(
             {
                 case "--help":
                 case "-h":
-                    return new SmokeOptions(true, false, false, false, false, false, false, null, pattern, []);
+                    return new SmokeOptions(true, false, false, false, false, false, false, null, [], [], null, pattern, []);
                 case "--save-reopen":
                     saveReopen = true;
                     break;
@@ -50,6 +60,15 @@ internal sealed record SmokeOptions(
                     break;
                 case "--freex-resave-before-excel":
                     freeXResaveBeforeExcel = true;
+                    break;
+                case "--corpus-manifest":
+                    corpusManifestPath = ReadOptionValue(args, ref index, arg);
+                    break;
+                case "--corpus-source":
+                    corpusSources.Add(ReadOptionValue(args, ref index, arg));
+                    break;
+                case "--corpus-status":
+                    corpusStatuses.Add(ReadOptionValue(args, ref index, arg));
                     break;
                 case "--out":
                     outputDirectory = ReadOptionValue(args, ref index, arg);
@@ -73,6 +92,9 @@ internal sealed record SmokeOptions(
             generateFreexFeatureFixtures,
             generateExcelFixture,
             freeXResaveBeforeExcel,
+            corpusManifestPath,
+            corpusSources,
+            corpusStatuses,
             outputDirectory,
             pattern,
             inputs);

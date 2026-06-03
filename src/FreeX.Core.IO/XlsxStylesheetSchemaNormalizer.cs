@@ -32,6 +32,15 @@ internal static class XlsxStylesheetSchemaNormalizer
             return false;
 
         var changed = false;
+        if (NormalizeStylesheetChildOrder(root, workbookNs))
+            changed = true;
+
+        if (root.Element(workbookNs + "colors") is { } colors &&
+            NormalizeColorsChildOrder(colors, workbookNs))
+        {
+            changed = true;
+        }
+
         foreach (var font in root.Element(workbookNs + "fonts")?.Elements(workbookNs + "font") ?? [])
         {
             if (NormalizeRegularFont(font, workbookNs))
@@ -46,6 +55,55 @@ internal static class XlsxStylesheetSchemaNormalizer
 
         return changed;
     }
+
+    private static bool NormalizeStylesheetChildOrder(XElement root, XNamespace workbookNs)
+    {
+        var orderedChildren = root.Elements()
+            .Select((element, index) => new { Element = element, Index = index })
+            .OrderBy(item => StylesheetChildOrder(item.Element, workbookNs))
+            .ThenBy(item => item.Index)
+            .Select(item => item.Element)
+            .ToList();
+        if (orderedChildren.Count == 0 || root.Elements().SequenceEqual(orderedChildren))
+            return false;
+
+        root.ReplaceNodes(orderedChildren);
+        return true;
+    }
+
+    private static int StylesheetChildOrder(XElement element, XNamespace workbookNs) =>
+        element.Name == workbookNs + "numFmts" ? 0 :
+        element.Name == workbookNs + "fonts" ? 1 :
+        element.Name == workbookNs + "fills" ? 2 :
+        element.Name == workbookNs + "borders" ? 3 :
+        element.Name == workbookNs + "cellStyleXfs" ? 4 :
+        element.Name == workbookNs + "cellXfs" ? 5 :
+        element.Name == workbookNs + "cellStyles" ? 6 :
+        element.Name == workbookNs + "dxfs" ? 7 :
+        element.Name == workbookNs + "tableStyles" ? 8 :
+        element.Name == workbookNs + "colors" ? 9 :
+        element.Name == workbookNs + "extLst" ? 100 :
+        90;
+
+    private static bool NormalizeColorsChildOrder(XElement colors, XNamespace workbookNs)
+    {
+        var orderedChildren = colors.Elements()
+            .Select((element, index) => new { Element = element, Index = index })
+            .OrderBy(item => ColorsChildOrder(item.Element, workbookNs))
+            .ThenBy(item => item.Index)
+            .Select(item => item.Element)
+            .ToList();
+        if (orderedChildren.Count == 0 || colors.Elements().SequenceEqual(orderedChildren))
+            return false;
+
+        colors.ReplaceNodes(orderedChildren);
+        return true;
+    }
+
+    private static int ColorsChildOrder(XElement element, XNamespace workbookNs) =>
+        element.Name == workbookNs + "indexedColors" ? 0 :
+        element.Name == workbookNs + "mruColors" ? 1 :
+        90;
 
     private static bool NormalizeRegularFont(XElement font, XNamespace workbookNs)
     {

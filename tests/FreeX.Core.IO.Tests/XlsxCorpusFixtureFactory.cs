@@ -3911,8 +3911,8 @@ internal static class XlsxCorpusFixtureFactory
         workbook.PivotCaches.Add(cache);
 
         var style = new PivotTableStyleModel { Name = "FreeXCorpusFilteredPivotStyle", AppliesToPivotTables = true };
-        style.Elements.Add(new PivotTableStyleElementModel("wholeTable", 0));
-        style.Elements.Add(new PivotTableStyleElementModel("headerRow", 1));
+        style.Elements.Add(new PivotTableStyleElementModel("wholeTable"));
+        style.Elements.Add(new PivotTableStyleElementModel("headerRow"));
         workbook.PivotTableStyles.Add(style);
 
         var pivot = new PivotTableModel
@@ -3940,7 +3940,7 @@ internal static class XlsxCorpusFixtureFactory
             MissingCaption = "(corpus missing)",
             ErrorCaption = "(corpus error)"
         };
-        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Hardware"));
+        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Hardware", SelectedItems: ["Hardware"]));
         pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["North"]));
         pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", 165, null, PivotShowValuesAs.None, null, null, "#,##0.0 \"kg\""));
         sheet.PivotTables.Add(pivot);
@@ -4370,8 +4370,8 @@ internal static class XlsxCorpusFixtureFactory
             AppliesToPivotTables = true,
             AppliesToTables = false
         };
-        style.Elements.Add(new PivotTableStyleElementModel("wholeTable", 0));
-        style.Elements.Add(new PivotTableStyleElementModel("firstRowStripe", 1, 1));
+        style.Elements.Add(new PivotTableStyleElementModel("wholeTable"));
+        style.Elements.Add(new PivotTableStyleElementModel("firstRowStripe", Size: 1));
         workbook.PivotTableStyles.Add(style);
 
         var pivot = new PivotTableModel

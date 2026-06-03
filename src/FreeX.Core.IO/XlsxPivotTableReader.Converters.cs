@@ -23,6 +23,91 @@ internal static partial class XlsxPivotTableReader
         return !string.Equals(attribute.Value, "0", StringComparison.Ordinal);
     }
 
+    private static Dictionary<int, IReadOnlyList<string>> ReadFreeXPivotFieldSelections(
+        XElement root,
+        XNamespace workbookNs)
+    {
+        var result = new Dictionary<int, IReadOnlyList<string>>();
+        foreach (var field in ReadFreeXPivotFieldElements(root, workbookNs))
+        {
+            var index = XlsxXmlAttributeReader.ReadIntAttribute(field, "x");
+            if (index is not { } fieldIndex)
+                continue;
+
+            var selectedItems = ReadCsvAttribute(field.Attribute("selectedItems")?.Value);
+            if (selectedItems is not null)
+            {
+                result[fieldIndex] = selectedItems;
+                continue;
+            }
+
+            var selectedItem = field.Attribute("selectedItem")?.Value;
+            if (!string.IsNullOrWhiteSpace(selectedItem))
+                result[fieldIndex] = [selectedItem.Trim()];
+        }
+
+        return result;
+    }
+
+    private static Dictionary<int, PivotFieldModel> ReadFreeXPivotFieldGroups(
+        XElement root,
+        XNamespace workbookNs)
+    {
+        var result = new Dictionary<int, PivotFieldModel>();
+        foreach (var field in ReadFreeXPivotFieldElements(root, workbookNs))
+        {
+            var index = XlsxXmlAttributeReader.ReadIntAttribute(field, "x");
+            if (index is not { } fieldIndex)
+                continue;
+
+            var grouping = ReadPivotFieldGrouping(field.Attribute("groupBy")?.Value);
+            var groupStart = XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupStart");
+            var groupEnd = XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupEnd");
+            var groupInterval = XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupInterval");
+            if (grouping == PivotFieldGrouping.None &&
+                groupStart is null &&
+                groupEnd is null &&
+                groupInterval is null)
+            {
+                continue;
+            }
+
+            result[fieldIndex] = new PivotFieldModel(
+                fieldIndex,
+                Grouping: grouping,
+                GroupStart: groupStart,
+                GroupEnd: groupEnd,
+                GroupInterval: groupInterval);
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<XElement> ReadFreeXPivotFieldElements(
+        XElement root,
+        XNamespace workbookNs)
+    {
+        XNamespace freeXNs = FreeXPivotExtensionNamespace;
+        return root.Element(workbookNs + "extLst")?
+            .Elements(workbookNs + "ext")
+            .Elements(freeXNs + "tableProps")
+            .Elements(freeXNs + "fields")
+            .Elements(freeXNs + "field")
+            ?? [];
+    }
+
+    private static Dictionary<TKey, TValue> MergeMissing<TKey, TValue>(
+        IReadOnlyDictionary<TKey, TValue> primary,
+        IReadOnlyDictionary<TKey, TValue> fallback)
+        where TKey : notnull
+    {
+        var merged = new Dictionary<TKey, TValue>(primary);
+        foreach (var pair in fallback)
+            merged.TryAdd(pair.Key, pair.Value);
+
+        return merged;
+    }
+
     // True if any pivotField sets the named boolean attribute; null when no field carries it (so callers
     // can fall back to a legacy definition-level attribute).
     private static bool? ReadAnyPivotFieldBool(XElement root, XNamespace workbookNs, string attributeName)

@@ -61,6 +61,9 @@ public static class XlsxPackagePath
         else if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
             target = $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";
+        else if (sourceDirectory.Equals("xl/pivotCache", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
+            target = targetPath["xl/pivotCache/".Length..];
         else if (sourceDirectory.Equals("xl/slicers", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
             target = $"../slicerCaches/{targetPath["xl/slicerCaches/".Length..]}";

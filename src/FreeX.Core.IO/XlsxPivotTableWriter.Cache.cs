@@ -6,7 +6,14 @@ namespace FreeX.Core.IO;
 
 internal static partial class XlsxPivotTableWriter
 {
-    private static XDocument ToPivotCacheDefinitionXml(PivotCacheModel cache, XNamespace workbookNs, XNamespace relNs)
+    private const string PivotCacheRecordsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
+
+    private static XDocument ToPivotCacheDefinitionXml(
+        PivotCacheModel cache,
+        XNamespace workbookNs,
+        XNamespace relNs,
+        string recordsRelId,
+        int recordCount)
     {
         var source = new XElement(workbookNs + "worksheetSource");
         if (!string.IsNullOrWhiteSpace(cache.SourceTableName))
@@ -25,6 +32,7 @@ internal static partial class XlsxPivotTableWriter
         return new XDocument(new XElement(
             workbookNs + "pivotCacheDefinition",
             new XAttribute(XNamespace.Xmlns + "r", relNs),
+            new XAttribute(relNs + "id", recordsRelId),
             cache.IsOlap ? new XAttribute("olap", "1") : null,
             new XAttribute("refreshOnLoad", cache.RefreshOnLoad ? "1" : "0"),
             new XAttribute("saveData", cache.SaveData ? "1" : "0"),
@@ -38,7 +46,7 @@ internal static partial class XlsxPivotTableWriter
             cache.MinRefreshableVersion is { } minRefreshableVersion ? new XAttribute("minRefreshableVersion", minRefreshableVersion.ToString(CultureInfo.InvariantCulture)) : null,
             cache.RefreshedVersion is { } refreshedVersion ? new XAttribute("refreshedVersion", refreshedVersion.ToString(CultureInfo.InvariantCulture)) : null,
             !string.IsNullOrWhiteSpace(cache.RefreshedBy) ? new XAttribute("refreshedBy", cache.RefreshedBy) : null,
-            new XAttribute("recordCount", (cache.RecordCount ?? 0).ToString(CultureInfo.InvariantCulture)),
+            new XAttribute("recordCount", recordCount.ToString(CultureInfo.InvariantCulture)),
             cacheSource,
             new XElement(
                 workbookNs + "cacheFields",
@@ -109,6 +117,104 @@ internal static partial class XlsxPivotTableWriter
         return new XElement(workbookNs + "s", new XAttribute("v", item));
     }
 
-    private static XDocument ToPivotCacheDefinitionRelsXml(XNamespace packageRelNs) =>
-        new(new XElement(packageRelNs + "Relationships"));
+    private static (XDocument Document, int RecordCount) ToPivotCacheRecordsXml(
+        PivotCacheModel cache,
+        Workbook workbook,
+        XNamespace workbookNs)
+    {
+        var records = new List<XElement>();
+        if (TryGetPivotCacheSourceRange(cache, workbook, out var sourceSheet, out var sourceRange) &&
+            sourceRange.RowCount > 1 &&
+            cache.Fields.Count > 0)
+        {
+            var fieldCount = Math.Min(cache.Fields.Count, (int)sourceRange.ColCount);
+            for (var row = sourceRange.Start.Row + 1; row <= sourceRange.End.Row; row++)
+            {
+                var values = new List<XElement>(fieldCount);
+                for (var index = 0; index < fieldCount; index++)
+                {
+                    var col = sourceRange.Start.Col + (uint)index;
+                    values.Add(ToPivotCacheRecordValueXml(sourceSheet.GetValue(row, col), workbookNs));
+                }
+
+                records.Add(new XElement(workbookNs + "r", values));
+            }
+        }
+
+        return (
+            new XDocument(new XElement(
+                workbookNs + "pivotCacheRecords",
+                new XAttribute("count", records.Count.ToString(CultureInfo.InvariantCulture)),
+                records)),
+            records.Count);
+    }
+
+    private static bool TryGetPivotCacheSourceRange(
+        PivotCacheModel cache,
+        Workbook workbook,
+        out Sheet sourceSheet,
+        out GridRange sourceRange)
+    {
+        sourceSheet = null!;
+        sourceRange = default;
+        if (cache.SourceType is PivotCacheSourceType.External or PivotCacheSourceType.Consolidation or PivotCacheSourceType.Scenario ||
+            string.IsNullOrWhiteSpace(cache.SourceSheetName) ||
+            string.IsNullOrWhiteSpace(cache.SourceReference))
+        {
+            return false;
+        }
+
+        var matchedSheet = workbook.GetSheet(cache.SourceSheetName);
+        if (matchedSheet is null)
+            return false;
+
+        sourceSheet = matchedSheet;
+        try
+        {
+            sourceRange = GridRange.Parse(NormalizePivotCacheSourceReference(cache.SourceReference), sourceSheet.Id);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static string NormalizePivotCacheSourceReference(string reference)
+    {
+        var normalized = reference.Trim();
+        var sheetSeparator = normalized.LastIndexOf('!');
+        if (sheetSeparator >= 0 && sheetSeparator + 1 < normalized.Length)
+            normalized = normalized[(sheetSeparator + 1)..];
+
+        return normalized.Replace("$", "", StringComparison.Ordinal);
+    }
+
+    private static XElement ToPivotCacheRecordValueXml(ScalarValue value, XNamespace workbookNs) =>
+        value switch
+        {
+            TextValue text => new XElement(workbookNs + "s", new XAttribute("v", text.Value)),
+            NumberValue number => new XElement(workbookNs + "n", new XAttribute("v", number.Value.ToString("G17", CultureInfo.InvariantCulture))),
+            DateTimeValue date => new XElement(workbookNs + "d", new XAttribute("v", date.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture))),
+            BoolValue boolean => new XElement(workbookNs + "b", new XAttribute("v", boolean.Value ? "1" : "0")),
+            ErrorValue error => new XElement(workbookNs + "e", new XAttribute("v", error.Code)),
+            _ => new XElement(workbookNs + "m")
+        };
+
+    private static XDocument ToPivotCacheDefinitionRelsXml(
+        XNamespace packageRelNs,
+        string cachePath,
+        string recordsPath,
+        string recordsRelId) =>
+        new(new XElement(
+            packageRelNs + "Relationships",
+            new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", recordsRelId),
+                new XAttribute("Type", PivotCacheRecordsRelationshipType),
+                new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(cachePath, recordsPath)))));
 }

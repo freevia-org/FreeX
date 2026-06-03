@@ -33,10 +33,16 @@ internal static partial class XlsxPivotTableWriter
             if (cache.CacheId <= 0)
                 continue;
 
-            var cachePath = $"xl/pivotCache/pivotCacheDefinition{cacheIndex++}.xml";
-            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, workbookNs, relNs));
-            XlsxPackageXmlEditor.ReplaceXml(archive, XlsxPackagePath.GetRelationshipPartPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs));
+            var cacheOrdinal = cacheIndex++;
+            var cachePath = $"xl/pivotCache/pivotCacheDefinition{cacheOrdinal}.xml";
+            var recordsPath = $"xl/pivotCache/pivotCacheRecords{cacheOrdinal}.xml";
+            var recordsRelId = "rIdPivotCacheRecords";
+            var cacheRecords = ToPivotCacheRecordsXml(cache, workbook, workbookNs);
+            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, workbookNs, relNs, recordsRelId, cacheRecords.RecordCount));
+            XlsxPackageXmlEditor.ReplaceXml(archive, recordsPath, cacheRecords.Document);
+            XlsxPackageXmlEditor.ReplaceXml(archive, XlsxPackagePath.GetRelationshipPartPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs, cachePath, recordsPath, recordsRelId));
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml");
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{recordsPath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml");
 
             var cacheRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
                 workbookRelsXml,
@@ -264,16 +270,25 @@ internal static partial class XlsxPivotTableWriter
             FreeXPivotTableExtension(pivot, workbookNs)));
 
     // Persists pivot-table flags with no base-schema attribute (repeatItemLabels only exists in the x14
-    // extension) inside a schema-valid extLst/ext block. Returns null when nothing needs preserving.
+    // extension) and FreeX-authored field selection/grouping state inside a schema-valid extLst/ext block.
+    // Returns null when nothing needs preserving.
     private static XElement? FreeXPivotTableExtension(PivotTableModel pivot, XNamespace workbookNs)
     {
         XNamespace freeXNs = FreeXPivotExtensionNamespace;
-        var payload = new XElement(freeXNs + "tableProps");
+        var tableProps = new XElement(freeXNs + "tableProps");
         if (!pivot.RepeatItemLabels)
-            payload.SetAttributeValue("repeatItemLabels", "0");
+            tableProps.SetAttributeValue("repeatItemLabels", "0");
 
-        if (!payload.HasAttributes)
+        var fields = new XElement(
+            freeXNs + "fields",
+            FreeXPivotFieldExtensionElements("row", pivot.RowFields, freeXNs),
+            FreeXPivotFieldExtensionElements("column", pivot.ColumnFields, freeXNs),
+            FreeXPivotFieldExtensionElements("page", pivot.PageFields, freeXNs));
+
+        if (!tableProps.HasAttributes && !fields.HasElements)
             return null;
+        if (fields.HasElements)
+            tableProps.Add(fields);
 
         return new XElement(
             workbookNs + "extLst",
@@ -281,8 +296,31 @@ internal static partial class XlsxPivotTableWriter
                 workbookNs + "ext",
                 new XAttribute("uri", FreeXPivotTableExtensionUri),
                 new XAttribute(XNamespace.Xmlns + "fx", FreeXPivotExtensionNamespace),
-                payload));
+                tableProps));
     }
+
+    private static IEnumerable<XElement> FreeXPivotFieldExtensionElements(
+        string axis,
+        IReadOnlyList<PivotFieldModel> fields,
+        XNamespace freeXNs) =>
+        fields
+            .Where(field =>
+                !string.IsNullOrWhiteSpace(field.SelectedItem) ||
+                field.SelectedItems is { Count: > 0 } ||
+                field.Grouping != PivotFieldGrouping.None ||
+                field.GroupStart is not null ||
+                field.GroupEnd is not null ||
+                field.GroupInterval is not null)
+            .Select(field => new XElement(
+                freeXNs + "field",
+                new XAttribute("axis", axis),
+                new XAttribute("x", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
+                OptionalAttribute("selectedItem", field.SelectedItem),
+                field.SelectedItems is { Count: > 0 } ? new XAttribute("selectedItems", string.Join(",", field.SelectedItems)) : null,
+                field.Grouping == PivotFieldGrouping.None ? null : new XAttribute("groupBy", ToPivotFieldGroupingText(field.Grouping)),
+                field.GroupStart is null ? null : new XAttribute("groupStart", FormatInvariant(field.GroupStart.Value)),
+                field.GroupEnd is null ? null : new XAttribute("groupEnd", FormatInvariant(field.GroupEnd.Value)),
+                field.GroupInterval is null ? null : new XAttribute("groupInterval", FormatInvariant(field.GroupInterval.Value))));
 
     private static XElement ToPivotFieldsXml(PivotTableModel pivot, XNamespace workbookNs)
     {
@@ -293,6 +331,9 @@ internal static partial class XlsxPivotTableWriter
             .Concat(pivot.DataFields.Select(field => field.SourceFieldIndex))
             .DefaultIfEmpty(-1)
             .Max();
+        var dataFieldIndexes = pivot.DataFields
+            .Select(field => field.SourceFieldIndex)
+            .ToHashSet();
 
         return new XElement(
             workbookNs + "pivotFields",
@@ -308,6 +349,7 @@ internal static partial class XlsxPivotTableWriter
                     pivot.RowFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisRow") : null,
                     pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisCol") : null,
                     pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisPage") : null,
+                    dataFieldIndexes.Contains(index) ? new XAttribute("dataField", "1") : null,
                     // insertBlankRow is the per-field flag for a blank line after items in OOXML
                     // (CT_PivotField); it is not a pivotTableDefinition attribute. repeatItemLabels has no
                     // home in the base spreadsheetml schema (it only exists in the x14 extension), so it is
@@ -344,13 +386,7 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute("count", fields.Count.ToString(CultureInfo.InvariantCulture)),
                 fields.Select(field => new XElement(
                     workbookNs + "field",
-                    new XAttribute("x", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
-                    string.IsNullOrWhiteSpace(field.SelectedItem) ? null : new XAttribute("name", field.SelectedItem),
-                    field.SelectedItems is null || field.SelectedItems.Count == 0 ? null : new XAttribute("selectedItems", string.Join(",", field.SelectedItems)),
-                    field.Grouping == PivotFieldGrouping.None ? null : new XAttribute("groupBy", ToPivotFieldGroupingText(field.Grouping)),
-                    field.GroupStart is null ? null : new XAttribute("groupStart", FormatInvariant(field.GroupStart.Value)),
-                    field.GroupEnd is null ? null : new XAttribute("groupEnd", FormatInvariant(field.GroupEnd.Value)),
-                    field.GroupInterval is null ? null : new XAttribute("groupInterval", FormatInvariant(field.GroupInterval.Value)))));
+                    new XAttribute("x", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)))));
 
     private static XElement? ToPivotPageFieldsXml(IReadOnlyList<PivotFieldModel> fields, XNamespace workbookNs) =>
         fields.Count == 0
@@ -361,12 +397,7 @@ internal static partial class XlsxPivotTableWriter
                 fields.Select(field => new XElement(
                     workbookNs + "pageField",
                     new XAttribute("fld", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
-                    string.IsNullOrWhiteSpace(field.SelectedItem) ? null : new XAttribute("name", field.SelectedItem),
-                    field.SelectedItems is null || field.SelectedItems.Count == 0 ? null : new XAttribute("selectedItems", string.Join(",", field.SelectedItems)),
-                    field.Grouping == PivotFieldGrouping.None ? null : new XAttribute("groupBy", ToPivotFieldGroupingText(field.Grouping)),
-                    field.GroupStart is null ? null : new XAttribute("groupStart", FormatInvariant(field.GroupStart.Value)),
-                    field.GroupEnd is null ? null : new XAttribute("groupEnd", FormatInvariant(field.GroupEnd.Value)),
-                    field.GroupInterval is null ? null : new XAttribute("groupInterval", FormatInvariant(field.GroupInterval.Value)))));
+                    string.IsNullOrWhiteSpace(field.SelectedItem) ? null : new XAttribute("name", field.SelectedItem))));
 
     private static XElement? ToPivotDataFieldsXml(
         IReadOnlyList<PivotDataFieldModel> fields,
