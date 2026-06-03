@@ -251,9 +251,13 @@ public sealed partial class XlsxFileAdapter
             // Save CellValue conditional format rules back to XLSX
             XlsxConditionalFormatClosedXmlMapper.Save(sheet, xlSheet);
 
-            // Save data validation rules back to XLSX
-            try { XlsxDataValidationClosedXmlMapper.Save(sheet, xlSheet); }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping data-validation save for sheet '{sheet.Name}': {ex.Message}"); }
+            // Save data validation rules back to XLSX. Sheets with native validation metadata are
+            // emitted in the worksheet XML post-processing pass to avoid duplicate ClosedXML work.
+            if (!XlsxDataValidationNativeMetadataMapper.HasNativeMetadata(sheet))
+            {
+                try { XlsxDataValidationClosedXmlMapper.Save(sheet, xlSheet); }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping data-validation save for sheet '{sheet.Name}': {ex.Message}"); }
+            }
 
             // Save merged regions
             foreach (var region in sheet.MergedRegions)

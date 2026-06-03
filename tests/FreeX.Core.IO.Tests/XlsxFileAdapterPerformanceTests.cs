@@ -1070,11 +1070,16 @@ public sealed class XlsxFileAdapterPerformanceTests
     public void SavePostProcessing_BatchesWorksheetNativeMetadataXmlWrites()
     {
         var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
         var batchSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetNativeMetadataBatchWriter.cs"));
         var sourceIndependentBatchSource = File.ReadAllText(FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "XlsxWorksheetSourceIndependentMetadataBatchWriter.cs"));
+        var dataValidationNativeSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "XlsxDataValidationNativeMetadataMapper.cs"));
         var sessionSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetXmlEditSession.cs"));
 
         adapterSource.Should().Contain("XlsxWorksheetSourceIndependentMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
@@ -1105,6 +1110,10 @@ public sealed class XlsxFileAdapterPerformanceTests
         sourceIndependentBatchSource.Should().Contain("XlsxWorksheetAutoFilterMapper.Save(session, workbook);");
         sourceIndependentBatchSource.Should().Contain("XlsxDataValidationNativeMetadataMapper.Save(session, workbook);");
         sourceIndependentBatchSource.Should().Contain("XlsxWorksheetNativeMetadataBatchWriter.Save(session, workbook);");
+        saveSource.Should().Contain("if (!XlsxDataValidationNativeMetadataMapper.HasNativeMetadata(sheet))");
+        dataValidationNativeSource.Should().Contain("TryCreateDataValidationsElement(sheet, containerSource, out var replacement)");
+        dataValidationNativeSource.Should().Contain("AddDataValidationsInOrder(edit.Root, replacement);");
+        dataValidationNativeSource.Should().Contain("XlsxDataValidationClosedXmlMapper.NormalizeListFormulaForSave");
         sessionSource.Should().Contain("private readonly Dictionary<string, XDocument> _documents");
         sessionSource.Should().Contain("XlsxPackageXmlEditor.ReplaceXml(_archive, path, _documents[path]);");
     }
