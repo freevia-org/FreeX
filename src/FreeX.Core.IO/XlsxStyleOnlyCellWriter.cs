@@ -58,7 +58,7 @@ internal static class XlsxStyleOnlyCellWriter
 
     private static List<StyleOnlyCell> GetWritableCells(Sheet sheet)
     {
-        var cells = new List<StyleOnlyCell>();
+        var cells = new List<StyleOnlyCell>(sheet.StyleOnlyCellCount);
         if (!sheet.HasStyleOnlyCells)
             return cells;
 
@@ -436,8 +436,52 @@ internal static class XlsxStyleOnlyCellWriter
         return true;
     }
 
-    private static string ToReference(uint row, uint col) =>
-        $"{CellAddress.NumberToColumnName(col)}{row.ToString(CultureInfo.InvariantCulture)}";
+    private static string ToReference(uint row, uint col)
+    {
+        var columnLength = GetColumnNameLength(col);
+        var rowLength = GetRowDigitCount(row);
+        return string.Create(
+            columnLength + rowLength,
+            (Row: row, Col: col, ColumnLength: columnLength),
+            static (destination, state) =>
+            {
+                WriteColumnName(state.Col, destination[..state.ColumnLength]);
+                WriteRowNumber(state.Row, destination[state.ColumnLength..]);
+            });
+    }
+
+    private static int GetColumnNameLength(uint col) =>
+        col <= 26 ? 1 :
+        col <= 702 ? 2 : 3;
+
+    private static void WriteColumnName(uint col, Span<char> destination)
+    {
+        for (var index = destination.Length - 1; index >= 0; index--)
+        {
+            col--;
+            destination[index] = (char)('A' + col % 26);
+            col /= 26;
+        }
+    }
+
+    private static int GetRowDigitCount(uint row) =>
+        row < 10 ? 1 :
+        row < 100 ? 2 :
+        row < 1_000 ? 3 :
+        row < 10_000 ? 4 :
+        row < 100_000 ? 5 :
+        row < 1_000_000 ? 6 : 7;
+
+    private static void WriteRowNumber(uint row, Span<char> destination)
+    {
+        var index = destination.Length;
+        do
+        {
+            destination[--index] = (char)('0' + row % 10);
+            row /= 10;
+        }
+        while (row > 0);
+    }
 
     private static bool IsValidWorksheetCell(uint row, uint col) =>
         row is >= 1 and <= CellAddress.MaxRow &&
