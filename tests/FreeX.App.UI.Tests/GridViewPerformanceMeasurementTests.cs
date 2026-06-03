@@ -549,6 +549,64 @@ public sealed class GridViewPerformanceMeasurementTests
     }
 
     [Fact]
+    public void Benchmark_RenderDrawingObjectHeavyViewportSelectionRepaints_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 48;
+            const int width = 1440;
+            const int height = 900;
+            const int rowCount = 40;
+            const int columnCount = 20;
+            var sheetId = SheetId.New();
+            var grid = CreateDrawingObjectHeavyGrid(width, height);
+            var ranges = Enumerable
+                .Range(0, iterations)
+                .Select(index =>
+                {
+                    var row = (uint)((index * 7 % rowCount) + 1);
+                    var column = (uint)((index * 5 % columnCount) + 1);
+                    return new GridRange(
+                        new CellAddress(sheetId, row, column),
+                        new CellAddress(sheetId, row, column));
+                })
+                .ToArray();
+
+            RenderOnce(grid, width, height);
+            RenderOnce(grid, width, height);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var timings = new List<double>(iterations);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+            {
+                grid.SelectedRange = ranges[i];
+                var step = Stopwatch.StartNew();
+                RenderOnce(grid, width, height);
+                step.Stop();
+                timings.Add(step.Elapsed.TotalMilliseconds);
+            }
+
+            total.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            var ordered = timings.OrderBy(value => value).ToArray();
+            var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+            Console.WriteLine(
+                "PERF GRID_RENDER_DRAWING_OBJECT_SELECTION_REPAINT " +
+                $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+                $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+                $"allocated_bytes={allocatedBytes:N0}");
+
+            timings.Average().Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
     public void Benchmark_RenderOffscreenDrawingObjectHeavyViewport_ReportsTiming()
     {
         StaTestRunner.Run(() =>
