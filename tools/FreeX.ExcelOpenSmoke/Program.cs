@@ -612,6 +612,15 @@ internal static class ExcelOpenSmoke
         if (fileName.Contains("tables", StringComparison.OrdinalIgnoreCase))
             return StructuredTableExpectations(saveReopen, expectFreeXPreSave, minStructuredTables: 1);
 
+        if (fileName.Contains("objects_links", StringComparison.OrdinalIgnoreCase))
+            return ShapeExpectations(saveReopen, minShapes: 1);
+
+        if (fileName.Contains("images_sparklines", StringComparison.OrdinalIgnoreCase))
+            return ShapeExpectations(saveReopen, minShapes: 1);
+
+        if (fileName.Contains("shapes_text", StringComparison.OrdinalIgnoreCase))
+            return ShapeExpectations(saveReopen, minShapes: 2);
+
         if (fileName.Contains("pivots", StringComparison.OrdinalIgnoreCase))
             return PivotTableExpectations(saveReopen, expectFreeXPreSave);
 
@@ -624,8 +633,10 @@ internal static class ExcelOpenSmoke
             MinFreeXPreSaveStructuredTables: 1,
             MinExcelOpenedFormulaCells: 1,
             MinExcelOpenedStructuredTables: 1,
+            MinExcelOpenedShapes: 2,
             MinExcelReopenedFormulaCells: saveReopen ? 1 : 0,
             MinExcelReopenedStructuredTables: saveReopen ? 1 : 0,
+            MinExcelReopenedShapes: saveReopen ? 2 : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? 1 : 0,
             MinFreeXReopenedStructuredTables: saveReopen ? 1 : 0,
             MinFreeXPreSavePivotTables: 1,
@@ -654,6 +665,11 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedStructuredTables: minStructuredTables,
             MinExcelReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
             MinFreeXReopenedStructuredTables: saveReopen ? minStructuredTables : 0);
+
+    private static WorkbookSmokeExpectations ShapeExpectations(bool saveReopen, int minShapes) =>
+        new(
+            MinExcelOpenedShapes: minShapes,
+            MinExcelReopenedShapes: saveReopen ? minShapes : 0);
 
     private static WorkbookSmokeExpectations PivotTableExpectations(bool saveReopen, bool expectFreeXPreSave) =>
         new(
@@ -696,6 +712,11 @@ internal static class ExcelOpenSmoke
             expectations.MinExcelOpenedStructuredTables,
             input);
         AssertMin(
+            "Excel open worksheet shapes",
+            opened.ShapeCount,
+            expectations.MinExcelOpenedShapes,
+            input);
+        AssertMin(
             "Excel reopen formula cells",
             reopened?.FormulaCellCount,
             expectations.MinExcelReopenedFormulaCells,
@@ -704,6 +725,11 @@ internal static class ExcelOpenSmoke
             "Excel reopen structured tables",
             reopened?.StructuredTableCount,
             expectations.MinExcelReopenedStructuredTables,
+            input);
+        AssertMin(
+            "Excel reopen worksheet shapes",
+            reopened?.ShapeCount,
+            expectations.MinExcelReopenedShapes,
             input);
         AssertMin(
             "FreeX reopened Excel save formula cells",
