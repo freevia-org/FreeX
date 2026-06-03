@@ -405,7 +405,8 @@ public sealed class GridViewDrawingObjectThemeTests
     {
         var source =
             File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs")) +
-            File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+            File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs")) +
+            File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjectLayerCache.cs"));
         var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
 
         source.Should().Contain("public enum GridObjectDisplayMode");
