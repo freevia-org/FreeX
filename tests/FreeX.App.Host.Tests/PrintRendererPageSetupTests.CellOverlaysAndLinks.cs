@@ -84,16 +84,58 @@ public sealed partial class PrintRendererPageSetupTests
         });
     }
 
-    [Fact]
-    public void RenderWorksheet_DoesNotAttachLinkOverlayForInternalWorksheetHyperlink()
+    [Theory]
+    [InlineData("Sheet1", "A10", 10u, 1u)]
+    [InlineData("Sheet1", "Sheet1!A10", 10u, 1u)]
+    [InlineData("Q1 Summary", "'Q1 Summary'!B2", 2u, 2u)]
+    public void RenderWorksheet_AttachesLinkOverlayForInternalWorksheetHyperlink(
+        string sheetName,
+        string target,
+        uint targetRow,
+        uint targetCol)
     {
         StaTestRunner.Run(() =>
         {
             var workbook = new Workbook("Internal hyperlink print");
+            var sheet = workbook.AddSheet(sheetName);
+            var address = new CellAddress(sheet.Id, 1, 1);
+            var targetAddress = new CellAddress(sheet.Id, targetRow, targetCol);
+            sheet.SetCell(address, new TextValue("Jump"));
+            sheet.SetCell(targetAddress, new TextValue("Target"));
+            sheet.PrintArea = new GridRange(
+                address,
+                targetAddress);
+            sheet.Hyperlinks[address] = target;
+            sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+                HyperlinkTargetKind.PlaceInThisDocument);
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+
+            var overlay = PdfLinkOverlayExtractor.Extract(page).Should().ContainSingle().Subject;
+            overlay.Target.Should().Be(target);
+            overlay.TargetKind.Should().Be(HyperlinkTargetKind.PlaceInThisDocument);
+            overlay.SourceAddress.Should().Be(address);
+            overlay.TargetAddress.Should().Be(targetAddress);
+
+            PdfCellDestinationOverlayExtractor.Extract(page)
+                .Should()
+                .ContainSingle()
+                .Which.Address.Should()
+                .Be(targetAddress);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_SkipsLinkOverlayForUnsupportedInternalWorksheetHyperlink()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Unsupported internal hyperlink print");
             var sheet = workbook.AddSheet("Sheet1");
             var address = new CellAddress(sheet.Id, 1, 1);
             sheet.SetCell(address, new TextValue("Jump"));
-            sheet.Hyperlinks[address] = "Sheet1!A10";
+            sheet.Hyperlinks[address] = "Missing Sheet!A10";
             sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
                 HyperlinkTargetKind.PlaceInThisDocument);
 

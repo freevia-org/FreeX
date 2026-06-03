@@ -16,6 +16,8 @@ internal static class PdfDocumentExporter
 {
     private const double StandardDpi = 96.0;
     private const double MinimumSizeDpi = 72.0;
+    private sealed record ExportedPdfPage(PdfPage PdfPage, FixedPage FixedPage);
+    private sealed record PdfInternalDestination(PdfPage Page, XPoint Point);
 
     public static void Save(
         FixedDocument document,
@@ -85,6 +87,7 @@ internal static class PdfDocumentExporter
         ApplyDefaultViewerPreferences(pdf, initialView);
         ApplyProperties(pdf, properties);
 
+        var exportedPages = new List<ExportedPdfPage>();
         for (int i = firstPageIndex; i <= lastPageIndexInclusive; i++)
         {
             var fixedPage = GetFixedPage(document.Pages[i]);
@@ -104,8 +107,12 @@ internal static class PdfDocumentExporter
             DrawVectorOverlays(gfx, fixedPage);
             if (includeSelectableText)
                 DrawTextOverlay(gfx, fixedPage);
-            AddLinkAnnotations(page, fixedPage);
+            exportedPages.Add(new ExportedPdfPage(page, fixedPage));
         }
+
+        var internalDestinations = BuildInternalDestinationLookup(exportedPages);
+        foreach (var exportedPage in exportedPages)
+            AddLinkAnnotations(exportedPage.PdfPage, exportedPage.FixedPage, internalDestinations);
 
         var hasBookmarks = AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
         ApplyOpenMode(pdf, openMode, hasBookmarks);
@@ -600,13 +607,58 @@ internal static class PdfDocumentExporter
         return double.IsNaN(top) ? 0 : top;
     }
 
-    private static void AddLinkAnnotations(PdfPage pdfPage, FixedPage fixedPage)
+    private static IReadOnlyDictionary<CellAddress, PdfInternalDestination> BuildInternalDestinationLookup(
+        IReadOnlyList<ExportedPdfPage> pages)
+    {
+        var result = new Dictionary<CellAddress, PdfInternalDestination>();
+        foreach (var page in pages)
+        {
+            foreach (var overlay in PdfCellDestinationOverlayExtractor.Extract(page.FixedPage))
+            {
+                if (result.ContainsKey(overlay.Address) ||
+                    overlay.Width <= 0 ||
+                    overlay.Height <= 0 ||
+                    !TryCreateInternalDestinationPoint(page.PdfPage, overlay, out var point))
+                {
+                    continue;
+                }
+
+                result[overlay.Address] = new PdfInternalDestination(page.PdfPage, point);
+            }
+        }
+
+        return result;
+    }
+
+    private static bool TryCreateInternalDestinationPoint(
+        PdfPage pdfPage,
+        PdfCellDestinationOverlay overlay,
+        out XPoint point)
+    {
+        var left = overlay.X * 72.0 / StandardDpi;
+        var top = pdfPage.Height.Point - overlay.Y * 72.0 / StandardDpi;
+
+        left = Math.Clamp(left, 0, pdfPage.Width.Point);
+        top = Math.Clamp(top, 0, pdfPage.Height.Point);
+
+        if (!IsFinite(left) || !IsFinite(top))
+        {
+            point = default;
+            return false;
+        }
+
+        point = new XPoint(left, top);
+        return true;
+    }
+
+    private static void AddLinkAnnotations(
+        PdfPage pdfPage,
+        FixedPage fixedPage,
+        IReadOnlyDictionary<CellAddress, PdfInternalDestination> internalDestinations)
     {
         foreach (var overlay in PdfLinkOverlayExtractor.Extract(fixedPage))
         {
-            var uri = NormalizeLinkAnnotationUri(overlay);
-            if (uri is null ||
-                overlay.Width <= 0 ||
+            if (overlay.Width <= 0 ||
                 overlay.Height <= 0)
             {
                 continue;
@@ -615,28 +667,77 @@ internal static class PdfDocumentExporter
             if (!TryCreateLinkAnnotationRect(pdfPage, overlay, out var rect) || rect is null)
                 continue;
 
-            var annotations = pdfPage.Elements.GetArray("/Annots");
-            if (annotations is null)
+            if (overlay.TargetKind == HyperlinkTargetKind.PlaceInThisDocument)
             {
-                annotations = new PdfArray(pdfPage.Owner);
-                pdfPage.Elements["/Annots"] = annotations;
+                if (overlay.TargetAddress is not { } targetAddress ||
+                    !internalDestinations.TryGetValue(targetAddress, out var destination))
+                {
+                    continue;
+                }
+
+                AddInternalLinkAnnotation(pdfPage, overlay, rect, destination);
+                continue;
             }
 
-            var action = new PdfDictionary(pdfPage.Owner);
-            action.Elements.SetName("/S", "/URI");
-            action.Elements.SetString("/URI", uri);
+            var uri = NormalizeLinkAnnotationUri(overlay);
+            if (uri is null)
+                continue;
 
-            var annotation = new PdfDictionary(pdfPage.Owner);
-            annotation.Elements.SetName("/Type", "/Annot");
-            annotation.Elements.SetName("/Subtype", "/Link");
-            annotation.Elements.SetRectangle("/Rect", rect);
-            annotation.Elements.SetName("/H", "/I");
-            annotation.Elements.SetInteger("/F", 4);
-            annotation.Elements["/Border"] = CreateInvisibleAnnotationBorder(pdfPage.Owner);
-            annotation.Elements.SetString("/Contents", uri);
-            annotation.Elements["/A"] = action;
-            annotations.Elements.Add(annotation);
+            AddUriLinkAnnotation(pdfPage, overlay, rect, uri);
         }
+    }
+
+    private static void AddUriLinkAnnotation(PdfPage pdfPage, PdfLinkOverlay overlay, PdfRectangle rect, string uri)
+    {
+        var action = new PdfDictionary(pdfPage.Owner);
+        action.Elements.SetName("/S", "/URI");
+        action.Elements.SetString("/URI", uri);
+
+        var annotation = CreateBaseLinkAnnotation(pdfPage, rect, uri);
+        annotation.Elements["/A"] = action;
+        GetOrCreateAnnotations(pdfPage).Elements.Add(annotation);
+    }
+
+    private static void AddInternalLinkAnnotation(
+        PdfPage pdfPage,
+        PdfLinkOverlay overlay,
+        PdfRectangle rect,
+        PdfInternalDestination destination)
+    {
+        var destinationArray = new PdfArray(pdfPage.Owner);
+        destinationArray.Elements.Add(destination.Page.ReferenceNotNull);
+        destinationArray.Elements.Add(new PdfName("/XYZ"));
+        destinationArray.Elements.Add(new PdfReal(destination.Point.X));
+        destinationArray.Elements.Add(new PdfReal(destination.Point.Y));
+        destinationArray.Elements.Add(PdfNull.Value);
+
+        var annotation = CreateBaseLinkAnnotation(pdfPage, rect, overlay.Target);
+        annotation.Elements["/Dest"] = destinationArray;
+        GetOrCreateAnnotations(pdfPage).Elements.Add(annotation);
+    }
+
+    private static PdfDictionary CreateBaseLinkAnnotation(PdfPage pdfPage, PdfRectangle rect, string contents)
+    {
+        var annotation = new PdfDictionary(pdfPage.Owner);
+        annotation.Elements.SetName("/Type", "/Annot");
+        annotation.Elements.SetName("/Subtype", "/Link");
+        annotation.Elements.SetRectangle("/Rect", rect);
+        annotation.Elements.SetName("/H", "/I");
+        annotation.Elements.SetInteger("/F", 4);
+        annotation.Elements["/Border"] = CreateInvisibleAnnotationBorder(pdfPage.Owner);
+        annotation.Elements.SetString("/Contents", contents);
+        return annotation;
+    }
+
+    private static PdfArray GetOrCreateAnnotations(PdfPage pdfPage)
+    {
+        var annotations = pdfPage.Elements.GetArray("/Annots");
+        if (annotations is not null)
+            return annotations;
+
+        annotations = new PdfArray(pdfPage.Owner);
+        pdfPage.Elements["/Annots"] = annotations;
+        return annotations;
     }
 
     private static bool TryCreateLinkAnnotationRect(PdfPage pdfPage, PdfLinkOverlay overlay, out PdfRectangle? rect)

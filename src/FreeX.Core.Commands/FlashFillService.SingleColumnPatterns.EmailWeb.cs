@@ -152,6 +152,97 @@ public static partial class FlashFillService
             : null;
     }
 
+    private static Func<string, string?>? TryExtractFinalUrlPathSegmentStem(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFinalUrlPathSegmentStem(e.Source, out var stem) && stem == e.Expected))
+            return null;
+
+        return source => TryGetFinalUrlPathSegmentStem(source, out var stem) ? stem : null;
+    }
+
+    private static bool TryGetFinalUrlPathSegmentStem(string source, out string stem)
+    {
+        stem = string.Empty;
+        if (!TryGetFinalUrlPathSegmentStemRange(source, out var start, out var endExclusive))
+            return false;
+
+        stem = SliceSegment(source.Trim(), start, endExclusive);
+        return true;
+    }
+
+    private static bool TryGetFinalUrlPathSegmentStemRange(
+        string source,
+        out int stemStart,
+        out int stemEndExclusive)
+    {
+        stemStart = 0;
+        stemEndExclusive = 0;
+
+        var candidate = source.Trim();
+        if (!IsHttpOrHttpsUrlCandidate(candidate) ||
+            !Uri.TryCreate(candidate, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            uri.UserInfo.Length > 0 ||
+            !TryNormalizeWebHost(uri.Host, out _))
+        {
+            return false;
+        }
+
+        var authorityStart = candidate.IndexOf("://", StringComparison.Ordinal) + 3;
+        var pathStart = candidate.IndexOf('/', authorityStart);
+        if (pathStart < 0)
+            return false;
+
+        var queryIndex = candidate.IndexOf('?', pathStart);
+        var fragmentIndex = candidate.IndexOf('#', pathStart);
+        var pathEndExclusive = MinPositiveIndexOrLength(candidate.Length, queryIndex, fragmentIndex);
+        if (pathEndExclusive <= pathStart + 1)
+            return false;
+
+        var segmentEnd = pathEndExclusive - 1;
+        if (candidate[segmentEnd] == '/')
+            return false;
+
+        var lastSlashIndex = candidate.LastIndexOf('/', segmentEnd, segmentEnd - pathStart + 1);
+        var segmentStart = lastSlashIndex + 1;
+        TrimSegment(candidate, ref segmentStart, ref segmentEnd);
+        if (segmentStart > segmentEnd)
+            return false;
+
+        var segmentLength = segmentEnd - segmentStart + 1;
+        var dotIndex = candidate.LastIndexOf('.', segmentEnd, segmentLength);
+        if (dotIndex <= segmentStart || dotIndex == segmentEnd)
+            return false;
+
+        stemStart = segmentStart;
+        var stemEnd = dotIndex - 1;
+        TrimSegment(candidate, ref stemStart, ref stemEnd);
+        if (stemStart > stemEnd)
+            return false;
+
+        stemEndExclusive = stemEnd + 1;
+        return true;
+    }
+
+    private static bool IsHttpOrHttpsUrlCandidate(string source)
+    {
+        var candidate = source.TrimStart();
+        return candidate.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+               candidate.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int MinPositiveIndexOrLength(int length, int firstIndex, int secondIndex)
+    {
+        if (firstIndex < 0)
+            return secondIndex < 0 ? length : secondIndex;
+
+        if (secondIndex < 0)
+            return firstIndex;
+
+        return Math.Min(firstIndex, secondIndex);
+    }
+
     private static bool TryExtractWebAddressParts(string source, out WebAddressParts parts)
     {
         parts = default;

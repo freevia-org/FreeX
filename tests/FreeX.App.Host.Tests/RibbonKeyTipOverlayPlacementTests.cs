@@ -198,6 +198,38 @@ public sealed class RibbonKeyTipOverlayPlacementTests
     }
 
     [Fact]
+    public void PlaceBadge_DropdownCommandKindCentersBadgeBelowCommandFrameWithGap()
+    {
+        // Dropdown and split-command keytips sit below the full control frame
+        // so the badge does not cover the caption, chevron, or value area.
+        var elementBounds = new Rect(220, 140, 72, 46);
+        var overlaySize = new Size(1280, 720);
+        var badgeSize = new Size(26, 16);
+
+        var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.DropdownCommand);
+
+        point.X.Should().Be(243);
+        point.Y.Should().Be(188);
+    }
+
+    [Fact]
+    public void PlaceBadge_DropdownCommandKindDiffersFromCommandKindVertically()
+    {
+        var elementBounds = new Rect(220, 140, 72, 46);
+        var overlaySize = new Size(1280, 720);
+        var badgeSize = new Size(26, 16);
+
+        var command = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.Command);
+        var dropdown = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.DropdownCommand);
+
+        dropdown.X.Should().Be(command.X);
+        dropdown.Y.Should().BeGreaterThan(command.Y);
+    }
+
+    [Fact]
     public void PlaceBadge_TabKindCentersBadgeBelowTabWithGap()
     {
         // Tab keytips sit centered just below the tab label rather than straddling

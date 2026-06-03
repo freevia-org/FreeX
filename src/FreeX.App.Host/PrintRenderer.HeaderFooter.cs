@@ -19,7 +19,7 @@ public static partial class PrintRenderer
         return (sheet.PageHeader, sheet.PageFooter, sheet.PageHeaderPictures, sheet.PageFooterPictures);
     }
 
-    private static (DrawingVisual Visual, IReadOnlyList<PdfTextOverlay> TextOverlays, IReadOnlyList<PdfLinkOverlay> LinkOverlays) RenderPageVisual(
+    private static (DrawingVisual Visual, IReadOnlyList<PdfTextOverlay> TextOverlays, IReadOnlyList<PdfLinkOverlay> LinkOverlays, IReadOnlyList<PdfCellDestinationOverlay> CellDestinationOverlays) RenderPageVisual(
         double pageW,
         double pageH,
         double marginLeft,
@@ -32,6 +32,7 @@ public static partial class PrintRenderer
         IReadOnlyList<uint> pageColumns,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
         IReadOnlyDictionary<(uint Row, uint Col), PdfLinkTarget> hyperlinkLookup,
+        IReadOnlyDictionary<(uint Row, uint Col), CellAddress> cellDestinationLookup,
         bool printGridlines,
         bool printHeadings,
         WorksheetHeaderFooter pageHeader,
@@ -63,6 +64,7 @@ public static partial class PrintRenderer
         var visual = new DrawingVisual();
         var textOverlays = new List<PdfTextOverlay>();
         var linkOverlays = new List<PdfLinkOverlay>();
+        var cellDestinationOverlays = new List<PdfCellDestinationOverlay>();
         using var dc = visual.RenderOpen();
         dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pageW, pageH));
         DrawHeaderFooter(
@@ -106,11 +108,13 @@ public static partial class PrintRenderer
             dc,
             textOverlays,
             linkOverlays,
+            cellDestinationOverlays,
             measurement,
             pageRows,
             pageColumns,
             cellLookup,
             hyperlinkLookup,
+            cellDestinationLookup,
             printGridlines,
             printErrorValue,
             gridLeft,
@@ -165,7 +169,7 @@ public static partial class PrintRenderer
                 blackAndWhite);
         }
 
-        return (visual, textOverlays, linkOverlays);
+        return (visual, textOverlays, linkOverlays, cellDestinationOverlays);
     }
 
 }

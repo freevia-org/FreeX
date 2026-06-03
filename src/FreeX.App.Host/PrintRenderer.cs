@@ -115,7 +115,8 @@ public static partial class PrintRenderer
                 : [];
         var totalPages = rowPlans.Count * columnPlans.Count + commentSummaryPages.Count;
         var pageNumber = sheet.FirstPageNumber ?? 1;
-        var printableHyperlinks = BuildPrintableHyperlinkLookup(sheet);
+        var printableHyperlinks = BuildPrintableHyperlinkLookup(workbook, sheet);
+        var printableCellDestinations = BuildPrintableCellDestinationLookup(workbook, sheet);
 
         if (sheet.PageOrder == WorksheetPageOrder.OverThenDown)
         {
@@ -154,7 +155,7 @@ public static partial class PrintRenderer
                 (uint)pageColumns.Count,
                 sheet.PrintHeadings);
             var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
-            var (visual, textOverlays, linkOverlays) = RenderPageVisual(
+            var (visual, textOverlays, linkOverlays, cellDestinationOverlays) = RenderPageVisual(
                 pageW,
                 pageH,
                 marginLeft,
@@ -167,6 +168,7 @@ public static partial class PrintRenderer
                 pageColumns,
                 cellLookup,
                 printableHyperlinks,
+                printableCellDestinations,
                 sheet.PrintGridlines,
                 sheet.PrintHeadings,
                 pageHeader,
@@ -196,7 +198,13 @@ public static partial class PrintRenderer
                 sheet.PrintBlackAndWhite);
             pageNumber++;
 
-            var container = new VisualHost { Visual = visual, TextOverlays = textOverlays, LinkOverlays = linkOverlays };
+            var container = new VisualHost
+            {
+                Visual = visual,
+                TextOverlays = textOverlays,
+                LinkOverlays = linkOverlays,
+                CellDestinationOverlays = cellDestinationOverlays
+            };
             var fixedPage = new FixedPage { Width = pageW, Height = pageH };
             fixedPage.Children.Add(container);
             FixedPage.SetLeft(container, 0);
@@ -279,6 +287,7 @@ public static partial class PrintRenderer
         sourcePage.UpdateLayout();
         var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
         var linkOverlays = PdfLinkOverlayExtractor.Extract(sourcePage);
+        var cellDestinationOverlays = PdfCellDestinationOverlayExtractor.Extract(sourcePage);
 
         var bitmap = new RenderTargetBitmap(
             Math.Max(1, (int)Math.Ceiling(width)),
@@ -296,8 +305,15 @@ public static partial class PrintRenderer
             Width = width,
             Height = height
         });
-        if (textOverlays.Count > 0 || linkOverlays.Count > 0)
-            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays, LinkOverlays = linkOverlays });
+        if (textOverlays.Count > 0 || linkOverlays.Count > 0 || cellDestinationOverlays.Count > 0)
+        {
+            fixedPage.Children.Add(new VisualHost
+            {
+                TextOverlays = textOverlays,
+                LinkOverlays = linkOverlays,
+                CellDestinationOverlays = cellDestinationOverlays
+            });
+        }
 
         var clone = new PageContent();
         ((IAddChild)clone).AddChild(fixedPage);
@@ -360,9 +376,13 @@ public static partial class PrintRenderer
             : count;
     }
 
-    private sealed record PdfLinkTarget(string Target, HyperlinkTargetKind TargetKind);
+    private sealed record PdfLinkTarget(
+        string Target,
+        HyperlinkTargetKind TargetKind,
+        CellAddress SourceAddress,
+        CellAddress? TargetAddress);
 
-    private static IReadOnlyDictionary<(uint Row, uint Col), PdfLinkTarget> BuildPrintableHyperlinkLookup(Sheet sheet)
+    private static IReadOnlyDictionary<(uint Row, uint Col), PdfLinkTarget> BuildPrintableHyperlinkLookup(Workbook workbook, Sheet sheet)
     {
         if (sheet.Hyperlinks.Count == 0)
             return new Dictionary<(uint Row, uint Col), PdfLinkTarget>();
@@ -376,12 +396,77 @@ public static partial class PrintRenderer
             var targetKind = metadata?.LinkType ?? HyperlinkTargetKind.ExistingFileOrWebPage;
             if (targetKind == HyperlinkTargetKind.PlaceInThisDocument)
             {
+                if (!TryResolveInternalHyperlinkDestination(workbook, sheet, target, metadata, out var targetAddress))
+                    continue;
+
+                result[(address.Row, address.Col)] = new PdfLinkTarget(target, targetKind, address, targetAddress);
                 continue;
             }
 
-            result[(address.Row, address.Col)] = new PdfLinkTarget(target, targetKind);
+            result[(address.Row, address.Col)] = new PdfLinkTarget(target, targetKind, address, null);
         }
 
         return result;
     }
+
+    private static IReadOnlyDictionary<(uint Row, uint Col), CellAddress> BuildPrintableCellDestinationLookup(Workbook workbook, Sheet destinationSheet)
+    {
+        var result = new Dictionary<(uint Row, uint Col), CellAddress>();
+        foreach (var sourceSheet in workbook.Sheets)
+        {
+            foreach (var (address, target) in sourceSheet.Hyperlinks)
+            {
+                if (address.Sheet != sourceSheet.Id || string.IsNullOrWhiteSpace(target))
+                    continue;
+
+                sourceSheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
+                if ((metadata?.LinkType ?? HyperlinkTargetKind.ExistingFileOrWebPage) != HyperlinkTargetKind.PlaceInThisDocument ||
+                    !TryResolveInternalHyperlinkDestination(workbook, sourceSheet, target, metadata, out var targetAddress) ||
+                    targetAddress.Sheet != destinationSheet.Id)
+                {
+                    continue;
+                }
+
+                result[(targetAddress.Row, targetAddress.Col)] = targetAddress;
+            }
+        }
+
+        return result;
+    }
+
+    private static bool TryResolveInternalHyperlinkDestination(
+        Workbook workbook,
+        Sheet sourceSheet,
+        string target,
+        HyperlinkMetadata? metadata,
+        out CellAddress address)
+    {
+        address = default;
+        var reference = !string.IsNullOrWhiteSpace(metadata?.Bookmark)
+            ? metadata.Bookmark
+            : target;
+        reference = reference.Trim();
+        if (reference.StartsWith("#", StringComparison.Ordinal))
+            reference = reference[1..].Trim();
+        if (reference.Length == 0)
+            return false;
+
+        if (!WorkbookRangeTextCodec.TryParse(
+                sourceSheet.Id,
+                reference,
+                sheetName => ResolveSheetIdByName(workbook, sheetName),
+                out var range) ||
+            range.Start.Row != range.End.Row ||
+            range.Start.Col != range.End.Col)
+        {
+            return false;
+        }
+
+        address = range.Start;
+        return true;
+    }
+
+    private static SheetId? ResolveSheetIdByName(Workbook workbook, string sheetName) =>
+        workbook.Sheets.FirstOrDefault(sheet =>
+            string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
 }

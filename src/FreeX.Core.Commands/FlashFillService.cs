@@ -39,6 +39,7 @@ public static partial class FlashFillService
             ?? TryEmailLocalPartWithoutPlusTag(examples)
             ?? TryEmailDomainStem(examples)
             ?? TryWebAddressCleanup(examples)
+            ?? TryExtractFinalUrlPathSegmentStem(examples)
             ?? TryDigitMask(examples)
             ?? TryDateNormalization(examples)
             ?? TryEmbeddedDateExtraction(examples)

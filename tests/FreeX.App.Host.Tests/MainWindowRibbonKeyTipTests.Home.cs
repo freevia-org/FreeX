@@ -64,6 +64,25 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void KeyTipOverlay_PlacesDropdownCommandBadgesBelowControlFrame()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+
+            var commandBounds = harness.RibbonButtonBoundsByTitle("Paste");
+            var badgeBounds = harness.OverlayBadgeBounds("V");
+
+            badgeBounds.Top.Should().BeGreaterThan(commandBounds.Bottom);
+            badgeBounds.Top.Should().Be(
+                Math.Round(commandBounds.Bottom + 2, MidpointRounding.AwayFromZero));
+        });
+    }
+
+    [Fact]
     public void HomeFormatKeyTip_OpensRowAndColumnSizingMenu()
     {
         RunSta(() =>

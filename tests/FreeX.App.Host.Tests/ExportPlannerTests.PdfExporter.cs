@@ -680,36 +680,60 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
-    public void PdfDocumentExporter_SkipsInternalWorkbookLinkAnnotations()
+    public void PdfDocumentExporter_WritesInternalWorkbookLinkAnnotations()
     {
         StaTestRunner.Run(() =>
         {
             var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
-            var document = new FixedDocument();
-            var page = new FixedPage { Width = 200, Height = 100 };
-            page.Children.Add(new VisualHost
-            {
-                LinkOverlays =
-                [
-                    new PdfLinkOverlay(
-                        "Sheet2!A1",
-                        HyperlinkTargetKind.PlaceInThisDocument,
-                        X: 12,
-                        Y: 24,
-                        Width: 48,
-                        Height: 12)
-                ]
-            });
-            var content = new PageContent();
-            ((IAddChild)content).AddChild(page);
-            document.Pages.Add(content);
-            document.DocumentPaginator.PageSize = new Size(200, 100);
+            var sheetId = new SheetId(Guid.NewGuid());
+            var sourceAddress = new CellAddress(sheetId, 1, 1);
+            var targetAddress = new CellAddress(sheetId, 10, 1);
+            var document = CreateInternalWorkbookLinkDocument(sourceAddress, targetAddress);
 
             try
             {
                 PdfDocumentExporter.Save(document, path);
 
                 using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.PageCount.Should().Be(2);
+                var annotation = ReadLinkAnnotations(pdf.Pages[0]).Should().ContainSingle().Subject;
+                annotation.Elements.GetDictionary("/A").Should().BeNull();
+                annotation.Elements.GetString("/Contents").Should().Be("Sheet1!A10");
+
+                var destination = annotation.Elements.GetArray("/Dest");
+                destination.Should().NotBeNull();
+                destination!.Elements.GetReference(0)!.ObjectNumber
+                    .Should()
+                    .Be(pdf.Pages[1].ReferenceNotNull.ObjectNumber);
+                destination.Elements.GetName(1).Should().Be("/XYZ");
+                destination.Elements.GetReal(2).Should().BeApproximately(30, 0.01);
+                destination.Elements.GetReal(3).Should().BeApproximately(60, 0.01);
+                destination.Elements[4].Should().Be(PdfNull.Value);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_SkipsInternalWorkbookLinkAnnotationWhenDestinationOutsidePageRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var sheetId = new SheetId(Guid.NewGuid());
+            var sourceAddress = new CellAddress(sheetId, 1, 1);
+            var targetAddress = new CellAddress(sheetId, 10, 1);
+            var document = CreateInternalWorkbookLinkDocument(sourceAddress, targetAddress);
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 1));
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.PageCount.Should().Be(1);
                 ReadLinkAnnotations(pdf.Pages[0]).Should().BeEmpty();
             }
             finally
@@ -1165,6 +1189,53 @@ public partial class ExportPlannerTests
             ((IAddChild)content).AddChild(page);
             document.Pages.Add(content);
         }
+
+        return document;
+    }
+
+    private static FixedDocument CreateInternalWorkbookLinkDocument(
+        CellAddress sourceAddress,
+        CellAddress targetAddress)
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(200, 100);
+
+        var sourcePage = new FixedPage { Width = 200, Height = 100 };
+        sourcePage.Children.Add(new VisualHost
+        {
+            LinkOverlays =
+            [
+                new PdfLinkOverlay(
+                    "Sheet1!A10",
+                    HyperlinkTargetKind.PlaceInThisDocument,
+                    X: 12,
+                    Y: 24,
+                    Width: 48,
+                    Height: 12,
+                    SourceAddress: sourceAddress,
+                    TargetAddress: targetAddress)
+            ]
+        });
+        var sourceContent = new PageContent();
+        ((IAddChild)sourceContent).AddChild(sourcePage);
+        document.Pages.Add(sourceContent);
+
+        var targetPage = new FixedPage { Width = 200, Height = 100 };
+        targetPage.Children.Add(new VisualHost
+        {
+            CellDestinationOverlays =
+            [
+                new PdfCellDestinationOverlay(
+                    targetAddress,
+                    X: 40,
+                    Y: 20,
+                    Width: 48,
+                    Height: 12)
+            ]
+        });
+        var targetContent = new PageContent();
+        ((IAddChild)targetContent).AddChild(targetPage);
+        document.Pages.Add(targetContent);
 
         return document;
     }
