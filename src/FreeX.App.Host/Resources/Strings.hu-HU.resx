@@ -9030,28 +9030,56 @@ Elküldi az összeomlási jelentéseket ehhez a tesztelő buildhez?</value>
     <value>_Rendelkezésre álló parancsok:</value>
   </data>
 
+<data name="Options_AvailableCommandsAutomationName" xml:space="preserve">
+    <value>Available commands</value>
+  </data>
+
 <data name="Options_QuickAccessToolbarCommands" xml:space="preserve">
     <value>_Gyorselérési eszköztár parancsok:</value>
+  </data>
+
+<data name="Options_QuickAccessToolbarCommandsAutomationName" xml:space="preserve">
+    <value>Quick Access Toolbar commands</value>
   </data>
 
 <data name="Options_Add" xml:space="preserve">
     <value>_Hozzáadás &gt;&gt;</value>
   </data>
 
+<data name="Options_QuickAccessAddCommandHelpText" xml:space="preserve">
+    <value>Add the selected command to the Quick Access Toolbar.</value>
+  </data>
+
 <data name="Options_Remove" xml:space="preserve">
     <value>&lt;&lt; _Eltávolítás</value>
+  </data>
+
+<data name="Options_QuickAccessRemoveCommandHelpText" xml:space="preserve">
+    <value>Remove the selected command from the Quick Access Toolbar.</value>
   </data>
 
 <data name="Options_MoveUp" xml:space="preserve">
     <value>_Felfelé</value>
   </data>
 
+<data name="Options_QuickAccessMoveUpHelpText" xml:space="preserve">
+    <value>Move the selected Quick Access Toolbar command up.</value>
+  </data>
+
 <data name="Options_MoveDown" xml:space="preserve">
     <value>_Lépés lefelé</value>
   </data>
 
+<data name="Options_QuickAccessMoveDownHelpText" xml:space="preserve">
+    <value>Move the selected Quick Access Toolbar command down.</value>
+  </data>
+
 <data name="Options_ImportExport" xml:space="preserve">
     <value>_Importálás/exportálás...</value>
+  </data>
+
+<data name="Options_QuickAccessImportExportHelpText" xml:space="preserve">
+    <value>Import or export FreeX Quick Access Toolbar customization.</value>
   </data>
 
 <data name="Options_CustomizeTheQuickAccessToolbar" xml:space="preserve">
@@ -9062,8 +9090,28 @@ Elküldi az összeomlási jelentéseket ehhez a tesztelő buildhez?</value>
     <value>_Gyorselérési eszköztár megjelenítése a szalag alatt</value>
   </data>
 
+<data name="Options_QuickAccessBelowRibbonHelpText" xml:space="preserve">
+    <value>Show the Quick Access Toolbar below the ribbon instead of above it.</value>
+  </data>
+
+<data name="Options_QuickAccessSearchHelpText" xml:space="preserve">
+    <value>Filter available Quick Access Toolbar commands.</value>
+  </data>
+
+<data name="Options_QuickAccessAvailableCommandsHelpText" xml:space="preserve">
+    <value>Commands that can be added to the Quick Access Toolbar. Press Enter or double-click to add the selected command.</value>
+  </data>
+
+<data name="Options_QuickAccessSelectedCommandsHelpText" xml:space="preserve">
+    <value>Commands currently shown on the Quick Access Toolbar. Press Delete to remove or Ctrl+Up/Ctrl+Down to reorder.</value>
+  </data>
+
 <data name="Options_Reset" xml:space="preserve">
     <value>_Visszaállítás...</value>
+  </data>
+
+<data name="Options_QuickAccessResetHelpText" xml:space="preserve">
+    <value>Restore the default Quick Access Toolbar commands.</value>
   </data>
 
 <data name="Options_ViewAndManageAddIns" xml:space="preserve">
