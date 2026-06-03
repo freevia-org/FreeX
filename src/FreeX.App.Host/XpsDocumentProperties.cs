@@ -18,7 +18,7 @@ internal sealed record XpsDocumentProperties(
 
         return new XpsDocumentProperties(
             Normalize(workbook.Name),
-            "FreeX",
+            ResolveWorkbookUserName(workbook),
             "FreeX workbook export",
             "FreeX, spreadsheet");
     }
@@ -34,6 +34,9 @@ internal sealed record XpsDocumentProperties(
         package.PackageProperties.Subject = Normalize(properties.Subject);
         package.PackageProperties.Keywords = Normalize(properties.Keywords);
     }
+
+    private static string ResolveWorkbookUserName(Workbook workbook) =>
+        Normalize(workbook.FileSharing?.UserName) ?? "FreeX";
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

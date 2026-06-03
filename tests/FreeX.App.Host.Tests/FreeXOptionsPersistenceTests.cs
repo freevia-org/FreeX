@@ -98,6 +98,18 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     }
 
     [Fact]
+    public void LoadFromPath_NormalizesUserName()
+    {
+        Directory.CreateDirectory(_tempDirectory);
+        var path = Path.Combine(_tempDirectory, "options.json");
+        File.WriteAllText(path, """{ "UserName": "  Analyst  " }""");
+
+        var options = FreeXOptions.LoadFromPath(path);
+
+        options.UserName.Should().Be("Analyst");
+    }
+
+    [Fact]
     public void SaveToPath_NormalizesDefaultFontOptions()
     {
         Directory.CreateDirectory(_tempDirectory);

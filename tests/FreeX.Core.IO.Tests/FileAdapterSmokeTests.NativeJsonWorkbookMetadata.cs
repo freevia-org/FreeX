@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -30,6 +32,32 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(stream);
 
         loaded.FileSharing.Should().BeEquivalentTo(workbook.FileSharing);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesAuthoredWorkbookFileSharingUserName()
+    {
+        var workbook = new Workbook("FileSharingUserNameXlsx")
+        {
+            FileSharing = new WorkbookFileSharingModel
+            {
+                UserName = "Analyst"
+            }
+        };
+        workbook.AddSheet("Data");
+
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing");
+        fileSharing.Should().NotBeNull();
+        fileSharing!.Attribute("userName")!.Value.Should().Be("Analyst");
+        fileSharing.Attribute("readOnlyRecommended").Should().BeNull();
     }
 
     [Fact]
