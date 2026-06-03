@@ -15,6 +15,7 @@ namespace FreeX.Core.IO;
 /// </summary>
 public sealed partial class XlsxFileAdapter : IFileAdapter
 {
+    private const int ClosedXmlStyleOnlyStripCellThreshold = 16_384;
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
     // ClosedXML keeps the immutable style key on internal cell types. Use a reflected delegate
     // so repeated styles are mapped once without materializing an XLStyle for every used cell.
@@ -430,10 +431,24 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
     private static bool ShouldStripClosedXmlStyleOnlyCells(
         IReadOnlyDictionary<string, SheetXmlLayout> sheetXmlLayout,
-        bool sheetXmlLayoutHadWarnings) =>
-        sheetXmlLayoutHadWarnings ||
-        sheetXmlLayout.Count == 0 ||
-        sheetXmlLayout.Values.Any(static layout => layout.HasStyleOnlyCells);
+        bool sheetXmlLayoutHadWarnings)
+    {
+        if (sheetXmlLayoutHadWarnings || sheetXmlLayout.Count == 0)
+            return true;
+
+        var explicitStyleOnlyCellCount = 0;
+        foreach (var layout in sheetXmlLayout.Values)
+        {
+            if (layout.HasStyleOnlyCells && layout.ExplicitStyleOnlyCells.Count == 0)
+                return true;
+
+            explicitStyleOnlyCellCount += layout.ExplicitStyleOnlyCells.Count;
+            if (explicitStyleOnlyCellCount > ClosedXmlStyleOnlyStripCellThreshold)
+                return true;
+        }
+
+        return false;
+    }
 
     private static IReadOnlySet<string>? GetWorksheetsWithPreservableSourceMetadata(
         IReadOnlyDictionary<string, SheetXmlLayout> sheetXmlLayout,
