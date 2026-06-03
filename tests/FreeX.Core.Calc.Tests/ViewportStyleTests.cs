@@ -197,6 +197,24 @@ public class ViewportStyleTests
     }
 
     [Fact]
+    public void TerminalViewportMetrics_SkipDefaultSheetBackwardProbeBeforeAllocatingLists()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportService.Metrics.cs"));
+        var terminalRowMetrics = source[
+            source.IndexOf("private static List<RowMetric>? BuildTerminalRowMetrics", StringComparison.Ordinal)..
+            source.IndexOf("private static bool CanSkipDefaultTerminalRowMetrics", StringComparison.Ordinal)];
+        var terminalColMetrics = source[
+            source.IndexOf("private static List<ColMetric>? BuildTerminalColMetrics", StringComparison.Ordinal)..
+            source.IndexOf("private static bool CanSkipDefaultTerminalColMetrics", StringComparison.Ordinal)];
+
+        terminalRowMetrics.IndexOf("CanSkipDefaultTerminalRowMetrics", StringComparison.Ordinal)
+            .Should().BeLessThan(terminalRowMetrics.IndexOf("new List<(uint Row, double Height)>", StringComparison.Ordinal));
+        terminalColMetrics.IndexOf("CanSkipDefaultTerminalColMetrics", StringComparison.Ordinal)
+            .Should().BeLessThan(terminalColMetrics.IndexOf("new List<(uint Col, double Width)>", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void GetViewport_AboveAverageCF_HighlightsCellsAboveAverage()
     {
         // Arrange: three cells with values 10, 20, 30 — average = 20
