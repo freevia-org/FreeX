@@ -55,6 +55,11 @@ public sealed partial class GridViewRenderPerformanceTests
             overlaysSource.IndexOf("private void DrawFormulaTraceArrow", StringComparison.Ordinal)];
 
         source.Should().Contain("public interface IFormulaTraceArrowLayoutConsumer");
+        overlaysSource.Should().Contain("public readonly record struct FormulaTraceArrowLayout");
+        source.Should().Contain("private FormulaTraceArrowLayout[]? _layouts;");
+        source.Should().Contain("_layouts ??= GC.AllocateUninitializedArray<FormulaTraceArrowLayout>(_capacity);");
+        source.Should().Contain("_count == _layouts.Length ? _layouts");
+        source.Should().NotContain("new List<FormulaTraceArrowLayout>(_capacity)");
         calculateLayouts.Should().Contain("var consumer = new FormulaTraceArrowLayoutCollector(arrows.Count);");
         calculateLayouts.Should().Contain("VisitLayouts(viewport, arrows, sheetId, ref consumer);");
         visitLayouts.Should().Contain("where TConsumer : struct, IFormulaTraceArrowLayoutConsumer");
