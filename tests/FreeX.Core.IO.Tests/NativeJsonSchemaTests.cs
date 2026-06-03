@@ -82,6 +82,41 @@ public sealed partial class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_CellsAcceptValueTypeBeforeOrAfterValue()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "Value order",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": [
+                    { "Address": "A1", "Value": "123", "ValueType": "n" },
+                    { "Address": "B1", "ValueType": "n", "Value": "456" },
+                    { "Address": "C1", "ValueType": "d", "Value": "45292.5" },
+                    { "Address": "D1", "ValueType": "t", "Value": "00123" },
+                    { "Address": "E1", "ValueType": "n", "Value": "NaN" }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.GetCell(1, 1)!.Value.Should().BeOfType<NumberValue>().Which.Value.Should().Be(123);
+        sheet.GetCell(1, 2)!.Value.Should().BeOfType<NumberValue>().Which.Value.Should().Be(456);
+        sheet.GetCell(1, 3)!.Value.Should().BeOfType<DateTimeValue>().Which.Value.Should().Be(45292.5);
+        sheet.GetCell(1, 4)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("00123");
+        sheet.GetCell(1, 5)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("NaN");
+    }
+
+    [Fact]
     public void Save_UsesCurrentStreamPositionAndLeavesOutputStreamOpen()
     {
         var workbook = new Workbook("OffsetSave");
