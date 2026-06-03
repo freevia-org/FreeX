@@ -160,6 +160,9 @@ public partial class MainWindow
 
     private void RefreshToolbarAfterSelectionChange()
     {
+        if (CanSkipSelectionToolbarRefresh())
+            return;
+
         RefreshQuickAccessToolbarCommandStatesAfterSelectionChange();
         RefreshToolbarVisualState();
     }
@@ -212,6 +215,9 @@ public partial class MainWindow
     }
 
     private bool CanSkipSelectionDragToolbarRefresh() =>
+        CanSkipSelectionToolbarRefresh();
+
+    private bool CanSkipSelectionToolbarRefresh() =>
         IsQuickAccessToolbarCommandStateStableForSelectionDrag() &&
         IsToolbarVisualStateCurrentForSelection();
 
