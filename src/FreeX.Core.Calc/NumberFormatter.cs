@@ -133,7 +133,9 @@ public static partial class NumberFormatter
         {
             var singleSectionText = sections[0] == ""
                 ? ""
-                : ApplyNumericFormat(value, sections[0]);
+                : TryFormatPlainNumericSection(value, sections[0], out var plainNumericText)
+                    ? plainNumericText
+                    : ApplyNumericFormat(value, sections[0]);
             singleSectionText = ApplyAccountingTargetWidth(singleSectionText, sections[0], targetWidthCharacters);
             return new FormatResult(singleSectionText);
         }
@@ -166,6 +168,49 @@ public static partial class NumberFormatter
             : ApplyNumericFormat(displayValue, section.Format);
         text = ApplyAccountingTargetWidth(text, section.Format, targetWidthCharacters);
         return new FormatResult(text, section.ColorHex);
+    }
+
+    private static bool TryFormatPlainNumericSection(double value, string format, out string text)
+    {
+        text = "";
+        if (!IsPlainNumericSection(format))
+            return false;
+
+        try
+        {
+            text = value.ToString(format, CultureInfo.InvariantCulture);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsPlainNumericSection(string format)
+    {
+        var hasPlaceholder = false;
+        var lastToken = '\0';
+        for (var i = 0; i < format.Length; i++)
+        {
+            var c = format[i];
+            switch (c)
+            {
+                case '0':
+                case '#':
+                    hasPlaceholder = true;
+                    lastToken = c;
+                    break;
+                case '.':
+                case ',':
+                    lastToken = c;
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        return hasPlaceholder && lastToken != ',';
     }
 
     private static string ApplyNumericFormat(
