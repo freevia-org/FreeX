@@ -933,7 +933,7 @@ internal static partial class XlsxCorpusFixtureFactory
             workbookRelsXml,
             "rIdFreeXCalcChain1",
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
-            "calcChain.xml");
+            "/xl/calcChain.xml");
         ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
     }
 

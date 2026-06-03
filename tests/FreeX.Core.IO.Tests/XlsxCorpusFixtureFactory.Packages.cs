@@ -59,11 +59,21 @@ internal static partial class XlsxCorpusFixtureFactory
             ("xl/diagrams/layout1.xml", "<dgm:layoutDef/>"),
             ("xl/diagrams/quickStyle1.xml", "<dgm:styleDef/>")),
         "generated-printer-settings-001" => CreatePackage(("xl/printerSettings/printerSettings1.bin", "FreeX generated printer settings placeholder")),
-        "generated-calc-chain-001" => CreatePackage(("xl/calcChain.xml", """
-            <calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <c r="A1" i="1"/>
-            </calcChain>
-            """)),
+        "generated-calc-chain-001" => CreatePackage(
+            ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="1">
+                      <c r="A1"><f>1+1</f><v>2</v></c>
+                    </row>
+                  </sheetData>
+                </worksheet>
+                """),
+            ("xl/calcChain.xml", """
+                <calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <c r="A1" i="1"/>
+                </calcChain>
+                """)),
         "generated-document-properties-001" => CreatePackage(
             ("docProps/core.xml", """
                 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
@@ -727,7 +737,7 @@ internal static partial class XlsxCorpusFixtureFactory
                 <cfRule type="cellIs" priority="1" operator="greaterThan" dxfId="0"><formula>25</formula></cfRule>
                 <cfRule type="cellIs" priority="2" operator="lessThan" dxfId="1"><formula>15</formula></cfRule>
                 <cfRule type="cellIs" priority="3" operator="equal" dxfId="0"><formula>20</formula></cfRule>
-                <cfRule type="formula" priority="4" dxfId="1"><formula>MOD(ROW(),2)=0</formula></cfRule>
+                <cfRule type="expression" priority="4" dxfId="1"><formula>MOD(ROW(),2)=0</formula></cfRule>
                 <cfRule type="top10" priority="5" dxfId="0" rank="1"/>
                 <cfRule type="top10" priority="6" dxfId="1" rank="1" bottom="1"/>
                 <cfRule type="duplicateValues" priority="7" dxfId="0"/>
@@ -738,7 +748,13 @@ internal static partial class XlsxCorpusFixtureFactory
                 <cfRule type="aboveAverage" priority="12" dxfId="1" aboveAverage="0"/>
                 <cfRule type="colorScale" priority="13"><colorScale><cfvo type="min"/><cfvo type="max"/><color rgb="FFF8696B"/><color rgb="FF63BE7B"/></colorScale></cfRule>
                 <cfRule type="dataBar" priority="14"><dataBar><cfvo type="min"/><cfvo type="max"/><color rgb="FF638EC6"/></dataBar></cfRule>
-                <cfRule type="iconSet" priority="15"><iconSet iconSet="3Arrows"/></cfRule>
+                <cfRule type="iconSet" priority="15">
+                  <iconSet iconSet="3Arrows">
+                    <cfvo type="percent" val="0"/>
+                    <cfvo type="percent" val="33"/>
+                    <cfvo type="percent" val="67"/>
+                  </iconSet>
+                </cfRule>
                 <cfRule type="cellIs" priority="16" operator="notEqual" dxfId="0"><formula>0</formula></cfRule>
               </conditionalFormatting>
             </worksheet>
@@ -755,7 +771,31 @@ internal static partial class XlsxCorpusFixtureFactory
                     <c:ser><c:idx val="2"/><c:order val="2"/><c:tx><c:strRef><c:f>Sheet1!$D$1</c:f></c:strRef></c:tx></c:ser>
                     <c:ser><c:idx val="3"/><c:order val="3"/><c:tx><c:strRef><c:f>Sheet1!$E$1</c:f></c:strRef></c:tx></c:ser>
                     <c:ser><c:idx val="4"/><c:order val="4"/><c:tx><c:strRef><c:f>Sheet1!$F$1</c:f></c:strRef></c:tx></c:ser>
+                    <c:axId val="48650112"/>
+                    <c:axId val="48672768"/>
                   </c:barChart>
+                  <c:catAx>
+                    <c:axId val="48650112"/>
+                    <c:scaling><c:orientation val="minMax"/></c:scaling>
+                    <c:axPos val="b"/>
+                    <c:tickLblPos val="nextTo"/>
+                    <c:crossAx val="48672768"/>
+                    <c:crosses val="autoZero"/>
+                    <c:auto val="1"/>
+                    <c:lblAlgn val="ctr"/>
+                    <c:lblOffset val="100"/>
+                  </c:catAx>
+                  <c:valAx>
+                    <c:axId val="48672768"/>
+                    <c:scaling><c:orientation val="minMax"/></c:scaling>
+                    <c:axPos val="l"/>
+                    <c:majorGridlines/>
+                    <c:numFmt formatCode="General" sourceLinked="1"/>
+                    <c:tickLblPos val="nextTo"/>
+                    <c:crossAx val="48650112"/>
+                    <c:crosses val="autoZero"/>
+                    <c:crossBetween val="between"/>
+                  </c:valAx>
                 </c:plotArea>
               </c:chart>
             </c:chartSpace>
