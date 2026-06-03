@@ -40,6 +40,33 @@ public sealed partial class XlsxPackageMetadataMergerTests
                             ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
                 </Types>
                 """);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", "<worksheet />");
+            WritePackageEntry(archive, "xl/worksheets/sheet2.xml", "<worksheet />");
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream CreatePackageWithDanglingAndInvalidContentTypeOverrides()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/worksheets/sheet2.xml"
+                            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                  <Override PartName="/xl/customXml/missing.xml"
+                            ContentType="application/xml"/>
+                  <Override PartName="/xl/../evil.xml"
+                            ContentType="application/xml"/>
+                  <Override PartName="xl\bad.xml"
+                            ContentType="application/xml"/>
+                </Types>
+                """);
         }
 
         package.Position = 0;

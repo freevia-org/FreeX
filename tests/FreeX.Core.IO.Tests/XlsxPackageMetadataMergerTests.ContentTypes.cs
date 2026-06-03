@@ -40,6 +40,29 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeContentTypes_SkipsDanglingAndInvalidOverrides()
+    {
+        using var sourcePackage = CreatePackageWithDanglingAndInvalidContentTypeOverrides();
+        using var targetPackage = CreatePackageWithExistingContentTypes();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, targetArchive);
+
+        var contentTypesXml = LoadXml(targetArchive.GetEntry("[Content_Types].xml")!);
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var overridePartNames = contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Select(element => (string?)element.Attribute("PartName"))
+            .ToList();
+
+        overridePartNames.Should().Contain("/xl/worksheets/sheet2.xml");
+        overridePartNames.Should().NotContain("/xl/customXml/missing.xml");
+        overridePartNames.Should().NotContain("/xl/../evil.xml");
+        overridePartNames.Should().NotContain("xl\\bad.xml");
+    }
+
+    [Fact]
     public void MergeContentTypes_DeduplicatesOverridesWithEquivalentRootedPartNames()
     {
         using var sourcePackage = CreatePackageWithUnrootedWorksheetOverride();

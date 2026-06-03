@@ -93,16 +93,22 @@ internal static class XlsxPackageMetadataMerger
             .Select(element => element.Attribute("PartName")?.Value)
             .OfType<string>()
             .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(NormalizeContentTypePartName)
+            .Select(value => TryNormalizeContentTypePartName(value, out var normalized) ? normalized : "")
+            .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var targetPartNames = GetValidPackageEntryNames(targetArchive);
         foreach (var sourceOverride in sourceRoot.Elements(contentTypeNs + "Override"))
         {
             var partName = sourceOverride.Attribute("PartName")?.Value;
             if (IsExcludedSourcePart(partName, excludedSourceParts))
                 continue;
-            if (!string.IsNullOrWhiteSpace(partName) && existingOverrides.Add(NormalizeContentTypePartName(partName)))
+            if (TryNormalizeContentTypePartName(partName, out var normalizedPartName) &&
+                targetPartNames.Contains(normalizedPartName) &&
+                existingOverrides.Add(normalizedPartName))
             {
-                targetRoot.Add(new XElement(sourceOverride));
+                var mergedOverride = new XElement(sourceOverride);
+                mergedOverride.SetAttributeValue("PartName", $"/{normalizedPartName}");
+                targetRoot.Add(mergedOverride);
                 changed = true;
             }
         }
@@ -326,8 +332,30 @@ internal static class XlsxPackageMetadataMerger
         return true;
     }
 
-    private static string NormalizeContentTypePartName(string value) =>
-        XlsxPackagePath.NormalizeZipPath(value.Trim().Replace('\\', '/').TrimStart('/'));
+    private static HashSet<string> GetValidPackageEntryNames(ZipArchive archive)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in archive.Entries)
+        {
+            if (TryNormalizeCopyableEntryName(entry.FullName, out var normalized))
+                names.Add(normalized);
+        }
+
+        return names;
+    }
+
+    private static bool TryNormalizeContentTypePartName(string? value, out string normalized)
+    {
+        normalized = "";
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith('/'))
+            trimmed = trimmed[1..];
+
+        return TryNormalizeCopyableEntryName(trimmed, out normalized);
+    }
 
     private static string NormalizeContentTypeExtension(string value) =>
         value.Trim().TrimStart('.');
