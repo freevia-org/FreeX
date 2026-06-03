@@ -57,6 +57,15 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void PackageXmlEditor_RewritesXmlWithoutFormattingWhitespace()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxPackageXmlEditor.cs"));
+
+        source.Should().Contain("document.Save(stream, SaveOptions.DisableFormatting);");
+        source.Should().NotContain("document.Save(stream);");
+    }
+
+    [Fact]
     public void StylesheetMetadataPreserver_PreflightsPlainStylesheetBeforeLoadingXml()
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStylesheetMetadataPreserver.cs"));
@@ -189,6 +198,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         writerSource.Should().Contain("ReadSeedStyleIndexes");
         writerSource.Should().Contain("ApplyStyleOnlyCells");
         writerSource.Should().Contain("UpdateDimension");
+        writerSource.Should().NotContain(
+            ".ToDictionary(",
+            "style-only worksheet post-processing walks cells row-by-row and should avoid a temporary reference map per row");
     }
 
     [Fact]

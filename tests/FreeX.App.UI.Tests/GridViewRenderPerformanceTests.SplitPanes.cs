@@ -154,10 +154,17 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("public static MergeRangeIndex Create", StringComparison.Ordinal)..
             source.IndexOf("public GridRange? Find", StringComparison.Ordinal)];
 
-        calculateLayouts.Should().Contain("BuildRowLookup(topRows)");
-        calculateLayouts.Should().Contain("BuildRowLookup(bottomLeftRows)");
-        calculateLayouts.Should().Contain("BuildColumnLookup(leftColumns)");
-        calculateLayouts.Should().Contain("BuildColumnLookup(topRightColumns)");
+        calculateLayouts.Should().Contain("new SplitPaneRowMetricLookup(topRows)");
+        calculateLayouts.Should().Contain("new SplitPaneRowMetricLookup(bottomLeftRows)");
+        calculateLayouts.Should().Contain("new SplitPaneColumnMetricLookup(leftColumns)");
+        calculateLayouts.Should().Contain("new SplitPaneColumnMetricLookup(topRightColumns)");
+        calculateLayouts.Should().Contain("private readonly struct SplitPaneRowMetricLookup");
+        calculateLayouts.Should().Contain("private readonly struct SplitPaneColumnMetricLookup");
+        calculateLayouts.Should().Contain("FindSortedRowMetric(_rows, row, _firstRow, _lastRow)");
+        calculateLayouts.Should().Contain("FindSortedColumnMetric(_columns, column, _firstColumn, _lastColumn)");
+        calculateLayouts.Should().Contain("var directIndex = row - firstRow;");
+        calculateLayouts.Should().Contain("var directIndex = column - firstColumn;");
+        calculateLayouts.Should().Contain("while (low <= high)");
         calculateLayouts.Should().Contain("ResolveSplitPaneRegion(isTopPane, isLeftPane)");
         calculateLayouts.Should().Contain("if (cells.Count == 0)");
         calculateLayouts.Should().Contain("var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);");
@@ -174,7 +181,7 @@ public sealed partial class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("consumer.AcceptLayout(new SplitPaneCellLayout");
         calculateLayouts.IndexOf("if (cells.Count == 0)", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(calculateLayouts.IndexOf("BuildRowLookup(topRows)", StringComparison.Ordinal));
+            .BeLessThan(calculateLayouts.IndexOf("new SplitPaneRowMetricLookup(topRows)", StringComparison.Ordinal));
         calculateLayouts.IndexOf("var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);", StringComparison.Ordinal)
             .Should()
             .BeLessThan(calculateLayouts.IndexOf("foreach (var cell in cells)", StringComparison.Ordinal));
@@ -182,10 +189,12 @@ public sealed partial class GridViewRenderPerformanceTests
             calculateLayouts.IndexOf("foreach (var cell in cells)", StringComparison.Ordinal)..]
             .Should()
             .NotContain("GridView.CalculateRowHeaderWidth(viewport)");
-        calculateLayouts.Should().NotContain("spansByRow.Add(cell.Row, spans)");
         buildOccupiedCells.Should().Contain("spansByRow.Add(cell.Row, spans)");
-        buildOccupiedCells.Should().Contain("AddOccupiedColumn(spans, cell.Col, ref needsNormalize)");
+        buildOccupiedCells.Should().Contain("Dictionary<uint, OccupiedColumnSpans>");
+        buildOccupiedCells.Should().Contain("AddOccupiedColumn(ref spans, cell.Col, ref needsNormalize)");
         buildOccupiedCells.Should().Contain("NormalizeOccupiedColumnSpans(spansByRow)");
+        buildOccupiedCells.Should().Contain("private struct OccupiedColumnSpans");
+        buildOccupiedCells.Should().Contain("private List<OccupiedColumnSpan>? _overflow;");
         buildOccupiedCells.Should().Contain("new SplitPaneOccupiedCellMap(spansByRow)");
         mergeRangeIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
         mergeRangeIndex.Should().Contain("mergedRegion.End.Row < queryCells.MinRow");
@@ -196,6 +205,8 @@ public sealed partial class GridViewRenderPerformanceTests
         calculateLayouts.Should().NotContain(".ToDictionary(");
         calculateLayouts.Should().NotContain(".Where(");
         calculateLayouts.Should().NotContain(".Select(");
+        calculateLayouts.Should().NotContain("new Dictionary<uint, RowMetric>");
+        calculateLayouts.Should().NotContain("new Dictionary<uint, ColMetric>");
     }
 
     [Fact]

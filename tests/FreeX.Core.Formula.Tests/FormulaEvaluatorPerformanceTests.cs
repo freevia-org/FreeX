@@ -437,25 +437,25 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-10);
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(1_000_000);
+        allocatedBytes.Should().BeLessThan(8_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
     [Theory]
-    [InlineData("=LARGE(A1:A100000,10)", 99_991d, 2_000_000)]
-    [InlineData("=SMALL(A1:A100000,10)", 10d, 2_000_000)]
-    [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 2_000_000)]
+    [InlineData("=LARGE(A1:A100000,10)", 99_991d, 1_000_000)]
+    [InlineData("=SMALL(A1:A100000,10)", 10d, 1_000_000)]
+    [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 1_000_000)]
     public void StatisticalSelectionLargeRanges_AvoidExcessAllocationChurn(string formula, double expected, long maxAllocatedBytes)
     {
         AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
     }
 
     [Theory]
-    [InlineData("=AGGREGATE(12,4,A1:A100000)", 50_000.5d, 4_000_000)]
-    [InlineData("=AGGREGATE(14,4,A1:A100000,10)", 99_991d, 4_000_000)]
-    [InlineData("=AGGREGATE(15,4,A1:A100000,10)", 10d, 4_000_000)]
-    [InlineData("=AGGREGATE(16,4,A1:A100000,0.5)", 50_000.5d, 4_000_000)]
-    [InlineData("=AGGREGATE(18,4,A1:A100000,0.5)", 50_000.5d, 4_000_000)]
+    [InlineData("=AGGREGATE(12,4,A1:A100000)", 50_000.5d, 1_000_000)]
+    [InlineData("=AGGREGATE(14,4,A1:A100000,10)", 99_991d, 1_000_000)]
+    [InlineData("=AGGREGATE(15,4,A1:A100000,10)", 10d, 1_000_000)]
+    [InlineData("=AGGREGATE(16,4,A1:A100000,0.5)", 50_000.5d, 1_000_000)]
+    [InlineData("=AGGREGATE(18,4,A1:A100000,0.5)", 50_000.5d, 1_000_000)]
     public void AggregateStatisticalSelectionLargeRanges_AvoidExcessAllocationChurn(
         string formula,
         double expected,
@@ -466,17 +466,17 @@ public sealed class FormulaEvaluatorPerformanceTests
 
     public static IEnumerable<object[]> AggregateNonSelectionStreamingCases()
     {
-        yield return ["=AGGREGATE(1,4,A1:A100000)", 50_000.5d, false, 1_000_000];
-        yield return ["=AGGREGATE(2,4,A1:A100000)", 100_000d, false, 1_000_000];
-        yield return ["=AGGREGATE(3,4,A1:A100000)", 100_000d, false, 1_000_000];
-        yield return ["=AGGREGATE(4,4,A1:A100000)", 100_000d, false, 1_000_000];
-        yield return ["=AGGREGATE(5,4,A1:A100000)", 1d, false, 1_000_000];
-        yield return ["=AGGREGATE(6,4,A1:A100000)", 2d, true, 1_000_000];
-        yield return ["=AGGREGATE(7,4,A1:A100000)", Math.Sqrt((double)RowCount * (RowCount + 1) / 12), false, 1_000_000];
-        yield return ["=AGGREGATE(8,4,A1:A100000)", Math.Sqrt(((double)RowCount * RowCount - 1) / 12), false, 1_000_000];
-        yield return ["=AGGREGATE(9,4,A1:A100000)", 5_000_050_000d, false, 1_000_000];
-        yield return ["=AGGREGATE(10,4,A1:A100000)", (double)RowCount * (RowCount + 1) / 12, false, 1_000_000];
-        yield return ["=AGGREGATE(11,4,A1:A100000)", ((double)RowCount * RowCount - 1) / 12, false, 1_000_000];
+        yield return ["=AGGREGATE(1,4,A1:A100000)", 50_000.5d, false, 8_000];
+        yield return ["=AGGREGATE(2,4,A1:A100000)", 100_000d, false, 8_000];
+        yield return ["=AGGREGATE(3,4,A1:A100000)", 100_000d, false, 8_000];
+        yield return ["=AGGREGATE(4,4,A1:A100000)", 100_000d, false, 8_000];
+        yield return ["=AGGREGATE(5,4,A1:A100000)", 1d, false, 8_000];
+        yield return ["=AGGREGATE(6,4,A1:A100000)", 2d, true, 8_000];
+        yield return ["=AGGREGATE(7,4,A1:A100000)", Math.Sqrt((double)RowCount * (RowCount + 1) / 12), false, 8_000];
+        yield return ["=AGGREGATE(8,4,A1:A100000)", Math.Sqrt(((double)RowCount * RowCount - 1) / 12), false, 8_000];
+        yield return ["=AGGREGATE(9,4,A1:A100000)", 5_000_050_000d, false, 8_000];
+        yield return ["=AGGREGATE(10,4,A1:A100000)", (double)RowCount * (RowCount + 1) / 12, false, 8_000];
+        yield return ["=AGGREGATE(11,4,A1:A100000)", ((double)RowCount * RowCount - 1) / 12, false, 8_000];
     }
 
     [Theory]
@@ -530,7 +530,7 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(8_000_000);
+        allocatedBytes.Should().BeLessThan(5_000_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 

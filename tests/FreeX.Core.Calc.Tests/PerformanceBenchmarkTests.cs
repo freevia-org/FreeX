@@ -202,8 +202,8 @@ public class PerformanceBenchmarkTests
             $"{allocated / iterations:N0} bytes/iteration");
 
         (allocated / iterations).Should().BeLessThan(
-            240_000,
-            "exact-only formula chains should not allocate a dedupe HashSet for each formula precedent");
+            80_000,
+            "single-root exact-only formula chains should use the linear recalc-order fast path");
     }
 
     [Fact]
@@ -289,7 +289,9 @@ public class PerformanceBenchmarkTests
 
         insideReport.RecalculatedCells.Should().Contain(formula);
         outsideReport.RecalculatedCells.Should().NotContain(formula);
-        rebuildAllocated.Should().BeLessThan(16_000_000);
+        rebuildAllocated.Should().BeLessThan(
+            1_000_000,
+            "dependency-only range registration should not initialize the full formula evaluator registry");
     }
 
     [Fact]
