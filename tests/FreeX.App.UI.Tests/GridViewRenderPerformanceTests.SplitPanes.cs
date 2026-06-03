@@ -189,10 +189,12 @@ public sealed partial class GridViewRenderPerformanceTests
             calculateLayouts.IndexOf("foreach (var cell in cells)", StringComparison.Ordinal)..]
             .Should()
             .NotContain("GridView.CalculateRowHeaderWidth(viewport)");
-        calculateLayouts.Should().NotContain("spansByRow.Add(cell.Row, spans)");
         buildOccupiedCells.Should().Contain("spansByRow.Add(cell.Row, spans)");
-        buildOccupiedCells.Should().Contain("AddOccupiedColumn(spans, cell.Col, ref needsNormalize)");
+        buildOccupiedCells.Should().Contain("Dictionary<uint, OccupiedColumnSpans>");
+        buildOccupiedCells.Should().Contain("AddOccupiedColumn(ref spans, cell.Col, ref needsNormalize)");
         buildOccupiedCells.Should().Contain("NormalizeOccupiedColumnSpans(spansByRow)");
+        buildOccupiedCells.Should().Contain("private struct OccupiedColumnSpans");
+        buildOccupiedCells.Should().Contain("private List<OccupiedColumnSpan>? _overflow;");
         buildOccupiedCells.Should().Contain("new SplitPaneOccupiedCellMap(spansByRow)");
         mergeRangeIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
         mergeRangeIndex.Should().Contain("mergedRegion.End.Row < queryCells.MinRow");
