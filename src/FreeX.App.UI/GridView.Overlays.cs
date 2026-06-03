@@ -13,6 +13,7 @@ public partial class GridView
 
     private readonly Dictionary<FormulaTraceArrowHeadGeometryKey, Geometry> _formulaTraceArrowHeadGeometryCache = new();
     private readonly Dictionary<FormulaTraceArrowDrawingKey, Drawing> _formulaTraceArrowDrawingCache = new();
+    private FormulaTraceArrowLayerCache? _formulaTraceArrowLayerCache;
 
     private void RenderResizeLine(DrawingContext dc)
     {
@@ -74,8 +75,7 @@ public partial class GridView
         var arrows = FormulaTraceArrows;
         if (viewport is null || arrows is not { Count: > 0 }) return;
 
-        var consumer = new FormulaTraceArrowDrawingConsumer(this, dc);
-        FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, FormulaTraceSheetId, ref consumer);
+        dc.DrawDrawing(GetFormulaTraceArrowLayerDrawing(viewport, arrows, FormulaTraceSheetId));
     }
 
     public static IReadOnlyList<FormulaTraceArrowLayout> CalculateFormulaTraceArrowLayouts(
@@ -99,6 +99,45 @@ public partial class GridView
             FormulaTraceArrowLayoutKind kind,
             CellAddress? navigationTarget) =>
             grid.DrawFormulaTraceArrow(dc, start, end, kind);
+    }
+
+    private Drawing GetFormulaTraceArrowLayerDrawing(
+        ViewportModel viewport,
+        IReadOnlyList<FormulaTraceArrow> arrows,
+        SheetId sheetId)
+    {
+        if (_formulaTraceArrowLayerCache is { } cached &&
+            ReferenceEquals(cached.Viewport, viewport) &&
+            cached.SheetId.Equals(sheetId) &&
+            FormulaTraceArrowsEqual(arrows, cached.Arrows))
+        {
+            return cached.Drawing;
+        }
+
+        var drawing = CreateFormulaTraceArrowLayerDrawing(viewport, arrows, sheetId);
+        _formulaTraceArrowLayerCache = new FormulaTraceArrowLayerCache(
+            viewport,
+            sheetId,
+            CopyFormulaTraceArrows(arrows),
+            drawing);
+        return drawing;
+    }
+
+    private Drawing CreateFormulaTraceArrowLayerDrawing(
+        ViewportModel viewport,
+        IReadOnlyList<FormulaTraceArrow> arrows,
+        SheetId sheetId)
+    {
+        var drawing = new DrawingGroup();
+        using (var dc = drawing.Open())
+        {
+            var consumer = new FormulaTraceArrowDrawingConsumer(this, dc);
+            FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, sheetId, ref consumer);
+        }
+
+        if (drawing.CanFreeze)
+            drawing.Freeze();
+        return drawing;
     }
 
     private void DrawFormulaTraceArrow(
@@ -186,12 +225,42 @@ public partial class GridView
 
     private void ClearFormulaTraceArrowHeadGeometryCache()
     {
+        _formulaTraceArrowLayerCache = null;
         _formulaTraceArrowHeadGeometryCache.Clear();
         _formulaTraceArrowDrawingCache.Clear();
     }
 
+    private static FormulaTraceArrow[] CopyFormulaTraceArrows(IReadOnlyList<FormulaTraceArrow> arrows)
+    {
+        var copy = new FormulaTraceArrow[arrows.Count];
+        for (var i = 0; i < copy.Length; i++)
+            copy[i] = arrows[i];
+        return copy;
+    }
+
+    private static bool FormulaTraceArrowsEqual(
+        IReadOnlyList<FormulaTraceArrow> current,
+        IReadOnlyList<FormulaTraceArrow> cached)
+    {
+        if (current.Count != cached.Count)
+            return false;
+
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!current[i].Equals(cached[i]))
+                return false;
+        }
+
+        return true;
+    }
+
     private readonly record struct FormulaTraceArrowHeadGeometryKey(Point Start, Point End);
     private readonly record struct FormulaTraceArrowDrawingKey(Point Start, Point End);
+    private sealed record FormulaTraceArrowLayerCache(
+        ViewportModel Viewport,
+        SheetId SheetId,
+        FormulaTraceArrow[] Arrows,
+        Drawing Drawing);
 
     private static void DrawFormulaTraceMarker(DrawingContext dc, Point point, FormulaTraceArrowLayoutKind kind)
     {
