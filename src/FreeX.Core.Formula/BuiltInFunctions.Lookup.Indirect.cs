@@ -11,7 +11,9 @@ public static partial class BuiltInFunctions
         uint StartRow,
         uint StartCol,
         uint EndRow,
-        uint EndCol);
+        uint EndCol,
+        bool IsFullRowRange,
+        bool IsFullColumnRange);
 
     private static ScalarValue Indirect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
         => IndirectCore(args, ctx, unwrapSingleCell: true);
@@ -75,9 +77,9 @@ public static partial class BuiltInFunctions
         if (useA1 && TryParseA1RangeRef(refText, out var startRow, out var startCol, out var endRow, out var endCol))
             return CompleteIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol, out range, out error);
         if (useA1 && TryParseA1FullRowRangeRef(refText, out startRow, out endRow))
-            return CompleteIndirectRange(ctx, sheetName, startRow, 1, endRow, CellAddress.MaxCol, out range, out error);
+            return CompleteIndirectRange(ctx, sheetName, startRow, 1, endRow, CellAddress.MaxCol, out range, out error, isFullRowRange: true);
         if (useA1 && TryParseA1FullColumnRangeRef(refText, out startCol, out endCol))
-            return CompleteIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, endCol, out range, out error);
+            return CompleteIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, endCol, out range, out error, isFullColumnRange: true);
         if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
             return CompleteIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol, out range, out error);
 
@@ -112,7 +114,9 @@ public static partial class BuiltInFunctions
         uint endRow,
         uint endCol,
         out IndirectRangeReference range,
-        out ScalarValue? error)
+        out ScalarValue? error,
+        bool isFullRowRange = false,
+        bool isFullColumnRange = false)
     {
         range = default;
         error = null;
@@ -122,7 +126,7 @@ public static partial class BuiltInFunctions
             return false;
         }
 
-        range = new IndirectRangeReference(sheetName, startRow, startCol, endRow, endCol);
+        range = new IndirectRangeReference(sheetName, startRow, startCol, endRow, endCol, isFullRowRange, isFullColumnRange);
         return true;
     }
 
