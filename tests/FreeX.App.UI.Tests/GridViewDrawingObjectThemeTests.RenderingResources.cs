@@ -103,7 +103,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void CommentMarkerRenderer_PaintsRedTriangleAtCellTopRight()
     {
-        RunOnStaThread(() =>
+        WpfTestThread.Run(() =>
         {
             var grid = new GridView();
             var visual = new System.Windows.Media.DrawingVisual();

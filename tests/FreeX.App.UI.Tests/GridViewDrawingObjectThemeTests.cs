@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Reflection;
-using System.Threading;
 using FluentAssertions;
 using FreeX.App.UI;
 
@@ -9,27 +8,6 @@ namespace FreeX.App.UI.Tests;
 
 public sealed partial class GridViewDrawingObjectThemeTests
 {
-    private static void RunOnStaThread(Action action)
-    {
-        Exception? exception = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                exception = ex;
-            }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-        if (exception is not null)
-            throw exception;
-    }
-
     private static T GetStaticResource<T>(string fieldName)
     {
         var field = typeof(GridView).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static);

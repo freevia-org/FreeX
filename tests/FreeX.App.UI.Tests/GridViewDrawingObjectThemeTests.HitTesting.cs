@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Reflection;
 using System.Windows;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -13,7 +12,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void PictureHitTesting_MapsPictureBodyAndResizeHandleToObjectCommands()
     {
-        RunOnStaThread(() =>
+        WpfTestThread.Run(() =>
         {
             var sheetId = SheetId.New();
             var picture = new PictureModel
@@ -26,30 +25,21 @@ public sealed partial class GridViewDrawingObjectThemeTests
             };
             var grid = new GridView
             {
-                Viewport = new ViewportModel(
-                    [],
-                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
-                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(),
                 Pictures = [picture]
             };
 
             grid.TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect)
                 .Should().BeTrue();
 
-            var hitTestDrawingObject = typeof(GridView).GetMethod(
-                "HitTestDrawingObject",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            var hit = hitTestDrawingObject!.Invoke(grid, [new Point(rect.Left + 10, rect.Top + 10)]);
-            hit!.GetType().GetField("Item1")!.GetValue(hit).Should().Be(picture.Id);
-            hit.GetType().GetField("Item2")!.GetValue(hit).Should().Be(ObjectKind.Picture);
+            var hit = GridViewTestHelpers.HitTestDrawingObject(grid, new Point(rect.Left + 10, rect.Top + 10));
+            hit.Id.Should().Be(picture.Id);
+            hit.Kind.Should().Be(ObjectKind.Picture);
 
-            var hitTestObjectHandle = typeof(GridView).GetMethod(
-                "HitTestObjectHandle",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            hitTestObjectHandle!.Invoke(grid, [new Point(rect.Right, rect.Bottom), rect])
+            GridViewTestHelpers.HitTestObjectHandle(grid, new Point(rect.Right, rect.Bottom), rect)
                 .Should()
                 .Match<object>(value => value.ToString() == "ResizeSE");
-            hitTestObjectHandle.Invoke(grid, [new Point(rect.Left + 10, rect.Top + 10), rect])
+            GridViewTestHelpers.HitTestObjectHandle(grid, new Point(rect.Left + 10, rect.Top + 10), rect)
                 .Should()
                 .Match<object>(value => value.ToString() == "Move");
         });
@@ -58,7 +48,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectHitTesting_IncludesRenderedBodyBoundary()
     {
-        RunOnStaThread(() =>
+        WpfTestThread.Run(() =>
         {
             var sheetId = SheetId.New();
             var picture = new PictureModel
@@ -71,30 +61,24 @@ public sealed partial class GridViewDrawingObjectThemeTests
             };
             var grid = new GridView
             {
-                Viewport = new ViewportModel(
-                    [],
-                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
-                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(),
                 Pictures = [picture]
             };
 
             grid.TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect)
                 .Should().BeTrue();
 
-            var hitTestDrawingObject = typeof(GridView).GetMethod(
-                "HitTestDrawingObject",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            var hit = hitTestDrawingObject!.Invoke(grid, [new Point(rect.Right, rect.Bottom)]);
+            var hit = GridViewTestHelpers.HitTestDrawingObject(grid, new Point(rect.Right, rect.Bottom));
 
-            hit!.GetType().GetField("Item1")!.GetValue(hit).Should().Be(picture.Id);
-            hit.GetType().GetField("Item2")!.GetValue(hit).Should().Be(ObjectKind.Picture);
+            hit.Id.Should().Be(picture.Id);
+            hit.Kind.Should().Be(ObjectKind.Picture);
         });
     }
 
     [Fact]
     public void DrawingObjectHitTesting_HonorsPictureRotation()
     {
-        RunOnStaThread(() =>
+        WpfTestThread.Run(() =>
         {
             var sheetId = SheetId.New();
             var picture = new PictureModel
@@ -108,31 +92,27 @@ public sealed partial class GridViewDrawingObjectThemeTests
             };
             var grid = new GridView
             {
-                Viewport = new ViewportModel(
-                    [],
-                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
-                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(),
                 Pictures = [picture]
             };
 
             grid.TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect)
                 .Should().BeTrue();
 
-            var hitTestDrawingObject = typeof(GridView).GetMethod(
-                "HitTestDrawingObject",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            var centerHit = hitTestDrawingObject!.Invoke(grid, [new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2)]);
-            var cornerHit = hitTestDrawingObject.Invoke(grid, [new Point(rect.Left + 5, rect.Top + 5)]);
+            var centerHit = GridViewTestHelpers.HitTestDrawingObject(
+                grid,
+                new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2));
+            var cornerHit = GridViewTestHelpers.HitTestDrawingObject(grid, new Point(rect.Left + 5, rect.Top + 5));
 
-            centerHit!.GetType().GetField("Item1")!.GetValue(centerHit).Should().Be(picture.Id);
-            cornerHit!.GetType().GetField("Item1")!.GetValue(cornerHit).Should().Be(Guid.Empty);
+            centerHit.Id.Should().Be(picture.Id);
+            cornerHit.Id.Should().Be(Guid.Empty);
         });
     }
 
     [Fact]
     public void DrawingObjectHitTesting_ChoosesTopmostRenderedObject()
     {
-        RunOnStaThread(() =>
+        WpfTestThread.Run(() =>
         {
             var sheetId = SheetId.New();
             var anchor = new CellAddress(sheetId, 1, 1);
@@ -162,10 +142,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
             };
             var grid = new GridView
             {
-                Viewport = new ViewportModel(
-                    [],
-                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
-                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(),
                 DrawingShapes = [shape],
                 Pictures = [backPicture, frontPicture]
             };
@@ -173,13 +150,10 @@ public sealed partial class GridViewDrawingObjectThemeTests
             grid.TryCreateAnchoredObjectRect(anchor, frontPicture.Width, frontPicture.Height, 24, 18, out var rect)
                 .Should().BeTrue();
 
-            var hitTestDrawingObject = typeof(GridView).GetMethod(
-                "HitTestDrawingObject",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            var hit = hitTestDrawingObject!.Invoke(grid, [new Point(rect.Left + 10, rect.Top + 10)]);
+            var hit = GridViewTestHelpers.HitTestDrawingObject(grid, new Point(rect.Left + 10, rect.Top + 10));
 
-            hit!.GetType().GetField("Item1")!.GetValue(hit).Should().Be(frontPicture.Id);
-            hit.GetType().GetField("Item2")!.GetValue(hit).Should().Be(ObjectKind.Picture);
+            hit.Id.Should().Be(frontPicture.Id);
+            hit.Kind.Should().Be(ObjectKind.Picture);
         });
     }
 
@@ -211,7 +185,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void SelectedDrawingObjectAnchor_UsesCurrentSelectedObject()
     {
-        RunOnStaThread(() =>
+        WpfTestThread.Run(() =>
         {
             var sheetId = SheetId.New();
             var first = new PictureModel
@@ -237,13 +211,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
                 Pictures = [first, selected]
             };
 
-            var getSelectedObjectAnchor = typeof(GridView).GetMethod(
-                "GetSelectedObjectAnchor",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-
-            getSelectedObjectAnchor!.Invoke(grid, [])
-                .Should()
-                .Be(selected.Anchor);
+            GridViewTestHelpers.GetSelectedObjectAnchor(grid).Should().Be(selected.Anchor);
         });
     }
 }
