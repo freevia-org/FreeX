@@ -8,14 +8,31 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetPageBreaksMetadataWriter
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly HashSet<string> LaterWorksheetElementNames =
+    [
+        "customProperties",
+        "cellWatches",
+        "ignoredErrors",
+        "smartTags",
+        "drawing",
+        "legacyDrawing",
+        "legacyDrawingHF",
+        "picture",
+        "oleObjects",
+        "controls",
+        "webPublishItems",
+        "tableParts",
+        "extLst"
+    ];
+
     private const uint RowBreakSpanMax = CellAddress.MaxCol - 1;
     private const uint ColumnBreakSpanMax = CellAddress.MaxRow - 1;
 
     public static bool HasModeledBreaksOrMetadata(Sheet sheet) =>
-        sheet.RowPageBreaks.Any(id => IsSupportedBreakId(id, CellAddress.MaxRow)) ||
-        sheet.ColumnPageBreaks.Any(id => IsSupportedBreakId(id, CellAddress.MaxCol)) ||
         sheet.RowPageBreaksMetadata is not null ||
-        sheet.ColumnPageBreaksMetadata is not null;
+        sheet.ColumnPageBreaksMetadata is not null ||
+        HasSupportedBreaks(sheet.RowPageBreaks, CellAddress.MaxRow) ||
+        HasSupportedBreaks(sheet.ColumnPageBreaks, CellAddress.MaxCol);
 
     public static void Save(Stream xlsxStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
     {
@@ -60,16 +77,12 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
     private static bool ApplyBreaks(
         XElement root,
         string elementName,
-        IEnumerable<uint> modeledBreaks,
+        SortedSet<uint> modeledBreaks,
         WorksheetPageBreaksMetadataModel? metadata,
         uint maxBreakId,
         uint defaultSpanMax)
     {
-        var validModeledBreaks = modeledBreaks
-            .Where(id => IsSupportedBreakId(id, maxBreakId))
-            .Distinct()
-            .ToArray();
-        if (metadata is null && validModeledBreaks.Length == 0)
+        if (metadata is null && !HasSupportedBreaks(modeledBreaks, maxBreakId))
             return false;
 
         var changed = false;
@@ -82,8 +95,12 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
         }
 
         var breaksById = BuildBreaksById(pageBreaks);
-        foreach (var id in validModeledBreaks)
+        var defaultSpanMaxText = defaultSpanMax.ToString(CultureInfo.InvariantCulture);
+        foreach (var id in modeledBreaks)
         {
+            if (!IsSupportedBreakId(id, maxBreakId))
+                continue;
+
             var idText = id.ToString(CultureInfo.InvariantCulture);
             if (!breaksById.TryGetValue(idText, out var breakElement))
             {
@@ -96,7 +113,7 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
             changed |= SetAttributeIfDifferent(
                 breakElement,
                 "max",
-                defaultSpanMax.ToString(CultureInfo.InvariantCulture));
+                defaultSpanMaxText);
             changed |= SetAttributeIfDifferent(breakElement, "man", "1");
         }
 
@@ -131,13 +148,18 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
             }
         }
 
-        var breakCount = pageBreaks.Elements(WorksheetNs + "brk").Count();
+        var breakCount = 0;
+        var manualBreakCount = 0;
+        foreach (var breakElement in pageBreaks.Elements(WorksheetNs + "brk"))
+        {
+            breakCount++;
+            if (!string.Equals(breakElement.Attribute("man")?.Value, "0", StringComparison.Ordinal))
+                manualBreakCount++;
+        }
+
         changed |= SetAttributeIfDifferent(pageBreaks, "count", breakCount.ToString(CultureInfo.InvariantCulture));
         if (metadata?.NativeAttributes.ContainsKey("manualBreakCount") != true)
         {
-            var manualBreakCount = pageBreaks
-                .Elements(WorksheetNs + "brk")
-                .Count(element => !string.Equals(element.Attribute("man")?.Value, "0", StringComparison.Ordinal));
             changed |= SetAttributeIfDifferent(
                 pageBreaks,
                 "manualBreakCount",
@@ -148,6 +170,17 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
     }
 
     private static bool IsSupportedBreakId(uint id, uint maxBreakId) => id is >= 2 && id <= maxBreakId;
+
+    private static bool HasSupportedBreaks(SortedSet<uint> modeledBreaks, uint maxBreakId)
+    {
+        foreach (var id in modeledBreaks)
+        {
+            if (IsSupportedBreakId(id, maxBreakId))
+                return true;
+        }
+
+        return false;
+    }
 
     private static void InsertPageBreaksInOrder(XElement root, XElement pageBreaks)
     {
@@ -172,27 +205,10 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
             }
         }
 
-        string[] laterWorksheetElements =
-        [
-            "customProperties",
-            "cellWatches",
-            "ignoredErrors",
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
-
         var insertionPoint = root.Elements()
             .FirstOrDefault(element =>
                 element.Name.Namespace == WorksheetNs &&
-                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+                LaterWorksheetElementNames.Contains(element.Name.LocalName));
         if (insertionPoint is null)
             root.Add(pageBreaks);
         else
