@@ -50,6 +50,9 @@ public sealed partial class GridViewRenderPerformanceTests
         var renderFormulaTrace = overlaysSource[
             overlaysSource.IndexOf("private void RenderFormulaTraceArrows", StringComparison.Ordinal)..
             overlaysSource.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateFormulaTraceArrowLayouts", StringComparison.Ordinal)];
+        var createFormulaTraceLayer = overlaysSource[
+            overlaysSource.IndexOf("private Drawing CreateFormulaTraceArrowLayerDrawing", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private void DrawFormulaTraceArrow", StringComparison.Ordinal)];
 
         source.Should().Contain("public interface IFormulaTraceArrowLayoutConsumer");
         calculateLayouts.Should().Contain("var consumer = new FormulaTraceArrowLayoutCollector(arrows.Count);");
@@ -67,7 +70,8 @@ public sealed partial class GridViewRenderPerformanceTests
         metricLookup.Should().Contain("_rowList = _rows as List<RowMetric>;");
         metricLookup.Should().Contain("_colArray = _columns as ColMetric[];");
         metricLookup.Should().Contain("_colList = _columns as List<ColMetric>;");
-        renderFormulaTrace.Should().Contain("FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, FormulaTraceSheetId, ref consumer);");
+        renderFormulaTrace.Should().Contain("GetFormulaTraceArrowLayerDrawing(viewport, arrows, FormulaTraceSheetId)");
+        createFormulaTraceLayer.Should().Contain("FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, sheetId, ref consumer);");
         renderFormulaTrace.Should().NotContain("CalculateFormulaTraceArrowLayouts");
         renderFormulaTrace.Should().NotContain("foreach");
         overlaysSource.Should().Contain("private readonly struct FormulaTraceArrowDrawingConsumer");
@@ -95,6 +99,15 @@ public sealed partial class GridViewRenderPerformanceTests
     {
         var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
         var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var renderFormulaTraceArrows = overlaysSource[
+            overlaysSource.IndexOf("private void RenderFormulaTraceArrows", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateFormulaTraceArrowLayouts", StringComparison.Ordinal)];
+        var getArrowLayerDrawing = overlaysSource[
+            overlaysSource.IndexOf("private Drawing GetFormulaTraceArrowLayerDrawing", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private Drawing CreateFormulaTraceArrowLayerDrawing", StringComparison.Ordinal)];
+        var createArrowLayerDrawing = overlaysSource[
+            overlaysSource.IndexOf("private Drawing CreateFormulaTraceArrowLayerDrawing", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private void DrawFormulaTraceArrow", StringComparison.Ordinal)];
         var drawFormulaTraceArrow = overlaysSource[
             overlaysSource.IndexOf("private void DrawFormulaTraceArrow", StringComparison.Ordinal)..
             overlaysSource.IndexOf("private Drawing GetFormulaTraceArrowDrawing", StringComparison.Ordinal)];
@@ -115,8 +128,19 @@ public sealed partial class GridViewRenderPerformanceTests
         overlaysSource.Should().Contain("private const int FormulaTraceArrowDrawingCacheLimit = 4096;");
         overlaysSource.Should().Contain("private readonly Dictionary<FormulaTraceArrowHeadGeometryKey, Geometry> _formulaTraceArrowHeadGeometryCache = new();");
         overlaysSource.Should().Contain("private readonly Dictionary<FormulaTraceArrowDrawingKey, Drawing> _formulaTraceArrowDrawingCache = new();");
+        overlaysSource.Should().Contain("private FormulaTraceArrowLayerCache? _formulaTraceArrowLayerCache;");
         overlaysSource.Should().Contain("private readonly record struct FormulaTraceArrowHeadGeometryKey(Point Start, Point End);");
         overlaysSource.Should().Contain("private readonly record struct FormulaTraceArrowDrawingKey(Point Start, Point End);");
+        overlaysSource.Should().Contain("private sealed record FormulaTraceArrowLayerCache");
+        renderFormulaTraceArrows.Should().Contain("dc.DrawDrawing(GetFormulaTraceArrowLayerDrawing(viewport, arrows, FormulaTraceSheetId));");
+        getArrowLayerDrawing.Should().Contain("_formulaTraceArrowLayerCache is { } cached");
+        getArrowLayerDrawing.Should().Contain("ReferenceEquals(cached.Viewport, viewport)");
+        getArrowLayerDrawing.Should().Contain("cached.SheetId.Equals(sheetId)");
+        getArrowLayerDrawing.Should().Contain("FormulaTraceArrowsEqual(arrows, cached.Arrows)");
+        getArrowLayerDrawing.Should().Contain("CopyFormulaTraceArrows(arrows)");
+        createArrowLayerDrawing.Should().Contain("new DrawingGroup()");
+        createArrowLayerDrawing.Should().Contain("FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, sheetId, ref consumer);");
+        createArrowLayerDrawing.Should().Contain("drawing.Freeze();");
         drawFormulaTraceArrow.Should().Contain("GetFormulaTraceArrowDrawing(start, end)");
         drawFormulaTraceArrow.Should().NotContain("CreateFormulaTraceArrowHeadGeometry");
         getArrowDrawing.Should().Contain("_formulaTraceArrowDrawingCache.TryGetValue(key, out var cached)");
@@ -132,8 +156,11 @@ public sealed partial class GridViewRenderPerformanceTests
         getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Add(key, geometry);");
         createArrowHeadGeometry.Should().Contain("new StreamGeometry()");
         createArrowHeadGeometry.Should().Contain("geometry.Freeze();");
+        overlaysSource.Should().Contain("_formulaTraceArrowLayerCache = null;");
         overlaysSource.Should().Contain("_formulaTraceArrowHeadGeometryCache.Clear();");
         overlaysSource.Should().Contain("_formulaTraceArrowDrawingCache.Clear();");
+        overlaysSource.Should().Contain("private static FormulaTraceArrow[] CopyFormulaTraceArrows");
+        overlaysSource.Should().Contain("private static bool FormulaTraceArrowsEqual");
         propertiesSource.Should().Contain("OnFormulaTraceRenderCacheInputChanged");
         propertiesSource.Should().Contain("grid.ClearFormulaTraceArrowHeadGeometryCache();");
         propertiesSource.Should().Contain("FormulaTraceArrowsProperty");

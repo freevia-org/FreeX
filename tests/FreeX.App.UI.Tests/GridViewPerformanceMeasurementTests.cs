@@ -739,6 +739,44 @@ public sealed class GridViewPerformanceMeasurementTests
     }
 
     [Fact]
+    public void Benchmark_RenderFormulaTraceLayerCache_ReportsTimingAndAllocatedBytes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 48;
+            const int arrowCount = 1_000;
+            const int width = 1440;
+            const int height = 900;
+            var grid = CreateFormulaTraceGrid(width, height, arrowCount);
+
+            RenderOnce(grid, width, height);
+            RenderOnce(grid, width, height);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var iteration = 0; iteration < iterations; iteration++)
+                RenderOnce(grid, width, height);
+
+            total.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+            Console.WriteLine(
+                "PERF GRID_RENDER_FORMULA_TRACE_LAYER_CACHE " +
+                $"arrows={arrowCount} steps={iterations} " +
+                $"total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+                $"mean_ms={total.Elapsed.TotalMilliseconds / iterations:F2} " +
+                $"allocated_bytes={allocatedBytes:N0}");
+
+            total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+            allocatedBytes.Should().BeLessThan(1_000_000);
+        });
+    }
+
+    [Fact]
     public void Benchmark_DrawFormulaTraceVisibleArrows_ReportsTimingAndAllocatedBytes()
     {
         StaTestRunner.Run(() =>
@@ -1082,6 +1120,49 @@ public sealed class GridViewPerformanceMeasurementTests
             Height = height,
             Viewport = new ViewportModel(cells, rows, columns),
             Charts = [chart],
+            SelectedRange = new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 1, 1))
+        };
+        grid.Measure(new Size(width, height));
+        grid.Arrange(new Rect(0, 0, width, height));
+        grid.UpdateLayout();
+        return grid;
+    }
+
+    private static GridView CreateFormulaTraceGrid(double width, double height, int arrowCount)
+    {
+        const int rowCount = 40;
+        const int columnCount = 40;
+        const double rowHeight = 20;
+        const double columnWidth = 64;
+
+        var sheetId = SheetId.New();
+        var rows = Enumerable
+            .Range(0, rowCount)
+            .Select(index => new RowMetric((uint)(index + 1), rowHeight, index * rowHeight))
+            .ToArray();
+        var columns = Enumerable
+            .Range(0, columnCount)
+            .Select(index => new ColMetric((uint)(index + 1), columnWidth, index * columnWidth))
+            .ToArray();
+        var arrows = new List<FormulaTraceArrow>(arrowCount);
+        for (var i = 0; i < arrowCount; i++)
+        {
+            var row = (uint)(1 + i / columnCount % (rowCount - 1));
+            var column = (uint)(1 + i % (columnCount - 1));
+            arrows.Add(new FormulaTraceArrow(
+                new CellAddress(sheetId, row, column),
+                new CellAddress(sheetId, row + 1, column + 1)));
+        }
+
+        var grid = new GridView
+        {
+            Width = width,
+            Height = height,
+            Viewport = new ViewportModel([], rows, columns),
+            FormulaTraceSheetId = sheetId,
+            FormulaTraceArrows = arrows,
             SelectedRange = new GridRange(
                 new CellAddress(sheetId, 1, 1),
                 new CellAddress(sheetId, 1, 1))
