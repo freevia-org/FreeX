@@ -19,7 +19,8 @@ public static class OptionsInputParser
     {
         sheetCount = 0;
         if (!int.TryParse(input.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            || parsed is < 1 or > 255)
+            || parsed < FreeXOptions.MinDefaultSheetCount
+            || parsed > FreeXOptions.MaxDefaultSheetCount)
             return false;
 
         sheetCount = parsed;
