@@ -355,6 +355,48 @@ public partial class FunctionLibraryTests
             .Should().Be(new NumberValue(3));
     }
 
+    [Fact] public void Indirect_A1FullColumnAggregate_ClampsToUsedRange()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 2, new NumberValue(2)),
+            (5, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"A:C\"))", sheet).Should().Be(new NumberValue(6));
+        _eval.Evaluate("=SUM(INDIRECT(\"F:G\"))", sheet).Should().Be(new NumberValue(0));
+    }
+
+    [Fact] public void Indirect_A1FullRowAggregate_ClampsToUsedRange()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 2, new NumberValue(2)),
+            (10, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"1:10\"))", sheet).Should().Be(new NumberValue(6));
+    }
+
+    [Fact] public void Indirect_SheetQualifiedFullColumnAggregate_ClampsToUsedRange()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var data = wb.AddSheet("Data");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new NumberValue(1));
+        data.SetCell(new CellAddress(data.Id, 3, 2), new NumberValue(2));
+
+        _eval.Evaluate("=SUM(INDIRECT(\"Data!A:C\"))", sheet, wb).Should().Be(new NumberValue(3));
+    }
+
+    [Fact] public void Indirect_A1FullColumnGenericAggregates_ClampToUsedRange()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(4)));
+
+        _eval.Evaluate("=COUNTA(INDIRECT(\"A:A\"))", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=CONCAT(INDIRECT(\"A:C\"))", sheet).Should().Be(new TextValue("24"));
+    }
+
     [Theory]
     [InlineData("=INDIRECT(\"A:A\")")]
     [InlineData("=INDIRECT(\"A:XFD\")")]

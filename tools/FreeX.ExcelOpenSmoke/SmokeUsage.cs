@@ -15,6 +15,9 @@ internal static class SmokeUsage
                                             Generate representative FreeX feature XLSX smoke files, including PivotTables.
               --generate-supported-corpus-fixtures
                                             Generate supported generated corpus fixtures from --corpus-manifest.
+                                            Defaults to supported-pass model fixtures; pass
+                                            --corpus-status supported-metadata-pass for metadata
+                                            package fixtures.
               --generate-chart-fixtures     Generate FreeX histogram and waterfall XLSX smoke files.
               --generate-excel-fixture      Generate an Excel-authored XLSX fixture through COM, including
                                             a native PivotTable, then load/save it through FreeX.

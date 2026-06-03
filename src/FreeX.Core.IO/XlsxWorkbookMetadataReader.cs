@@ -651,8 +651,7 @@ internal static class XlsxWorkbookMetadataReader
 
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageXmlEditor.LoadXml(entry);
     }
 
 }

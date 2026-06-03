@@ -167,8 +167,7 @@ internal static class XlsxStructuredTableMetadataReader
 
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageXmlEditor.LoadXml(entry);
     }
 
     private static List<string> ReadWorksheetRelationshipIds(

@@ -253,7 +253,37 @@ internal static partial class XlsxCorpusFixtureFactory
                     <a:cs typeface="Minor Complex"/>
                   </a:minorFont>
                 </a:fontScheme>
-                <a:fmtScheme name="Effects Test"/>
+                <a:fmtScheme name="Effects Test">
+                  <a:fillStyleLst>
+                    <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                    <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                    <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                  </a:fillStyleLst>
+                  <a:lnStyleLst>
+                    <a:ln w="6350" cap="flat" cmpd="sng" algn="ctr">
+                      <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                      <a:prstDash val="solid"/>
+                    </a:ln>
+                    <a:ln w="12700" cap="flat" cmpd="sng" algn="ctr">
+                      <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                      <a:prstDash val="solid"/>
+                    </a:ln>
+                    <a:ln w="19050" cap="flat" cmpd="sng" algn="ctr">
+                      <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                      <a:prstDash val="solid"/>
+                    </a:ln>
+                  </a:lnStyleLst>
+                  <a:effectStyleLst>
+                    <a:effectStyle><a:effectLst/></a:effectStyle>
+                    <a:effectStyle><a:effectLst/></a:effectStyle>
+                    <a:effectStyle><a:effectLst/></a:effectStyle>
+                  </a:effectStyleLst>
+                  <a:bgFillStyleLst>
+                    <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                    <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                    <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                  </a:bgFillStyleLst>
+                </a:fmtScheme>
               </a:themeElements>
             </a:theme>
             """)),

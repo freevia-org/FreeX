@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Windows;
+using FreeX.App.UI;
 using FreeX.Core.IO;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
@@ -87,6 +89,8 @@ public partial class MainWindow
 
     private void PrepareActiveWorkbookForFinalClose()
     {
+        ReleaseWorkbookUiStateForClose();
+
         if (!IsFinalWorkbookWindowClose())
             return;
 
@@ -105,5 +109,82 @@ public partial class MainWindow
         _workbook = replacement;
         _workbookRef.Current = replacement;
         _currentSheetId = replacement.Sheets[0].Id;
+    }
+
+    private void ReleaseWorkbookUiStateForClose()
+    {
+        ClearFormulaReferenceHighlights();
+        ClearClipboardVisualState();
+        _internalClipboard = null;
+
+        if (_validationDropdown is not null)
+        {
+            _validationDropdown.IsDropDownOpen = false;
+            _validationDropdown.ItemsSource = null;
+            _validationDropdown.Visibility = Visibility.Collapsed;
+        }
+
+        if (SheetGrid is not null)
+        {
+            SheetGrid.Viewport = null;
+            SheetGrid.SelectedRange = null;
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.QuickAnalysisPreviewRange = null;
+            SheetGrid.QuickAnalysisPreviewVisual = FreeX.App.UI.GridQuickAnalysisPreviewVisualKind.None;
+            SheetGrid.EditingCell = null;
+            SheetGrid.FormulaTraceArrows = null;
+            SheetGrid.FormulaTraceSheetId = default;
+            SheetGrid.Charts = null;
+            SheetGrid.TextBoxes = null;
+            SheetGrid.DrawingShapes = null;
+            SheetGrid.WorkbookTheme = WorkbookTheme.Office;
+            SheetGrid.Pictures = null;
+            SheetGrid.DrawingObjectZOrder = null;
+            SheetGrid.NativeSlicers = null;
+            SheetGrid.NativeTimelines = null;
+            SheetGrid.WorksheetBackground = null;
+            SheetGrid.Sparklines = null;
+            SheetGrid.SparklineValues = null;
+            SheetGrid.MergedRegions = null;
+            SheetGrid.RowPageBreaks = null;
+            SheetGrid.ColumnPageBreaks = null;
+            SheetGrid.PrintArea = null;
+            SheetGrid.SplitRow = null;
+            SheetGrid.SplitColumn = null;
+            SheetGrid.SelectedObjectId = Guid.Empty;
+            SheetGrid.SelectedObjectKind = ObjectKind.None;
+            SheetGrid.ContextMenu = null;
+        }
+
+        _sheetTabs.Clear();
+        if (SheetTabsControl is not null)
+            SheetTabsControl.ItemsSource = null;
+
+        _pendingPivotLayout = null;
+        _pivotFieldListAvailableItems = [];
+        if (PivotFieldListPane is not null)
+            PivotFieldListPane.Visibility = Visibility.Collapsed;
+        if (PivotAvailableFieldsList is not null)
+            PivotAvailableFieldsList.ItemsSource = null;
+        if (PivotRowsList is not null)
+            PivotRowsList.ItemsSource = null;
+        if (PivotColumnsList is not null)
+            PivotColumnsList.ItemsSource = null;
+        if (PivotFiltersList is not null)
+            PivotFiltersList.ItemsSource = null;
+        if (PivotValuesList is not null)
+            PivotValuesList.ItemsSource = null;
+
+        _slicerTimelinePaneDismissed = false;
+        if (SlicerTimelinePane is not null)
+            SlicerTimelinePane.Visibility = Visibility.Collapsed;
+        if (SlicerItemsControl is not null)
+            SlicerItemsControl.ItemsSource = null;
+        if (TimelineItemsControl is not null)
+            TimelineItemsControl.ItemsSource = null;
+
+        _lastViewportTableContextRefreshKey = null;
+        _lastViewportPivotFieldListRefreshKey = null;
+        _lastViewportSlicerTimelineRefreshKey = null;
     }
 }
