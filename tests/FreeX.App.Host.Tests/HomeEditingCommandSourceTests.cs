@@ -86,6 +86,7 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("FillSeriesPlanner.BuildSeriesEdits(");
         source.Should().Contain("dialog.Result");
         source.Should().Contain("UiText.Get(\"FillSeriesStep_SelectNumericOrDateStartMessage\")");
+        source.Should().Contain("UiText.Get(\"FillSeriesStep_Title\")");
         source.Should().Contain("private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();");
         source.Should().Contain("currentRange => CreateFlashFillCommand(sheet, currentRange)");
         source.Should().Contain("FlashFillRangePlanner.Plan(sheet, range)");
