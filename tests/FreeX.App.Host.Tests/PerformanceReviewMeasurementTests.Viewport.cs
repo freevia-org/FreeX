@@ -12,7 +12,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class PerformanceReviewMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ViewportSidePaneRefresh_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -52,7 +52,7 @@ public sealed partial class PerformanceReviewMeasurementTests
         source.Should().NotContain("viewport.ColMetrics.Count(column =>");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ViewportNoCommentsFastPath_ReportsTiming()
     {
         var workbook = new Workbook("Book1");
@@ -103,7 +103,7 @@ public sealed partial class PerformanceReviewMeasurementTests
         result.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SparseViewportEmptyCellFastPath_ReportsTiming()
     {
         var workbook = new Workbook("Book1");

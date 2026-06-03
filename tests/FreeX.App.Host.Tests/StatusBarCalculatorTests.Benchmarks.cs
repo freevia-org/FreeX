@@ -7,7 +7,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class StatusBarCalculatorTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RepeatedWholeColumnStatusCalculations()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -36,7 +36,7 @@ public sealed partial class StatusBarCalculatorTests
         stats.Sum.Should().Be(5_000_050_000d);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ExpandingStatusSelection_ReusesPreviousStats()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -66,7 +66,7 @@ public sealed partial class StatusBarCalculatorTests
         stats.Sum.Should().Be(iterations * (iterations + 1) / 2d);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ClippedSparseStatusSelection()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -86,7 +86,7 @@ public sealed partial class StatusBarCalculatorTests
         stats.Should().Be(new StatusBarCalculator.Stats(5, 1, 1, 5, 5, 5));
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_BoundedStatusSelectionInLargeOccupiedSheet()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -112,7 +112,7 @@ public sealed partial class StatusBarCalculatorTests
         stats.Sum.Should().Be(200_010_000d);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_BoundedStatusSelection_AvoidsAddressIteratorAllocation()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

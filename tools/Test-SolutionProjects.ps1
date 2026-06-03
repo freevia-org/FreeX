@@ -57,6 +57,31 @@ function Test-IsIgnoredProjectPath {
         $segments -contains ".claude"
 }
 
+function Test-IsIgnoredDirectoryName {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    return $Name -in @("bin", "obj", ".git", ".worktrees", ".claude")
+}
+
+function Get-ProjectFiles {
+    param([Parameter(Mandatory = $true)][System.IO.DirectoryInfo]$Directory)
+
+    foreach ($projectFile in $Directory.EnumerateFiles("*.csproj")) {
+        $relativePath = Normalize-RelativePath (Get-RelativePath -RootPath $resolvedProjectRoot -Path $projectFile.FullName)
+        if (-not (Test-IsIgnoredProjectPath -ProjectFile $projectFile -RelativePath $relativePath)) {
+            $projectFile
+        }
+    }
+
+    foreach ($childDirectory in $Directory.EnumerateDirectories()) {
+        if (Test-IsIgnoredDirectoryName $childDirectory.Name) {
+            continue
+        }
+
+        Get-ProjectFiles -Directory $childDirectory
+    }
+}
+
 $resolvedProjectRoot = Resolve-RepoPath $ProjectRoot
 if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
     throw "Project root was not found: $resolvedProjectRoot"
@@ -102,12 +127,10 @@ $escapedSolutionProjectPaths = @(
 )
 
 $discoveredProjectPaths = @(
-    Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter "*.csproj" -File -Recurse |
+    Get-ProjectFiles -Directory (Get-Item -LiteralPath $resolvedProjectRoot) |
         ForEach-Object {
             $relativePath = Normalize-RelativePath (Get-RelativePath -RootPath $resolvedProjectRoot -Path $_.FullName)
-            if (-not (Test-IsIgnoredProjectPath -ProjectFile $_ -RelativePath $relativePath)) {
-                $relativePath
-            }
+            $relativePath
         } |
         Where-Object { $_.StartsWith("src/") -or $_.StartsWith("tests/") -or $_.StartsWith("tools/") } |
         Sort-Object -Unique

@@ -10,7 +10,7 @@ using FluentAssertions;
 namespace FreeX.App.UI.Tests;
 public sealed partial class GridViewPerformanceMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderChartViewport_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -53,7 +53,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderChartViewportDuringDimensionResize_ReportsTiming()
     {
         StaTestRunner.Run(() =>

@@ -8,7 +8,7 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed class XlsxWorksheetPageBreaksMetadataWriterPerformanceTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SavePageBreaksMetadata_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 20;

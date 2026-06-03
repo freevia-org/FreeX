@@ -7,7 +7,7 @@ namespace FreeX.Core.Model.Tests;
 
 public partial class InsertDeleteRowsTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_InsertRowsWithDenseMovedCells_ReportsTiming()
     {
         const int iterations = 3;
@@ -54,7 +54,7 @@ public partial class InsertDeleteRowsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_DeleteRowsWithDenseMovedCells_ReportsTiming()
     {
         const int iterations = 3;
@@ -101,7 +101,7 @@ public partial class InsertDeleteRowsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_InsertRowsWithDenseTailMovedCells_ReportsTiming()
     {
         const int iterations = 3;
@@ -149,7 +149,7 @@ public partial class InsertDeleteRowsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_InsertRowsWithDenseRowMetadata_ReportsTiming()
     {
         const int iterations = 3;
@@ -199,7 +199,7 @@ public partial class InsertDeleteRowsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_DeleteRowsWithDenseRowMetadata_ReportsTiming()
     {
         const int iterations = 3;

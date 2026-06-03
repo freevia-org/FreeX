@@ -28,35 +28,50 @@ public sealed class RepositoryPreflightTests
     public void RepositoryPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-RepositoryPreflight.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-repository-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
 
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
+        try
         {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"",
-            WorkingDirectory = Path.GetTempPath(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+            var jsonScript = CreatePassingPreflightScript(tempDirectory, "Test-JsonFiles.ps1");
+            var xmlScript = CreatePassingPreflightScript(tempDirectory, "Test-XmlFiles.ps1");
+            var toolScriptsScript = CreatePassingPreflightScript(tempDirectory, "Test-ToolScripts.ps1");
+            var workflowsScript = CreatePassingPreflightScript(tempDirectory, "Test-GitHubWorkflows.ps1");
+            var sdkScript = CreatePassingPreflightScript(tempDirectory, "Test-DotNetSdkReadiness.ps1");
+            var projectReferencesScript = CreatePassingPreflightScript(tempDirectory, "Test-DotNetProjectReferences.ps1");
+            var solutionProjectsScript = CreatePassingPreflightScript(tempDirectory, "Test-SolutionProjects.ps1");
+            var generatedDocsScript = CreatePassingPreflightScript(tempDirectory, "Test-GeneratedDocs.ps1");
+            var conflictMarkersScript = CreatePassingPreflightScript(tempDirectory, "Test-ConflictMarkers.ps1");
 
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
+            var result = RunPowerShellScript(
+                scriptPath,
+                Path.GetTempPath(),
+                $"-JsonFilesScriptPath \"{jsonScript}\" " +
+                $"-XmlFilesScriptPath \"{xmlScript}\" " +
+                $"-ToolScriptsScriptPath \"{toolScriptsScript}\" " +
+                $"-GitHubWorkflowsScriptPath \"{workflowsScript}\" " +
+                $"-DotNetSdkReadinessScriptPath \"{sdkScript}\" " +
+                $"-DotNetProjectReferencesScriptPath \"{projectReferencesScript}\" " +
+                $"-SolutionProjectsScriptPath \"{solutionProjectsScript}\" " +
+                $"-GeneratedDocsScriptPath \"{generatedDocsScript}\" " +
+                $"-ConflictMarkersScriptPath \"{conflictMarkersScript}\"");
 
-        process.ExitCode.Should().Be(0, error);
-        output.Should().Contain("Running JSON files preflight...");
-        output.Should().Contain("Running XML files preflight...");
-        output.Should().Contain("Running PowerShell tools preflight...");
-        output.Should().Contain("Running GitHub workflows preflight...");
-        output.Should().Contain("Running .NET SDK readiness preflight...");
-        output.Should().Contain("Running .NET project references preflight...");
-        output.Should().Contain("Running solution projects preflight...");
-        output.Should().Contain("Running generated docs preflight...");
-        output.Should().Contain("Running Git conflict markers preflight...");
-        output.Should().Contain("Repository preflight checks passed.");
+            result.ExitCode.Should().Be(0, result.Error);
+            result.Output.Should().Contain("Running JSON files preflight...");
+            result.Output.Should().Contain("Running XML files preflight...");
+            result.Output.Should().Contain("Running PowerShell tools preflight...");
+            result.Output.Should().Contain("Running GitHub workflows preflight...");
+            result.Output.Should().Contain("Running .NET SDK readiness preflight...");
+            result.Output.Should().Contain("Running .NET project references preflight...");
+            result.Output.Should().Contain("Running solution projects preflight...");
+            result.Output.Should().Contain("Running generated docs preflight...");
+            result.Output.Should().Contain("Running Git conflict markers preflight...");
+            result.Output.Should().Contain("Repository preflight checks passed.");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]
@@ -227,6 +242,18 @@ public sealed class RepositoryPreflightTests
         process.WaitForExit();
 
         return new PowerShellResult(process.ExitCode, output, error);
+    }
+
+    private static string CreatePassingPreflightScript(string directory, string fileName)
+    {
+        var path = Path.Combine(directory, fileName);
+        File.WriteAllText(
+            path,
+            """
+            $ErrorActionPreference = "Stop"
+            Write-Host "Synthetic preflight passed."
+            """);
+        return path;
     }
 
     private static string NormalizeWhitespace(string text) => Regex.Replace(text, "\\s+", " ");

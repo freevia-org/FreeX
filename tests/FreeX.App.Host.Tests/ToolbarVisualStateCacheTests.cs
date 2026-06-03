@@ -189,7 +189,7 @@ public sealed class ToolbarVisualStateCacheTests
         }
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_AlternatingStyleSources_ReportsTiming()
     {
         const int iterations = 20_000;

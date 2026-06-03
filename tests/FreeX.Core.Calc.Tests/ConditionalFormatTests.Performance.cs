@@ -7,7 +7,7 @@ namespace FreeX.Core.Calc.Tests;
 
 public partial class ConditionalFormatTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ConditionalFormatFormulaThresholds_ReportsTiming()
     {
         var (wb, sheet) = MakeWorkbook();
@@ -74,7 +74,7 @@ public partial class ConditionalFormatTests
         total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ConditionalFormatFormulaRules_ReportsTiming()
     {
         var (wb, sheet) = MakeWorkbook();
@@ -142,7 +142,7 @@ public partial class ConditionalFormatTests
         total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ConditionalFormatAndFormulaRules_ReportsTiming()
     {
         var (wb, sheet) = MakeWorkbook();
@@ -205,7 +205,7 @@ public partial class ConditionalFormatTests
         total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ConditionalFormatIconSetThresholds_ReportsTiming()
     {
         var (wb, sheet) = MakeWorkbook();

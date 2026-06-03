@@ -14,7 +14,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class PerformanceReviewMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SelectionDragStatusRefresh_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -38,7 +38,7 @@ public sealed partial class PerformanceReviewMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_AdditionalSelectionDragToolbarRefresh_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -62,7 +62,7 @@ public sealed partial class PerformanceReviewMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RepeatedHeaderSelectionTarget_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -86,7 +86,7 @@ public sealed partial class PerformanceReviewMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RepeatedSelectionDragTargetNoOps_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -150,7 +150,7 @@ public sealed partial class PerformanceReviewMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_NonDragSelectionToolbarRefresh_ReportsTimingAndQatProbes()
     {
         StaTestRunner.Run(() =>

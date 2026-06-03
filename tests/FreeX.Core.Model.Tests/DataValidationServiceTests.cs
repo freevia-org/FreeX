@@ -132,7 +132,7 @@ public sealed class DataValidationServiceTests
         typeof(DataValidationService.InputPrompt).IsValueType.Should().BeTrue();
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ValidateLargeRangeListMatch_ReportsTimingAndAllocatedBytes()
     {
         const int itemCount = 5_000;
@@ -178,7 +178,7 @@ public sealed class DataValidationServiceTests
             $"allocated_bytes={allocatedBytes:N0}");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_GetInputPromptManyRules_ReportsTimingAndAllocatedBytes()
     {
         const int ruleCount = 10_000;
@@ -236,7 +236,7 @@ public sealed class DataValidationServiceTests
         allocatedBytes.Should().BeLessThan(6_000);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_GetListItemsLargeSameSheetRange_ReportsTimingAndAllocatedBytes()
     {
         const int itemCount = 5_000;

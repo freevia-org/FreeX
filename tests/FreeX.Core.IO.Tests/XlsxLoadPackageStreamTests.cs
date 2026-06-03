@@ -108,7 +108,7 @@ public sealed class XlsxLoadPackageStreamTests
         ReadWorksheetCellReferences(stripped).Should().Equal("A1", "B1", "D1");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_StyleOnlyCellStripper_DuplicateWorksheetReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;

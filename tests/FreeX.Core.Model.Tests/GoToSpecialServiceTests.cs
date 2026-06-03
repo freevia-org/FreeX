@@ -345,7 +345,7 @@ public sealed class GoToSpecialServiceTests
             .Equal(expected);
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_FindConditionalFormatsManyRules_ReportsTimingAndAllocatedBytes()
     {
@@ -377,7 +377,7 @@ public sealed class GoToSpecialServiceTests
         count.Should().Be(rules);
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_FindDataValidationsManyRules_ReportsTimingAndAllocatedBytes()
     {
@@ -409,7 +409,7 @@ public sealed class GoToSpecialServiceTests
         count.Should().Be(rules);
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_FindDependentsManyFormulaCells_ReportsTimingAndAllocatedBytes()
     {

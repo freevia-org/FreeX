@@ -5,7 +5,7 @@ namespace FreeX.App.UI.Tests;
 
 public sealed partial class GridViewPerformanceMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderCommentIndicatorHeavyViewport_ReportsTiming()
     {
         StaTestRunner.Run(() =>

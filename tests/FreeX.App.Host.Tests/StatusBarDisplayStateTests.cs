@@ -69,7 +69,7 @@ public sealed class StatusBarDisplayStateTests
         changed.ReadyText.Should().Be("Edit");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RepeatedStatsDisplayState_ReportsCachedTimingAndAllocation()
     {
         const int iterations = 50_000;

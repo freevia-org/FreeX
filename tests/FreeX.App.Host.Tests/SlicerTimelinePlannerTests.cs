@@ -247,7 +247,7 @@ public sealed class SlicerTimelinePlannerTests
         hidden.Slicers.Should().BeEmpty();
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_NativeVisualFiltersEmptyWorkbookFastPath_ReportsTiming()
     {
         const int iterations = 20_000;
@@ -287,7 +287,7 @@ public sealed class SlicerTimelinePlannerTests
         stopwatch.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_NativeVisualFiltersLargeWorkbookPairedCalls_ReportsTiming()
     {
         const int iterations = 100;

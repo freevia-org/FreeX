@@ -11,7 +11,7 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxFileAdapterPerformanceTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveDenseWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -54,7 +54,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_LoadDrawingPicturesWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -129,7 +129,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         readPictureParts.Should().NotContain("ReadNonVisualDescription(pictureElement)");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveIgnoredErrorsWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -174,7 +174,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         packageSizes.Should().OnlyContain(size => size > 0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveStyleOnlyWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -219,7 +219,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveLoadedDenseWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -268,7 +268,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveLoadedDenseMutatedWorkbook_ReportsTiming()
     {
         const int iterations = 5;
@@ -318,7 +318,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveLoadedDensePostProcessing_ReportsTiming()
     {
         const int iterations = 3;
@@ -370,7 +370,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveWorksheetNativeMetadataWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -413,7 +413,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveWorksheetAutoFilterNativeMetadataWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -456,7 +456,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveDataValidationNativeMetadataWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -499,7 +499,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveAdvancedConditionalFormattingWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -542,7 +542,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveWorksheetSingleXmlCellsPostProcessingWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -586,7 +586,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveLoadedWorksheetReplayMetadataWorkbook_ReportsTiming()
     {
         const int iterations = 3;

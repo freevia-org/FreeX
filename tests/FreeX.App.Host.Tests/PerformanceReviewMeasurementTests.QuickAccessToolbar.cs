@@ -13,7 +13,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class PerformanceReviewMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_FullQuickAccessToolbarCommandStateApply_ReportsTimingAndAllocatedBytes()
     {
         StaTestRunner.Run(() =>
