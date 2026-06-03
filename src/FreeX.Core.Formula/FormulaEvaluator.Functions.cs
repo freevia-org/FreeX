@@ -58,6 +58,10 @@ public sealed partial class FormulaEvaluator
             TryEvaluateLookupDirectRanges(node, context, out var directLookupResult))
             return directLookupResult;
 
+        if (IsDirectSelectionFunction(functionName) &&
+            TryEvaluateStatisticalSelectionDirectRange(functionName, node, context, out var directSelectionResult))
+            return directSelectionResult;
+
         if (functionName == "NPV" &&
             TryEvaluateNpvDirectRanges(node, context, out var directNpvResult))
             return directNpvResult;
