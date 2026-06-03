@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+using System.Buffers;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -37,7 +37,15 @@ public static class SelectionRangeService
             return null;
 
         var contentIndex = ContentIndex.CreateIfWorthwhile(sheet, usedRange.Value);
-        var bounds = ExpandCurrentRegionBounds(sheet, contentIndex, usedRange.Value, activeCell);
+        CurrentRegionBounds bounds;
+        try
+        {
+            bounds = ExpandCurrentRegionBounds(sheet, contentIndex, usedRange.Value, activeCell);
+        }
+        finally
+        {
+            contentIndex?.Dispose();
+        }
 
         return new GridRange(
             new CellAddress(activeCell.Sheet, bounds.Top, bounds.Left),
@@ -161,17 +169,21 @@ public static class SelectionRangeService
 
     private readonly record struct CurrentRegionBounds(uint Top, uint Bottom, uint Left, uint Right);
 
-    private sealed class ContentIndex
+    private sealed class ContentIndex : IDisposable
     {
         private const long MinimumUsedCells = 4_096;
         private const int SparseAreaPerStoredCell = 4;
-        private readonly Dictionary<uint, AxisValues> _colsByRow;
-        private readonly Dictionary<uint, AxisValues> _rowsByCol;
+        private const int ColumnKeyBits = 15;
+        private const int RowKeyBits = 21;
+        private readonly ulong[] _rowKeys;
+        private readonly ulong[] _columnKeys;
+        private readonly int _count;
 
-        private ContentIndex(Dictionary<uint, AxisValues> colsByRow, Dictionary<uint, AxisValues> rowsByCol)
+        private ContentIndex(ulong[] rowKeys, ulong[] columnKeys, int count)
         {
-            _colsByRow = colsByRow;
-            _rowsByCol = rowsByCol;
+            _rowKeys = rowKeys;
+            _columnKeys = columnKeys;
+            _count = count;
         }
 
         public static ContentIndex? CreateIfWorthwhile(Sheet sheet, GridRange usedRange)
@@ -182,110 +194,68 @@ public static class SelectionRangeService
                 return null;
             }
 
-            var rowCapacity = GetDictionaryCapacity(sheet.CellCount, usedRange.RowCount);
-            var colCapacity = GetDictionaryCapacity(sheet.CellCount, usedRange.ColCount);
-            var colsByRow = new Dictionary<uint, AxisValues>(rowCapacity);
-            var rowsByCol = new Dictionary<uint, AxisValues>(colCapacity);
-            foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+            var rowKeys = ArrayPool<ulong>.Shared.Rent(sheet.CellCount);
+            ulong[]? columnKeys = null;
+            try
             {
-                if (!HasCellContent(cell))
-                    continue;
+                columnKeys = ArrayPool<ulong>.Shared.Rent(sheet.CellCount);
+                var count = 0;
+                foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+                {
+                    if (!HasCellContent(cell))
+                        continue;
 
-                Add(colsByRow, row, col);
-                Add(rowsByCol, col, row);
+                    rowKeys[count] = CreateRowKey(row, col);
+                    columnKeys[count] = CreateColumnKey(row, col);
+                    count++;
+                }
+
+                if (count == 0)
+                {
+                    ArrayPool<ulong>.Shared.Return(rowKeys);
+                    ArrayPool<ulong>.Shared.Return(columnKeys);
+                    return null;
+                }
+
+                Array.Sort(rowKeys, 0, count);
+                Array.Sort(columnKeys, 0, count);
+                return new ContentIndex(rowKeys, columnKeys, count);
             }
+            catch
+            {
+                ArrayPool<ulong>.Shared.Return(rowKeys);
+                if (columnKeys is not null)
+                    ArrayPool<ulong>.Shared.Return(columnKeys);
 
-            if (colsByRow.Count == 0)
-                return null;
-
-            SortValues(colsByRow);
-            SortValues(rowsByCol);
-            return new ContentIndex(colsByRow, rowsByCol);
+                throw;
+            }
         }
 
         public bool RowHasContent(uint row, uint startCol, uint endCol) =>
-            _colsByRow.TryGetValue(row, out var cols) && HasAnyInRange(cols, startCol, endCol);
+            HasAnyInRange(_rowKeys, _count, CreateRowKey(row, startCol), CreateRowKey(row, endCol));
 
         public bool ColumnHasContent(uint col, uint startRow, uint endRow) =>
-            _rowsByCol.TryGetValue(col, out var rows) && HasAnyInRange(rows, startRow, endRow);
+            HasAnyInRange(_columnKeys, _count, CreateColumnKey(startRow, col), CreateColumnKey(endRow, col));
 
-        private static int GetDictionaryCapacity(int cellCount, uint axisLength) =>
-            (int)Math.Min((uint)cellCount, axisLength);
+        private static ulong CreateRowKey(uint row, uint col) =>
+            ((ulong)row << ColumnKeyBits) | col;
 
-        private static void Add(Dictionary<uint, AxisValues> valuesByKey, uint key, uint value)
+        private static ulong CreateColumnKey(uint row, uint col) =>
+            ((ulong)col << RowKeyBits) | row;
+
+        private static bool HasAnyInRange(ulong[] keys, int count, ulong startKey, ulong endKey)
         {
-            ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(valuesByKey, key, out _);
-            values.Add(value);
-        }
-
-        private static void SortValues(Dictionary<uint, AxisValues> valuesByKey)
-        {
-            foreach (var key in valuesByKey.Keys)
-            {
-                ref var values = ref CollectionsMarshal.GetValueRefOrNullRef(valuesByKey, key);
-                values.Sort();
-            }
-        }
-
-        private static bool HasAnyInRange(AxisValues sortedValues, uint start, uint end)
-        {
-            if (sortedValues.Count == 0)
-                return false;
-
-            if (sortedValues.Count == 1)
-                return sortedValues.First >= start && sortedValues.First <= end;
-
-            if (sortedValues.Count == 2)
-            {
-                return (sortedValues.First >= start && sortedValues.First <= end) ||
-                    (sortedValues.Second >= start && sortedValues.Second <= end);
-            }
-
-            var values = sortedValues.Overflow!;
-            var index = values.BinarySearch(start);
+            var index = Array.BinarySearch(keys, 0, count, startKey);
             if (index < 0)
                 index = ~index;
 
-            return index < values.Count && values[index] <= end;
+            return index < count && keys[index] <= endKey;
         }
 
-        private struct AxisValues
+        public void Dispose()
         {
-            public int Count;
-            public uint First;
-            public uint Second;
-            public List<uint>? Overflow;
-
-            public void Add(uint value)
-            {
-                if (Count == 0)
-                {
-                    First = value;
-                }
-                else if (Count == 1)
-                {
-                    Second = value;
-                }
-                else
-                {
-                    Overflow ??= [First, Second];
-                    Overflow.Add(value);
-                }
-
-                Count++;
-            }
-
-            public void Sort()
-            {
-                if (Count == 2)
-                {
-                    if (Second < First)
-                        (First, Second) = (Second, First);
-                    return;
-                }
-
-                Overflow?.Sort();
-            }
+            ArrayPool<ulong>.Shared.Return(_rowKeys);
+            ArrayPool<ulong>.Shared.Return(_columnKeys);
         }
     }
 }
