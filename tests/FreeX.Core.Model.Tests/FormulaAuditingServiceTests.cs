@@ -405,6 +405,14 @@ public sealed class FormulaAuditingServiceTests
     [InlineData("MIN")]
     [InlineData("MAX")]
     [InlineData("PRODUCT")]
+    [InlineData("STDEV")]
+    [InlineData("STDEVP")]
+    [InlineData("STDEV.S")]
+    [InlineData("STDEV.P")]
+    [InlineData("VAR")]
+    [InlineData("VARP")]
+    [InlineData("VAR.S")]
+    [InlineData("VAR.P")]
     public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsForAggregateFunctions(string functionName)
     {
         var wb = new Workbook("test");
