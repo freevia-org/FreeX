@@ -8,6 +8,8 @@ public partial class GridView
 {
     private DrawingGroup? _drawingObjectLayerCache;
     private DrawingObjectLayerCacheKey _drawingObjectLayerCacheKey;
+    private DrawingObjectLayerCacheKey _lastDrawingObjectLayerRenderKey;
+    private bool _hasLastDrawingObjectLayerRenderKey;
 
     private readonly record struct DrawingObjectLayerCacheKey(
         ViewportModel Viewport,
@@ -43,6 +45,35 @@ public partial class GridView
             return;
         }
 
+        if (_drawingObjectLayerCache is not null)
+            ClearDrawingObjectLayerCache();
+
+        if (!ShouldBuildDrawingObjectLayerCache(key))
+        {
+            RenderDrawingObjectLayers(dc);
+            RememberDrawingObjectLayerRenderKey(key);
+            return;
+        }
+
+        var group = BuildDrawingObjectLayerCache();
+
+        _drawingObjectLayerCache = group;
+        _drawingObjectLayerCacheKey = key;
+        RememberDrawingObjectLayerRenderKey(key);
+        dc.DrawDrawing(group);
+    }
+
+    private bool ShouldBuildDrawingObjectLayerCache(DrawingObjectLayerCacheKey key) =>
+        _hasLastDrawingObjectLayerRenderKey && _lastDrawingObjectLayerRenderKey == key;
+
+    private void RememberDrawingObjectLayerRenderKey(DrawingObjectLayerCacheKey key)
+    {
+        _lastDrawingObjectLayerRenderKey = key;
+        _hasLastDrawingObjectLayerRenderKey = true;
+    }
+
+    private DrawingGroup BuildDrawingObjectLayerCache()
+    {
         var group = new DrawingGroup();
         using (var groupContext = group.Open())
             RenderDrawingObjectLayers(groupContext);
@@ -50,9 +81,7 @@ public partial class GridView
         if (group.CanFreeze)
             group.Freeze();
 
-        _drawingObjectLayerCache = group;
-        _drawingObjectLayerCacheKey = key;
-        dc.DrawDrawing(group);
+        return group;
     }
 
     private void RenderDrawingObjectLayers(DrawingContext dc)
@@ -110,5 +139,6 @@ public partial class GridView
     private void ClearDrawingObjectLayerCache()
     {
         _drawingObjectLayerCache = null;
+        _hasLastDrawingObjectLayerRenderKey = false;
     }
 }
