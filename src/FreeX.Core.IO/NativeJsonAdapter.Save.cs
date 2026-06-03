@@ -82,38 +82,8 @@ public sealed partial class NativeJsonAdapter
                         .Select(ToCustomViewSheetDto)
                         .ToList()
                 }).ToList(),
-            WatchedCells = workbook.WatchedCells.Select(address =>
-            {
-                var sheet = workbook.GetSheet(address.Sheet);
-                return sheet is null || !IsValidAddressOnSheet(address, sheet.Id)
-                    ? null
-                    : new WatchedCellDto { SheetName = sheet.Name, Address = address.ToA1() };
-            }).OfType<WatchedCellDto>().ToList(),
-            Scenarios = workbook.Scenarios
-                .OfType<WorkbookScenario>()
-                .Select(scenario => new ScenarioDto
-                {
-                    Name = scenario.Name,
-                    Comment = string.IsNullOrWhiteSpace(scenario.Comment) ? null : scenario.Comment,
-                    Hidden = scenario.Hidden,
-                    Locked = scenario.Locked,
-                    User = string.IsNullOrWhiteSpace(scenario.User) ? null : scenario.User,
-                    ChangingCells = (scenario.ChangingCells ?? []).OfType<ScenarioCellValue>().Select(change =>
-                    {
-                        var sheet = workbook.GetSheet(change.Address.Sheet);
-                        if (sheet is null || !IsValidAddressOnSheet(change.Address, sheet.Id))
-                            return null;
-
-                        var serializedValue = NativeJsonScalarValueMapper.SerializeWithType(change.Value);
-                        return new ScenarioCellDto
-                        {
-                            SheetName = sheet.Name,
-                            Address = change.Address.ToA1(),
-                            Value = serializedValue.Value,
-                            ValueType = serializedValue.ValueType
-                        };
-                    }).OfType<ScenarioCellDto>().ToList()
-                }).Where(scenario => scenario.ChangingCells.Count > 0).ToList(),
+            WatchedCells = ToWatchedCellDtos(workbook),
+            Scenarios = ToScenarioDtos(workbook),
             PivotCaches = workbook.PivotCaches
                 .OfType<PivotCacheModel>()
                 .Where(cache => cache.CacheId > 0)
@@ -321,6 +291,80 @@ public sealed partial class NativeJsonAdapter
         PopulateCalculationOptions(workbook, dto);
 
         JsonSerializer.Serialize(stream, dto, SaveOptions);
+    }
+
+    private static List<WatchedCellDto> ToWatchedCellDtos(Workbook workbook)
+    {
+        if (workbook.WatchedCells.Count == 0)
+            return [];
+
+        var watchedCells = new List<WatchedCellDto>(workbook.WatchedCells.Count);
+        foreach (var address in workbook.WatchedCells)
+        {
+            var sheet = workbook.GetSheet(address.Sheet);
+            if (sheet is null || !IsValidAddressOnSheet(address, sheet.Id))
+                continue;
+
+            watchedCells.Add(new WatchedCellDto
+            {
+                SheetName = sheet.Name,
+                Address = address.ToA1()
+            });
+        }
+
+        return watchedCells;
+    }
+
+    private static List<ScenarioDto> ToScenarioDtos(Workbook workbook)
+    {
+        if (workbook.Scenarios.Count == 0)
+            return [];
+
+        var scenarios = new List<ScenarioDto>(workbook.Scenarios.Count);
+        foreach (var scenario in workbook.Scenarios)
+        {
+            if (scenario is null)
+                continue;
+
+            IReadOnlyList<ScenarioCellValue> changes = scenario.ChangingCells ?? [];
+            if (changes.Count == 0)
+                continue;
+
+            var changingCells = new List<ScenarioCellDto>(changes.Count);
+            foreach (var change in changes)
+            {
+                if (change is null)
+                    continue;
+
+                var sheet = workbook.GetSheet(change.Address.Sheet);
+                if (sheet is null || !IsValidAddressOnSheet(change.Address, sheet.Id))
+                    continue;
+
+                var serializedValue = NativeJsonScalarValueMapper.SerializeWithType(change.Value);
+                changingCells.Add(new ScenarioCellDto
+                {
+                    SheetName = sheet.Name,
+                    Address = change.Address.ToA1(),
+                    Value = serializedValue.Value,
+                    ValueType = serializedValue.ValueType
+                });
+            }
+
+            if (changingCells.Count == 0)
+                continue;
+
+            scenarios.Add(new ScenarioDto
+            {
+                Name = scenario.Name,
+                Comment = string.IsNullOrWhiteSpace(scenario.Comment) ? null : scenario.Comment,
+                Hidden = scenario.Hidden,
+                Locked = scenario.Locked,
+                User = string.IsNullOrWhiteSpace(scenario.User) ? null : scenario.User,
+                ChangingCells = changingCells
+            });
+        }
+
+        return scenarios;
     }
 
     private static void WriteCellDtos(Utf8JsonWriter writer, Sheet sheet, JsonSerializerOptions options)
