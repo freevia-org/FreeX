@@ -43,7 +43,7 @@ public sealed class NumberFormatterRegexCachePerformanceTests
         var colorSource = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.Core.Calc", "NumberFormatColorMapper.cs"));
 
-        colorSource.Should().Contain("TokenEqualsIgnoringWhitespace(token, \"THEMEACCENT1\")");
+        colorSource.Should().Contain("TryConsumeIgnoringWhitespace(token, \"THEMEACCENT1\"");
         colorSource.Should().Contain("TokenStartsWithIgnoringWhitespace(token, \"THEME\")");
         colorSource.Should().Contain("StringComparison.OrdinalIgnoreCase");
         colorSource.Should().NotContain(

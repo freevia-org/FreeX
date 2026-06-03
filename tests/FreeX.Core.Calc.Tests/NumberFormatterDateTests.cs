@@ -22,4 +22,14 @@ public sealed class NumberFormatterDateTests
 
         result.Should().Be("45292.13");
     }
+
+    [Fact]
+    public void Format_DateTimeValueWithTintedThemeColorDirective_RendersDateText()
+    {
+        var result = NumberFormatter.Format(
+            new DateTimeValue(new DateTime(2026, 6, 3).ToOADate()),
+            "[ThemeAccent1Tint40]yyyy-mm-dd");
+
+        result.Should().Be("2026-06-03");
+    }
 }

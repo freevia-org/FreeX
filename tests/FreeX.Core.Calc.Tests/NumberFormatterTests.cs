@@ -351,6 +351,29 @@ public class NumberFormatterTests
         Assert.Equal("#123456", result.ColorHex);
     }
 
+    [Theory]
+    [InlineData("[ThemeAccent1Tint40]0.0", "#71859A")]
+    [InlineData("[Theme Accent1 Tint 40]0.0", "#71859A")]
+    [InlineData("[ThemeAccent1Tint40%]0.0", "#71859A")]
+    [InlineData("[ThemeAccent1Tint-25]0.0", "#0E2740")]
+    public void CustomNumberSubset_ResolvesTintedThemeColorDirectivesWithWorkbookTheme(
+        string numberFormat,
+        string expectedColor)
+    {
+        var theme = WorkbookTheme.Office.WithColor(
+            WorkbookThemeColorSlot.Accent1,
+            CellColor.FromArgb(0x12, 0x34, 0x56));
+
+        var result = NumberFormatter.FormatWithColor(
+            new NumberValue(12.5),
+            numberFormat,
+            new WorkbookIndexedColorPalette(),
+            theme);
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
+    }
+
     [Fact]
     public void CustomNumberSubset_IgnoresThemeColorDirectivesWithoutThemeContext()
     {
@@ -361,7 +384,7 @@ public class NumberFormatterTests
     }
 
     [Fact]
-    public void CustomNumberSubset_UnsupportedThemeColorDirectiveDoesNotBlockConditions()
+    public void CustomNumberSubset_TintedThemeColorDirectiveWithoutThemeContextDoesNotBlockConditions()
     {
         var result = NumberFormatter.FormatWithColor(
             new NumberValue(12.5),
