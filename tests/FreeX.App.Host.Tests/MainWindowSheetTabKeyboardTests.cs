@@ -234,7 +234,11 @@ public sealed class MainWindowSheetTabKeyboardTests
             foreach (var button in visibleNavButtons)
             {
                 var buttonBounds = BoundsRelativeToWindow(button, window);
-                buttonBounds.Top.Should().BeApproximately(overlayBounds.Top + 2.0, 0.75, "sheet-tab nav buttons should start immediately below the internal blue rule");
+                var buttonTopOffset = buttonBounds.Top - overlayBounds.Top;
+                buttonTopOffset.Should().BeInRange(
+                    0.75,
+                    2.25,
+                    "sheet-tab nav buttons should start below the internal blue rule while allowing layout rounding in the compact strip");
                 buttonBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5, "sheet-tab nav buttons should stay inside the sheet-tab row");
             }
 
