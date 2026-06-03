@@ -9,7 +9,7 @@ public sealed partial class FormulaEvaluator
         if (IsArithmeticOperator(node.Operator) &&
             TryEvaluateNumericScalar(node, context, out var numericResult, out var numericError) != NumericScalarEvaluationState.Unsupported)
         {
-            return numericError is not null ? numericError : new NumberValue(numericResult);
+            return numericError is not null ? numericError : NumberValueFor(numericResult);
         }
 
         var left = EvaluateArrayOperand(node.Left, context);
@@ -216,7 +216,7 @@ public sealed partial class FormulaEvaluator
     {
         if (baseVal == 0 && exp <= 0) return exp == 0 ? ErrorValue.Num : ErrorValue.DivByZero;
         double result = Math.Pow(baseVal, exp);
-        return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
+        return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }
 
     private static ScalarValue ArithOp(ScalarValue left, ScalarValue right, ArithmeticKind kind)
@@ -259,7 +259,7 @@ public sealed partial class FormulaEvaluator
             ArithmeticKind.Subtract => leftNumber - rightNumber,
             _ => leftNumber * rightNumber
         };
-        return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
+        return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }
 
     private static ScalarValue DivideOp(ScalarValue left, ScalarValue right)
@@ -279,7 +279,7 @@ public sealed partial class FormulaEvaluator
     {
         if (divisor == 0) return ErrorValue.DivByZero;
         double result = dividend / divisor;
-        return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
+        return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }
 
     private static ScalarValue ConcatOp(ScalarValue left, ScalarValue right)
@@ -482,10 +482,10 @@ public sealed partial class FormulaEvaluator
     private static ScalarValue NegateScalarOp(ScalarValue v)
     {
         if (v is NumberValue numberValue)
-            return new NumberValue(-numberValue.Value);
+            return NumberValueFor(-numberValue.Value);
 
         if (!TryCoerceToNumberValue(v, out var number)) return NumericCoercionError(v);
-        return new NumberValue(-number);
+        return NumberValueFor(-number);
     }
 
     private static ScalarValue PercentOp(ScalarValue v)
@@ -494,10 +494,10 @@ public sealed partial class FormulaEvaluator
     private static ScalarValue PercentScalarOp(ScalarValue v)
     {
         if (v is NumberValue numberValue)
-            return new NumberValue(numberValue.Value / 100.0);
+            return NumberValueFor(numberValue.Value / 100.0);
 
         if (!TryCoerceToNumberValue(v, out var number)) return NumericCoercionError(v);
-        return new NumberValue(number / 100.0);
+        return NumberValueFor(number / 100.0);
     }
 
     private static ScalarValue ElementwiseUnaryOp(ScalarValue value, Func<ScalarValue, ScalarValue> scalarOp)
@@ -518,12 +518,12 @@ public sealed partial class FormulaEvaluator
     {
         ErrorValue e => e,
         NumberValue => v,
-        BlankValue => new NumberValue(0),
-        BoolValue b => new NumberValue(b.Value ? 1 : 0),
+        BlankValue => NumberValueFor(0),
+        BoolValue b => NumberValueFor(b.Value ? 1 : 0),
         TextValue t when ExcelTextNumberParser.TryParse(t.Value, out var d) =>
-            new NumberValue(d),
+            NumberValueFor(d),
         TextValue => ErrorValue.Value,
-        DateTimeValue dt => new NumberValue(dt.Value),
+        DateTimeValue dt => NumberValueFor(dt.Value),
         _ => ErrorValue.Value
     };
 

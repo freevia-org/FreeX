@@ -289,7 +289,9 @@ public class PerformanceBenchmarkTests
 
         insideReport.RecalculatedCells.Should().Contain(formula);
         outsideReport.RecalculatedCells.Should().NotContain(formula);
-        rebuildAllocated.Should().BeLessThan(16_000_000);
+        rebuildAllocated.Should().BeLessThan(
+            1_000_000,
+            "dependency-only range registration should not initialize the full formula evaluator registry");
     }
 
     [Fact]
