@@ -22,6 +22,8 @@ internal static class ExcelOpenSmoke
 {
     private const uint ExcelOpenRejectedHResult = 0x800A03ECu;
     private const int ExcelCellTypeFormulas = -4123;
+    private const int ExcelCellTypeAllValidation = -4174;
+    private const int MaxDataValidationProbeCells = 20000;
     private const int MaxOpenXmlValidationErrorsToReport = 20;
 
     public static int Run(string[] args)
@@ -547,6 +549,8 @@ internal static class ExcelOpenSmoke
             var worksheetCount = Convert.ToInt32(((dynamic)worksheets).Count, CultureInfo.InvariantCulture);
             var namedRangeCount = CountWorkbookUserDefinedNames(workbook);
             var chartCount = CountWorkbookChartSheets(workbook);
+            var dataValidationCellCount = 0;
+            var conditionalFormatCount = 0;
             var shapeCount = 0;
             var formulaCellCount = 0;
             var structuredTableCount = 0;
@@ -583,6 +587,24 @@ internal static class ExcelOpenSmoke
 
                     try
                     {
+                        dataValidationCellCount += CountWorksheetDataValidationCells(worksheet);
+                    }
+                    catch (COMException ex)
+                    {
+                        throw new InvalidDataException($"Excel data-validation count failed for worksheet index {index}", ex);
+                    }
+
+                    try
+                    {
+                        conditionalFormatCount += CountWorksheetConditionalFormats(worksheet);
+                    }
+                    catch (COMException ex)
+                    {
+                        throw new InvalidDataException($"Excel conditional-format count failed for worksheet index {index}", ex);
+                    }
+
+                    try
+                    {
                         listObjects = ((dynamic)worksheet).ListObjects;
                         structuredTableCount += Convert.ToInt32(((dynamic)listObjects).Count, CultureInfo.InvariantCulture);
                     }
@@ -610,7 +632,16 @@ internal static class ExcelOpenSmoke
                 }
             }
 
-            return new ExcelWorkbookSummary(worksheetCount, namedRangeCount, chartCount, shapeCount, formulaCellCount, structuredTableCount, pivotTableCount);
+            return new ExcelWorkbookSummary(
+                worksheetCount,
+                namedRangeCount,
+                chartCount,
+                dataValidationCellCount,
+                conditionalFormatCount,
+                shapeCount,
+                formulaCellCount,
+                structuredTableCount,
+                pivotTableCount);
         }
         finally
         {
@@ -702,6 +733,144 @@ internal static class ExcelOpenSmoke
         finally
         {
             ReleaseComObject(chartObjects);
+        }
+    }
+
+    private static int CountWorksheetDataValidationCells(object worksheet)
+    {
+        object? cells = null;
+        object? validationCells = null;
+        try
+        {
+            cells = ((dynamic)worksheet).Cells;
+            validationCells = ((dynamic)cells).SpecialCells(ExcelCellTypeAllValidation);
+            return CountRangeCellsCapped(validationCells);
+        }
+        catch (COMException)
+        {
+            return IsWorksheetProtected(worksheet)
+                ? CountWorksheetDataValidationCellsByProbe(worksheet)
+                : 0;
+        }
+        finally
+        {
+            ReleaseComObject(validationCells);
+            ReleaseComObject(cells);
+        }
+    }
+
+    private static bool IsWorksheetProtected(object worksheet)
+    {
+        try
+        {
+            return Convert.ToBoolean(((dynamic)worksheet).ProtectContents, CultureInfo.InvariantCulture);
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+    }
+
+    private static int CountWorksheetDataValidationCellsByProbe(object worksheet)
+    {
+        object? usedRange = null;
+        object? rows = null;
+        object? columns = null;
+        object? cells = null;
+        try
+        {
+            usedRange = ((dynamic)worksheet).UsedRange;
+            rows = ((dynamic)usedRange).Rows;
+            columns = ((dynamic)usedRange).Columns;
+            cells = ((dynamic)worksheet).Cells;
+
+            var firstRow = Convert.ToInt32(((dynamic)usedRange).Row, CultureInfo.InvariantCulture);
+            var firstColumn = Convert.ToInt32(((dynamic)usedRange).Column, CultureInfo.InvariantCulture);
+            var rowCount = Convert.ToInt32(((dynamic)rows).Count, CultureInfo.InvariantCulture);
+            var columnCount = Convert.ToInt32(((dynamic)columns).Count, CultureInfo.InvariantCulture);
+            var count = 0;
+            var probed = 0;
+
+            for (var rowOffset = 0; rowOffset < rowCount && probed < MaxDataValidationProbeCells; rowOffset++)
+            {
+                for (var columnOffset = 0; columnOffset < columnCount && probed < MaxDataValidationProbeCells; columnOffset++)
+                {
+                    object? cell = null;
+                    try
+                    {
+                        cell = ((dynamic)cells)[firstRow + rowOffset, firstColumn + columnOffset];
+                        probed++;
+                        if (CellHasDataValidation(cell))
+                            count++;
+                    }
+                    finally
+                    {
+                        ReleaseComObject(cell);
+                    }
+                }
+            }
+
+            return count;
+        }
+        catch (COMException)
+        {
+            return 0;
+        }
+        finally
+        {
+            ReleaseComObject(cells);
+            ReleaseComObject(columns);
+            ReleaseComObject(rows);
+            ReleaseComObject(usedRange);
+        }
+    }
+
+    private static bool CellHasDataValidation(object cell)
+    {
+        object? validation = null;
+        try
+        {
+            validation = ((dynamic)cell).Validation;
+            var typeText = Convert.ToString(((dynamic)validation).Type, CultureInfo.InvariantCulture);
+            return !string.IsNullOrWhiteSpace(typeText);
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        finally
+        {
+            ReleaseComObject(validation);
+        }
+    }
+
+    private static int CountWorksheetConditionalFormats(object worksheet)
+    {
+        object? cells = null;
+        object? formatConditions = null;
+        try
+        {
+            cells = ((dynamic)worksheet).Cells;
+            formatConditions = ((dynamic)cells).FormatConditions;
+            return Convert.ToInt32(((dynamic)formatConditions).Count, CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            ReleaseComObject(formatConditions);
+            ReleaseComObject(cells);
+        }
+    }
+
+    private static int CountRangeCellsCapped(object range)
+    {
+        try
+        {
+            var countLarge = Convert.ToDouble(((dynamic)range).CountLarge, CultureInfo.InvariantCulture);
+            return countLarge >= int.MaxValue ? int.MaxValue : Convert.ToInt32(countLarge, CultureInfo.InvariantCulture);
+        }
+        catch (COMException)
+        {
+            return Convert.ToInt32(((dynamic)range).Count, CultureInfo.InvariantCulture);
         }
     }
 
@@ -1100,9 +1269,13 @@ internal static class ExcelOpenSmoke
             MinFreeXPreSaveStructureProtection: expectFreeXPreSave ? minStructureProtection : 0,
             MinExcelOpenedFormulaCells: minFormulaCells,
             MinExcelOpenedStructuredTables: minStructuredTables,
+            MinExcelOpenedDataValidationCells: minDataValidations > 0 ? 1 : 0,
+            MinExcelOpenedConditionalFormats: minConditionalFormats,
             MinExcelOpenedShapes: minExcelShapes,
             MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
             MinExcelReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
+            MinExcelReopenedDataValidationCells: saveReopen && minDataValidations > 0 ? 1 : 0,
+            MinExcelReopenedConditionalFormats: saveReopen ? minConditionalFormats : 0,
             MinExcelReopenedShapes: saveReopen ? minExcelShapes : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
             MinFreeXReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
@@ -1210,10 +1383,14 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedFormulaCells: 1,
             MinExcelOpenedNamedRanges: 1,
             MinExcelOpenedStructuredTables: 1,
+            MinExcelOpenedDataValidationCells: 1,
+            MinExcelOpenedConditionalFormats: 1,
             MinExcelOpenedShapes: 2,
             MinExcelReopenedFormulaCells: saveReopen ? 1 : 0,
             MinExcelReopenedNamedRanges: saveReopen ? 1 : 0,
             MinExcelReopenedStructuredTables: saveReopen ? 1 : 0,
+            MinExcelReopenedDataValidationCells: saveReopen ? 1 : 0,
+            MinExcelReopenedConditionalFormats: saveReopen ? 1 : 0,
             MinExcelReopenedShapes: saveReopen ? 2 : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? 1 : 0,
             MinFreeXReopenedNamedRanges: saveReopen ? 1 : 0,
@@ -1262,6 +1439,10 @@ internal static class ExcelOpenSmoke
         new(
             MinFreeXPreSaveDataValidations: expectFreeXPreSave ? 3 : 0,
             MinFreeXPreSaveConditionalFormats: expectFreeXPreSave ? 4 : 0,
+            MinExcelOpenedDataValidationCells: 1,
+            MinExcelOpenedConditionalFormats: 4,
+            MinExcelReopenedDataValidationCells: saveReopen ? 1 : 0,
+            MinExcelReopenedConditionalFormats: saveReopen ? 4 : 0,
             MinFreeXReopenedDataValidations: saveReopen ? 3 : 0,
             MinFreeXReopenedConditionalFormats: saveReopen ? 4 : 0);
 
@@ -1376,6 +1557,16 @@ internal static class ExcelOpenSmoke
             expectations.MinExcelOpenedCharts,
             input);
         AssertMin(
+            "Excel open data-validation cells",
+            opened.DataValidationCellCount,
+            expectations.MinExcelOpenedDataValidationCells,
+            input);
+        AssertMin(
+            "Excel open conditional formats",
+            opened.ConditionalFormatCount,
+            expectations.MinExcelOpenedConditionalFormats,
+            input);
+        AssertMin(
             "Excel open worksheet shapes",
             opened.ShapeCount,
             expectations.MinExcelOpenedShapes,
@@ -1399,6 +1590,16 @@ internal static class ExcelOpenSmoke
             "Excel reopen charts",
             reopened?.ChartCount,
             expectations.MinExcelReopenedCharts,
+            input);
+        AssertMin(
+            "Excel reopen data-validation cells",
+            reopened?.DataValidationCellCount,
+            expectations.MinExcelReopenedDataValidationCells,
+            input);
+        AssertMin(
+            "Excel reopen conditional formats",
+            reopened?.ConditionalFormatCount,
+            expectations.MinExcelReopenedConditionalFormats,
             input);
         AssertMin(
             "Excel reopen worksheet shapes",
@@ -1584,12 +1785,12 @@ internal static class ExcelOpenSmoke
         if (result.Opened is { } opened)
         {
             Console.WriteLine(
-                $"  Excel open: worksheets {opened.WorksheetCount}; named ranges {opened.NamedRangeCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; charts {opened.ChartCount}; worksheet shapes {opened.ShapeCount}; pivots {opened.PivotTableCount}");
+                $"  Excel open: worksheets {opened.WorksheetCount}; named ranges {opened.NamedRangeCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; charts {opened.ChartCount}; validation cells {opened.DataValidationCellCount}; conditional formats {opened.ConditionalFormatCount}; worksheet shapes {opened.ShapeCount}; pivots {opened.PivotTableCount}");
         }
         if (result.Reopened is { } reopened)
         {
             Console.WriteLine(
-                $"  Excel reopen: worksheets {reopened.WorksheetCount}; named ranges {reopened.NamedRangeCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; charts {reopened.ChartCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
+                $"  Excel reopen: worksheets {reopened.WorksheetCount}; named ranges {reopened.NamedRangeCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; charts {reopened.ChartCount}; validation cells {reopened.DataValidationCellCount}; conditional formats {reopened.ConditionalFormatCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
         }
         if (result.FreeXReopenedExcelSave is { } freeXReopened)
             WriteFreeXSummary("FreeX reopened Excel save", freeXReopened);
