@@ -241,6 +241,7 @@ internal static class ExcelOpenSmoke
         string sourceForExcel = input.SourcePath;
         string? freeXSavedPath = null;
         FreeXWorkbookSummary? freeXPreSave = null;
+        IReadOnlyList<string> freeXPreSaveWarnings = [];
 
         try
         {
@@ -250,10 +251,12 @@ internal static class ExcelOpenSmoke
             if (input.Workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel)
             {
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
+                AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
                 sourceForExcel = freeXSave.SavedPath;
                 freeXSavedPath = freeXSave.SavedPath;
                 freeXPreSave = freeXSave.Summary;
+                freeXPreSaveWarnings = freeXSave.LoadWarnings;
             }
 
             var stagedPath = CopyToStagingDirectory(sourceForExcel, stagingDirectory);
@@ -269,13 +272,16 @@ internal static class ExcelOpenSmoke
                     opened,
                     null,
                     freeXPreSave,
-                    null);
+                    freeXPreSaveWarnings,
+                    null,
+                    Array.Empty<string>());
             }
 
             var excelSavedPath = CreateDerivedOutputPath(excelSavedDirectory, stagedPath, "excel-saved");
             var saveReopenResult = OpenSaveCloseReopenWorkbook(workbooks, stagedPath, excelSavedPath);
             var freeXReopenedExcelSave = LoadWorkbookSummary(saveReopenResult.ExcelSavedPath);
-            AssertSmokeExpectations(input, freeXPreSave, saveReopenResult.Opened, saveReopenResult.Reopened, freeXReopenedExcelSave);
+            AssertFreeXLoadWarnings(input, "FreeX reopened Excel save", freeXReopenedExcelSave.Warnings);
+            AssertSmokeExpectations(input, freeXPreSave, saveReopenResult.Opened, saveReopenResult.Reopened, freeXReopenedExcelSave.Summary);
 
             return WorkbookSmokeResult.Pass(
                 input,
@@ -285,7 +291,9 @@ internal static class ExcelOpenSmoke
                 saveReopenResult.Opened,
                 saveReopenResult.Reopened,
                 freeXPreSave,
-                freeXReopenedExcelSave);
+                freeXPreSaveWarnings,
+                freeXReopenedExcelSave.Summary,
+                freeXReopenedExcelSave.Warnings);
         }
         catch (Exception ex)
         {
@@ -695,12 +703,13 @@ internal static class ExcelOpenSmoke
     {
         Directory.CreateDirectory(outputDirectory);
         var adapter = new XlsxFileAdapter();
-        Workbook workbook;
+        XlsxLoadResult loadResult;
         using (var input = File.OpenRead(sourcePath))
         {
-            workbook = adapter.Load(input);
+            loadResult = adapter.LoadWithWarnings(input);
         }
 
+        var workbook = loadResult.Workbook;
         var summary = SummarizeWorkbook(workbook);
         AddFreeXSaveMarker(workbook);
         var outputPath = CreateDerivedOutputPath(outputDirectory, sourcePath, "freex-saved");
@@ -709,14 +718,14 @@ internal static class ExcelOpenSmoke
             adapter.Save(workbook, output);
         }
 
-        return new FreeXSaveResult(outputPath, summary);
+        return new FreeXSaveResult(outputPath, summary, loadResult.Warnings);
     }
 
-    private static FreeXWorkbookSummary LoadWorkbookSummary(string sourcePath)
+    private static FreeXLoadSummaryResult LoadWorkbookSummary(string sourcePath)
     {
         using var input = File.OpenRead(sourcePath);
-        var workbook = new XlsxFileAdapter().Load(input);
-        return SummarizeWorkbook(workbook);
+        var result = new XlsxFileAdapter().LoadWithWarnings(input);
+        return new FreeXLoadSummaryResult(SummarizeWorkbook(result.Workbook), result.Warnings);
     }
 
     private static FreeXWorkbookSummary SummarizeWorkbook(Workbook workbook) =>
@@ -851,19 +860,39 @@ internal static class ExcelOpenSmoke
 
         if (HasSupportedFeatureExpectations(row))
         {
-            return SupportedCorpusExpectations(
+            var supportedExpectations = SupportedCorpusExpectations(
                 row,
                 saveReopen,
                 expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel);
+            return ApplyFreeXLoadWarningExpectation(row, supportedExpectations);
         }
 
-        return null;
+        return ApplyFreeXLoadWarningExpectation(row, null);
     }
 
     private static bool HasSupportedFeatureExpectations(CorpusManifestRow row) =>
         string.Equals(row.ExpectedStatus, "supported-pass", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(row.ExpectedStatus, "public-pass", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(row.ExpectedStatus, "supported-pivot-metadata-pass", StringComparison.OrdinalIgnoreCase);
+
+    private static WorkbookSmokeExpectations? ApplyFreeXLoadWarningExpectation(
+        CorpusManifestRow row,
+        WorkbookSmokeExpectations? expectations)
+    {
+        if (!RequiresNoFreeXLoadWarnings(row))
+            return expectations;
+
+        return expectations is null
+            ? new WorkbookSmokeExpectations(RequireNoFreeXLoadWarnings: true)
+            : expectations with { RequireNoFreeXLoadWarnings = true };
+    }
+
+    private static bool RequiresNoFreeXLoadWarnings(CorpusManifestRow row) =>
+        !string.Equals(row.SourceType, "public", StringComparison.OrdinalIgnoreCase) &&
+        string.IsNullOrWhiteSpace(row.ExpectedWarnings) &&
+        (string.Equals(row.ExpectedStatus, "supported-pass", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(row.ExpectedStatus, "supported-metadata-pass", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(row.ExpectedStatus, "supported-pivot-metadata-pass", StringComparison.OrdinalIgnoreCase));
 
     private static WorkbookSmokeExpectations? SupportedCorpusExpectations(
         CorpusManifestRow row,
@@ -1225,6 +1254,28 @@ internal static class ExcelOpenSmoke
             input);
     }
 
+    private static void AssertFreeXLoadWarnings(
+        WorkbookSmokeInput input,
+        string label,
+        IReadOnlyList<string> warnings)
+    {
+        if (input.Expectations?.RequireNoFreeXLoadWarnings != true || warnings.Count == 0)
+            return;
+
+        throw new InvalidDataException(
+            $"{label} produced {warnings.Count} warning(s) for {input.Description}: {FormatWarnings(warnings)}");
+    }
+
+    private static string FormatWarnings(IReadOnlyList<string> warnings)
+    {
+        const int maxWarningsToReport = 8;
+        var sample = string.Join("; ", warnings.Take(maxWarningsToReport));
+        var suffix = warnings.Count > maxWarningsToReport
+            ? $"; ... {warnings.Count - maxWarningsToReport} more"
+            : string.Empty;
+        return $"{sample}{suffix}";
+    }
+
     private static void AssertFreeXMetadataExpectations(
         string label,
         FreeXWorkbookSummary? summary,
@@ -1324,6 +1375,7 @@ internal static class ExcelOpenSmoke
 
         if (result.FreeXPreSave is { } freeXPreSave)
             WriteFreeXSummary("FreeX source load", freeXPreSave);
+        WriteFreeXWarnings("FreeX source load", result.FreeXPreSaveWarnings);
 
         if (result.Opened is { } opened)
         {
@@ -1337,6 +1389,7 @@ internal static class ExcelOpenSmoke
         }
         if (result.FreeXReopenedExcelSave is { } freeXReopened)
             WriteFreeXSummary("FreeX reopened Excel save", freeXReopened);
+        WriteFreeXWarnings("FreeX reopened Excel save", result.FreeXReopenedExcelSaveWarnings);
 
         if (!result.Success)
             Console.WriteLine($"  Error: {result.Error}");
@@ -1348,6 +1401,14 @@ internal static class ExcelOpenSmoke
             $"  {label}: sheets {summary.SheetCount}; cells {summary.CellCount}; formulas {summary.FormulaCellCount}; tables {summary.StructuredTableCount}; pivots {summary.PivotTableCount}; pivot caches {summary.PivotCacheCount}");
         Console.WriteLine(
             $"  {label} metadata: validations {summary.DataValidationCount}; conditional formats {summary.ConditionalFormatCount}; hyperlinks {summary.HyperlinkCount}; comments {summary.CommentCount}; pictures {summary.PictureCount}; sparklines {summary.SparklineCount}; text boxes {summary.TextBoxCount}; drawing shapes {summary.DrawingShapeCount}; protected sheets {summary.ProtectedSheetCount}; structure protection {summary.StructureProtectionCount}");
+    }
+
+    private static void WriteFreeXWarnings(string label, IReadOnlyList<string> warnings)
+    {
+        if (warnings.Count == 0)
+            return;
+
+        Console.WriteLine($"  {label} warnings: {FormatWarnings(warnings)}");
     }
 
     private static string FormatWorkflow(WorkbookValidationWorkflow workflow) =>
@@ -1428,7 +1489,9 @@ internal static class ExcelOpenSmoke
                 opened = result.Opened,
                 reopened = result.Reopened,
                 freeXPreSave = result.FreeXPreSave,
+                freeXPreSaveWarnings = result.FreeXPreSaveWarnings,
                 freeXReopenedExcelSave = result.FreeXReopenedExcelSave,
+                freeXReopenedExcelSaveWarnings = result.FreeXReopenedExcelSaveWarnings,
                 error = result.Error
             })
         };
