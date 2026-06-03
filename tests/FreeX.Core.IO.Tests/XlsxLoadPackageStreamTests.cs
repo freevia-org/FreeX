@@ -209,18 +209,86 @@ public sealed class XlsxLoadPackageStreamTests
         package.ReadByte().Should().Be(2);
     }
 
+    [Fact]
+    public void CreateLoadPackageStream_RejectsSeekableStreamsBeforeAllocatingOverCap()
+    {
+        var buffer = new byte[] { 1, 2, 3, 4 };
+        using var source = new NonMemoryReadStream(buffer);
+
+        Action act = () => CreateLoadPackageStream(source, maxFileBytes: 3);
+
+        act.Should().Throw<WorkbookTooLargeException>();
+        source.Position.Should().Be(0, "seekable oversized streams should be rejected before copying");
+    }
+
+    [Fact]
+    public void CreateLoadPackageStream_RejectsNonSeekableStreamsWhileCopyingWithCap()
+    {
+        var buffer = new byte[] { 1, 2, 3, 4 };
+        using var source = new NonSeekableReadStream(buffer);
+
+        Action act = () => CreateLoadPackageStream(source, maxFileBytes: 3);
+
+        act.Should().Throw<WorkbookTooLargeException>();
+        source.BytesRead.Should().Be(4, "the bounded copy should read only enough to prove the stream exceeds the cap");
+    }
+
     private static MemoryStream CreateLoadPackageStream(
         Stream stream,
         bool expectedCanReuseBufferForSnapshot)
     {
+        var packageStream = CreateLoadPackageStream(stream);
+
+        var canReuseBufferForSnapshot = GetCanReuseBufferForSnapshot(packageStream.LoadPackage);
+        canReuseBufferForSnapshot.Should().Be(expectedCanReuseBufferForSnapshot);
+        return packageStream.PackageStream;
+    }
+
+    private static MemoryStream CreateLoadPackageStream(Stream stream, long? maxFileBytes = null)
+    {
         var method = typeof(XlsxFileAdapter).GetMethod(
             "CreateLoadPackageStream",
-            BindingFlags.NonPublic | BindingFlags.Static);
+            BindingFlags.NonPublic | BindingFlags.Static,
+            binder: null,
+            maxFileBytes is null ? [typeof(Stream)] : [typeof(Stream), typeof(long)],
+            modifiers: null);
 
         method.Should().NotBeNull();
-        var loadPackage = method!.Invoke(null, [stream]);
+        var arguments = maxFileBytes is null ? new object[] { stream } : [stream, maxFileBytes.Value];
+        var loadPackage = InvokeCreateLoadPackageStream(method!, arguments);
         loadPackage.Should().NotBeNull();
+        return GetPackageStream(loadPackage!);
+    }
 
+    private static (object LoadPackage, MemoryStream PackageStream) CreateLoadPackageStream(Stream stream)
+    {
+        var method = typeof(XlsxFileAdapter).GetMethod(
+            "CreateLoadPackageStream",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            binder: null,
+            [typeof(Stream)],
+            modifiers: null);
+
+        method.Should().NotBeNull();
+        var loadPackage = InvokeCreateLoadPackageStream(method!, [stream]);
+        loadPackage.Should().NotBeNull();
+        return (loadPackage!, GetPackageStream(loadPackage!));
+    }
+
+    private static object? InvokeCreateLoadPackageStream(MethodInfo method, object[] arguments)
+    {
+        try
+        {
+            return method.Invoke(null, arguments);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            throw ex.InnerException;
+        }
+    }
+
+    private static MemoryStream GetPackageStream(object loadPackage)
+    {
         var loadPackageType = loadPackage!.GetType();
         var packageStreamProperty = loadPackageType.GetProperty(
             "PackageStream",
@@ -231,6 +299,12 @@ public sealed class XlsxLoadPackageStreamTests
             .Should()
             .BeOfType<MemoryStream>()
             .Subject;
+        return packageStream;
+    }
+
+    private static bool GetCanReuseBufferForSnapshot(object loadPackage)
+    {
+        var loadPackageType = loadPackage.GetType();
         var canReuseBufferForSnapshotProperty = loadPackageType.GetProperty(
             "CanReuseBufferForSnapshot",
             BindingFlags.Instance | BindingFlags.Public);
@@ -241,8 +315,7 @@ public sealed class XlsxLoadPackageStreamTests
             .BeOfType<bool>()
             .Subject;
 
-        canReuseBufferForSnapshot.Should().Be(expectedCanReuseBufferForSnapshot);
-        return packageStream;
+        return canReuseBufferForSnapshot;
     }
 
     private static MemoryStream CreateStyleOnlyStrippedPackage(MemoryStream package)
@@ -387,6 +460,45 @@ public sealed class XlsxLoadPackageStreamTests
         public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
         public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
         public override void SetLength(long value) => inner.SetLength(value);
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                inner.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class NonSeekableReadStream(byte[] buffer) : Stream
+    {
+        private readonly MemoryStream inner = new(buffer, writable: false);
+
+        public int BytesRead { get; private set; }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = inner.Read(buffer, offset, count);
+            BytesRead += read;
+            return read;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
         protected override void Dispose(bool disposing)

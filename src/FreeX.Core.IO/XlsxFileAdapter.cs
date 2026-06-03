@@ -620,8 +620,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
              path.Replace('\\', '/').StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static LoadPackageStream CreateLoadPackageStream(Stream stream)
+    private static LoadPackageStream CreateLoadPackageStream(Stream stream) =>
+        CreateLoadPackageStream(stream, WorkbookOpenSizeGuard.DefaultMaxFileBytes);
+
+    private static LoadPackageStream CreateLoadPackageStream(Stream stream, long maxFileBytes)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxFileBytes, 1);
+
         if (stream is MemoryStream memoryStream &&
             memoryStream.CanSeek &&
             memoryStream.TryGetBuffer(out var sourceBuffer))
@@ -629,6 +634,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             var memoryRemainingLength = memoryStream.Length - memoryStream.Position;
             if (memoryRemainingLength is >= 0 and <= int.MaxValue)
             {
+                WorkbookOpenSizeGuard.EnsureFileWithinLimit(memoryRemainingLength, maxFileBytes);
                 var memoryPackageStream = new MemoryStream(
                     sourceBuffer.Array!,
                     sourceBuffer.Offset + (int)memoryStream.Position,
@@ -644,11 +650,53 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var remainingLength = stream.CanSeek
             ? Math.Max(0, stream.Length - stream.Position)
             : 0;
+        if (stream.CanSeek)
+            WorkbookOpenSizeGuard.EnsureFileWithinLimit(remainingLength, maxFileBytes);
+
         var packageStream = remainingLength is > 0 and <= int.MaxValue
             ? new MemoryStream((int)remainingLength)
             : new MemoryStream();
-        stream.CopyTo(packageStream);
+        CopyToMemoryStreamWithLimit(stream, packageStream, maxFileBytes);
         return new LoadPackageStream(packageStream, CanReuseBufferForSnapshot: true);
+    }
+
+    private static void CopyToMemoryStreamWithLimit(Stream source, MemoryStream destination, long maxFileBytes)
+    {
+        var buffer = new byte[81920];
+        while (true)
+        {
+            var remainingAllowance = maxFileBytes - destination.Length;
+            var maxRead = remainingAllowance >= buffer.Length
+                ? buffer.Length
+                : (int)Math.Max(1, remainingAllowance + 1);
+            var read = source.Read(buffer, 0, maxRead);
+            if (read == 0)
+                return;
+
+            if (read > remainingAllowance)
+            {
+                throw new WorkbookTooLargeException(
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The file exceeds the {FormatFileSize(maxFileBytes)} open limit."));
+            }
+
+            destination.Write(buffer, 0, read);
+        }
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        string[] units = ["bytes", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return string.Create(CultureInfo.InvariantCulture, $"{value:0.#} {units[unit]}");
     }
 
     private readonly record struct LoadPackageStream(
