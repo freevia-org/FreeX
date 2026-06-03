@@ -42,6 +42,10 @@ public static partial class PrintRenderer
         string sheetName,
         WorkbookTheme workbookTheme,
         IReadOnlyList<TextBoxModel> textBoxes,
+        IReadOnlyList<ChartModel> charts,
+        ViewportModel viewport,
+        IReadOnlyList<uint> bodyRows,
+        IReadOnlyList<uint> bodyColumns,
         bool alignHeaderFooterWithMargins,
         bool centerHorizontally,
         bool centerVertically,
@@ -111,6 +115,23 @@ public static partial class PrintRenderer
             printErrorValue,
             gridLeft,
             gridTop);
+
+        if (!draftQuality)
+        {
+            DrawPrintedCharts(
+                dc,
+                viewport,
+                charts,
+                workbookTheme,
+                bodyRows,
+                bodyColumns,
+                pageRows.Count - bodyRows.Count,
+                pageColumns.Count - bodyColumns.Count,
+                gridLeft,
+                gridTop,
+                colWidth,
+                rowHeight);
+        }
 
         DrawPrintedTextBoxes(
             dc,
