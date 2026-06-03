@@ -417,8 +417,6 @@ public partial class GridView
 
         grid.ClearChartRenderCache();
         grid.ClearFormulaTraceArrowHeadGeometryCache();
-        grid.ClearRenderLookupCache();
-        grid.ClearPreSelectionLayerCache();
         grid.ClearDrawingObjectLayerCache();
     }
 

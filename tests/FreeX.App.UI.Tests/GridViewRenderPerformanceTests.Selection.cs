@@ -159,6 +159,14 @@ public sealed partial class GridViewRenderPerformanceTests
         renderWithCache.Should().Contain("dc.DrawDrawing(cached);");
         renderWithCache.Should().Contain("ShouldBuildPreSelectionLayerCache(key)");
         renderWithCache.Should().Contain("RememberPreSelectionLayerRenderKey(key);");
+        cache.Should().Contain("IReadOnlyList<DisplayCell> Cells");
+        cache.Should().Contain("IReadOnlyList<RowMetric> RowMetrics");
+        cache.Should().Contain("IReadOnlyList<ColMetric> ColMetrics");
+        cache.Should().Contain("SplitPaneState? SplitPanes");
+        cache.Should().Contain("viewport.Cells");
+        cache.Should().Contain("viewport.RowMetrics");
+        cache.Should().Contain("viewport.ColMetrics");
+        cache.Should().NotContain("ViewportModel Viewport");
         cache.Should().Contain("bool SkipHeavyLayers");
         cache.Should().Contain("private static bool CanCachePreSelectionLayers(bool skipHeavyLayers, bool isLiveResizing) =>");
         cache.Should().Contain("!isLiveResizing;");
@@ -166,6 +174,39 @@ public sealed partial class GridViewRenderPerformanceTests
         cache.Should().Contain("_hasLastPreSelectionLayerRenderKey && _lastPreSelectionLayerRenderKey == key");
         cache.Should().Contain("_selectionVisualOnlyChangePending ||");
         cache.Should().Contain("_hasLastPreSelectionLayerRenderKey = false;");
+    }
+
+    [Fact]
+    public void PreSelectionLayerCacheKey_IsStableAcrossEquivalentViewportWrappers()
+    {
+        RunOnStaThread(() =>
+        {
+            var method = typeof(GridView).GetMethod(
+                "CreatePreSelectionLayerCacheKey",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            method.Should().NotBeNull();
+
+            var rows = new[] { new RowMetric(1, 20, 0) };
+            var columns = new[] { new ColMetric(1, 64, 0) };
+            var cells = new[] { Cell(1, 1, "value") };
+            var grid = new GridView
+            {
+                Width = 320,
+                Height = 240,
+                Viewport = new ViewportModel(cells, rows, columns)
+            };
+            grid.Measure(new Size(320, 240));
+            grid.Arrange(new Rect(0, 0, 320, 240));
+
+            var firstKey = method!.Invoke(grid, [false]);
+            grid.Viewport = new ViewportModel(cells, rows, columns);
+            var wrappedKey = method.Invoke(grid, [false]);
+            grid.Viewport = new ViewportModel(new[] { Cell(1, 1, "value") }, rows, columns);
+            var changedCellsKey = method.Invoke(grid, [false]);
+
+            wrappedKey.Should().Be(firstKey);
+            changedCellsKey.Should().NotBe(firstKey);
+        });
     }
 
     [Fact]

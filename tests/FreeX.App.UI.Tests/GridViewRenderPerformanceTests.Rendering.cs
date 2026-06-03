@@ -531,12 +531,44 @@ public sealed partial class GridViewRenderPerformanceTests
             rendering.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("GetRenderCellLookups(viewport)");
-        rendering.Should().Contain("ReferenceEquals(cached.Viewport, viewport)");
+        rendering.Should().Contain("ReferenceEquals(cached.Cells, viewport.Cells)");
+        rendering.Should().Contain("ReferenceEquals(cached.RowMetrics, viewport.RowMetrics)");
+        rendering.Should().Contain("ReferenceEquals(cached.ColMetrics, viewport.ColMetrics)");
         rendering.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
         cacheSource.Should().Contain("private sealed record RenderCellLookupCache");
+        cacheSource.Should().Contain("IReadOnlyList<DisplayCell> Cells");
+        cacheSource.Should().Contain("IReadOnlyList<RowMetric> RowMetrics");
+        cacheSource.Should().Contain("IReadOnlyList<ColMetric> ColMetrics");
         cacheSource.Should().Contain("private sealed record OccupiedCellLookupCache");
         propertiesSource.Should().Contain("OnViewportChanged");
-        propertiesSource.Should().Contain("grid.ClearRenderLookupCache();");
+        propertiesSource.Should().NotContain("grid.ClearRenderLookupCache();");
+    }
+
+    [Fact]
+    public void RenderCellLookups_AreReusedWhenViewportWrapperChangesButSourcesDoNot()
+    {
+        RunOnStaThread(() =>
+        {
+            var method = typeof(GridView).GetMethod(
+                "GetRenderCellLookups",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            method.Should().NotBeNull();
+
+            var rows = new[] { new RowMetric(1, 20, 0) };
+            var columns = new[] { new ColMetric(1, 64, 0) };
+            var cells = new[] { Cell(1, 1, "value") };
+            var grid = new GridView();
+            var firstViewport = new ViewportModel(cells, rows, columns);
+            var wrappedViewport = new ViewportModel(cells, rows, columns);
+            var changedCellsViewport = new ViewportModel(new[] { Cell(1, 1, "value") }, rows, columns);
+
+            var firstLookup = method!.Invoke(grid, [firstViewport]);
+            var wrappedLookup = method.Invoke(grid, [wrappedViewport]);
+            var changedCellsLookup = method.Invoke(grid, [changedCellsViewport]);
+
+            wrappedLookup.Should().BeSameAs(firstLookup);
+            changedCellsLookup.Should().NotBeSameAs(firstLookup);
+        });
     }
 
     [Fact]
