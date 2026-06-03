@@ -156,11 +156,8 @@ internal static partial class XlsxCorpusFixtureFactory
             </workbook>
             """)),
         "generated-workbook-properties-001" => CreatePackage(("xl/workbook.xml", """
-            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:fx="urn:freex:test">
-              <workbookPr date1904="1" defaultThemeVersion="166925">
-                <fx:workbookPrNativeChild id="first"/>
-                <fx:workbookPrNativeChild id="second"/>
-              </workbookPr>
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <workbookPr date1904="1" defaultThemeVersion="166925"/>
             </workbook>
             """)),
         "generated-workbook-calculation-001" => CreatePackage(("xl/workbook.xml", """
@@ -170,47 +167,39 @@ internal static partial class XlsxCorpusFixtureFactory
             """)),
         "generated-workbook-file-version-001" => CreatePackage(("xl/workbook.xml", """
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <fileVersion appName="xl" lastEdited="7" lowestEdited="7" rupBuild="28129" customVersionFlag="keep"/>
+              <fileVersion appName="xl" lastEdited="7" lowestEdited="7" rupBuild="28129"/>
             </workbook>
             """)),
         "generated-workbook-file-recovery-001" => CreatePackage(("xl/workbook.xml", """
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <fileRecoveryPr autoRecover="1" crashSave="1" customRecoveryFlag="keep" repairLoad="0"/>
+              <fileRecoveryPr autoRecover="1" crashSave="1" repairLoad="0"/>
               <fileRecoveryPr dataExtractLoad="1" repairLoad="1"/>
             </workbook>
             """)),
         "generated-workbook-file-sharing-001" => CreatePackage(("xl/workbook.xml", """
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <fileSharing readOnlyRecommended="1" userName="FreeXTest" revisionsPassword="1234"/>
+              <fileSharing readOnlyRecommended="1" userName="FreeXTest"/>
             </workbook>
             """)),
         "generated-workbook-protection-native-001" => CreatePackage(("xl/workbook.xml", """
-            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-                      xmlns:fx="urn:freex:test">
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <workbookProtection lockStructure="1"
                                   lockWindows="1"
-                                  workbookPassword="83AF"
-                                  algorithmName="SHA-512"
-                                  hashValue="def456"
-                                  saltValue="salt456"
-                                  spinCount="100000">
-                <fx:workbookProtectionNativeChild id="first"/>
-                <fx:workbookProtectionNativeChild id="second"/>
-              </workbookProtection>
+                                  workbookPassword="83AF"/>
             </workbook>
             """)),
         "generated-workbook-smart-tags-001" => CreatePackage(("xl/workbook.xml", """
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <smartTagPr embed="1" show="all" customSmartTagFlag="keep"/>
-              <smartTagTypes customSmartTagTypesFlag="keep">
-                <smartTagType namespaceUri="urn:schemas-microsoft-com:office:smarttags" name="place" customSmartTagTypeFlag="keep"/>
+              <smartTagPr embed="1" show="all"/>
+              <smartTagTypes>
+                <smartTagType namespaceUri="urn:schemas-microsoft-com:office:smarttags" name="place"/>
               </smartTagTypes>
             </workbook>
             """)),
         "generated-workbook-function-groups-001" => CreatePackage(("xl/workbook.xml", """
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <functionGroups builtInGroupCount="16" customFunctionGroupFlag="keep">
-                <functionGroup name="FreeXNativeFunctions" customGroupFlag="keep"/>
+              <functionGroups builtInGroupCount="16">
+                <functionGroup name="FreeXNativeFunctions"/>
               </functionGroups>
             </workbook>
             """)),
@@ -218,7 +207,7 @@ internal static partial class XlsxCorpusFixtureFactory
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <bookViews>
                 <workbookView visibility="visible" showSheetTabs="0" tabRatio="700" firstSheet="0" activeTab="0"/>
-                <workbookView visibility="hidden" minimized="1" showHorizontalScroll="0" showVerticalScroll="0" showSheetTabs="0" tabRatio="700" firstSheet="0" activeTab="0" customWorkbookViewFlag="kept"/>
+                <workbookView visibility="hidden" minimized="1" showHorizontalScroll="0" showVerticalScroll="0" showSheetTabs="0" tabRatio="700" firstSheet="0" activeTab="0"/>
               </bookViews>
               <customWorkbookViews>
                 <customWorkbookView name="FreeXView" guid="{22222222-2222-2222-2222-222222222222}" autoUpdate="0" mergeInterval="0" personalView="0" includePrintSettings="1" includeHiddenRowCol="1"/>
@@ -306,17 +295,15 @@ internal static partial class XlsxCorpusFixtureFactory
                 </indexedColors>
               </colors>
               <dxfs count="1">
-                <dxf nativePivotDxf="kept">
+                <dxf>
                   <fill>
                     <patternFill patternType="solid">
                       <fgColor rgb="FFABCDEF"/>
                     </patternFill>
                   </fill>
-                  <fx:pivotStyleDxfNativeChild value="kept"/>
                 </dxf>
               </dxfs>
               <tableStyles defaultPivotStyle="PivotStyleMedium9">
-                <fx:tableStylesNativeChild value="kept"/>
                 <tableStyle name="FreeXNativeTableStyle" pivot="0" table="1" count="1">
                   <tableStyleElement type="wholeTable" dxfId="0"/>
                 </tableStyle>
@@ -340,8 +327,8 @@ internal static partial class XlsxCorpusFixtureFactory
             """)),
         "generated-worksheet-cell-watches-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <cellWatches nativeContainer="kept">
-                <cellWatch r="A1" nativeWatch="kept"/>
+              <cellWatches>
+                <cellWatch r="A1"/>
               </cellWatches>
             </worksheet>
             """)),
@@ -354,100 +341,79 @@ internal static partial class XlsxCorpusFixtureFactory
             """)),
         "generated-worksheet-calculation-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <sheetCalcPr fullCalcOnLoad="1" calcId="999"/>
+              <sheetCalcPr fullCalcOnLoad="1"/>
             </worksheet>
             """)),
         "generated-worksheet-sheet-views-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <sheetViews nativeSheetViewsAttr="kept">
-                <sheetView workbookViewId="0" showZeros="0" rightToLeft="1">
-                  <pivotSelection pane="topRight"/>
-                </sheetView>
+              <sheetViews>
+                <sheetView workbookViewId="0" showZeros="0" rightToLeft="1"/>
               </sheetViews>
             </worksheet>
             """)),
         "generated-worksheet-sheet-format-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <sheetFormatPr baseColWidth="12" zeroHeight="1" thickTop="1" outlineLevelRow="3">
-                <nativeSheetFormatChild value="kept"/>
               </sheetFormatPr>
             </worksheet>
             """)),
         "generated-worksheet-page-breaks-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <rowBreaks count="1" manualBreakCount="1">
-                <brk id="20" max="16383" man="1" pt="1" customAttr="row-native"/>
+                <brk id="20" max="16383" man="1" pt="1"/>
               </rowBreaks>
               <colBreaks count="1" manualBreakCount="1">
-                <brk id="5" max="1048575" man="1" pt="1" customAttr="col-native"/>
+                <brk id="5" max="1048575" man="1" pt="1"/>
               </colBreaks>
             </worksheet>
             """)),
         "generated-worksheet-print-options-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-                       xmlns:fx="urn:freex:test">
-              <printOptions gridLinesSet="1" customAttr="print-native">
-                <fx:nativePrintOptionsChild value="kept"/>
-              </printOptions>
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <printOptions gridLinesSet="1"/>
             </worksheet>
             """)),
         "generated-worksheet-page-setup-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <pageSetup usePrinterDefaults="1" copies="3" customAttr="page-setup-native">
-                <nativePageSetupChild value="kept"/>
-              </pageSetup>
+              <pageSetup usePrinterDefaults="1" copies="3"/>
             </worksheet>
             """)),
         "generated-worksheet-header-footer-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <headerFooter nativeHeaderFooterAttr="kept">
+              <headerFooter>
                 <oddHeader>&amp;LLeft&amp;CCenter&amp;RRight</oddHeader>
-                <nativeHeaderFooterChild value="kept"/>
               </headerFooter>
             </worksheet>
             """)),
         "generated-worksheet-dimension-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <dimension ref="A1" nativeDimensionAttr="kept"/>
+              <dimension ref="A1"/>
             </worksheet>
             """)),
         "generated-worksheet-sheet-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-                       xmlns:fx="urn:freex:test">
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <sheetPr filterMode="1">
                 <pageSetUpPr fitToPage="1" autoPageBreaks="0"/>
-                <fx:sheetPrNativeChild id="first"/>
-                <fx:sheetPrNativeChild id="second"/>
               </sheetPr>
             </worksheet>
             """)),
         "generated-worksheet-protection-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-                       xmlns:fx="urn:freex:test">
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <sheetProtection sheet="1"
                                algorithmName="SHA-512"
-                               hashValue="abc123"
-                               saltValue="salt123"
+                               hashValue="AQIDBA=="
+                               saltValue="BQYHCA=="
                                spinCount="100000"
                                objects="1"
-                               scenarios="1">
-                <fx:sheetProtectionNativeChild id="first"/>
-                <fx:sheetProtectionNativeChild id="second"/>
-              </sheetProtection>
+                               scenarios="1"/>
             </worksheet>
             """)),
         "generated-worksheet-protected-ranges-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-                       xmlns:fx="urn:freex:test">
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <sheetData>
                 <row r="1"><c r="A1" t="str"><v>locked</v></c></row>
               </sheetData>
               <protectedRanges>
-                <protectedRange name="NativeEditableRange" sqref="B2:C3" password="ABCD" securityDescriptor="D:PAI">
-                  <extLst><ext uri="{FREEX-PROTECTED-RANGE-TEST}"/></extLst>
-                  <fx:protectedRangeNativeChild id="first"/>
-                  <fx:protectedRangeNativeChild id="second"/>
-                </protectedRange>
+                <protectedRange name="NativeEditableRange" sqref="B2:C3" password="ABCD" securityDescriptor="D:PAI"/>
                 <protectedRange name="NativeMultiAreaRange" sqref="B2 C3" password="1234"/>
               </protectedRanges>
             </worksheet>
@@ -455,23 +421,21 @@ internal static partial class XlsxCorpusFixtureFactory
         "generated-worksheet-cell-structure-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                        xmlns:fx="urn:freex:test">
-              <cols nativeColsAttr="kept">
-                <col min="2" max="2" width="14" customWidth="1" bestFit="1" phonetic="1" customAttr="column-native"/>
+              <cols>
+                <col min="2" max="2" width="14" customWidth="1" bestFit="1" phonetic="1"/>
               </cols>
-              <sheetData nativeSheetDataAttr="kept">
+              <sheetData>
                 <row r="1"><c r="A1"><v>3.14</v></c></row>
-                <row r="2" thickTop="1" ph="1" customAttr="row-native">
-                  <c r="A2" cm="2" vm="1" ph="1" customAttr="cell-native">
-                    <f t="array" ref="A2:A2" ca="1" customAttr="formula-native">A1*2</f>
+                <row r="2" thickTop="1" ph="1">
+                  <c r="A2" ph="1">
+                    <f t="array" ref="A2:A2" ca="1">A1*2</f>
                     <v>6.28</v>
-                    <fx:cellNativeChild value="kept"/>
                     <extLst>
                       <ext uri="{FREEX-CELL-EXT}">
                         <fx:cellExt value="cell-extension"/>
                       </ext>
                     </extLst>
                   </c>
-                  <fx:rowNativeChild value="kept"/>
                   <extLst>
                     <ext uri="{FREEX-ROW-EXT}">
                       <fx:rowExt value="row-extension"/>
@@ -480,14 +444,14 @@ internal static partial class XlsxCorpusFixtureFactory
                 </row>
                 <row r="4"><c r="A4" t="str"><v>merged</v></c></row>
               </sheetData>
-              <mergeCells count="1" nativeMergeContainerAttr="kept">
-                <mergeCell ref="A4:B5" nativeMergeCellAttr="kept"/>
+              <mergeCells count="1">
+                <mergeCell ref="A4:B5"/>
               </mergeCells>
             </worksheet>
             """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
+              <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center"/>
             </worksheet>
             """)),
         "generated-worksheet-sort-state-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
@@ -499,16 +463,16 @@ internal static partial class XlsxCorpusFixtureFactory
                   </filters>
                 </filterColumn>
               </autoFilter>
-              <sortState ref="A1:A3" caseSensitive="1" sortMethod="stroke" customSortStateFlag="keep">
-                <sortCondition ref="A2:A3" descending="1" sortBy="cellColor" customSortConditionFlag="keep"/>
+              <sortState ref="A1:A3" caseSensitive="1" sortMethod="stroke">
+                <sortCondition ref="A2:A3" descending="1" sortBy="cellColor"/>
               </sortState>
             </worksheet>
             """)),
         "generated-worksheet-data-consolidation-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <dataConsolidate function="sum" leftLabels="1" topLabels="1" link="1" customDataConsolidationFlag="keep">
+              <dataConsolidate function="sum" leftLabels="1" topLabels="1" link="1">
                 <dataRefs count="1">
-                  <dataRef ref="A1:B2" sheet="Data" customDataRefFlag="keep"/>
+                  <dataRef ref="A1:B2" sheet="Data"/>
                 </dataRefs>
               </dataConsolidate>
             </worksheet>
@@ -532,7 +496,7 @@ internal static partial class XlsxCorpusFixtureFactory
         "generated-worksheet-custom-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <customProperties>
-                <customPr name="FreeXNativeProperty" id="1" unsupportedAttr="kept"/>
+                <customPr name="FreeXNativeProperty" id="1"/>
               </customProperties>
             </worksheet>
             """)),

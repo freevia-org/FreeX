@@ -1113,16 +1113,13 @@ internal static partial class XlsxCorpusFixtureFactory
             new XAttribute("appName", "xl"),
             new XAttribute("lastEdited", "7"),
             new XAttribute("lowestEdited", "7"),
-            new XAttribute("rupBuild", "28129"),
-            new XAttribute("customVersionFlag", "keep")));
+            new XAttribute("rupBuild", "28129")));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
     private static void ApplyWorkbookPropertiesFixup(ZipArchive archive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
-
         var workbookPath = "xl/workbook.xml";
         var workbookEntry = archive.GetEntry(workbookPath);
         if (workbookEntry is null)
@@ -1133,9 +1130,7 @@ internal static partial class XlsxCorpusFixtureFactory
         workbookXml.Root?.AddFirst(new XElement(
             workbookNs + "workbookPr",
             new XAttribute("date1904", "1"),
-            new XAttribute("defaultThemeVersion", "166925"),
-            new XElement(freexNs + "workbookPrNativeChild", new XAttribute("id", "first")),
-            new XElement(freexNs + "workbookPrNativeChild", new XAttribute("id", "second"))));
+            new XAttribute("defaultThemeVersion", "166925")));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
@@ -1178,7 +1173,6 @@ internal static partial class XlsxCorpusFixtureFactory
                 workbookNs + "fileRecoveryPr",
                 new XAttribute("autoRecover", "1"),
                 new XAttribute("crashSave", "1"),
-                new XAttribute("customRecoveryFlag", "keep"),
                 new XAttribute("repairLoad", "0")),
             new XElement(
                 workbookNs + "fileRecoveryPr",
@@ -1201,16 +1195,13 @@ internal static partial class XlsxCorpusFixtureFactory
         workbookXml.Root?.AddFirst(new XElement(
             workbookNs + "fileSharing",
             new XAttribute("readOnlyRecommended", "1"),
-            new XAttribute("userName", "FreeXTest"),
-            new XAttribute("revisionsPassword", "1234")));
+            new XAttribute("userName", "FreeXTest")));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
     private static void ApplyWorkbookProtectionNativeFixup(ZipArchive archive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
-
         var workbookPath = "xl/workbook.xml";
         var workbookEntry = archive.GetEntry(workbookPath);
         if (workbookEntry is null)
@@ -1222,13 +1213,7 @@ internal static partial class XlsxCorpusFixtureFactory
             workbookNs + "workbookProtection",
             new XAttribute("lockStructure", "1"),
             new XAttribute("lockWindows", "1"),
-            new XAttribute("workbookPassword", "83AF"),
-            new XAttribute("algorithmName", "SHA-512"),
-            new XAttribute("hashValue", "def456"),
-            new XAttribute("saltValue", "salt456"),
-            new XAttribute("spinCount", "100000"),
-            new XElement(freexNs + "workbookProtectionNativeChild", new XAttribute("id", "first")),
-            new XElement(freexNs + "workbookProtectionNativeChild", new XAttribute("id", "second"))));
+            new XAttribute("workbookPassword", "83AF")));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
@@ -1248,16 +1233,13 @@ internal static partial class XlsxCorpusFixtureFactory
             new XElement(
                 workbookNs + "smartTagPr",
                 new XAttribute("embed", "1"),
-                new XAttribute("show", "all"),
-                new XAttribute("customSmartTagFlag", "keep")),
+                new XAttribute("show", "all")),
             new XElement(
                 workbookNs + "smartTagTypes",
-                new XAttribute("customSmartTagTypesFlag", "keep"),
                 new XElement(
                     workbookNs + "smartTagType",
                     new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
-                    new XAttribute("name", "place"),
-                    new XAttribute("customSmartTagTypeFlag", "keep"))));
+                    new XAttribute("name", "place"))));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
@@ -1275,11 +1257,9 @@ internal static partial class XlsxCorpusFixtureFactory
         workbookXml.Root?.Add(new XElement(
             workbookNs + "functionGroups",
             new XAttribute("builtInGroupCount", "16"),
-            new XAttribute("customFunctionGroupFlag", "keep"),
             new XElement(
                 workbookNs + "functionGroup",
-                new XAttribute("name", "FreeXNativeFunctions"),
-                new XAttribute("customGroupFlag", "keep"))));
+                new XAttribute("name", "FreeXNativeFunctions"))));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
@@ -1313,8 +1293,7 @@ internal static partial class XlsxCorpusFixtureFactory
                 new XAttribute("showSheetTabs", "0"),
                 new XAttribute("tabRatio", "700"),
                 new XAttribute("firstSheet", "0"),
-                new XAttribute("activeTab", "0"),
-                new XAttribute("customWorkbookViewFlag", "kept"))));
+                new XAttribute("activeTab", "0"))));
         workbookXml.Root?.Add(new XElement(
             workbookNs + "customWorkbookViews",
             new XElement(
@@ -1353,7 +1332,6 @@ internal static partial class XlsxCorpusFixtureFactory
     private static void ApplyStylesheetNativeMetadataFixup(ZipArchive archive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         var stylesPath = "xl/styles.xml";
         var stylesEntry = archive.GetEntry(stylesPath);
@@ -1376,18 +1354,15 @@ internal static partial class XlsxCorpusFixtureFactory
                 new XAttribute("count", "1"),
                 new XElement(
                     workbookNs + "dxf",
-                    new XAttribute("nativePivotDxf", "kept"),
                     new XElement(
                         workbookNs + "fill",
                         new XElement(
                             workbookNs + "patternFill",
                             new XAttribute("patternType", "solid"),
-                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FFABCDEF")))),
-                    new XElement(freexNs + "pivotStyleDxfNativeChild", new XAttribute("value", "kept")))),
+                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FFABCDEF")))))),
             new XElement(
                 workbookNs + "tableStyles",
                 new XAttribute("defaultPivotStyle", "PivotStyleMedium9"),
-                new XElement(freexNs + "tableStylesNativeChild", new XAttribute("value", "kept")),
                 new XElement(
                     workbookNs + "tableStyle",
                     new XAttribute("name", "FreeXNativeTableStyle"),
@@ -1451,11 +1426,9 @@ internal static partial class XlsxCorpusFixtureFactory
         worksheetXml.Root?.Elements(worksheetNs + "cellWatches").Remove();
         worksheetXml.Root?.Add(new XElement(
             worksheetNs + "cellWatches",
-            new XAttribute("nativeContainer", "kept"),
             new XElement(
                 worksheetNs + "cellWatch",
-                new XAttribute("r", "A1"),
-                new XAttribute("nativeWatch", "kept"))));
+                new XAttribute("r", "A1"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1495,8 +1468,7 @@ internal static partial class XlsxCorpusFixtureFactory
         worksheetXml.Root?.Elements(worksheetNs + "sheetCalcPr").Remove();
         worksheetXml.Root?.Add(new XElement(
             worksheetNs + "sheetCalcPr",
-            new XAttribute("fullCalcOnLoad", "1"),
-            new XAttribute("calcId", "999")));
+            new XAttribute("fullCalcOnLoad", "1")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1513,15 +1485,11 @@ internal static partial class XlsxCorpusFixtureFactory
         worksheetXml.Root?.Elements(worksheetNs + "sheetViews").Remove();
         worksheetXml.Root?.AddFirst(new XElement(
             worksheetNs + "sheetViews",
-            new XAttribute("nativeSheetViewsAttr", "kept"),
             new XElement(
                 worksheetNs + "sheetView",
                 new XAttribute("workbookViewId", "0"),
                 new XAttribute("showZeros", "0"),
-                new XAttribute("rightToLeft", "1"),
-                new XElement(
-                    worksheetNs + "pivotSelection",
-                    new XAttribute("pane", "topRight")))));
+                new XAttribute("rightToLeft", "1"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1541,10 +1509,7 @@ internal static partial class XlsxCorpusFixtureFactory
             new XAttribute("baseColWidth", "12"),
             new XAttribute("zeroHeight", "1"),
             new XAttribute("thickTop", "1"),
-            new XAttribute("outlineLevelRow", "3"),
-            new XElement(
-                worksheetNs + "nativeSheetFormatChild",
-                new XAttribute("value", "kept"))));
+            new XAttribute("outlineLevelRow", "3")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1570,8 +1535,7 @@ internal static partial class XlsxCorpusFixtureFactory
                     new XAttribute("id", "20"),
                     new XAttribute("max", "16383"),
                     new XAttribute("man", "1"),
-                    new XAttribute("pt", "1"),
-                    new XAttribute("customAttr", "row-native"))),
+                    new XAttribute("pt", "1"))),
             new XElement(
                 worksheetNs + "colBreaks",
                 new XAttribute("count", "1"),
@@ -1581,15 +1545,13 @@ internal static partial class XlsxCorpusFixtureFactory
                     new XAttribute("id", "5"),
                     new XAttribute("max", "1048575"),
                     new XAttribute("man", "1"),
-                    new XAttribute("pt", "1"),
-                    new XAttribute("customAttr", "col-native"))));
+                    new XAttribute("pt", "1"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
     private static void ApplyWorksheetPrintOptionsFixup(ZipArchive archive)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         var worksheetPath = "xl/worksheets/sheet1.xml";
         var worksheetEntry = archive.GetEntry(worksheetPath);
@@ -1600,11 +1562,7 @@ internal static partial class XlsxCorpusFixtureFactory
         worksheetXml.Root?.Elements(worksheetNs + "printOptions").Remove();
         worksheetXml.Root?.Add(new XElement(
             worksheetNs + "printOptions",
-            new XAttribute("gridLinesSet", "1"),
-            new XAttribute("customAttr", "print-native"),
-            new XElement(
-                freexNs + "nativePrintOptionsChild",
-                new XAttribute("value", "kept"))));
+            new XAttribute("gridLinesSet", "1")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1622,11 +1580,7 @@ internal static partial class XlsxCorpusFixtureFactory
         worksheetXml.Root?.Add(new XElement(
             worksheetNs + "pageSetup",
             new XAttribute("usePrinterDefaults", "1"),
-            new XAttribute("copies", "3"),
-            new XAttribute("customAttr", "page-setup-native"),
-            new XElement(
-                worksheetNs + "nativePageSetupChild",
-                new XAttribute("value", "kept"))));
+            new XAttribute("copies", "3")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1643,11 +1597,7 @@ internal static partial class XlsxCorpusFixtureFactory
         worksheetXml.Root?.Elements(worksheetNs + "headerFooter").Remove();
         worksheetXml.Root?.Add(new XElement(
             worksheetNs + "headerFooter",
-            new XAttribute("nativeHeaderFooterAttr", "kept"),
-            new XElement(worksheetNs + "oddHeader", "&LLeft&CCenter&RRight"),
-            new XElement(
-                worksheetNs + "nativeHeaderFooterChild",
-                new XAttribute("value", "kept"))));
+            new XElement(worksheetNs + "oddHeader", "&LLeft&CCenter&RRight")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1664,15 +1614,13 @@ internal static partial class XlsxCorpusFixtureFactory
         worksheetXml.Root?.Elements(worksheetNs + "dimension").Remove();
         worksheetXml.Root?.AddFirst(new XElement(
             worksheetNs + "dimension",
-            new XAttribute("ref", "A1"),
-            new XAttribute("nativeDimensionAttr", "kept")));
+            new XAttribute("ref", "A1")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
     private static void ApplyWorksheetSheetPropertiesFixup(ZipArchive archive)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         var worksheetPath = "xl/worksheets/sheet1.xml";
         var worksheetEntry = archive.GetEntry(worksheetPath);
@@ -1687,16 +1635,13 @@ internal static partial class XlsxCorpusFixtureFactory
             new XElement(
                 worksheetNs + "pageSetUpPr",
                 new XAttribute("fitToPage", "1"),
-                new XAttribute("autoPageBreaks", "0")),
-            new XElement(freexNs + "sheetPrNativeChild", new XAttribute("id", "first")),
-            new XElement(freexNs + "sheetPrNativeChild", new XAttribute("id", "second"))));
+                new XAttribute("autoPageBreaks", "0"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
     private static void ApplyWorksheetProtectionNativeFixup(ZipArchive archive)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         var worksheetPath = "xl/worksheets/sheet1.xml";
         var worksheetEntry = archive.GetEntry(worksheetPath);
@@ -1709,20 +1654,17 @@ internal static partial class XlsxCorpusFixtureFactory
             worksheetNs + "sheetProtection",
             new XAttribute("sheet", "1"),
             new XAttribute("algorithmName", "SHA-512"),
-            new XAttribute("hashValue", "abc123"),
-            new XAttribute("saltValue", "salt123"),
+            new XAttribute("hashValue", "AQIDBA=="),
+            new XAttribute("saltValue", "BQYHCA=="),
             new XAttribute("spinCount", "100000"),
             new XAttribute("objects", "1"),
-            new XAttribute("scenarios", "1"),
-            new XElement(freexNs + "sheetProtectionNativeChild", new XAttribute("id", "first")),
-            new XElement(freexNs + "sheetProtectionNativeChild", new XAttribute("id", "second"))));
+            new XAttribute("scenarios", "1")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
     private static void ApplyWorksheetProtectedRangesFixup(ZipArchive archive)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         var worksheetPath = "xl/worksheets/sheet1.xml";
         var worksheetEntry = archive.GetEntry(worksheetPath);
@@ -1738,14 +1680,7 @@ internal static partial class XlsxCorpusFixtureFactory
                 new XAttribute("name", "NativeEditableRange"),
                 new XAttribute("sqref", "B2:C3"),
                 new XAttribute("password", "ABCD"),
-                new XAttribute("securityDescriptor", "D:PAI"),
-                new XElement(
-                    worksheetNs + "extLst",
-                    new XElement(
-                        worksheetNs + "ext",
-                        new XAttribute("uri", "{FREEX-PROTECTED-RANGE-TEST}"))),
-                new XElement(freexNs + "protectedRangeNativeChild", new XAttribute("id", "first")),
-                new XElement(freexNs + "protectedRangeNativeChild", new XAttribute("id", "second"))),
+                new XAttribute("securityDescriptor", "D:PAI")),
             new XElement(
                 worksheetNs + "protectedRange",
                 new XAttribute("name", "NativeMultiAreaRange"),
@@ -1770,7 +1705,6 @@ internal static partial class XlsxCorpusFixtureFactory
         worksheetXml.Root?.Elements(worksheetNs + "mergeCells").Remove();
         worksheetXml.Root?.AddFirst(new XElement(
             worksheetNs + "cols",
-            new XAttribute("nativeColsAttr", "kept"),
             new XElement(
                 worksheetNs + "col",
                 new XAttribute("min", "2"),
@@ -1778,12 +1712,10 @@ internal static partial class XlsxCorpusFixtureFactory
                 new XAttribute("width", "14"),
                 new XAttribute("customWidth", "1"),
                 new XAttribute("bestFit", "1"),
-                new XAttribute("phonetic", "1"),
-                new XAttribute("customAttr", "column-native"))));
+                new XAttribute("phonetic", "1"))));
 
         worksheetXml.Root?.Add(new XElement(
             worksheetNs + "sheetData",
-            new XAttribute("nativeSheetDataAttr", "kept"),
             new XElement(
                 worksheetNs + "row",
                 new XAttribute("r", "1"),
@@ -1796,30 +1728,23 @@ internal static partial class XlsxCorpusFixtureFactory
                 new XAttribute("r", "2"),
                 new XAttribute("thickTop", "1"),
                 new XAttribute("ph", "1"),
-                new XAttribute("customAttr", "row-native"),
                 new XElement(
                     worksheetNs + "c",
                     new XAttribute("r", "A2"),
-                    new XAttribute("cm", "2"),
-                    new XAttribute("vm", "1"),
                     new XAttribute("ph", "1"),
-                    new XAttribute("customAttr", "cell-native"),
                     new XElement(
                         worksheetNs + "f",
                         new XAttribute("t", "array"),
                         new XAttribute("ref", "A2:A2"),
                         new XAttribute("ca", "1"),
-                        new XAttribute("customAttr", "formula-native"),
                         "A1*2"),
                     new XElement(worksheetNs + "v", "6.28"),
-                    new XElement(freexNs + "cellNativeChild", new XAttribute("value", "kept")),
                     new XElement(
                         worksheetNs + "extLst",
                         new XElement(
                             worksheetNs + "ext",
                             new XAttribute("uri", "{FREEX-CELL-EXT}"),
                             new XElement(freexNs + "cellExt", new XAttribute("value", "cell-extension"))))),
-                new XElement(freexNs + "rowNativeChild", new XAttribute("value", "kept")),
                 new XElement(
                     worksheetNs + "extLst",
                     new XElement(
@@ -1837,11 +1762,9 @@ internal static partial class XlsxCorpusFixtureFactory
         worksheetXml.Root?.Add(new XElement(
             worksheetNs + "mergeCells",
             new XAttribute("count", "1"),
-            new XAttribute("nativeMergeContainerAttr", "kept"),
             new XElement(
                 worksheetNs + "mergeCell",
-                new XAttribute("ref", "A4:B5"),
-                new XAttribute("nativeMergeCellAttr", "kept"))));
+                new XAttribute("ref", "A4:B5"))));
 
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
@@ -1861,8 +1784,7 @@ internal static partial class XlsxCorpusFixtureFactory
             worksheetNs + "phoneticPr",
             new XAttribute("fontId", "1"),
             new XAttribute("type", "fullwidthKatakana"),
-            new XAttribute("alignment", "center"),
-            new XAttribute("nativeOnly", "kept")));
+            new XAttribute("alignment", "center")));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1893,13 +1815,11 @@ internal static partial class XlsxCorpusFixtureFactory
                 new XAttribute("ref", "A1:A3"),
                 new XAttribute("caseSensitive", "1"),
                 new XAttribute("sortMethod", "stroke"),
-                new XAttribute("customSortStateFlag", "keep"),
                 new XElement(
                     worksheetNs + "sortCondition",
                     new XAttribute("ref", "A2:A3"),
                     new XAttribute("descending", "1"),
-                    new XAttribute("sortBy", "cellColor"),
-                    new XAttribute("customSortConditionFlag", "keep"))));
+                    new XAttribute("sortBy", "cellColor"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1920,15 +1840,13 @@ internal static partial class XlsxCorpusFixtureFactory
             new XAttribute("leftLabels", "1"),
             new XAttribute("topLabels", "1"),
             new XAttribute("link", "1"),
-            new XAttribute("customDataConsolidationFlag", "keep"),
             new XElement(
                 worksheetNs + "dataRefs",
                 new XAttribute("count", "1"),
                 new XElement(
                     worksheetNs + "dataRef",
                     new XAttribute("ref", "A1:B2"),
-                    new XAttribute("sheet", "Data"),
-                    new XAttribute("customDataRefFlag", "keep")))));
+                    new XAttribute("sheet", "Data")))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
@@ -1991,8 +1909,7 @@ internal static partial class XlsxCorpusFixtureFactory
             new XElement(
                 worksheetNs + "customPr",
                 new XAttribute("name", "FreeXNativeProperty"),
-                new XAttribute("id", "1"),
-                new XAttribute("unsupportedAttr", "kept"))));
+                new XAttribute("id", "1"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
