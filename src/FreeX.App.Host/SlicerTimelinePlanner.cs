@@ -22,6 +22,10 @@ public sealed record NativeVisualFilters(
 public static class SlicerTimelinePlanner
 {
     private static readonly ConditionalWeakTable<Sheet, ActivePivotNameSetCache> ActivePivotNameSets = new();
+    private static readonly ConditionalWeakTable<Sheet, NativeVisualFilterCache> NativeVisualFilterCaches = new();
+    private static readonly NativeVisualFilters EmptyNativeVisualFilters = new(
+        Array.Empty<SlicerModel>(),
+        Array.Empty<TimelineModel>());
 
     public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer, IEnumerable<string> sourceItems)
     {
@@ -90,21 +94,11 @@ public static class SlicerTimelinePlanner
     public static NativeVisualFilters GetNativeVisualFilters(Workbook workbook, Sheet activeSheet)
     {
         if (activeSheet.PivotTables.Count == 0)
-        {
-            return new NativeVisualFilters(
-                Array.Empty<SlicerModel>(),
-                Array.Empty<TimelineModel>());
-        }
+            return EmptyNativeVisualFilters;
 
         var activePivotNames = BuildActivePivotNameSet(activeSheet);
-        var slicers = workbook.Slicers.Count == 0
-            ? Array.Empty<SlicerModel>()
-            : GetNativeVisualSlicers(workbook.Slicers, activePivotNames);
-        var timelines = workbook.Timelines.Count == 0
-            ? Array.Empty<TimelineModel>()
-            : GetNativeVisualTimelines(workbook.Timelines, activePivotNames);
-
-        return new NativeVisualFilters(slicers, timelines);
+        var cache = NativeVisualFilterCaches.GetValue(activeSheet, static _ => new NativeVisualFilterCache());
+        return cache.GetOrCreate(workbook, activePivotNames);
     }
 
     private static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(
@@ -192,5 +186,131 @@ public static class SlicerTimelinePlanner
 
             return true;
         }
+    }
+
+    private sealed class NativeVisualFilterCache
+    {
+        private readonly object _sync = new();
+        private Workbook? _workbook;
+        private IReadOnlySet<string>? _activePivotNames;
+        private SlicerSnapshot[] _slicerSnapshots = [];
+        private TimelineSnapshot[] _timelineSnapshots = [];
+        private NativeVisualFilters _filters = EmptyNativeVisualFilters;
+
+        public NativeVisualFilters GetOrCreate(Workbook workbook, IReadOnlySet<string> activePivotNames)
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(_workbook, workbook) &&
+                    ReferenceEquals(_activePivotNames, activePivotNames) &&
+                    SlicersMatch(workbook.Slicers) &&
+                    TimelinesMatch(workbook.Timelines))
+                {
+                    return _filters;
+                }
+
+                var slicers = workbook.Slicers.Count == 0
+                    ? Array.Empty<SlicerModel>()
+                    : GetNativeVisualSlicers(workbook.Slicers, activePivotNames);
+                var timelines = workbook.Timelines.Count == 0
+                    ? Array.Empty<TimelineModel>()
+                    : GetNativeVisualTimelines(workbook.Timelines, activePivotNames);
+
+                _workbook = workbook;
+                _activePivotNames = activePivotNames;
+                _slicerSnapshots = CaptureSlicers(workbook.Slicers);
+                _timelineSnapshots = CaptureTimelines(workbook.Timelines);
+                _filters = slicers.Count == 0 && timelines.Count == 0
+                    ? EmptyNativeVisualFilters
+                    : new NativeVisualFilters(slicers, timelines);
+                return _filters;
+            }
+        }
+
+        private bool SlicersMatch(IReadOnlyList<SlicerModel> slicers)
+        {
+            if (_slicerSnapshots.Length != slicers.Count)
+                return false;
+
+            for (var index = 0; index < _slicerSnapshots.Length; index++)
+            {
+                var snapshot = _slicerSnapshots[index];
+                var slicer = slicers[index];
+                if (!ReferenceEquals(snapshot.Model, slicer) ||
+                    !string.Equals(snapshot.SourcePivotTableName, slicer.SourcePivotTableName, StringComparison.Ordinal) ||
+                    snapshot.HasDrawingAnchor != (slicer.DrawingAnchor is not null))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool TimelinesMatch(IReadOnlyList<TimelineModel> timelines)
+        {
+            if (_timelineSnapshots.Length != timelines.Count)
+                return false;
+
+            for (var index = 0; index < _timelineSnapshots.Length; index++)
+            {
+                var snapshot = _timelineSnapshots[index];
+                var timeline = timelines[index];
+                if (!ReferenceEquals(snapshot.Model, timeline) ||
+                    !string.Equals(snapshot.SourcePivotTableName, timeline.SourcePivotTableName, StringComparison.Ordinal) ||
+                    snapshot.HasDrawingAnchor != (timeline.DrawingAnchor is not null))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static SlicerSnapshot[] CaptureSlicers(IReadOnlyList<SlicerModel> slicers)
+        {
+            if (slicers.Count == 0)
+                return [];
+
+            var snapshots = new SlicerSnapshot[slicers.Count];
+            for (var index = 0; index < slicers.Count; index++)
+            {
+                var slicer = slicers[index];
+                snapshots[index] = new SlicerSnapshot(
+                    slicer,
+                    slicer.SourcePivotTableName,
+                    slicer.DrawingAnchor is not null);
+            }
+
+            return snapshots;
+        }
+
+        private static TimelineSnapshot[] CaptureTimelines(IReadOnlyList<TimelineModel> timelines)
+        {
+            if (timelines.Count == 0)
+                return [];
+
+            var snapshots = new TimelineSnapshot[timelines.Count];
+            for (var index = 0; index < timelines.Count; index++)
+            {
+                var timeline = timelines[index];
+                snapshots[index] = new TimelineSnapshot(
+                    timeline,
+                    timeline.SourcePivotTableName,
+                    timeline.DrawingAnchor is not null);
+            }
+
+            return snapshots;
+        }
+
+        private readonly record struct SlicerSnapshot(
+            SlicerModel Model,
+            string? SourcePivotTableName,
+            bool HasDrawingAnchor);
+
+        private readonly record struct TimelineSnapshot(
+            TimelineModel Model,
+            string? SourcePivotTableName,
+            bool HasDrawingAnchor);
     }
 }
