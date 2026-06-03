@@ -51,6 +51,12 @@ public sealed partial class FormulaEvaluator
         {
             return ErrorFromCode(ex.ErrorCode);
         }
+        catch (FormulaParseException)
+        {
+            // An unparseable formula (e.g. a phone number typed as "+389 78 609-030") is an error, not
+            // a crash. Return #VALUE! so direct callers behave like a recalc, which already does this.
+            return ErrorValue.Value;
+        }
     }
 
     /// <summary>
