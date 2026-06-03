@@ -433,13 +433,13 @@ public partial class GridView
         SplitPaneClipLayoutPlanner.CalculateClipRects(viewport, actualWidth, actualHeight);
 }
 
-public sealed record SplitDividerLayout(double? HorizontalY, double? VerticalX);
+public readonly record struct SplitDividerLayout(double? HorizontalY, double? VerticalX);
 public readonly record struct SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region);
 public sealed record SplitDividerDragTarget(uint? Row, uint? Column);
 public readonly record struct SplitPaneScrollbarChrome(
     SplitPaneScrollbar? HorizontalTopRight,
     SplitPaneScrollbar? VerticalBottomLeft);
-public sealed record SplitPaneScrollbar(
+public readonly record struct SplitPaneScrollbar(
     SplitPaneScrollbarOrientation Orientation,
     SplitPaneRegion Region,
     Rect Track,
