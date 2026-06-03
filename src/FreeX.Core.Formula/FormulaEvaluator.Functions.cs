@@ -42,6 +42,10 @@ public sealed partial class FormulaEvaluator
         if (TryEvaluateReferenceDimensionFunction(functionName, node, context, out var dimensionResult))
             return dimensionResult;
 
+        if (functionName == "NPV" &&
+            TryEvaluateNpvDirectRanges(node, context, out var directNpvResult))
+            return directNpvResult;
+
         if (functionName == "XNPV" &&
             TryEvaluateXnpvDirectRanges(node, context, out var directXnpvResult))
             return directXnpvResult;
