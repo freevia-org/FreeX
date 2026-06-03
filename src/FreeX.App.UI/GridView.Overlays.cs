@@ -433,7 +433,7 @@ public enum FormulaTraceArrowLayoutKind
     OffscreenMarker,
     CrossSheetMarker
 }
-public sealed record FormulaTraceArrowLayout(
+public readonly record struct FormulaTraceArrowLayout(
     Point Start,
     Point End,
     FormulaTraceArrowLayoutKind Kind = FormulaTraceArrowLayoutKind.VisibleArrow,

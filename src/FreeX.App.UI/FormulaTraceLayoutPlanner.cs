@@ -98,7 +98,8 @@ public static class FormulaTraceLayoutPlanner
     private struct FormulaTraceArrowLayoutCollector(int capacity) : IFormulaTraceArrowLayoutConsumer
     {
         private readonly int _capacity = capacity;
-        private List<FormulaTraceArrowLayout>? _layouts;
+        private FormulaTraceArrowLayout[]? _layouts;
+        private int _count;
 
         public void AcceptLayout(
             Point start,
@@ -106,12 +107,21 @@ public static class FormulaTraceLayoutPlanner
             FormulaTraceArrowLayoutKind kind,
             CellAddress? navigationTarget)
         {
-            _layouts ??= new List<FormulaTraceArrowLayout>(_capacity);
-            _layouts.Add(new FormulaTraceArrowLayout(start, end, kind, navigationTarget));
+            _layouts ??= GC.AllocateUninitializedArray<FormulaTraceArrowLayout>(_capacity);
+            _layouts[_count++] = new FormulaTraceArrowLayout(start, end, kind, navigationTarget);
         }
 
         public readonly IReadOnlyList<FormulaTraceArrowLayout> ToLayouts() =>
-            _layouts is { Count: > 0 } layouts ? layouts : [];
+            _layouts is null ? [] :
+            _count == _layouts.Length ? _layouts :
+            CopyLayouts(_layouts, _count);
+    }
+
+    private static FormulaTraceArrowLayout[] CopyLayouts(FormulaTraceArrowLayout[] layouts, int count)
+    {
+        var copy = new FormulaTraceArrowLayout[count];
+        Array.Copy(layouts, copy, count);
+        return copy;
     }
 
     private static Point CenterOf(Rect rect) =>
