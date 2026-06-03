@@ -36,7 +36,7 @@ public static partial class PivotTableRefreshService
             var key = ReadDetailRowKey(targetSheet, pivotTable, outputRow, firstDataRow, index, rowFields.Count);
             if (key is null)
                 return new PivotDetailRows(headers, []);
-            if (string.Equals(key, "Grand Total", StringComparison.OrdinalIgnoreCase))
+            if (IsPivotGrandTotalCaption(pivotTable, key))
             {
                 keys.Clear();
                 isRowGrandTotal = true;
@@ -145,8 +145,7 @@ public static partial class PivotTableRefreshService
             if (value is null)
                 return null;
             var key = KeyText(value);
-            if (string.Equals(key, "Grand Total", StringComparison.OrdinalIgnoreCase) ||
-                key.StartsWith("Grand Total ", StringComparison.OrdinalIgnoreCase))
+            if (IsPivotGrandTotalCaption(pivotTable, key))
             {
                 return [];
             }

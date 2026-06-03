@@ -28,6 +28,7 @@ public static partial class PivotTableRefreshService
             MergeRepeatedLabelsInColumn(
                 workbook,
                 sheet,
+                pivotTable,
                 materialized,
                 bodyStart.Row + 1,
                 bodyStart.Col + (uint)colOffset,
@@ -70,6 +71,7 @@ public static partial class PivotTableRefreshService
     private static void MergeRepeatedLabelsInColumn(
         Workbook workbook,
         Sheet sheet,
+        PivotTableModel pivotTable,
         GridRange materialized,
         uint firstBodyRow,
         uint labelCol,
@@ -79,11 +81,11 @@ public static partial class PivotTableRefreshService
         string? spanText = null;
         for (var row = firstBodyRow; row <= materialized.End.Row + 1; row++)
         {
-            var text = row <= materialized.End.Row ? GetMergeableLabelText(sheet, row, labelCol) : null;
+            var text = row <= materialized.End.Row ? GetMergeableLabelText(sheet, pivotTable, row, labelCol) : null;
             var suppressedContinuation = text is null &&
                 spanStart is not null &&
                 row <= materialized.End.Row &&
-                HasInnerRowLabelValue(sheet, row, labelCol, lastRowLabelCol);
+                HasInnerRowLabelValue(sheet, pivotTable, row, labelCol, lastRowLabelCol);
             if (spanStart is not null &&
                 !suppressedContinuation &&
                 (!string.Equals(text, spanText, StringComparison.Ordinal) || text is null))
@@ -101,11 +103,11 @@ public static partial class PivotTableRefreshService
         }
     }
 
-    private static string? GetMergeableLabelText(Sheet sheet, uint row, uint col)
+    private static string? GetMergeableLabelText(Sheet sheet, PivotTableModel pivotTable, uint row, uint col)
     {
         if (sheet.GetCell(row, col)?.Value is not TextValue text ||
             string.IsNullOrWhiteSpace(text.Value) ||
-            IsPivotGrandTotalCaption(text.Value) ||
+            IsPivotGrandTotalCaption(pivotTable, text.Value) ||
             IsPivotSubtotalCaption(text.Value))
         {
             return null;
@@ -114,11 +116,11 @@ public static partial class PivotTableRefreshService
         return text.Value;
     }
 
-    private static bool HasInnerRowLabelValue(Sheet sheet, uint row, uint labelCol, uint lastRowLabelCol)
+    private static bool HasInnerRowLabelValue(Sheet sheet, PivotTableModel pivotTable, uint row, uint labelCol, uint lastRowLabelCol)
     {
         for (var col = labelCol + 1; col <= lastRowLabelCol; col++)
         {
-            if (GetMergeableLabelText(sheet, row, col) is not null)
+            if (GetMergeableLabelText(sheet, pivotTable, row, col) is not null)
                 return true;
         }
 

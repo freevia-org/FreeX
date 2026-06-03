@@ -40,6 +40,36 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_MatrixUsesCustomGrandTotalCaptionForHeadersRowsAndDetails()
+    {
+        var workbook = new Workbook("PivotMatrixCustomGrandTotalCaptionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7"),
+            GrandTotalCaption = "Overall Total"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "H2").Should().Be("Overall Total");
+        Text(sheet, "E5").Should().Be("Overall Total");
+        var rowGrandTotalDetail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "H3"));
+        rowGrandTotalDetail.Rows.Select(row => string.Join("|", row.Select(PivotValueText)))
+            .Should().BeEquivalentTo(["East|Q1|10", "East|Q2|15"]);
+        var columnGrandTotalDetail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "F5"));
+        columnGrandTotalDetail.Rows.Select(row => string.Join("|", row.Select(PivotValueText)))
+            .Should().BeEquivalentTo(["East|Q1|10", "West|Q1|20"]);
+    }
+
+    [Fact]
     public void Refresh_MatrixUsesEmptyValueTextForMissingIntersections()
     {
         var workbook = new Workbook("PivotEmptyValueDisplayTest");
