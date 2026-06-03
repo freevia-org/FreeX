@@ -24,10 +24,8 @@ public static partial class AccessibilityCheckerService
             var endCol = (int)table.Range.End.Col;
             for (var col = startCol; col <= endCol; col++)
             {
-                var columnOffset = col - startCol;
-                var columnName = columnOffset < table.Columns.Count ? table.Columns[columnOffset].Name : null;
                 var headerAddress = new CellAddress(sheet.Id, table.Range.Start.Row, (uint)col);
-                var headerText = ReadHeaderText(sheet, headerAddress, columnName);
+                var headerText = ReadHeaderText(sheet, headerAddress);
                 if (string.IsNullOrWhiteSpace(headerText))
                 {
                     issues.Add(new AccessibilityIssue(
@@ -67,13 +65,8 @@ public static partial class AccessibilityCheckerService
         }
     }
 
-    private static string? ReadHeaderText(Sheet sheet, CellAddress headerAddress, string? columnName)
-    {
-        if (sheet.GetCell(headerAddress) is { } cell)
-            return ValueText(cell.Value);
-
-        return columnName;
-    }
+    private static string ReadHeaderText(Sheet sheet, CellAddress headerAddress) =>
+        ValueText(sheet.GetValue(headerAddress));
 
     private static string NormalizeHeaderText(string text) =>
         string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));

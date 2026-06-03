@@ -952,6 +952,34 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsStructuredTablesWithMissingHeaderCellDespiteColumnMetadata()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            HeaderRowCount = 1,
+            HasAutoFilter = true,
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Sales"));
+        sheet.StructuredTables.Add(table);
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.TableMissingHeaderText).Subject;
+
+        issue.Location.Should().Be("B1");
+        issue.Message.Should().Be("Table headers should not be blank.");
+    }
+
+    [Fact]
     public void FindIssues_FlagsStructuredTablesWithDefaultAndDuplicateHeaderText()
     {
         var workbook = new Workbook("Accessibility");
