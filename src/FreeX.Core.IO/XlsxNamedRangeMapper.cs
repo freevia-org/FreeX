@@ -5,12 +5,26 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxNamedRangeMapper
 {
+    private static readonly HashSet<string> ExcelReservedDefinedNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Print_Area",
+        "Print_Titles",
+        "_FilterDatabase",
+        "Criteria",
+        "Database",
+        "Extract",
+        "Consolidate_Area"
+    };
+
     public static void Load(XLWorkbook xlWorkbook, Workbook workbook)
     {
         foreach (var namedRange in xlWorkbook.DefinedNames)
         {
             try
             {
+                if (IsExcelReservedDefinedName(namedRange.Name))
+                    continue;
+
                 var xlRange = namedRange.Ranges.FirstOrDefault();
                 if (xlRange is null)
                     continue;
@@ -45,6 +59,9 @@ internal static class XlsxNamedRangeMapper
         {
             try
             {
+                if (IsExcelReservedDefinedName(name))
+                    continue;
+
                 var sheet = workbook.GetSheet(range.Start.Sheet);
                 if (sheet is null)
                     continue;
@@ -64,5 +81,16 @@ internal static class XlsxNamedRangeMapper
                 // Skip any named range that cannot be serialized to ClosedXML.
             }
         }
+    }
+
+    private static bool IsExcelReservedDefinedName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return true;
+
+        var trimmedName = name.Trim();
+        return trimmedName.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase) ||
+               trimmedName.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) ||
+               ExcelReservedDefinedNames.Contains(trimmedName);
     }
 }

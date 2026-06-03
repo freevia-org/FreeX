@@ -755,12 +755,12 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Theory]
-    [InlineData("=XMATCH(100000,A1:A100000,0,2)", 100_000d)]
-    [InlineData("=XMATCH(1,A1:A100000,0,-2)", 1d)]
-    public void XmatchLargeDirectRangeBinarySearch_AvoidsIndexListAllocation(string formula, double expected)
+    [InlineData("=XMATCH(100000,A1:A100000,0,2)", 100_000d, false)]
+    [InlineData("=XMATCH(100000,A1:A100000,0,-2)", 1d, true)]
+    public void XmatchLargeDirectRangeBinarySearch_AvoidsIndexListAllocation(string formula, double expected, bool descending)
     {
         var evaluator = new FormulaEvaluator();
-        var sheet = MakeNumericSheet();
+        var sheet = descending ? MakeDescendingNumericSheet() : MakeNumericSheet();
 
         evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
 
@@ -807,12 +807,12 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Theory]
-    [InlineData("=XLOOKUP(100000,A1:A100000,B1:B100000,,0,2)", 200_000d)]
-    [InlineData("=XLOOKUP(1,A1:A100000,B1:B100000,,0,-2)", 2d)]
-    public void XlookupLargeDirectRangeBinarySearch_AvoidsIndexListAllocation(string formula, double expected)
+    [InlineData("=XLOOKUP(100000,A1:A100000,B1:B100000,,0,2)", 200_000d, false)]
+    [InlineData("=XLOOKUP(100000,A1:A100000,B1:B100000,,0,-2)", 200_000d, true)]
+    public void XlookupLargeDirectRangeBinarySearch_AvoidsIndexListAllocation(string formula, double expected, bool descending)
     {
         var evaluator = new FormulaEvaluator();
-        var sheet = MakeLookupSheet();
+        var sheet = descending ? MakeDescendingLookupSheet() : MakeLookupSheet();
 
         evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
 
@@ -837,6 +837,18 @@ public sealed class FormulaEvaluatorPerformanceTests
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         for (uint row = 1; row <= RowCount; row++)
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+        return sheet;
+    }
+
+    private static Sheet MakeDescendingNumericSheet()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= RowCount; row++)
+        {
+            var value = RowCount - (int)row + 1;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(value));
+        }
+
         return sheet;
     }
 
@@ -931,6 +943,19 @@ public sealed class FormulaEvaluatorPerformanceTests
         {
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
             sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 2));
+        }
+
+        return sheet;
+    }
+
+    private static Sheet MakeDescendingLookupSheet()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= RowCount; row++)
+        {
+            var value = RowCount - (int)row + 1;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(value));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(value * 2));
         }
 
         return sheet;

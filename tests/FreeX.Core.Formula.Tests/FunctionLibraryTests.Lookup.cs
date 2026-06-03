@@ -871,10 +871,76 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet(
             (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)),
-            (3, 1, new NumberValue(2)), (4, 1, new NumberValue(3)));
+            (3, 1, new NumberValue(2)), (4, 1, new NumberValue(3)),
+            (1, 2, new NumberValue(3)), (2, 2, new NumberValue(2)),
+            (3, 2, new NumberValue(2)), (4, 2, new NumberValue(1)));
 
         _eval.Evaluate("=XMATCH(2,A1:A4,0,2)", sheet).Should().Be(new NumberValue(2));
-        _eval.Evaluate("=XMATCH(2,A1:A4,0,-2)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=XMATCH(2,B1:B4,0,-2)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Xmatch_And_Xlookup_DirectBinarySearchExactModes_HandleDuplicatesAndMissingValues()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (3, 1, new NumberValue(2)),
+            (4, 1, new NumberValue(2)), (5, 1, new NumberValue(4)),
+            (1, 2, new NumberValue(4)), (2, 2, new NumberValue(2)), (3, 2, new NumberValue(2)),
+            (4, 2, new NumberValue(2)), (5, 2, new NumberValue(1)),
+            (1, 3, new TextValue("asc-one")), (2, 3, new TextValue("asc-first")),
+            (3, 3, new TextValue("asc-middle")), (4, 3, new TextValue("asc-last")),
+            (5, 3, new TextValue("asc-four")),
+            (1, 4, new TextValue("desc-four")), (2, 4, new TextValue("desc-first")),
+            (3, 4, new TextValue("desc-middle")), (4, 4, new TextValue("desc-last")),
+            (5, 4, new TextValue("desc-one")));
+
+        _eval.Evaluate("=XMATCH(2,A1:A5,0,2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=XMATCH(2,B1:B5,0,-2)", sheet).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=XMATCH(3,A1:A5,0,2)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=XMATCH(3,B1:B5,0,-2)", sheet).Should().Be(ErrorValue.NA);
+
+        _eval.Evaluate("=XLOOKUP(2,A1:A5,C1:C5,\"missing\",0,2)", sheet).Should().Be(new TextValue("asc-first"));
+        _eval.Evaluate("=XLOOKUP(2,B1:B5,D1:D5,\"missing\",0,-2)", sheet).Should().Be(new TextValue("desc-last"));
+        _eval.Evaluate("=XLOOKUP(3,A1:A5,C1:C5,\"missing\",0,2)", sheet).Should().Be(new TextValue("missing"));
+        _eval.Evaluate("=XLOOKUP(3,B1:B5,D1:D5,\"missing\",0,-2)", sheet).Should().Be(new TextValue("missing"));
+    }
+
+    [Fact]
+    public void Xmatch_And_Xlookup_DirectBinarySearchApproximateModes_HandleAscendingAndDescendingBounds()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(3)), (3, 1, new NumberValue(3)),
+            (4, 1, new NumberValue(5)), (5, 1, new NumberValue(7)),
+            (1, 2, new NumberValue(7)), (2, 2, new NumberValue(5)), (3, 2, new NumberValue(3)),
+            (4, 2, new NumberValue(3)), (5, 2, new NumberValue(1)),
+            (1, 3, new TextValue("asc-one")), (2, 3, new TextValue("asc-three-first")),
+            (3, 3, new TextValue("asc-three-last")), (4, 3, new TextValue("asc-five")),
+            (5, 3, new TextValue("asc-seven")),
+            (1, 4, new TextValue("desc-seven")), (2, 4, new TextValue("desc-five")),
+            (3, 4, new TextValue("desc-three-first")), (4, 4, new TextValue("desc-three-last")),
+            (5, 4, new TextValue("desc-one")));
+
+        _eval.Evaluate("=XMATCH(4,A1:A5,-1,2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=XMATCH(4,A1:A5,1,2)", sheet).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=XMATCH(4,B1:B5,-1,-2)", sheet).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=XMATCH(4,B1:B5,1,-2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=XMATCH(3,A1:A5,-1,2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=XMATCH(3,A1:A5,1,2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=XMATCH(3,B1:B5,-1,-2)", sheet).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=XMATCH(3,B1:B5,1,-2)", sheet).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=XMATCH(0,A1:A5,-1,2)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=XMATCH(8,B1:B5,1,-2)", sheet).Should().Be(ErrorValue.NA);
+
+        _eval.Evaluate("=XLOOKUP(4,A1:A5,C1:C5,\"missing\",-1,2)", sheet).Should().Be(new TextValue("asc-three-first"));
+        _eval.Evaluate("=XLOOKUP(4,A1:A5,C1:C5,\"missing\",1,2)", sheet).Should().Be(new TextValue("asc-five"));
+        _eval.Evaluate("=XLOOKUP(4,B1:B5,D1:D5,\"missing\",-1,-2)", sheet).Should().Be(new TextValue("desc-three-last"));
+        _eval.Evaluate("=XLOOKUP(4,B1:B5,D1:D5,\"missing\",1,-2)", sheet).Should().Be(new TextValue("desc-five"));
+        _eval.Evaluate("=XLOOKUP(3,A1:A5,C1:C5,\"missing\",-1,2)", sheet).Should().Be(new TextValue("asc-three-first"));
+        _eval.Evaluate("=XLOOKUP(3,A1:A5,C1:C5,\"missing\",1,2)", sheet).Should().Be(new TextValue("asc-three-first"));
+        _eval.Evaluate("=XLOOKUP(3,B1:B5,D1:D5,\"missing\",-1,-2)", sheet).Should().Be(new TextValue("desc-three-last"));
+        _eval.Evaluate("=XLOOKUP(3,B1:B5,D1:D5,\"missing\",1,-2)", sheet).Should().Be(new TextValue("desc-three-last"));
+        _eval.Evaluate("=XLOOKUP(0,A1:A5,C1:C5,\"missing\",-1,2)", sheet).Should().Be(new TextValue("missing"));
+        _eval.Evaluate("=XLOOKUP(8,B1:B5,D1:D5,\"missing\",1,-2)", sheet).Should().Be(new TextValue("missing"));
     }
 
     [Fact]

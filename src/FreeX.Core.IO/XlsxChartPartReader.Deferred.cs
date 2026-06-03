@@ -84,6 +84,17 @@ public static partial class XlsxChartPartReader
         ChartType chartType,
         out ChartModel chart)
     {
+        return TryReadDeferredAdvancedChart(chartXml, plotChart, sheetId, chartType, fallbackDataRange: null, out chart);
+    }
+
+    private static bool TryReadDeferredAdvancedChart(
+        XDocument chartXml,
+        XElement plotChart,
+        SheetId sheetId,
+        ChartType chartType,
+        GridRange? fallbackDataRange,
+        out ChartModel chart)
+    {
         var ranges = new List<GridRange>();
         var hasTitleRange = false;
         var hasCategoryRange = false;
@@ -133,8 +144,19 @@ public static partial class XlsxChartPartReader
 
         if (ranges.Count == 0)
         {
-            chart = new ChartModel();
-            return false;
+            if (fallbackDataRange is not { } fallbackRange || !HasExcelInternalChartExDataReference(chartXml))
+            {
+                chart = new ChartModel();
+                return false;
+            }
+
+            result.DataRange = fallbackRange;
+            result.FirstRowIsHeader = true;
+            result.FirstColIsCategories = fallbackRange.End.Col > fallbackRange.Start.Col;
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
         }
 
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
@@ -145,6 +167,13 @@ public static partial class XlsxChartPartReader
         chart = result;
         return true;
     }
+
+    private static bool HasExcelInternalChartExDataReference(XDocument chartXml) =>
+        chartXml.Root?
+            .Descendants()
+            .Any(element =>
+                element.Name.LocalName == "f" &&
+                element.Value.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase)) == true;
 
     /// <summary>
     /// Reads chartEx per-series <c>layoutPr</c> settings (histogram <c>binning</c>, waterfall

@@ -78,9 +78,10 @@ public sealed partial class XlsxFileAdapter
         sheet.GroupHiddenRows.UnionWith(layout.GroupHiddenRows);
         sheet.GroupHiddenCols.UnionWith(layout.GroupHiddenCols);
         var loadedDrawingObjectOrder = new List<(int OrderIndex, DrawingObjectZOrderEntry Entry)>();
+        var fallbackChartDataRange = sheet.GetUsedRange();
         foreach (var chartPart in layout.ChartParts)
         {
-            if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
+            if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, fallbackChartDataRange, out var chart))
             {
                 chart.Name = chartPart.Name;
                 XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
