@@ -43,10 +43,10 @@ public static class SplitPaneCellLayoutPlanner
         var leftColumns = splitPanes.LeftColumns ?? [];
         var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
         var bottomLeftRows = splitPanes.BottomLeftRows ?? viewport.RowMetrics;
-        var topRowLookup = BuildRowLookup(topRows);
-        var bottomLeftRowLookup = BuildRowLookup(bottomLeftRows);
-        var leftColumnLookup = BuildColumnLookup(leftColumns);
-        var topRightColumnLookup = BuildColumnLookup(topRightColumns);
+        var topRowLookup = new SplitPaneRowMetricLookup(topRows);
+        var bottomLeftRowLookup = new SplitPaneRowMetricLookup(bottomLeftRows);
+        var leftColumnLookup = new SplitPaneColumnMetricLookup(leftColumns);
+        var topRightColumnLookup = new SplitPaneColumnMetricLookup(topRightColumns);
         var mergeLookup = MergeRangeIndex.Create(mergedRegions, cells);
         var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
         var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
@@ -64,11 +64,15 @@ public static class SplitPaneCellLayoutPlanner
             var isLeftPane = leftColumnLookup.TryGetValue(cell.Col, out var leftColumn);
             var region = ResolveSplitPaneRegion(isTopPane, isLeftPane);
             var row = isTopPane
-                ? topRow!
-                : bottomLeftRowLookup.GetValueOrDefault(cell.Row);
+                ? topRow
+                : bottomLeftRowLookup.TryGetValue(cell.Row, out var bottomLeftRow)
+                    ? bottomLeftRow
+                    : null;
             var column = isLeftPane
-                ? leftColumn!
-                : topRightColumnLookup.GetValueOrDefault(cell.Col);
+                ? leftColumn
+                : topRightColumnLookup.TryGetValue(cell.Col, out var topRightColumn)
+                    ? topRightColumn
+                    : null;
 
             if (row is null || column is null)
                 continue;
@@ -213,22 +217,172 @@ public static class SplitPaneCellLayoutPlanner
             _ => SplitPaneRegion.BottomRight
         };
 
-    private static Dictionary<uint, RowMetric> BuildRowLookup(IReadOnlyList<RowMetric> rows)
+    private readonly struct SplitPaneRowMetricLookup
     {
-        var lookup = new Dictionary<uint, RowMetric>(rows.Count);
-        foreach (var row in rows)
-            lookup.Add(row.Row, row);
+        private readonly IReadOnlyList<RowMetric> _rows;
+        private readonly bool _isSorted;
+        private readonly uint _firstRow;
+        private readonly uint _lastRow;
 
-        return lookup;
+        public SplitPaneRowMetricLookup(IReadOnlyList<RowMetric> rows)
+        {
+            _rows = rows;
+            _isSorted = AreRowsSorted(rows);
+            _firstRow = rows.Count > 0 ? rows[0].Row : 0;
+            _lastRow = rows.Count > 0 ? rows[^1].Row : 0;
+        }
+
+        public int Count => _rows.Count;
+
+        public RowMetric this[int index] => _rows[index];
+
+        public bool TryGetValue(uint row, out RowMetric? metric)
+        {
+            metric = _isSorted
+                ? FindSortedRowMetric(_rows, row, _firstRow, _lastRow)
+                : FindRowMetric(_rows, row);
+            return metric is not null;
+        }
     }
 
-    private static Dictionary<uint, ColMetric> BuildColumnLookup(IReadOnlyList<ColMetric> columns)
+    private readonly struct SplitPaneColumnMetricLookup
     {
-        var lookup = new Dictionary<uint, ColMetric>(columns.Count);
-        foreach (var column in columns)
-            lookup.Add(column.Col, column);
+        private readonly IReadOnlyList<ColMetric> _columns;
+        private readonly bool _isSorted;
+        private readonly uint _firstColumn;
+        private readonly uint _lastColumn;
 
-        return lookup;
+        public SplitPaneColumnMetricLookup(IReadOnlyList<ColMetric> columns)
+        {
+            _columns = columns;
+            _isSorted = AreColumnsSorted(columns);
+            _firstColumn = columns.Count > 0 ? columns[0].Col : 0;
+            _lastColumn = columns.Count > 0 ? columns[^1].Col : 0;
+        }
+
+        public int Count => _columns.Count;
+
+        public ColMetric this[int index] => _columns[index];
+
+        public bool TryGetValue(uint column, out ColMetric? metric)
+        {
+            metric = _isSorted
+                ? FindSortedColumnMetric(_columns, column, _firstColumn, _lastColumn)
+                : FindColumnMetric(_columns, column);
+            return metric is not null;
+        }
+    }
+
+    private static bool AreRowsSorted(IReadOnlyList<RowMetric> rows)
+    {
+        for (var i = 1; i < rows.Count; i++)
+        {
+            if (rows[i].Row < rows[i - 1].Row)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool AreColumnsSorted(IReadOnlyList<ColMetric> columns)
+    {
+        for (var i = 1; i < columns.Count; i++)
+        {
+            if (columns[i].Col < columns[i - 1].Col)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static RowMetric? FindSortedRowMetric(
+        IReadOnlyList<RowMetric> rows,
+        uint row,
+        uint firstRow,
+        uint lastRow)
+    {
+        if (rows.Count == 0 || row < firstRow || row > lastRow)
+            return null;
+
+        var directIndex = row - firstRow;
+        if (directIndex < rows.Count)
+        {
+            var candidate = rows[(int)directIndex];
+            if (candidate.Row == row)
+                return candidate;
+        }
+
+        var low = 0;
+        var high = rows.Count - 1;
+        while (low <= high)
+        {
+            var mid = low + ((high - low) / 2);
+            var metric = rows[mid];
+            if (metric.Row == row)
+                return metric;
+            if (metric.Row < row)
+                low = mid + 1;
+            else
+                high = mid - 1;
+        }
+
+        return null;
+    }
+
+    private static ColMetric? FindSortedColumnMetric(
+        IReadOnlyList<ColMetric> columns,
+        uint column,
+        uint firstColumn,
+        uint lastColumn)
+    {
+        if (columns.Count == 0 || column < firstColumn || column > lastColumn)
+            return null;
+
+        var directIndex = column - firstColumn;
+        if (directIndex < columns.Count)
+        {
+            var candidate = columns[(int)directIndex];
+            if (candidate.Col == column)
+                return candidate;
+        }
+
+        var low = 0;
+        var high = columns.Count - 1;
+        while (low <= high)
+        {
+            var mid = low + ((high - low) / 2);
+            var metric = columns[mid];
+            if (metric.Col == column)
+                return metric;
+            if (metric.Col < column)
+                low = mid + 1;
+            else
+                high = mid - 1;
+        }
+
+        return null;
+    }
+
+    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> rows, uint row)
+    {
+        foreach (var metric in rows)
+        {
+            if (metric.Row == row)
+                return metric;
+        }
+
+        return null;
+    }
+
+    private static ColMetric? FindColumnMetric(IReadOnlyList<ColMetric> columns, uint column)
+    {
+        foreach (var metric in columns)
+        {
+            if (metric.Col == column)
+                return metric;
+        }
+
+        return null;
     }
 
     private static bool CanOverflowSplitPaneText(DisplayCell cell, GridRange? merge) =>
@@ -345,7 +499,7 @@ public static class SplitPaneCellLayoutPlanner
 
     private static double SumEmptyOverflowColumnWidths(
         DisplayCell cell,
-        IReadOnlyDictionary<uint, ColMetric> columns,
+        SplitPaneColumnMetricLookup columns,
         SplitPaneOccupiedCellMap occupied)
     {
         double width = 0;
@@ -353,18 +507,19 @@ public static class SplitPaneCellLayoutPlanner
         while (columns.TryGetValue(nextCol, out var nextMetric) &&
                !occupied.Contains(cell.Row, nextCol))
         {
-            width += nextMetric.Width;
+            width += nextMetric!.Width;
             nextCol++;
         }
 
         return width;
     }
 
-    private static double SumMergedColumnWidths(GridRange merge, IReadOnlyDictionary<uint, ColMetric> columns, uint anchorCol)
+    private static double SumMergedColumnWidths(GridRange merge, SplitPaneColumnMetricLookup columns, uint anchorCol)
     {
         double width = 0;
-        foreach (var metric in columns.Values)
+        for (var i = 0; i < columns.Count; i++)
         {
+            var metric = columns[i];
             if (metric.Col > anchorCol && metric.Col <= merge.End.Col)
                 width += metric.Width;
         }
@@ -372,11 +527,12 @@ public static class SplitPaneCellLayoutPlanner
         return width;
     }
 
-    private static double SumMergedRowHeights(GridRange merge, IReadOnlyDictionary<uint, RowMetric> rows, uint anchorRow)
+    private static double SumMergedRowHeights(GridRange merge, SplitPaneRowMetricLookup rows, uint anchorRow)
     {
         double height = 0;
-        foreach (var metric in rows.Values)
+        for (var i = 0; i < rows.Count; i++)
         {
+            var metric = rows[i];
             if (metric.Row > anchorRow && metric.Row <= merge.End.Row)
                 height += metric.Height;
         }
