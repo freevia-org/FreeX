@@ -165,7 +165,8 @@ public sealed partial class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("? rowHeaderWidth + column.LeftOffset");
         calculateLayouts.Should().Contain("VisitLayouts(viewport, mergedRegions, editingCell, ref consumer);");
         calculateLayouts.Should().Contain("private struct SplitPaneCellLayoutCollector");
-        calculateLayouts.Should().Contain("new List<SplitPaneCellLayout>(_capacity)");
+        calculateLayouts.Should().Contain("new SplitPaneCellLayoutList(");
+        calculateLayouts.Should().Contain("_cellIndexes = new int[capacity]");
         calculateLayouts.Should().Contain("SplitPaneOccupiedCellMap? occupied = null;");
         calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell)");
         calculateLayouts.Should().Contain("SumEmptyOverflowColumnWidths(cell, colMetrics, occupied.Value)");

@@ -1,7 +1,7 @@
 namespace FreeX.Core.Model;
 
 /// <summary>Display-ready cell data sent from the engine to the UI viewport.</summary>
-public sealed record DisplayCell(
+public readonly record struct DisplayCell(
     uint Row,
     uint Col,
     ScalarValue? RawValue,
