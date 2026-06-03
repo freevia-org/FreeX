@@ -9,27 +9,31 @@ internal static partial class XlsxWorksheetDrawingPartReader
     private static XlsxDrawingAnchor? ReadNearestAnchor(XElement element)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        return element
-            .Ancestors(spreadsheetDrawingNs + "twoCellAnchor")
-            .Select(TryReadTwoCellAnchor)
-            .FirstOrDefault(candidate => candidate is not null)
-            ?? element
-                .Ancestors(spreadsheetDrawingNs + "oneCellAnchor")
-                .Select(TryReadOneCellAnchor)
-                .FirstOrDefault(candidate => candidate is not null)
-            ?? element
-                .Ancestors(spreadsheetDrawingNs + "absoluteAnchor")
-                .Select(TryReadAbsoluteAnchor)
-                .FirstOrDefault(candidate => candidate is not null);
+        var anchor = FindNearestAnchorElement(element, spreadsheetDrawingNs);
+        return anchor is null ? null : TryReadAnchor(anchor, spreadsheetDrawingNs);
     }
 
     private static int ReadNearestAnchorOrderIndex(XElement element)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        var anchor = element
-            .Ancestors()
-            .FirstOrDefault(candidate => IsSpreadsheetDrawingAnchor(candidate, spreadsheetDrawingNs));
-        if (anchor?.Parent is null)
+        var anchor = FindNearestAnchorElement(element, spreadsheetDrawingNs);
+        return anchor is null ? -1 : ReadAnchorOrderIndex(anchor, spreadsheetDrawingNs);
+    }
+
+    private static XElement? FindNearestAnchorElement(XElement element, XNamespace spreadsheetDrawingNs)
+    {
+        foreach (var candidate in element.Ancestors())
+        {
+            if (IsSpreadsheetDrawingAnchor(candidate, spreadsheetDrawingNs))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static int ReadAnchorOrderIndex(XElement anchor, XNamespace spreadsheetDrawingNs)
+    {
+        if (anchor.Parent is null)
             return -1;
 
         var index = 0;
@@ -45,6 +49,17 @@ internal static partial class XlsxWorksheetDrawingPartReader
         }
 
         return -1;
+    }
+
+    private static XlsxDrawingAnchor? TryReadAnchor(XElement anchor, XNamespace spreadsheetDrawingNs)
+    {
+        if (anchor.Name == spreadsheetDrawingNs + "twoCellAnchor")
+            return TryReadTwoCellAnchor(anchor);
+        if (anchor.Name == spreadsheetDrawingNs + "oneCellAnchor")
+            return TryReadOneCellAnchor(anchor);
+        return anchor.Name == spreadsheetDrawingNs + "absoluteAnchor"
+            ? TryReadAbsoluteAnchor(anchor)
+            : null;
     }
 
     private static bool IsSpreadsheetDrawingAnchor(XElement element, XNamespace spreadsheetDrawingNs) =>
