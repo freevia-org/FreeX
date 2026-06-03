@@ -58,6 +58,8 @@ public sealed partial class NativeJsonAdapter
 
         public Sheet? SourceSheet { get; }
 
+        public int Count => _items?.Count ?? SourceSheet?.CellCount ?? 0;
+
         public static CellDtoSequence FromItems(List<CellDto?> items)
             => items.Count == 0 ? Empty : new CellDtoSequence(items);
 

@@ -79,6 +79,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _endMode;
     private bool _dragSelectActive;
     private bool _dragSelectAddsAdditionalRange;
+    private bool _dragSelectionTransientOverlaysCleared;
     private GridHeaderContextMenuTarget? _dragHeaderSelectionTarget;
     private uint _dragHeaderSelectionAnchor;
     private bool _dragSelectStatusRefreshPending;
@@ -101,6 +102,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private readonly HashSet<TabItem> _normalizedRibbonStaticTabs = [];
     private string? _ribbonAdaptiveMeasurementCacheKey;
     private IReadOnlyList<RibbonAdaptiveGroup>? _ribbonAdaptiveGroupCache;
+    private IReadOnlyList<string>? _ribbonAdaptiveGroupProfileKeyCache;
     private double _ribbonAdaptiveFixedChromeWidthCache;
     private string? _ribbonResizeThresholdCacheKey;
     private IReadOnlyList<double> _ribbonResizeThresholds = [];

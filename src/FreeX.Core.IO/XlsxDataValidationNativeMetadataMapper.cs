@@ -9,6 +9,13 @@ namespace FreeX.Core.IO;
 internal static class XlsxDataValidationNativeMetadataMapper
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly HashSet<string> ElementsAfterDataValidations = new(StringComparer.Ordinal)
+    {
+        "hyperlinks", "printOptions", "pageMargins", "pageSetup", "headerFooter", "rowBreaks", "colBreaks",
+        "customProperties", "cellWatches", "ignoredErrors", "smartTags", "drawing", "legacyDrawing",
+        "legacyDrawingHF", "drawingHF", "picture", "oleObjects", "controls", "webPublishItems", "tableParts",
+        "extLst",
+    };
 
     public static IReadOnlyList<DataValidationNativeMetadata> Read(XDocument worksheetXml, XNamespace worksheetNs)
     {
@@ -146,6 +153,14 @@ internal static class XlsxDataValidationNativeMetadataMapper
             if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 
+            if (TryCreateDataValidationsElement(sheet, containerSource, out var replacement))
+            {
+                edit.Root.Element(WorksheetNs + "dataValidations")?.Remove();
+                AddDataValidationsInOrder(edit.Root, replacement);
+                session.MarkDirty(edit);
+                continue;
+            }
+
             var dataValidations = edit.Root.Element(WorksheetNs + "dataValidations");
             if (dataValidations is null)
                 continue;
@@ -181,6 +196,135 @@ internal static class XlsxDataValidationNativeMetadataMapper
             if (changed)
                 session.MarkDirty(edit);
         }
+    }
+
+    private static bool TryCreateDataValidationsElement(
+        Sheet sheet,
+        DataValidation? containerSource,
+        out XElement dataValidations)
+    {
+        dataValidations = new XElement(WorksheetNs + "dataValidations");
+        if (containerSource is not null)
+            ApplyContainerNativeMetadata(dataValidations, containerSource, WorksheetNs);
+
+        var count = 0;
+        foreach (var validation in sheet.DataValidations)
+        {
+            if (!TryCreateValidationElement(sheet, validation, out var validationElement))
+                continue;
+
+            dataValidations.Add(validationElement);
+            count++;
+        }
+
+        if (count == 0)
+        {
+            dataValidations = null!;
+            return false;
+        }
+
+        dataValidations.SetAttributeValue("count", count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return true;
+    }
+
+    private static bool TryCreateValidationElement(
+        Sheet sheet,
+        DataValidation validation,
+        out XElement validationElement)
+    {
+        validationElement = new XElement(WorksheetNs + "dataValidation");
+        if (!Enum.IsDefined(validation.Type) ||
+            !Enum.IsDefined(validation.Operator) ||
+            !Enum.IsDefined(validation.AlertStyle) ||
+            validation.AppliesTo.Start.Sheet != sheet.Id ||
+            validation.AppliesTo.End.Sheet != sheet.Id)
+        {
+            return false;
+        }
+
+        var sqref = ToSqref(validation);
+        if (string.IsNullOrWhiteSpace(sqref))
+            return false;
+
+        validationElement.SetAttributeValue("sqref", sqref);
+
+        if (validation.Type != DvType.Any)
+            validationElement.SetAttributeValue("type", ToDataValidationType(validation.Type));
+        if (ShouldWriteOperator(validation.Type))
+            validationElement.SetAttributeValue("operator", ToDataValidationOperator(validation.Operator));
+        if (validation.AllowBlank)
+            validationElement.SetAttributeValue("allowBlank", "1");
+        if (!validation.ShowDropdown)
+            validationElement.SetAttributeValue("showDropDown", "1");
+        if (validation.AlertStyle != DvAlertStyle.Stop)
+            validationElement.SetAttributeValue("errorStyle", ToDataValidationAlertStyle(validation.AlertStyle));
+        if (!validation.ShowInputMessage)
+            validationElement.SetAttributeValue("showInputMessage", "0");
+        if (!validation.ShowErrorMessage)
+            validationElement.SetAttributeValue("showErrorMessage", "0");
+        if (!string.IsNullOrEmpty(validation.ErrorTitle))
+            validationElement.SetAttributeValue("errorTitle", validation.ErrorTitle);
+        if (!string.IsNullOrEmpty(validation.ErrorMessage))
+            validationElement.SetAttributeValue("error", validation.ErrorMessage);
+        if (!string.IsNullOrEmpty(validation.PromptTitle))
+            validationElement.SetAttributeValue("promptTitle", validation.PromptTitle);
+        if (!string.IsNullOrEmpty(validation.PromptMessage))
+            validationElement.SetAttributeValue("prompt", validation.PromptMessage);
+
+        var formula1 = validation.Type == DvType.List
+            ? XlsxDataValidationClosedXmlMapper.NormalizeListFormulaForSave(validation.Formula1 ?? "")
+            : validation.Formula1;
+        if (!string.IsNullOrEmpty(formula1))
+            validationElement.Add(new XElement(WorksheetNs + "formula1", formula1));
+        if (!string.IsNullOrEmpty(validation.Formula2))
+            validationElement.Add(new XElement(WorksheetNs + "formula2", validation.Formula2));
+
+        ApplyValidationNativeMetadata(validationElement, validation, WorksheetNs);
+        return true;
+    }
+
+    private static bool ShouldWriteOperator(DvType type) =>
+        type is DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time or DvType.TextLength;
+
+    private static string ToDataValidationType(DvType type) => type switch
+    {
+        DvType.WholeNumber => "whole",
+        DvType.Decimal => "decimal",
+        DvType.List => "list",
+        DvType.Date => "date",
+        DvType.Time => "time",
+        DvType.TextLength => "textLength",
+        DvType.Custom => "custom",
+        _ => "none",
+    };
+
+    private static string ToDataValidationOperator(DvOperator op) => op switch
+    {
+        DvOperator.NotBetween => "notBetween",
+        DvOperator.Equal => "equal",
+        DvOperator.NotEqual => "notEqual",
+        DvOperator.GreaterThan => "greaterThan",
+        DvOperator.LessThan => "lessThan",
+        DvOperator.GreaterThanOrEqual => "greaterThanOrEqual",
+        DvOperator.LessThanOrEqual => "lessThanOrEqual",
+        _ => "between",
+    };
+
+    private static string ToDataValidationAlertStyle(DvAlertStyle style) => style switch
+    {
+        DvAlertStyle.Warning => "warning",
+        DvAlertStyle.Information => "information",
+        _ => "stop",
+    };
+
+    private static void AddDataValidationsInOrder(XElement root, XElement dataValidations)
+    {
+        var anchor = root.Elements()
+            .FirstOrDefault(element => ElementsAfterDataValidations.Contains(element.Name.LocalName));
+        if (anchor is not null)
+            anchor.AddBeforeSelf(dataValidations);
+        else
+            root.Add(dataValidations);
     }
 
     private static Dictionary<string, string> ReadAttributes(XElement validation)

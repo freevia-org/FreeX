@@ -125,6 +125,40 @@ public sealed class BuiltInFunctionsPerformanceTests
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         result.Should().BeOfType<NumberValue>();
         _output.WriteLine($"XNPV large cash-flow range allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(750_000);
+        allocatedBytes.Should().BeLessThan(
+            80_000,
+            "scalar-rate XNPV should stream direct value/date ranges instead of materializing RangeValue arrays");
+    }
+
+    [Fact]
+    public void Npv_LargeCashFlowRangeAvoidsRangeMaterializationChurn()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 20_000; row++)
+        {
+            var value = row == 1 ? -10_000d : 1d;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(value));
+        }
+
+        evaluator.Evaluate("=NPV(0.08,A1:A20000)", sheet)
+            .Should().BeOfType<NumberValue>();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate("=NPV(0.08,A1:A20000)", sheet);
+        stopwatch.Stop();
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        result.Should().BeOfType<NumberValue>();
+        _output.WriteLine(
+            $"NPV large cash-flow range elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(
+            80_000,
+            "scalar-rate NPV should stream direct value ranges instead of materializing RangeValue arrays");
     }
 }

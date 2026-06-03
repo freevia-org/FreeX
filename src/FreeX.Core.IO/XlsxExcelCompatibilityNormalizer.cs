@@ -19,7 +19,12 @@ internal static partial class XlsxExcelCompatibilityNormalizer
     private static readonly XNamespace ContentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace X14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
 
-    public static void NormalizeSourcePackageSave(Stream packageStream)
+    public static void NormalizeSourcePackageSave(Stream packageStream) =>
+        NormalizeSourcePackageSave(packageStream, XlsxExcelCompatibilityNormalizationPlan.Full);
+
+    internal static void NormalizeSourcePackageSave(
+        Stream packageStream,
+        XlsxExcelCompatibilityNormalizationPlan plan)
     {
         using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
 
@@ -30,9 +35,18 @@ internal static partial class XlsxExcelCompatibilityNormalizer
 
         RemoveInvalidWorkbookExtensionAttributes(archive);
 
-        var changedWorksheets = RemoveWorksheetCustomViews(archive);
-        changedWorksheets |= ConvertPhoneLikeFormulaText(archive);
-        changedWorksheets |= RemoveDuplicateWorksheetDrawingTargets(archive);
+        var changedWorksheets = false;
+        if (plan.RequiresWorksheetScan)
+        {
+            var worksheetPaths = GetWorkbookWorksheetPaths(archive);
+            if (plan.ScanWorksheetCustomViews)
+                changedWorksheets |= RemoveWorksheetCustomViews(archive, worksheetPaths);
+            if (plan.ScanWorksheetFormulaText)
+                changedWorksheets |= ConvertPhoneLikeFormulaText(archive, worksheetPaths);
+            if (plan.ScanWorksheetDrawingTargets)
+                changedWorksheets |= RemoveDuplicateWorksheetDrawingTargets(archive, worksheetPaths);
+        }
+
         if (changedWorksheets)
             RemoveCalcChain(archive);
 
@@ -85,10 +99,10 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         return true;
     }
 
-    private static bool RemoveWorksheetCustomViews(ZipArchive archive)
+    private static bool RemoveWorksheetCustomViews(ZipArchive archive, IReadOnlyList<string> worksheetPaths)
     {
         var changed = false;
-        foreach (var worksheetPath in GetWorkbookWorksheetPaths(archive))
+        foreach (var worksheetPath in worksheetPaths)
         {
             var worksheetXml = LoadXml(archive, worksheetPath);
             var root = worksheetXml?.Root;
@@ -109,10 +123,10 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         return changed;
     }
 
-    private static bool ConvertPhoneLikeFormulaText(ZipArchive archive)
+    private static bool ConvertPhoneLikeFormulaText(ZipArchive archive, IReadOnlyList<string> worksheetPaths)
     {
         var changed = false;
-        foreach (var worksheetPath in GetWorkbookWorksheetPaths(archive))
+        foreach (var worksheetPath in worksheetPaths)
         {
             var worksheetXml = LoadXml(archive, worksheetPath);
             var root = worksheetXml?.Root;
@@ -153,11 +167,11 @@ internal static partial class XlsxExcelCompatibilityNormalizer
                text.All(ch => char.IsDigit(ch) || ch is '+' or '-' or '.' or '(' or ')' || char.IsWhiteSpace(ch));
     }
 
-    private static bool RemoveDuplicateWorksheetDrawingTargets(ZipArchive archive)
+    private static bool RemoveDuplicateWorksheetDrawingTargets(ZipArchive archive, IReadOnlyList<string> worksheetPaths)
     {
         var changed = false;
         var activeDrawingTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var worksheetPath in GetWorkbookWorksheetPaths(archive))
+        foreach (var worksheetPath in worksheetPaths)
         {
             var worksheetXml = LoadXml(archive, worksheetPath);
             var root = worksheetXml?.Root;
@@ -579,4 +593,20 @@ internal static partial class XlsxExcelCompatibilityNormalizer
     }
 
     private sealed record PivotTablePartInfo(string Path, XDocument Xml);
+}
+
+internal readonly record struct XlsxExcelCompatibilityNormalizationPlan(
+    bool ScanWorksheetCustomViews,
+    bool ScanWorksheetFormulaText,
+    bool ScanWorksheetDrawingTargets)
+{
+    public static XlsxExcelCompatibilityNormalizationPlan Full { get; } = new(
+        ScanWorksheetCustomViews: true,
+        ScanWorksheetFormulaText: true,
+        ScanWorksheetDrawingTargets: true);
+
+    public bool RequiresWorksheetScan =>
+        ScanWorksheetCustomViews ||
+        ScanWorksheetFormulaText ||
+        ScanWorksheetDrawingTargets;
 }

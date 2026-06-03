@@ -223,6 +223,20 @@ public sealed class SpellCheckWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildReplaceAllEdits_CollapsesRepeatedWordRunsWithinCells()
+    {
+        var sheet = SheetId.New();
+        var address = new CellAddress(sheet, 1, 1);
+        var issues = SpellCheckService.FindIssuesInCell(address, "the the the and The The file");
+
+        var edits = SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, "the the", "the");
+
+        edits.Should().ContainSingle();
+        edits[0].Address.Should().Be(address);
+        edits[0].NewCell.Value.Should().Be(new TextValue("the and The file"));
+    }
+
+    [Fact]
     public void BuildReplaceAllEdits_ScansLargeIssueListsWithoutGroupingAllocation()
     {
         var sheet = SheetId.New();

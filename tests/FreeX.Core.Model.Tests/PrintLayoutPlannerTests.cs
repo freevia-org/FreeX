@@ -66,6 +66,86 @@ public sealed class PrintLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildRowPlans_ManualBreakStartsNewBodyPageAndRepeatsTitleRows()
+    {
+        var sheetId = SheetId.New();
+        var printRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 7, 3));
+
+        var pages = PrintLayoutPlanner.BuildRowPlans(
+            printRange,
+            new WorksheetRepeatRange(1, 1),
+            rowsPerPage: 10,
+            manualRowBreaks: [5]);
+
+        pages.Should().HaveCount(2);
+        pages[0].TitleRows.Should().Equal(1u);
+        pages[0].BodyRows.Should().Equal(2u, 3u, 4u);
+        pages[1].TitleRows.Should().Equal(1u);
+        pages[1].BodyRows.Should().Equal(5u, 6u, 7u);
+    }
+
+    [Fact]
+    public void BuildColumnPlans_ManualBreakStartsNewBodyPageAndRepeatsTitleColumns()
+    {
+        var sheetId = SheetId.New();
+        var printRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 7));
+
+        var pages = PrintLayoutPlanner.BuildColumnPlans(
+            printRange,
+            new WorksheetRepeatRange(1, 1),
+            columnsPerPage: 10,
+            manualColumnBreaks: [5]);
+
+        pages.Should().HaveCount(2);
+        pages[0].TitleColumns.Should().Equal(1u);
+        pages[0].BodyColumns.Should().Equal(2u, 3u, 4u);
+        pages[1].TitleColumns.Should().Equal(1u);
+        pages[1].BodyColumns.Should().Equal(5u, 6u, 7u);
+    }
+
+    [Fact]
+    public void BuildRowPlans_IgnoresLeadingTitleAndOutOfRangeManualBreaks()
+    {
+        var sheetId = SheetId.New();
+        var printRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 5, 3));
+
+        var pages = PrintLayoutPlanner.BuildRowPlans(
+            printRange,
+            new WorksheetRepeatRange(1, 1),
+            rowsPerPage: 10,
+            manualRowBreaks: [1, 2, 6]);
+
+        pages.Should().ContainSingle();
+        pages[0].TitleRows.Should().Equal(1u);
+        pages[0].BodyRows.Should().Equal(2u, 3u, 4u, 5u);
+    }
+
+    [Fact]
+    public void BuildColumnPlans_IgnoresLeadingTitleAndOutOfRangeManualBreaks()
+    {
+        var sheetId = SheetId.New();
+        var printRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 5));
+
+        var pages = PrintLayoutPlanner.BuildColumnPlans(
+            printRange,
+            new WorksheetRepeatRange(1, 1),
+            columnsPerPage: 10,
+            manualColumnBreaks: [1, 2, 6]);
+
+        pages.Should().ContainSingle();
+        pages[0].TitleColumns.Should().Equal(1u);
+        pages[0].BodyColumns.Should().Equal(2u, 3u, 4u, 5u);
+    }
+
+    [Fact]
     public void BuildPagePlans_AvoidLinqPageSlicing()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Model", "PrintLayoutPlanner.cs"));

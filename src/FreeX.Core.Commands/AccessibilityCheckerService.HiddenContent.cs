@@ -40,6 +40,11 @@ public static partial class AccessibilityCheckerService
             MarkHiddenContentAddress(sheet, address, ref hasContent, ref hiddenRows, ref hiddenCols);
         }
 
+        foreach (var address in sheet.Hyperlinks.Keys)
+        {
+            MarkHiddenContentAddress(sheet, address, ref hasContent, ref hiddenRows, ref hiddenCols);
+        }
+
         foreach (var table in sheet.StructuredTables)
         {
             MarkHiddenContentRange(sheet, table.Range, ref hasContent, ref hiddenRows, ref hiddenCols);

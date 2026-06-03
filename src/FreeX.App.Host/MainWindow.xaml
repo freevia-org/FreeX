@@ -4221,6 +4221,9 @@
 	                        Style="{StaticResource SsNavBtn}"
 	                        Padding="18,11" FontSize="18"
 	                        Click="SsBackBtn_Click"
+	                        AutomationProperties.AutomationId="BackstageBackButton"
+	                        AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_Back}"
+	                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_ToolTip_BackToWorkbook}"
 	                        ToolTip="{local:Loc Key=MainWindow_ToolTip_BackToWorkbook}"
 	                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Back}"
 	                        local:RibbonTooltip.KeyTip="B" local:RibbonMetadata.CommandName="Back">
@@ -4232,6 +4235,9 @@
                         HorizontalAlignment="Stretch"
                         Style="{StaticResource SsNavBtnActive}"
                         Click="SsHomeNavBtn_Click"
+                        AutomationProperties.AutomationId="BackstageHomeButton"
+                        AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Home}"
+                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipTitle_Home}"
                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Home}"
                         local:RibbonTooltip.KeyTip="H" local:RibbonMetadata.CommandName="Home">
                     <StackPanel Orientation="Horizontal">
@@ -4278,9 +4284,13 @@
 
                 <!-- Navigation items -->
                 <StackPanel>
-                    <Button HorizontalAlignment="Stretch"
+                    <Button x:Name="SsNewNavBtn"
+                            HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsNewBtn_Click"
+                            AutomationProperties.AutomationId="BackstageNewButton"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_Text_New}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_CreateANewWorkbook}"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_New}"
                             local:RibbonTooltip.KeyTip="N" local:RibbonMetadata.CommandName="New">
                         <StackPanel Orientation="Horizontal">
@@ -4288,9 +4298,13 @@
                             <AccessText Text="{local:Loc Key=MainWindow_Text_New}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button HorizontalAlignment="Stretch"
+                    <Button x:Name="SsOpenNavBtn"
+                            HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsOpenBtn_Click"
+                            AutomationProperties.AutomationId="BackstageOpenButton"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_Text_Open}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_OpenAnExistingWorkbook}"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Open}"
                             local:RibbonTooltip.KeyTip="O" local:RibbonMetadata.CommandName="Open">
                         <StackPanel Orientation="Horizontal">
@@ -4330,9 +4344,13 @@
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Info}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button HorizontalAlignment="Stretch"
+                    <Button x:Name="SsSaveNavBtn"
+                            HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SaveButton_Click"
+                            AutomationProperties.AutomationId="BackstageSaveButton"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Save}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbook}"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Save}"
                             local:RibbonTooltip.KeyTip="S" local:RibbonMetadata.CommandName="Save">
                         <StackPanel Orientation="Horizontal">
@@ -4340,9 +4358,13 @@
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Save}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button HorizontalAlignment="Stretch"
+                    <Button x:Name="SsSaveAsNavBtn"
+                            HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SaveAsButton_Click"
+                            AutomationProperties.AutomationId="BackstageSaveAsButton"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_TooltipTitle_SaveAs}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbookWithANewNameOrFormat}"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SaveAs}"
                             local:RibbonTooltip.KeyTip="A" local:RibbonMetadata.CommandName="Save As">
                         <StackPanel Orientation="Horizontal">
@@ -4379,9 +4401,13 @@
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Export}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button HorizontalAlignment="Stretch"
+                    <Button x:Name="SsCloseNavBtn"
+                            HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsCloseBtn_Click"
+                            AutomationProperties.AutomationId="BackstageCloseButton"
+                            AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Close}"
+                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipTitle_Close}"
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Close}"
                             local:RibbonTooltip.KeyTip="C" local:RibbonMetadata.CommandName="Close">
                         <StackPanel Orientation="Horizontal">

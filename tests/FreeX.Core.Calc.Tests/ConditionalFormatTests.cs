@@ -488,6 +488,21 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void StackedConditionalFormatStyles_ReuseViewportCache()
+    {
+        var evaluatorSource = ReadViewportConditionalFormatEvaluatorSources();
+        var evaluateSource = evaluatorSource[
+            evaluatorSource.IndexOf("public static CfStyleResult? Evaluate", StringComparison.Ordinal)..
+            evaluatorSource.IndexOf("private static Dictionary<ConditionalFormat, CellStyle> PrecomputeDefaultMergedFormatStyles", StringComparison.Ordinal)];
+
+        evaluatorSource.Should().Contain("CfStackedStyleCache");
+        evaluatorSource.Should().Contain("CreateStackedStyleCache(rulesByPriority)");
+        evaluatorSource.Should().Contain("RuntimeHelpers.GetHashCode");
+        evaluateSource.Should().Contain("GetStackedDifferentialStyle(cfContext");
+        evaluateSource.Should().NotContain("StackDifferentialStyle(result.Value.Style, styleResult.Style)");
+    }
+
+    [Fact]
     public void ColorScale_LargeSparseRange_UsesOccupiedCellsForAggregates()
     {
         var (wb, sheet) = MakeWorkbook();

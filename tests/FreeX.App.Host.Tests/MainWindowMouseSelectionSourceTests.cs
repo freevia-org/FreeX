@@ -114,9 +114,9 @@ public sealed class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
 
-        addSelection.Should().Contain("HideValidationDropdown();");
+        addSelection.Should().Contain("ClearSelectionTransientOverlays();");
         addSelection.Should().Contain("SetSelectedRangesIfChanged(ranges);");
-        addSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
+        addSelection.IndexOf("ClearSelectionTransientOverlays();", StringComparison.Ordinal)
             .Should()
             .BeLessThan(addSelection.IndexOf("SetSelectedRangesIfChanged(ranges);", StringComparison.Ordinal));
     }
@@ -151,9 +151,9 @@ public sealed class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
 
-        extendSelection.Should().Contain("HideValidationDropdown();");
+        extendSelection.Should().Contain("ClearSelectionTransientOverlays();");
         extendSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
-        extendSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
+        extendSelection.IndexOf("ClearSelectionTransientOverlays();", StringComparison.Ordinal)
             .Should()
             .BeLessThan(extendSelection.IndexOf("SheetGrid.SelectedRange = new GridRange(", StringComparison.Ordinal));
     }
@@ -170,13 +170,17 @@ public sealed class MainWindowMouseSelectionSourceTests
         var addSelection = selectionSource[
             selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
+        var clearTransientOverlays = selectionSource[
+            selectionSource.IndexOf("private void ClearSelectionTransientOverlays", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private CellAddress? HitTestCell", StringComparison.Ordinal)];
 
-        extendSelection.Should().Contain("ClearCommentPreview();");
-        addSelection.Should().Contain("ClearCommentPreview();");
-        extendSelection.IndexOf("ClearCommentPreview();", StringComparison.Ordinal)
+        extendSelection.Should().Contain("ClearSelectionTransientOverlays();");
+        addSelection.Should().Contain("ClearSelectionTransientOverlays();");
+        clearTransientOverlays.Should().Contain("ClearCommentPreview();");
+        extendSelection.IndexOf("ClearSelectionTransientOverlays();", StringComparison.Ordinal)
             .Should()
             .BeLessThan(extendSelection.IndexOf("SheetGrid.SelectedRange = new GridRange(", StringComparison.Ordinal));
-        addSelection.IndexOf("ClearCommentPreview();", StringComparison.Ordinal)
+        addSelection.IndexOf("ClearSelectionTransientOverlays();", StringComparison.Ordinal)
             .Should()
             .BeLessThan(addSelection.IndexOf("SetSelectedRangesIfChanged(ranges);", StringComparison.Ordinal));
     }
@@ -198,10 +202,10 @@ public sealed class MainWindowMouseSelectionSourceTests
         addSelection.Should().Contain("if (IsAdditionalSelectionExtensionUnchanged(target, extendSelection))");
         extendSelection.IndexOf("if (IsSelectionExtensionUnchanged(anchor, to))", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(extendSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal));
+            .BeLessThan(extendSelection.IndexOf("ClearSelectionTransientOverlays();", StringComparison.Ordinal));
         addSelection.IndexOf("if (IsAdditionalSelectionExtensionUnchanged(target, extendSelection))", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(addSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal));
+            .BeLessThan(addSelection.IndexOf("ClearSelectionTransientOverlays();", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -370,10 +374,14 @@ public sealed class MainWindowMouseSelectionSourceTests
         var mouseDown = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
+        var clearTransientOverlays = selectionSource[
+            selectionSource.IndexOf("private void ClearSelectionTransientOverlays", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private CellAddress? HitTestCell", StringComparison.Ordinal)];
 
-        selectRow.Should().Contain("ClearCommentPreview();");
-        selectColumn.Should().Contain("ClearCommentPreview();");
-        selectAll.Should().Contain("ClearCommentPreview();");
+        selectRow.Should().Contain("ClearSelectionTransientOverlays();");
+        selectColumn.Should().Contain("ClearSelectionTransientOverlays();");
+        selectAll.Should().Contain("ClearSelectionTransientOverlays();");
+        clearTransientOverlays.Should().Contain("ClearCommentPreview();");
 
         var columnAnchorIndex = mouseDown.IndexOf("uint anchorCol = _selectionAnchor.Value.Col;", StringComparison.Ordinal);
         var rowAnchorIndex = mouseDown.IndexOf("uint anchorRow = _selectionAnchor.Value.Row;", StringComparison.Ordinal);

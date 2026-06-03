@@ -89,6 +89,34 @@ public sealed class WorkbookThemeEffectStyleTests
     }
 
     [Fact]
+    public void FromTheme_UsesImportedFormatSchemeGlow()
+    {
+        var theme = WorkbookTheme.Office
+            .WithEffects("Office")
+            .WithNativeFormatSchemeXml("""
+                <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+                  <a:effectStyleLst>
+                    <a:effectStyle>
+                      <a:effectLst>
+                        <a:glow rad="38100">
+                          <a:srgbClr val="5B9BD5"><a:alpha val="42000"/></a:srgbClr>
+                        </a:glow>
+                      </a:effectLst>
+                    </a:effectStyle>
+                  </a:effectStyleLst>
+                </a:fmtScheme>
+                """);
+
+        var style = WorkbookThemeEffectStyle.FromTheme(theme);
+
+        style.HasShadow.Should().BeFalse();
+        style.HasGlow.Should().BeTrue();
+        style.GlowOpacity.Should().BeApproximately(0.42, 0.0001);
+        style.GlowRadius.Should().BeApproximately(4, 0.0001);
+        style.GlowColor.Should().Be(new CellColor(91, 155, 213));
+    }
+
+    [Fact]
     public void FromTheme_TreatsUnknownEffectsAsOffice()
     {
         WorkbookThemeEffectStyle.FromTheme(WorkbookTheme.Office.WithEffects("Custom")).HasShadow.Should().BeFalse();

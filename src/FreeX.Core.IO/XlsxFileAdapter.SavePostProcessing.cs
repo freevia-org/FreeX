@@ -299,7 +299,9 @@ public sealed partial class XlsxFileAdapter
         void NormalizeSourcePackageForExcelCompatibility()
         {
             packageStream.Position = 0;
-            XlsxExcelCompatibilityNormalizer.NormalizeSourcePackageSave(packageStream);
+            XlsxExcelCompatibilityNormalizer.NormalizeSourcePackageSave(
+                packageStream,
+                CreateExcelCompatibilityNormalizationPlan(sourcePackage, sourceParts, featurePlan));
         }
 
         void NormalizeWorkbookForSchema()
@@ -307,6 +309,24 @@ public sealed partial class XlsxFileAdapter
             packageStream.Position = 0;
             XlsxWorkbookSchemaNormalizer.Normalize(packageStream);
         }
+    }
+
+    private static XlsxExcelCompatibilityNormalizationPlan CreateExcelCompatibilityNormalizationPlan(
+        XlsxSourcePackage? sourcePackage,
+        SourcePackagePartSummary sourceParts,
+        XlsxPostProcessingFeaturePlan featurePlan)
+    {
+        var shouldScanSourceWorksheetMetadata =
+            sourcePackage?.WorksheetsWithPreservableSourceMetadata is null ||
+            sourcePackage.WorksheetsWithPreservableSourceMetadata.Count > 0;
+
+        return new XlsxExcelCompatibilityNormalizationPlan(
+            ScanWorksheetCustomViews: shouldScanSourceWorksheetMetadata || featurePlan.HasCustomViews,
+            ScanWorksheetFormulaText: featurePlan.HasCellFormulas,
+            ScanWorksheetDrawingTargets:
+                sourceParts.HasDrawings ||
+                featurePlan.HasSupportedCharts ||
+                featurePlan.HasSupportedDrawingObjects);
     }
 
     private static bool HasIgnoredFormulaErrors(Sheet sheet)
@@ -375,12 +395,15 @@ public sealed partial class XlsxFileAdapter
         public bool HasReplayMetadata;
         public bool HasSourceIndependentMetadata;
         public bool HasStyleOnlyCells;
+        public bool HasCustomViews;
+        public bool HasCellFormulas;
 
         public static XlsxPostProcessingFeaturePlan Create(Workbook workbook)
         {
             var plan = new XlsxPostProcessingFeaturePlan();
             plan.HasWorkbookPostProcessingMetadata = XlsxWorkbookMetadataWriter.HasPostProcessingMetadata(workbook);
             plan.HasWorkbookReplayMetadata = XlsxWorkbookMetadataWriter.HasSourcePackageReplayMetadata(workbook);
+            plan.HasCustomViews = workbook.CustomViews.Count > 0;
             foreach (var sheet in workbook.Sheets)
                 plan.Include(sheet);
 
@@ -401,7 +424,7 @@ public sealed partial class XlsxFileAdapter
             HasHeaderFooterPictures |= XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet);
             HasPersistableViewState |= XlsxWorksheetViewWriter.HasPersistableViewState(sheet);
             HasCodeNames |= !string.IsNullOrWhiteSpace(sheet.CodeName);
-            HasIgnoredFormulaErrors |= HasIgnoredFormulaErrors(sheet);
+            IncludeCellFeatures(sheet);
             HasCustomProperties |= sheet.CustomProperties.Count > 0;
             HasWorksheetElementMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasWorksheetElementMetadata(sheet);
             HasSupportedCharts |= HasSupportedXlsxCharts(sheet);
@@ -412,6 +435,17 @@ public sealed partial class XlsxFileAdapter
             HasReplayMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata(sheet);
             HasSourceIndependentMetadata |= XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata(sheet);
             HasStyleOnlyCells |= sheet.HasStyleOnlyCells;
+        }
+
+        private void IncludeCellFeatures(Sheet sheet)
+        {
+            foreach (var pair in sheet.GetOccupiedCellMap())
+            {
+                HasIgnoredFormulaErrors |= pair.Value.IgnoreFormulaError;
+                HasCellFormulas |= pair.Value.HasFormula;
+                if (HasIgnoredFormulaErrors && HasCellFormulas)
+                    return;
+            }
         }
     }
 }

@@ -7,7 +7,7 @@ namespace FreeX.Core.Commands;
 
 public static partial class FormulaAuditingService
 {
-    private const string OmittedAdjacentCellsAggregateFunctionPattern = "SUM|AVERAGE|COUNTA|COUNT|MEDIAN|MIN|MAX|PRODUCT|SUBTOTAL|AGGREGATE";
+    private const string OmittedAdjacentCellsAggregateFunctionPattern = "SUM|AVERAGE|COUNTA|COUNT|MEDIAN|MIN|MAX|PRODUCT|STDEV\\.S|STDEV\\.P|STDEVP|STDEV|VAR\\.S|VAR\\.P|VARP|VAR|SUBTOTAL|AGGREGATE";
 
     private static readonly string[] OmittedAdjacentCellsAggregateFunctions =
     [
@@ -19,6 +19,14 @@ public static partial class FormulaAuditingService
         "MIN",
         "MAX",
         "PRODUCT",
+        "STDEV.S",
+        "STDEV.P",
+        "STDEVP",
+        "STDEV",
+        "VAR.S",
+        "VAR.P",
+        "VARP",
+        "VAR",
         "SUBTOTAL",
         "AGGREGATE"
     ];
@@ -325,10 +333,10 @@ public static partial class FormulaAuditingService
             if (formulas is null || formulas.Count == 0 || flaggedInconsistentFormulas is null)
                 continue;
 
-            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Row), flaggedInconsistentFormulas))
+            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas, flaggedInconsistentFormulas, groupByRow: true))
                 yield return issue;
 
-            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Col), flaggedInconsistentFormulas))
+            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas, flaggedInconsistentFormulas, groupByRow: false))
                 yield return issue;
         }
     }
@@ -353,82 +361,112 @@ public static partial class FormulaAuditingService
                 formulas.Add(new FormulaPattern(address, cell.FormulaText!, NormalizeFormulaPattern(address, cell.FormulaText!)));
             }
 
-            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Row), flagged))
+            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas, flagged, groupByRow: true))
                 yield return issue;
 
-            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Col), flagged))
+            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas, flagged, groupByRow: false))
                 yield return issue;
         }
     }
 
     private static IEnumerable<FormulaErrorIssue> FindInconsistentFormulaRuns(
         Sheet sheet,
-        IEnumerable<IGrouping<uint, FormulaPattern>> groupedFormulas,
+        List<FormulaPattern> formulas,
+        HashSet<CellAddress> flagged,
+        bool groupByRow)
+    {
+        if (formulas.Count < 3)
+            yield break;
+
+        formulas.Sort(groupByRow ? CompareFormulaPatternByRowThenColumn : CompareFormulaPatternByColumnThenRow);
+
+        var runStart = 0;
+        for (var index = 1; index <= formulas.Count; index++)
+        {
+            if (index < formulas.Count &&
+                FormulaPatternsShareGroup(formulas[index - 1], formulas[index], groupByRow) &&
+                AreAdjacentFormulaPatterns(formulas[index - 1], formulas[index]))
+            {
+                continue;
+            }
+
+            var runCount = index - runStart;
+            if (runCount >= 3)
+            {
+                foreach (var issue in FindInconsistentFormulaRunIssues(sheet, formulas, runStart, runCount, flagged))
+                    yield return issue;
+            }
+
+            runStart = index;
+        }
+    }
+
+    private static IEnumerable<FormulaErrorIssue> FindInconsistentFormulaRunIssues(
+        Sheet sheet,
+        IReadOnlyList<FormulaPattern> formulas,
+        int start,
+        int count,
         HashSet<CellAddress> flagged)
     {
-        foreach (var group in groupedFormulas)
+        var patternCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var majorityCount = 0;
+        var end = start + count;
+        for (var index = start; index < end; index++)
         {
-            var formulas = group.OrderBy(item => item.Address.Row).ThenBy(item => item.Address.Col).ToList();
-            foreach (var run in SplitAdjacentFormulaRuns(formulas))
-            {
-                if (run.Count < 3)
-                    continue;
+            var formula = formulas[index];
+            var formulaCount = patternCounts.GetValueOrDefault(formula.Pattern) + 1;
+            patternCounts[formula.Pattern] = formulaCount;
+            if (formulaCount > majorityCount)
+                majorityCount = formulaCount;
+        }
 
-                var patternCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-                var majorityCount = 0;
-                foreach (var formula in run)
-                {
-                    var count = patternCounts.GetValueOrDefault(formula.Pattern) + 1;
-                    patternCounts[formula.Pattern] = count;
-                    if (count > majorityCount)
-                        majorityCount = count;
-                }
+        if (patternCounts.Count < 2 || majorityCount < 2)
+            yield break;
 
-                if (patternCounts.Count < 2 || majorityCount < 2)
-                    continue;
+        for (var index = start; index < end; index++)
+        {
+            var outlier = formulas[index];
+            if (patternCounts[outlier.Pattern] != 1)
+                continue;
 
-                foreach (var outlier in run)
-                {
-                    if (patternCounts[outlier.Pattern] != 1)
-                        continue;
+            if (!flagged.Add(outlier.Address))
+                continue;
 
-                    if (!flagged.Add(outlier.Address))
-                        continue;
-
-                    yield return new FormulaErrorIssue(
-                        sheet.Id,
-                        sheet.Name,
-                        outlier.Address,
-                        outlier.Address.ToA1(),
-                        InconsistentFormulaErrorCode,
-                        "=" + outlier.FormulaText,
-                        "The formula is inconsistent with nearby formulas.");
-                }
-            }
+            yield return new FormulaErrorIssue(
+                sheet.Id,
+                sheet.Name,
+                outlier.Address,
+                outlier.Address.ToA1(),
+                InconsistentFormulaErrorCode,
+                "=" + outlier.FormulaText,
+                "The formula is inconsistent with nearby formulas.");
         }
     }
 
-    private static IEnumerable<List<FormulaPattern>> SplitAdjacentFormulaRuns(IReadOnlyList<FormulaPattern> formulas)
+    private static int CompareFormulaPatternByRowThenColumn(FormulaPattern left, FormulaPattern right)
     {
-        var run = new List<FormulaPattern>();
-        FormulaPattern? previous = null;
-        foreach (var formula in formulas)
-        {
-            if (previous is not null &&
-                Math.Abs((int)formula.Address.Row - (int)previous.Address.Row) +
-                Math.Abs((int)formula.Address.Col - (int)previous.Address.Col) != 1)
-            {
-                yield return run;
-                run = [];
-            }
-
-            run.Add(formula);
-            previous = formula;
-        }
-
-        if (run.Count > 0)
-            yield return run;
+        var rowComparison = left.Address.Row.CompareTo(right.Address.Row);
+        return rowComparison != 0
+            ? rowComparison
+            : left.Address.Col.CompareTo(right.Address.Col);
     }
+
+    private static int CompareFormulaPatternByColumnThenRow(FormulaPattern left, FormulaPattern right)
+    {
+        var columnComparison = left.Address.Col.CompareTo(right.Address.Col);
+        return columnComparison != 0
+            ? columnComparison
+            : left.Address.Row.CompareTo(right.Address.Row);
+    }
+
+    private static bool FormulaPatternsShareGroup(FormulaPattern left, FormulaPattern right, bool groupByRow) =>
+        groupByRow
+            ? left.Address.Row == right.Address.Row
+            : left.Address.Col == right.Address.Col;
+
+    private static bool AreAdjacentFormulaPatterns(FormulaPattern left, FormulaPattern right) =>
+        Math.Abs((int)left.Address.Row - (int)right.Address.Row) +
+        Math.Abs((int)left.Address.Col - (int)right.Address.Col) == 1;
 
     private static bool IsInconsistentFormula(Workbook workbook, SheetId sheetId, CellAddress address) =>
         FindInconsistentFormulaIssues(workbook, sheetId)
@@ -512,7 +550,7 @@ public static partial class FormulaAuditingService
         return normalized.TrimEnd();
     }
 
-    private sealed record FormulaPattern(CellAddress Address, string FormulaText, string Pattern);
+    private readonly record struct FormulaPattern(CellAddress Address, string FormulaText, string Pattern);
 
     private static IEnumerable<FormulaErrorIssue> FindFormulaOmitsAdjacentCellsIssues(Workbook workbook, SheetId? sheetId)
     {
@@ -866,6 +904,17 @@ public static partial class FormulaAuditingService
                 var start = new CellAddress(rangeSheetId, rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
                 var end = new CellAddress(rangeSheetId, rangeRef.End.Row, rangeRef.End.ColumnNumber);
                 range = NormalizeRange(start, end);
+                return true;
+
+            case NamedRangeNode namedRange:
+                if (!workbook.TryGetNamedRange(namedRange.Name, out var resolvedRange) ||
+                    resolvedRange.Start.Sheet != sheetId ||
+                    resolvedRange.End.Sheet != sheetId)
+                {
+                    return false;
+                }
+
+                range = NormalizeRange(resolvedRange.Start, resolvedRange.End);
                 return true;
 
             default:

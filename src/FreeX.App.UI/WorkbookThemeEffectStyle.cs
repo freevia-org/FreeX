@@ -5,20 +5,27 @@ namespace FreeX.App.UI;
 public readonly record struct WorkbookThemeEffectStyle(
     double ShadowOpacity,
     double ShadowOffsetX,
-    double ShadowOffsetY)
+    double ShadowOffsetY,
+    double GlowOpacity = 0,
+    double GlowRadius = 0,
+    CellColor? GlowColor = null)
 {
     public bool HasShadow => ShadowOpacity > 0;
+    public bool HasGlow => GlowOpacity > 0 && GlowRadius > 0;
 
     public static WorkbookThemeEffectStyle FromTheme(WorkbookTheme theme)
     {
         ArgumentNullException.ThrowIfNull(theme);
 
-        if (theme.EffectDefaults is { HasShadow: true } effectDefaults)
+        if (theme.EffectDefaults is { HasAnyEffect: true } effectDefaults)
         {
             return new WorkbookThemeEffectStyle(
                 effectDefaults.ShadowOpacity,
                 effectDefaults.ShadowOffsetX,
-                effectDefaults.ShadowOffsetY);
+                effectDefaults.ShadowOffsetY,
+                effectDefaults.GlowOpacity,
+                effectDefaults.GlowRadius,
+                effectDefaults.GlowColor);
         }
 
         return theme.EffectsName.Trim().ToUpperInvariant() switch

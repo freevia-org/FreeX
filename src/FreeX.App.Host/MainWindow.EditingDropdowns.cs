@@ -16,6 +16,12 @@ public partial class MainWindow
         if (_inlineEditor?.IsVisible == true)
             return;
 
+        if (_validationDropdown is null &&
+            _workbook.GetSheet(_currentSheetId)?.DataValidations.Count == 0)
+        {
+            return;
+        }
+
         if (SheetGrid.SelectedRange is not { } range ||
             _workbook.GetSheet(_currentSheetId) is not { } sheet)
         {

@@ -47,7 +47,7 @@ public static partial class PivotTableRefreshService
         {
             if (sheet.GetCell(row, col)?.Value is not TextValue text)
                 continue;
-            if (IsPivotGrandTotalCaption(text.Value))
+            if (IsPivotGrandTotalCaption(pivotTable, text.Value))
             {
                 if (row <= headerEndRow)
                     grandTotalColumns.Add(col);
@@ -196,10 +196,6 @@ public static partial class PivotTableRefreshService
             cell.StyleId = workbook.RegisterStyle(style);
         }
     }
-
-    private static bool IsPivotGrandTotalCaption(string value) =>
-        string.Equals(value, "Grand Total", StringComparison.OrdinalIgnoreCase) ||
-        value.StartsWith("Grand Total ", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsPivotSubtotalCaption(string value) =>
         value.EndsWith(" Total", StringComparison.OrdinalIgnoreCase);

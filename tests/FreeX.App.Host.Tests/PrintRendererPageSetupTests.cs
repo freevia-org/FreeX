@@ -504,6 +504,30 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_IncludesCommentsAtEndPagesInHeaderFooterTotalPages()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Comment total pages");
+            var sheet = workbook.AddSheet("Sheet1");
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(address, new TextValue("Printed"));
+            sheet.Comments[address] = "Summary note";
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+            sheet.PageFooter = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", "");
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var firstPage = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlayTexts = PdfTextOverlayExtractor.Extract(firstPage)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            document.Pages.Should().HaveCount(2);
+            overlayTexts.Should().Contain("Page 1 of 2");
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_UsesLandscapeLetterPageSetupForExport()
     {
         StaTestRunner.Run(() =>
@@ -631,6 +655,86 @@ public sealed class PrintRendererPageSetupTests
 
             printAreaDocument.Pages.Should().HaveCount(1);
             ignoredPrintAreaDocument.Pages.Count.Should().BeGreaterThan(1);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_UsesManualRowPageBreaksForPrintPagination()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Manual row break");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Top"));
+            sheet.SetCell(new CellAddress(sheet.Id, 10, 1), new TextValue("Bottom"));
+
+            var automaticDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            sheet.RowPageBreaks.Add(6);
+            var manualBreakDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            automaticDocument.Pages.Should().HaveCount(1);
+            manualBreakDocument.Pages.Should().HaveCount(2);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_UsesManualColumnPageBreaksForPrintPagination()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Manual column break");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Left"));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 10), new TextValue("Right"));
+
+            var automaticDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            sheet.ColumnPageBreaks.Add(6);
+            var manualBreakDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            automaticDocument.Pages.Should().HaveCount(1);
+            manualBreakDocument.Pages.Should().HaveCount(2);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_UsesScalePercentForPrintPagination()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Scaled print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Top"));
+            sheet.SetCell(new CellAddress(sheet.Id, 80, 1), new TextValue("Bottom"));
+
+            var defaultScaleDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            sheet.ScaleToFit = new WorksheetScaleToFit(50, null, null);
+            var scaledDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            defaultScaleDocument.Pages.Should().HaveCount(2);
+            scaledDocument.Pages.Should().HaveCount(1);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_UsesFitToPagesWideForPrintPagination()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Fit wide print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Left"));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 80), new TextValue("Right"));
+
+            var defaultScaleDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, null);
+            var fitWideDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            defaultScaleDocument.Pages.Count.Should().BeGreaterThan(1);
+            fitWideDocument.Pages.Should().HaveCount(1);
         });
     }
 

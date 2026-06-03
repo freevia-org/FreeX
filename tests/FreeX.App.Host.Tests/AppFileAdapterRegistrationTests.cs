@@ -50,10 +50,17 @@ public sealed class AppFileAdapterRegistrationTests
         using var provider = BuildAppServices();
         var adapters = provider.GetServices<IFileAdapter>().ToList();
 
-        FileDialogFilterBuilder.BuildSaveFilter(adapters)
-            .Should().Contain("FreeX Workbook (*.fxl)|*.fxl");
-        FileDialogFilterBuilder.FindSaveFilterIndex(adapters, FreeXOptions.FreeXWorkbookDefaultFormat)
-            .Should().Be(4);
+        var saveFilterParts = FileDialogFilterBuilder.BuildSaveFilter(adapters).Split('|');
+        var nativeFilterIndex = FileDialogFilterBuilder.FindSaveFilterIndex(
+            adapters,
+            FreeXOptions.FreeXWorkbookDefaultFormat);
+
+        saveFilterParts.Should().Contain("FreeX Workbook (*.fxl)");
+        saveFilterParts.Should().Contain("*.fxl");
+        nativeFilterIndex.Should().BeGreaterThan(0);
+        saveFilterParts.Should().HaveCountGreaterThanOrEqualTo(nativeFilterIndex * 2);
+        saveFilterParts[(nativeFilterIndex - 1) * 2].Should().Be("FreeX Workbook (*.fxl)");
+        saveFilterParts[(nativeFilterIndex - 1) * 2 + 1].Should().Be("*.fxl");
     }
 
     [Fact]

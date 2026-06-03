@@ -173,16 +173,37 @@ public sealed record WorkbookTheme(
                 .Elements(drawingNs + "effectStyle")
                 .Select(effectStyle => FindThemeShadow(effectStyle, drawingNs))
                 .FirstOrDefault(shadow => shadow is not null);
-            if (shadowEffect is null)
+            var glowEffect = formatScheme
+                .Element(drawingNs + "effectStyleLst")?
+                .Elements(drawingNs + "effectStyle")
+                .Select(effectStyle => FindThemeGlow(effectStyle, drawingNs))
+                .FirstOrDefault(glow => glow is not null);
+            if (shadowEffect is null && glowEffect is null)
                 return null;
 
-            var opacity = ReadShadowOpacity(shadowEffect, drawingNs);
-            var distancePixels = ReadPositiveCoordinatePixels(shadowEffect.Attribute("dist")?.Value);
-            var directionRadians = ReadAngleRadians(shadowEffect.Attribute("dir")?.Value);
-            var offsetX = CleanZero(Math.Round(Math.Cos(directionRadians) * distancePixels, 3));
-            var offsetY = CleanZero(Math.Round(Math.Sin(directionRadians) * distancePixels, 3));
+            var shadowOpacity = 0d;
+            var offsetX = 0d;
+            var offsetY = 0d;
+            if (shadowEffect is not null)
+            {
+                shadowOpacity = ReadEffectOpacity(shadowEffect, drawingNs);
+                var distancePixels = ReadPositiveCoordinatePixels(shadowEffect.Attribute("dist")?.Value);
+                var directionRadians = ReadAngleRadians(shadowEffect.Attribute("dir")?.Value);
+                offsetX = CleanZero(Math.Round(Math.Cos(directionRadians) * distancePixels, 3));
+                offsetY = CleanZero(Math.Round(Math.Sin(directionRadians) * distancePixels, 3));
+            }
 
-            return new WorkbookThemeEffectDefaults(opacity, offsetX, offsetY);
+            var glowOpacity = glowEffect is null ? 0d : ReadEffectOpacity(glowEffect, drawingNs);
+            var glowRadius = glowEffect is null ? 0d : ReadPositiveCoordinatePixels(glowEffect.Attribute("rad")?.Value);
+            var glowColor = glowEffect is null ? null : ReadEffectSrgbColor(glowEffect, drawingNs);
+
+            return new WorkbookThemeEffectDefaults(
+                shadowOpacity,
+                offsetX,
+                offsetY,
+                glowOpacity,
+                glowRadius,
+                glowColor);
         }
         catch
         {
@@ -204,9 +225,19 @@ public sealed record WorkbookTheme(
         effect.Name == drawingNs + "outerShdw" ||
         effect.Name == drawingNs + "prstShdw";
 
-    private static double ReadShadowOpacity(XElement outerShadow, XNamespace drawingNs)
+    private static XElement? FindThemeGlow(XElement effectStyle, XNamespace drawingNs) =>
+        effectStyle
+            .Element(drawingNs + "effectLst")?
+            .Elements()
+            .FirstOrDefault(effect => effect.Name == drawingNs + "glow")
+        ?? effectStyle
+            .Element(drawingNs + "effectDag")?
+            .Descendants()
+            .FirstOrDefault(effect => effect.Name == drawingNs + "glow");
+
+    private static double ReadEffectOpacity(XElement effect, XNamespace drawingNs)
     {
-        var alphaText = outerShadow
+        var alphaText = effect
             .Elements()
             .Select(color => color.Element(drawingNs + "alpha")?.Attribute("val")?.Value)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
@@ -214,6 +245,23 @@ public sealed record WorkbookTheme(
         return int.TryParse(alphaText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var alpha)
             ? Math.Clamp(alpha / 100000d, 0, 1)
             : 1;
+    }
+
+    private static CellColor? ReadEffectSrgbColor(XElement effect, XNamespace drawingNs)
+    {
+        var value = effect
+            .Elements(drawingNs + "srgbClr")
+            .Select(color => color.Attribute("val")?.Value)
+            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+        if (value is not { Length: 6 } ||
+            !byte.TryParse(value[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var red) ||
+            !byte.TryParse(value[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var green) ||
+            !byte.TryParse(value[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var blue))
+        {
+            return null;
+        }
+
+        return new CellColor(red, green, blue);
     }
 
     private static double ReadPositiveCoordinatePixels(string? coordinateText)
@@ -307,9 +355,14 @@ public sealed record WorkbookThemeTextObjectDefault(
 public sealed record WorkbookThemeEffectDefaults(
     double ShadowOpacity = 0,
     double ShadowOffsetX = 0,
-    double ShadowOffsetY = 0)
+    double ShadowOffsetY = 0,
+    double GlowOpacity = 0,
+    double GlowRadius = 0,
+    CellColor? GlowColor = null)
 {
     public bool HasShadow => ShadowOpacity > 0;
+    public bool HasGlow => GlowOpacity > 0 && GlowRadius > 0;
+    public bool HasAnyEffect => HasShadow || HasGlow;
 }
 
 public readonly record struct WorkbookThemeColorReference(

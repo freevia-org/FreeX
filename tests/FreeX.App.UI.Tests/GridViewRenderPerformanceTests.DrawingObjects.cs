@@ -1,0 +1,201 @@
+using System;
+using System.IO;
+using System.Reflection;
+using FreeX.App.UI;
+using FreeX.Core.Model;
+using FluentAssertions;
+using System.Windows;
+
+namespace FreeX.App.UI.Tests;
+
+public sealed partial class GridViewRenderPerformanceTests
+{
+    [Fact]
+    public void DrawingObjectRenderAndHitTest_ReusesMetricLookupsForAnchoredObjects()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var objectDrag = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
+        var planner = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridDrawingObjectPlanner.cs"));
+
+        drawingObjects.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        pictures.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        objectDrag.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        drawingObjects.Should().Contain("metricLookups,");
+        pictures.Should().Contain("metricLookups,");
+        objectDrag.Should().Contain("metricLookups,");
+        planner.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
+        planner.Should().Contain("rows.TryGetValue(anchor.Row");
+        planner.Should().Contain("columns.TryGetValue(anchor.Col");
+    }
+
+    [Fact]
+    public void RenderTextBoxes_ReusesNamedClipRectForText()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderTextBox = drawingObjects[
+            drawingObjects.IndexOf("private void RenderTextBox(", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
+
+        renderTextBox.Should().Contain("var textWidth = Math.Max(1, rect.Width - 8);");
+        renderTextBox.Should().Contain("var textHeight = Math.Max(1, rect.Height - 8);");
+        renderTextBox.Should().Contain("var textClipRect = new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight);");
+        renderTextBox.Should().Contain("dc.PushClip(GetDrawingObjectClipGeometry(textClipRect));");
+        renderTextBox.Should().NotContain("GetDrawingObjectClipGeometry(new Rect");
+        renderTextBox.Should().NotContain("new RectangleGeometry");
+    }
+
+    [Fact]
+    public void PivotChartFieldButtonHitTest_ScansChartsBackToFrontWithoutLinqIterators()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.HitTesting.cs"));
+        var hitTest = source[
+            source.IndexOf("public static (ChartModel Chart, string FieldButton)? HitTestPivotChartFieldButton", StringComparison.Ordinal)..];
+
+        hitTest.Should().Contain("for (var i = charts.Count - 1; i >= 0; i--)");
+        hitTest.Should().NotContain(".Where(");
+        hitTest.Should().NotContain(".Reverse(");
+    }
+
+    [Fact]
+    public void ChartRenderer_BuildsChartCellLookupWithoutLinqFiltering()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "ChartRenderer.cs"));
+        var buildLookup = source[
+            source.IndexOf("private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup", StringComparison.Ordinal)..
+            source.IndexOf("private static LineSeries CreateLineSeries", StringComparison.Ordinal)];
+
+        buildLookup.Should().Contain("foreach (var cell in viewport.ChartDataCells)");
+        buildLookup.Should().Contain("if (cell.SheetId != sheetId)");
+        buildLookup.Should().Contain("cell.RawValue");
+        buildLookup.Should().NotContain(".Where(");
+        buildLookup.Should().NotContain(".Select(");
+    }
+
+    [Fact]
+    public void RenderCharts_ReusesCachedChartImagesAcrossRepaints()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ChartRenderCache.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var renderCharts = drawingSource[
+            drawingSource.IndexOf("private void RenderCharts", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)];
+        var getCachedChartImage = cacheSource[
+            cacheSource.IndexOf("private ImageSource? GetCachedChartImage", StringComparison.Ordinal)..
+            cacheSource.IndexOf("private void ClearChartRenderCache", StringComparison.Ordinal)];
+
+        gridViewSource.Should().Contain("private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();");
+        drawingSource.Should().Contain("GetCachedChartImage(chart, Viewport, WorkbookTheme, renderScale)");
+        drawingSource.Should().NotContain("ChartRenderer.Render(chart, Viewport, WorkbookTheme)");
+        cacheSource.Should().Contain("_chartRenderCache.TryGetValue");
+        renderCharts.Should().Contain("var dpi = VisualTreeHelper.GetDpi(this);");
+        renderCharts.Should().Contain("var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;");
+        renderCharts.Should().Contain("var renderScale = Math.Clamp(Math.Max(dpi.DpiScaleX, dpi.DpiScaleY) * zoom, 0.25, 4.0);");
+        getCachedChartImage.Should().Contain("double renderScale");
+        getCachedChartImage.Should().NotContain("VisualTreeHelper.GetDpi(this)");
+        getCachedChartImage.Should().NotContain("ZoomFactor > 0 ? ZoomFactor : 1.0");
+        cacheSource.Should().Contain("private readonly double _renderScale;");
+        cacheSource.Should().Contain("chart.Width * renderScale");
+        cacheSource.Should().Contain("chart.Height * renderScale");
+        cacheSource.Should().Contain("ChartRenderer.Render(chart, viewport, theme, renderScale)");
+        propertiesSource.Should().Contain("OnChartRenderCacheInputChanged");
+        propertiesSource.Should().Contain("grid.ClearChartRenderCache();");
+    }
+
+    [Fact]
+    public void RenderNativeControls_ReusesPixelsPerDipAcrossClippedTextCalls()
+    {
+        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderNativeControls = drawingSource[
+            drawingSource.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)..
+            drawingSource.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)];
+        var drawNativeSlicer = drawingSource[
+            drawingSource.IndexOf("private void DrawNativeSlicerControl", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)];
+        var drawNativeTimeline = drawingSource[
+            drawingSource.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void DrawNativeControlFrame", StringComparison.Ordinal)];
+        var drawNativeFrame = drawingSource[
+            drawingSource.IndexOf("private void DrawNativeControlFrame", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void DrawClippedText", StringComparison.Ordinal)];
+        var drawClippedText = drawingSource[
+            drawingSource.IndexOf("private void DrawClippedText", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private static string GetNativeControlCaption", StringComparison.Ordinal)];
+
+        renderNativeControls.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        renderNativeControls.Should().Contain("DrawNativeSlicerControl(dc, controlRect, slicer, pixelsPerDip);");
+        renderNativeControls.Should().Contain("DrawNativeTimelineControl(dc, controlRect, timeline, pixelsPerDip);");
+        drawNativeSlicer.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName), pixelsPerDip);");
+        drawNativeSlicer.Should().Contain("DrawClippedText(dc, tileText, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
+        drawNativeTimeline.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName), pixelsPerDip);");
+        drawNativeTimeline.Should().Contain("DrawClippedText(dc, label, new Rect");
+        drawNativeTimeline.Should().Contain("pixelsPerDip);");
+        drawNativeFrame.Should().Contain("DrawClippedText(dc, caption, new Rect");
+        drawNativeFrame.Should().Contain("pixelsPerDip);");
+        drawClippedText.Should().Contain("double pixelsPerDip)");
+        drawClippedText.Should().Contain("GetDrawingObjectText(");
+        drawClippedText.Should().NotContain("VisualTreeHelper.GetDpi(this)");
+    }
+
+    [Fact]
+    public void RenderObjectPlaceholders_ReusesPixelsPerDipAcrossPlaceholderLabels()
+    {
+        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderObjectPlaceholders = drawingSource[
+            drawingSource.IndexOf("private void RenderObjectPlaceholders", StringComparison.Ordinal)..
+            drawingSource.IndexOf("public static string CreateObjectPlaceholderLabel", StringComparison.Ordinal)];
+        var drawObjectPlaceholder = drawingSource[
+            drawingSource.IndexOf("private void DrawObjectPlaceholder", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private static void DrawPlaceholderDiagonals", StringComparison.Ordinal)];
+
+        renderObjectPlaceholders.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Chart\", chart.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Shape\", shape.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Picture\", picture.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Text Box\", textBox.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel(\"Slicer\"");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel(\"Timeline\"");
+        drawObjectPlaceholder.Should().Contain("double pixelsPerDip)");
+        drawObjectPlaceholder.Should().Contain("GetDrawingObjectText(");
+        drawObjectPlaceholder.Should().Contain("var textClipRect = new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight);");
+        drawObjectPlaceholder.Should().Contain("dc.PushClip(GetDrawingObjectClipGeometry(textClipRect));");
+        drawObjectPlaceholder.Should().NotContain("VisualTreeHelper.GetDpi(this)");
+        drawObjectPlaceholder.Should().NotContain("new RectangleGeometry");
+        drawObjectPlaceholder.Should().NotContain("GetDrawingObjectClipGeometry(new Rect");
+    }
+
+    [Fact]
+    public void DrawingObjectLayers_ReuseFrozenDrawingLayerAcrossStableRepaints()
+    {
+        var dispatch = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var cache = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjectLayerCache.cs"));
+        var properties = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var renderPostSelectionLayers = dispatch[
+            dispatch.IndexOf("private void RenderPostSelectionLayers", StringComparison.Ordinal)..
+            dispatch.IndexOf("private bool HasPostSelectionLayerWork", StringComparison.Ordinal)];
+
+        renderPostSelectionLayers.Should().Contain("RenderDrawingObjectLayersWithCache(dc);");
+        renderPostSelectionLayers.Should().NotContain("RenderDrawingShapes(dc);");
+        renderPostSelectionLayers.Should().NotContain("RenderTextBoxes(dc);");
+        cache.Should().Contain("private DrawingGroup? _drawingObjectLayerCache;");
+        cache.Should().Contain("private readonly record struct DrawingObjectLayerCacheKey");
+        cache.Should().Contain("dc.DrawDrawing(cached);");
+        cache.Should().Contain("ShouldBuildDrawingObjectLayerCache(key)");
+        cache.Should().Contain("RenderDrawingObjectLayers(dc);");
+        cache.Should().Contain("RememberDrawingObjectLayerRenderKey(key);");
+        cache.Should().Contain("BuildDrawingObjectLayerCache()");
+        cache.Should().Contain("RenderDrawingObjectLayers(groupContext);");
+        cache.Should().Contain("group.Freeze();");
+        cache.Should().Contain("_hasLastDrawingObjectLayerRenderKey && _lastDrawingObjectLayerRenderKey == key");
+        cache.Should().Contain("GridRange? SelectedRange");
+        cache.Should().Contain("IReadOnlyList<DrawingShapeModel>? DrawingShapes");
+        cache.Should().Contain("IReadOnlyList<TextBoxModel>? TextBoxes");
+        cache.Should().Contain("IReadOnlyList<PictureModel>? Pictures");
+        cache.Should().Contain("private void ClearDrawingObjectLayerCache()");
+        properties.Should().Contain("OnDrawingObjectLayerInputChanged");
+        properties.Should().Contain("grid.ClearDrawingObjectLayerCache();");
+        properties.Should().Contain("new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnDrawingObjectLayerInputChanged)");
+    }
+}

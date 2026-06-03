@@ -13,7 +13,8 @@ public static class PrintLayoutPlanner
     public static IReadOnlyList<PrintPageRowPlan> BuildRowPlans(
         GridRange printRange,
         WorksheetRepeatRange? repeatRows,
-        uint rowsPerPage)
+        uint rowsPerPage,
+        IReadOnlyCollection<uint>? manualRowBreaks = null)
     {
         if (rowsPerPage == 0)
             throw new ArgumentOutOfRangeException(nameof(rowsPerPage), "Rows per page must be at least 1.");
@@ -31,14 +32,10 @@ public static class PrintLayoutPlanner
             ? Math.Min((uint)titleRows.Count, rowsPerPage - 1)
             : 0;
         var bodyRowsPerPage = Math.Max(1u, rowsPerPage - titleRowsOnPage);
-        var bodyRowsPerPageCount = ToPageItemCount(bodyRowsPerPage);
-        var pages = new List<PrintPageRowPlan>(GetPageCount(bodyRows.Count, bodyRowsPerPageCount));
-        for (var index = 0; index < bodyRows.Count; index += bodyRowsPerPageCount)
-        {
-            pages.Add(new PrintPageRowPlan(
-                titleRows,
-                CopyPageValues(bodyRows, index, bodyRowsPerPageCount)));
-        }
+        var bodyPages = BuildBodyPages(bodyRows, bodyRowsPerPage, manualRowBreaks);
+        var pages = new List<PrintPageRowPlan>(bodyPages.Count);
+        foreach (var bodyPage in bodyPages)
+            pages.Add(new PrintPageRowPlan(titleRows, bodyPage));
 
         if (pages.Count == 0 && titleRows.Count > 0)
             pages.Add(new PrintPageRowPlan(titleRows, []));
@@ -49,7 +46,8 @@ public static class PrintLayoutPlanner
     public static IReadOnlyList<PrintPageColumnPlan> BuildColumnPlans(
         GridRange printRange,
         WorksheetRepeatRange? repeatColumns,
-        uint columnsPerPage)
+        uint columnsPerPage,
+        IReadOnlyCollection<uint>? manualColumnBreaks = null)
     {
         if (columnsPerPage == 0)
             throw new ArgumentOutOfRangeException(nameof(columnsPerPage), "Columns per page must be at least 1.");
@@ -67,14 +65,10 @@ public static class PrintLayoutPlanner
             ? Math.Min((uint)titleColumns.Count, columnsPerPage - 1)
             : 0;
         var bodyColumnsPerPage = Math.Max(1u, columnsPerPage - titleColumnsOnPage);
-        var bodyColumnsPerPageCount = ToPageItemCount(bodyColumnsPerPage);
-        var pages = new List<PrintPageColumnPlan>(GetPageCount(bodyColumns.Count, bodyColumnsPerPageCount));
-        for (var index = 0; index < bodyColumns.Count; index += bodyColumnsPerPageCount)
-        {
-            pages.Add(new PrintPageColumnPlan(
-                titleColumns,
-                CopyPageValues(bodyColumns, index, bodyColumnsPerPageCount)));
-        }
+        var bodyPages = BuildBodyPages(bodyColumns, bodyColumnsPerPage, manualColumnBreaks);
+        var pages = new List<PrintPageColumnPlan>(bodyPages.Count);
+        foreach (var bodyPage in bodyPages)
+            pages.Add(new PrintPageColumnPlan(titleColumns, bodyPage));
 
         if (pages.Count == 0 && titleColumns.Count > 0)
             pages.Add(new PrintPageColumnPlan(titleColumns, []));
@@ -137,6 +131,65 @@ public static class PrintLayoutPlanner
 
     private static int GetPageCount(int itemCount, int itemsPerPage) =>
         itemCount == 0 ? 0 : ((itemCount - 1) / itemsPerPage) + 1;
+
+    private static List<List<uint>> BuildBodyPages(
+        List<uint> bodyValues,
+        uint valuesPerPage,
+        IReadOnlyCollection<uint>? manualBreaks)
+    {
+        var valuesPerPageCount = ToPageItemCount(valuesPerPage);
+        var pages = new List<List<uint>>(GetPageCount(bodyValues.Count, valuesPerPageCount));
+        if (bodyValues.Count == 0)
+            return pages;
+
+        var manualBreakSet = BuildManualBreakSet(manualBreaks, bodyValues[0], bodyValues[^1]);
+        var segmentStartIndex = 0;
+        for (var index = 0; index < bodyValues.Count; index++)
+        {
+            if (index > segmentStartIndex && manualBreakSet.Contains(bodyValues[index]))
+            {
+                AddCapacityPages(bodyValues, segmentStartIndex, index, valuesPerPageCount, pages);
+                segmentStartIndex = index;
+            }
+        }
+
+        AddCapacityPages(bodyValues, segmentStartIndex, bodyValues.Count, valuesPerPageCount, pages);
+        return pages;
+    }
+
+    private static HashSet<uint> BuildManualBreakSet(
+        IReadOnlyCollection<uint>? manualBreaks,
+        uint firstBodyValue,
+        uint lastBodyValue)
+    {
+        var manualBreakSet = new HashSet<uint>();
+        if (manualBreaks is null || manualBreaks.Count == 0)
+            return manualBreakSet;
+
+        foreach (var manualBreak in manualBreaks)
+        {
+            if (manualBreak > firstBodyValue && manualBreak <= lastBodyValue)
+                manualBreakSet.Add(manualBreak);
+        }
+
+        return manualBreakSet;
+    }
+
+    private static void AddCapacityPages(
+        List<uint> values,
+        int segmentStartIndex,
+        int segmentEndIndex,
+        int valuesPerPageCount,
+        List<List<uint>> pages)
+    {
+        for (var index = segmentStartIndex; index < segmentEndIndex; index += valuesPerPageCount)
+        {
+            pages.Add(CopyPageValues(
+                values,
+                index,
+                Math.Min(valuesPerPageCount, segmentEndIndex - index)));
+        }
+    }
 
     private static List<uint> CopyPageValues(List<uint> values, int startIndex, int maxCount)
     {

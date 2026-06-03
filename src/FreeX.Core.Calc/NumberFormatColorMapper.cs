@@ -7,7 +7,7 @@ namespace FreeX.Core.Calc;
 internal static class NumberFormatColorMapper
 {
     private static readonly Regex LeadingColorDirectiveRegex = new(
-        @"^\[([A-Za-z]+|Color\s*\d+)\]",
+        @"^\[([^\]]+)\]",
         RegexOptions.IgnoreCase);
     private static readonly Regex IndexedColorTokenRegex = new(
         @"^Color\s*(\d+)$",
@@ -19,8 +19,12 @@ internal static class NumberFormatColorMapper
         if (!match.Success)
             return (null, section);
 
-        return TryMapColor(match.Groups[1].Value, out var hex)
-            ? (hex, section[match.Length..])
+        var token = match.Groups[1].Value;
+        if (TryMapColor(token, out var hex))
+            return (hex, section[match.Length..]);
+
+        return IsThemeColorDirective(token)
+            ? (null, section[match.Length..])
             : (null, section);
     }
 
@@ -98,38 +102,43 @@ internal static class NumberFormatColorMapper
         out string? color)
     {
         color = null;
-        if (theme is null || !TryGetThemeColorSlot(token, out var slot))
+        if (theme is null || !TryGetThemeColorReference(token, out var slot, out var tint))
             return false;
 
-        color = ToHex(theme.ResolveColor(slot));
+        color = ToHex(theme.ResolveColor(slot, tint));
         return true;
     }
 
-    private static bool TryGetThemeColorSlot(string token, out WorkbookThemeColorSlot slot)
+    private static bool TryGetThemeColorReference(
+        string token,
+        out WorkbookThemeColorSlot slot,
+        out double tint)
     {
-        if (TokenEqualsIgnoringWhitespace(token, "THEMEDARK1"))
+        tint = 0;
+
+        if (TryConsumeIgnoringWhitespace(token, "THEMEDARK1", 0, out var next))
             slot = WorkbookThemeColorSlot.Dark1;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMELIGHT1"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMELIGHT1", 0, out next))
             slot = WorkbookThemeColorSlot.Light1;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMEDARK2"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMEDARK2", 0, out next))
             slot = WorkbookThemeColorSlot.Dark2;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMELIGHT2"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMELIGHT2", 0, out next))
             slot = WorkbookThemeColorSlot.Light2;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT1"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMEACCENT1", 0, out next))
             slot = WorkbookThemeColorSlot.Accent1;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT2"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMEACCENT2", 0, out next))
             slot = WorkbookThemeColorSlot.Accent2;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT3"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMEACCENT3", 0, out next))
             slot = WorkbookThemeColorSlot.Accent3;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT4"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMEACCENT4", 0, out next))
             slot = WorkbookThemeColorSlot.Accent4;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT5"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMEACCENT5", 0, out next))
             slot = WorkbookThemeColorSlot.Accent5;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT6"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMEACCENT6", 0, out next))
             slot = WorkbookThemeColorSlot.Accent6;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMEHYPERLINK"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMEHYPERLINK", 0, out next))
             slot = WorkbookThemeColorSlot.Hyperlink;
-        else if (TokenEqualsIgnoringWhitespace(token, "THEMEFOLLOWEDHYPERLINK"))
+        else if (TryConsumeIgnoringWhitespace(token, "THEMEFOLLOWEDHYPERLINK", 0, out next))
             slot = WorkbookThemeColorSlot.FollowedHyperlink;
         else
         {
@@ -137,6 +146,42 @@ internal static class NumberFormatColorMapper
             return false;
         }
 
+        next = SkipWhitespace(token, next);
+        if (next == token.Length)
+            return true;
+
+        return TryConsumeIgnoringWhitespace(token, "TINT", next, out next) &&
+               TryParseThemeTint(token, next, out tint);
+    }
+
+    private static bool TryParseThemeTint(string token, int startIndex, out double tint)
+    {
+        tint = 0;
+        startIndex = SkipWhitespace(token, startIndex);
+        var endIndex = token.Length;
+        while (endIndex > startIndex && char.IsWhiteSpace(token[endIndex - 1]))
+            endIndex--;
+
+        var hasPercentSuffix = endIndex > startIndex && token[endIndex - 1] == '%';
+        if (hasPercentSuffix)
+        {
+            endIndex--;
+            while (endIndex > startIndex && char.IsWhiteSpace(token[endIndex - 1]))
+                endIndex--;
+        }
+
+        if (startIndex >= endIndex ||
+            !double.TryParse(
+                token.AsSpan(startIndex, endIndex - startIndex),
+                NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
+                CultureInfo.InvariantCulture,
+                out var tintPercent) ||
+            tintPercent is < -100d or > 100d)
+        {
+            return false;
+        }
+
+        tint = tintPercent / 100d;
         return true;
     }
 
@@ -155,6 +200,37 @@ internal static class NumberFormatColorMapper
         }
 
         return prefixIndex == prefix.Length;
+    }
+
+    private static bool TryConsumeIgnoringWhitespace(
+        string token,
+        string expected,
+        int startIndex,
+        out int nextIndex)
+    {
+        var tokenIndex = startIndex;
+        var expectedIndex = 0;
+        while (tokenIndex < token.Length && expectedIndex < expected.Length)
+        {
+            var current = token[tokenIndex++];
+            if (char.IsWhiteSpace(current))
+                continue;
+
+            if (char.ToUpperInvariant(current) != expected[expectedIndex++])
+            {
+                nextIndex = startIndex;
+                return false;
+            }
+        }
+
+        if (expectedIndex != expected.Length)
+        {
+            nextIndex = startIndex;
+            return false;
+        }
+
+        nextIndex = tokenIndex;
+        return true;
     }
 
     private static bool TokenEqualsIgnoringWhitespace(string token, string expected)
@@ -178,6 +254,14 @@ internal static class NumberFormatColorMapper
         }
 
         return expectedIndex == expected.Length;
+    }
+
+    private static int SkipWhitespace(string token, int index)
+    {
+        while (index < token.Length && char.IsWhiteSpace(token[index]))
+            index++;
+
+        return index;
     }
 
     private static string ToHex(CellColor color) =>

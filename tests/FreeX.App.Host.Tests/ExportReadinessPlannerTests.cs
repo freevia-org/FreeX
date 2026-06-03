@@ -17,6 +17,8 @@ public sealed class ExportReadinessPlannerTests
         plan.StatusText.Should().Contain("Ready for local PDF/XPS export");
         plan.StatusText.Should().Contain("selected range");
         plan.StatusText.Should().Contain("XPS routing");
+        plan.StatusText.Should().Contain("PDF-only choices called out");
+        plan.StatusText.Should().Contain("PDF/A and tagged PDF are exposed as unsupported and rejected");
         plan.StatusText.Should().Contain("No Microsoft account or cloud service is required.");
     }
 

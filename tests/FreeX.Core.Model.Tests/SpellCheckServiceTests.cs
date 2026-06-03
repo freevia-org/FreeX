@@ -382,6 +382,17 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void ApplyCorrectionToAllOccurrences_CollapsesRepeatedWordRuns()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var issue = SpellCheckService.FindIssuesInCell(address, "the the the and The The file").First();
+
+        var corrected = SpellCheckService.ApplyCorrectionToAllOccurrences(issue, "the");
+
+        corrected.Should().Be("the and The file");
+    }
+
+    [Fact]
     public void ApplyCorrectionToAllOccurrences_SkipsIgnoredAddressSpans()
     {
         var address = new CellAddress(SheetId.New(), 1, 1);

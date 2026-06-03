@@ -816,6 +816,23 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsHiddenSheetsThatContainOnlyHyperlinks()
+    {
+        var workbook = new Workbook("Accessibility");
+        var hiddenSheet = workbook.AddSheet("Archived Links");
+        hiddenSheet.IsHidden = true;
+        hiddenSheet.Hyperlinks[new CellAddress(hiddenSheet.Id, 2, 3)] = "https://example.com/confidential-report";
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HiddenSheetWithContent).Subject;
+
+        issue.SheetId.Should().Be(hiddenSheet.Id);
+        issue.SheetName.Should().Be("Archived Links");
+        issue.Location.Should().Be("Archived Links");
+        issue.Message.Should().Be("Hidden sheets with content may not be available to assistive technologies.");
+    }
+
+    [Fact]
     public void FindIssues_FlagsHiddenRowsAndColumnsThatContainContent()
     {
         var workbook = new Workbook("Accessibility");
@@ -852,11 +869,15 @@ public sealed class AccessibilityCheckerServiceTests
         sheet.GroupHiddenRows.Add(5);
         sheet.HiddenRows.Add(7);
         sheet.HiddenRows.Add(8);
+        sheet.HiddenRows.Add(9);
         sheet.HiddenCols.Add(3);
         sheet.GroupHiddenCols.Add(6);
+        sheet.HiddenCols.Add(7);
 
         sheet.Comments[new CellAddress(sheet.Id, 4, 1)] = "Hidden row note";
         sheet.ThreadedComments[new CellAddress(sheet.Id, 1, 3)] = new ThreadedComment("Hidden column thread");
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 9, 2)] = "https://example.com/hidden-row";
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 2, 7)] = "https://example.com/hidden-column";
         var table = new StructuredTableModel
         {
             Id = 1,
@@ -891,11 +912,11 @@ public sealed class AccessibilityCheckerServiceTests
         issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent)
             .Select(i => i.Location)
             .Should()
-            .Equal("4:4", "5:5", "7:7");
+            .Equal("4:4", "5:5", "7:7", "9:9");
         issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenColumnWithContent)
             .Select(i => i.Location)
             .Should()
-            .Equal("C:C", "F:F");
+            .Equal("C:C", "F:F", "G:G");
         issues.Should().NotContain(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent && i.Location == "8:8");
     }
 
@@ -947,6 +968,34 @@ public sealed class AccessibilityCheckerServiceTests
 
         issue.SheetId.Should().Be(sheet.Id);
         issue.SheetName.Should().Be("Sales");
+        issue.Location.Should().Be("B1");
+        issue.Message.Should().Be("Table headers should not be blank.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsStructuredTablesWithMissingHeaderCellDespiteColumnMetadata()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            HeaderRowCount = 1,
+            HasAutoFilter = true,
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Sales"));
+        sheet.StructuredTables.Add(table);
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.TableMissingHeaderText).Subject;
+
         issue.Location.Should().Be("B1");
         issue.Message.Should().Be("Table headers should not be blank.");
     }

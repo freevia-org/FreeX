@@ -31,6 +31,9 @@ internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
 {
     public SelectionPaneItem Source { get; } = item;
     public string Name { get; set; } = item.Name;
+    public string AutomationId { get; } = CreateAutomationId(item.Kind, item.Id);
+    public string VisibilityAutomationId => AutomationId + "VisibilityBox";
+    public string NameAutomationId => AutomationId + "NameBox";
     public string Kind => Source.Kind switch
     {
         SelectionPaneObjectKind.Chart => UiText.Get("SelectionPane_ObjectKindChart"),
@@ -42,6 +45,9 @@ internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
     public bool IsVisible { get; set; } = item.IsVisible;
     public bool IsDropBefore { get; set; }
     public bool IsDropAfter { get; set; }
+
+    private static string CreateAutomationId(SelectionPaneObjectKind kind, Guid id) =>
+        $"SelectionPaneItem{kind}{id:N}";
 }
 
 internal sealed record SelectionPaneFilterChoice(string Value, string Label);
@@ -76,9 +82,11 @@ public sealed partial class SelectionPaneDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, "SelectionPaneDialog");
 
         _list.Margin = new Thickness(0, 0, 0, 10);
         AutomationProperties.SetName(_list, UiText.Get("SelectionPane_ObjectListAutomationName"));
+        AutomationProperties.SetAutomationId(_list, "SelectionPaneObjectList");
         AutomationProperties.SetHelpText(_list, UiText.Get("SelectionPane_ObjectListHelpText"));
         _list.AllowDrop = true;
         _list.PreviewMouseLeftButtonDown += List_PreviewMouseLeftButtonDown;
@@ -98,42 +106,53 @@ public sealed partial class SelectionPaneDialog : Window
             _list.SelectedIndex = 0;
         _list.ItemTemplate = CreateItemTemplate();
         AutomationProperties.SetName(_searchBox, UiText.Get("SelectionPane_SearchAutomationName"));
+        AutomationProperties.SetAutomationId(_searchBox, "SelectionPaneSearchBox");
         AutomationProperties.SetHelpText(_searchBox, UiText.Get("SelectionPane_SearchHelpText"));
         _searchBox.TextChanged += (_, _) => ApplySearchAndFilter();
         _filterBox.ItemsSource = CreateFilterChoices();
         _filterBox.DisplayMemberPath = nameof(SelectionPaneFilterChoice.Label);
         _filterBox.SelectedIndex = 0;
         AutomationProperties.SetName(_filterBox, UiText.Get("SelectionPane_FilterAutomationName"));
+        AutomationProperties.SetAutomationId(_filterBox, "SelectionPaneFilterBox");
         AutomationProperties.SetHelpText(_filterBox, UiText.Get("SelectionPane_FilterHelpText"));
         _filterBox.SelectionChanged += (_, _) => ApplySearchAndFilter();
         AutomationProperties.SetName(_renameBox, UiText.Get("SelectionPane_ObjectNameAutomationName"));
+        AutomationProperties.SetAutomationId(_renameBox, "SelectionPaneRenameBox");
         AutomationProperties.SetHelpText(_renameBox, UiText.Get("SelectionPane_ObjectNameHelpText"));
         AutomationProperties.SetName(_renameButton, UiText.Get("SelectionPane_RenameButtonAutomationName"));
+        AutomationProperties.SetAutomationId(_renameButton, "SelectionPaneRenameButton");
         AutomationProperties.SetHelpText(_renameButton, UiText.Get("SelectionPane_RenameButtonHelpText"));
         _renameButton.Click += (_, _) => RenameSelectedItem();
         AutomationProperties.SetName(_toggleVisibilityButton, UiText.Get("SelectionPane_ToggleVisibilityAutomationName"));
+        AutomationProperties.SetAutomationId(_toggleVisibilityButton, "SelectionPaneToggleVisibilityButton");
         AutomationProperties.SetHelpText(_toggleVisibilityButton, UiText.Get("SelectionPane_ToggleVisibilityHelpText"));
         _toggleVisibilityButton.Click += (_, _) => ToggleSelectedVisibility();
 
         AutomationProperties.SetName(_moveUpButton, UiText.Get("SelectionPane_BringForwardAutomationName"));
+        AutomationProperties.SetAutomationId(_moveUpButton, "SelectionPaneBringForwardButton");
         AutomationProperties.SetHelpText(_moveUpButton, UiText.Get("SelectionPane_BringForwardHelpText"));
         AutomationProperties.SetName(_moveDownButton, UiText.Get("SelectionPane_SendBackwardAutomationName"));
+        AutomationProperties.SetAutomationId(_moveDownButton, "SelectionPaneSendBackwardButton");
         AutomationProperties.SetHelpText(_moveDownButton, UiText.Get("SelectionPane_SendBackwardHelpText"));
         _moveUpButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveUp);
         _moveDownButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveDown);
         AutomationProperties.SetName(_showAllButton, UiText.Get("SelectionPane_ShowAllAutomationName"));
+        AutomationProperties.SetAutomationId(_showAllButton, "SelectionPaneShowAllButton");
         AutomationProperties.SetHelpText(_showAllButton, UiText.Get("SelectionPane_ShowAllHelpText"));
         AutomationProperties.SetName(_hideAllButton, UiText.Get("SelectionPane_HideAllAutomationName"));
+        AutomationProperties.SetAutomationId(_hideAllButton, "SelectionPaneHideAllButton");
         AutomationProperties.SetHelpText(_hideAllButton, UiText.Get("SelectionPane_HideAllHelpText"));
         _showAllButton.Click += (_, _) => SetAllVisibility(true);
         _hideAllButton.Click += (_, _) => SetAllVisibility(false);
 
         var okButton = new Button { Content = UiText.Ok, Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
         AutomationProperties.SetName(okButton, UiText.Get("SelectionPane_OkAutomationName"));
+        AutomationProperties.SetAutomationId(okButton, "SelectionPaneOkButton");
         AutomationProperties.SetHelpText(okButton, UiText.Get("SelectionPane_OkHelpText"));
         okButton.Click += (_, _) => AcceptVisibility();
         var cancelButton = new Button { Content = UiText.Cancel, Width = 78, IsCancel = true };
         AutomationProperties.SetName(cancelButton, UiText.Get("SelectionPane_CancelAutomationName"));
+        AutomationProperties.SetAutomationId(cancelButton, "SelectionPaneCancelButton");
         AutomationProperties.SetHelpText(cancelButton, UiText.Get("SelectionPane_CancelHelpText"));
 
         var searchRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
@@ -194,6 +213,7 @@ public sealed partial class SelectionPaneDialog : Window
         border.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)));
         border.SetValue(Border.BorderThicknessProperty, new Thickness(0));
         border.SetValue(Border.PaddingProperty, new Thickness(0, 2, 0, 2));
+        border.SetBinding(AutomationProperties.AutomationIdProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.AutomationId)));
 
         var panel = new FrameworkElementFactory(typeof(StackPanel));
         panel.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
@@ -204,6 +224,7 @@ public sealed partial class SelectionPaneDialog : Window
         checkBox.SetValue(FrameworkElement.WidthProperty, 24.0);
         checkBox.SetValue(CheckBox.ToolTipProperty, UiText.Get("SelectionPane_ItemVisibilityToolTip"));
         checkBox.SetValue(AutomationProperties.NameProperty, UiText.Get("SelectionPane_ItemVisibilityAutomationName"));
+        checkBox.SetBinding(AutomationProperties.AutomationIdProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.VisibilityAutomationId)));
         checkBox.SetValue(AutomationProperties.HelpTextProperty, UiText.Get("SelectionPane_ItemVisibilityHelpText"));
         checkBox.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.IsVisible)) { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.AppendChild(checkBox);
@@ -215,6 +236,7 @@ public sealed partial class SelectionPaneDialog : Window
         name.SetValue(TextBox.BackgroundProperty, Brushes.Transparent);
         name.SetValue(TextBox.ToolTipProperty, UiText.Get("SelectionPane_ItemRenameToolTip"));
         name.SetValue(AutomationProperties.NameProperty, UiText.Get("SelectionPane_ObjectNameAutomationName"));
+        name.SetBinding(AutomationProperties.AutomationIdProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.NameAutomationId)));
         name.SetValue(AutomationProperties.HelpTextProperty, UiText.Get("SelectionPane_ObjectNameHelpText"));
         name.SetBinding(TextBox.TextProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.Name))
         {

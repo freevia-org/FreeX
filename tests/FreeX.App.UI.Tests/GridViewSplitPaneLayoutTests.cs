@@ -618,13 +618,15 @@ public sealed class GridViewSplitPaneLayoutTests
         var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
 
         chrome.HorizontalTopRight.Should().NotBeNull();
-        chrome.HorizontalTopRight!.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight + 58 - 10, 262, 10));
-        chrome.HorizontalTopRight.Thumb.Width.Should().BeGreaterThanOrEqualTo(24);
-        chrome.HorizontalTopRight.Thumb.Y.Should().Be(chrome.HorizontalTopRight.Track.Y + 1);
+        var horizontal = chrome.HorizontalTopRight!.Value;
+        horizontal.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight + 58 - 10, 262, 10));
+        horizontal.Thumb.Width.Should().BeGreaterThanOrEqualTo(24);
+        horizontal.Thumb.Y.Should().Be(horizontal.Track.Y + 1);
         chrome.VerticalBottomLeft.Should().NotBeNull();
-        chrome.VerticalBottomLeft!.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208 - 10, GridView.ColHeaderHeight + 58, 10, 224));
-        chrome.VerticalBottomLeft.Thumb.Height.Should().BeGreaterThanOrEqualTo(24);
-        chrome.VerticalBottomLeft.Thumb.X.Should().Be(chrome.VerticalBottomLeft.Track.X + 1);
+        var vertical = chrome.VerticalBottomLeft!.Value;
+        vertical.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208 - 10, GridView.ColHeaderHeight + 58, 10, 224));
+        vertical.Thumb.Height.Should().BeGreaterThanOrEqualTo(24);
+        vertical.Thumb.X.Should().Be(vertical.Track.X + 1);
     }
 
     [Fact]
@@ -634,8 +636,8 @@ public sealed class GridViewSplitPaneLayoutTests
 
         var chrome = SplitPaneViewportChrome.CalculateScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
 
-        chrome.HorizontalTopRight!.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight + 58 - 10, 262, 10));
-        chrome.VerticalBottomLeft!.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208 - 10, GridView.ColHeaderHeight + 58, 10, 224));
+        chrome.HorizontalTopRight!.Value.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight + 58 - 10, 262, 10));
+        chrome.VerticalBottomLeft!.Value.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208 - 10, GridView.ColHeaderHeight + 58, 10, 224));
     }
 
     [Fact]
@@ -756,11 +758,13 @@ public sealed class GridViewSplitPaneLayoutTests
 
         var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
 
-        var horizontalAvailable = chrome.HorizontalTopRight!.Track.Width - 2;
-        var verticalAvailable = chrome.VerticalBottomLeft!.Track.Height - 2;
-        chrome.HorizontalTopRight.Thumb.Width.Should()
+        var horizontal = chrome.HorizontalTopRight!.Value;
+        var vertical = chrome.VerticalBottomLeft!.Value;
+        var horizontalAvailable = horizontal.Track.Width - 2;
+        var verticalAvailable = vertical.Track.Height - 2;
+        horizontal.Thumb.Width.Should()
             .Be(Math.Max(24, horizontalAvailable * 2 / CellAddress.MaxCol));
-        chrome.VerticalBottomLeft.Thumb.Height.Should()
+        vertical.Thumb.Height.Should()
             .Be(Math.Max(24, verticalAvailable * 2 / CellAddress.MaxRow));
     }
 
@@ -770,11 +774,14 @@ public sealed class GridViewSplitPaneLayoutTests
         var viewport = SplitViewport();
         var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
 
-        GridView.HitTestSplitPaneScrollbar(chrome, chrome.HorizontalTopRight!.Thumb.TopLeft + new Vector(2, 2))
+        var horizontal = chrome.HorizontalTopRight!.Value;
+        var vertical = chrome.VerticalBottomLeft!.Value;
+
+        GridView.HitTestSplitPaneScrollbar(chrome, horizontal.Thumb.TopLeft + new Vector(2, 2))
             .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Thumb, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
-        GridView.HitTestSplitPaneScrollbar(chrome, chrome.VerticalBottomLeft!.Thumb.TopLeft + new Vector(2, 2))
+        GridView.HitTestSplitPaneScrollbar(chrome, vertical.Thumb.TopLeft + new Vector(2, 2))
             .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Thumb, SplitPaneScrollbarOrientation.Vertical, SplitPaneRegion.BottomLeft));
-        GridView.HitTestSplitPaneScrollbar(chrome, new Point(chrome.HorizontalTopRight.Track.Right - 2, chrome.HorizontalTopRight.Track.Top + 2))
+        GridView.HitTestSplitPaneScrollbar(chrome, new Point(horizontal.Track.Right - 2, horizontal.Track.Top + 2))
             .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Track, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
         GridView.HitTestSplitPaneScrollbar(chrome, new Point(5, 5))
             .Should().BeNull();
@@ -785,8 +792,8 @@ public sealed class GridViewSplitPaneLayoutTests
     {
         var viewport = SplitViewport();
         var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
-        var horizontal = chrome.HorizontalTopRight!;
-        var vertical = chrome.VerticalBottomLeft!;
+        var horizontal = chrome.HorizontalTopRight!.Value;
+        var vertical = chrome.VerticalBottomLeft!.Value;
 
         GridView.HitTestSplitPaneScrollbar(chrome, horizontal.Thumb.BottomRight)
             .Should().Be(new SplitPaneScrollbarHit(SplitPaneScrollbarPart.Thumb, SplitPaneScrollbarOrientation.Horizontal, SplitPaneRegion.TopRight));
@@ -806,15 +813,15 @@ public sealed class GridViewSplitPaneLayoutTests
 
         GridView.CalculateSplitPaneScrollbarScrollTarget(
                 chrome,
-                new Point(chrome.HorizontalTopRight!.Track.Left + 1, chrome.HorizontalTopRight.Track.Top + 2))
+                new Point(chrome.HorizontalTopRight!.Value.Track.Left + 1, chrome.HorizontalTopRight.Value.Track.Top + 2))
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 1));
         GridView.CalculateSplitPaneScrollbarScrollTarget(
                 chrome,
-                new Point(chrome.HorizontalTopRight.Track.Right - 1, chrome.HorizontalTopRight.Track.Top + 2))
+                new Point(chrome.HorizontalTopRight.Value.Track.Right - 1, chrome.HorizontalTopRight.Value.Track.Top + 2))
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, CellAddress.MaxCol - 1));
         GridView.CalculateSplitPaneScrollbarScrollTarget(
                 chrome,
-                new Point(chrome.VerticalBottomLeft!.Track.Left + 2, chrome.VerticalBottomLeft.Track.Bottom - 1))
+                new Point(chrome.VerticalBottomLeft!.Value.Track.Left + 2, chrome.VerticalBottomLeft.Value.Track.Bottom - 1))
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.BottomLeft, SplitPaneScrollbarOrientation.Vertical, CellAddress.MaxRow - 1));
     }
 
@@ -826,11 +833,11 @@ public sealed class GridViewSplitPaneLayoutTests
 
         GridView.CalculateSplitPaneScrollbarScrollTarget(
                 chrome,
-                new Point(chrome.HorizontalTopRight!.Track.Right - 1, chrome.HorizontalTopRight.Track.Top + 2))
+                new Point(chrome.HorizontalTopRight!.Value.Track.Right - 1, chrome.HorizontalTopRight.Value.Track.Top + 2))
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, CellAddress.MaxCol - 1));
         GridView.CalculateSplitPaneScrollbarScrollTarget(
                 chrome,
-                new Point(chrome.VerticalBottomLeft!.Track.Left + 2, chrome.VerticalBottomLeft.Track.Bottom - 1))
+                new Point(chrome.VerticalBottomLeft!.Value.Track.Left + 2, chrome.VerticalBottomLeft.Value.Track.Bottom - 1))
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.BottomLeft, SplitPaneScrollbarOrientation.Vertical, CellAddress.MaxRow - 1));
     }
 
@@ -843,12 +850,12 @@ public sealed class GridViewSplitPaneLayoutTests
         GridView.CalculateSplitPaneScrollbarInteractionTarget(
                 viewport,
                 chrome,
-                new Point(chrome.HorizontalTopRight!.Thumb.Right + 12, chrome.HorizontalTopRight.Track.Top + 2))
+                new Point(chrome.HorizontalTopRight!.Value.Thumb.Right + 12, chrome.HorizontalTopRight.Value.Track.Top + 2))
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 12));
         GridView.CalculateSplitPaneScrollbarInteractionTarget(
                 viewport,
                 chrome,
-                new Point(chrome.VerticalBottomLeft!.Track.Left + 2, chrome.VerticalBottomLeft.Thumb.Bottom + 12))
+                new Point(chrome.VerticalBottomLeft!.Value.Track.Left + 2, chrome.VerticalBottomLeft.Value.Thumb.Bottom + 12))
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.BottomLeft, SplitPaneScrollbarOrientation.Vertical, 22));
     }
 
@@ -861,12 +868,12 @@ public sealed class GridViewSplitPaneLayoutTests
         GridView.CalculateSplitPaneScrollbarInteractionTarget(
                 viewport,
                 chrome,
-                chrome.HorizontalTopRight!.Thumb.TopLeft + new Vector(2, 2))
+                chrome.HorizontalTopRight!.Value.Thumb.TopLeft + new Vector(2, 2))
             .Should().BeNull();
         GridView.CalculateSplitPaneScrollbarInteractionTarget(
                 viewport,
                 chrome,
-                chrome.VerticalBottomLeft!.Thumb.TopLeft + new Vector(2, 2))
+                chrome.VerticalBottomLeft!.Value.Thumb.TopLeft + new Vector(2, 2))
             .Should().BeNull();
     }
 
@@ -875,7 +882,8 @@ public sealed class GridViewSplitPaneLayoutTests
     {
         var viewport = SplitViewport();
         var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
-        var pos = new Point(chrome.HorizontalTopRight!.Thumb.Right + 12, chrome.HorizontalTopRight.Track.Top + 2);
+        var horizontal = chrome.HorizontalTopRight!.Value;
+        var pos = new Point(horizontal.Thumb.Right + 12, horizontal.Track.Top + 2);
         var hit = new SplitPaneScrollbarHit(
             SplitPaneScrollbarPart.Track,
             SplitPaneScrollbarOrientation.Horizontal,
@@ -890,8 +898,8 @@ public sealed class GridViewSplitPaneLayoutTests
     {
         var viewport = SplitViewport();
         var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
-        var horizontal = chrome.HorizontalTopRight!;
-        var vertical = chrome.VerticalBottomLeft!;
+        var horizontal = chrome.HorizontalTopRight!.Value;
+        var vertical = chrome.VerticalBottomLeft!.Value;
 
         GridView.CalculateSplitPaneScrollbarThumbDragTarget(
                 horizontal,
@@ -912,12 +920,12 @@ public sealed class GridViewSplitPaneLayoutTests
         var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
 
         GridView.CalculateSplitPaneScrollbarWheelTarget(
-                chrome.HorizontalTopRight!,
+                chrome.HorizontalTopRight!.Value,
                 CellAddress.MaxCol - 2,
                 notches: -1)
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, CellAddress.MaxCol - 1));
         GridView.CalculateSplitPaneScrollbarWheelTarget(
-                chrome.VerticalBottomLeft!,
+                chrome.VerticalBottomLeft!.Value,
                 CellAddress.MaxRow - 2,
                 notches: -1)
             .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.BottomLeft, SplitPaneScrollbarOrientation.Vertical, CellAddress.MaxRow - 1));
@@ -933,7 +941,7 @@ public sealed class GridViewSplitPaneLayoutTests
         GridView.ResolveSplitPaneWheelTarget(
                 viewport,
                 sheetId,
-                new Point(chrome.HorizontalTopRight!.Track.Left + 2, chrome.HorizontalTopRight.Track.Top + 2),
+                new Point(chrome.HorizontalTopRight!.Value.Track.Left + 2, chrome.HorizontalTopRight.Value.Track.Top + 2),
                 actualWidth: 500,
                 actualHeight: 300,
                 requestedHorizontal: false)
@@ -942,7 +950,7 @@ public sealed class GridViewSplitPaneLayoutTests
         GridView.ResolveSplitPaneWheelTarget(
                 viewport,
                 sheetId,
-                new Point(chrome.VerticalBottomLeft!.Track.Left + 2, chrome.VerticalBottomLeft.Track.Top + 2),
+                new Point(chrome.VerticalBottomLeft!.Value.Track.Left + 2, chrome.VerticalBottomLeft.Value.Track.Top + 2),
                 actualWidth: 500,
                 actualHeight: 300,
                 requestedHorizontal: true)
@@ -1217,26 +1225,26 @@ public sealed class GridViewSplitPaneLayoutTests
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "FormulaTraceLayoutPlanner.cs"));
-        var rowLookup = source[
-            source.IndexOf("private static RowMetric? FindRowMetric", StringComparison.Ordinal)..
-            source.IndexOf("private static ColMetric? GetColMetric", StringComparison.Ordinal)];
-        var columnLookup = source[
-            source.IndexOf("private static ColMetric? FindColMetric", StringComparison.Ordinal)..];
-        var rowLookupBuilder = source[
-            source.IndexOf("private static Dictionary<uint, RowMetric> BuildRowMetricLookup", StringComparison.Ordinal)..
-            source.IndexOf("private static Dictionary<uint, ColMetric> BuildColMetricLookup", StringComparison.Ordinal)];
-        var columnLookupBuilder = source[
-            source.IndexOf("private static Dictionary<uint, ColMetric> BuildColMetricLookup", StringComparison.Ordinal)..
-            source.IndexOf("private static bool TryGetCellRect", StringComparison.Ordinal)];
+        var metricLookup = source[
+            source.IndexOf("private readonly struct FormulaTraceMetricLookup", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryGetMarkerHit", StringComparison.Ordinal)];
 
-        rowLookup.Should().Contain("if (metric.Row > row)");
-        rowLookup.Should().Contain("break;");
-        columnLookup.Should().Contain("if (metric.Col > col)");
-        columnLookup.Should().Contain("break;");
-        rowLookupBuilder.Should().Contain("lookup.TryAdd(row.Row, row);");
-        rowLookupBuilder.Should().NotContain("ContainsKey");
-        columnLookupBuilder.Should().Contain("lookup.TryAdd(col.Col, col);");
-        columnLookupBuilder.Should().NotContain("ContainsKey");
+        metricLookup.Should().Contain("_firstRow = _hasRows ? _rows[0].Row : 0;");
+        metricLookup.Should().Contain("_lastRow = _hasRows ? _rows[^1].Row : 0;");
+        metricLookup.Should().Contain("_firstCol = _hasColumns ? _columns[0].Col : 0;");
+        metricLookup.Should().Contain("_lastCol = _hasColumns ? _columns[^1].Col : 0;");
+        metricLookup.Should().Contain("row < _firstRow || row > _lastRow");
+        metricLookup.Should().Contain("col < _firstCol || col > _lastCol");
+        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindRowMetric(_rowArray, row, _firstRow)");
+        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindColMetric(_colArray, col, _firstCol)");
+        source.Should().Contain("var index = row - firstRow;");
+        source.Should().Contain("var index = col - firstCol;");
+        source.Should().Contain("while (low <= high)");
+        source.Should().NotContain("Dictionary<uint, RowMetric>");
+        source.Should().NotContain("Dictionary<uint, ColMetric>");
+        source.Should().NotContain("BuildRowMetricLookup");
+        source.Should().NotContain("BuildColMetricLookup");
+        source.Should().NotContain("TryGetValue");
     }
 
     private struct CollectingFormulaTraceArrowLayoutConsumer : IFormulaTraceArrowLayoutConsumer

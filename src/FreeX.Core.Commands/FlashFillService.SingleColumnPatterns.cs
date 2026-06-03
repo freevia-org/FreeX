@@ -1,4 +1,3 @@
-using System.Globalization;
 using static FreeX.Core.Commands.FlashFillTextPrimitives;
 
 namespace FreeX.Core.Commands;
@@ -285,6 +284,17 @@ public static partial class FlashFillService
         return null;
     }
 
+    private static Func<string, string?>? TryExtractFinalPathSegmentStem(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFinalPathSegmentStem(e.Source, out var stem) && stem == e.Expected))
+            return null;
+
+        var cache = new ExtractedSegmentCache();
+        return source => TryGetFinalPathSegmentStemRange(source, out var start, out var endExclusive)
+            ? cache.GetOrAdd(source, start, endExclusive)
+            : null;
+    }
+
     private static bool TryRemoveFinalDottedToken(string source, out string stem)
     {
         stem = string.Empty;
@@ -345,6 +355,45 @@ public static partial class FlashFillService
         }
 
         return false;
+    }
+
+    private static bool TryGetFinalPathSegmentStem(string source, out string stem)
+    {
+        stem = string.Empty;
+        if (!TryGetFinalPathSegmentStemRange(source, out var start, out var endExclusive))
+            return false;
+
+        stem = SliceSegment(source, start, endExclusive);
+        return true;
+    }
+
+    private static bool TryGetFinalPathSegmentStemRange(string source, out int stemStart, out int stemEndExclusive)
+    {
+        stemStart = 0;
+        stemEndExclusive = 0;
+        var lastSeparatorIndex = Math.Max(source.LastIndexOf('/'), source.LastIndexOf('\\'));
+        if (lastSeparatorIndex < 0 || lastSeparatorIndex == source.Length - 1)
+            return false;
+
+        var segmentStart = lastSeparatorIndex + 1;
+        var segmentEnd = source.Length - 1;
+        TrimSegment(source, ref segmentStart, ref segmentEnd);
+        if (segmentStart > segmentEnd)
+            return false;
+
+        var segmentLength = segmentEnd - segmentStart + 1;
+        var dotIndex = source.LastIndexOf('.', segmentEnd, segmentLength);
+        if (dotIndex <= segmentStart || dotIndex == segmentEnd)
+            return false;
+
+        stemStart = segmentStart;
+        var stemEnd = dotIndex - 1;
+        TrimSegment(source, ref stemStart, ref stemEnd);
+        if (stemStart > stemEnd)
+            return false;
+
+        stemEndExclusive = stemEnd + 1;
+        return true;
     }
 
     private static bool TryFindDelimitedPartIndex(
@@ -429,14 +478,6 @@ public static partial class FlashFillService
         return true;
     }
 
-    private static Func<string, string?>? TryEmailDisplayName(IReadOnlyList<(string Source, string Expected)> examples)
-    {
-        if (!examples.All(e => TryFormatDottedEmailUserName(e.Source, out var displayName) && displayName == e.Expected))
-            return null;
-
-        return s => TryFormatDottedEmailUserName(s, out var displayName) ? displayName : null;
-    }
-
     private static Func<string, string?>? TrySplitPascalCaseWords(IReadOnlyList<(string Source, string Expected)> examples)
     {
         if (!examples.All(e => TrySplitPascalCaseWords(e.Source, out var words) && words == e.Expected))
@@ -473,271 +514,6 @@ public static partial class FlashFillService
         words = new string(split.ToArray());
         return words.Length > source.Length;
     }
-
-    private static bool TryFormatDottedEmailUserName(string source, out string displayName)
-    {
-        displayName = string.Empty;
-        var atIndex = source.IndexOf('@', StringComparison.Ordinal);
-        if (atIndex <= 0)
-            return false;
-
-        var userName = source[..atIndex];
-        var plusIndex = userName.IndexOf('+');
-        if (plusIndex >= 0)
-            userName = userName[..plusIndex];
-
-        if (userName.Length == 0)
-            return false;
-
-        if (!userName.Contains('.', StringComparison.Ordinal) &&
-            !userName.Contains('_', StringComparison.Ordinal) &&
-            !userName.Contains('-', StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var parts = userName.Split(['.', '_', '-'], StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 2)
-            return false;
-
-        var nameParts = new string[parts.Length];
-        for (var i = 0; i < parts.Length; i++)
-        {
-            if (!TryNormalizeEmailDisplayNamePart(parts[i], out nameParts[i]))
-                return false;
-        }
-
-        displayName = string.Join(' ', nameParts.Select(ToProperCase));
-        return true;
-    }
-
-    private static bool TryNormalizeEmailDisplayNamePart(string part, out string normalized)
-    {
-        normalized = string.Empty;
-        var endExclusive = part.Length;
-        while (endExclusive > 0 && char.IsDigit(part[endExclusive - 1]))
-            endExclusive--;
-
-        if (endExclusive == 0)
-            return false;
-
-        var candidate = part[..endExclusive];
-        if (!candidate.Any(char.IsLetter) || candidate.Any(char.IsDigit))
-            return false;
-
-        normalized = candidate;
-        return true;
-    }
-
-    private static Func<string, string?>? TryEmailLocalPartWithoutPlusTag(IReadOnlyList<(string Source, string Expected)> examples)
-    {
-        if (!examples.All(e => TryExtractEmailLocalPartWithoutPlusTag(e.Source, out var localPart) && localPart == e.Expected))
-            return null;
-
-        return source => TryExtractEmailLocalPartWithoutPlusTag(source, out var localPart) ? localPart : null;
-    }
-
-    private static Func<string, string?>? TryEmailDomainStem(IReadOnlyList<(string Source, string Expected)> examples)
-    {
-        if (!examples.All(e => TryExtractEmailDomainStem(e.Source, out var domainStem) && domainStem == e.Expected))
-            return null;
-
-        return source => TryExtractEmailDomainStem(source, out var domainStem) ? domainStem : null;
-    }
-
-    private static bool TryExtractEmailLocalPartWithoutPlusTag(string source, out string localPart)
-    {
-        localPart = string.Empty;
-        var atIndex = source.IndexOf('@', StringComparison.Ordinal);
-        if (atIndex <= 0)
-            return false;
-
-        var plusIndex = source.IndexOf('+', 0, atIndex);
-        if (plusIndex <= 0)
-            return false;
-
-        localPart = source[..plusIndex];
-        return localPart.Length > 0;
-    }
-
-    private static bool TryExtractEmailDomainStem(string source, out string domainStem)
-    {
-        domainStem = string.Empty;
-
-        var atIndex = source.IndexOf('@', StringComparison.Ordinal);
-        if (atIndex <= 0 || atIndex == source.Length - 1)
-            return false;
-
-        var domain = source[(atIndex + 1)..].Trim();
-        if (domain.Length == 0 || domain.Any(char.IsWhiteSpace))
-            return false;
-
-        var lastDotIndex = domain.LastIndexOf('.');
-        if (lastDotIndex <= 0 || lastDotIndex == domain.Length - 1)
-            return false;
-
-        domainStem = domain[..lastDotIndex];
-        return domainStem.Length > 0;
-    }
-
-    private static Func<string, string?>? TryWebAddressCleanup(IReadOnlyList<(string Source, string Expected)> examples)
-    {
-        var allowHost = true;
-        var allowHostWithoutWww = true;
-        var allowDomainStem = true;
-
-        foreach (var (source, expected) in examples)
-        {
-            if (!TryExtractWebAddressParts(source, out var parts))
-                return null;
-
-            allowHost &= expected == parts.Host;
-            allowHostWithoutWww &= expected == parts.HostWithoutWww;
-            allowDomainStem &= expected == parts.DomainStem;
-
-            if (!allowHost && !allowHostWithoutWww && !allowDomainStem)
-                return null;
-        }
-
-        WebAddressOutputKind kind;
-        if (allowDomainStem)
-            kind = WebAddressOutputKind.DomainStem;
-        else if (allowHostWithoutWww && !allowHost)
-            kind = WebAddressOutputKind.HostWithoutWww;
-        else if (allowHost)
-            kind = WebAddressOutputKind.Host;
-        else
-            return null;
-
-        return source => TryExtractWebAddressParts(source, out var parts)
-            ? GetWebAddressOutput(parts, kind)
-            : null;
-    }
-
-    private static bool TryExtractWebAddressParts(string source, out WebAddressParts parts)
-    {
-        parts = default;
-
-        var candidate = source.Trim();
-        if (candidate.Length == 0 ||
-            candidate.Any(char.IsWhiteSpace) ||
-            candidate.Contains('@', StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var hasHttpScheme =
-            candidate.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            candidate.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
-        if (!hasHttpScheme && candidate.Contains("://", StringComparison.Ordinal))
-            return false;
-
-        var isBareWebAddress =
-            candidate.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ||
-            LooksLikeBareWebHost(candidate) ||
-            candidate.Contains('/', StringComparison.Ordinal) ||
-            candidate.Contains('?', StringComparison.Ordinal) ||
-            candidate.Contains('#', StringComparison.Ordinal);
-        if (!hasHttpScheme && !isBareWebAddress)
-            return false;
-
-        var uriText = hasHttpScheme
-            ? candidate
-            : "https://" + candidate;
-        if (!Uri.TryCreate(uriText, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
-            uri.UserInfo.Length > 0)
-        {
-            return false;
-        }
-
-        if (!TryNormalizeWebHost(uri.Host, out var host))
-            return false;
-
-        var hostWithoutWww = host.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
-            ? host[4..]
-            : host;
-        if (!TryRemoveFinalDottedToken(hostWithoutWww, out var domainStem))
-            return false;
-
-        parts = new WebAddressParts(host, hostWithoutWww, domainStem);
-        return true;
-    }
-
-    private static bool LooksLikeBareWebHost(string candidate)
-    {
-        var lastDotIndex = candidate.LastIndexOf('.');
-        if (lastDotIndex <= 0 || lastDotIndex == candidate.Length - 1)
-            return false;
-
-        for (var i = 0; i < candidate.Length; i++)
-        {
-            var c = candidate[i];
-            if (!char.IsLetterOrDigit(c) && c != '-' && c != '.')
-                return false;
-        }
-
-        var suffix = candidate[(lastDotIndex + 1)..];
-        if (suffix.Length == 2)
-            return suffix.All(char.IsLetter);
-
-        return suffix.Equals("com", StringComparison.OrdinalIgnoreCase) ||
-               suffix.Equals("org", StringComparison.OrdinalIgnoreCase) ||
-               suffix.Equals("net", StringComparison.OrdinalIgnoreCase) ||
-               suffix.Equals("edu", StringComparison.OrdinalIgnoreCase) ||
-               suffix.Equals("gov", StringComparison.OrdinalIgnoreCase) ||
-               suffix.Equals("io", StringComparison.OrdinalIgnoreCase) ||
-               suffix.Equals("co", StringComparison.OrdinalIgnoreCase) ||
-               suffix.Equals("biz", StringComparison.OrdinalIgnoreCase) ||
-               suffix.Equals("info", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryNormalizeWebHost(string host, out string normalized)
-    {
-        normalized = string.Empty;
-
-        host = host.Trim().TrimEnd('.').ToLowerInvariant();
-        if (host.Length == 0 ||
-            !host.Contains('.', StringComparison.Ordinal) ||
-            !host.Any(char.IsLetter))
-        {
-            return false;
-        }
-
-        var labels = host.Split('.');
-        if (labels.Length < 2)
-            return false;
-
-        foreach (var label in labels)
-        {
-            if (label.Length == 0 ||
-                label[0] == '-' ||
-                label[^1] == '-' ||
-                !label.Any(char.IsLetterOrDigit))
-            {
-                return false;
-            }
-
-            for (var i = 0; i < label.Length; i++)
-            {
-                var c = label[i];
-                if (!char.IsLetterOrDigit(c) && c != '-')
-                    return false;
-            }
-        }
-
-        normalized = host;
-        return true;
-    }
-
-    private static string GetWebAddressOutput(WebAddressParts parts, WebAddressOutputKind kind) =>
-        kind switch
-        {
-            WebAddressOutputKind.Host => parts.Host,
-            WebAddressOutputKind.HostWithoutWww => parts.HostWithoutWww,
-            WebAddressOutputKind.DomainStem => parts.DomainStem,
-            _ => parts.Host
-        };
 
     private static Func<string, string?>? TryStripThousandSeparators(IReadOnlyList<(string Source, string Expected)> examples)
     {
@@ -797,476 +573,6 @@ public static partial class FlashFillService
 
         digitRun = source[(start + 1)..(end + 1)];
         return digitRun.Length > 0;
-    }
-
-    private static Func<string, string?>? TryUsAddressComponentExtraction(
-        IReadOnlyList<(string Source, string Expected)> examples)
-    {
-        UsAddressComponentKind? componentKind = null;
-
-        foreach (var (source, expected) in examples)
-        {
-            if (!TryParseUsAddress(source, out var parts) ||
-                !TryFindUsAddressComponent(parts, expected, out var currentKind))
-            {
-                return null;
-            }
-
-            if (componentKind is null)
-                componentKind = currentKind;
-            else if (componentKind.Value != currentKind)
-                return null;
-        }
-
-        if (componentKind is null)
-            return null;
-
-        var kind = componentKind.Value;
-        return source =>
-            TryParseUsAddress(source, out var parts) &&
-            TryGetUsAddressComponent(parts, kind, out var component)
-                ? component
-                : null;
-    }
-
-    private static bool TryParseUsAddress(string source, out UsAddressParts parts)
-    {
-        parts = default;
-        var segments = source.Split(',', StringSplitOptions.TrimEntries);
-        if (segments.Length != 3 ||
-            segments[0].Length == 0 ||
-            segments[1].Length == 0 ||
-            segments[2].Length == 0)
-        {
-            return false;
-        }
-
-        var stateZipTokens = segments[2].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (stateZipTokens.Length != 2 ||
-            !IsUsStateAbbreviation(stateZipTokens[0]) ||
-            !IsUsZipCode(stateZipTokens[1]))
-        {
-            return false;
-        }
-
-        parts = new UsAddressParts(segments[0], segments[1], stateZipTokens[0], stateZipTokens[1]);
-        return true;
-    }
-
-    private static bool TryFindUsAddressComponent(
-        UsAddressParts parts,
-        string expected,
-        out UsAddressComponentKind componentKind)
-    {
-        componentKind = default;
-        var matched = false;
-
-        foreach (var candidateKind in UsAddressComponentKinds)
-        {
-            if (!TryGetUsAddressComponent(parts, candidateKind, out var component) ||
-                component != expected)
-            {
-                continue;
-            }
-
-            if (matched)
-                return false;
-
-            componentKind = candidateKind;
-            matched = true;
-        }
-
-        return matched;
-    }
-
-    private static bool TryGetUsAddressComponent(
-        UsAddressParts parts,
-        UsAddressComponentKind kind,
-        out string component)
-    {
-        component = kind switch
-        {
-            UsAddressComponentKind.Street => parts.Street,
-            UsAddressComponentKind.City => parts.City,
-            UsAddressComponentKind.State => parts.State,
-            UsAddressComponentKind.Zip5 => parts.Zip[..5],
-            UsAddressComponentKind.Zip when parts.Zip.Contains('-', StringComparison.Ordinal) => parts.Zip,
-            UsAddressComponentKind.StateZip => parts.State + " " + parts.Zip,
-            _ => string.Empty
-        };
-
-        return component.Length > 0;
-    }
-
-    private static bool IsUsStateAbbreviation(string value) =>
-        value.Length == 2 && value.All(char.IsLetter);
-
-    private static bool IsUsZipCode(string value) =>
-        IsFiveDigitZipCode(value) ||
-        value.Length == 10 &&
-        value[5] == '-' &&
-        IsFiveDigitZipCode(value[..5]) &&
-        value[6..].All(char.IsDigit);
-
-    private static bool IsFiveDigitZipCode(string value) =>
-        value.Length == 5 && value.All(char.IsDigit);
-
-    private static Func<string, string?>? TryDateComponentExtraction(IReadOnlyList<(string Source, string Expected)> examples)
-    {
-        int? partIndex = null;
-
-        foreach (var (source, expected) in examples)
-        {
-            if (!TrySplitDateLikeComponents(source, out var components))
-                return null;
-
-            var matches = new List<int>(1);
-            for (var i = 0; i < components.Length; i++)
-            {
-                if (components[i] == expected)
-                    matches.Add(i);
-            }
-
-            if (matches.Count != 1)
-                return null;
-
-            if (partIndex is null)
-                partIndex = matches[0];
-            else if (partIndex.Value != matches[0])
-                return null;
-        }
-
-        if (partIndex is null)
-            return null;
-
-        var idx = partIndex.Value;
-        return source => TrySplitDateLikeComponents(source, out var components)
-            ? components[idx]
-            : null;
-    }
-
-    private static bool TrySplitDateLikeComponents(string source, out string[] components)
-    {
-        foreach (var separator in DateComponentSeparators)
-        {
-            var parts = source.Split(separator, StringSplitOptions.TrimEntries);
-            if (parts.Length != 3 ||
-                parts.Any(part => part.Length == 0 || part.Any(c => !char.IsDigit(c))))
-            {
-                continue;
-            }
-
-            var yearIndex = Array.FindIndex(parts, part => part.Length == 4);
-            if (yearIndex < 0 ||
-                Array.FindLastIndex(parts, part => part.Length == 4) != yearIndex ||
-                (yearIndex != 0 && yearIndex != 2))
-            {
-                continue;
-            }
-
-            if (!int.TryParse(parts[yearIndex], NumberStyles.None, CultureInfo.InvariantCulture, out var year) ||
-                year < 1000)
-            {
-                continue;
-            }
-
-            var dateish = true;
-            for (var i = 0; i < parts.Length; i++)
-            {
-                if (i == yearIndex)
-                    continue;
-
-                if (parts[i].Length is < 1 or > 2 ||
-                    !int.TryParse(parts[i], NumberStyles.None, CultureInfo.InvariantCulture, out var value) ||
-                    value is < 1 or > 31)
-                {
-                    dateish = false;
-                    break;
-                }
-            }
-
-            if (!dateish)
-                continue;
-
-            components = parts;
-            return true;
-        }
-
-        components = [];
-        return false;
-    }
-
-    private static Func<string, string?>? TryEmbeddedDateExtraction(IReadOnlyList<(string Source, string Expected)> examples)
-    {
-        DateOutputPattern? outputPattern = null;
-        var changedAny = false;
-
-        foreach (var (source, expected) in examples)
-        {
-            if (!TryFindEmbeddedDateLikeValue(source, out var sourceDate, out _) ||
-                !TryParseDateLikeValue(expected, out var expectedDate, out var currentPattern) ||
-                sourceDate != expectedDate)
-            {
-                return null;
-            }
-
-            if (outputPattern is null)
-                outputPattern = currentPattern;
-            else if (outputPattern.Value != currentPattern)
-                return null;
-
-            changedAny |= !string.Equals(source, expected, StringComparison.Ordinal);
-        }
-
-        if (outputPattern is null || !changedAny)
-            return null;
-
-        var pattern = outputPattern.Value;
-        return source => TryFindEmbeddedDateLikeValue(source, out var date, out _)
-            ? FormatDateParts(date, pattern)
-            : null;
-    }
-
-    private static Func<string, string?>? TryDateNormalization(IReadOnlyList<(string Source, string Expected)> examples)
-    {
-        DateOutputPattern? outputPattern = null;
-        var changedAny = false;
-
-        foreach (var (source, expected) in examples)
-        {
-            if (!TryParseDateLikeValue(source, out var sourceDate, out _) ||
-                !TryParseDateLikeValue(expected, out var expectedDate, out var currentPattern) ||
-                sourceDate != expectedDate)
-            {
-                return null;
-            }
-
-            if (outputPattern is null)
-                outputPattern = currentPattern;
-            else if (outputPattern.Value != currentPattern)
-                return null;
-
-            changedAny |= !string.Equals(source, expected, StringComparison.Ordinal);
-        }
-
-        if (outputPattern is null || !changedAny)
-            return null;
-
-        var pattern = outputPattern.Value;
-        return source => TryParseDateLikeValue(source, out var date, out _)
-            ? FormatDateParts(date, pattern)
-            : null;
-    }
-
-    private static bool TryParseDateLikeValue(
-        string source,
-        out DateParts date,
-        out DateOutputPattern pattern)
-    {
-        date = default;
-        pattern = default;
-
-        if (!TrySplitDateLikeText(source, out var parts, out var separator))
-            return false;
-
-        var yearIndex = Array.FindIndex(parts, part => part.Length == 4);
-        if (yearIndex < 0 ||
-            Array.FindLastIndex(parts, part => part.Length == 4) != yearIndex ||
-            (yearIndex != 0 && yearIndex != 2))
-        {
-            return false;
-        }
-
-        var order = yearIndex == 0
-            ? new[] { DatePartKind.Year, DatePartKind.Month, DatePartKind.Day }
-            : new[] { DatePartKind.Month, DatePartKind.Day, DatePartKind.Year };
-
-        if (!TryCreateDateParts(parts, order, out date))
-            return false;
-
-        pattern = new DateOutputPattern(
-            order[0],
-            order[1],
-            order[2],
-            separator,
-            parts[Array.IndexOf(order, DatePartKind.Year)].Length,
-            parts[Array.IndexOf(order, DatePartKind.Month)].Length,
-            parts[Array.IndexOf(order, DatePartKind.Day)].Length);
-        return true;
-    }
-
-    private static bool TrySplitDateLikeText(string source, out string[] parts, out char separator)
-    {
-        foreach (var candidate in DateComponentSeparators)
-        {
-            var split = source.Split(candidate, StringSplitOptions.TrimEntries);
-            if (split.Length == 3 &&
-                split.All(part => part.Length > 0 && part.All(char.IsDigit)))
-            {
-                parts = split;
-                separator = candidate;
-                return true;
-            }
-        }
-
-        parts = [];
-        separator = default;
-        return false;
-    }
-
-    private static bool TryFindEmbeddedDateLikeValue(
-        string source,
-        out DateParts date,
-        out DateOutputPattern pattern)
-    {
-        date = default;
-        pattern = default;
-
-        var found = false;
-        for (var start = 0; start < source.Length; start++)
-        {
-            if (!char.IsDigit(source[start]) ||
-                (start > 0 && char.IsDigit(source[start - 1])))
-            {
-                continue;
-            }
-
-            foreach (var separator in DateComponentSeparators)
-            {
-                if (!TryReadDateTokenAt(source, start, separator, out var endExclusive) ||
-                    !HasDateTokenBoundary(source, start, endExclusive, separator))
-                {
-                    continue;
-                }
-
-                var token = source[start..endExclusive];
-                if (!TryParseDateLikeValue(token, out var currentDate, out var currentPattern))
-                    continue;
-
-                if (found)
-                    return false;
-
-                date = currentDate;
-                pattern = currentPattern;
-                found = true;
-            }
-        }
-
-        return found;
-    }
-
-    private static bool TryReadDateTokenAt(
-        string source,
-        int start,
-        char separator,
-        out int endExclusive)
-    {
-        endExclusive = start;
-        var index = start;
-
-        for (var group = 0; group < 3; group++)
-        {
-            var groupStart = index;
-            while (index < source.Length && char.IsDigit(source[index]))
-                index++;
-
-            if (index == groupStart)
-                return false;
-
-            if (group < 2)
-            {
-                if (index >= source.Length || source[index] != separator)
-                    return false;
-
-                index++;
-            }
-        }
-
-        endExclusive = index;
-        return true;
-    }
-
-    private static bool HasDateTokenBoundary(
-        string source,
-        int start,
-        int endExclusive,
-        char separator)
-    {
-        if (start > 0 && char.IsLetterOrDigit(source[start - 1]))
-            return false;
-
-        if (endExclusive >= source.Length)
-            return true;
-
-        var next = source[endExclusive];
-        if (char.IsLetterOrDigit(next))
-            return false;
-
-        return next != separator ||
-            endExclusive == source.Length - 1 ||
-            !char.IsDigit(source[endExclusive + 1]);
-    }
-
-    private static bool TryCreateDateParts(string[] parts, DatePartKind[] order, out DateParts date)
-    {
-        date = default;
-        if (parts.Length != 3 || order.Length != 3)
-            return false;
-
-        if (!TryGetDatePartValue(parts, order, DatePartKind.Year, out var year) ||
-            !TryGetDatePartValue(parts, order, DatePartKind.Month, out var month) ||
-            !TryGetDatePartValue(parts, order, DatePartKind.Day, out var day) ||
-            year is < 1000 or > 9999 ||
-            month is < 1 or > 12 ||
-            day < 1 ||
-            day > DateTime.DaysInMonth(year, month))
-        {
-            return false;
-        }
-
-        date = new DateParts(year, month, day);
-        return true;
-    }
-
-    private static bool TryGetDatePartValue(
-        string[] parts,
-        DatePartKind[] order,
-        DatePartKind kind,
-        out int value)
-    {
-        value = 0;
-        var index = Array.IndexOf(order, kind);
-        return index >= 0 &&
-            int.TryParse(parts[index], NumberStyles.None, CultureInfo.InvariantCulture, out value);
-    }
-
-    private static string FormatDateParts(DateParts date, DateOutputPattern pattern) =>
-        string.Join(
-            pattern.Separator,
-            new[]
-            {
-                FormatDatePart(date, pattern.First, pattern),
-                FormatDatePart(date, pattern.Second, pattern),
-                FormatDatePart(date, pattern.Third, pattern)
-            });
-
-    private static string FormatDatePart(DateParts date, DatePartKind kind, DateOutputPattern pattern)
-    {
-        var value = kind switch
-        {
-            DatePartKind.Year => date.Year,
-            DatePartKind.Month => date.Month,
-            _ => date.Day
-        };
-
-        var width = kind switch
-        {
-            DatePartKind.Year => pattern.YearWidth,
-            DatePartKind.Month => pattern.MonthWidth,
-            _ => pattern.DayWidth
-        };
-
-        return value.ToString("D" + width.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
     }
 
     private static Func<string, string?>? TryDelimitedPartCaseTransform(
