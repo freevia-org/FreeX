@@ -445,14 +445,14 @@ public sealed class DependencyGraph
 
     private static bool HasAnyRangeDependent(
         CellAddress cell,
-        List<RangeDependency>? candidates)
+        List<RangeDependencyGroup>? candidates)
     {
         if (candidates is null)
             return false;
 
-        foreach (var dep in candidates)
+        foreach (var group in candidates)
         {
-            if (dep.Range.Contains(cell))
+            if (group.Range.Contains(cell) && group.Count != 0)
                 return true;
         }
 
@@ -482,7 +482,7 @@ public sealed class DependencyGraph
 
     private static HashSet<CellAddress>? EnqueueRangeDependentCandidates(
         CellAddress cell,
-        List<RangeDependency>? candidates,
+        List<RangeDependencyGroup>? candidates,
         HashSet<CellAddress>? rangeSeen,
         HashSet<CellAddress> toRecalc,
         Queue<CellAddress> queue)
@@ -490,14 +490,18 @@ public sealed class DependencyGraph
         if (candidates is null)
             return rangeSeen;
 
-        foreach (var dep in candidates)
+        foreach (var group in candidates)
         {
-            if (!dep.Range.Contains(cell))
+            if (!group.Range.Contains(cell))
                 continue;
 
-            rangeSeen ??= [];
-            if (rangeSeen.Add(dep.Dependent) && toRecalc.Add(dep.Dependent))
-                queue.Enqueue(dep.Dependent);
+            for (var i = 0; i < group.Count; i++)
+            {
+                var dependent = group.GetDependent(i);
+                rangeSeen ??= [];
+                if (rangeSeen.Add(dependent) && toRecalc.Add(dependent))
+                    queue.Enqueue(dependent);
+            }
         }
 
         return rangeSeen;
@@ -526,7 +530,7 @@ public sealed class DependencyGraph
 
     private static HashSet<CellAddress>? DecrementRangeDependentCandidates(
         CellAddress cell,
-        List<RangeDependency>? candidates,
+        List<RangeDependencyGroup>? candidates,
         HashSet<CellAddress>? rangeSeen,
         Dictionary<CellAddress, int> inDegree,
         Queue<CellAddress> ready)
@@ -534,16 +538,20 @@ public sealed class DependencyGraph
         if (candidates is null)
             return rangeSeen;
 
-        foreach (var dep in candidates)
+        foreach (var group in candidates)
         {
-            if (!dep.Range.Contains(cell))
+            if (!group.Range.Contains(cell))
                 continue;
 
-            rangeSeen ??= [];
-            if (!rangeSeen.Add(dep.Dependent))
-                continue;
+            for (var i = 0; i < group.Count; i++)
+            {
+                var dependent = group.GetDependent(i);
+                rangeSeen ??= [];
+                if (!rangeSeen.Add(dependent))
+                    continue;
 
-            DecrementInDegree(dep.Dependent, inDegree, ready);
+                DecrementInDegree(dependent, inDegree, ready);
+            }
         }
 
         return rangeSeen;
@@ -566,18 +574,21 @@ public sealed class DependencyGraph
 
     private static HashSet<CellAddress>? CollectRangeDependentCandidates(
         CellAddress cell,
-        List<RangeDependency>? candidates,
+        List<RangeDependencyGroup>? candidates,
         HashSet<CellAddress>? result)
     {
         if (candidates is null)
             return result;
 
-        foreach (var dep in candidates)
+        foreach (var group in candidates)
         {
-            if (dep.Range.Contains(cell))
+            if (!group.Range.Contains(cell))
+                continue;
+
+            for (var i = 0; i < group.Count; i++)
             {
                 result ??= [];
-                result.Add(dep.Dependent);
+                result.Add(group.GetDependent(i));
             }
         }
 
@@ -690,13 +701,32 @@ public sealed class DependencyGraph
 
 internal readonly record struct RangeDependency(GridRange Range, CellAddress Dependent);
 
+internal sealed class RangeDependencyGroup
+{
+    private readonly List<CellAddress> _dependents = [];
+
+    public RangeDependencyGroup(GridRange range)
+    {
+        Range = range;
+    }
+
+    public GridRange Range { get; }
+    public int Count => _dependents.Count;
+
+    public CellAddress GetDependent(int index) => _dependents[index];
+
+    public void Add(CellAddress dependent) => _dependents.Add(dependent);
+
+    public bool Remove(CellAddress dependent) => _dependents.Remove(dependent);
+}
+
 internal sealed class RangeDependencyIndex
 {
     private const uint RowBucketSize = 256;
     private const uint ColumnBucketSize = 16;
 
-    private readonly Dictionary<uint, List<RangeDependency>> _rowBuckets = [];
-    private readonly Dictionary<uint, List<RangeDependency>> _columnBuckets = [];
+    private readonly Dictionary<uint, List<RangeDependencyGroup>> _rowBuckets = [];
+    private readonly Dictionary<uint, List<RangeDependencyGroup>> _columnBuckets = [];
 
     public int Count { get; private set; }
 
@@ -722,10 +752,10 @@ internal sealed class RangeDependencyIndex
             Count--;
     }
 
-    public List<RangeDependency>? GetRowCandidates(uint row) =>
+    public List<RangeDependencyGroup>? GetRowCandidates(uint row) =>
         _rowBuckets.TryGetValue(GetBucket(row, RowBucketSize), out var deps) ? deps : null;
 
-    public List<RangeDependency>? GetColumnCandidates(uint column) =>
+    public List<RangeDependencyGroup>? GetColumnCandidates(uint column) =>
         _columnBuckets.TryGetValue(GetBucket(column, ColumnBucketSize), out var deps) ? deps : null;
 
     private static bool UseRowIndex(GridRange range) =>
@@ -733,7 +763,7 @@ internal sealed class RangeDependencyIndex
         GetBucketCount(range.Start.Col, range.End.Col, ColumnBucketSize);
 
     private static void AddToBuckets(
-        Dictionary<uint, List<RangeDependency>> buckets,
+        Dictionary<uint, List<RangeDependencyGroup>> buckets,
         RangeDependency dependency,
         uint start,
         uint end,
@@ -750,12 +780,19 @@ internal sealed class RangeDependencyIndex
                 buckets[bucket] = deps;
             }
 
-            deps.Add(dependency);
+            var group = FindGroup(deps, dependency.Range);
+            if (group is null)
+            {
+                group = new RangeDependencyGroup(dependency.Range);
+                deps.Add(group);
+            }
+
+            group.Add(dependency.Dependent);
         }
     }
 
     private static bool RemoveFromBuckets(
-        Dictionary<uint, List<RangeDependency>> buckets,
+        Dictionary<uint, List<RangeDependencyGroup>> buckets,
         RangeDependency dependency,
         uint start,
         uint end,
@@ -770,14 +807,32 @@ internal sealed class RangeDependencyIndex
             if (!buckets.TryGetValue(bucket, out var deps))
                 continue;
 
-            if (deps.Remove(dependency))
+            var group = FindGroup(deps, dependency.Range);
+            if (group is not null && group.Remove(dependency.Dependent))
+            {
                 removed = true;
+                if (group.Count == 0)
+                    deps.Remove(group);
+            }
 
             if (deps.Count == 0)
                 buckets.Remove(bucket);
         }
 
         return removed;
+    }
+
+    private static RangeDependencyGroup? FindGroup(
+        List<RangeDependencyGroup> groups,
+        GridRange range)
+    {
+        for (var i = 0; i < groups.Count; i++)
+        {
+            if (groups[i].Range == range)
+                return groups[i];
+        }
+
+        return null;
     }
 
     private static uint GetBucketCount(uint start, uint end, uint bucketSize) =>
