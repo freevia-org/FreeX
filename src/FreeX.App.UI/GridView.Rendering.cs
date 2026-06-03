@@ -449,52 +449,18 @@ public partial class GridView
         if (hasCellSurfaces || hasMergedSurfaces)
         {
             // Pass 1: non-default backgrounds and merged-cell surfaces
-            foreach (var rowMetric in viewport.RowMetrics)
-            {
-                foreach (var colMetric in viewport.ColMetrics)
-                {
-                    var merge = hasMergedSurfaces ? FindMerge(rowMetric.Row, colMetric.Col) : null;
-                    if (merge.HasValue && (rowMetric.Row != merge.Value.Start.Row || colMetric.Col != merge.Value.Start.Col))
-                        continue;
-                    CellStyle? bg = null;
-                    if (hasCellSurfaces)
-                        styleLookup.TryGetValue((rowMetric.Row, colMetric.Col), out bg);
-                    if (bg is null && !merge.HasValue)
-                        continue;
-
-                    double w = colMetric.Width;
-                    double h = rowMetric.Height;
-
-                    if (merge.HasValue)
-                    {
-                        for (uint c2 = merge.Value.Start.Col + 1; c2 <= merge.Value.End.Col; c2++)
-                            if (colLookupAll.TryGetValue(c2, out var cm2)) w += cm2.Width;
-                        for (uint r2 = merge.Value.Start.Row + 1; r2 <= merge.Value.End.Row; r2++)
-                            if (rowLookupAll.TryGetValue(r2, out var rm2)) h += rm2.Height;
-                    }
-
-                    var rect = new Rect(
-                        colMetric.LeftOffset + rowHeaderWidth, rowMetric.TopOffset + columnHeaderHeight, w, h);
-                    if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
-                        continue;
-
-                    Brush? fill = null;
-                    if (bg?.FillColor.HasValue == true)
-                    {
-                        fill = BrushForCellColor(bg.FillColor.Value, _brushCache);
-                    }
-                    else if (WorksheetBackground == null &&
-                             (merge.HasValue || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None))
-                    {
-                        fill = Brushes.White;
-                    }
-
-                    if (fill is not null || merge.HasValue)
-                        dc.DrawRectangle(fill, merge.HasValue ? GridPen : null, rect);
-                    if (bg is not null)
-                        DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache);
-                }
-            }
+            RenderStyledAndMergedCellSurfaces(
+                dc,
+                styleLookup,
+                rowLookupAll,
+                colLookupAll,
+                hasMergedSurfaces,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                visibleLeft,
+                visibleTop,
+                visibleRight,
+                visibleBottom);
         }
 
         // Pass 2: explicit cell borders
@@ -719,6 +685,94 @@ public partial class GridView
             if (shouldClipText)
                 dc.Pop();
         }
+    }
+
+    private void RenderStyledAndMergedCellSurfaces(
+        DrawingContext dc,
+        Dictionary<(uint Row, uint Col), CellStyle> styleLookup,
+        Dictionary<uint, RowMetric> rowLookup,
+        Dictionary<uint, ColMetric> colLookup,
+        bool hasMergedSurfaces,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double visibleLeft,
+        double visibleTop,
+        double visibleRight,
+        double visibleBottom)
+    {
+        foreach (var entry in styleLookup)
+        {
+            var row = entry.Key.Row;
+            var column = entry.Key.Col;
+            if (hasMergedSurfaces && FindMerge(row, column).HasValue)
+                continue;
+            if (!rowLookup.TryGetValue(row, out var rowMetric)) continue;
+            if (!colLookup.TryGetValue(column, out var colMetric)) continue;
+
+            var rect = new Rect(
+                colMetric.LeftOffset + rowHeaderWidth,
+                rowMetric.TopOffset + columnHeaderHeight,
+                colMetric.Width,
+                rowMetric.Height);
+            DrawCellSurface(dc, rect, entry.Value, isMerged: false, visibleLeft, visibleTop, visibleRight, visibleBottom);
+        }
+
+        if (!hasMergedSurfaces)
+            return;
+
+        foreach (var entry in _mergeLookup)
+        {
+            var merge = entry.Value;
+            if (entry.Key.Row != merge.Start.Row || entry.Key.Col != merge.Start.Col)
+                continue;
+            if (!rowLookup.TryGetValue(merge.Start.Row, out var rowMetric)) continue;
+            if (!colLookup.TryGetValue(merge.Start.Col, out var colMetric)) continue;
+
+            double width = colMetric.Width;
+            double height = rowMetric.Height;
+            for (uint column = merge.Start.Col + 1; column <= merge.End.Col; column++)
+                if (colLookup.TryGetValue(column, out var mergedColumn)) width += mergedColumn.Width;
+            for (uint row = merge.Start.Row + 1; row <= merge.End.Row; row++)
+                if (rowLookup.TryGetValue(row, out var mergedRow)) height += mergedRow.Height;
+
+            var rect = new Rect(
+                colMetric.LeftOffset + rowHeaderWidth,
+                rowMetric.TopOffset + columnHeaderHeight,
+                width,
+                height);
+            styleLookup.TryGetValue((merge.Start.Row, merge.Start.Col), out var bg);
+            DrawCellSurface(dc, rect, bg, isMerged: true, visibleLeft, visibleTop, visibleRight, visibleBottom);
+        }
+    }
+
+    private void DrawCellSurface(
+        DrawingContext dc,
+        Rect rect,
+        CellStyle? bg,
+        bool isMerged,
+        double visibleLeft,
+        double visibleTop,
+        double visibleRight,
+        double visibleBottom)
+    {
+        if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
+            return;
+
+        Brush? fill = null;
+        if (bg?.FillColor.HasValue == true)
+        {
+            fill = BrushForCellColor(bg.FillColor.Value, _brushCache);
+        }
+        else if (WorksheetBackground == null &&
+                 (isMerged || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None))
+        {
+            fill = Brushes.White;
+        }
+
+        if (fill is not null || isMerged)
+            dc.DrawRectangle(fill, isMerged ? GridPen : null, rect);
+        if (bg is not null)
+            DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache);
     }
 
     private void RenderCellBackgroundBase(DrawingContext dc, double rowHeaderWidth, double columnHeaderHeight)

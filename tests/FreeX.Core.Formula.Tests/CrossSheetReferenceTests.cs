@@ -157,6 +157,36 @@ public class CrossSheetReferenceTests
         result.Cells[2, 0].Should().Be(new NumberValue(3));
     }
 
+    [Theory]
+    [InlineData("XFE1")]
+    [InlineData("A1048577")]
+    public void NamedRangeReference_OutOfGridA1ShapedName_ResolvesAsName(string name)
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var target = new CellAddress(sheet.Id, 4, 2);
+        sheet.SetCell(target, new NumberValue(42));
+        workbook.DefineNamedRange(name, new GridRange(target, target));
+
+        var result = _evaluator.Evaluate("=" + name, sheet, workbook);
+
+        result.Should().BeOfType<RangeValue>()
+            .Subject.Cells[0, 0].Should().Be(new NumberValue(42));
+    }
+
+    [Theory]
+    [InlineData("=XFE1")]
+    [InlineData("=A1048577")]
+    public void NamedRangeReference_UnboundOutOfGridA1ShapedName_ReturnsNameError(string formula)
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        var result = _evaluator.Evaluate(formula, sheet, workbook);
+
+        result.Should().Be(ErrorValue.Name);
+    }
+
     [Fact]
     public void CrossSheetRef_UnknownSheet_ReturnsRefError()
     {

@@ -150,6 +150,30 @@ public class LexerTests
         tokens.Should().NotContain(t => t.Type == TokenType.CellRef);
     }
 
+    [Theory]
+    [InlineData("=XFE1", "XFE1")]
+    [InlineData("=ZZZ1", "ZZZ1")]
+    [InlineData("=A1048577", "A1048577")]
+    [InlineData("=A0", "A0")]
+    public void Lexer_OutOfGridA1ShapedIdentifiers_AreNamedRanges(string formula, string expectedName)
+    {
+        var tokens = new Lexer(formula).Tokenize();
+
+        tokens[0].Type.Should().Be(TokenType.NamedRange);
+        tokens[0].Value.Should().Be(expectedName);
+    }
+
+    [Theory]
+    [InlineData("=XFD1048576", "XFD1048576")]
+    [InlineData("=$XFD$1048576", "$XFD$1048576")]
+    public void Lexer_GridEdgeA1References_AreCellReferences(string formula, string expectedReference)
+    {
+        var tokens = new Lexer(formula).Tokenize();
+
+        tokens[0].Type.Should().Be(TokenType.CellRef);
+        tokens[0].Value.Should().Be(expectedReference);
+    }
+
     [Fact]
     public void Lexer_LoneDecimalPoint_ThrowsFormulaParseException()
     {
