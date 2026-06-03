@@ -4,6 +4,9 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using static ExcelSmokeCom;
@@ -19,6 +22,7 @@ internal static class ExcelOpenSmoke
 {
     private const uint ExcelOpenRejectedHResult = 0x800A03ECu;
     private const int ExcelCellTypeFormulas = -4123;
+    private const int MaxOpenXmlValidationErrorsToReport = 20;
 
     public static int Run(string[] args)
     {
@@ -236,6 +240,7 @@ internal static class ExcelOpenSmoke
             if (input.Workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel)
             {
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
+                AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
                 sourceForExcel = freeXSave.SavedPath;
                 freeXSavedPath = freeXSave.SavedPath;
                 freeXPreSave = freeXSave.Summary;
@@ -335,6 +340,7 @@ internal static class ExcelOpenSmoke
             ReleaseComObject(workbook);
             workbook = null;
             CollectComReferences();
+            AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
 
             reopenedWorkbook = OpenExcelWorkbook(workbooks, excelSavedPath, readOnly: true);
             var reopened = CountWorkbookContents(reopenedWorkbook);
@@ -404,6 +410,46 @@ internal static class ExcelOpenSmoke
             throw new InvalidDataException(
                 $"Excel saved copy contains repair/recovery log parts: {string.Join(", ", recoveryLogs)}");
         }
+    }
+
+    private static void AssertOpenXmlValid(string xlsxPath, string label)
+    {
+        try
+        {
+            using var document = SpreadsheetDocument.Open(xlsxPath, false);
+            var errors = new OpenXmlValidator(FileFormatVersions.Microsoft365)
+                .Validate(document)
+                .ToArray();
+
+            if (errors.Length == 0)
+                return;
+
+            var sample = string.Join(
+                "; ",
+                errors
+                    .Take(MaxOpenXmlValidationErrorsToReport)
+                    .Select(FormatOpenXmlValidationError));
+            var suffix = errors.Length > MaxOpenXmlValidationErrorsToReport
+                ? $"; ... {errors.Length - MaxOpenXmlValidationErrorsToReport} more"
+                : string.Empty;
+
+            throw new InvalidDataException(
+                $"{label} failed Open XML SDK validation with {errors.Length} error(s): {sample}{suffix}");
+        }
+        catch (OpenXmlPackageException ex)
+        {
+            throw new InvalidDataException(
+                $"{label} could not be opened by Open XML SDK validation: {ex.Message}",
+                ex);
+        }
+    }
+
+    private static string FormatOpenXmlValidationError(ValidationErrorInfo error)
+    {
+        var path = string.IsNullOrWhiteSpace(error.Path?.XPath)
+            ? "<unknown path>"
+            : error.Path.XPath;
+        return $"{path}: {error.Description}";
     }
 
     private static ExcelWorkbookSummary CountWorkbookContents(object workbook)
