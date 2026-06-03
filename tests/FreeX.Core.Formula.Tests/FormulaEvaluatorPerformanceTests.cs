@@ -53,6 +53,16 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Fact]
+    public void NumberValueCache_CoversCommonSmallIntegerFormulaResults()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaEvaluator.cs"));
+
+        source.Should().Contain(
+            "private const int CachedIntegerNumberMax = 64",
+            "common scalar arithmetic and coercion results should reuse immutable NumberValue instances");
+    }
+
+    [Fact]
     public void RepeatedFormulaTextEvaluation_ReusesParsedAst()
     {
         var evaluator = new FormulaEvaluator();
@@ -85,7 +95,9 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(expected);
         _output.WriteLine(
             $"PERF repeated formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(1_000_000);
+        allocatedBytes.Should().BeLessThan(
+            1_024,
+            "cached-AST scalar arithmetic should reuse cached integer NumberValue results instead of allocating one result per evaluation");
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
