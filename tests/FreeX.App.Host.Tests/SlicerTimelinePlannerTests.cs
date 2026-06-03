@@ -178,6 +178,36 @@ public sealed class SlicerTimelinePlannerTests
     }
 
     [Fact]
+    public void NativeVisualFilters_RebuildCachedPivotLookupWhenNamesChange()
+    {
+        var workbook = new Workbook("NativeVisualFiltersCacheInvalidation");
+        var activeSheet = workbook.AddSheet("Pivot");
+        activeSheet.PivotTables.Add(new PivotTableModel { Name = "PivotA" });
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 0, 1, 0),
+            new DrawingAnchorPoint(4, 0, 8, 0));
+        workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "Region Slicer",
+            SourcePivotTableName = "PivotB",
+            DrawingAnchor = anchor
+        });
+
+        SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet)
+            .Slicers
+            .Should()
+            .BeEmpty();
+
+        activeSheet.PivotTables[0].Name = "PivotB";
+
+        SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet)
+            .Slicers
+            .Select(slicer => slicer.Name)
+            .Should()
+            .Equal("Region Slicer");
+    }
+
+    [Fact]
     public void Benchmark_NativeVisualFiltersEmptyWorkbookFastPath_ReportsTiming()
     {
         const int iterations = 20_000;
@@ -268,8 +298,11 @@ public sealed class SlicerTimelinePlannerTests
         source.Should().Contain("return Array.Empty<TimelineModel>();");
         source.Should().Contain("List<SlicerModel>? visible = null;");
         source.Should().Contain("List<TimelineModel>? visible = null;");
-        source.Should().Contain("visible ??= new List<SlicerModel>();");
-        source.Should().Contain("visible ??= new List<TimelineModel>();");
+        source.Should().Contain("visible ??= new List<SlicerModel>(slicers.Count);");
+        source.Should().Contain("visible ??= new List<TimelineModel>(timelines.Count);");
+        source.Should().Contain("ConditionalWeakTable<Sheet, ActivePivotNameSetCache>");
+        source.Should().Contain("new HashSet<string>(pivotTables.Count");
+        source.Should().Contain("Matches(pivotTables)");
         source.Should().Contain("activePivotNames.Contains(pivotTableName)");
         source.Should().NotContain("activeSheet.PivotTables.Any");
     }
