@@ -238,7 +238,9 @@ internal static partial class XlsxPivotTableReader
             ReadFreeXPivotFieldGroups(root, workbookNs));
         var nativeFieldMetadata = ReadNativePivotFieldMetadata(pivotFieldsElement, workbookNs);
         var nativeFiltersElement = root.Element(workbookNs + "filters");
-        var calculatedFields = ReadPivotCalculatedFields(root.Element(workbookNs + "calculatedFields"), workbookNs);
+        var calculatedFieldsElement = root.Element(workbookNs + "calculatedFields");
+        var calculatedFields = ReadPivotCalculatedFields(calculatedFieldsElement, workbookNs, pivotCache);
+        var calculatedFieldNamesByIndex = ReadPivotCalculatedFieldNamesByIndex(calculatedFieldsElement, workbookNs, pivotCache);
         var valueFilters = ReadPivotValueFilters(root.Element(workbookNs + "valueFilters"), workbookNs)
             .Concat(ReadNativePivotValueFilters(nativeFiltersElement, workbookNs))
             .ToList();
@@ -316,8 +318,8 @@ internal static partial class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "preserveFormatting", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "itemPrintTitles") || XlsxXmlAttributeReader.ReadBoolAttribute(root, "fieldPrintTitles"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "printDrill"),
-            root.Attribute("altText")?.Value,
-            root.Attribute("altTextSummary")?.Value,
+            ReadFreeXTableText(root, workbookNs, "altTextTitle") ?? root.Attribute("altText")?.Value,
+            ReadFreeXTableText(root, workbookNs, "altTextDescription") ?? root.Attribute("altTextSummary")?.Value,
             root.Attribute("dataCaption")?.Value,
             root.Attribute("grandTotalCaption")?.Value,
             root.Attribute("missingCaption")?.Value,
@@ -325,7 +327,7 @@ internal static partial class XlsxPivotTableReader
             ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
             ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
             ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
-            ReadPivotDataFields(root.Element(workbookNs + "dataFields"), workbookNs, calculatedFields, numberFormatCatalog),
+            ReadPivotDataFields(root.Element(workbookNs + "dataFields"), workbookNs, calculatedFields, calculatedFieldNamesByIndex, numberFormatCatalog),
             calculatedFields,
             ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs),
             valueFilters,

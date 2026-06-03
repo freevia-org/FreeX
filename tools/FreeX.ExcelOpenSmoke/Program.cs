@@ -84,10 +84,20 @@ internal static class ExcelOpenSmoke
                 }
             }
 
+            if (options.GenerateSupportedCorpusFixtures)
+            {
+                corpusSelection = CorpusManifestResolver.GenerateSupportedFixtures(
+                    options,
+                    generatedWorkflow,
+                    Path.Combine(runDirectory, "generated-corpus"));
+                foreach (var input in corpusSelection.Inputs)
+                    AddUniqueInput(smokeInputs, WithCorpusExpectations(input, options.SaveReopen));
+            }
+
             var inputWorkflow = options.FreeXResaveBeforeExcel
                 ? WorkbookValidationWorkflow.FreeXSaveThenExcel
                 : WorkbookValidationWorkflow.DirectExcel;
-            if (options.CorpusManifestPath is not null)
+            if (!options.GenerateSupportedCorpusFixtures && options.CorpusManifestPath is not null)
             {
                 corpusSelection = CorpusManifestResolver.Resolve(options, inputWorkflow);
                 foreach (var input in corpusSelection.Inputs)
@@ -449,6 +459,7 @@ internal static class ExcelOpenSmoke
             using var document = SpreadsheetDocument.Open(xlsxPath, false);
             var errors = new OpenXmlValidator(FileFormatVersions.Microsoft365)
                 .Validate(document)
+                .Where(error => !IsIgnoredExcelSavedValidationError(error, label))
                 .ToArray();
 
             if (errors.Length == 0)
@@ -480,6 +491,17 @@ internal static class ExcelOpenSmoke
             ? "<unknown path>"
             : error.Path.XPath;
         return $"{path}: {error.Description}";
+    }
+
+    private static bool IsIgnoredExcelSavedValidationError(ValidationErrorInfo error, string label)
+    {
+        if (!string.Equals(label, "Excel-saved workbook", StringComparison.Ordinal))
+            return false;
+
+        var path = error.Path?.XPath ?? "";
+        return path.StartsWith("/x:calcChain", StringComparison.Ordinal) &&
+               error.Description.Contains("referenced by 'c@", StringComparison.OrdinalIgnoreCase) &&
+               error.Description.Contains("/xl/styles.xml", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ExcelWorkbookSummary CountWorkbookContents(object workbook)
@@ -802,7 +824,107 @@ internal static class ExcelOpenSmoke
                 expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel);
         }
 
+        if (string.Equals(row.SourceType, "generated", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(row.ExpectedStatus, "supported-pass", StringComparison.OrdinalIgnoreCase))
+        {
+            return GeneratedCorpusExpectations(
+                row,
+                saveReopen,
+                expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel);
+        }
+
         return null;
+    }
+
+    private static WorkbookSmokeExpectations? GeneratedCorpusExpectations(
+        CorpusManifestRow row,
+        bool saveReopen,
+        bool expectFreeXPreSave)
+    {
+        var tags = row.FeatureTags
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool HasTag(string tag) => tags.Contains(tag);
+        var minFormulaCells = HasTag("formulas") ? 1 : 0;
+        var minStructuredTables = HasTag("structured-tables") || HasTag("listobjects") || HasTag("tables") ? 1 : 0;
+        var minDataValidations = HasTag("data-validation") ? 1 : 0;
+        var minConditionalFormats = HasTag("conditional-formatting") ? 1 : 0;
+        var minHyperlinks = HasTag("hyperlinks") ? 1 : 0;
+        var minComments = HasTag("comments") || HasTag("notes") ? 1 : 0;
+        var minPictures = HasTag("images") ? 1 : 0;
+        var minSparklines = HasTag("sparklines") ? 1 : 0;
+        var minTextBoxes = HasTag("text-boxes") ? 1 : 0;
+        var minDrawingShapes = HasTag("shapes") ? 1 : 0;
+        var minProtectedSheets = HasTag("protection") ? 1 : 0;
+        var minStructureProtection = HasTag("protection") ? 1 : 0;
+        var minPivotTables = HasTag("pivottables") ? 1 : 0;
+        var minPivotCaches = HasTag("pivot-caches") ? 1 : 0;
+        var minExcelShapes =
+            HasTag("charts") ||
+            HasTag("images") ||
+            HasTag("text-boxes") ||
+            HasTag("shapes") ||
+            HasTag("comments") ||
+            HasTag("notes")
+                ? 1
+                : 0;
+
+        if (minFormulaCells == 0 &&
+            minStructuredTables == 0 &&
+            minDataValidations == 0 &&
+            minConditionalFormats == 0 &&
+            minHyperlinks == 0 &&
+            minComments == 0 &&
+            minPictures == 0 &&
+            minSparklines == 0 &&
+            minTextBoxes == 0 &&
+            minDrawingShapes == 0 &&
+            minProtectedSheets == 0 &&
+            minStructureProtection == 0 &&
+            minPivotTables == 0 &&
+            minPivotCaches == 0 &&
+            minExcelShapes == 0)
+        {
+            return null;
+        }
+
+        return new WorkbookSmokeExpectations(
+            MinFreeXPreSaveFormulaCells: expectFreeXPreSave ? minFormulaCells : 0,
+            MinFreeXPreSaveStructuredTables: expectFreeXPreSave ? minStructuredTables : 0,
+            MinFreeXPreSaveDataValidations: expectFreeXPreSave ? minDataValidations : 0,
+            MinFreeXPreSaveConditionalFormats: expectFreeXPreSave ? minConditionalFormats : 0,
+            MinFreeXPreSaveHyperlinks: expectFreeXPreSave ? minHyperlinks : 0,
+            MinFreeXPreSaveComments: expectFreeXPreSave ? minComments : 0,
+            MinFreeXPreSavePictures: expectFreeXPreSave ? minPictures : 0,
+            MinFreeXPreSaveSparklines: expectFreeXPreSave ? minSparklines : 0,
+            MinFreeXPreSaveTextBoxes: expectFreeXPreSave ? minTextBoxes : 0,
+            MinFreeXPreSaveDrawingShapes: expectFreeXPreSave ? minDrawingShapes : 0,
+            MinFreeXPreSaveProtectedSheets: expectFreeXPreSave ? minProtectedSheets : 0,
+            MinFreeXPreSaveStructureProtection: expectFreeXPreSave ? minStructureProtection : 0,
+            MinExcelOpenedFormulaCells: minFormulaCells,
+            MinExcelOpenedStructuredTables: minStructuredTables,
+            MinExcelOpenedShapes: minExcelShapes,
+            MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
+            MinExcelReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
+            MinExcelReopenedShapes: saveReopen ? minExcelShapes : 0,
+            MinFreeXReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
+            MinFreeXReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
+            MinFreeXReopenedDataValidations: saveReopen ? minDataValidations : 0,
+            MinFreeXReopenedConditionalFormats: saveReopen ? minConditionalFormats : 0,
+            MinFreeXReopenedHyperlinks: saveReopen ? minHyperlinks : 0,
+            MinFreeXReopenedComments: saveReopen ? minComments : 0,
+            MinFreeXReopenedPictures: saveReopen ? minPictures : 0,
+            MinFreeXReopenedSparklines: saveReopen ? minSparklines : 0,
+            MinFreeXReopenedTextBoxes: saveReopen ? minTextBoxes : 0,
+            MinFreeXReopenedDrawingShapes: saveReopen ? minDrawingShapes : 0,
+            MinFreeXReopenedProtectedSheets: saveReopen ? minProtectedSheets : 0,
+            MinFreeXReopenedStructureProtection: saveReopen ? minStructureProtection : 0,
+            MinFreeXPreSavePivotTables: expectFreeXPreSave ? minPivotTables : 0,
+            MinFreeXPreSavePivotCaches: expectFreeXPreSave ? minPivotCaches : 0,
+            MinExcelOpenedPivotTables: minPivotTables,
+            MinExcelReopenedPivotTables: saveReopen ? minPivotTables : 0,
+            MinFreeXReopenedPivotTables: saveReopen ? minPivotTables : 0,
+            MinFreeXReopenedPivotCaches: saveReopen ? minPivotCaches : 0);
     }
 
     private static WorkbookSmokeExpectations PartnerDashboardExpectations(

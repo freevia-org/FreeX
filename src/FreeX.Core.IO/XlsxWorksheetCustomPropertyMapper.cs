@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -8,8 +9,24 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetCustomPropertyMapper
 {
-    public static IReadOnlyList<WorksheetCustomProperty> Read(XDocument worksheetXml, XNamespace worksheetNs)
+    public static IReadOnlyList<WorksheetCustomProperty> Read(XDocument worksheetXml, XNamespace worksheetNs) =>
+        Read(worksheetXml, worksheetNs, null, null);
+
+    public static IReadOnlyList<WorksheetCustomProperty> Read(
+        XDocument worksheetXml,
+        XNamespace worksheetNs,
+        ZipArchive? archive,
+        string? worksheetPath)
     {
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipTargets = archive is not null && !string.IsNullOrWhiteSpace(worksheetPath)
+            ? XlsxRelationshipReader.LoadTargets(
+                archive,
+                XlsxPackagePath.GetRelationshipPartPath(worksheetPath),
+                worksheetPath,
+                packageRelNs)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var properties = new List<WorksheetCustomProperty>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var customProperty in worksheetXml.Root?
@@ -18,7 +35,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
         {
             var name = customProperty.Attribute("name")?.Value;
             if (string.IsNullOrWhiteSpace(name) ||
-                !int.TryParse(customProperty.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ||
+                !TryReadCustomPropertyId(customProperty, relNs, relationshipTargets, out var id) ||
                 id <= 0 ||
                 !seen.Add(name))
             {
@@ -72,11 +89,33 @@ internal static class XlsxWorksheetCustomPropertyMapper
             if (root is null)
                 continue;
 
+            var worksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
+            var worksheetRelsEntry = archive.GetEntry(worksheetRelsPath);
+            var worksheetRelsXml = worksheetRelsEntry is null
+                ? new XDocument(new XElement(packageRelNs + "Relationships"))
+                : XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry);
+
             root.Element(workbookNs + "customProperties")?.Remove();
             InsertCustomPropertiesInOrder(root, workbookNs, new XElement(
                 workbookNs + "customProperties",
-                properties.Select(property => ToXml(property, workbookNs))));
+                properties.Select(property =>
+                {
+                    var customPropertyPath = GetCustomPropertyPartPath(worksheetPath, property);
+                    WriteCustomPropertyPart(archive, customPropertyPath, property);
+                    XlsxPackageXmlEditor.EnsureSpecificContentType(
+                        archive,
+                        customPropertyPath,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.customProperty");
+                    var relationshipId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+                        worksheetRelsXml,
+                        packageRelNs,
+                        worksheetPath,
+                        customPropertyPath,
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty");
+                    return ToXml(property, workbookNs, relNs, relationshipId);
+                })));
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetRelsPath, worksheetRelsXml);
         }
     }
 
@@ -149,16 +188,102 @@ internal static class XlsxWorksheetCustomPropertyMapper
 
     private static readonly IReadOnlyCollection<string> ModeledCustomPropertyAttributes = ["name", "id"];
 
-    private static XElement ToXml(WorksheetCustomProperty property, XNamespace workbookNs)
+    private static XElement ToXml(WorksheetCustomProperty property, XNamespace workbookNs, XNamespace relNs, string relationshipId)
     {
         var element = new XElement(
             workbookNs + "customPr",
             new XAttribute("name", property.Name),
-            new XAttribute("id", property.Id.ToString(CultureInfo.InvariantCulture)));
+            new XAttribute(relNs + "id", relationshipId));
 
         XmlNativeBagSerializer.ApplyToElement(element, property.Metadata?.Get("customPr"), ModeledCustomPropertyAttributes);
 
         return element;
+    }
+
+    private static bool TryReadCustomPropertyId(
+        XElement customProperty,
+        XNamespace relNs,
+        IReadOnlyDictionary<string, string> relationshipTargets,
+        out int id)
+    {
+        var legacyId = customProperty.Attribute("id")?.Value;
+        if (TryReadCustomPropertyId(legacyId, out id))
+            return true;
+
+        var relationshipId = customProperty.Attribute(relNs + "id")?.Value;
+        if (!string.IsNullOrWhiteSpace(relationshipId) &&
+            relationshipTargets.TryGetValue(relationshipId, out var targetPath) &&
+            TryReadCustomPropertyIdFromPartPath(targetPath, out id))
+        {
+            return true;
+        }
+
+        return TryReadCustomPropertyId(relationshipId, out id);
+    }
+
+    private static bool TryReadCustomPropertyId(string? value, out int id)
+    {
+        id = 0;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var trimmed = value.Trim();
+        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out id))
+            return true;
+
+        if (trimmed.StartsWith("rId", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(trimmed[3..], NumberStyles.Integer, CultureInfo.InvariantCulture, out id))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryReadCustomPropertyIdFromPartPath(string targetPath, out int id)
+    {
+        id = 0;
+        var normalized = targetPath.Replace('\\', '/');
+        var slash = normalized.LastIndexOf('/');
+        var fileName = slash >= 0 ? normalized[(slash + 1)..] : normalized;
+        var dot = fileName.LastIndexOf('.');
+        if (dot > 0)
+            fileName = fileName[..dot];
+
+        var firstSeparator = fileName.IndexOf('-');
+        if (firstSeparator < 0)
+            return false;
+
+        var secondSeparator = fileName.IndexOf('-', firstSeparator + 1);
+        return secondSeparator > firstSeparator + 1 &&
+            int.TryParse(
+                fileName[(firstSeparator + 1)..secondSeparator],
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out id);
+    }
+
+    private static string GetCustomPropertyPartPath(string worksheetPath, WorksheetCustomProperty property)
+    {
+        var worksheetName = Path.GetFileNameWithoutExtension(worksheetPath);
+        var safeName = string.Concat(property.Name.Select(character =>
+            char.IsLetterOrDigit(character) ? character : '_'));
+        if (string.IsNullOrWhiteSpace(safeName))
+            safeName = "property";
+
+        return $"xl/customProperty/{worksheetName}-{property.Id}-{safeName}.bin";
+    }
+
+    private static void WriteCustomPropertyPart(
+        ZipArchive archive,
+        string customPropertyPath,
+        WorksheetCustomProperty property)
+    {
+        archive.GetEntry(customPropertyPath)?.Delete();
+        var entry = archive.CreateEntry(customPropertyPath, CompressionLevel.Optimal);
+        using var stream = entry.Open();
+        var bytes = Encoding.Unicode.GetBytes(property.Name);
+        stream.Write(bytes, 0, bytes.Length);
     }
 
     private static bool IsModeledAttribute(string name) =>

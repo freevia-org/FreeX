@@ -921,6 +921,8 @@ public sealed partial class NativeJsonAdapter
         public string? MinDate { get; set; }
         public string? MaxDate { get; set; }
         public List<string>? SharedItems { get; set; }
+        public string? Formula { get; set; }
+        public bool IsDatabaseField { get; set; } = true;
     }
 
     private class PivotTableDto

@@ -315,8 +315,36 @@ internal static class XlsxHeaderFooterPicturePackageWriter
 
         root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
         root.Elements(worksheetNs + "legacyDrawingHF").Remove();
-        root.Add(new XElement(worksheetNs + "legacyDrawingHF", new XAttribute(relNs + "id", vmlRelId)));
+        InsertLegacyDrawingHeaderFooterInOrder(
+            root,
+            worksheetNs,
+            new XElement(worksheetNs + "legacyDrawingHF", new XAttribute(relNs + "id", vmlRelId)));
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void InsertLegacyDrawingHeaderFooterInOrder(
+        XElement worksheetRoot,
+        XNamespace worksheetNs,
+        XElement legacyDrawingHeaderFooter)
+    {
+        string[] laterWorksheetElements =
+        [
+            "picture",
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts",
+            "extLst"
+        ];
+
+        var insertionPoint = worksheetRoot.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == worksheetNs &&
+                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        if (insertionPoint is null)
+            worksheetRoot.Add(legacyDrawingHeaderFooter);
+        else
+            insertionPoint.AddBeforeSelf(legacyDrawingHeaderFooter);
     }
 
 }

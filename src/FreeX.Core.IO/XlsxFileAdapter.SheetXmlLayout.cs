@@ -248,7 +248,7 @@ public sealed partial class XlsxFileAdapter
         var cellWatchesMetadata = XlsxWorksheetDiagnosticsMapper.ReadCellWatchesMetadata(worksheetXml, worksheetNs);
         var scenarios = XlsxWorksheetScenarioMapper.Read(worksheetXml, worksheetNs);
         var customViews = XlsxCustomViewMapper.ReadWorksheetViews(worksheetXml, worksheetNs);
-        var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs);
+        var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs, archive, worksheetPath);
         var smartTags = XlsxWorksheetSmartTagMapper.Read(worksheetXml.Root?.Element(worksheetNs + "smartTags"));
         var dataConsolidation = XlsxWorksheetDataConsolidationMapper.Read(worksheetXml.Root?.Element(worksheetNs + "dataConsolidate"));
         var sortState = XlsxWorksheetSortStateMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sortState"));

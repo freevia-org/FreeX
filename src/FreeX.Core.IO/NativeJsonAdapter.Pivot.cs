@@ -81,7 +81,9 @@ public sealed partial class NativeJsonAdapter
             dto.MaxValue,
             TrimToNull(dto.MinDate),
             TrimToNull(dto.MaxDate),
-            sharedItems);
+            sharedItems,
+            TrimToNull(dto.Formula),
+            dto.IsDatabaseField);
     }
 
     private static PivotTableModel? TryLoadPivotTable(
@@ -321,7 +323,9 @@ public sealed partial class NativeJsonAdapter
             MaxValue = field.MaxValue,
             MinDate = field.MinDate,
             MaxDate = field.MaxDate,
-            SharedItems = field.SharedItems?.ToList()
+            SharedItems = field.SharedItems?.ToList(),
+            Formula = field.Formula,
+            IsDatabaseField = field.IsDatabaseField
         };
 
     private static PivotTableDto? ToPivotTableDto(Workbook workbook, Sheet sheet, PivotTableModel pivot)

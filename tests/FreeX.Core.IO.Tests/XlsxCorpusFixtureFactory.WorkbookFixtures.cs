@@ -242,10 +242,11 @@ internal static partial class XlsxCorpusFixtureFactory
         };
         rule.IconSetThresholds.AddRange(
         [
-            new CfThresholdModel(CfThresholdType.Number, "0"),
-            new CfThresholdModel(CfThresholdType.Percent, "25"),
-            new CfThresholdModel(CfThresholdType.Percent, "50"),
-            new CfThresholdModel(CfThresholdType.Percent, "75")
+            new CfThresholdModel(CfThresholdType.Percent, "0"),
+            new CfThresholdModel(CfThresholdType.Percent, "20"),
+            new CfThresholdModel(CfThresholdType.Percent, "40"),
+            new CfThresholdModel(CfThresholdType.Percent, "60"),
+            new CfThresholdModel(CfThresholdType.Percent, "80")
         ]);
         sheet.ConditionalFormats.Add(rule);
         return workbook;
@@ -1312,6 +1313,7 @@ internal static partial class XlsxCorpusFixtureFactory
         cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["North", "South", "West"]));
         cache.Fields.Add(new PivotCacheFieldModel("Sales", ContainsNumber: true, MinValue: 160, MaxValue: 200));
         cache.Fields.Add(new PivotCacheFieldModel("Cost", ContainsNumber: true, MinValue: 110, MaxValue: 150));
+        cache.Fields.Add(new PivotCacheFieldModel("Margin", Formula: "Sales-Cost", IsDatabaseField: false));
         workbook.PivotCaches.Add(cache);
         var pivot = new PivotTableModel
         {
