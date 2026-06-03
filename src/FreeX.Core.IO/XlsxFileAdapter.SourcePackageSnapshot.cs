@@ -5,6 +5,12 @@ namespace FreeX.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
+    public static void ForgetLoadedPackageSnapshot(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        SourcePackages.Remove(workbook);
+    }
+
     private sealed record XlsxSourcePackage(
         byte[] Buffer,
         int Offset,

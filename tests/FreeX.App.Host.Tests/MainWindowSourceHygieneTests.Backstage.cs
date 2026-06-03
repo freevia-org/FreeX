@@ -103,11 +103,13 @@ public sealed partial class MainWindowSourceHygieneTests
 
         var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
         newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
+        newMethod.Should().Contain("== SaveChangesConfirmation.Cancel");
         newMethod.Should().Contain("CreateNewWorkbook();");
         newMethod.Should().Contain("HideStartScreen();");
 
         var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
         openMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeOpeningWorkbook\"))");
+        openMethod.Should().Contain("== SaveChangesConfirmation.Cancel");
         openMethod.IndexOf("ConfirmSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
             .Should()
             .BeLessThan(openMethod.IndexOf("var loader = new OpenWorkbookLoader", StringComparison.Ordinal));
@@ -134,15 +136,21 @@ public sealed partial class MainWindowSourceHygieneTests
         saveTargetMethod.Should().Contain("HideSaveProgress();");
         saveTargetMethod.Should().NotContain("MessageBox.Show(");
 
-        var confirmMethod = ExtractMethodSource(lifecycleSource, "private async Task<bool> ConfirmSaveBeforeDestructiveActionAsync(");
+        var confirmMethod = ExtractMethodSource(lifecycleSource, "private async Task<SaveChangesConfirmation> ConfirmSaveBeforeDestructiveActionAsync(");
         confirmMethod.Should().Contain("ShowOwnedMessage(");
+        confirmMethod.Should().Contain("SaveChangesConfirmation.DiscardWithoutSaving");
         confirmMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
-        confirmMethod.Should().Contain("return await SaveWorkbookWithDialogAsync();");
+        confirmMethod.Should().Contain("return await SaveWorkbookWithDialogAsync()");
 
         var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
         closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeClosingWorkbook\"))");
         closingMethod.Should().Contain("_suppressClosePrompt = true;");
-        closingMethod.Should().Contain("Close();");
+        closingMethod.Should().Contain("PrepareActiveWorkbookForFinalClose();");
+        closingMethod.Should().Contain("_ = Dispatcher.BeginInvoke(new Action(Close));");
+
+        var finalCloseMethod = ExtractMethodSource(lifecycleSource, "private void PrepareActiveWorkbookForFinalClose()");
+        finalCloseMethod.Should().Contain("XlsxFileAdapter.ForgetLoadedPackageSnapshot(_workbook);");
+        finalCloseMethod.Should().Contain("_workbookRef.Current = replacement;");
 
         keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewWorkbook, async (_, _) => await RequestNewWorkbookAsync());");
         keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveWorkbook, SaveButton_Click);");

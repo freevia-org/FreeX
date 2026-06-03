@@ -277,6 +277,24 @@ public sealed class XlsxFileAdapterFormatTests
     }
 
     [Fact]
+    public void ForgetLoadedPackageSnapshot_RemovesLoadedWorkbookSourcePackage()
+    {
+        var adapter = new XlsxFileAdapter();
+        var workbook = CreateSimpleWorkbook("loaded");
+
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loadedWorkbook = adapter.Load(stream);
+        HasSourcePackage(loadedWorkbook).Should().BeTrue();
+
+        XlsxFileAdapter.ForgetLoadedPackageSnapshot(loadedWorkbook);
+
+        HasSourcePackage(loadedWorkbook).Should().BeFalse();
+    }
+
+    [Fact]
     public void SavePostProcessing_CapturesRefreshedSourcePackageWithoutIntermediateStreamCopy()
     {
         var savePostProcessingSource = File.ReadAllText(FindWorkspaceFile(
