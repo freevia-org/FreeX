@@ -10143,7 +10143,7 @@ Vai nosūtīt avāriju pārskatus šim testētāja būvējumam?</value>
   </data>
 
 <data name="Options_DefaultFormatJson" xml:space="preserve">
-    <value>FreeX JSON (.json)</value>
+    <value>FreeX Workbook (.fxl)</value>
   </data>
 
 <data name="Options_InvalidDefaultFontSizeMessage" xml:space="preserve">

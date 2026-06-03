@@ -10143,7 +10143,7 @@ Siųsti šios bandytojo versijos strigčių ataskaitas?</value>
   </data>
 
 <data name="Options_DefaultFormatJson" xml:space="preserve">
-    <value>FreeX JSON (.json)</value>
+    <value>FreeX Workbook (.fxl)</value>
   </data>
 
 <data name="Options_InvalidDefaultFontSizeMessage" xml:space="preserve">

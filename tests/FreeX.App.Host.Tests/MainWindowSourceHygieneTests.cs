@@ -242,10 +242,13 @@ public sealed class MainWindowSourceHygieneTests
 
         backstageSource.Should().Contain("new Microsoft.Win32.SaveFileDialog");
         backstageSource.Should().Contain("FileName = _workbook.Name");
-        backstageSource.Should().Contain("DefaultExt = \".xlsx\"");
+        backstageSource.Should().Contain("var defaultExt = ResolveSaveDialogDefaultExtension();");
+        backstageSource.Should().Contain("DefaultExt = defaultExt");
+        backstageSource.Should().Contain("FilterIndex = FileDialogFilterBuilder.FindSaveFilterIndex(_fileAdapters, defaultExt)");
         backstageSource.Should().Contain("AddExtension = true");
         backstageSource.Should().Contain("OverwritePrompt = true");
         backstageSource.Should().Contain("FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ext, out _)");
+        backstageSource.Should().Contain("FreeXOptions.NormalizeDefaultFormat(_options.DefaultFormat)");
         backstageSource.Should().Contain("return await SaveWorkbookToTargetAsync(new FileSaveTarget(dialog.FileName, adapter));");
     }
 

@@ -9440,7 +9440,7 @@ Ibgħat rapporti tal-ħabta għal din il-bini tat-tester?</value>
     <value>Workbook XLSX (.xlsx)</value>
   </data>
   <data name="Options_DefaultFormatJson" xml:space="preserve">
-    <value>FreeX JSON (.json)</value>
+    <value>FreeX Workbook (.fxl)</value>
   </data>
   <data name="Options_InvalidDefaultFontSizeMessage" xml:space="preserve">
     <value>Daħħal daqs tat-tipa default pożittiv.</value>

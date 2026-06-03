@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FreeX.Core.IO;
 
 namespace FreeX.App.Host;
 
@@ -22,6 +23,9 @@ public enum FreeXObjectDisplay
 public sealed class FreeXOptions
 {
     internal const string OptionsPathEnvironmentVariable = "FREEX_OPTIONS_PATH";
+    public const string XlsxDefaultFormat = ".xlsx";
+    public const string FreeXWorkbookDefaultFormat = ".fxl";
+    private const string LegacyJsonDefaultFormat = ".json";
 
     private static readonly JsonSerializerOptions StoreJsonOptions = new()
     {
@@ -56,7 +60,7 @@ public sealed class FreeXOptions
     public FreeXObjectDisplay ObjectsDisplay { get; set; } = FreeXObjectDisplay.All;
 
     // Save
-    public string DefaultFormat { get; set; } = ".xlsx";
+    public string DefaultFormat { get; set; } = XlsxDefaultFormat;
 
     // Quick Access Toolbar
     public bool QuickAccessToolbarBelowRibbon { get; set; }
@@ -145,7 +149,22 @@ public sealed class FreeXOptions
 
     internal void NormalizePersistedCollections()
     {
+        DefaultFormat = NormalizeDefaultFormat(DefaultFormat);
         SpellCheckCustomDictionaryWords = NormalizeSpellCheckCustomDictionaryWords(SpellCheckCustomDictionaryWords);
+    }
+
+    internal static string NormalizeDefaultFormat(string? extension)
+    {
+        var normalized = string.IsNullOrWhiteSpace(extension)
+            ? XlsxDefaultFormat
+            : FileFormatResolver.NormalizeExtension(extension);
+
+        if (string.Equals(normalized, LegacyJsonDefaultFormat, StringComparison.OrdinalIgnoreCase))
+            return FreeXWorkbookDefaultFormat;
+
+        return string.Equals(normalized, FreeXWorkbookDefaultFormat, StringComparison.OrdinalIgnoreCase)
+            ? FreeXWorkbookDefaultFormat
+            : XlsxDefaultFormat;
     }
 
     internal static List<string> NormalizeSpellCheckCustomDictionaryWords(IEnumerable<string>? words)
