@@ -105,13 +105,14 @@ public sealed partial class GridViewDrawingObjectThemeTests
     {
         RunOnStaThread(() =>
         {
+            var grid = new GridView();
             var visual = new System.Windows.Media.DrawingVisual();
             using (var drawingContext = visual.RenderOpen())
             {
                 var drawCommentIndicator = typeof(GridView).GetMethod(
                     "DrawCommentIndicator",
-                    BindingFlags.Static | BindingFlags.NonPublic);
-                drawCommentIndicator!.Invoke(null, [drawingContext, new Rect(30, 18, 60, 24)]);
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                drawCommentIndicator!.Invoke(grid, [drawingContext, new Rect(30, 18, 60, 24)]);
             }
 
             var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
