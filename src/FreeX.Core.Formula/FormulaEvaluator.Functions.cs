@@ -66,6 +66,10 @@ public sealed partial class FormulaEvaluator
             TryEvaluateXmatchDirectRange(node, context, out var directXmatchResult))
             return directXmatchResult;
 
+        if ((functionName == "VLOOKUP" || functionName == "HLOOKUP") &&
+            TryEvaluateLegacyLookupDirectTable(node, context, horizontal: functionName == "HLOOKUP", out var directLegacyLookupResult))
+            return directLegacyLookupResult;
+
         if (functionName == "XLOOKUP" &&
             TryEvaluateXlookupDirectRanges(node, context, out var directXlookupResult))
             return directXlookupResult;
