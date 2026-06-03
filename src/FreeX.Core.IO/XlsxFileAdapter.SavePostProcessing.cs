@@ -36,6 +36,14 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetDimensionDefaultsWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        // ClosedXML's Column.Width setter inflates the stored width (e.g. 2.0 -> 2.71) on save; rewrite
+        // each worksheet's <cols> with the modelled exact widths so column widths round-trip.
+        if (featurePlan.HasColumnWidths)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetColumnWidthWriter.Save(packageStream, workbook);
+        }
+
         if (featurePlan.HasStyleOnlyCells)
         {
             packageStream.Position = 0;
@@ -371,6 +379,7 @@ public sealed partial class XlsxFileAdapter
     private struct XlsxPostProcessingFeaturePlan
     {
         public bool HasNonDefaultDimensions;
+        public bool HasColumnWidths;
         public bool HasFullCalculationOnLoad;
         public bool HasModeledPrinterAttributes;
         public bool HasPhoneticProperties;
@@ -413,6 +422,7 @@ public sealed partial class XlsxFileAdapter
         private void Include(Sheet sheet)
         {
             HasNonDefaultDimensions |= XlsxWorksheetDimensionDefaultsWriter.HasNonDefaultDimensions(sheet);
+            HasColumnWidths |= sheet.ColumnWidths.Count > 0;
             HasFullCalculationOnLoad |= sheet.FullCalculationOnLoad;
             HasModeledPrinterAttributes |= XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes(sheet);
             HasPhoneticProperties |= sheet.PhoneticProperties is not null;

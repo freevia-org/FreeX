@@ -55,8 +55,8 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         layout.RowColumnLayout.RowOutlineLevels.Should().Contain(5u, 2);
         layout.RowColumnLayout.GroupHiddenRows.Should().Equal(5u);
         layout.RowColumnLayout.HiddenCols.Should().Equal(2u, 3u);
-        layout.RowColumnLayout.ColumnWidths.Should().Contain(2u, 12);
-        layout.RowColumnLayout.ColumnWidths.Should().Contain(3u, 12);
+        layout.RowColumnLayout.ColumnWidths.Should().Contain(2u, 12.75);
+        layout.RowColumnLayout.ColumnWidths.Should().Contain(3u, 12.75);
         layout.RowColumnLayout.ColOutlineLevels.Should().Contain(2u, 1);
         layout.RowColumnLayout.ColOutlineLevels.Should().Contain(3u, 1);
         layout.RowColumnLayout.GroupHiddenCols.Should().Equal(2u, 3u);

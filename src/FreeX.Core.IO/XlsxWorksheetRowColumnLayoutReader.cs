@@ -127,10 +127,13 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             ParseOptionalDouble(col.Attribute("width")?.Value) is { } width &&
             width > 0)
         {
+            // A column carrying a style at a near-default width is a styling-only entry, not a real
+            // custom width, so skip it. The column-width writer strips the default style="0" from
+            // genuine modelled widths on save, so they survive this check and round-trip intact.
             if (col.Attribute("style") is not null && width <= 9.2)
                 return;
 
-            width = Math.Floor(width);
+            // Keep the exact width — Excel column widths are fractional, so flooring loses fidelity.
             for (var colNumber = min; colNumber <= max; colNumber++)
                 columnWidths[colNumber] = width;
         }
