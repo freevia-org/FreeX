@@ -183,6 +183,7 @@ public sealed class DependencyGraph
             return;
 
         _precedents.EnsureCapacity(formulaCount);
+        _rangePrecedents.EnsureCapacity(formulaCount);
     }
 
     private static readonly IReadOnlySet<CellAddress> EmptySet =
