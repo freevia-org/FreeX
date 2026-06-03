@@ -159,6 +159,9 @@ public sealed partial class ViewportService
         if (availableHeight <= 0 || maxRow < CellAddress.MaxRow)
             return null;
 
+        if (CanSkipDefaultTerminalRowMetrics(sheet, requestedStartRow, availableHeight))
+            return null;
+
         var rows = new List<(uint Row, double Height)>();
         double totalHeight = 0;
         for (uint row = maxRow; row >= 1; row--)
@@ -196,6 +199,26 @@ public sealed partial class ViewportService
         return metrics;
     }
 
+    private static bool CanSkipDefaultTerminalRowMetrics(Sheet sheet, uint requestedStartRow, double availableHeight)
+    {
+        if (sheet.RowHeights.Count != 0
+            || sheet.HiddenRows.Count != 0
+            || sheet.FilterHiddenRows.Count != 0
+            || sheet.GroupHiddenRows.Count != 0
+            || sheet.DefaultRowHeight <= 0)
+        {
+            return false;
+        }
+
+        var visibleRowCount = Math.Ceiling(availableHeight / sheet.DefaultRowHeight);
+        if (!double.IsFinite(visibleRowCount) || visibleRowCount <= 0 || visibleRowCount >= CellAddress.MaxRow)
+            return false;
+
+        var firstTerminalRow = CellAddress.MaxRow - (uint)visibleRowCount + 1;
+        var terminalThreshold = firstTerminalRow > 1 ? firstTerminalRow - 1 : 1;
+        return requestedStartRow < terminalThreshold;
+    }
+
     private static List<ColMetric>? BuildTerminalColMetrics(
         Sheet sheet,
         uint requestedStartCol,
@@ -203,6 +226,9 @@ public sealed partial class ViewportService
         double availableWidth)
     {
         if (availableWidth <= 0 || maxCol < CellAddress.MaxCol)
+            return null;
+
+        if (CanSkipDefaultTerminalColMetrics(sheet, requestedStartCol, availableWidth))
             return null;
 
         var columns = new List<(uint Col, double Width)>();
@@ -240,5 +266,25 @@ public sealed partial class ViewportService
         }
 
         return metrics;
+    }
+
+    private static bool CanSkipDefaultTerminalColMetrics(Sheet sheet, uint requestedStartCol, double availableWidth)
+    {
+        var defaultWidthPixels = sheet.DefaultColumnWidth * 8;
+        if (sheet.ColumnWidths.Count != 0
+            || sheet.HiddenCols.Count != 0
+            || sheet.GroupHiddenCols.Count != 0
+            || defaultWidthPixels <= 0)
+        {
+            return false;
+        }
+
+        var visibleColumnCount = Math.Ceiling(availableWidth / defaultWidthPixels);
+        if (!double.IsFinite(visibleColumnCount) || visibleColumnCount <= 0 || visibleColumnCount >= CellAddress.MaxCol)
+            return false;
+
+        var firstTerminalColumn = CellAddress.MaxCol - (uint)visibleColumnCount + 1;
+        var terminalThreshold = firstTerminalColumn > 1 ? firstTerminalColumn - 1 : 1;
+        return requestedStartCol < terminalThreshold;
     }
 }

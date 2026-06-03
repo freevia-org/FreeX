@@ -507,6 +507,16 @@ internal static class ExcelOpenSmoke
             workbook.Sheets.Sum(sheet => sheet.CellCount),
             workbook.Sheets.Sum(sheet => sheet.FormulaCellCount),
             workbook.Sheets.Sum(sheet => sheet.StructuredTables.Count),
+            workbook.Sheets.Sum(sheet => sheet.DataValidations.Count),
+            workbook.Sheets.Sum(sheet => sheet.ConditionalFormats.Count),
+            workbook.Sheets.Sum(sheet => sheet.Hyperlinks.Count),
+            workbook.Sheets.Sum(sheet => sheet.Comments.Count + sheet.ThreadedComments.Count),
+            workbook.Sheets.Sum(sheet => sheet.Pictures.Count),
+            workbook.Sheets.Sum(sheet => sheet.Sparklines.Count),
+            workbook.Sheets.Sum(sheet => sheet.TextBoxes.Count),
+            workbook.Sheets.Sum(sheet => sheet.DrawingShapes.Count),
+            workbook.Sheets.Count(sheet => sheet.IsProtected),
+            workbook.IsStructureProtected ? 1 : 0,
             workbook.Sheets.Sum(sheet => sheet.PivotTables.Count),
             workbook.PivotCaches.Count);
 
@@ -609,20 +619,26 @@ internal static class ExcelOpenSmoke
         if (fileName.Contains("grid_formulas", StringComparison.OrdinalIgnoreCase))
             return FormulaExpectations(saveReopen, expectFreeXPreSave, minFormulaCells: 4);
 
+        if (fileName.Contains("validation_cf", StringComparison.OrdinalIgnoreCase))
+            return ValidationCfExpectations(saveReopen, expectFreeXPreSave);
+
         if (fileName.Contains("tables", StringComparison.OrdinalIgnoreCase))
             return StructuredTableExpectations(saveReopen, expectFreeXPreSave, minStructuredTables: 1);
 
         if (fileName.Contains("objects_links", StringComparison.OrdinalIgnoreCase))
-            return ShapeExpectations(saveReopen, minShapes: 1);
+            return ObjectsLinksExpectations(saveReopen, expectFreeXPreSave);
 
         if (fileName.Contains("images_sparklines", StringComparison.OrdinalIgnoreCase))
-            return ShapeExpectations(saveReopen, minShapes: 1);
+            return ImagesSparklinesExpectations(saveReopen, expectFreeXPreSave);
 
         if (fileName.Contains("shapes_text", StringComparison.OrdinalIgnoreCase))
-            return ShapeExpectations(saveReopen, minShapes: 2);
+            return ShapesTextExpectations(saveReopen, expectFreeXPreSave);
 
         if (fileName.Contains("pivots", StringComparison.OrdinalIgnoreCase))
             return PivotTableExpectations(saveReopen, expectFreeXPreSave);
+
+        if (fileName.Contains("protection_page", StringComparison.OrdinalIgnoreCase))
+            return ProtectionPageExpectations(saveReopen, expectFreeXPreSave);
 
         return null;
     }
@@ -631,6 +647,11 @@ internal static class ExcelOpenSmoke
         new(
             MinFreeXPreSaveFormulaCells: 1,
             MinFreeXPreSaveStructuredTables: 1,
+            MinFreeXPreSaveDataValidations: 1,
+            MinFreeXPreSaveConditionalFormats: 1,
+            MinFreeXPreSaveHyperlinks: 1,
+            MinFreeXPreSaveComments: 1,
+            MinFreeXPreSaveTextBoxes: 1,
             MinExcelOpenedFormulaCells: 1,
             MinExcelOpenedStructuredTables: 1,
             MinExcelOpenedShapes: 2,
@@ -639,6 +660,11 @@ internal static class ExcelOpenSmoke
             MinExcelReopenedShapes: saveReopen ? 2 : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? 1 : 0,
             MinFreeXReopenedStructuredTables: saveReopen ? 1 : 0,
+            MinFreeXReopenedDataValidations: saveReopen ? 1 : 0,
+            MinFreeXReopenedConditionalFormats: saveReopen ? 1 : 0,
+            MinFreeXReopenedHyperlinks: saveReopen ? 1 : 0,
+            MinFreeXReopenedComments: saveReopen ? 1 : 0,
+            MinFreeXReopenedTextBoxes: saveReopen ? 1 : 0,
             MinFreeXPreSavePivotTables: 1,
             MinFreeXPreSavePivotCaches: 1,
             MinExcelOpenedPivotTables: 1,
@@ -656,6 +682,13 @@ internal static class ExcelOpenSmoke
             MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? minFormulaCells : 0);
 
+    private static WorkbookSmokeExpectations ValidationCfExpectations(bool saveReopen, bool expectFreeXPreSave) =>
+        new(
+            MinFreeXPreSaveDataValidations: expectFreeXPreSave ? 3 : 0,
+            MinFreeXPreSaveConditionalFormats: expectFreeXPreSave ? 4 : 0,
+            MinFreeXReopenedDataValidations: saveReopen ? 3 : 0,
+            MinFreeXReopenedConditionalFormats: saveReopen ? 4 : 0);
+
     private static WorkbookSmokeExpectations StructuredTableExpectations(
         bool saveReopen,
         bool expectFreeXPreSave,
@@ -670,6 +703,40 @@ internal static class ExcelOpenSmoke
         new(
             MinExcelOpenedShapes: minShapes,
             MinExcelReopenedShapes: saveReopen ? minShapes : 0);
+
+    private static WorkbookSmokeExpectations ObjectsLinksExpectations(bool saveReopen, bool expectFreeXPreSave) =>
+        new(
+            MinFreeXPreSaveHyperlinks: expectFreeXPreSave ? 3 : 0,
+            MinFreeXPreSaveComments: expectFreeXPreSave ? 1 : 0,
+            MinExcelOpenedShapes: 1,
+            MinExcelReopenedShapes: saveReopen ? 1 : 0,
+            MinFreeXReopenedHyperlinks: saveReopen ? 3 : 0,
+            MinFreeXReopenedComments: saveReopen ? 1 : 0);
+
+    private static WorkbookSmokeExpectations ImagesSparklinesExpectations(bool saveReopen, bool expectFreeXPreSave) =>
+        new(
+            MinFreeXPreSavePictures: expectFreeXPreSave ? 1 : 0,
+            MinFreeXPreSaveSparklines: expectFreeXPreSave ? 2 : 0,
+            MinExcelOpenedShapes: 1,
+            MinExcelReopenedShapes: saveReopen ? 1 : 0,
+            MinFreeXReopenedPictures: saveReopen ? 1 : 0,
+            MinFreeXReopenedSparklines: saveReopen ? 2 : 0);
+
+    private static WorkbookSmokeExpectations ShapesTextExpectations(bool saveReopen, bool expectFreeXPreSave) =>
+        new(
+            MinFreeXPreSaveTextBoxes: expectFreeXPreSave ? 1 : 0,
+            MinFreeXPreSaveDrawingShapes: expectFreeXPreSave ? 1 : 0,
+            MinExcelOpenedShapes: 2,
+            MinExcelReopenedShapes: saveReopen ? 2 : 0,
+            MinFreeXReopenedTextBoxes: saveReopen ? 1 : 0,
+            MinFreeXReopenedDrawingShapes: saveReopen ? 1 : 0);
+
+    private static WorkbookSmokeExpectations ProtectionPageExpectations(bool saveReopen, bool expectFreeXPreSave) =>
+        new(
+            MinFreeXPreSaveProtectedSheets: expectFreeXPreSave ? 1 : 0,
+            MinFreeXPreSaveStructureProtection: expectFreeXPreSave ? 1 : 0,
+            MinFreeXReopenedProtectedSheets: saveReopen ? 1 : 0,
+            MinFreeXReopenedStructureProtection: saveReopen ? 1 : 0);
 
     private static WorkbookSmokeExpectations PivotTableExpectations(bool saveReopen, bool expectFreeXPreSave) =>
         new(
@@ -701,6 +768,7 @@ internal static class ExcelOpenSmoke
             freeXPreSave?.StructuredTableCount,
             expectations.MinFreeXPreSaveStructuredTables,
             input);
+        AssertFreeXMetadataExpectations("FreeX source load", freeXPreSave, expectations, input, preSave: true);
         AssertMin(
             "Excel open formula cells",
             opened.FormulaCellCount,
@@ -741,6 +809,7 @@ internal static class ExcelOpenSmoke
             freeXReopenedExcelSave?.StructuredTableCount,
             expectations.MinFreeXReopenedStructuredTables,
             input);
+        AssertFreeXMetadataExpectations("FreeX reopened Excel save", freeXReopenedExcelSave, expectations, input, preSave: false);
         AssertMin(
             "FreeX source load pivot tables",
             freeXPreSave?.PivotTableCount,
@@ -770,6 +839,65 @@ internal static class ExcelOpenSmoke
             "FreeX reopened Excel save pivot caches",
             freeXReopenedExcelSave?.PivotCacheCount,
             expectations.MinFreeXReopenedPivotCaches,
+            input);
+    }
+
+    private static void AssertFreeXMetadataExpectations(
+        string label,
+        FreeXWorkbookSummary? summary,
+        WorkbookSmokeExpectations expectations,
+        WorkbookSmokeInput input,
+        bool preSave)
+    {
+        AssertMin(
+            $"{label} data validations",
+            summary?.DataValidationCount,
+            preSave ? expectations.MinFreeXPreSaveDataValidations : expectations.MinFreeXReopenedDataValidations,
+            input);
+        AssertMin(
+            $"{label} conditional formats",
+            summary?.ConditionalFormatCount,
+            preSave ? expectations.MinFreeXPreSaveConditionalFormats : expectations.MinFreeXReopenedConditionalFormats,
+            input);
+        AssertMin(
+            $"{label} hyperlinks",
+            summary?.HyperlinkCount,
+            preSave ? expectations.MinFreeXPreSaveHyperlinks : expectations.MinFreeXReopenedHyperlinks,
+            input);
+        AssertMin(
+            $"{label} comments",
+            summary?.CommentCount,
+            preSave ? expectations.MinFreeXPreSaveComments : expectations.MinFreeXReopenedComments,
+            input);
+        AssertMin(
+            $"{label} pictures",
+            summary?.PictureCount,
+            preSave ? expectations.MinFreeXPreSavePictures : expectations.MinFreeXReopenedPictures,
+            input);
+        AssertMin(
+            $"{label} sparklines",
+            summary?.SparklineCount,
+            preSave ? expectations.MinFreeXPreSaveSparklines : expectations.MinFreeXReopenedSparklines,
+            input);
+        AssertMin(
+            $"{label} text boxes",
+            summary?.TextBoxCount,
+            preSave ? expectations.MinFreeXPreSaveTextBoxes : expectations.MinFreeXReopenedTextBoxes,
+            input);
+        AssertMin(
+            $"{label} drawing shapes",
+            summary?.DrawingShapeCount,
+            preSave ? expectations.MinFreeXPreSaveDrawingShapes : expectations.MinFreeXReopenedDrawingShapes,
+            input);
+        AssertMin(
+            $"{label} protected sheets",
+            summary?.ProtectedSheetCount,
+            preSave ? expectations.MinFreeXPreSaveProtectedSheets : expectations.MinFreeXReopenedProtectedSheets,
+            input);
+        AssertMin(
+            $"{label} structure protection",
+            summary?.StructureProtectionCount,
+            preSave ? expectations.MinFreeXPreSaveStructureProtection : expectations.MinFreeXReopenedStructureProtection,
             input);
     }
 
@@ -812,10 +940,7 @@ internal static class ExcelOpenSmoke
             Console.WriteLine($"  Excel saved: {result.ExcelSavedPath}");
 
         if (result.FreeXPreSave is { } freeXPreSave)
-        {
-            Console.WriteLine(
-                $"  FreeX source load: sheets {freeXPreSave.SheetCount}; cells {freeXPreSave.CellCount}; formulas {freeXPreSave.FormulaCellCount}; tables {freeXPreSave.StructuredTableCount}; pivots {freeXPreSave.PivotTableCount}; pivot caches {freeXPreSave.PivotCacheCount}");
-        }
+            WriteFreeXSummary("FreeX source load", freeXPreSave);
 
         if (result.Opened is { } opened)
         {
@@ -828,13 +953,18 @@ internal static class ExcelOpenSmoke
                 $"  Excel reopen: worksheets {reopened.WorksheetCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
         }
         if (result.FreeXReopenedExcelSave is { } freeXReopened)
-        {
-            Console.WriteLine(
-                $"  FreeX reopened Excel save: sheets {freeXReopened.SheetCount}; cells {freeXReopened.CellCount}; formulas {freeXReopened.FormulaCellCount}; tables {freeXReopened.StructuredTableCount}; pivots {freeXReopened.PivotTableCount}; pivot caches {freeXReopened.PivotCacheCount}");
-        }
+            WriteFreeXSummary("FreeX reopened Excel save", freeXReopened);
 
         if (!result.Success)
             Console.WriteLine($"  Error: {result.Error}");
+    }
+
+    private static void WriteFreeXSummary(string label, FreeXWorkbookSummary summary)
+    {
+        Console.WriteLine(
+            $"  {label}: sheets {summary.SheetCount}; cells {summary.CellCount}; formulas {summary.FormulaCellCount}; tables {summary.StructuredTableCount}; pivots {summary.PivotTableCount}; pivot caches {summary.PivotCacheCount}");
+        Console.WriteLine(
+            $"  {label} metadata: validations {summary.DataValidationCount}; conditional formats {summary.ConditionalFormatCount}; hyperlinks {summary.HyperlinkCount}; comments {summary.CommentCount}; pictures {summary.PictureCount}; sparklines {summary.SparklineCount}; text boxes {summary.TextBoxCount}; drawing shapes {summary.DrawingShapeCount}; protected sheets {summary.ProtectedSheetCount}; structure protection {summary.StructureProtectionCount}");
     }
 
     private static string FormatWorkflow(WorkbookValidationWorkflow workflow) =>
