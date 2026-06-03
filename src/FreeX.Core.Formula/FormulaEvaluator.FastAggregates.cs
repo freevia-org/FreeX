@@ -538,12 +538,27 @@ public sealed partial class FormulaEvaluator
                     : FastAggregateRangeResolution.Error;
             }
 
+            var startRow = Math.Min(indirectRange.StartRow, indirectRange.EndRow);
+            var startCol = Math.Min(indirectRange.StartCol, indirectRange.EndCol);
+            var endRow = Math.Max(indirectRange.StartRow, indirectRange.EndRow);
+            var endCol = Math.Max(indirectRange.StartCol, indirectRange.EndCol);
+
+            if ((indirectRange.IsFullColumnRange || indirectRange.IsFullRowRange) &&
+                kind != FastAggregateKind.CountBlank)
+            {
+                if (!TryClampFullRangeToUsed(indirectRange.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
+                {
+                    range = new FastAggregateRange(indirectRange.SheetName, 1, 1, 0, 0);
+                    return FastAggregateRangeResolution.Range;
+                }
+            }
+
             var resolvedRange = new FastAggregateRange(
                 indirectRange.SheetName,
-                Math.Min(indirectRange.StartRow, indirectRange.EndRow),
-                Math.Min(indirectRange.StartCol, indirectRange.EndCol),
-                Math.Max(indirectRange.StartRow, indirectRange.EndRow),
-                Math.Max(indirectRange.StartCol, indirectRange.EndCol));
+                startRow,
+                startCol,
+                endRow,
+                endCol);
 
             if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
                 return FastAggregateRangeResolution.Error;
