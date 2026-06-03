@@ -247,6 +247,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("SheetTabsOverlayLayer.Children.Add(CreateSheetTabPath(");
         source.Should().Contain("CreateSheetTabTopRuleGeometry");
         source.Should().Contain("CreateActiveSheetTabContourGeometry");
+        source.Should().Contain("CreateInactiveSheetTabFillGeometry");
         source.Should().Contain("tabClipGeometry");
         source.Should().NotContain("CreateActiveSheetTabGridRuleGeometry");
         source.Should().NotContain("CreateActiveSheetTabTopScrubGeometry");
