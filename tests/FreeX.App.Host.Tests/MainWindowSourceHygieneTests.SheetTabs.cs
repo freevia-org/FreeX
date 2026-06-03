@@ -239,8 +239,9 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("MeasureRightClippedSheetTabWidth");
         source.Should().Contain("TryGetSheetTabViewportBounds");
         source.Should().Contain("Canvas.SetLeft(");
-        source.Should().Contain("CreateActiveSheetTabTopScrubGeometry(active)");
+        source.Should().Contain("context.BeginFigure(new Point(left + sideInset, sideTop)");
         source.Should().Contain("SheetTabsOverlayLayer.Children.Add(CreateSheetTabPath(");
+        source.Should().NotContain("CreateActiveSheetTabTopScrubGeometry");
         source.Should().NotContain("activeTop.Left");
         source.Should().NotContain("activeTop.Right");
         xaml.Should().NotContain("x:Name=\"SheetTabsTrailingScrollSpacer\"");

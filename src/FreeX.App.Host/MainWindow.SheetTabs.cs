@@ -590,13 +590,6 @@ public partial class MainWindow
                 tabClipGeometry,
                 1));
             RenderSheetTabsOverlay(activeRect, accentBrush);
-            SheetTabsOverlayLayer.Children.Add(CreateSheetTabPath(
-                CreateActiveSheetTabTopScrubGeometry(active),
-                activeFillBrush,
-                null,
-                0,
-                tabClipGeometry,
-                1));
             return;
         }
 
@@ -881,17 +874,6 @@ public partial class MainWindow
         return geometry;
     }
 
-    private static Geometry CreateActiveSheetTabTopScrubGeometry(Rect tab)
-    {
-        var geometry = new RectangleGeometry(new Rect(
-            tab.Left - 0.5,
-            SheetTabGridRuleTop - 4.0,
-            Math.Max(0, tab.Width + 1.0),
-            7.0));
-        geometry.Freeze();
-        return geometry;
-    }
-
     private static Geometry CreateSheetTabOutlineGeometry(Rect tab, bool drawLeft, bool drawRight)
     {
         const double top = SheetTabGridRuleTop;
@@ -911,8 +893,7 @@ public partial class MainWindow
         {
             if (drawLeft)
             {
-                context.BeginFigure(new Point(left, top), false, false);
-                context.BezierTo(new Point(left + sideInset, top), new Point(left + sideInset, sideTop), new Point(left + sideInset, sideTop), true, true);
+                context.BeginFigure(new Point(left + sideInset, sideTop), false, false);
                 context.LineTo(new Point(left + sideInset, sideBottom), true, true);
                 context.BezierTo(new Point(left + sideInset, sideBottomControl), new Point(left + bottomInset - 2, bottom), new Point(bottomStart, bottom), true, true);
             }
@@ -927,7 +908,6 @@ public partial class MainWindow
             {
                 context.BezierTo(new Point(right - bottomInset + 2, bottom), new Point(right - sideInset, sideBottomControl), new Point(right - sideInset, sideBottom), true, true);
                 context.LineTo(new Point(right - sideInset, sideTop), true, true);
-                context.BezierTo(new Point(right - sideInset, sideTop), new Point(right - sideInset, top), new Point(right, top), true, true);
             }
         }
 
