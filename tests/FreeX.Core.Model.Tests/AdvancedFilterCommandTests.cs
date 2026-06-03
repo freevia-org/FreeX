@@ -419,6 +419,7 @@ public sealed class AdvancedFilterCommandTests
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
         copiedRows.Should().Be(2240);
+        allocatedBytes.Should().BeLessThan(3_500_000);
         Console.WriteLine(
             "PERF ADVANCED_FILTER_COPY_UNIQUE_DENSE " +
             $"rows={rows} cols={cols} steps={steps} " +
@@ -428,6 +429,15 @@ public sealed class AdvancedFilterCommandTests
             $"p95_ms={timings.OrderBy(x => x).ElementAt((int)Math.Ceiling(steps * 0.95) - 1):F2} " +
             $"max_ms={timings.Max():F2} " +
             $"allocated_bytes={allocatedBytes}");
+    }
+
+    [Fact]
+    public void CommandGuards_CanEditCell_AvoidsCapturedAllowEditRangePredicate()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "CommandGuards.cs"));
+
+        source.Should().NotContain("AllowEditRanges.Any(");
+        source.Should().Contain("foreach (var range in sheet.AllowEditRanges)");
     }
 
     private static (Workbook Wb, Sheet Sheet, ICommandContext Ctx) Setup()
@@ -549,6 +559,21 @@ public sealed class AdvancedFilterCommandTests
     private static CellAddress Addr(Sheet sheet, uint row, uint col) => new(sheet.Id, row, col);
     private static void Set(Sheet sheet, uint row, uint col, string text) => sheet.SetCell(Addr(sheet, row, col), new TextValue(text));
     private static void Set(Sheet sheet, uint row, uint col, double number) => sheet.SetCell(Addr(sheet, row, col), new NumberValue(number));
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine([dir, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
+    }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {

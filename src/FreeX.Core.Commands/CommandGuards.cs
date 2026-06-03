@@ -35,8 +35,11 @@ internal static class CommandGuards
         if (!sheet.IsProtected)
             return true;
 
-        if (sheet.AllowEditRanges.Any(range => range.Contains(address)))
-            return true;
+        foreach (var range in sheet.AllowEditRanges)
+        {
+            if (range.Contains(address))
+                return true;
+        }
 
         var current = sheet.GetCell(address);
         var styleId = current?.StyleId
