@@ -271,6 +271,12 @@ public partial class ConditionalFormatTests
     }
 
     [Fact]
+    public void ConditionalFormatIcon_IsValueTypedToAvoidPerCellIconAllocations()
+    {
+        typeof(ConditionalFormatIcon).IsValueType.Should().BeTrue();
+    }
+
+    [Fact]
     public void ConditionalFormatAggregates_DoNotEnumerateEveryCellInLargeAppliesToRanges()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
