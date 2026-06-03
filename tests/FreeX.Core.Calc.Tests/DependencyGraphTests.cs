@@ -77,14 +77,14 @@ public class DependencyGraphTests
             "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
         var afterPlan = source[
             source.IndexOf("var plan = _graph.GetRecalcOrder(changedForTraversal);", StringComparison.Ordinal)..
-            source.IndexOf("var recalculated = new List<CellAddress>();", StringComparison.Ordinal)];
+            source.IndexOf("var recalculatedCount = 0;", StringComparison.Ordinal)];
 
         afterPlan.Should().Contain("plan.OrderedCells.Count == 0");
         afterPlan.Should().Contain("plan.CyclicCells.Count == 0");
         afterPlan.Should().Contain("_volatileCells.Count == 0");
         afterPlan.Should().Contain("changedFormulaCells is null");
         afterPlan.Should().Contain("return EmptyReport;");
-        source.Should().Contain("private static List<CellAddress>? CollectChangedFormulaCells");
+        source.Should().Contain("private static IReadOnlyList<CellAddress>? CollectChangedFormulaCells");
         source.Should().NotContain("changedCells.Where");
 
         var workbook = new Workbook();

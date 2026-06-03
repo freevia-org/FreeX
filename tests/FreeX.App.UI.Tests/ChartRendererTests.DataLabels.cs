@@ -292,6 +292,22 @@ public sealed partial class ChartRendererTests
     }
 
     [Fact]
+    public void DataLabelFormatLookups_UseReverseScansWithoutLinqPredicates()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.SeriesFormatting.cs"));
+        var seriesLookup = source[
+            source.IndexOf("private static ChartSeriesFormat? GetSeriesFormat", StringComparison.Ordinal)..
+            source.IndexOf("private static void ApplyLineFormat", StringComparison.Ordinal)];
+
+        seriesLookup.Should().Contain("for (var i = formats.Count - 1; i >= 0; i--)");
+        seriesLookup.Should().Contain("format.SeriesIndex == seriesIndex");
+        seriesLookup.Should().Contain("format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex");
+        seriesLookup.Should().NotContain("LastOrDefault");
+        seriesLookup.Should().NotContain(".Where(");
+    }
+
+    [Fact]
     public void PieRenderer_RotatesInsideDataLabelsWhenRotationIsRequested()
     {
         var sheetId = SheetId.New();

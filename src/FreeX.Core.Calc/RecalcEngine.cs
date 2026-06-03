@@ -53,7 +53,9 @@ public sealed class RecalcEngine
             return EmptyReport;
         }
 
-        var recalculated = new List<CellAddress>();
+        var recalculatedCount = 0;
+        var singleRecalculated = default(CellAddress);
+        List<CellAddress>? recalculated = null;
         List<(CellAddress Cell, string Error)>? errors = null;
         List<CellAddress>? cyclicCells = null;
         HashSet<CellAddress>? seenCyclicCells = null;
@@ -129,14 +131,14 @@ public sealed class RecalcEngine
                     {
                         cell.Value = rv.Cells[0, 0];
                         sheet.SetSpillRange(addr, rv);
-                        recalculated.Add(addr);
+                        AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                     }
                 }
                 else
                 {
                     sheet.ClearSpillRange(addr);
                     cell.Value = result;
-                    recalculated.Add(addr);
+                    AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
             }
             catch (FormulaParseException)
@@ -167,7 +169,10 @@ public sealed class RecalcEngine
             }
         }
 
-        return new RecalcReport(recalculated, errors ?? EmptyErrors, cyclicCells ?? EmptyCells);
+        return new RecalcReport(
+            BuildRecalculatedCells(recalculatedCount, singleRecalculated, recalculated),
+            errors ?? EmptyErrors,
+            cyclicCells ?? EmptyCells);
     }
 
     private IEnumerable<CellAddress> BuildChangedSetForTraversal(IReadOnlyList<CellAddress> changedCells)
@@ -183,8 +188,15 @@ public sealed class RecalcEngine
         return allChanged;
     }
 
-    private static List<CellAddress>? CollectChangedFormulaCells(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
+    private static IReadOnlyList<CellAddress>? CollectChangedFormulaCells(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
     {
+        if (changedCells.Count == 1)
+        {
+            var addr = changedCells[0];
+            var sheet = workbook.GetSheet(addr.Sheet);
+            return sheet?.GetCell(addr)?.HasFormula == true ? changedCells : null;
+        }
+
         List<CellAddress>? formulaCells = null;
         for (var i = 0; i < changedCells.Count; i++)
         {
@@ -200,9 +212,38 @@ public sealed class RecalcEngine
         return formulaCells;
     }
 
+    private static void AddRecalculatedCell(
+        ref int count,
+        ref CellAddress single,
+        ref List<CellAddress>? multiple,
+        CellAddress address)
+    {
+        if (count == 0)
+        {
+            single = address;
+            count = 1;
+            return;
+        }
+
+        multiple ??= new List<CellAddress>(4) { single };
+        multiple.Add(address);
+        count++;
+    }
+
+    private static IReadOnlyList<CellAddress> BuildRecalculatedCells(
+        int count,
+        CellAddress single,
+        List<CellAddress>? multiple) =>
+        count switch
+        {
+            0 => EmptyCells,
+            1 => [single],
+            _ => multiple!
+        };
+
     private static bool CanEvaluateChangedFormulaRootsDirectly(
         RecalcPlan dependencyPlan,
-        List<CellAddress>? changedFormulaCells,
+        IReadOnlyList<CellAddress>? changedFormulaCells,
         int volatileCellCount) =>
         volatileCellCount == 0 &&
         changedFormulaCells is { Count: > 0 } &&
