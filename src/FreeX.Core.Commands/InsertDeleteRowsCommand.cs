@@ -10,7 +10,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly uint _beforeRow;
     private readonly uint _count;
-    private List<(CellAddress Addr, Cell Snapshot)>? _movedSnapshot;
+    private List<CellStateSnapshot>? _movedSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
@@ -107,11 +107,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
-        foreach (var (addr, _) in _movedSnapshot)
-            sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row + _count, addr.Col));
+        foreach (var snapshot in _movedSnapshot)
+            sheet.ClearCell(new CellAddress(snapshot.Address.Sheet, snapshot.Address.Row + _count, snapshot.Address.Col));
 
-        foreach (var (addr, snapshot) in _movedSnapshot)
-            sheet.SetCell(addr, snapshot.Clone());
+        foreach (var snapshot in _movedSnapshot)
+            sheet.SetCell(snapshot.Address, snapshot.ToCell());
 
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.FilterHiddenRows, _beforeRow + _count, _count);
@@ -132,9 +132,9 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 
-    private (uint MaxOccupied, List<(CellAddress Addr, Cell Snapshot)> Moved) CaptureMovedCells(Sheet sheet)
+    private (uint MaxOccupied, List<CellStateSnapshot> Moved) CaptureMovedCells(Sheet sheet)
     {
-        var moved = new List<(CellAddress Addr, Cell Snapshot)>(sheet.CellCount);
+        var moved = new List<CellStateSnapshot>(sheet.CellCount);
         uint maxOccupied = 0;
 
         foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
@@ -145,7 +145,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             if (row > maxOccupied)
                 maxOccupied = row;
 
-            moved.Add((new CellAddress(sheet.Id, row, col), cell.Clone()));
+            moved.Add(CellStateSnapshot.Capture(new CellAddress(sheet.Id, row, col), cell));
         }
 
         return (maxOccupied, moved);
@@ -153,7 +153,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
     private static void MoveCellsForInsert(
         Sheet sheet,
-        IReadOnlyList<(CellAddress Addr, Cell Snapshot)> movedCells,
+        IReadOnlyList<CellStateSnapshot> movedCells,
         uint count)
     {
         if (movedCells.Count == 0)
@@ -163,14 +163,14 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         try
         {
             for (var i = 0; i < movedCells.Count; i++)
-                originals[i] = sheet.GetCell(movedCells[i].Addr)!;
+                originals[i] = sheet.GetCell(movedCells[i].Address)!;
 
             for (var i = 0; i < movedCells.Count; i++)
-                sheet.ClearCell(movedCells[i].Addr);
+                sheet.ClearCell(movedCells[i].Address);
 
             for (var i = 0; i < movedCells.Count; i++)
             {
-                var addr = movedCells[i].Addr;
+                var addr = movedCells[i].Address;
                 sheet.SetCell(new CellAddress(addr.Sheet, addr.Row + count, addr.Col), originals[i]);
             }
         }

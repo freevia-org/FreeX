@@ -96,32 +96,41 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
 
     public static void SaveIgnoredErrors(Stream packageStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap;
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true))
+            worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+
+        if (packageStream.CanSeek)
+            packageStream.Position = 0;
+
+        SaveIgnoredErrors(packageStream, workbook, worksheetPathMap);
+    }
+
+    public static void SaveIgnoredErrors(
+        Stream packageStream,
+        Workbook workbook,
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
+        if (worksheetPathMap is null)
             return;
 
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var sheetPaths = GetSheetPaths(archive, workbookEntry, workbookNs);
+        using var session = new XlsxWorksheetXmlEditSession(packageStream, worksheetPathMap);
+        SaveIgnoredErrors(session, workbook);
+    }
 
+    internal static void SaveIgnoredErrors(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         foreach (var sheet in workbook.Sheets)
         {
             var ignoredErrorRuns = BuildIgnoredErrorRuns(sheet);
             if (ignoredErrorRuns.Count == 0)
                 continue;
 
-            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
+            if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
+            var root = edit.Root;
             root.Element(workbookNs + "ignoredErrors")?.Remove();
             var ignoredErrors = new XElement(workbookNs + "ignoredErrors");
             foreach (var attribute in sheet.IgnoredErrorsMetadata?.NativeAttributes ?? [])
@@ -156,15 +165,25 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             }
 
             InsertWorksheetMetadataElementInOrder(root, workbookNs, ignoredErrors);
-
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            session.MarkDirty(edit);
         }
     }
 
     private static List<IgnoredErrorRun> BuildIgnoredErrorRuns(Sheet sheet)
     {
-        var ignoredCells = new List<CellAddress>();
-        foreach (var pair in sheet.GetOccupiedCellMap())
+        var occupiedCells = sheet.GetOccupiedCellMap();
+        var ignoredCellCount = 0;
+        foreach (var pair in occupiedCells)
+        {
+            if (pair.Value.IgnoreFormulaError)
+                ignoredCellCount++;
+        }
+
+        if (ignoredCellCount == 0)
+            return [];
+
+        var ignoredCells = new List<CellAddress>(ignoredCellCount);
+        foreach (var pair in occupiedCells)
         {
             if (!pair.Value.IgnoreFormulaError)
                 continue;
@@ -173,9 +192,6 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             ignoredCells.Add(new CellAddress(sheet.Id, row, col));
         }
 
-        if (ignoredCells.Count == 0)
-            return [];
-
         ignoredCells.Sort(static (left, right) =>
         {
             var rowCompare = left.Row.CompareTo(right.Row);
@@ -183,7 +199,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
         });
 
         var nativeAttributeLookup = IgnoredErrorNativeAttributeLookup.Create(sheet.IgnoredErrorsMetadata);
-        var runs = new List<IgnoredErrorRun>(Math.Min(ignoredCells.Count, 256));
+        var runs = new List<IgnoredErrorRun>(Math.Min(ignoredCells.Count, 1024));
         var first = ignoredCells[0];
         var currentRun = new IgnoredErrorRun(
             first.Row,

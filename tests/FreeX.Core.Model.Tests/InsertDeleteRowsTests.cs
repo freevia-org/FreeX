@@ -41,6 +41,44 @@ public class InsertDeleteRowsTests
     }
 
     [Fact]
+    public void InsertRowRevert_RestoresCapturedCellStateAfterShiftedCellMutates()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var style = wb.RegisterStyle(new CellStyle { Bold = true });
+        var cachedAst = new object();
+        var original = new Cell
+        {
+            Value = new NumberValue(100),
+            IgnoreFormulaError = true,
+            StyleId = style
+        };
+        original.FormulaText = "A1+1";
+        original.CachedAst = cachedAst;
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), original);
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3);
+
+        cmd.Apply(ctx).Success.Should().BeTrue();
+        var shifted = sheet.GetCell(4, 1)!;
+        shifted.Value = new TextValue("mutated");
+        shifted.FormulaText = null;
+        shifted.CachedAst = null;
+        shifted.IgnoreFormulaError = false;
+        shifted.StyleId = StyleId.Default;
+
+        cmd.Revert(ctx);
+
+        var restored = sheet.GetCell(3, 1)!;
+        restored.Should().NotBeSameAs(shifted);
+        restored.Value.Should().Be(new NumberValue(100));
+        restored.FormulaText.Should().Be("A1+1");
+        restored.CachedAst.Should().BeSameAs(cachedAst);
+        restored.IgnoreFormulaError.Should().BeTrue();
+        restored.StyleId.Should().Be(style);
+        sheet.GetCell(4, 1).Should().BeNull();
+    }
+
+    [Fact]
     public void InsertRow_ShiftsCustomRowHeightsAndUndoRestores()
     {
         var (_, sheet, ctx) = Setup();
