@@ -1,0 +1,145 @@
+using System.IO;
+using System.Windows.Input;
+using System.Xml.Linq;
+using FluentAssertions;
+using FreeX.App.Host;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed partial class MainWindowXamlKeyTipTests
+{
+    [Fact]
+    public void TitleBarWindowChrome_ExposesMinimizeMaximizeRestoreAndCloseButtons()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:FreeX.App.Host";
+
+        var systemButtons = document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute("Click")?.Value is "MinimizeBtn_Click" or "MaxRestoreBtn_Click" or "CloseSysBtn_Click")
+            .Select(button => new
+            {
+                Click = button.Attribute("Click")?.Value,
+                AutomationName = LocalizedAttribute(button, "AutomationProperties.Name"),
+                IconKind = button.Element(local + "RibbonIcon")?.Attribute("Kind")?.Value
+            })
+            .ToList();
+
+        systemButtons.Should().BeEquivalentTo(
+        [
+            new { Click = "MinimizeBtn_Click", AutomationName = "Minimize", IconKind = "WindowMinimize" },
+            new { Click = "MaxRestoreBtn_Click", AutomationName = "Maximize or Restore", IconKind = "WindowMaximize" },
+            new { Click = "CloseSysBtn_Click", AutomationName = "Close", IconKind = "WindowClose" }
+        ]);
+
+        source.Should().Contain("SystemCommands.MinimizeWindow(this)");
+        source.Should().Contain("SystemCommands.RestoreWindow(this)");
+        source.Should().Contain("SystemCommands.MaximizeWindow(this)");
+        source.Should().Contain("SystemCommands.CloseWindow(this)");
+    }
+
+    [Fact]
+    public void QuickAccessToolbar_BuildsPersistedCommandsWithKeyTipsAndSharedCommandRoutes()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var catalogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "QuickAccessToolbarCatalog.cs"));
+        var qatSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
+        var keyTipSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyTips.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CommandExecution.cs"));
+
+        xaml.Should().Contain("x:Name=\"TitleBarQatPanel\"");
+        xaml.Should().Contain("x:Name=\"BelowRibbonQatPanel\"");
+        catalogSource.Should().Contain("DefaultCommandIds");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.Save");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.Undo");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.Redo");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.Print");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.InsertFunction");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.NameManager");
+        qatSource.Should().Contain("RebuildQuickAccessToolbar()");
+        qatSource.Should().Contain("RibbonTooltip.SetKeyTip(button, FormatQuickAccessToolbarKeyTip(visibleIndex));");
+        qatSource.Should().Contain("AutomationProperties.SetAutomationId(button, command.AutomationId);");
+        qatSource.Should().Contain("RegisterName(command.AutomationId, button);");
+        qatSource.Should().Contain("ExecuteQuickAccessToolbarCommand(command.Id, button, args)");
+
+        keyTipSource.Should().Contain("private bool TryInvokeTopLevelQatKeyTip(string keyTip)");
+        keyTipSource.Should().Contain("GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)");
+        keyTipSource.Should().Contain("private IEnumerable<FrameworkElement> EnumerateKeyTipCandidateElements");
+        keyTipSource.Should().Contain("RibbonTabs.Items.OfType<TabItem>()");
+        keyTipSource.Should().Contain("EnumerateQuickAccessToolbarButtons()");
+        keyTipSource.Should().Contain("selectedTab.Content as DependencyObject ?? selectedTab");
+        keyTipSource.Should().Contain("if (!match.IsEnabled)");
+        keyTipSource.Should().Contain("match.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, match));");
+
+        backstageSource.Should().Contain("private async void SaveButton_Click(object sender, RoutedEventArgs e)");
+        backstageSource.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
+        backstageSource.Should().Contain("await SaveWorkbookToTargetAsync(target!)");
+        backstageSource.Should().Contain("await SaveWorkbookWithDialogAsync()");
+        backstageSource.Should().Contain("MarkWorkbookSaved()");
+        backstageSource.Should().Contain("UpdateTitleBar()");
+
+        qatSource.Should().Contain("case QuickAccessToolbarCommandIds.Undo:");
+        qatSource.Should().Contain("ExecuteUndo();");
+        qatSource.Should().Contain("case QuickAccessToolbarCommandIds.Redo:");
+        qatSource.Should().Contain("ExecuteRedo();");
+        commandSource.Should().Contain("_commandBus.Undo(_workbook.Id)");
+        commandSource.Should().Contain("_commandBus.Redo(_workbook.Id)");
+        commandSource.Should().Contain("RefreshToolbar()");
+    }
+
+    [Fact]
+    public void GreenSurfaceButtons_UseCustomHoverChromeInsteadOfNativeBlueHover()
+    {
+        var mainWindow = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "MainWindowResources.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        foreach (var buttonName in new[] { "StatusZoomOutButton", "StatusZoomInButton" })
+        {
+            var button = mainWindow
+                .Descendants(presentation + "Button")
+                .Single(element => element.Attribute(x + "Name")?.Value == buttonName);
+
+            button.Attribute("Style")?.Value.Should().Be("{StaticResource StatusBarZoomButtonStyle}");
+        }
+
+        static XElement ResourceStyle(XDocument document, XNamespace presentation, XNamespace x, string key) =>
+            document
+                .Descendants(presentation + "Style")
+                .Single(style => style.Attribute(x + "Key")?.Value == key);
+
+        foreach (var styleKey in new[] { "StatusBarZoomButtonStyle", "SysBtnStyle", "TitleBarQatButton" })
+        {
+            var style = ResourceStyle(resources, presentation, x, styleKey);
+
+            style
+                .Descendants(presentation + "ControlTemplate")
+                .Should()
+                .NotBeEmpty($"{styleKey} should not fall back to the native WPF button template");
+
+            style
+                .ToString(SaveOptions.DisableFormatting)
+                .Should()
+                .Contain("FreeXTitleBarHoverBrush", $"{styleKey} should use the green title/status hover color");
+        }
+
+        var closeStyle = ResourceStyle(resources, presentation, x, "CloseSysBtnStyle");
+        closeStyle.Attribute("BasedOn")?.Value.Should().Be("{StaticResource SysBtnStyle}");
+        closeStyle
+            .Descendants(presentation + "Trigger")
+            .Where(trigger => trigger.Attribute("Property")?.Value == "IsMouseOver")
+            .Should()
+            .BeEmpty("the close button should share the same title-bar hover chrome as the other green-surface buttons");
+
+        var greenSurfaceStyleText = string.Concat(
+            new[] { "StatusBarZoomButtonStyle", "SysBtnStyle", "TitleBarQatButton", "CloseSysBtnStyle" }
+                .Select(styleKey => ResourceStyle(resources, presentation, x, styleKey).ToString(SaveOptions.DisableFormatting)));
+
+        greenSurfaceStyleText.Should().NotContain("#0078", "green-surface hover should not use Windows blue accent colors");
+        greenSurfaceStyleText.Should().NotContain("SystemColors.Highlight", "green-surface hover should not use native highlight brushes");
+    }
+}
