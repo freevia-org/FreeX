@@ -16,6 +16,27 @@ public static class FileDialogFilterBuilder
         return BuildFilter(formats, includeAllSupported: false, includeAllFiles: false);
     }
 
+    public static int FindSaveFilterIndex(IEnumerable<IFileAdapter> adapters, string extension)
+    {
+        var normalizedExtension = FileFormatResolver.NormalizeExtension(extension);
+        if (normalizedExtension.Length == 0)
+            return 1;
+
+        var formats = GetFormats(adapters, static format => format.CanSave);
+        for (var i = 0; i < formats.Count; i++)
+        {
+            if (string.Equals(
+                FileFormatResolver.NormalizeExtension(formats[i].Extension),
+                normalizedExtension,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return i + 1;
+            }
+        }
+
+        return 1;
+    }
+
     public static IFileAdapter? FindOpenAdapter(
         IEnumerable<IFileAdapter> adapters,
         string extension,

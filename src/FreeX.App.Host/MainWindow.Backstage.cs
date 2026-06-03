@@ -706,11 +706,13 @@ public partial class MainWindow
     private async Task<bool> SaveWorkbookWithDialogAsync()
     {
         var filter = FileDialogFilterBuilder.BuildSaveFilter(_fileAdapters);
+        var defaultExt = ResolveSaveDialogDefaultExtension();
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = filter,
             FileName = _workbook.Name,
-            DefaultExt = ".xlsx",
+            DefaultExt = defaultExt,
+            FilterIndex = FileDialogFilterBuilder.FindSaveFilterIndex(_fileAdapters, defaultExt),
             AddExtension = true,
             OverwritePrompt = true
         };
@@ -726,6 +728,14 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    private string ResolveSaveDialogDefaultExtension()
+    {
+        var preferredExtension = FreeXOptions.NormalizeDefaultFormat(_options.DefaultFormat);
+        return FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, preferredExtension, out _) is null
+            ? FreeXOptions.XlsxDefaultFormat
+            : preferredExtension;
     }
 
     private async Task<bool> SaveWorkbookToTargetAsync(FileSaveTarget target)

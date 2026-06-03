@@ -45,6 +45,18 @@ public sealed class AppFileAdapterRegistrationTests
     }
 
     [Fact]
+    public void ConfigureServices_NativeFreexWorkbookAppearsInSaveFilter()
+    {
+        using var provider = BuildAppServices();
+        var adapters = provider.GetServices<IFileAdapter>().ToList();
+
+        FileDialogFilterBuilder.BuildSaveFilter(adapters)
+            .Should().Contain("FreeX Workbook (*.fxl)|*.fxl");
+        FileDialogFilterBuilder.FindSaveFilterIndex(adapters, FreeXOptions.FreeXWorkbookDefaultFormat)
+            .Should().Be(4);
+    }
+
+    [Fact]
     public void ConfigureServices_XmlSpreadsheetResolvesOpenAndSaveAdapters()
     {
         using var provider = BuildAppServices();
