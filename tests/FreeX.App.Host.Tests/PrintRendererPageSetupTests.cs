@@ -332,6 +332,47 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_PrintsVisibleChartBitmap()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Chart print");
+            var sheet = workbook.AddSheet("Sheet1");
+            PopulateChartSource(sheet);
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 20, 8));
+            sheet.Charts.Add(CreatePrintedChart(
+                sheet,
+                "Printable sales chart",
+                left: 24,
+                top: 24,
+                new CellColor(23, 180, 90)));
+            var hiddenChart = CreatePrintedChart(
+                sheet,
+                "Hidden sales chart",
+                left: 24,
+                top: 24,
+                new CellColor(210, 20, 90));
+            hiddenChart.IsVisible = false;
+            sheet.Charts.Add(hiddenChart);
+            sheet.Charts.Add(CreatePrintedChart(
+                sheet,
+                "Off-page sales chart",
+                left: 10000,
+                top: 10000,
+                new CellColor(25, 40, 230)));
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+
+            CountApproximateRgbPixels(page, 23, 180, 90).Should().BeGreaterThan(100);
+            CountApproximateRgbPixels(page, 210, 20, 90).Should().Be(0);
+            CountApproximateRgbPixels(page, 25, 40, 230).Should().Be(0);
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_BoundsLongCellTextOverlaysToVisiblePrintText()
     {
         StaTestRunner.Run(() =>
@@ -576,6 +617,46 @@ public sealed class PrintRendererPageSetupTests
         }
 
         return count;
+    }
+
+    private static void PopulateChartSource(Sheet sheet)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(14));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(11));
+    }
+
+    private static ChartModel CreatePrintedChart(
+        Sheet sheet,
+        string title,
+        double left,
+        double top,
+        CellColor fillColor)
+    {
+        return new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2)),
+            Title = title,
+            Left = left,
+            Top = top,
+            Width = 260,
+            Height = 180,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: fillColor,
+                    StrokeColor: fillColor)
+            ]
+        };
     }
 
     private static int CountApproximateRgbPixels(FrameworkElement page, byte expectedRed, byte expectedGreen, byte expectedBlue)

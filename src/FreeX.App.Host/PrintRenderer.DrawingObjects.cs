@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.UI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -8,6 +9,78 @@ namespace FreeX.App.Host;
 public static partial class PrintRenderer
 {
     private static readonly Typeface PrintedTextBoxTypeface = new("Segoe UI");
+
+    private static void DrawPrintedCharts(
+        DrawingContext dc,
+        ViewportModel viewport,
+        IReadOnlyList<ChartModel> charts,
+        WorkbookTheme workbookTheme,
+        IReadOnlyList<uint> bodyRows,
+        IReadOnlyList<uint> bodyColumns,
+        int rowPlanTitleCount,
+        int columnPlanTitleCount,
+        double gridLeft,
+        double gridTop,
+        double colWidth,
+        double rowHeight)
+    {
+        if (charts.Count == 0 || bodyRows.Count == 0 || bodyColumns.Count == 0)
+            return;
+
+        var bodyGridLeft = gridLeft + columnPlanTitleCount * colWidth;
+        var bodyGridTop = gridTop + rowPlanTitleCount * rowHeight;
+        var bodyGridRect = new Rect(
+            bodyGridLeft,
+            bodyGridTop,
+            bodyColumns.Count * colWidth,
+            bodyRows.Count * rowHeight);
+        var firstBodyColumn = bodyColumns[0];
+        var firstBodyRow = bodyRows[0];
+        var pageGridLeft = (firstBodyColumn - 1) * colWidth;
+        var pageGridTop = (firstBodyRow - 1) * rowHeight;
+        var pageGridRect = new Rect(
+            pageGridLeft,
+            pageGridTop,
+            bodyGridRect.Width,
+            bodyGridRect.Height);
+
+        dc.PushClip(new RectangleGeometry(bodyGridRect));
+        foreach (var chart in charts)
+        {
+            if (!ShouldPrintChart(chart, pageGridRect))
+                continue;
+
+            var image = ChartRenderer.Render(chart, viewport, workbookTheme);
+            if (image is null)
+                continue;
+
+            dc.DrawImage(
+                image,
+                new Rect(
+                    bodyGridLeft + chart.Left - pageGridLeft,
+                    bodyGridTop + chart.Top - pageGridTop,
+                    chart.Width,
+                    chart.Height));
+        }
+        dc.Pop();
+    }
+
+    private static bool ShouldPrintChart(ChartModel chart, Rect pageGridRect)
+    {
+        if (!chart.IsVisible ||
+            !double.IsFinite(chart.Left) ||
+            !double.IsFinite(chart.Top) ||
+            !double.IsFinite(chart.Width) ||
+            !double.IsFinite(chart.Height) ||
+            chart.Width <= 0 ||
+            chart.Height <= 0)
+        {
+            return false;
+        }
+
+        var chartRect = new Rect(chart.Left, chart.Top, chart.Width, chart.Height);
+        return chartRect.IntersectsWith(pageGridRect);
+    }
 
     private static void DrawPrintedTextBoxes(
         DrawingContext dc,
