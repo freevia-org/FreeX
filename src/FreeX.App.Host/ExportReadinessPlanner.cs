@@ -9,7 +9,7 @@ public sealed record ExportReadinessPlan(
 public static class ExportReadinessPlanner
 {
     private const string ExportOptionSummary =
-        "Options include page range, standard/minimum-size PDF quality, ignore print areas, document properties, PDF bookmarks/language/view choices, XPS routing, and open after publishing.";
+        "Options include page range, standard/minimum-size PDF quality, ignore print areas, document properties, PDF bookmarks/language/view choices, XPS routing with PDF-only choices called out, and open after publishing. PDF/A and tagged PDF are exposed as unsupported and rejected rather than emitted as normal PDFs.";
 
     public static ExportReadinessPlan Create(Workbook workbook, bool hasSelection = false)
     {
