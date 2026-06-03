@@ -190,19 +190,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         if (font is not null)
             changed |= NormalizeDifferentialFontOrder(font, workbookNs);
 
-        var orderedChildren = dxf.Elements()
-            .OrderBy(element => DifferentialStyleChildOrder(element, workbookNs))
-            .ToList();
-        if (orderedChildren.Count == 0)
-            return changed;
-
-        if (!dxf.Elements().Select(element => element.Name).SequenceEqual(orderedChildren.Select(element => element.Name)))
-        {
-            dxf.ReplaceNodes(orderedChildren);
-            changed = true;
-        }
-
-        return changed;
+        return NormalizeDifferentialStyleChildrenOrder(dxf, workbookNs) || changed;
     }
 
     private static int DifferentialStyleChildOrder(XElement element, XNamespace workbookNs) =>
@@ -218,17 +206,8 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     private static bool NormalizeDifferentialFontOrder(XElement font, XNamespace workbookNs)
     {
         var changed = XlsxFontNameSanitizer.SanitizeValAttribute(font.Element(workbookNs + "name"));
-        var orderedChildren = font.Elements()
-            .OrderBy(element => DifferentialFontChildOrder(element, workbookNs))
-            .ToList();
-        if (orderedChildren.Count == 0 ||
-            font.Elements().Select(element => element.Name).SequenceEqual(orderedChildren.Select(element => element.Name)))
-        {
-            return changed;
-        }
 
-        font.ReplaceNodes(orderedChildren);
-        return true;
+        return NormalizeDifferentialFontChildrenOrder(font, workbookNs) || changed;
     }
 
     private static int DifferentialFontChildOrder(XElement element, XNamespace workbookNs) =>
@@ -248,6 +227,89 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         element.Name == workbookNs + "family" ? 13 :
         element.Name == workbookNs + "scheme" ? 14 :
         90;
+
+    private static bool NormalizeDifferentialStyleChildrenOrder(XElement dxf, XNamespace workbookNs)
+    {
+        var previousOrder = int.MinValue;
+        foreach (var child in dxf.Elements())
+        {
+            var order = DifferentialStyleChildOrder(child, workbookNs);
+            if (order < previousOrder)
+            {
+                var children = CopyChildElements(dxf);
+                StableSortDifferentialStyleChildren(children, workbookNs);
+                dxf.ReplaceNodes(children);
+                return true;
+            }
+
+            previousOrder = order;
+        }
+
+        return false;
+    }
+
+    private static bool NormalizeDifferentialFontChildrenOrder(XElement font, XNamespace workbookNs)
+    {
+        var previousOrder = int.MinValue;
+        foreach (var child in font.Elements())
+        {
+            var order = DifferentialFontChildOrder(child, workbookNs);
+            if (order < previousOrder)
+            {
+                var children = CopyChildElements(font);
+                StableSortDifferentialFontChildren(children, workbookNs);
+                font.ReplaceNodes(children);
+                return true;
+            }
+
+            previousOrder = order;
+        }
+
+        return false;
+    }
+
+    private static List<XElement> CopyChildElements(XElement parent)
+    {
+        var children = new List<XElement>();
+        foreach (var child in parent.Elements())
+            children.Add(child);
+
+        return children;
+    }
+
+    private static void StableSortDifferentialStyleChildren(List<XElement> children, XNamespace workbookNs)
+    {
+        for (var index = 1; index < children.Count; index++)
+        {
+            var current = children[index];
+            var currentOrder = DifferentialStyleChildOrder(current, workbookNs);
+            var insertAt = index - 1;
+            while (insertAt >= 0 && DifferentialStyleChildOrder(children[insertAt], workbookNs) > currentOrder)
+            {
+                children[insertAt + 1] = children[insertAt];
+                insertAt--;
+            }
+
+            children[insertAt + 1] = current;
+        }
+    }
+
+    private static void StableSortDifferentialFontChildren(List<XElement> children, XNamespace workbookNs)
+    {
+        for (var index = 1; index < children.Count; index++)
+        {
+            var current = children[index];
+            var currentOrder = DifferentialFontChildOrder(current, workbookNs);
+            var insertAt = index - 1;
+            while (insertAt >= 0 && DifferentialFontChildOrder(children[insertAt], workbookNs) > currentOrder)
+            {
+                children[insertAt + 1] = children[insertAt];
+                insertAt--;
+            }
+
+            children[insertAt + 1] = current;
+        }
+    }
 
     private static bool IsModeledDifferentialStyleElement(string localName) =>
         localName is "font" or "numFmt" or "fill" or "alignment" or "border" or "protection";

@@ -305,4 +305,26 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             "workbook.Sheets.Any(",
             "source-package replay metadata save should avoid allocating a LINQ predicate iterator while checking page-setup metadata");
     }
+
+    [Fact]
+    public void AdvancedConditionalFormatDifferentialStyles_NormalizeOrderWithoutEagerLinqSort()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "XlsxAdvancedConditionalFormatWriter.DifferentialStyles.cs"));
+
+        source.Should().Contain("NormalizeDifferentialStyleChildrenOrder");
+        source.Should().Contain("NormalizeDifferentialFontChildrenOrder");
+        source.Should().Contain("StableSortDifferentialStyleChildren");
+        source.Should().NotContain(
+            ".OrderBy(",
+            "generated differential styles are emitted in schema order and should not pay eager LINQ sorting costs");
+        source.Should().NotContain(
+            ".SequenceEqual(",
+            "order normalization should use an allocation-free scan on the hot generated-style path");
+        source.Should().NotContain(
+            ".ToList()",
+            "order normalization should only copy child elements after it detects out-of-order native payloads");
+    }
 }
