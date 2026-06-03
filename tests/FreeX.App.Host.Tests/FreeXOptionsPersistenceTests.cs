@@ -64,6 +64,59 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         options.DefaultSheetCount.Should().Be(expectedSheetCount);
     }
 
+    [Theory]
+    [InlineData("", "Calibri")]
+    [InlineData("  Aptos  ", "Aptos")]
+    public void LoadFromPath_NormalizesDefaultFontName(
+        string persistedFontName,
+        string expectedFontName)
+    {
+        Directory.CreateDirectory(_tempDirectory);
+        var path = Path.Combine(_tempDirectory, "options.json");
+        File.WriteAllText(path, $$"""{ "DefaultFontName": "{{persistedFontName}}" }""");
+
+        var options = FreeXOptions.LoadFromPath(path);
+
+        options.DefaultFontName.Should().Be(expectedFontName);
+    }
+
+    [Theory]
+    [InlineData(0, 11)]
+    [InlineData(14, 14)]
+    [InlineData(500, 409)]
+    public void LoadFromPath_NormalizesDefaultFontSizeToSupportedRange(
+        int persistedFontSize,
+        int expectedFontSize)
+    {
+        Directory.CreateDirectory(_tempDirectory);
+        var path = Path.Combine(_tempDirectory, "options.json");
+        File.WriteAllText(path, $$"""{ "DefaultFontSize": {{persistedFontSize}} }""");
+
+        var options = FreeXOptions.LoadFromPath(path);
+
+        options.DefaultFontSize.Should().Be(expectedFontSize);
+    }
+
+    [Fact]
+    public void SaveToPath_NormalizesDefaultFontOptions()
+    {
+        Directory.CreateDirectory(_tempDirectory);
+        var path = Path.Combine(_tempDirectory, "options.json");
+        var options = new FreeXOptions
+        {
+            DefaultFontName = "  Aptos  ",
+            DefaultFontSize = 500
+        };
+
+        options.SaveToPath(path).Should().BeTrue();
+
+        options.DefaultFontName.Should().Be("Aptos");
+        options.DefaultFontSize.Should().Be(409);
+        var reloaded = FreeXOptions.LoadFromPath(path);
+        reloaded.DefaultFontName.Should().Be("Aptos");
+        reloaded.DefaultFontSize.Should().Be(409);
+    }
+
     [Fact]
     public void Save_WhenStorePathCannotBeWritten_ReturnsFalseWithObservableError()
     {

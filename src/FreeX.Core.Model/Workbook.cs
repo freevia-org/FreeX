@@ -247,6 +247,17 @@ public sealed class Workbook
         Name = name;
     }
 
+    public Workbook(string name, CellStyle defaultStyle)
+        : this(name)
+    {
+        ArgumentNullException.ThrowIfNull(defaultStyle);
+
+        var clone = defaultStyle.Clone();
+        _styles[0] = clone;
+        _styleIndex.Clear();
+        _styleIndex[clone] = 0;
+    }
+
     /// <summary>Add a new sheet with the given name. Returns the new sheet.</summary>
     public Sheet AddSheet(string name)
     {
