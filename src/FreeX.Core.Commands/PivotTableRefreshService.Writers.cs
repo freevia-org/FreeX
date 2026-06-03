@@ -140,7 +140,7 @@ public static partial class PivotTableRefreshService
 
         if (pivotTable.ShowColumnGrandTotals)
         {
-            sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue("Grand Total"));
+            sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue(GrandTotalCaption(pivotTable)));
             for (var index = 0; index < pivotTable.DataFields.Count; index++)
                 SetPivotValueCell(
                     workbook,
@@ -215,8 +215,9 @@ public static partial class PivotTableRefreshService
         {
             foreach (var dataField in pivotTable.DataFields)
             {
-                var caption = singleDataField ? "Grand Total" : $"Grand Total {dataField.Name}";
-                sheet.SetCell(new CellAddress(sheet.Id, start.Row, outputColumn), new TextValue(caption));
+                sheet.SetCell(
+                    new CellAddress(sheet.Id, start.Row, outputColumn),
+                    new TextValue(GrandTotalCaption(pivotTable, dataField, singleDataField)));
                 outputColumn++;
             }
         }
