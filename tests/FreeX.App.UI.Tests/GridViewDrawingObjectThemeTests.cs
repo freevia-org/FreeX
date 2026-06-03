@@ -347,6 +347,30 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectRendering_UsesThemeGlowForTextBoxesAndShapesOnly()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var textBoxThemeEffect = drawingObjects[
+            drawingObjects.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)];
+        var shapeThemeEffect = drawingObjects[
+            drawingObjects.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("public static DrawingObjectColors ResolveDrawingShapeColors", StringComparison.Ordinal)];
+
+        textBoxThemeEffect.Should().Contain("effect.HasGlow");
+        textBoxThemeEffect.Should().Contain("effect.GlowRadius");
+        textBoxThemeEffect.Should().Contain("effect.GlowColor ?? new CellColor(91, 155, 213)");
+        shapeThemeEffect.Should().Contain("effect.HasGlow");
+        shapeThemeEffect.Should().Contain("DrawShapeOutlineEffect(");
+        shapeThemeEffect.Should().Contain("effect.GlowRadius");
+        pictures.Should().NotContain("WorkbookThemeEffectStyle");
+        pictures.Should().NotContain("HasGlow");
+    }
+
+    [Fact]
     public void DrawingObjectRendering_UsesAuthoredGradientDirectionMetadata()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
