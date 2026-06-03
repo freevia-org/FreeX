@@ -29,6 +29,14 @@ internal static class XlsxFontNameSanitizer
         if (string.IsNullOrWhiteSpace(value))
             return FallbackFontName;
 
+        // Excel accepts any font name within its 31-character limit verbatim — including the quoted/CSS-style
+        // names Google Sheets exports (e.g. "Century Gothic") — and simply falls back to a default face when
+        // the family is not installed. Preserve such names exactly so they round-trip unchanged; only names
+        // that exceed the limit (which force a repair on open) are reduced to the first CSS family with
+        // surrounding quotes stripped, whitespace flattened, and truncated as a last resort.
+        if (value.Length <= MaxFontNameLength)
+            return value;
+
         var candidate = FirstFontFamily(value).Trim();
         if (candidate.Length >= 2 &&
             ((candidate[0] == '"' && candidate[^1] == '"') ||
