@@ -282,8 +282,7 @@ public static class XlsxFeatureInspector
         XDocument relationshipsXml;
         try
         {
-            using var stream = entry.Open();
-            relationshipsXml = XDocument.Load(stream);
+            relationshipsXml = XlsxPackageXmlEditor.LoadXml(entry);
         }
         catch
         {
@@ -420,8 +419,7 @@ public static class XlsxFeatureInspector
     {
         try
         {
-            using var stream = entry.Open();
-            var chartXml = XDocument.Load(stream);
+            var chartXml = XlsxPackageXmlEditor.LoadXml(entry);
             return XlsxChartPartReader.TryReadSupportedChart(chartXml, SheetId.New(), out _);
         }
         catch
@@ -438,8 +436,7 @@ public static class XlsxFeatureInspector
     {
         try
         {
-            using var stream = entry.Open();
-            var worksheetXml = XDocument.Load(stream);
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
             return worksheetXml
                 .Descendants()
                 .Any(element => string.Equals(element.Name.LocalName, "sparklineGroups", StringComparison.OrdinalIgnoreCase));
@@ -475,8 +472,7 @@ public static class XlsxFeatureInspector
     {
         try
         {
-            using var stream = entry.Open();
-            var xml = XDocument.Load(stream);
+            var xml = XlsxPackageXmlEditor.LoadXml(entry);
             return xml.Descendants().Any(predicate);
         }
         catch
@@ -502,8 +498,7 @@ public static class XlsxFeatureInspector
     {
         try
         {
-            using var stream = entry.Open();
-            var propertiesXml = XDocument.Load(stream);
+            var propertiesXml = XlsxPackageXmlEditor.LoadXml(entry);
             XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
 
             return propertiesXml

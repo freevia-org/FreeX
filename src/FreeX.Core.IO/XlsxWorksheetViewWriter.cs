@@ -146,8 +146,7 @@ internal static class XlsxWorksheetViewWriter
 
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageXmlEditor.LoadXml(entry);
     }
 
     private static bool SetAttributeIfDifferent(XElement element, XName name, string? value)

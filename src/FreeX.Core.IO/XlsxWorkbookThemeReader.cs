@@ -45,8 +45,7 @@ public static class XlsxWorkbookThemeReader
             if (themeEntry is null)
                 return WorkbookTheme.Office;
 
-            using var entryStream = themeEntry.Open();
-            var themeXml = XDocument.Load(entryStream);
+            var themeXml = XlsxPackageXmlEditor.LoadXml(themeEntry);
             return Read(themeXml);
         }
         catch
