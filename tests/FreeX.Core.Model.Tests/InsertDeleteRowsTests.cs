@@ -825,6 +825,23 @@ public class InsertDeleteRowsTests
         source.Should().NotContain("sheet.RowPageBreaks.ToList()");
     }
 
+    [Fact]
+    public void InsertRowsCommand_UsesCompactMetadataSnapshotsForUndo()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src",
+            "FreeX.Core.Commands",
+            "InsertDeleteRowsCommand.cs"));
+
+        source.Should().Contain("private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;");
+        source.Should().Contain("CaptureDictionary(sheet.RowHeights)");
+        source.Should().Contain("CaptureDictionary(sheet.Comments)");
+        source.Should().Contain("CaptureSortedSet(sheet.RowPageBreaks)");
+        source.Should().NotContain("new Dictionary<uint, double>(sheet.RowHeights)");
+        source.Should().NotContain("new Dictionary<CellAddress, string>(sheet.Comments)");
+        source.Should().NotContain("sheet.RowPageBreaks.ToList()");
+    }
+
     private const int DenseShiftRows = 500;
     private const int DenseShiftColumns = 80;
     private const uint DenseShiftBeforeRow = 2;
