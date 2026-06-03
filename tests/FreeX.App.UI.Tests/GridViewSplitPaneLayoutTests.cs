@@ -1217,26 +1217,26 @@ public sealed class GridViewSplitPaneLayoutTests
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "FormulaTraceLayoutPlanner.cs"));
-        var rowLookup = source[
-            source.IndexOf("private static RowMetric? FindRowMetric", StringComparison.Ordinal)..
-            source.IndexOf("private static ColMetric? GetColMetric", StringComparison.Ordinal)];
-        var columnLookup = source[
-            source.IndexOf("private static ColMetric? FindColMetric", StringComparison.Ordinal)..];
-        var rowLookupBuilder = source[
-            source.IndexOf("private static Dictionary<uint, RowMetric> BuildRowMetricLookup", StringComparison.Ordinal)..
-            source.IndexOf("private static Dictionary<uint, ColMetric> BuildColMetricLookup", StringComparison.Ordinal)];
-        var columnLookupBuilder = source[
-            source.IndexOf("private static Dictionary<uint, ColMetric> BuildColMetricLookup", StringComparison.Ordinal)..
-            source.IndexOf("private static bool TryGetCellRect", StringComparison.Ordinal)];
+        var metricLookup = source[
+            source.IndexOf("private readonly struct FormulaTraceMetricLookup", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryGetMarkerHit", StringComparison.Ordinal)];
 
-        rowLookup.Should().Contain("if (metric.Row > row)");
-        rowLookup.Should().Contain("break;");
-        columnLookup.Should().Contain("if (metric.Col > col)");
-        columnLookup.Should().Contain("break;");
-        rowLookupBuilder.Should().Contain("lookup.TryAdd(row.Row, row);");
-        rowLookupBuilder.Should().NotContain("ContainsKey");
-        columnLookupBuilder.Should().Contain("lookup.TryAdd(col.Col, col);");
-        columnLookupBuilder.Should().NotContain("ContainsKey");
+        metricLookup.Should().Contain("_firstRow = _hasRows ? _rows[0].Row : 0;");
+        metricLookup.Should().Contain("_lastRow = _hasRows ? _rows[^1].Row : 0;");
+        metricLookup.Should().Contain("_firstCol = _hasColumns ? _columns[0].Col : 0;");
+        metricLookup.Should().Contain("_lastCol = _hasColumns ? _columns[^1].Col : 0;");
+        metricLookup.Should().Contain("row < _firstRow || row > _lastRow");
+        metricLookup.Should().Contain("col < _firstCol || col > _lastCol");
+        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindRowMetric(_rowArray, row, _firstRow)");
+        metricLookup.Should().Contain("FormulaTraceLayoutPlanner.FindColMetric(_colArray, col, _firstCol)");
+        source.Should().Contain("var index = row - firstRow;");
+        source.Should().Contain("var index = col - firstCol;");
+        source.Should().Contain("while (low <= high)");
+        source.Should().NotContain("Dictionary<uint, RowMetric>");
+        source.Should().NotContain("Dictionary<uint, ColMetric>");
+        source.Should().NotContain("BuildRowMetricLookup");
+        source.Should().NotContain("BuildColMetricLookup");
+        source.Should().NotContain("TryGetValue");
     }
 
     private struct CollectingFormulaTraceArrowLayoutConsumer : IFormulaTraceArrowLayoutConsumer
