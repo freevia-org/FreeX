@@ -247,6 +247,54 @@ public sealed partial class ChartRendererTests
     }
 
     [Fact]
+    public void BarRenderer_AppliesLastDensePointSpecificDataLabelFormatting()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowDataLabels = true,
+            DataLabelFillColor = new CellColor(255, 255, 255)
+        };
+        chart.PointDataLabelFormats.Add(new ChartPointDataLabelFormat(
+            0,
+            1,
+            TextColor: new CellColor(192, 0, 0),
+            FontSize: 9));
+        for (var index = 0; index < 20; index++)
+        {
+            chart.PointDataLabelFormats.Add(new ChartPointDataLabelFormat(
+                1,
+                index,
+                TextColor: new CellColor(89, 89, 89),
+                FontSize: 8));
+        }
+        chart.PointDataLabelFormats.Add(new ChartPointDataLabelFormat(
+            0,
+            1,
+            TextColor: new CellColor(0, 97, 0),
+            FontSize: 15));
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var annotations = model.Annotations.OfType<TextAnnotation>().ToList();
+        annotations.Should().HaveCount(2);
+        annotations[1].TextColor.Should().Be(OxyColor.FromRgb(0, 97, 0));
+        annotations[1].FontSize.Should().Be(15);
+    }
+
+    [Fact]
     public void PieRenderer_UsesCorrectCategoryValueAndPercentagePlaceholders()
     {
         var sheetId = SheetId.New();
@@ -292,17 +340,26 @@ public sealed partial class ChartRendererTests
     }
 
     [Fact]
-    public void DataLabelFormatLookups_UseReverseScansWithoutLinqPredicates()
+    public void DataLabelFormatLookups_UseSparseReverseScansAndDenseIndexWithoutLinqPredicates()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "ChartRenderer.SeriesFormatting.cs"));
+        var pointLookup = source[
+            source.IndexOf("private readonly struct ChartPointDataLabelFormatLookup", StringComparison.Ordinal)..
+            source.IndexOf("private static double ColumnBarHalfWidth", StringComparison.Ordinal)];
         var seriesLookup = source[
             source.IndexOf("private static ChartSeriesFormat? GetSeriesFormat", StringComparison.Ordinal)..
             source.IndexOf("private static void ApplyLineFormat", StringComparison.Ordinal)];
 
+        source.Should().Contain("private const int PointDataLabelFormatLookupThreshold = 16");
+        pointLookup.Should().Contain("new Dictionary<(int SeriesIndex, int PointIndex), ChartPointDataLabelFormat>(formats.Count)");
+        pointLookup.Should().Contain("_indexedFormats[(format.SeriesIndex, format.PointIndex)] = format;");
+        pointLookup.Should().Contain("_indexedFormats.TryGetValue((seriesIndex, pointIndex)");
+        pointLookup.Should().Contain("for (var i = _formats.Count - 1; i >= 0; i--)");
         seriesLookup.Should().Contain("for (var i = formats.Count - 1; i >= 0; i--)");
         seriesLookup.Should().Contain("format.SeriesIndex == seriesIndex");
-        seriesLookup.Should().Contain("format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex");
+        pointLookup.Should().NotContain("LastOrDefault");
+        pointLookup.Should().NotContain(".Where(");
         seriesLookup.Should().NotContain("LastOrDefault");
         seriesLookup.Should().NotContain(".Where(");
     }

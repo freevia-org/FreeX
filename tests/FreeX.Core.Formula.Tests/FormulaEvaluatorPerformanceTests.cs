@@ -513,6 +513,22 @@ public sealed class FormulaEvaluatorPerformanceTests
         AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
     }
 
+    [Fact]
+    public void AggregateSelectionOversizedSparseDirectRanges_PreserveValuesWhenBufferGrows()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 5; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row + 5));
+        }
+
+        evaluator.Evaluate("=AGGREGATE(15,4,A1:A600000,B1:B600000,1)", sheet)
+            .Should()
+            .Be(new NumberValue(1d));
+    }
+
     public static IEnumerable<object[]> AggregateNonSelectionStreamingCases()
     {
         yield return ["=AGGREGATE(1,4,A1:A100000)", 50_000.5d, false, 8_000];

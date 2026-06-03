@@ -12,8 +12,50 @@ public static partial class ChartRenderer
 {
     private const string PieAnnotationXAxisKey = "PieAnnotationX";
     private const string PieAnnotationYAxisKey = "PieAnnotationY";
+    private const int PointDataLabelFormatLookupThreshold = 16;
 
     private sealed record PieDataLabelPoint(string CategoryName, double Value);
+
+    private readonly struct ChartPointDataLabelFormatLookup
+    {
+        private readonly IReadOnlyList<ChartPointDataLabelFormat>? _formats;
+        private readonly Dictionary<(int SeriesIndex, int PointIndex), ChartPointDataLabelFormat>? _indexedFormats;
+
+        public ChartPointDataLabelFormatLookup(IReadOnlyList<ChartPointDataLabelFormat> formats)
+        {
+            _formats = formats;
+            if (formats.Count <= PointDataLabelFormatLookupThreshold)
+            {
+                _indexedFormats = null;
+                return;
+            }
+
+            _indexedFormats = new Dictionary<(int SeriesIndex, int PointIndex), ChartPointDataLabelFormat>(formats.Count);
+            for (var i = 0; i < formats.Count; i++)
+            {
+                var format = formats[i];
+                _indexedFormats[(format.SeriesIndex, format.PointIndex)] = format;
+            }
+        }
+
+        public ChartPointDataLabelFormat? Get(int seriesIndex, int pointIndex)
+        {
+            if (_indexedFormats is not null)
+                return _indexedFormats.TryGetValue((seriesIndex, pointIndex), out var format) ? format : null;
+
+            if (_formats is null)
+                return null;
+
+            for (var i = _formats.Count - 1; i >= 0; i--)
+            {
+                var format = _formats[i];
+                if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
+                    return format;
+            }
+
+            return null;
+        }
+    }
 
     private static double ColumnBarHalfWidth(ChartModel chart) =>
         chart.BarGapWidth is int gapWidth
@@ -35,19 +77,6 @@ public static partial class ChartRenderer
         {
             var format = formats[i];
             if (format.SeriesIndex == seriesIndex)
-                return format;
-        }
-
-        return null;
-    }
-
-    private static ChartPointDataLabelFormat? GetPointDataLabelFormat(ChartModel chart, int seriesIndex, int pointIndex)
-    {
-        var formats = chart.PointDataLabelFormats;
-        for (var i = formats.Count - 1; i >= 0; i--)
-        {
-            var format = formats[i];
-            if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
                 return format;
         }
 
@@ -273,6 +302,7 @@ public static partial class ChartRenderer
         PlotModel model,
         ChartModel chart,
         WorkbookTheme theme,
+        ChartPointDataLabelFormatLookup pointDataLabelFormats,
         string seriesName,
         int seriesIndex,
         int pointIndex,
@@ -281,7 +311,7 @@ public static partial class ChartRenderer
         double y,
         double value)
     {
-        var pointFormat = GetPointDataLabelFormat(chart, seriesIndex, pointIndex);
+        var pointFormat = pointDataLabelFormats.Get(seriesIndex, pointIndex);
         var textColor = pointFormat?.ResolveTextColor(theme) ?? chart.ResolveDataLabelTextColor(theme);
         var borderColor = pointFormat?.ResolveBorderColor(theme) ?? chart.ResolveDataLabelBorderColor(theme);
         var fillColor = pointFormat?.ResolveFillColor(theme) ?? chart.ResolveDataLabelFillColor(theme);
@@ -310,6 +340,7 @@ public static partial class ChartRenderer
         PlotModel model,
         ChartModel chart,
         WorkbookTheme theme,
+        ChartPointDataLabelFormatLookup pointDataLabelFormats,
         LineSeries series,
         string seriesName,
         int seriesIndex,
@@ -325,6 +356,7 @@ public static partial class ChartRenderer
                 model,
                 chart,
                 theme,
+                pointDataLabelFormats,
                 seriesName,
                 seriesIndex,
                 pointIndex,

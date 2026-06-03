@@ -214,6 +214,7 @@ public sealed partial class FormulaEvaluator
                 {
                     if (count == values.Length)
                     {
+                        numbers.Count = count;
                         values = numbers.Grow();
                     }
 
@@ -256,6 +257,7 @@ public sealed partial class FormulaEvaluator
                 {
                     if (count == values.Length)
                     {
+                        numbers.Count = count;
                         values = numbers.Grow();
                     }
 

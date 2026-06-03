@@ -19,7 +19,8 @@ public static partial class ChartRenderer
         uint endCol,
         uint headerRow,
         bool normalizeToPercent,
-        WorkbookTheme theme)
+        WorkbookTheme theme,
+        ChartPointDataLabelFormatLookup pointDataLabelFormats)
     {
         var (positiveTotals, negativeTotals) = normalizeToPercent
             ? CalculateStackedPercentTotals(cellLookup, categories.Count, dataStartRow, endRow, dataStartCol, endCol)
@@ -56,7 +57,7 @@ public static partial class ChartRenderer
 
                     lineSeries.Points.Add(new DataPoint(pointIndex, value));
                 }
-                AddLineDataLabelAnnotations(model, chart, theme, lineSeries, seriesName, seriesIndex, categories);
+                AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
                 model.Series.Add(lineSeries);
                 continue;
             }
@@ -84,7 +85,7 @@ public static partial class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -104,7 +105,8 @@ public static partial class ChartRenderer
         uint endCol,
         uint headerRow,
         bool normalizeToPercent,
-        WorkbookTheme theme)
+        WorkbookTheme theme,
+        ChartPointDataLabelFormatLookup pointDataLabelFormats)
     {
         var (positiveTotals, negativeTotals) = normalizeToPercent
             ? CalculateStackedPercentTotals(cellLookup, categories.Count, dataStartRow, endRow, dataStartCol, endCol)
@@ -152,7 +154,7 @@ public static partial class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
