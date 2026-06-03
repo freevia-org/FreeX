@@ -491,26 +491,42 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Theory]
-    [InlineData("=LARGE(A1:A100000,10)", 99_991d, 1_000_000)]
-    [InlineData("=SMALL(A1:A100000,10)", 10d, 1_000_000)]
-    [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 1_000_000)]
+    [InlineData("=LARGE(A1:A100000,10)", 99_991d, 16_000)]
+    [InlineData("=SMALL(A1:A100000,10)", 10d, 16_000)]
+    [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 16_000)]
     public void StatisticalSelectionLargeRanges_AvoidExcessAllocationChurn(string formula, double expected, long maxAllocatedBytes)
     {
         AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
     }
 
     [Theory]
-    [InlineData("=AGGREGATE(12,4,A1:A100000)", 50_000.5d, 1_000_000)]
-    [InlineData("=AGGREGATE(14,4,A1:A100000,10)", 99_991d, 1_000_000)]
-    [InlineData("=AGGREGATE(15,4,A1:A100000,10)", 10d, 1_000_000)]
-    [InlineData("=AGGREGATE(16,4,A1:A100000,0.5)", 50_000.5d, 1_000_000)]
-    [InlineData("=AGGREGATE(18,4,A1:A100000,0.5)", 50_000.5d, 1_000_000)]
+    [InlineData("=AGGREGATE(12,4,A1:A100000)", 50_000.5d, 16_000)]
+    [InlineData("=AGGREGATE(14,4,A1:A100000,10)", 99_991d, 16_000)]
+    [InlineData("=AGGREGATE(15,4,A1:A100000,10)", 10d, 16_000)]
+    [InlineData("=AGGREGATE(16,4,A1:A100000,0.5)", 50_000.5d, 16_000)]
+    [InlineData("=AGGREGATE(18,4,A1:A100000,0.5)", 50_000.5d, 16_000)]
     public void AggregateStatisticalSelectionLargeRanges_AvoidExcessAllocationChurn(
         string formula,
         double expected,
         long maxAllocatedBytes)
     {
         AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
+    }
+
+    [Fact]
+    public void AggregateSelectionOversizedSparseDirectRanges_PreserveValuesWhenBufferGrows()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 5; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row + 5));
+        }
+
+        evaluator.Evaluate("=AGGREGATE(15,4,A1:A600000,B1:B600000,1)", sheet)
+            .Should()
+            .Be(new NumberValue(1d));
     }
 
     public static IEnumerable<object[]> AggregateNonSelectionStreamingCases()
