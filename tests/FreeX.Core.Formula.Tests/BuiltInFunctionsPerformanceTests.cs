@@ -125,6 +125,8 @@ public sealed class BuiltInFunctionsPerformanceTests
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         result.Should().BeOfType<NumberValue>();
         _output.WriteLine($"XNPV large cash-flow range allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(750_000);
+        allocatedBytes.Should().BeLessThan(
+            80_000,
+            "scalar-rate XNPV should stream direct value/date ranges instead of materializing RangeValue arrays");
     }
 }
