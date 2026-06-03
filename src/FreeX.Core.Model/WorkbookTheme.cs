@@ -168,16 +168,20 @@ public sealed record WorkbookTheme(
             if (formatScheme.Name != drawingNs + "fmtScheme")
                 return null;
 
-            var shadowEffect = formatScheme
-                .Element(drawingNs + "effectStyleLst")?
-                .Elements(drawingNs + "effectStyle")
-                .Select(effectStyle => FindThemeShadow(effectStyle, drawingNs))
-                .FirstOrDefault(shadow => shadow is not null);
-            var glowEffect = formatScheme
-                .Element(drawingNs + "effectStyleLst")?
-                .Elements(drawingNs + "effectStyle")
-                .Select(effectStyle => FindThemeGlow(effectStyle, drawingNs))
-                .FirstOrDefault(glow => glow is not null);
+            var effectStyleList = formatScheme.Element(drawingNs + "effectStyleLst");
+            if (effectStyleList is null)
+                return null;
+
+            XElement? shadowEffect = null;
+            XElement? glowEffect = null;
+            foreach (var effectStyle in effectStyleList.Elements(drawingNs + "effectStyle"))
+            {
+                shadowEffect = FindThemeShadow(effectStyle, drawingNs);
+                glowEffect = FindThemeGlow(effectStyle, drawingNs);
+                if (shadowEffect is not null || glowEffect is not null)
+                    break;
+            }
+
             if (shadowEffect is null && glowEffect is null)
                 return null;
 

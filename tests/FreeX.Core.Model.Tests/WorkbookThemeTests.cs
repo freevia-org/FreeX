@@ -85,6 +85,39 @@ public sealed class WorkbookThemeTests
     }
 
     [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_UsesOneSupportedEffectStyleGroup()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml("""
+            <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Grouped Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst/>
+                </a:effectStyle>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:glow rad="38100">
+                      <a:srgbClr val="5B9BD5"><a:alpha val="42000"/></a:srgbClr>
+                    </a:glow>
+                  </a:effectLst>
+                </a:effectStyle>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:outerShdw blurRad="40000" dist="19050" dir="5400000" rotWithShape="0">
+                      <a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr>
+                    </a:outerShdw>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+            """);
+
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeFalse();
+        theme.EffectDefaults.HasGlow.Should().BeTrue();
+        theme.EffectDefaults.GlowOpacity.Should().BeApproximately(0.42, 0.0001);
+    }
+
+    [Fact]
     public void WorkbookTheme_WithEffects_RenamesNativeFormatSchemeAndKeepsEffectDefaults()
     {
         var theme = WorkbookTheme.Office
