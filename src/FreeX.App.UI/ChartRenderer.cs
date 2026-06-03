@@ -85,6 +85,9 @@ public static partial class ChartRenderer
         ApplyAreaStyle(model, chart, theme);
         ConfigureLegend(model, chart, theme);
         AddPivotChartFieldButtons(model, chart);
+        var pointDataLabelFormats = ShouldUseAnnotationLabels(chart)
+            ? new ChartPointDataLabelFormatLookup(chart.PointDataLabelFormats)
+            : default;
 
         if (chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut)
         {
@@ -139,7 +142,7 @@ public static partial class ChartRenderer
 
         if (chart.Type is ChartType.StackedColumn or ChartType.PercentStackedColumn)
         {
-            var stackedColumnModel = BuildStackedColumnModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedColumn, theme);
+            var stackedColumnModel = BuildStackedColumnModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedColumn, theme, pointDataLabelFormats);
             ApplyAxisBounds(stackedColumnModel, chart, theme);
             AddChartDataTableAnnotations(stackedColumnModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return stackedColumnModel;
@@ -147,7 +150,7 @@ public static partial class ChartRenderer
 
         if (chart.Type is ChartType.StackedBar or ChartType.PercentStackedBar)
         {
-            var stackedBarModel = BuildStackedBarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedBar, theme);
+            var stackedBarModel = BuildStackedBarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedBar, theme, pointDataLabelFormats);
             ApplyAxisBounds(stackedBarModel, chart, theme);
             AddChartDataTableAnnotations(stackedBarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return stackedBarModel;
@@ -155,7 +158,7 @@ public static partial class ChartRenderer
 
         if (chart.Type == ChartType.Bubble)
         {
-            var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme, out var trendPoints);
+            var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme, pointDataLabelFormats, out var trendPoints);
             AddTrendlineIfRequested(bubbleModel, chart, theme, trendPoints);
             ApplyAxisBounds(bubbleModel, chart, theme);
             AddChartDataTableAnnotations(bubbleModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
@@ -230,7 +233,7 @@ public static partial class ChartRenderer
                     AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
                     if (firstSeriesPoints is null)
                         firstSeriesPoints = comboTrendPoints;
-                    AddLineDataLabelAnnotations(model, chart, theme, lineSeries, seriesName, seriesIndex, categories);
+                    AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
                     model.Series.Add(lineSeries);
                     continue;
                 }
@@ -254,7 +257,7 @@ public static partial class ChartRenderer
                         series.Items.Add(new RectangleBarItem(i - colHalfWidth, Math.Min(0, v), i + colHalfWidth, Math.Max(0, v)));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
                     }
                     else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
                         && cellLookup.TryGetValue((r, col), out cell)
@@ -263,7 +266,7 @@ public static partial class ChartRenderer
                         series.Items.Add(new RectangleBarItem(i - colHalfWidth, 0, i + colHalfWidth, 0));
                         trendPoints?.Add(new DataPoint(i, 0));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -296,7 +299,7 @@ public static partial class ChartRenderer
                         series.Items.Add(new BarItem { Value = v });
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), v, i, v);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), v, i, v);
                     }
                     else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
                         && cellLookup.TryGetValue((r, col), out cell)
@@ -305,7 +308,7 @@ public static partial class ChartRenderer
                         series.Items.Add(new BarItem { Value = 0 });
                         trendPoints?.Add(new DataPoint(i, 0));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), 0, i, 0);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), 0, i, 0);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -327,7 +330,7 @@ public static partial class ChartRenderer
                     AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
                     if (firstSeriesPoints is null)
                         firstSeriesPoints = comboTrendPoints;
-                    AddLineDataLabelAnnotations(model, chart, theme, lineSeries, seriesName, seriesIndex, categories);
+                    AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
                     model.Series.Add(lineSeries);
                     continue;
                 }
@@ -349,7 +352,7 @@ public static partial class ChartRenderer
                         series.Points.Add(new DataPoint(i, v));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
                     }
                     else if (cellLookup.TryGetValue((r, col), out cell) && IsChartBlank(cell))
                     {
@@ -358,7 +361,7 @@ public static partial class ChartRenderer
                             series.Points.Add(new DataPoint(i, 0));
                             trendPoints?.Add(new DataPoint(i, 0));
                             if (ShouldUseAnnotationLabels(chart))
-                                AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
+                                AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
                         }
                         else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Gap)
                         {
@@ -403,7 +406,7 @@ public static partial class ChartRenderer
                         series.Points.Add(new ScatterPoint(x, y));
                         trendPoints?.Add(new DataPoint(x, y));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, (int)(r - dataStartRow), ChartDataLabelFormatter.GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, (int)(r - dataStartRow), ChartDataLabelFormatter.GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -424,7 +427,7 @@ public static partial class ChartRenderer
                 AddLinePoints(series, chart, cellLookup, dataStartRow, endRow, col, trendPoints, out trendPoints);
                 if (firstSeriesPoints is null)
                     firstSeriesPoints = trendPoints;
-                AddLineDataLabelAnnotations(model, chart, theme, series, seriesName, seriesIndex, categories);
+                AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, series, seriesName, seriesIndex, categories);
                 model.Series.Add(series);
             }
         }

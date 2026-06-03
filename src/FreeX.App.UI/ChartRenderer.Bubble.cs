@@ -18,6 +18,7 @@ public static partial class ChartRenderer
         uint endCol,
         uint headerRow,
         WorkbookTheme theme,
+        ChartPointDataLabelFormatLookup pointDataLabelFormats,
         out List<DataPoint> trendPoints)
     {
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle });
@@ -59,7 +60,7 @@ public static partial class ChartRenderer
                 if (seriesIndex == 0)
                     trendPoints.Add(new DataPoint(x, y));
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, fallbackIndex, ChartDataLabelFormatter.GetCategory(categories, fallbackIndex), x, y, y);
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, fallbackIndex, ChartDataLabelFormatter.GetCategory(categories, fallbackIndex), x, y, y);
             }
 
             model.Series.Add(series);
