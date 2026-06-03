@@ -198,7 +198,7 @@ public static partial class PivotTableRefreshService
         var columnAggregateCache = CreateColumnAggregateCacheIfNeeded(rowsByColumnKey, pivotTable, headers, columnFields);
         columnKeys = ApplyValueFilters(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields, columnAggregateCache);
         columnKeys = ApplySorts(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields, columnAggregateCache);
-        var visibleRows = RowsForColumnKeys(rowsByColumnKey, columnKeys);
+        var visibleRows = RowsForColumnKeys(rowsByColumnKey, columnKeys, rows);
         var singleDataField = pivotTable.DataFields.Count == 1;
 
         var outputColumn = start.Col;
