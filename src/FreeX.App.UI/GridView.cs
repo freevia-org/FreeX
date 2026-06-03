@@ -55,9 +55,8 @@ public partial class GridView : FrameworkElement
     }
 
     /// <summary>
-    /// Returns a custom automation peer that exposes the grid as a data-grid-style custom
-    /// control so that screen readers announce the name and control type correctly instead
-    /// of the default FrameworkElement peer (which reports a generic "custom" type).
+    /// Returns a custom automation peer for the worksheet grid and its visible cell
+    /// peers, including grid, selection, grid-item, value, and selection-item patterns.
     /// </summary>
     protected override AutomationPeer OnCreateAutomationPeer() => new GridViewAutomationPeer(this);
 
