@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -16,7 +17,13 @@ internal static class XlsxPackageXmlEditor
     public static XDocument LoadXml(ZipArchiveEntry entry)
     {
         using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return LoadXml(stream);
+    }
+
+    public static XDocument LoadXml(Stream stream, long maxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument)
+    {
+        using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create(maxCharactersInDocument));
+        return XDocument.Load(reader);
     }
 
     public static string NextRelationshipId(XDocument relsXml, XNamespace packageRelNs)
