@@ -16,23 +16,31 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("[string]$Version = \"\"");
         script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\")]");
         script.Should().Contain("[string]$PublishMode = \"SingleFile\"");
-        script.Should().Contain("AppInfo.cs");
+        script.Should().Contain("function Get-MsBuildPropertyValue");
+        script.Should().Contain("InformationalVersion");
+        script.Should().Contain("function ConvertTo-MsBuildVersion");
         script.Should().Contain("function ConvertTo-MsixPackageVersion");
         script.Should().Contain("function Assert-SafeArtifactToken");
         script.Should().Contain("function Assert-SafeTimestampUrl");
         script.Should().Contain("function Assert-MsixCertificatePath");
         script.Should().Contain("function Assert-MsixSigningOptions");
+        script.Should().Contain("function Assert-MsixPublishSigningMode");
         script.Should().Contain("Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label \"RuntimeIdentifier\"");
         script.Should().Contain("Assert-SafeTimestampUrl -Value $MsixTimestampUrl");
         script.Should().Contain("Assert-MsixCertificatePath -Value $MsixCertificatePath");
         script.Should().Contain("Assert-MsixSigningOptions -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword -TimestampUrl $MsixTimestampUrl");
+        script.Should().Contain("Assert-MsixPublishSigningMode -PublishMode $PublishMode -CertificatePath $MsixCertificatePath -AllowUnsigned ([bool]$AllowUnsignedMsix)");
         script.Should().Contain("rev-parse --short=8 HEAD");
+        script.Should().Contain("$assemblyVersion = ConvertTo-MsBuildVersion -DisplayVersion $Version");
+        script.Should().Contain("$informationalVersion = \"$assemblyVersion+$commitId\"");
         script.Should().Contain("$buildStamp = Get-Date -Format \"yyyyMMdd-HHmmss\"");
         script.Should().Contain("freex-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug");
         script.Should().Contain("$launchExeName = \"$artifactName.exe\"");
         script.Should().Contain("Move-Item -LiteralPath $defaultExePath -Destination $artifactExePath");
         script.Should().Contain("IsPathRooted");
         script.Should().Contain("\"--self-contained\", \"false\"");
+        script.Should().Contain("-p:Version=$assemblyVersion");
+        script.Should().Contain("-p:InformationalVersion=$informationalVersion");
         script.Should().Contain("-p:PublishSingleFile=true");
         script.Should().Contain("-p:FreeXTesterReleaseEnglishOnly=true");
         script.Should().NotContain("-p:EnableCompressionInSingleFile=true");
@@ -69,6 +77,27 @@ public sealed class UserTestPublishScriptTests
         project.Should().Contain("Condition=\"'$(FreeXTesterReleaseEnglishOnly)' == 'true'\"");
         project.Should().Contain("EmbeddedResource Remove=\"Resources\\Strings.*.resx\"");
         project.Should().NotContain("EmbeddedResource Remove=\"Resources\\Strings.resx\"");
+    }
+
+    [Fact]
+    public void PublishScript_RejectsUnsignedMsixUnlessExplicitlyAllowedBeforePublishing()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
+            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]

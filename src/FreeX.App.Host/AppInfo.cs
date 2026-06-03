@@ -1,8 +1,14 @@
+using System.Reflection;
+
 namespace FreeX.App.Host;
 
 public static class AppInfo
 {
-    public const string VersionText = "Version 0.5 (Tester Release)";
+    public static string VersionText { get; } = FormatVersionText(
+        typeof(AppInfo).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion);
+
     public const string HelpUrl = "https://github.com/tony-xmelon/FreeX";
     public const string FeedbackUrl = "https://github.com/tony-xmelon/FreeX/issues/new";
     public const string LatestReleaseUrl = "https://github.com/tony-xmelon/FreeX/releases/latest";
@@ -17,4 +23,27 @@ public static class AppInfo
 
     public static string AboutText { get; } =
         $"FreeX\n{VersionText}\n\nA free spreadsheet app for .xlsx files.\n\nBuilt with .NET 10, WPF, ClosedXML, OxyPlot.\n\n{TrademarkNotice}\n\n{CompatibilityNotice}\n\n{ProjectLicenseNotice}\n\n{PrivacyNotice}\n\n{ThirdPartyRuntimeNotice}\n\n{SourceNotice}";
+
+    internal static string FormatVersionText(string? informationalVersion)
+    {
+        var displayVersion = string.IsNullOrWhiteSpace(informationalVersion)
+            ? "0.5.0"
+            : informationalVersion.Trim();
+        var metadataIndex = displayVersion.IndexOf('+', StringComparison.Ordinal);
+        if (metadataIndex >= 0)
+        {
+            displayVersion = displayVersion[..metadataIndex];
+        }
+
+        var versionParts = displayVersion.Split('.');
+        if (versionParts.Length == 3 &&
+            versionParts[2] == "0" &&
+            versionParts[0].All(char.IsDigit) &&
+            versionParts[1].All(char.IsDigit))
+        {
+            displayVersion = $"{versionParts[0]}.{versionParts[1]}";
+        }
+
+        return $"Version {displayVersion} (Tester Release)";
+    }
 }

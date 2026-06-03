@@ -18,4 +18,8 @@
     <Project Path="tests/FreeX.Fixtures/FreeX.Fixtures.csproj" />
     <Project Path="tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/FreeX.ChartInteropCompare/FreeX.ChartInteropCompare.csproj" />
+    <Project Path="tools/FreeX.ExcelOpenSmoke/FreeX.ExcelOpenSmoke.csproj" />
+  </Folder>
 </Solution>
