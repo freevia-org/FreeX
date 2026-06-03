@@ -32,8 +32,9 @@ public static class FormulaTraceLayoutPlanner
         where TConsumer : struct, IFormulaTraceArrowLayoutConsumer
     {
         var metrics = new FormulaTraceMetricLookup(viewport, GridView.CalculateRowHeaderWidth(viewport));
-        foreach (var arrow in arrows)
+        for (var i = 0; i < arrows.Count; i++)
         {
+            var arrow = arrows[i];
             var fromOnCurrentSheet = arrow.From.Sheet.Equals(sheetId);
             var toOnCurrentSheet = arrow.To.Sheet.Equals(sheetId);
             var fromVisible = fromOnCurrentSheet && metrics.TryGetCellRect(arrow.From, out var fromRect);
@@ -74,8 +75,9 @@ public static class FormulaTraceLayoutPlanner
     {
         const double hitRadius = 8;
         var metrics = new FormulaTraceMetricLookup(viewport, GridView.CalculateRowHeaderWidth(viewport));
-        foreach (var arrow in arrows)
+        for (var i = 0; i < arrows.Count; i++)
         {
+            var arrow = arrows[i];
             if (!TryGetMarkerHit(
                 in metrics,
                 arrow,
