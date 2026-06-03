@@ -675,6 +675,46 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_UsesScalePercentForPrintPagination()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Scaled print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Top"));
+            sheet.SetCell(new CellAddress(sheet.Id, 80, 1), new TextValue("Bottom"));
+
+            var defaultScaleDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            sheet.ScaleToFit = new WorksheetScaleToFit(50, null, null);
+            var scaledDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            defaultScaleDocument.Pages.Should().HaveCount(2);
+            scaledDocument.Pages.Should().HaveCount(1);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_UsesFitToPagesWideForPrintPagination()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Fit wide print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Left"));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 80), new TextValue("Right"));
+
+            var defaultScaleDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, null);
+            var fitWideDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            defaultScaleDocument.Pages.Count.Should().BeGreaterThan(1);
+            fitWideDocument.Pages.Should().HaveCount(1);
+        });
+    }
+
+    [Fact]
     public void RenderWorkbook_CombinesVisibleWorksheetsAndSkipsHiddenSheets()
     {
         StaTestRunner.Run(() =>
