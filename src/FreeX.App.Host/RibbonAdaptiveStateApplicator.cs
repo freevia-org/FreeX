@@ -81,14 +81,18 @@ internal static class RibbonAdaptiveStateApplicator
         MainWindow.RibbonCompactGroupSnapshot snapshot,
         MainWindow.RibbonCompactLevel level)
     {
-        foreach (var label in snapshot.CommandLabels)
+        for (var labelIndex = 0; labelIndex < snapshot.CommandLabels.Count; labelIndex++)
+        {
+            var label = snapshot.CommandLabels[labelIndex];
             SetIfChanged(
                 label,
                 UIElement.VisibilityProperty,
                 level == MainWindow.RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible);
+        }
 
-        foreach (var buttonSnapshot in snapshot.Buttons)
+        for (var buttonIndex = 0; buttonIndex < snapshot.Buttons.Count; buttonIndex++)
         {
+            var buttonSnapshot = snapshot.Buttons[buttonIndex];
             if (buttonSnapshot.HasCompactWidths)
             {
                 SetIfChanged(
@@ -132,8 +136,9 @@ internal static class RibbonAdaptiveStateApplicator
             return;
         }
 
-        foreach (var label in snapshot.Labels)
+        for (var labelIndex = 0; labelIndex < snapshot.Labels.Count; labelIndex++)
         {
+            var label = snapshot.Labels[labelIndex];
             SetIfChanged(
                 label,
                 UIElement.VisibilityProperty,
@@ -155,8 +160,11 @@ internal static class RibbonAdaptiveStateApplicator
             if (snapshot.Content is not null)
                 SetIfChanged(snapshot.Content, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
 
-            foreach (var stack in snapshot.HorizontalStacks)
+            for (var stackIndex = 0; stackIndex < snapshot.HorizontalStacks.Count; stackIndex++)
+            {
+                var stack = snapshot.HorizontalStacks[stackIndex];
                 SetIfChanged(stack, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            }
         }
 
         if (snapshot.HasContentLayout &&
@@ -461,8 +469,10 @@ internal static class RibbonAdaptiveStateApplicator
         if (contentGrid is null)
             return null;
 
-        foreach (var child in contentGrid.Children)
+        var children = contentGrid.Children;
+        for (var childIndex = 0; childIndex < children.Count; childIndex++)
         {
+            var child = children[childIndex];
             if (child is not FrameworkElement chevron ||
                 !RibbonMetadata.IsDropdownChevron(chevron))
             {
