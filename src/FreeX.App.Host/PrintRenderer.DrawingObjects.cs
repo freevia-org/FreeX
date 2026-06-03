@@ -88,34 +88,34 @@ public static partial class PrintRenderer
             ResolveChartTitleOverlayColor(chart, workbookTheme),
             rotationDegrees: 0);
 
-        if (!ChartTypeSupport.SupportsAxes(chart.Type))
-            return;
-
-        var axisFontSize = NormalizePrintedChartFontSize(chart.AxisTitleFontSize, 12);
-        var axisColor = ResolveAxisTitleOverlayColor(chart, workbookTheme);
-        if (!chart.HideXAxis)
+        if (ChartTypeSupport.SupportsAxes(chart.Type))
         {
-            AddPrintedChartCenteredOverlay(
-                textOverlays,
-                chart.XAxisTitle,
-                chartRect.Left + chartRect.Width / 2,
-                chartRect.Bottom - axisFontSize - textInset,
-                Math.Max(1, chartRect.Width - textInset * 2),
-                axisFontSize,
-                axisColor,
-                rotationDegrees: 0);
-        }
+            var axisFontSize = NormalizePrintedChartFontSize(chart.AxisTitleFontSize, 12);
+            var axisColor = ResolveAxisTitleOverlayColor(chart, workbookTheme);
+            if (!chart.HideXAxis)
+            {
+                AddPrintedChartCenteredOverlay(
+                    textOverlays,
+                    chart.XAxisTitle,
+                    chartRect.Left + chartRect.Width / 2,
+                    chartRect.Bottom - axisFontSize - textInset,
+                    Math.Max(1, chartRect.Width - textInset * 2),
+                    axisFontSize,
+                    axisColor,
+                    rotationDegrees: 0);
+            }
 
-        if (!chart.HideYAxis)
-        {
-            AddPrintedChartVerticalAxisOverlay(
-                textOverlays,
-                chart.YAxisTitle,
-                chartRect.Left + textInset,
-                chartRect.Top + chartRect.Height / 2,
-                Math.Max(1, chartRect.Height - textInset * 2),
-                axisFontSize,
-                axisColor);
+            if (!chart.HideYAxis)
+            {
+                AddPrintedChartVerticalAxisOverlay(
+                    textOverlays,
+                    chart.YAxisTitle,
+                    chartRect.Left + textInset,
+                    chartRect.Top + chartRect.Height / 2,
+                    Math.Max(1, chartRect.Height - textInset * 2),
+                    axisFontSize,
+                    axisColor);
+            }
         }
 
         AddPrintedChartNonTitleTextOverlays(textOverlays, chart, workbookTheme, chartRect, viewport, pageCellLookup);

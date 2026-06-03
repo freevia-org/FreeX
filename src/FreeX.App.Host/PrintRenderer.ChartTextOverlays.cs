@@ -26,6 +26,12 @@ public static partial class PrintRenderer
         ViewportModel viewport,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup)
     {
+        if (IsPrintedChartPieFamily(chart.Type))
+        {
+            AddPrintedChartPieFamilyTextOverlays(textOverlays, chart, workbookTheme, chartRect, viewport, pageCellLookup);
+            return;
+        }
+
         if (!SupportsPrintedChartNonTitleTextOverlays(chart.Type))
             return;
 
@@ -59,6 +65,65 @@ public static partial class PrintRenderer
             or ChartType.ThreeDBar
             or ChartType.StackedBar
             or ChartType.PercentStackedBar;
+
+    private static bool IsPrintedChartPieFamily(ChartType chartType) =>
+        chartType is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut;
+
+    private static void AddPrintedChartPieFamilyTextOverlays(
+        ICollection<PdfTextOverlay> textOverlays,
+        ChartModel chart,
+        WorkbookTheme workbookTheme,
+        Rect chartRect,
+        ViewportModel viewport,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup)
+    {
+        var cellLookup = BuildPrintedChartCellLookup(chart, viewport, pageCellLookup);
+        var categories = BuildPrintedChartCategories(chart, cellLookup);
+        if (BuildPrintedChartPieSeries(chart, cellLookup, categories) is not { } pieSeries)
+            return;
+
+        var plotRect = EstimatePrintedChartPlotRect(chart, chartRect);
+        var legendEntries = pieSeries.Points
+            .Select(point => new PrintedChartSeries(point.Category, point.Index, [point]))
+            .ToList();
+        AddPrintedChartLegendEntryOverlays(textOverlays, chart, workbookTheme, chartRect, legendEntries);
+        AddPrintedChartPieDataLabelOverlays(textOverlays, chart, workbookTheme, plotRect, pieSeries);
+    }
+
+    private static PrintedChartSeries? BuildPrintedChartPieSeries(
+        ChartModel chart,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        IReadOnlyList<string> categories)
+    {
+        var valueColumns = ChartTypeSupport.GetYAxisValueColumns(chart);
+        if (valueColumns.Count == 0)
+            return null;
+
+        var valueColumn = valueColumns[0];
+        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
+        if (dataStartRow > chart.DataRange.End.Row)
+            return null;
+
+        var points = new List<PrintedChartPoint>();
+        var pointIndex = 0;
+        for (var row = dataStartRow; row <= chart.DataRange.End.Row; row++, pointIndex++)
+        {
+            if (!cellLookup.TryGetValue((row, valueColumn), out var cell) ||
+                !TryGetPrintedChartNumericValue(cell, out var value))
+            {
+                continue;
+            }
+
+            var category = pointIndex < categories.Count && !string.IsNullOrWhiteSpace(categories[pointIndex])
+                ? categories[pointIndex]
+                : string.Create(CultureInfo.InvariantCulture, $"Slice {pointIndex + 1}");
+            points.Add(new PrintedChartPoint(category, pointIndex, value));
+        }
+
+        return points.Count == 0
+            ? null
+            : new PrintedChartSeries(GetPrintedChartSeriesName(chart, cellLookup, valueColumn, 0), 0, points);
+    }
 
     private static Dictionary<(uint Row, uint Col), DisplayCell> BuildPrintedChartCellLookup(
         ChartModel chart,
@@ -572,6 +637,78 @@ public static partial class PrintRenderer
                     chart.DataLabelAngle));
             }
         }
+    }
+
+    private static void AddPrintedChartPieDataLabelOverlays(
+        ICollection<PdfTextOverlay> textOverlays,
+        ChartModel chart,
+        WorkbookTheme workbookTheme,
+        Rect plotRect,
+        PrintedChartSeries pieSeries)
+    {
+        if (!chart.ShowDataLabels)
+            return;
+
+        var total = 0d;
+        foreach (var point in pieSeries.Points)
+            total += Math.Max(0, point.Value);
+        if (total <= 0)
+            return;
+
+        var fontSize = NormalizePrintedChartFontSize(chart.DataLabelFontSize, chart.ChartDefaultFontSize);
+        var color = chart.ResolveDataLabelTextColor(workbookTheme) ?? ResolveChartDefaultOverlayColor(chart, workbookTheme);
+        var maxWidth = Math.Max(42, Math.Min(110, plotRect.Width * 0.42));
+        var accumulatedAngle = chart.FirstSliceAngle;
+        var labelCount = 0;
+        foreach (var point in pieSeries.Points)
+        {
+            if (labelCount++ >= MaxPrintedChartDataLabelOverlays)
+                return;
+
+            var positiveValue = Math.Max(0, point.Value);
+            var sweep = positiveValue / total * 360.0;
+            var midAngle = accumulatedAngle + sweep / 2.0;
+            accumulatedAngle += sweep;
+
+            var value = ChartDataLabelFormatter.ShouldRenderPercentageLabels(chart)
+                ? point.Value / total
+                : point.Value;
+            var text = ChartDataLabelFormatter.FormatDataLabel(chart, pieSeries.Name, point.Category, value);
+            var bounded = BoundPrintedChartOverlayText(text, maxWidth, fontSize);
+            if (bounded.Length == 0)
+                continue;
+
+            var position = GetPrintedChartPieDataLabelPoint(chart, plotRect, midAngle, fontSize);
+            AddPrintedChartCenteredOverlay(
+                textOverlays,
+                bounded,
+                Math.Clamp(position.X, plotRect.Left, plotRect.Right),
+                Math.Clamp(position.Y, plotRect.Top, Math.Max(plotRect.Top, plotRect.Bottom - fontSize)),
+                maxWidth,
+                fontSize,
+                color,
+                chart.DataLabelAngle);
+        }
+    }
+
+    private static Point GetPrintedChartPieDataLabelPoint(
+        ChartModel chart,
+        Rect plotRect,
+        double angleDegrees,
+        double fontSize)
+    {
+        var radiusFactor = chart.DataLabelPosition switch
+        {
+            ChartDataLabelPosition.Center => chart.Type == ChartType.Doughnut ? 0.48 : 0.36,
+            ChartDataLabelPosition.OutsideEnd => 0.98,
+            ChartDataLabelPosition.InsideEnd => 0.68,
+            _ => 0.68
+        };
+        var radius = Math.Min(plotRect.Width, plotRect.Height) * 0.5 * radiusFactor;
+        var radians = Math.PI * angleDegrees / 180.0;
+        return new Point(
+            plotRect.Left + plotRect.Width / 2.0 + Math.Cos(radians) * radius,
+            plotRect.Top + plotRect.Height / 2.0 - Math.Sin(radians) * radius - fontSize / 2.0);
     }
 
     private static (double X, double Y) GetPrintedChartVerticalDataLabelPoint(

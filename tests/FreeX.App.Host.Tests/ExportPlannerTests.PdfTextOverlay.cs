@@ -196,6 +196,67 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedPieCharts()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable pie chart export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 30, 30), new TextValue("Month"));
+            sheet.SetCell(new CellAddress(sheet.Id, 30, 31), new TextValue("PDF Share"));
+            sheet.SetCell(new CellAddress(sheet.Id, 31, 30), new TextValue("PDF pie Jan"));
+            sheet.SetCell(new CellAddress(sheet.Id, 31, 31), new NumberValue(8));
+            sheet.SetCell(new CellAddress(sheet.Id, 32, 30), new TextValue("PDF pie Feb"));
+            sheet.SetCell(new CellAddress(sheet.Id, 32, 31), new NumberValue(14));
+            sheet.SetCell(new CellAddress(sheet.Id, 33, 30), new TextValue("PDF pie Mar"));
+            sheet.SetCell(new CellAddress(sheet.Id, 33, 31), new NumberValue(11));
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 20, 8));
+            sheet.Charts.Add(new ChartModel
+            {
+                Type = ChartType.Pie,
+                DataRange = new GridRange(
+                    new CellAddress(sheet.Id, 30, 30),
+                    new CellAddress(sheet.Id, 33, 31)),
+                Title = "Pie Chart Title PDF Text",
+                Left = 24,
+                Top = 24,
+                Width = 380,
+                Height = 210,
+                ShowLegend = true,
+                LegendPosition = ChartLegendPosition.Right,
+                ShowDataLabels = true,
+                ShowDataLabelCategoryName = true,
+                ShowDataLabelValue = true,
+                ShowDataLabelPercentage = true
+            });
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Pie Chart Title PDF Text");
+                pdfText.Should().Contain("PDF pie Jan");
+                pdfText.Should().Contain("PDF pie Feb");
+                pdfText.Should().Contain("PDF pie Jan, 24%");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedHeaderFooter()
     {
         StaTestRunner.Run(() =>

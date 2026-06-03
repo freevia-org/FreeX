@@ -163,6 +163,59 @@ public sealed partial class PrintRendererPageSetupTests
         });
     }
 
+    [Theory]
+    [InlineData(ChartType.Pie)]
+    [InlineData(ChartType.ThreeDPie)]
+    [InlineData(ChartType.Doughnut)]
+    public void RenderWorksheet_AttachesSelectablePieFamilyLegendAndDataLabelOverlaysToPrintedCharts(ChartType chartType)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook($"Chart print {chartType} text");
+            var sheet = workbook.AddSheet("Sheet1");
+            PopulateChartSource(
+                sheet,
+                startRow: 30,
+                startCol: 30,
+                category1: "PDF pie Jan",
+                category2: "PDF pie Feb",
+                category3: "PDF pie Mar",
+                seriesName: "PDF Share");
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 20, 8));
+            var chart = new ChartModel
+            {
+                Type = chartType,
+                DataRange = new GridRange(
+                    new CellAddress(sheet.Id, 30, 30),
+                    new CellAddress(sheet.Id, 33, 31)),
+                Title = "Printable pie label title",
+                Left = 24,
+                Top = 24,
+                Width = 380,
+                Height = 210,
+                ShowLegend = true,
+                LegendPosition = ChartLegendPosition.Right,
+                ShowDataLabels = true,
+                ShowDataLabelCategoryName = true,
+                ShowDataLabelValue = true,
+                ShowDataLabelPercentage = true
+            };
+            sheet.Charts.Add(chart);
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlayTexts = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlayTexts.Should().Contain("PDF pie Jan");
+            overlayTexts.Should().Contain("PDF pie Feb");
+            overlayTexts.Should().Contain("PDF pie Jan, 24%");
+        });
+    }
+
     [Fact]
     public void RenderWorksheet_DoesNotAttachChartTextOverlaysForClippedCharts()
     {
