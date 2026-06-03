@@ -341,7 +341,7 @@ public sealed class MainWindowMouseSelectionSourceTests
         columnShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
         columnShiftSelection.Should().Contain("CellAddressBox.Text");
         columnShiftSelection.Should().Contain("HideValidationDropdown();");
-        columnShiftSelection.Should().Contain("FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);");
+        columnShiftSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));");
         columnShiftSelection.Should().Contain("SheetGrid.Focus();");
         columnShiftSelection.Should().Contain("RefreshToolbarAfterSelectionChange();");
         columnShiftSelection.Should().Contain("RefreshStatusBar();");
@@ -350,7 +350,7 @@ public sealed class MainWindowMouseSelectionSourceTests
         rowShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
         rowShiftSelection.Should().Contain("CellAddressBox.Text");
         rowShiftSelection.Should().Contain("HideValidationDropdown();");
-        rowShiftSelection.Should().Contain("FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);");
+        rowShiftSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));");
         rowShiftSelection.Should().Contain("SheetGrid.Focus();");
         rowShiftSelection.Should().Contain("RefreshToolbarAfterSelectionChange();");
         rowShiftSelection.Should().Contain("RefreshStatusBar();");
@@ -691,7 +691,7 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
-    public void SelectionHotPathsUpdateNameBoxWithoutBuildingUndoHistory()
+    public void SelectionHotPathsUpdateTextBoxesWithoutBuildingUndoHistory()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
@@ -710,10 +710,15 @@ public sealed class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private CellAddress? HitTestCell", StringComparison.Ordinal)];
 
         setActiveCell.Should().Contain("SetCellAddressBoxSelectionText(FormatCellReference(addr));");
+        setActiveCell.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(cell, addr));");
         extendSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(anchor, to));");
         addSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));");
+        addSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(target), target));");
         helper.Should().Contain("CellAddressBox.IsKeyboardFocusWithin");
         helper.Should().Contain("CellAddressBox.IsUndoEnabled = false;");
         helper.Should().Contain("CellAddressBox.IsUndoEnabled = true;");
+        helper.Should().Contain("FormulaBar.IsKeyboardFocusWithin");
+        helper.Should().Contain("FormulaBar.IsUndoEnabled = false;");
+        helper.Should().Contain("FormulaBar.IsUndoEnabled = true;");
     }
 }
