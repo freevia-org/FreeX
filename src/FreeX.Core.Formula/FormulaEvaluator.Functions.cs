@@ -70,6 +70,14 @@ public sealed partial class FormulaEvaluator
             TryEvaluateIrrDirectRange(node, context, out var directIrrResult))
             return directIrrResult;
 
+        if (functionName == "SUBTOTAL" &&
+            TryEvaluateSubtotalDirectRanges(node, context, out var directSubtotalResult))
+            return directSubtotalResult;
+
+        if (functionName == "AGGREGATE" &&
+            TryEvaluateAggregateDirectRanges(node, context, out var directAggregateResult))
+            return directAggregateResult;
+
         bool isStructured = IsStructuredRangeFunction(functionName);
         bool isAggregate = IsAggregateFunction(functionName);
         bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
