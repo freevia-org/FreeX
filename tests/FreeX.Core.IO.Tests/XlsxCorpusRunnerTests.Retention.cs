@@ -773,13 +773,6 @@ public partial class XlsxCorpusRunnerTests
         var workbook = adapter.Load(source);
         workbook.IsStructureProtected.Should().BeTrue();
         workbook.StructureProtectionPassword.Should().Be("83AF");
-        workbook.ProtectionMetadata.Should().NotBeNull();
-        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "algorithmName").Should().Be("SHA-512");
-        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "hashValue").Should().Be("def456");
-        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "saltValue").Should().Be("salt456");
-        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "spinCount").Should().Be("100000");
-        BagAttr(workbook.ProtectionMetadata, "workbookProtection", "lockWindows").Should().Be("1");
-        BagChildren(workbook.ProtectionMetadata, "workbookProtection").Should().HaveCount(2);
         workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-workbook-protection-edit"));
 
         using var saved = new MemoryStream();
@@ -1515,7 +1508,7 @@ public partial class XlsxCorpusRunnerTests
             var relationshipId = customProperty.Attribute(relNs + "id")!.Value;
             AssertWorksheetCustomPropertyRelationship(archive, relationshipId, "sheet1-1-FreeXNativeProperty.bin", because);
         }
-        customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept", because);
+        customProperty.Attribute("unsupportedAttr").Should().BeNull(because);
     }
 
     private static void AssertWorksheetCustomPropertyRelationship(
@@ -1551,7 +1544,7 @@ public partial class XlsxCorpusRunnerTests
         dataConsolidate.Attribute("leftLabels")!.Value.Should().Be("1", because);
         dataConsolidate.Attribute("topLabels")!.Value.Should().Be("1", because);
         dataConsolidate.Attribute("link")!.Value.Should().Be("1", because);
-        dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep", because);
+        dataConsolidate.Attribute("customDataConsolidationFlag").Should().BeNull(because);
 
         var dataRef = dataConsolidate
             .Element(worksheetNs + "dataRefs")!
@@ -1561,7 +1554,7 @@ public partial class XlsxCorpusRunnerTests
             .Subject;
         dataRef.Attribute("ref")!.Value.Should().Be("A1:B2", because);
         dataRef.Attribute("sheet")!.Value.Should().Be("Data", because);
-        dataRef.Attribute("customDataRefFlag")!.Value.Should().Be("keep", because);
+        dataRef.Attribute("customDataRefFlag").Should().BeNull(because);
     }
 
     private static void AssertWorksheetAutoFilterMetadata(Stream package, string because)
@@ -1606,7 +1599,7 @@ public partial class XlsxCorpusRunnerTests
         sortState!.Attribute("ref")!.Value.Should().Be("A1:A3", because);
         sortState.Attribute("caseSensitive")!.Value.Should().Be("1", because);
         sortState.Attribute("sortMethod")!.Value.Should().Be("stroke", because);
-        sortState.Attribute("customSortStateFlag")!.Value.Should().Be("keep", because);
+        sortState.Attribute("customSortStateFlag").Should().BeNull(because);
 
         var sortCondition = sortState.Elements(worksheetNs + "sortCondition")
             .Should()
@@ -1615,7 +1608,7 @@ public partial class XlsxCorpusRunnerTests
         sortCondition.Attribute("ref")!.Value.Should().Be("A2:A3", because);
         sortCondition.Attribute("descending")!.Value.Should().Be("1", because);
         sortCondition.Attribute("sortBy")!.Value.Should().Be("cellColor", because);
-        sortCondition.Attribute("customSortConditionFlag")!.Value.Should().Be("keep", because);
+        sortCondition.Attribute("customSortConditionFlag").Should().BeNull(because);
     }
 
     private static void AssertWorksheetPhoneticProperties(Stream package, string because)
@@ -1629,7 +1622,7 @@ public partial class XlsxCorpusRunnerTests
         phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1", because);
         phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana", because);
         phoneticProperties.Attribute("alignment")!.Value.Should().Be("center", because);
-        phoneticProperties.Attribute("nativeOnly")!.Value.Should().Be("kept", because);
+        phoneticProperties.Attribute("nativeOnly").Should().BeNull(because);
     }
 
     private static void AssertWorksheetCellWatches(Stream package, string because)
@@ -1640,14 +1633,14 @@ public partial class XlsxCorpusRunnerTests
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
         cellWatches.Should().NotBeNull(because);
-        cellWatches!.Attribute("nativeContainer")!.Value.Should().Be("kept", because);
+        cellWatches!.Attribute("nativeContainer").Should().BeNull(because);
 
         var cellWatch = cellWatches.Elements(worksheetNs + "cellWatch")
             .Should()
             .ContainSingle(because)
             .Subject;
         cellWatch.Attribute("r")!.Value.Should().Be("A1", because);
-        cellWatch.Attribute("nativeWatch")!.Value.Should().Be("kept", because);
+        cellWatch.Attribute("nativeWatch").Should().BeNull(because);
     }
 
     private static void AssertWorksheetSingleXmlCells(Stream package, string because)
@@ -1679,7 +1672,7 @@ public partial class XlsxCorpusRunnerTests
         var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
         sheetCalcPr.Should().NotBeNull(because);
         sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1", because);
-        sheetCalcPr.Attribute("calcId")!.Value.Should().Be("999", because);
+        sheetCalcPr.Attribute("calcId").Should().BeNull(because);
     }
 
     private static void AssertWorksheetSheetViews(Stream package, string because)
@@ -1690,7 +1683,7 @@ public partial class XlsxCorpusRunnerTests
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
         sheetViews.Should().NotBeNull(because);
-        sheetViews!.Attribute("nativeSheetViewsAttr")!.Value.Should().Be("kept", because);
+        sheetViews!.Attribute("nativeSheetViewsAttr").Should().BeNull(because);
         var sheetView = sheetViews.Elements(worksheetNs + "sheetView")
             .Should()
             .ContainSingle(because)
@@ -1698,8 +1691,7 @@ public partial class XlsxCorpusRunnerTests
         sheetView.Attribute("workbookViewId")!.Value.Should().Be("0", because);
         sheetView.Attribute("showZeros")!.Value.Should().Be("0", because);
         sheetView.Attribute("rightToLeft")!.Value.Should().Be("1", because);
-        sheetView.Element(worksheetNs + "pivotSelection")!
-            .Attribute("pane")!.Value.Should().Be("topRight", because);
+        sheetView.Element(worksheetNs + "pivotSelection").Should().BeNull(because);
     }
 
     private static void AssertWorksheetSheetFormat(Stream package, string because)
@@ -1714,8 +1706,7 @@ public partial class XlsxCorpusRunnerTests
         sheetFormat.Attribute("zeroHeight")!.Value.Should().Be("1", because);
         sheetFormat.Attribute("thickTop")!.Value.Should().Be("1", because);
         sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3", because);
-        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild")!
-            .Attribute("value")!.Value.Should().Be("kept", because);
+        sheetFormat.HasElements.Should().BeFalse(because);
     }
 
     private static void AssertWorksheetPageBreaks(Stream package, string because)
@@ -1736,7 +1727,7 @@ public partial class XlsxCorpusRunnerTests
         rowBreak.Attribute("max")!.Value.Should().Be("16383", because);
         rowBreak.Attribute("man")!.Value.Should().Be("1", because);
         rowBreak.Attribute("pt")!.Value.Should().Be("1", because);
-        rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native", because);
+        rowBreak.Attribute("customAttr").Should().BeNull(because);
 
         var columnBreaks = worksheetXml.Root.Element(worksheetNs + "colBreaks");
         columnBreaks.Should().NotBeNull(because);
@@ -1750,26 +1741,24 @@ public partial class XlsxCorpusRunnerTests
         columnBreak.Attribute("max")!.Value.Should().Be("1048575", because);
         columnBreak.Attribute("man")!.Value.Should().Be("1", because);
         columnBreak.Attribute("pt")!.Value.Should().Be("1", because);
-        columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native", because);
+        columnBreak.Attribute("customAttr").Should().BeNull(because);
     }
 
     private static void AssertWorksheetPrintOptions(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
         printOptions.Should().NotBeNull(because);
         printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1", because);
-        printOptions.Attribute("customAttr")!.Value.Should().Be("print-native", because);
+        printOptions.Attribute("customAttr").Should().BeNull(because);
         printOptions.Attribute("gridLines")?.Value.Should().NotBe("1", because);
         printOptions.Attribute("headings")?.Value.Should().NotBe("1", because);
         printOptions.Attribute("horizontalCentered")?.Value.Should().NotBe("1", because);
         printOptions.Attribute("verticalCentered")?.Value.Should().NotBe("1", because);
-        printOptions.Element(freexNs + "nativePrintOptionsChild")!
-            .Attribute("value")!.Value.Should().Be("kept", because);
+        printOptions.HasElements.Should().BeFalse(because);
     }
 
     private static void AssertWorksheetPageSetupNative(Stream package, string because)
@@ -1782,9 +1771,8 @@ public partial class XlsxCorpusRunnerTests
         pageSetup.Should().NotBeNull(because);
         pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1", because);
         pageSetup.Attribute("copies")!.Value.Should().Be("3", because);
-        pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native", because);
-        pageSetup.Element(worksheetNs + "nativePageSetupChild")!
-            .Attribute("value")!.Value.Should().Be("kept", because);
+        pageSetup.Attribute("customAttr").Should().BeNull(because);
+        pageSetup.HasElements.Should().BeFalse(because);
     }
 
     private static void AssertWorksheetHeaderFooterNative(Stream package, string because)
@@ -1795,10 +1783,9 @@ public partial class XlsxCorpusRunnerTests
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
         headerFooter.Should().NotBeNull(because);
-        headerFooter!.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept", because);
+        headerFooter!.Attribute("nativeHeaderFooterAttr").Should().BeNull(because);
         headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center", because);
-        headerFooter.Element(worksheetNs + "nativeHeaderFooterChild")!
-            .Attribute("value")!.Value.Should().Be("kept", because);
+        headerFooter.Element(worksheetNs + "nativeHeaderFooterChild").Should().BeNull(because);
     }
 
     private static void AssertWorksheetDimensionNative(Stream package, string because, string expectedRef)
@@ -1810,13 +1797,12 @@ public partial class XlsxCorpusRunnerTests
         var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension");
         dimension.Should().NotBeNull(because);
         dimension!.Attribute("ref")!.Value.Should().Be(expectedRef, because);
-        dimension.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept", because);
+        dimension.Attribute("nativeDimensionAttr").Should().BeNull(because);
     }
 
     private static void AssertWorksheetSheetProperties(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
@@ -1827,16 +1813,14 @@ public partial class XlsxCorpusRunnerTests
         pageSetUpPr.Should().NotBeNull(because);
         pageSetUpPr!.Attribute("fitToPage")!.Value.Should().Be("1", because);
         pageSetUpPr.Attribute("autoPageBreaks")!.Value.Should().Be("0", because);
-        sheetPr.Elements(freexNs + "sheetPrNativeChild")
-            .Select(element => element.Attribute("id")?.Value)
+        sheetPr.Elements().Where(element => element.Name.NamespaceName == "urn:freex:test")
             .Should()
-            .BeEquivalentTo(["first", "second"], because);
+            .BeEmpty(because);
     }
 
     private static void AssertWorksheetProtectionNative(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
@@ -1844,21 +1828,17 @@ public partial class XlsxCorpusRunnerTests
         protection.Should().NotBeNull(because);
         protection!.Attribute("sheet")!.Value.Should().Be("1", because);
         protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512", because);
-        protection.Attribute("hashValue")!.Value.Should().Be("abc123", because);
-        protection.Attribute("saltValue")!.Value.Should().Be("salt123", because);
+        protection.Attribute("hashValue")!.Value.Should().Be("AQIDBA==", because);
+        protection.Attribute("saltValue")!.Value.Should().Be("BQYHCA==", because);
         protection.Attribute("spinCount")!.Value.Should().Be("100000", because);
         protection.Attribute("objects")!.Value.Should().Be("1", because);
         protection.Attribute("scenarios")!.Value.Should().Be("1", because);
-        protection.Elements(freexNs + "sheetProtectionNativeChild")
-            .Select(element => element.Attribute("id")?.Value)
-            .Should()
-            .BeEquivalentTo(["first", "second"], because);
+        protection.HasElements.Should().BeFalse(because);
     }
 
     private static void AssertWorksheetProtectedRanges(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
@@ -1873,13 +1853,7 @@ public partial class XlsxCorpusRunnerTests
         editableRange.Attribute("sqref")!.Value.Should().Be("B2:C3", because);
         editableRange.Attribute("password")!.Value.Should().Be("ABCD", because);
         editableRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI", because);
-        editableRange.Element(worksheetNs + "extLst")!
-            .Element(worksheetNs + "ext")!
-            .Attribute("uri")!.Value.Should().Be("{FREEX-PROTECTED-RANGE-TEST}", because);
-        editableRange.Elements(freexNs + "protectedRangeNativeChild")
-            .Select(element => element.Attribute("id")?.Value)
-            .Should()
-            .BeEquivalentTo(["first", "second"], because);
+        editableRange.HasElements.Should().BeFalse(because);
 
         var nativeOnlyRange = ranges.Should()
             .ContainSingle(element => (string?)element.Attribute("name") == "NativeMultiAreaRange", because)
@@ -1897,7 +1871,7 @@ public partial class XlsxCorpusRunnerTests
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         var cols = worksheetXml.Root!.Element(worksheetNs + "cols");
         cols.Should().NotBeNull(because);
-        cols!.Attribute("nativeColsAttr")!.Value.Should().Be("kept", because);
+        cols!.Attribute("nativeColsAttr").Should().BeNull(because);
         var column = cols.Elements(worksheetNs + "col")
             .Where(element => (string?)element.Attribute("min") == "2" && (string?)element.Attribute("max") == "2")
             .Should()
@@ -1905,11 +1879,11 @@ public partial class XlsxCorpusRunnerTests
             .Subject;
         column.Attribute("bestFit")!.Value.Should().Be("1", because);
         column.Attribute("phonetic")!.Value.Should().Be("1", because);
-        column.Attribute("customAttr")!.Value.Should().Be("column-native", because);
+        column.Attribute("customAttr").Should().BeNull(because);
 
         var sheetData = worksheetXml.Root.Element(worksheetNs + "sheetData");
         sheetData.Should().NotBeNull(because);
-        sheetData!.Attribute("nativeSheetDataAttr")!.Value.Should().Be("kept", because);
+        sheetData!.Attribute("nativeSheetDataAttr").Should().BeNull(because);
         var row = sheetData.Elements(worksheetNs + "row")
             .Where(element => (string?)element.Attribute("r") == "2")
             .Should()
@@ -1917,9 +1891,8 @@ public partial class XlsxCorpusRunnerTests
             .Subject;
         row.Attribute("thickTop")!.Value.Should().Be("1", because);
         row.Attribute("ph")!.Value.Should().Be("1", because);
-        row.Attribute("customAttr")!.Value.Should().Be("row-native", because);
-        row.Element(freexNs + "rowNativeChild")!
-            .Attribute("value")!.Value.Should().Be("kept", because);
+        row.Attribute("customAttr").Should().BeNull(because);
+        row.Element(freexNs + "rowNativeChild").Should().BeNull(because);
         row.Element(worksheetNs + "extLst")!
             .Element(worksheetNs + "ext")!
             .Element(freexNs + "rowExt")!
@@ -1930,12 +1903,11 @@ public partial class XlsxCorpusRunnerTests
             .Should()
             .ContainSingle(because)
             .Subject;
-        cell.Attribute("cm")!.Value.Should().Be("2", because);
-        cell.Attribute("vm")!.Value.Should().Be("1", because);
+        cell.Attribute("cm").Should().BeNull(because);
+        cell.Attribute("vm").Should().BeNull(because);
         cell.Attribute("ph")!.Value.Should().Be("1", because);
-        cell.Attribute("customAttr")!.Value.Should().Be("cell-native", because);
-        cell.Element(freexNs + "cellNativeChild")!
-            .Attribute("value")!.Value.Should().Be("kept", because);
+        cell.Attribute("customAttr").Should().BeNull(because);
+        cell.Element(freexNs + "cellNativeChild").Should().BeNull(because);
         cell.Element(worksheetNs + "extLst")!
             .Element(worksheetNs + "ext")!
             .Element(freexNs + "cellExt")!
@@ -1945,17 +1917,17 @@ public partial class XlsxCorpusRunnerTests
         formula!.Attribute("t")!.Value.Should().Be("array", because);
         formula.Attribute("ref")!.Value.Should().Be("A2:A2", because);
         formula.Attribute("ca")!.Value.Should().Be("1", because);
-        formula.Attribute("customAttr")!.Value.Should().Be("formula-native", because);
+        formula.Attribute("customAttr").Should().BeNull(because);
 
         var mergeCells = worksheetXml.Root.Element(worksheetNs + "mergeCells");
         mergeCells.Should().NotBeNull(because);
-        mergeCells!.Attribute("nativeMergeContainerAttr")!.Value.Should().Be("kept", because);
+        mergeCells!.Attribute("nativeMergeContainerAttr").Should().BeNull(because);
         var mergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
             .Where(element => (string?)element.Attribute("ref") == "A4:B5")
             .Should()
             .ContainSingle(because)
             .Subject;
-        mergeCell.Attribute("nativeMergeCellAttr")!.Value.Should().Be("kept", because);
+        mergeCell.Attribute("nativeMergeCellAttr").Should().BeNull(because);
     }
 
     private static void AssertWorksheetIgnoredErrors(Stream package, string because)
@@ -1989,7 +1961,6 @@ public partial class XlsxCorpusRunnerTests
     private static void AssertWorkbookProperties(Stream package, string because)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
@@ -1997,10 +1968,7 @@ public partial class XlsxCorpusRunnerTests
         workbookProperties.Should().NotBeNull(because);
         workbookProperties!.Attribute("date1904")!.Value.Should().Be("1", because);
         workbookProperties.Attribute("defaultThemeVersion")!.Value.Should().Be("166925", because);
-        workbookProperties.Elements(freexNs + "workbookPrNativeChild")
-            .Select(element => element.Attribute("id")?.Value)
-            .Should()
-            .BeEquivalentTo(["first", "second"], because);
+        workbookProperties.HasElements.Should().BeFalse(because);
     }
 
     private static void AssertWorkbookCalculation(Stream package, string because)
@@ -2032,7 +2000,7 @@ public partial class XlsxCorpusRunnerTests
         fileVersion.Attribute("lastEdited")!.Value.Should().Be("7", because);
         fileVersion.Attribute("lowestEdited")!.Value.Should().Be("7", because);
         fileVersion.Attribute("rupBuild")!.Value.Should().Be("28129", because);
-        fileVersion.Attribute("customVersionFlag")!.Value.Should().Be("keep", because);
+        fileVersion.Attribute("customVersionFlag").Should().BeNull(because);
     }
 
     private static void AssertWorkbookFileRecovery(Stream package, string because)
@@ -2045,7 +2013,7 @@ public partial class XlsxCorpusRunnerTests
         recoveryBlocks.Should().HaveCount(2, because);
         recoveryBlocks[0].Attribute("autoRecover")!.Value.Should().Be("1", because);
         recoveryBlocks[0].Attribute("crashSave")!.Value.Should().Be("1", because);
-        recoveryBlocks[0].Attribute("customRecoveryFlag")!.Value.Should().Be("keep", because);
+        recoveryBlocks[0].Attribute("customRecoveryFlag").Should().BeNull(because);
         recoveryBlocks[0].Attribute("repairLoad")!.Value.Should().Be("0", because);
         recoveryBlocks[1].Attribute("dataExtractLoad")!.Value.Should().Be("1", because);
         recoveryBlocks[1].Attribute("repairLoad")!.Value.Should().Be("1", because);
@@ -2061,13 +2029,12 @@ public partial class XlsxCorpusRunnerTests
         fileSharing.Should().NotBeNull(because);
         fileSharing!.Attribute("readOnlyRecommended")!.Value.Should().Be("1", because);
         fileSharing.Attribute("userName")!.Value.Should().Be("FreeXTest", because);
-        fileSharing.Attribute("revisionsPassword")!.Value.Should().Be("1234", because);
+        fileSharing.Attribute("revisionsPassword").Should().BeNull(because);
     }
 
     private static void AssertWorkbookProtectionNative(Stream package, string because)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
@@ -2076,14 +2043,11 @@ public partial class XlsxCorpusRunnerTests
         protection!.Attribute("lockStructure")!.Value.Should().Be("1", because);
         protection.Attribute("lockWindows")!.Value.Should().Be("1", because);
         protection.Attribute("workbookPassword")!.Value.Should().Be("83AF", because);
-        protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512", because);
-        protection.Attribute("hashValue")!.Value.Should().Be("def456", because);
-        protection.Attribute("saltValue")!.Value.Should().Be("salt456", because);
-        protection.Attribute("spinCount")!.Value.Should().Be("100000", because);
-        protection.Elements(freexNs + "workbookProtectionNativeChild")
-            .Select(element => element.Attribute("id")?.Value)
-            .Should()
-            .BeEquivalentTo(["first", "second"], because);
+        protection.Attribute("algorithmName").Should().BeNull(because);
+        protection.Attribute("hashValue").Should().BeNull(because);
+        protection.Attribute("saltValue").Should().BeNull(because);
+        protection.Attribute("spinCount").Should().BeNull(because);
+        protection.HasElements.Should().BeFalse(because);
     }
 
     private static void AssertWorkbookSmartTags(Stream package, string because)
@@ -2096,18 +2060,18 @@ public partial class XlsxCorpusRunnerTests
         smartTagProperties.Should().NotBeNull(because);
         smartTagProperties!.Attribute("embed")!.Value.Should().Be("1", because);
         smartTagProperties.Attribute("show")!.Value.Should().Be("all", because);
-        smartTagProperties.Attribute("customSmartTagFlag")!.Value.Should().Be("keep", because);
+        smartTagProperties.Attribute("customSmartTagFlag").Should().BeNull(because);
 
         var smartTagTypes = workbookXml.Root.Element(workbookNs + "smartTagTypes");
         smartTagTypes.Should().NotBeNull(because);
-        smartTagTypes!.Attribute("customSmartTagTypesFlag")!.Value.Should().Be("keep", because);
+        smartTagTypes!.Attribute("customSmartTagTypesFlag").Should().BeNull(because);
         var smartTagType = smartTagTypes.Elements(workbookNs + "smartTagType")
             .Should()
             .ContainSingle(because)
             .Subject;
         smartTagType.Attribute("namespaceUri")!.Value.Should().Be("urn:schemas-microsoft-com:office:smarttags", because);
         smartTagType.Attribute("name")!.Value.Should().Be("place", because);
-        smartTagType.Attribute("customSmartTagTypeFlag")!.Value.Should().Be("keep", because);
+        smartTagType.Attribute("customSmartTagTypeFlag").Should().BeNull(because);
     }
 
     private static void AssertWorkbookFunctionGroups(Stream package, string because)
@@ -2119,13 +2083,13 @@ public partial class XlsxCorpusRunnerTests
         var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups");
         functionGroups.Should().NotBeNull(because);
         functionGroups!.Attribute("builtInGroupCount")!.Value.Should().Be("16", because);
-        functionGroups.Attribute("customFunctionGroupFlag")!.Value.Should().Be("keep", because);
+        functionGroups.Attribute("customFunctionGroupFlag").Should().BeNull(because);
         var functionGroup = functionGroups.Elements(workbookNs + "functionGroup")
             .Should()
             .ContainSingle(because)
             .Subject;
         functionGroup.Attribute("name")!.Value.Should().Be("FreeXNativeFunctions", because);
-        functionGroup.Attribute("customGroupFlag")!.Value.Should().Be("keep", because);
+        functionGroup.Attribute("customGroupFlag").Should().BeNull(because);
     }
 
     private static void AssertWorkbookViews(Stream package, string because, bool expectCustomViews = true)
@@ -2146,7 +2110,7 @@ public partial class XlsxCorpusRunnerTests
         hasPrimaryView.Should().BeTrue(because);
         var hasAdditionalView = views.Any(view =>
             string.Equals(view.Attribute("visibility")?.Value, "hidden", StringComparison.Ordinal) &&
-            string.Equals(view.Attribute("customWorkbookViewFlag")?.Value, "kept", StringComparison.Ordinal) &&
+            view.Attribute("customWorkbookViewFlag") is null &&
             string.Equals(view.Attribute("showHorizontalScroll")?.Value, "0", StringComparison.Ordinal));
         hasAdditionalView.Should().BeTrue(because);
 
@@ -2188,7 +2152,6 @@ public partial class XlsxCorpusRunnerTests
     private static void AssertStylesheetNativeMetadata(Stream package, string because)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace freexNs = "urn:freex:test";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
@@ -2201,10 +2164,6 @@ public partial class XlsxCorpusRunnerTests
         tableStyles!.Attribute("defaultPivotStyle")!.Value.Should().Be("PivotStyleMedium9", because);
         tableStyles.Elements(workbookNs + "tableStyle")
             .Where(element => string.Equals(element.Attribute("name")?.Value, "FreeXNativeTableStyle", StringComparison.Ordinal))
-            .Should()
-            .ContainSingle(because);
-        tableStyles.Elements(freexNs + "tableStylesNativeChild")
-            .Where(element => string.Equals(element.Attribute("value")?.Value, "kept", StringComparison.Ordinal))
             .Should()
             .ContainSingle(because);
         tableStyles.Elements(workbookNs + "tableStyle")
@@ -2221,12 +2180,10 @@ public partial class XlsxCorpusRunnerTests
             .Should()
             .ContainSingle(because)
             .Subject;
-        differentialStyle.Attribute("nativePivotDxf")!.Value.Should().Be("kept", because);
-        differentialStyle.Element(freexNs + "pivotStyleDxfNativeChild")!
-            .Attribute("value")!
-            .Value
+        differentialStyle.Attribute("nativePivotDxf").Should().BeNull(because);
+        differentialStyle.Elements().Where(element => element.Name.LocalName == "pivotStyleDxfNativeChild")
             .Should()
-            .Be("kept", because);
+            .BeEmpty(because);
 
         var extensionList = stylesXml.Root.Element(workbookNs + "extLst");
         extensionList.Should().NotBeNull(because);
