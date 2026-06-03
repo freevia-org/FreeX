@@ -556,6 +556,10 @@ public sealed class GridViewRenderPerformanceTests
         renderWithCache.Should().Contain("dc.DrawDrawing(cached);");
         renderWithCache.Should().Contain("ShouldBuildPreSelectionLayerCache(key)");
         renderWithCache.Should().Contain("RememberPreSelectionLayerRenderKey(key);");
+        cache.Should().Contain("bool SkipHeavyLayers");
+        cache.Should().Contain("private static bool CanCachePreSelectionLayers(bool skipHeavyLayers, bool isLiveResizing) =>");
+        cache.Should().Contain("!isLiveResizing;");
+        cache.Should().NotContain("!skipHeavyLayers &&");
         cache.Should().Contain("_hasLastPreSelectionLayerRenderKey && _lastPreSelectionLayerRenderKey == key");
         cache.Should().Contain("_selectionVisualOnlyChangePending ||");
         cache.Should().Contain("_hasLastPreSelectionLayerRenderKey = false;");
