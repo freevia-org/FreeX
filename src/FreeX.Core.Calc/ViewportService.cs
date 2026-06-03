@@ -38,6 +38,12 @@ public sealed partial class ViewportService : IViewportService
             hasAnyStyleOnlyCells);
         var occupiedScanUsedRangeOverlapsViewport = scanOccupiedViewportCells &&
             UsedRangeOverlapsVisibleMetrics(sheet, rowMetrics, colMetrics);
+        if (!scanOccupiedViewportCells || occupiedScanUsedRangeOverlapsViewport)
+        {
+            rowMetrics = MaterializeRowMetrics(rowMetrics);
+            colMetrics = MaterializeColMetrics(colMetrics);
+        }
+
         var cells = new List<DisplayCell>(
             scanOccupiedViewportCells
                 ? occupiedScanUsedRangeOverlapsViewport
@@ -129,6 +135,30 @@ public sealed partial class ViewportService : IViewportService
             : [];
 
         return new ViewportModel(cells, rowMetrics, colMetrics, frozenPanes, [], splitPanes, chartDataCells);
+    }
+
+    private static IReadOnlyList<RowMetric> MaterializeRowMetrics(IReadOnlyList<RowMetric> metrics)
+    {
+        if (metrics.Count == 0 || metrics is List<RowMetric>)
+            return metrics;
+
+        var materialized = new List<RowMetric>(metrics.Count);
+        for (var i = 0; i < metrics.Count; i++)
+            materialized.Add(metrics[i]);
+
+        return materialized;
+    }
+
+    private static IReadOnlyList<ColMetric> MaterializeColMetrics(IReadOnlyList<ColMetric> metrics)
+    {
+        if (metrics.Count == 0 || metrics is List<ColMetric>)
+            return metrics;
+
+        var materialized = new List<ColMetric>(metrics.Count);
+        for (var i = 0; i < metrics.Count; i++)
+            materialized.Add(metrics[i]);
+
+        return materialized;
     }
 
     private static int EstimateDisplayCellCapacity(
