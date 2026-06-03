@@ -530,6 +530,32 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void RegisterFormulaDependencies_NonTinyRange_UsesCompactRange()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        var formula = new CellAddress(sheet.Id, 20, 2);
+        var inside = new CellAddress(sheet.Id, 5, 1);
+        var outside = new CellAddress(sheet.Id, 11, 1);
+
+        engine.RegisterFormulaDependencies(
+            formula,
+            new Parser(new Lexer("=SUM(A1:A10)").Tokenize()).Parse(),
+            sheet.Id,
+            workbook);
+
+        graph.GetDirectPrecedents(formula).Should().BeEmpty();
+        graph.GetDirectRangePrecedents(formula).Should().ContainSingle()
+            .Which.Should().Be(new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 10, 1)));
+        graph.GetRecalcOrder([inside]).OrderedCells.Should().Contain(formula);
+        graph.GetRecalcOrder([outside]).OrderedCells.Should().NotContain(formula);
+    }
+
+    [Fact]
     public void RecalcOrder_DetectsCycleThroughLargeRangeDependency()
     {
         var workbook = new Workbook("Test");

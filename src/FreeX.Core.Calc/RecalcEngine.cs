@@ -11,7 +11,8 @@ namespace FreeX.Core.Calc;
 /// </summary>
 public sealed class RecalcEngine
 {
-    private const long CompactRangeCellThreshold = 1024;
+    // Keep only tiny ranges as exact cell edges; larger ranges avoid repeated dependent-list fan-out.
+    private const long CompactRangeCellThreshold = 8;
     private const int MaxDependencyPlanCacheEntries = 1024;
     private static readonly IReadOnlySet<CellAddress> EmptyDependencyCells = FrozenSet<CellAddress>.Empty;
     private static readonly RecalcReport EmptyReport = new([], [], []);
