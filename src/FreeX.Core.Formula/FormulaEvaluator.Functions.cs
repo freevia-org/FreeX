@@ -42,6 +42,22 @@ public sealed partial class FormulaEvaluator
         if (TryEvaluateReferenceDimensionFunction(functionName, node, context, out var dimensionResult))
             return dimensionResult;
 
+        if (functionName == "MATCH" &&
+            TryEvaluateMatchDirectRange(node, context, out var directMatchResult))
+            return directMatchResult;
+
+        if (functionName == "XMATCH" &&
+            TryEvaluateXmatchDirectRange(node, context, out var directXmatchResult))
+            return directXmatchResult;
+
+        if (functionName == "XLOOKUP" &&
+            TryEvaluateXlookupDirectRanges(node, context, out var directXlookupResult))
+            return directXlookupResult;
+
+        if (functionName == "LOOKUP" &&
+            TryEvaluateLookupDirectRanges(node, context, out var directLookupResult))
+            return directLookupResult;
+
         if (functionName == "NPV" &&
             TryEvaluateNpvDirectRanges(node, context, out var directNpvResult))
             return directNpvResult;

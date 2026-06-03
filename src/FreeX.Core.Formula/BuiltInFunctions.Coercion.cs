@@ -24,7 +24,7 @@ public static partial class BuiltInFunctions
         _ => throw new FormulaEvalException("#VALUE!", $"Cannot convert {v} to boolean")
     };
 
-    private static string ToText(ScalarValue v) => v switch
+    internal static string ToText(ScalarValue v) => v switch
     {
         DirectTextLiteralValue t => t.Value,
         TextValue t => t.Value,
@@ -149,7 +149,7 @@ public static partial class BuiltInFunctions
         return result;
     }
 
-    private static int CompareScalar(ScalarValue a, ScalarValue b)
+    internal static int CompareScalar(ScalarValue a, ScalarValue b)
     {
         if (a is BlankValue && TryCellNumber(b, out _)) a = new NumberValue(0);
         if (b is BlankValue && TryCellNumber(a, out _)) b = new NumberValue(0);
