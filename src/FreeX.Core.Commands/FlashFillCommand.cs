@@ -76,9 +76,12 @@ public sealed class FlashFillCommand : IWorkbookCommand
             }
             else
             {
-                // Blank fill cell — candidate for filling
-                rowsToFill.Add(row);
-                sourcesToFill.Add(sourceStr);
+                // Blank fill cells with no source data are left blank instead of aborting the whole range.
+                if (sourceStr.Length > 0)
+                {
+                    rowsToFill.Add(row);
+                    sourcesToFill.Add(sourceStr);
+                }
             }
         }
 

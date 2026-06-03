@@ -127,6 +127,8 @@ internal static class XlsxStyleOnlyCellWriter
                 .Select(cell => (Element: cell, Reference: cell.Attribute("r")?.Value))
                 .Where(pair => !string.IsNullOrWhiteSpace(pair.Reference))
                 .ToDictionary(pair => pair.Reference!, pair => pair.Element, StringComparer.OrdinalIgnoreCase);
+            XElement? insertionCursor = null;
+            uint insertionCursorCol = 0;
 
             do
             {
@@ -138,6 +140,8 @@ internal static class XlsxStyleOnlyCellWriter
                 if (cellsByReference.TryGetValue(reference, out var existingCell))
                 {
                     changed |= RewriteStyleOnlyCell(existingCell, worksheetNs, reference, styleIndex);
+                    insertionCursor = existingCell;
+                    insertionCursorCol = cell.Col;
                     continue;
                 }
 
@@ -145,7 +149,7 @@ internal static class XlsxStyleOnlyCellWriter
                     cellName,
                     new XAttribute("r", reference),
                     new XAttribute("s", styleIndex));
-                InsertCellInOrder(row, cellName, newCell, cell.Col);
+                InsertCellInOrder(row, cellName, newCell, cell.Col, ref insertionCursor, ref insertionCursorCol);
                 cellsByReference[reference] = newCell;
                 changed = true;
             }
@@ -275,15 +279,41 @@ internal static class XlsxStyleOnlyCellWriter
         return row;
     }
 
-    private static void InsertCellInOrder(XElement row, XName cellName, XElement cell, uint col)
+    private static void InsertCellInOrder(
+        XElement row,
+        XName cellName,
+        XElement cell,
+        uint col,
+        ref XElement? insertionCursor,
+        ref uint insertionCursorCol)
     {
-        var insertBefore = row
-            .Elements(cellName)
-            .FirstOrDefault(existing => TryGetCellColumn(existing, out var existingCol) && existingCol > col);
-        if (insertBefore is null)
+        var cells = insertionCursor is not null && insertionCursorCol < col
+            ? insertionCursor.ElementsAfterSelf(cellName)
+            : row.Elements(cellName);
+        var lastSeen = insertionCursor is not null && insertionCursorCol < col
+            ? insertionCursor
+            : null;
+
+        foreach (var existing in cells)
+        {
+            if (TryGetCellColumn(existing, out var existingCol) && existingCol > col)
+            {
+                existing.AddBeforeSelf(cell);
+                insertionCursor = cell;
+                insertionCursorCol = col;
+                return;
+            }
+
+            lastSeen = existing;
+        }
+
+        if (lastSeen is null)
             row.Add(cell);
         else
-            insertBefore.AddBeforeSelf(cell);
+            lastSeen.AddAfterSelf(cell);
+
+        insertionCursor = cell;
+        insertionCursorCol = col;
     }
 
     private static XElement? FindCell(XElement sheetData, XNamespace worksheetNs, string reference)

@@ -438,8 +438,8 @@ public class PerformanceBenchmarkTests
         sheet.GetCell(new CellAddress(sheet.Id, 1, 3))!.CachedAst.Should().NotBeNull();
         allocated.Should().BeGreaterThan(0);
         (allocated / formulaCount).Should().BeLessThan(
-            5_000,
-            "repeated formula dependency rebuilds should reuse shared text-to-AST and dependency-plan caches");
+            4_000,
+            "repeated formula dependency rebuilds should reuse shared text-to-AST and compact dependency-plan caches");
     }
 
     [Fact]
