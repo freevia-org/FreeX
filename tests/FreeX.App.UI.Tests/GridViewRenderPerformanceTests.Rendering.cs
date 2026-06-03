@@ -90,7 +90,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
         renderCells.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip).Width");
@@ -434,8 +434,30 @@ public sealed partial class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<TextWidthLayoutKey, double> _textWidthLayoutCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<ShrinkTextLayoutKey, double> _shrinkTextLayoutCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<Rect, RectangleGeometry> _cellClipGeometryCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<Rect, Geometry> _commentIndicatorGeometryCache = new();");
         gridViewSource.Should().Contain("private RenderCellLookupCache? _renderCellLookupCache;");
         gridViewSource.Should().Contain("private OccupiedCellLookupCache? _occupiedCellLookupCache;");
+    }
+
+    [Fact]
+    public void RenderCells_ReusesCommentIndicatorGeometriesAcrossRenderPasses()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var drawCommentIndicator = rendering[
+            rendering.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)..
+            rendering.IndexOf("private static bool ShouldClipText", StringComparison.Ordinal)];
+
+        gridViewSource.Should().Contain("private readonly Dictionary<Rect, Geometry> _commentIndicatorGeometryCache = new();");
+        rendering.Should().Contain("private const int CommentIndicatorGeometryCacheLimit = 16384;");
+        drawCommentIndicator.Should().Contain("dc.DrawGeometry(Brushes.Red, null, GetCommentIndicatorGeometry(rect));");
+        drawCommentIndicator.Should().Contain("_commentIndicatorGeometryCache.TryGetValue(rect, out var cached)");
+        drawCommentIndicator.Should().Contain("_commentIndicatorGeometryCache.Count >= CommentIndicatorGeometryCacheLimit");
+        drawCommentIndicator.Should().Contain("_commentIndicatorGeometryCache.Clear();");
+        drawCommentIndicator.Should().Contain("CreateCommentIndicatorGeometry(rect)");
+        drawCommentIndicator.Should().Contain("_commentIndicatorGeometryCache.Add(rect, geometry);");
+        drawCommentIndicator.Should().Contain("geometry.Freeze();");
+        drawCommentIndicator.Should().NotContain("dc.DrawGeometry(Brushes.Red, null, geometry);");
     }
 
     [Fact]
@@ -612,7 +634,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("BrushForCellColor(bg.FillColor.Value, _brushCache)");
         renderCells.Should().Contain("BrushForCellColor(fc, _brushCache)");
@@ -625,7 +647,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("_brushCache, _borderPenCache");
     }
@@ -658,7 +680,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("var typefaceKey = CreateCellTypefaceKey(style);");
         renderCells.Should().Contain("CreateCellTypeface(typefaceKey, _typefaceCache)");
@@ -687,7 +709,7 @@ public sealed partial class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+            source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
         renderCells.Should().Contain("UnderlinePenForTextBrush(textBrush, _underlinePenCache)");
         source.Should().Contain("private static Pen UnderlinePenForTextBrush");
