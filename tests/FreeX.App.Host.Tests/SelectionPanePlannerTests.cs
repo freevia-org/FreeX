@@ -606,6 +606,54 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_ExposesStableAutomationIds()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SelectionPaneDialog.cs"));
+
+        foreach (var expected in new[]
+        {
+            "AutomationProperties.SetAutomationId(this, \"SelectionPaneDialog\")",
+            "AutomationProperties.SetAutomationId(_list, \"SelectionPaneObjectList\")",
+            "AutomationProperties.SetAutomationId(_searchBox, \"SelectionPaneSearchBox\")",
+            "AutomationProperties.SetAutomationId(_filterBox, \"SelectionPaneFilterBox\")",
+            "AutomationProperties.SetAutomationId(_renameBox, \"SelectionPaneRenameBox\")",
+            "AutomationProperties.SetAutomationId(_renameButton, \"SelectionPaneRenameButton\")",
+            "AutomationProperties.SetAutomationId(_toggleVisibilityButton, \"SelectionPaneToggleVisibilityButton\")",
+            "AutomationProperties.SetAutomationId(_moveUpButton, \"SelectionPaneBringForwardButton\")",
+            "AutomationProperties.SetAutomationId(_moveDownButton, \"SelectionPaneSendBackwardButton\")",
+            "AutomationProperties.SetAutomationId(_showAllButton, \"SelectionPaneShowAllButton\")",
+            "AutomationProperties.SetAutomationId(_hideAllButton, \"SelectionPaneHideAllButton\")",
+            "AutomationProperties.SetAutomationId(okButton, \"SelectionPaneOkButton\")",
+            "AutomationProperties.SetAutomationId(cancelButton, \"SelectionPaneCancelButton\")",
+            "AutomationProperties.AutomationIdProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.AutomationId))",
+            "AutomationProperties.AutomationIdProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.VisibilityAutomationId))",
+            "AutomationProperties.AutomationIdProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.NameAutomationId))"
+        })
+        {
+            source.Should().Contain(expected);
+        }
+    }
+
+    [Fact]
+    public void SelectionPaneDialogItem_AutomationIdsIncludeKindAndObjectId()
+    {
+        var id = Guid.Parse("01890def-56ab-4cde-9234-0123456789ab");
+        var item = new SelectionPaneItem(
+            SelectionPaneObjectKind.Picture,
+            id,
+            "Picture 1",
+            IsVisible: true,
+            CanMoveUp: true,
+            CanMoveDown: true);
+
+        var dialogItem = new SelectionPaneDialogItem(item);
+
+        dialogItem.AutomationId.Should().Be("SelectionPaneItemPicture01890def56ab4cde92340123456789ab");
+        dialogItem.VisibilityAutomationId.Should().Be("SelectionPaneItemPicture01890def56ab4cde92340123456789abVisibilityBox");
+        dialogItem.NameAutomationId.Should().Be("SelectionPaneItemPicture01890def56ab4cde92340123456789abNameBox");
+    }
+
+    [Fact]
     public void SelectionPaneDialogOpenedFromKeyboard_FocusesSearchBox()
     {
         var source = ReadSelectionPaneDialogSources();
