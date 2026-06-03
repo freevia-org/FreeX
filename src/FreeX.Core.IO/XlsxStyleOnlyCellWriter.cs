@@ -112,11 +112,7 @@ internal static class XlsxStyleOnlyCellWriter
         var cellName = worksheetNs + "c";
         var changed = false;
 
-        var rowsByNumber = sheetData
-            .Elements(rowName)
-            .Select(row => (Element: row, Number: TryGetRowNumber(row, out var number) ? number : 0))
-            .Where(pair => pair.Number > 0)
-            .ToDictionary(pair => pair.Number, pair => pair.Element);
+        var rowsByNumber = ReadRowsByNumber(sheetData, rowName);
         XElement? rowInsertionCursor = null;
         uint rowInsertionCursorNumber = 0;
 
@@ -131,11 +127,6 @@ internal static class XlsxStyleOnlyCellWriter
                 ref rowInsertionCursor,
                 ref rowInsertionCursorNumber,
                 ref changed);
-            var cellsByReference = row
-                .Elements(cellName)
-                .Select(cell => (Element: cell, Reference: cell.Attribute("r")?.Value))
-                .Where(pair => !string.IsNullOrWhiteSpace(pair.Reference))
-                .ToDictionary(pair => pair.Reference!, pair => pair.Element, StringComparer.OrdinalIgnoreCase);
             XElement? insertionCursor = null;
             uint insertionCursorCol = 0;
 
@@ -146,21 +137,22 @@ internal static class XlsxStyleOnlyCellWriter
                     continue;
 
                 var reference = ToReference(cell.Row, cell.Col);
-                if (cellsByReference.TryGetValue(reference, out var existingCell))
+                var targetCell = GetOrCreateCellInOrder(
+                    row,
+                    cellName,
+                    reference,
+                    cell.Col,
+                    ref insertionCursor,
+                    ref insertionCursorCol,
+                    out var created);
+                if (created)
                 {
-                    changed |= RewriteStyleOnlyCell(existingCell, worksheetNs, reference, styleIndex);
-                    insertionCursor = existingCell;
-                    insertionCursorCol = cell.Col;
+                    SetAttributeIfDifferent(targetCell, "s", styleIndex);
+                    changed = true;
                     continue;
                 }
 
-                var newCell = new XElement(
-                    cellName,
-                    new XAttribute("r", reference),
-                    new XAttribute("s", styleIndex));
-                InsertCellInOrder(row, cellName, newCell, cell.Col, ref insertionCursor, ref insertionCursorCol);
-                cellsByReference[reference] = newCell;
-                changed = true;
+                changed |= RewriteStyleOnlyCell(targetCell, worksheetNs, reference, styleIndex);
             }
             while (index < styleOnlyCells.Count && styleOnlyCells[index].Row == rowNumber);
         }
@@ -264,6 +256,18 @@ internal static class XlsxStyleOnlyCellWriter
         return sheetData;
     }
 
+    private static Dictionary<uint, XElement> ReadRowsByNumber(XElement sheetData, XName rowName)
+    {
+        var rows = new Dictionary<uint, XElement>();
+        foreach (var row in sheetData.Elements(rowName))
+        {
+            if (TryGetRowNumber(row, out var rowNumber) && rowNumber > 0)
+                rows.Add(rowNumber, row);
+        }
+
+        return rows;
+    }
+
     private static XElement GetOrCreateRow(
         XElement sheetData,
         XName rowName,
@@ -315,14 +319,21 @@ internal static class XlsxStyleOnlyCellWriter
         return row;
     }
 
-    private static void InsertCellInOrder(
+    private static XElement GetOrCreateCellInOrder(
         XElement row,
         XName cellName,
-        XElement cell,
+        string reference,
         uint col,
         ref XElement? insertionCursor,
-        ref uint insertionCursorCol)
+        ref uint insertionCursorCol,
+        out bool created)
     {
+        if (insertionCursor is not null && insertionCursorCol == col)
+        {
+            created = false;
+            return insertionCursor;
+        }
+
         var cells = insertionCursor is not null && insertionCursorCol < col
             ? insertionCursor.ElementsAfterSelf(cellName)
             : row.Elements(cellName);
@@ -332,24 +343,40 @@ internal static class XlsxStyleOnlyCellWriter
 
         foreach (var existing in cells)
         {
-            if (TryGetCellColumn(existing, out var existingCol) && existingCol > col)
+            if (TryGetCellColumn(existing, out var existingCol))
             {
-                existing.AddBeforeSelf(cell);
-                insertionCursor = cell;
-                insertionCursorCol = col;
-                return;
+                if (existingCol == col)
+                {
+                    insertionCursor = existing;
+                    insertionCursorCol = col;
+                    created = false;
+                    return existing;
+                }
+
+                if (existingCol > col)
+                {
+                    var cell = new XElement(cellName, new XAttribute("r", reference));
+                    existing.AddBeforeSelf(cell);
+                    insertionCursor = cell;
+                    insertionCursorCol = col;
+                    created = true;
+                    return cell;
+                }
             }
 
             lastSeen = existing;
         }
 
+        var appendedCell = new XElement(cellName, new XAttribute("r", reference));
         if (lastSeen is null)
-            row.Add(cell);
+            row.Add(appendedCell);
         else
-            lastSeen.AddAfterSelf(cell);
+            lastSeen.AddAfterSelf(appendedCell);
 
-        insertionCursor = cell;
+        insertionCursor = appendedCell;
         insertionCursorCol = col;
+        created = true;
+        return appendedCell;
     }
 
     private static XElement? FindCell(XElement sheetData, XNamespace worksheetNs, string reference)
