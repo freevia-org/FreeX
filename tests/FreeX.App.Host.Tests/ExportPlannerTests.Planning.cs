@@ -144,4 +144,32 @@ public partial class ExportPlannerTests
         request.Format.Should().Be(ExportFormat.Xps);
         request.ActualPath.Should().Be(path);
     }
+
+    [Fact]
+    public void ShouldPromptForNormalizedOverwrite_WhenDialogPathChangesToExistingTarget()
+    {
+        var request = ExportPlanner.PlanExport(@"C:\temp\report.txt", ExportFormat.Pdf, ExportOptions.ExcelLikeDefault);
+
+        ExportPlanner.ShouldPromptForNormalizedOverwrite(
+                @"C:\temp\report.txt",
+                request,
+                path => path.Equals(@"C:\temp\report.pdf", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .BeTrue();
+    }
+
+    [Fact]
+    public void ShouldPromptForNormalizedOverwrite_SkipsUnchangedOrMissingTarget()
+    {
+        var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf", ExportFormat.Pdf, ExportOptions.ExcelLikeDefault);
+
+        ExportPlanner.ShouldPromptForNormalizedOverwrite(@"C:\temp\report.pdf", request, _ => true)
+            .Should()
+            .BeFalse();
+
+        var normalized = ExportPlanner.PlanExport(@"C:\temp\report.txt", ExportFormat.Pdf, ExportOptions.ExcelLikeDefault);
+        ExportPlanner.ShouldPromptForNormalizedOverwrite(@"C:\temp\report.txt", normalized, _ => false)
+            .Should()
+            .BeFalse();
+    }
 }

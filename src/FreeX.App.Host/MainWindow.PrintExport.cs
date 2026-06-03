@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Documents;
 using FreeX.Core.Model;
@@ -68,6 +69,16 @@ public partial class MainWindow
         }
 
         var request = ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result);
+        if (ExportPlanner.ShouldPromptForNormalizedOverwrite(saveDlg.FileName, request, File.Exists) &&
+            ShowOwnedMessage(
+                UiText.Format("MainWindowMessage_ExportNormalizedOverwritePrompt", request.Path),
+                UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
         if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError))
         {
             ShowOwnedMessage(
