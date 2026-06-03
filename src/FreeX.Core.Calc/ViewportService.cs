@@ -36,9 +36,13 @@ public sealed partial class ViewportService : IViewportService
             sheet,
             hasAnyCellComments,
             hasAnyStyleOnlyCells);
+        var occupiedScanUsedRangeOverlapsViewport = scanOccupiedViewportCells &&
+            UsedRangeOverlapsVisibleMetrics(sheet, rowMetrics, colMetrics);
         var cells = new List<DisplayCell>(
             scanOccupiedViewportCells
-                ? EstimateOccupiedScanDisplayCellCapacity(rowMetrics, colMetrics, sheet)
+                ? occupiedScanUsedRangeOverlapsViewport
+                    ? EstimateOccupiedScanDisplayCellCapacity(rowMetrics, colMetrics, sheet)
+                    : 0
                 : EstimateDisplayCellCapacity(
                     rowMetrics.Count,
                     colMetrics.Count,
@@ -51,19 +55,22 @@ public sealed partial class ViewportService : IViewportService
         // Retrieve Cells in Viewport
         if (scanOccupiedViewportCells)
         {
-            AddOccupiedViewportCells(
-                cells,
-                workbook,
-                sheet,
-                sheetId,
-                rowMetrics,
-                colMetrics,
-                request.IncludeFormulas,
-                cfContext,
-                hasConditionalStyles,
-                hasConditionalIcons,
-                hasAnyCellComments,
-                ref styleCache);
+            if (occupiedScanUsedRangeOverlapsViewport)
+            {
+                AddOccupiedViewportCells(
+                    cells,
+                    workbook,
+                    sheet,
+                    sheetId,
+                    rowMetrics,
+                    colMetrics,
+                    request.IncludeFormulas,
+                    cfContext,
+                    hasConditionalStyles,
+                    hasConditionalIcons,
+                    hasAnyCellComments,
+                    ref styleCache);
+            }
         }
         else
         {
@@ -178,18 +185,25 @@ public sealed partial class ViewportService : IViewportService
         IReadOnlyList<ColMetric> colMetrics,
         Sheet sheet)
     {
-        if (sheet.GetUsedRange() is not { } usedRange ||
-            rowMetrics.Count == 0 ||
-            colMetrics.Count == 0 ||
-            !RangesOverlap(usedRange.Start.Row, usedRange.End.Row, rowMetrics[0].Row, rowMetrics[^1].Row) ||
-            !RangesOverlap(usedRange.Start.Col, usedRange.End.Col, colMetrics[0].Col, colMetrics[^1].Col))
-        {
-            return 0;
-        }
-
         return ClampCapacityHint(Math.Min(
             EstimateVisibleCellSlots(rowMetrics.Count, colMetrics.Count),
             sheet.CellCount));
+    }
+
+    private static bool UsedRangeOverlapsVisibleMetrics(
+        Sheet sheet,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics)
+    {
+        if (rowMetrics.Count == 0 ||
+            colMetrics.Count == 0 ||
+            sheet.GetUsedRange() is not { } usedRange)
+        {
+            return false;
+        }
+
+        return RangesOverlap(usedRange.Start.Row, usedRange.End.Row, rowMetrics[0].Row, rowMetrics[^1].Row) &&
+            RangesOverlap(usedRange.Start.Col, usedRange.End.Col, colMetrics[0].Col, colMetrics[^1].Col);
     }
 
     private static bool RangesOverlap(uint firstStart, uint firstEnd, uint secondStart, uint secondEnd) =>

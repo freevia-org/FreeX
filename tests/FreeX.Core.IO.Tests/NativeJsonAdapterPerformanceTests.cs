@@ -273,6 +273,24 @@ public sealed class NativeJsonAdapterPerformanceTests
     }
 
     [Fact]
+    public void SaveWorkbookReferences_AvoidsLinqProjectionChains()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.Save.cs"));
+
+        source.Should().Contain("WatchedCells = ToWatchedCellDtos(workbook)");
+        source.Should().Contain("Scenarios = ToScenarioDtos(workbook)");
+        source.Should().Contain("new List<WatchedCellDto>(workbook.WatchedCells.Count)");
+        source.Should().Contain("new List<ScenarioDto>(workbook.Scenarios.Count)");
+        source.Should().Contain("new List<ScenarioCellDto>(changes.Count)");
+        source.Should().NotContain("workbook.WatchedCells.Select");
+        source.Should().NotContain(".OfType<WatchedCellDto>()");
+        source.Should().NotContain(".OfType<ScenarioCellValue>()");
+    }
+
+    [Fact]
     public void SaveCellWriters_StreamAddressesInsteadOfAllocatingA1Strings()
     {
         var saveSource = File.ReadAllText(FindRepoFile(

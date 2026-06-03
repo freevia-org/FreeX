@@ -663,6 +663,26 @@ public class PerformanceBenchmarkTests
             "sparse viewport construction should avoid repeated linear metric scans for every occupied cell");
     }
 
+    [Fact]
+    public void SparseOccupiedViewportCells_SkipsOccupiedMapScanWhenUsedRangeMissesViewport()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Calc", "ViewportService.cs"));
+        var getViewport = source[
+            source.IndexOf("public ViewportModel GetViewport", StringComparison.Ordinal)..
+            source.IndexOf("private static int EstimateDisplayCellCapacity", StringComparison.Ordinal)];
+        var overlapHelper = source[
+            source.IndexOf("private static bool UsedRangeOverlapsVisibleMetrics", StringComparison.Ordinal)..
+            source.IndexOf("private static bool RangesOverlap", StringComparison.Ordinal)];
+
+        getViewport.Should().Contain("var occupiedScanUsedRangeOverlapsViewport = scanOccupiedViewportCells &&");
+        getViewport.Should().Contain("UsedRangeOverlapsVisibleMetrics(sheet, rowMetrics, colMetrics)");
+        getViewport.Should().Contain("if (occupiedScanUsedRangeOverlapsViewport)");
+        getViewport.IndexOf("UsedRangeOverlapsVisibleMetrics", StringComparison.Ordinal)
+            .Should().BeLessThan(getViewport.IndexOf("AddOccupiedViewportCells(", StringComparison.Ordinal));
+        overlapHelper.Should().Contain("sheet.GetUsedRange()");
+        overlapHelper.Should().Contain("RangesOverlap(usedRange.Start.Col");
+    }
+
     /// <summary>
     /// Benchmark: Memory usage for 1,000,000 cells (values only, no formulas).
     /// Target: <200MB
