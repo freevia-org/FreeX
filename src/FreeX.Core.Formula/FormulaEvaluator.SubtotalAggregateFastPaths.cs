@@ -147,7 +147,7 @@ public sealed partial class FormulaEvaluator
         }
 
         if (funcNum > 11)
-            return false;
+            return TryEvaluateAggregateSelectionDirectRanges(node, context, funcNum, options, out result);
 
         var ignoreErrors = options is 2 or 3 or 6 or 7;
         var ignoreHiddenRows = options is 1 or 3 or 5 or 7;
