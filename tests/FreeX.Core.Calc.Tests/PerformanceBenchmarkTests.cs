@@ -241,6 +241,70 @@ public class PerformanceBenchmarkTests
     }
 
     [Fact]
+    public void Benchmark_LeafFormulaRootRecalc_SkipsEvaluationOrderScaffolding()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var precedent = new CellAddress(sheet.Id, 1, 1);
+        var formula = new CellAddress(sheet.Id, 1, 2);
+        var changed = new[] { formula };
+        const int iterations = 10_000;
+
+        sheet.SetCell(precedent, new NumberValue(41));
+        sheet.SetFormula(formula, "A1+1");
+        engine.RebuildFormulaDependencies(workbook);
+        engine.Recalculate(workbook, changed);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var report = engine.Recalculate(workbook, changed);
+            if (report.RecalculatedCells.Count != 1 || !report.RecalculatedCells[0].Equals(formula))
+                throw new Xunit.Sdk.XunitException("Leaf formula root recalc should evaluate the changed formula exactly once.");
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Leaf formula root recalc: {iterations:N0} iterations, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes allocated, " +
+            $"{allocated / iterations:N0} bytes/iteration");
+        Console.WriteLine(
+            $"PERF LEAF_FORMULA_ROOT_RECALC iterations={iterations:N0} total_ms={sw.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocated:N0} bytes_per_iteration={allocated / iterations:N0}");
+
+        sheet.GetValue(formula).Should().Be(new NumberValue(42));
+        (allocated / iterations).Should().BeLessThan(
+            650,
+            "leaf formula roots without downstream dependents should not build dirty-set evaluation-order scaffolding");
+    }
+
+    [Fact]
+    public void LeafFormulaRootRecalc_SkipsEvaluationOrderScaffoldingBeforeDirtySetBuild()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Calc", "RecalcEngine.cs"));
+        var recalculate = source[
+            source.IndexOf("var evaluationPlan = plan;", StringComparison.Ordinal)..
+            source.IndexOf("foreach (var addr in directFormulaRoots ?? evaluationPlan.OrderedCells)", StringComparison.Ordinal)];
+        var fastPath = source[
+            source.IndexOf("private static bool CanEvaluateChangedFormulaRootsDirectly", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddCyclicCell", StringComparison.Ordinal)];
+
+        recalculate.Should().Contain("CanEvaluateChangedFormulaRootsDirectly(plan, changedFormulaCells, _volatileCells.Count)");
+        recalculate.Should().Contain("directFormulaRoots = changedFormulaCells!.Count == 1");
+        recalculate.IndexOf("CanEvaluateChangedFormulaRootsDirectly", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(recalculate.IndexOf("var dirtyCells = new HashSet<CellAddress>", StringComparison.Ordinal));
+
+        fastPath.Should().Contain("volatileCellCount == 0");
+        fastPath.Should().Contain("changedFormulaCells is { Count: > 0 }");
+        fastPath.Should().Contain("dependencyPlan.OrderedCells.Count == 0");
+        fastPath.Should().Contain("dependencyPlan.CyclicCells.Count == 0");
+    }
+
+    [Fact]
     public void Benchmark_LargeRangeDependencyRebuild_UsesCompactRangeTracking()
     {
         var workbook = new Workbook("Benchmark");
