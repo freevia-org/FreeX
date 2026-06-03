@@ -154,26 +154,8 @@ public partial class MainWindow
 
     private FlashFillCommand CreateFlashFillCommand(Sheet sheet, GridRange range)
     {
-        uint fillCol = range.Start.Col;
-        uint sourceCol = fillCol > 1 ? fillCol - 1 : fillCol + 1;
-        uint startRow = range.Start.Row;
-        uint endRow = range.End.Row;
-
-        if (startRow == endRow)
-        {
-            uint maxRow = startRow;
-            for (uint r = startRow + 1; r <= CellAddress.MaxRow; r++)
-            {
-                var fillVal = sheet.GetValue(r, fillCol);
-                var srcVal = sheet.GetValue(r, sourceCol);
-                if (fillVal is BlankValue && srcVal is BlankValue)
-                    break;
-                maxRow = r;
-            }
-            endRow = maxRow;
-        }
-
-        return new FlashFillCommand(_currentSheetId, fillCol, sourceCol, startRow, endRow);
+        var plan = FlashFillRangePlanner.Plan(sheet, range);
+        return new FlashFillCommand(_currentSheetId, plan.FillColumn, plan.SourceColumn, plan.StartRow, plan.EndRow);
     }
 
     private void SortFilterPickerBtn_Click(object sender, RoutedEventArgs e)
