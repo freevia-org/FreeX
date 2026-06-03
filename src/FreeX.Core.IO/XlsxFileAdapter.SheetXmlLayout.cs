@@ -147,8 +147,7 @@ public sealed partial class XlsxFileAdapter
 
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        return XlsxPackageXmlEditor.LoadXml(entry);
     }
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
