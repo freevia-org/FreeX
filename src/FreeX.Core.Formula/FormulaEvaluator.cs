@@ -26,7 +26,7 @@ public sealed partial class FormulaEvaluator
     [ThreadStatic]
     private static int _evalDepth;
 
-    private const int CachedIntegerNumberMax = 16;
+    private const int CachedIntegerNumberMax = 64;
     private static readonly BoolValue TrueValue = new(true);
     private static readonly BoolValue FalseValue = new(false);
     private static readonly NumberValue[] CachedIntegerNumberValues = CreateCachedIntegerNumberValues();
