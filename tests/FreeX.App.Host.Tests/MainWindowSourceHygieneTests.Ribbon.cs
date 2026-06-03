@@ -8,16 +8,16 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RibbonSplitButtonHover_UsesRibbonButtonHoverBrushInsteadOfMenuHoverBrush()
     {
-        var ribbonSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Ribbon.cs"));
+        var ribbonDropdownSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonDropdown.cs"));
         var resources = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "MainWindowResources.xaml"));
         var theme = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "ThemeResources.xaml"));
-        var hoverMethod = ExtractMethodSource(ribbonSource, "private static Brush GetRibbonDropdownHoverBrush(");
+        var hoverMethod = ExtractMethodSource(ribbonDropdownSource, "private static Brush GetRibbonDropdownHoverBrush(");
 
         resources.Should().Contain("FreeXRibbonButtonHoverBrush");
         theme.Should().Contain("FreeXRibbonButtonHoverBrush\" Color=\"#BEE6FD\"");
         hoverMethod.Should().Contain("FreeXRibbonButtonHoverBrush");
         hoverMethod.Should().NotContain("FreeXAccentSoftBrush");
-        ribbonSource.Should().Contain("Color.FromRgb(0x3C, 0x7F, 0xB1)");
+        ribbonDropdownSource.Should().Contain("Color.FromRgb(0x3C, 0x7F, 0xB1)");
     }
 
     [Fact]
