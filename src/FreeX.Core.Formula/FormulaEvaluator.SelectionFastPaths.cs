@@ -4,6 +4,8 @@ namespace FreeX.Core.Formula;
 
 public sealed partial class FormulaEvaluator
 {
+    private const int MaxDirectRangeModeCapacity = 50_000;
+
     private static bool IsDirectSelectionFunction(string functionName) =>
         functionName is "LARGE" or "SMALL" or
             "PERCENTILE" or "PERCENTILE.INC" or "PERCENTILE.EXC" or
@@ -255,7 +257,7 @@ public sealed partial class FormulaEvaluator
         bool ignoreHiddenRows,
         bool ignoreNestedAggregates)
     {
-        var mode = new DirectRangeModeAccumulator();
+        var mode = new DirectRangeModeAccumulator(EstimateDirectRangeModeCapacity(ranges));
         foreach (var range in ranges)
         {
             for (var row = range.StartRow; row <= range.EndRow; row++)
@@ -285,6 +287,23 @@ public sealed partial class FormulaEvaluator
         return mode.TryGetValue(out var result)
             ? FastNumberResult(result)
             : ErrorValue.NA;
+    }
+
+    private static int EstimateDirectRangeModeCapacity(IReadOnlyList<DirectRangeArgument> ranges)
+    {
+        long count = 0;
+        foreach (var range in ranges)
+        {
+            count += FormulaSafetyLimits.GetRangeCellCount(
+                range.StartRow,
+                range.StartCol,
+                range.EndRow,
+                range.EndCol);
+            if (count >= MaxDirectRangeModeCapacity)
+                return MaxDirectRangeModeCapacity;
+        }
+
+        return (int)count;
     }
 
     private static ScalarValue EvaluateDirectSelectionFunction(
@@ -462,16 +481,25 @@ public sealed partial class FormulaEvaluator
 
     private sealed class DirectRangeModeAccumulator
     {
-        private readonly Dictionary<double, DirectRangeModeCount> _counts = [];
+        private readonly int _capacity;
+        private Dictionary<double, DirectRangeModeCount>? _counts;
         private int _ordinal;
         private int _bestCount;
         private int _bestOrdinal;
         private double _bestValue;
 
+        public DirectRangeModeAccumulator(int capacity)
+        {
+            _capacity = capacity;
+        }
+
         public void Add(double value)
         {
+            var counts = _counts ??= _capacity > 0
+                ? new Dictionary<double, DirectRangeModeCount>(_capacity)
+                : [];
             ref var entry = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(
-                _counts,
+                counts,
                 value,
                 out var exists);
             if (exists)
