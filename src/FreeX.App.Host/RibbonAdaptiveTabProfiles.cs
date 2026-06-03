@@ -3,6 +3,7 @@ namespace FreeX.App.Host;
 internal static class RibbonAdaptiveTabProfiles
 {
     private const double VeryNarrowWidth = 700;
+    private static readonly IReadOnlySet<int> EmptyProtectedGroupIndexes = new HashSet<int>();
 
     private static readonly IReadOnlyList<RibbonAdaptiveTabProfile> Profiles =
     [
@@ -283,17 +284,24 @@ internal static class RibbonAdaptiveTabProfiles
         double availableWidth,
         string? selectedTabHeader = null)
     {
-        var protectedIndexes = new HashSet<int>();
         if (availableWidth <= 760)
-            return protectedIndexes;
+            return EmptyProtectedGroupIndexes;
 
-        foreach (var protectedGroupName in GetPriorityProtectedGroupNames(groupNames, availableWidth, selectedTabHeader))
+        var protectedGroupNames = GetPriorityProtectedGroupNames(groupNames, availableWidth, selectedTabHeader);
+        if (protectedGroupNames.Count == 0)
+            return EmptyProtectedGroupIndexes;
+
+        HashSet<int>? protectedIndexes = null;
+        foreach (var protectedGroupName in protectedGroupNames)
         {
             if (TryFindGroupIndex(groupNames, protectedGroupName, out var index))
+            {
+                protectedIndexes ??= new HashSet<int>();
                 protectedIndexes.Add(index);
+            }
         }
 
-        return protectedIndexes;
+        return protectedIndexes ?? EmptyProtectedGroupIndexes;
     }
 
     public static IReadOnlyList<int> GetExpandableGroupIndexes(
@@ -655,7 +663,10 @@ internal static class RibbonAdaptiveTabProfiles
         double availableWidth,
         IReadOnlyList<string> groupNames)
     {
-        var decisions = new List<RibbonAdaptiveRuntimeStateOverride>();
+        if (rules.Count == 0)
+            return [];
+
+        List<RibbonAdaptiveRuntimeStateOverride>? decisions = null;
         foreach (var rule in rules)
         {
             if (availableWidth > rule.MaxWidth)
@@ -665,10 +676,13 @@ internal static class RibbonAdaptiveTabProfiles
                 continue;
 
             if (TryFindGroupIndex(groupNames, rule.GroupName, out var index))
+            {
+                decisions ??= new List<RibbonAdaptiveRuntimeStateOverride>();
                 decisions.Add(new RibbonAdaptiveRuntimeStateOverride(index, rule.State));
+            }
         }
 
-        return decisions;
+        return decisions ?? [];
     }
 
     private static void ApplyRuntimeOverrides(

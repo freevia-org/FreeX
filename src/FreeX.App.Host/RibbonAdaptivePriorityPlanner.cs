@@ -2,6 +2,8 @@ namespace FreeX.App.Host;
 
 internal static class RibbonAdaptivePriorityPlanner
 {
+    private static readonly IReadOnlySet<int> EmptyProtectedGroupIndexes = new HashSet<int>();
+
     public static IReadOnlyList<RibbonAdaptiveGroupState> ApplyRuntimePriorityStates(
         double availableWidth,
         IReadOnlyList<string> groupNames,
@@ -52,20 +54,24 @@ internal static class RibbonAdaptivePriorityPlanner
         string? selectedTabHeader = null)
     {
         var profileIndexes = RibbonAdaptiveTabProfiles.GetExpandableGroupIndexes(groupNames, availableWidth, selectedTabHeader);
+        if (profileIndexes.Count == 0)
+            return [];
+
         var runtimeStateOverrides = GetRuntimeStateOverrides(availableWidth, groupNames, selectedTabHeader);
         var runtimeVisibilityOverrides = GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader);
-        var indexes = new List<int>(profileIndexes.Count);
+        List<int>? indexes = null;
         for (var profileIndex = 0; profileIndex < profileIndexes.Count; profileIndex++)
         {
             var index = profileIndexes[profileIndex];
             if (!ContainsDecisionIndex(runtimeStateOverrides, index) &&
                 !ContainsDecisionIndex(runtimeVisibilityOverrides, index))
             {
+                indexes ??= new List<int>(profileIndexes.Count);
                 indexes.Add(index);
             }
         }
 
-        return indexes;
+        return indexes ?? [];
     }
 
     public static IReadOnlyList<int> GetSpaceFillingExpandableGroupIndexes(
@@ -133,7 +139,10 @@ internal static class RibbonAdaptivePriorityPlanner
         IReadOnlyList<string> groupNames,
         IReadOnlyList<RibbonAdaptiveRuntimeStateOverride> decisions)
     {
-        var indexes = new HashSet<int>();
+        if (decisions.Count == 0)
+            return EmptyProtectedGroupIndexes;
+
+        HashSet<int>? indexes = null;
         for (var decisionIndex = 0; decisionIndex < decisions.Count; decisionIndex++)
         {
             var decision = decisions[decisionIndex];
@@ -141,11 +150,12 @@ internal static class RibbonAdaptivePriorityPlanner
                 decision.Index >= 0 &&
                 decision.Index < groupNames.Count)
             {
+                indexes ??= new HashSet<int>();
                 indexes.Add(decision.Index);
             }
         }
 
-        return indexes;
+        return indexes ?? EmptyProtectedGroupIndexes;
     }
 }
 

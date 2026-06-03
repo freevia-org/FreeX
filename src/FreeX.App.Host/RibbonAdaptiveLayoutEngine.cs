@@ -259,13 +259,13 @@ internal static class RibbonAdaptiveLayoutEngine
         double availableWidth,
         string? selectedTabHeader)
     {
-        var protectedGroupIndexes = RibbonAdaptivePriorityPlanner
-            .GetFallbackProtectedGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader)
-            .ToHashSet();
-        var runtimeVisibilityProtectedGroupIndexes = RibbonAdaptivePriorityPlanner
-            .GetRuntimeVisibilityProtectedGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader)
-            .ToHashSet();
-        protectedGroupIndexes.UnionWith(runtimeVisibilityProtectedGroupIndexes);
+        if (StatesFit(groups, states, fixedChromeWidth, availableWidth))
+            return;
+
+        var protectedGroupIndexes = CreateProtectedGroupIndexSet(
+            groupProfileKeys,
+            availableWidth,
+            selectedTabHeader);
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
                TryCollapseOneMoreGroup(states, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
         {
@@ -290,11 +290,15 @@ internal static class RibbonAdaptiveLayoutEngine
     {
         var expandableIndexes = RibbonAdaptivePriorityPlanner
             .GetExpandableGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader);
-        var protectedIndexes = RibbonAdaptivePriorityPlanner
-            .GetFallbackProtectedGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader)
-            .ToHashSet();
-        protectedIndexes.UnionWith(
-            RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityProtectedGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader));
+        var spaceFillingExpandableIndexes = RibbonAdaptivePriorityPlanner
+            .GetSpaceFillingExpandableGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader);
+        if (expandableIndexes.Count == 0 && spaceFillingExpandableIndexes.Count == 0)
+            return;
+
+        var protectedIndexes = CreateProtectedGroupIndexSet(
+            groupProfileKeys,
+            availableWidth,
+            selectedTabHeader);
         var rollbackIndexes = new int[states.Length];
         var rollbackStates = new RibbonAdaptiveGroupState[states.Length];
         var madeProgress = true;
@@ -319,6 +323,7 @@ internal static class RibbonAdaptiveLayoutEngine
                     continue;
                 }
 
+                protectedIndexes ??= new HashSet<int>();
                 protectedIndexes.Add(i);
                 if (TryCollapseUnprotectedGroupsToFit(
                     states,
@@ -338,8 +343,6 @@ internal static class RibbonAdaptiveLayoutEngine
             }
         }
 
-        var spaceFillingExpandableIndexes = RibbonAdaptivePriorityPlanner
-            .GetSpaceFillingExpandableGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader);
         madeProgress = true;
         while (madeProgress)
         {
@@ -374,6 +377,27 @@ internal static class RibbonAdaptiveLayoutEngine
         }
 
         return false;
+    }
+
+    private static HashSet<int>? CreateProtectedGroupIndexSet(
+        IReadOnlyList<string> groupProfileKeys,
+        double availableWidth,
+        string? selectedTabHeader)
+    {
+        var fallbackProtectedIndexes = RibbonAdaptivePriorityPlanner
+            .GetFallbackProtectedGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader);
+        var runtimeVisibilityProtectedIndexes = RibbonAdaptivePriorityPlanner
+            .GetRuntimeVisibilityProtectedGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader);
+        if (fallbackProtectedIndexes.Count == 0 && runtimeVisibilityProtectedIndexes.Count == 0)
+            return null;
+
+        var protectedIndexes = fallbackProtectedIndexes.Count > 0
+            ? new HashSet<int>(fallbackProtectedIndexes)
+            : new HashSet<int>();
+        if (runtimeVisibilityProtectedIndexes.Count > 0)
+            protectedIndexes.UnionWith(runtimeVisibilityProtectedIndexes);
+
+        return protectedIndexes;
     }
 
     private static bool TryCollapseUnprotectedGroupsToFit(

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Diagnostics;
 
 namespace FreeX.App.Host.Tests;
 
@@ -298,6 +299,53 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         method.Should().Contain("RollbackStateChanges");
         method.Should().NotContain("states.ToArray()");
         method.Should().NotContain("Array.Copy(");
+    }
+
+    [Fact]
+    public void Plan_ReviewTabDisabledPriorityExpansionPath_StaysAllocationLight()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Proofing", 140, 96, 62, 52),
+            new RibbonAdaptiveGroup("Accessibility", 155, 108, 70, 52),
+            new RibbonAdaptiveGroup("Comments", 170, 120, 76, 52),
+            new RibbonAdaptiveGroup("Notes", 120, 86, 58, 52),
+            new RibbonAdaptiveGroup("Protect", 130, 92, 60, 52)
+        };
+        var groupProfileKeys = new[]
+        {
+            "Proofing",
+            "Accessibility",
+            "Comments",
+            "Notes",
+            "Protect"
+        };
+        const int iterations = 10_000;
+
+        for (var iteration = 0; iteration < 250; iteration++)
+            RibbonAdaptiveLayoutEngine.Plan(1040 + iteration % 180, groups, groupProfileKeys, 24, "Review");
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        for (var iteration = 0; iteration < iterations; iteration++)
+        {
+            var layout = RibbonAdaptiveLayoutEngine.Plan(1040 + iteration % 180, groups, groupProfileKeys, 24, "Review");
+            if (layout.States.Count != groups.Length)
+                throw new InvalidOperationException("Ribbon adaptive layout returned an unexpected state count.");
+        }
+
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        Console.WriteLine(
+            "PERF RIBBON_REVIEW_PLAN_DISABLED_PRIORITY_EXPANSION " +
+            $"steps={iterations:N0} total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocated:N0}");
+
+        allocated.Should().BeLessThan(12_000_000);
     }
 
     [Fact]
