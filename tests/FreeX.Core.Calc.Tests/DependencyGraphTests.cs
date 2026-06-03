@@ -188,6 +188,43 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void DependencyGraph_UsesLeafFastPathForMultiRootExactDependents()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
+        var getRecalcOrder = source[
+            source.IndexOf("public RecalcPlan GetRecalcOrder", StringComparison.Ordinal)..
+            source.IndexOf("var toRecalc = new HashSet<CellAddress>();", StringComparison.Ordinal)];
+        var fastPath = source[
+            source.IndexOf("private bool TryBuildSingleLeafExactDependentPlan", StringComparison.Ordinal)..
+            source.IndexOf("public RecalcPlan GetEvaluationOrder", StringComparison.Ordinal)];
+
+        getRecalcOrder.Should().Contain("TryBuildSingleLeafExactDependentPlan(changedList, out var leafPlan)");
+        fastPath.Should().Contain("_rangeDependentsBySheet.Count != 0");
+        fastPath.Should().Contain("downstream.Count != 0");
+        fastPath.Should().NotContain("new HashSet<CellAddress>");
+
+        var graph = new DependencyGraph();
+        var sheet = SheetId.New();
+        var a1 = new CellAddress(sheet, 1, 1);
+        var b1 = new CellAddress(sheet, 1, 2);
+        var c1 = new CellAddress(sheet, 1, 3);
+        var d1 = new CellAddress(sheet, 1, 4);
+
+        graph.SetDependencies(c1, [a1, b1]);
+
+        var leafPlan = graph.GetRecalcOrder([a1, b1]);
+        leafPlan.CyclicCells.Should().BeEmpty();
+        leafPlan.OrderedCells.Should().Equal([c1]);
+
+        graph.SetDependencies(d1, [c1]);
+
+        var downstreamPlan = graph.GetRecalcOrder([a1, b1]);
+        downstreamPlan.CyclicCells.Should().BeEmpty();
+        downstreamPlan.OrderedCells.Should().Equal([c1, d1]);
+    }
+
+    [Fact]
     public void SetDependencies_TracksDependents()
     {
         var graph = new DependencyGraph();
