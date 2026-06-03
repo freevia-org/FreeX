@@ -277,11 +277,17 @@ internal static class PdfDocumentExporter
 
             var font = new XFont(overlay.FontFamily, overlay.FontSize * 72.0 / StandardDpi, style);
             var brush = new XSolidBrush(XColor.FromArgb(overlay.Color.A, overlay.Color.R, overlay.Color.G, overlay.Color.B));
-            gfx.DrawString(
-                overlay.Text,
-                font,
-                brush,
-                new XPoint(overlay.X * 72.0 / StandardDpi, (overlay.Y + overlay.FontSize) * 72.0 / StandardDpi));
+            var point = new XPoint(overlay.X * 72.0 / StandardDpi, (overlay.Y + overlay.FontSize) * 72.0 / StandardDpi);
+            if (IsZero(overlay.RotationDegrees))
+            {
+                gfx.DrawString(overlay.Text, font, brush, point);
+                continue;
+            }
+
+            var state = gfx.Save();
+            gfx.RotateAtTransform(overlay.RotationDegrees, point);
+            gfx.DrawString(overlay.Text, font, brush, point);
+            gfx.Restore(state);
         }
     }
 
