@@ -231,6 +231,9 @@ public sealed class DependencyGraph
             if (TryBuildSingleLeafExactDependentPlan(changedList, out var leafPlan))
                 return leafPlan;
 
+            if (TryBuildSingleLeafRangeDependentPlan(changedList, out var rangeLeafPlan))
+                return rangeLeafPlan;
+
             if (changedList.Count == 0 || !HasAnyDependents(changedList))
                 return EmptyPlan;
         }
@@ -378,6 +381,51 @@ public sealed class DependencyGraph
         return true;
     }
 
+    private bool TryBuildSingleLeafRangeDependentPlan(
+        IReadOnlyList<CellAddress> changedCells,
+        out RecalcPlan plan)
+    {
+        plan = EmptyPlan;
+        if (changedCells.Count != 1)
+            return false;
+
+        var root = changedCells[0];
+        var hasDependent = false;
+        var dependent = default(CellAddress);
+
+        if (_dependents.TryGetValue(root, out var exactDependents))
+        {
+            for (var i = 0; i < exactDependents.Count; i++)
+            {
+                if (!TryCollectSingleDependent(exactDependents[i], ref hasDependent, ref dependent))
+                    return false;
+            }
+        }
+
+        if (_rangeDependentsBySheet.TryGetValue(root.Sheet, out var rangeDependents))
+        {
+            if (!TryCollectSingleRangeDependent(
+                    root,
+                    rangeDependents.GetRowCandidates(root.Row),
+                    ref hasDependent,
+                    ref dependent) ||
+                !TryCollectSingleRangeDependent(
+                    root,
+                    rangeDependents.GetColumnCandidates(root.Col),
+                    ref hasDependent,
+                    ref dependent))
+            {
+                return false;
+            }
+        }
+
+        if (!hasDependent || HasAnyDependent(dependent))
+            return false;
+
+        plan = new RecalcPlan([dependent], []);
+        return true;
+    }
+
     /// <summary>
     /// Topologically order a known dirty set, including the dirty roots themselves.
     /// </summary>
@@ -424,16 +472,20 @@ public sealed class DependencyGraph
     {
         for (var i = 0; i < cells.Count; i++)
         {
-            var cell = cells[i];
-            if (_dependents.TryGetValue(cell, out var exactDeps) && exactDeps.Count > 0)
-                return true;
-
-            if (_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps) &&
-                HasAnyRangeDependent(cell, rangeDeps))
+            if (HasAnyDependent(cells[i]))
                 return true;
         }
 
         return false;
+    }
+
+    private bool HasAnyDependent(CellAddress cell)
+    {
+        if (_dependents.TryGetValue(cell, out var exactDeps) && exactDeps.Count > 0)
+            return true;
+
+        return _rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps) &&
+               HasAnyRangeDependent(cell, rangeDeps);
     }
 
     private void EnqueueUnvisitedDependents(
@@ -556,6 +608,45 @@ public sealed class DependencyGraph
         }
 
         return false;
+    }
+
+    private static bool TryCollectSingleRangeDependent(
+        CellAddress cell,
+        List<RangeDependencyGroup>? candidates,
+        ref bool hasDependent,
+        ref CellAddress dependent)
+    {
+        if (candidates is null)
+            return true;
+
+        foreach (var group in candidates)
+        {
+            if (!group.Range.Contains(cell))
+                continue;
+
+            for (var i = 0; i < group.Count; i++)
+            {
+                if (!TryCollectSingleDependent(group.GetDependent(i), ref hasDependent, ref dependent))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryCollectSingleDependent(
+        CellAddress candidate,
+        ref bool hasDependent,
+        ref CellAddress dependent)
+    {
+        if (!hasDependent)
+        {
+            dependent = candidate;
+            hasDependent = true;
+            return true;
+        }
+
+        return candidate.Equals(dependent);
     }
 
     private static HashSet<CellAddress>? EnqueueRangeDependents(

@@ -420,6 +420,9 @@ public class PerformanceBenchmarkTests
         (sw.Elapsed.TotalMilliseconds / iterations).Should().BeLessThan(
             5.0,
             "compact range invalidation lookup should stay sublinear enough for interactive single-cell edits");
+        (allocated / iterations).Should().BeLessThan(
+            600,
+            "single-cell compact range invalidations that hit one leaf formula should skip BFS/topological scaffolding");
     }
 
     [Fact]

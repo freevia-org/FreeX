@@ -225,6 +225,53 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void DependencyGraph_UsesLeafFastPathForSingleRangeDependent()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
+        var getRecalcOrder = source[
+            source.IndexOf("public RecalcPlan GetRecalcOrder", StringComparison.Ordinal)..
+            source.IndexOf("var toRecalc = new HashSet<CellAddress>();", StringComparison.Ordinal)];
+        var fastPath = source[
+            source.IndexOf("private bool TryBuildSingleLeafRangeDependentPlan", StringComparison.Ordinal)..
+            source.IndexOf("public RecalcPlan GetEvaluationOrder", StringComparison.Ordinal)];
+
+        getRecalcOrder.Should().Contain("TryBuildSingleLeafRangeDependentPlan(changedList, out var rangeLeafPlan)");
+        fastPath.Should().Contain("TryCollectSingleRangeDependent");
+        fastPath.Should().Contain("HasAnyDependent(dependent)");
+        fastPath.Should().Contain("new RecalcPlan([dependent], [])");
+        fastPath.Should().NotContain("new HashSet<CellAddress>");
+
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        var input = new CellAddress(sheet.Id, 5, 1);
+        var rangeLeaf = new CellAddress(sheet.Id, 1, 2);
+        var downstream = new CellAddress(sheet.Id, 1, 3);
+
+        engine.RegisterFormulaDependencies(
+            rangeLeaf,
+            new Parser(new Lexer("=SUM(A1:A10)").Tokenize()).Parse(),
+            sheet.Id,
+            workbook);
+
+        var leafPlan = graph.GetRecalcOrder([input]);
+        leafPlan.CyclicCells.Should().BeEmpty();
+        leafPlan.OrderedCells.Should().Equal([rangeLeaf]);
+
+        engine.RegisterFormulaDependencies(
+            downstream,
+            new Parser(new Lexer("=SUM(B1:B10)").Tokenize()).Parse(),
+            sheet.Id,
+            workbook);
+
+        var downstreamPlan = graph.GetRecalcOrder([input]);
+        downstreamPlan.CyclicCells.Should().BeEmpty();
+        downstreamPlan.OrderedCells.Should().Equal([rangeLeaf, downstream]);
+    }
+
+    [Fact]
     public void SetDependencies_TracksDependents()
     {
         var graph = new DependencyGraph();
