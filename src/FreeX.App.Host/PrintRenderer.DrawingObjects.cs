@@ -15,6 +15,7 @@ public static partial class PrintRenderer
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
         ViewportModel viewport,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup,
         IReadOnlyList<ChartModel> charts,
         WorkbookTheme workbookTheme,
         IReadOnlyList<uint> bodyRows,
@@ -63,7 +64,7 @@ public static partial class PrintRenderer
                 chart.Height);
             dc.DrawImage(image, chartRect);
             if (bodyGridRect.Contains(chartRect))
-                AddPrintedChartTextOverlays(textOverlays, chart, workbookTheme, chartRect);
+                AddPrintedChartTextOverlays(textOverlays, chart, workbookTheme, chartRect, viewport, pageCellLookup);
         }
         dc.Pop();
     }
@@ -72,7 +73,9 @@ public static partial class PrintRenderer
         ICollection<PdfTextOverlay> textOverlays,
         ChartModel chart,
         WorkbookTheme workbookTheme,
-        Rect chartRect)
+        Rect chartRect,
+        ViewportModel viewport,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup)
     {
         var textInset = Math.Min(8, Math.Max(0, chartRect.Width / 20));
         AddPrintedChartCenteredOverlay(
@@ -114,6 +117,8 @@ public static partial class PrintRenderer
                 axisFontSize,
                 axisColor);
         }
+
+        AddPrintedChartNonTitleTextOverlays(textOverlays, chart, workbookTheme, chartRect, viewport, pageCellLookup);
     }
 
     private static void AddPrintedChartCenteredOverlay(

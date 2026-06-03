@@ -434,6 +434,56 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_AttachesSelectableLegendTickAndDataLabelOverlaysToPrintedCharts()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Chart print label text");
+            var sheet = workbook.AddSheet("Sheet1");
+            PopulateChartSource(
+                sheet,
+                startRow: 30,
+                startCol: 30,
+                category1: "PDF tick Jan",
+                category2: "PDF tick Feb",
+                category3: "PDF tick Mar",
+                seriesName: "PDF Rev");
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 20, 8));
+            var chart = new ChartModel
+            {
+                Type = ChartType.Column,
+                DataRange = new GridRange(
+                    new CellAddress(sheet.Id, 30, 30),
+                    new CellAddress(sheet.Id, 33, 31)),
+                Title = "Printable chart label title",
+                XAxisTitle = "Printable chart label axis",
+                Left = 24,
+                Top = 24,
+                Width = 300,
+                Height = 210,
+                ShowLegend = true,
+                LegendPosition = ChartLegendPosition.Right,
+                ShowDataLabels = true,
+                ShowDataLabelCategoryName = true,
+                ShowDataLabelValue = true
+            };
+            sheet.Charts.Add(chart);
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlayTexts = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlayTexts.Should().Contain("PDF Rev");
+            overlayTexts.Should().Contain("PDF tick Jan");
+            overlayTexts.Should().Contain("PDF tick Jan, 8");
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_DoesNotAttachChartTextOverlaysForClippedCharts()
     {
         StaTestRunner.Run(() =>
@@ -715,14 +765,26 @@ public sealed class PrintRendererPageSetupTests
 
     private static void PopulateChartSource(Sheet sheet)
     {
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
-        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
-        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(8));
-        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
-        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(14));
-        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
-        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(11));
+        PopulateChartSource(sheet, 1, 1, "Jan", "Feb", "Mar", "Sales");
+    }
+
+    private static void PopulateChartSource(
+        Sheet sheet,
+        uint startRow,
+        uint startCol,
+        string category1,
+        string category2,
+        string category3,
+        string seriesName)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, startRow, startCol), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, startRow, startCol + 1), new TextValue(seriesName));
+        sheet.SetCell(new CellAddress(sheet.Id, startRow + 1, startCol), new TextValue(category1));
+        sheet.SetCell(new CellAddress(sheet.Id, startRow + 1, startCol + 1), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, startRow + 2, startCol), new TextValue(category2));
+        sheet.SetCell(new CellAddress(sheet.Id, startRow + 2, startCol + 1), new NumberValue(14));
+        sheet.SetCell(new CellAddress(sheet.Id, startRow + 3, startCol), new TextValue(category3));
+        sheet.SetCell(new CellAddress(sheet.Id, startRow + 3, startCol + 1), new NumberValue(11));
     }
 
     private static ChartModel CreatePrintedChart(

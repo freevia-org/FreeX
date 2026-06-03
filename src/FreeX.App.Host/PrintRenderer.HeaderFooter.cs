@@ -122,6 +122,7 @@ public static partial class PrintRenderer
                 dc,
                 textOverlays,
                 viewport,
+                cellLookup,
                 charts,
                 workbookTheme,
                 bodyRows,
