@@ -1,0 +1,638 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
+using System.Reflection;
+using System.Xml.Linq;
+using ClosedXML.Excel;
+using FluentAssertions;
+using FreeX.Core.Model;
+
+namespace FreeX.Core.IO.Tests;
+
+public sealed partial class XlsxFileAdapterPerformanceTests
+{
+    [Fact]
+    public void Benchmark_SaveDenseWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateDenseModelWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_DENSE " +
+            $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_LoadDrawingPicturesWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        const int pictureCount = 180;
+        var workbook = CreateDrawingPicturesWorkbook(pictureCount);
+        var adapter = new XlsxFileAdapter();
+        byte[] package;
+        using (var source = new MemoryStream())
+        {
+            adapter.Save(workbook, source);
+            package = source.ToArray();
+        }
+
+        using (var warmup = new MemoryStream(package))
+        {
+            var loaded = adapter.Load(warmup);
+            loaded.GetSheetAt(0).Pictures.Should().HaveCount(pictureCount);
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream(package);
+            var step = Stopwatch.StartNew();
+            var loaded = adapter.Load(stream);
+            step.Stop();
+            loaded.GetSheetAt(0).Pictures.Should().HaveCount(pictureCount);
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_LOAD_DRAWING_PICTURES " +
+            $"pictures={pictureCount} package_bytes={package.Length:N0} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void LoadDrawingPictures_TransfersOwnedImageBuffersWithoutSecondCopy()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.LoadSheetXmlLayoutApplication.cs"));
+        var pictureLoop = source[
+            source.IndexOf("foreach (var picturePart in layout.PictureParts)", StringComparison.Ordinal)..
+            source.IndexOf("foreach (var textBoxPart in layout.TextBoxParts)", StringComparison.Ordinal)];
+
+        pictureLoop.Should().Contain("ImageBytes = picturePart.ImageBytes,");
+        pictureLoop.Should().NotContain("ImageBytes = picturePart.ImageBytes.ToArray()");
+
+        var drawingPartsSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetDrawingParts.cs"));
+        var readPictureParts = drawingPartsSource[
+            drawingPartsSource.IndexOf("private static IReadOnlyList<XlsxPicturePackagePart> ReadPictureParts", StringComparison.Ordinal)..
+            drawingPartsSource.IndexOf("private static Dictionary<string, string> ReadRelationshipTargetsById", StringComparison.Ordinal)];
+
+        readPictureParts.Should().Contain("ReadEntryBytes(imageEntry)");
+        readPictureParts.Should().Contain("GC.AllocateUninitializedArray<byte>");
+        readPictureParts.Should().Contain("ReadNonVisualProperties(pictureElement)");
+        readPictureParts.Should().NotContain("ReadNonVisualName(pictureElement)");
+        readPictureParts.Should().NotContain("ReadNonVisualTitle(pictureElement)");
+        readPictureParts.Should().NotContain("ReadNonVisualDescription(pictureElement)");
+    }
+
+    [Fact]
+    public void Benchmark_SaveIgnoredErrorsWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateIgnoredErrorsSaveWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_IGNORED_ERRORS " +
+            $"rows={IgnoredErrorSaveRows} cols={IgnoredErrorSaveColumns} " +
+            $"ignored_cells={IgnoredErrorSaveRows * IgnoredErrorSaveColumns} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        packageSizes.Should().OnlyContain(size => size > 0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveStyleOnlyWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateStyleOnlyModelWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_STYLE_ONLY " +
+            $"sheets={StyleOnlySaveSheetCount} rows={StyleOnlySaveRowsPerSheet} " +
+            $"style_only_cols={StyleOnlySaveColumnsPerSheet} run_width={StyleOnlySaveRunWidth} " +
+            $"style_only_cells={StyleOnlySaveSheetCount * StyleOnlySaveRowsPerSheet * StyleOnlySaveColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveLoadedDenseWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var package = CreateDenseXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var loadStream = new MemoryStream(package, writable: false))
+            workbook = adapter.Load(loadStream);
+
+        var sheet = workbook.Sheets[0];
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(42));
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_DENSE " +
+            $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveLoadedDenseMutatedWorkbook_ReportsTiming()
+    {
+        const int iterations = 5;
+        var package = CreateDenseXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var loadStream = new MemoryStream(package, writable: false))
+            workbook = adapter.Load(loadStream);
+
+        var sheet = workbook.Sheets[0];
+        var markerAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(markerAddress, new NumberValue(42));
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            sheet.SetCell(markerAddress, new NumberValue(100 + i));
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_DENSE_MUTATED " +
+            $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveLoadedDensePostProcessing_ReportsTiming()
+    {
+        const int iterations = 3;
+        var sourcePackage = CreateDenseXlsxPackage();
+        var generatedPackage = CreateDenseXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbooks = new List<Workbook>(iterations + 1);
+        for (var i = 0; i <= iterations; i++)
+        {
+            using var loadStream = new MemoryStream(sourcePackage, writable: false);
+            var workbook = adapter.Load(loadStream);
+            workbook.Sheets[0].SetCell(new CellAddress(workbook.Sheets[0].Id, 1, 1), new NumberValue(42 + i));
+            workbooks.Add(workbook);
+        }
+
+        using (var warmup = CreateWritablePackageStream(generatedPackage))
+            InvokeSavePostProcessing(workbooks[0], warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = CreateWritablePackageStream(generatedPackage);
+            var step = Stopwatch.StartNew();
+            InvokeSavePostProcessing(workbooks[i + 1], stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_DENSE_POSTPROCESSING " +
+            $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveWorksheetNativeMetadataWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateWorksheetNativeMetadataWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_WORKSHEET_NATIVE_METADATA " +
+            $"sheets={WorksheetNativeMetadataSheetCount} rows={WorksheetNativeMetadataRowsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveWorksheetAutoFilterNativeMetadataWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateWorksheetAutoFilterNativeMetadataWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_WORKSHEET_AUTOFILTER_NATIVE_METADATA " +
+            $"sheets={WorksheetNativeMetadataSheetCount} rows={WorksheetNativeMetadataRowsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveDataValidationNativeMetadataWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateDataValidationNativeMetadataWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_DATA_VALIDATION_NATIVE_METADATA " +
+            $"sheets={WorksheetNativeMetadataSheetCount} validations_per_sheet={WorksheetNativeMetadataRowsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveAdvancedConditionalFormattingWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateAdvancedConditionalFormattingWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_ADVANCED_CONDITIONAL_FORMATTING " +
+            $"sheets={WorksheetNativeMetadataSheetCount} rules_per_sheet={AdvancedConditionalFormatRulesPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveWorksheetSingleXmlCellsPostProcessingWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateWorksheetSingleXmlCellsPostProcessingWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_WORKSHEET_SINGLE_XML_CELLS_POSTPROCESSING " +
+            $"sheets={WorksheetNativeMetadataSheetCount} rows={WorksheetNativeMetadataRowsPerSheet} " +
+            $"single_xml_cells_per_sheet={WorksheetSingleXmlCellsPerSheet} steps={iterations} " +
+            $"package_bytes={packageSizes.Max():N0} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveLoadedWorksheetReplayMetadataWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var package = CreateWorksheetReplayMetadataSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var loadStream = new MemoryStream(package, writable: false))
+            workbook = adapter.Load(loadStream);
+        ApplyWorksheetReplayMetadata(workbook);
+
+        var markerAddress = new CellAddress(workbook.Sheets[0].Id, 1, 2);
+        workbook.Sheets[0].SetCell(markerAddress, new NumberValue(1000));
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            workbook.Sheets[0].SetCell(markerAddress, new NumberValue(1001 + i));
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_WORKSHEET_REPLAY_METADATA " +
+            $"sheets={WorksheetReplayMetadataSheetCount} rows={WorksheetReplayMetadataRowsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+}

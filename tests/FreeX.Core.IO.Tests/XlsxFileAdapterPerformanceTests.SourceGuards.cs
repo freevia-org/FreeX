@@ -1,0 +1,291 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
+using System.Reflection;
+using System.Xml.Linq;
+using ClosedXML.Excel;
+using FluentAssertions;
+using FreeX.Core.Model;
+
+namespace FreeX.Core.IO.Tests;
+
+public sealed partial class XlsxFileAdapterPerformanceTests
+{
+    [Fact]
+    public void Benchmark_StructuredTableWriterTrailingNumber_AvoidsReverseIteratorAllocation()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableWriter.cs"));
+        var methodStart = source.IndexOf("private static int ExtractTrailingNumber", StringComparison.Ordinal);
+        var methodEnd = source.IndexOf("private static void TrySetNativeAttributeIfMissing", methodStart, StringComparison.Ordinal);
+        var method = source[methodStart..methodEnd];
+
+        method.Should().NotContain(
+            ".Reverse()",
+            "structured table id fallback parsing runs during XLSX save and should avoid LINQ iterator scaffolding");
+        method.Should().NotContain(
+            ".ToArray()",
+            "trailing-number parsing should avoid a temporary char array allocation");
+    }
+
+    [Fact]
+    public void SavePostProcessing_DetectsPivotCustomNumberFormatsWithoutNestedLinq()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+
+        source.Should().Contain("featurePlan.HasPivotCustomNumberFormats");
+        source.Should().Contain("private static bool HasPivotCustomNumberFormats(Sheet sheet)");
+        source.Should().NotContain(
+            "workbook.Sheets.SelectMany(sheet => sheet.PivotTables)",
+            "XLSX save post-processing should avoid nested LINQ iterator allocation while deciding whether pivot custom number formats need catalog output");
+    }
+
+    [Fact]
+    public void SavePostProcessing_BatchesWorkbookFeatureDetection()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+
+        source.Should().Contain("var featurePlan = XlsxPostProcessingFeaturePlan.Create(workbook);");
+        source.Should().Contain("private struct XlsxPostProcessingFeaturePlan");
+        source.Should().Contain("foreach (var sheet in workbook.Sheets)");
+        source.Should().Contain("sheet.GetOccupiedCellMap()");
+        source.Should().NotContain(
+            "workbook.Sheets.Any(",
+            "XLSX save post-processing should batch sheet feature checks instead of rescanning every sheet for each optional writer");
+        source.Should().NotContain(
+            "sheet.EnumerateCells().Any",
+            "ignored-error detection should avoid nested LINQ and cell-address iterator allocation");
+    }
+
+    [Fact]
+    public void StylesheetMetadataPreserver_PreflightsPlainStylesheetBeforeLoadingXml()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStylesheetMetadataPreserver.cs"));
+
+        source.Should().Contain("HasPreservableStylesheetMetadata(sourceStylesEntry)");
+        source.Should().Contain("case \"colors\":");
+        source.Should().Contain("case \"extLst\":");
+        source.Should().Contain("case \"dxfs\":");
+        source.Should().Contain("case \"tableStyles\":");
+        source.Should().Contain("TableStyleMedium2");
+        source.Should().Contain("PivotStyleLight16");
+        source.Should().Contain("return true;");
+    }
+
+    [Fact]
+    public void NumberFormatCatalogWriter_BuildsPivotCustomFormatCatalogWithoutNestedLinq()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxNumberFormatCatalogWriter.cs"));
+
+        source.Should().Contain("foreach (var sheet in workbook.Sheets)");
+        source.Should().Contain("foreach (var pivot in sheet.PivotTables)");
+        source.Should().Contain("foreach (var field in pivot.DataFields)");
+        source.Should().NotContain(
+            ".SelectMany(",
+            "pivot custom number-format catalog building should walk sheets/pivots/data fields directly");
+        source.Should().NotContain(
+            ".Where(pair => pair.Key >= 164",
+            "catalog seeding should avoid a temporary LINQ filtered dictionary projection");
+    }
+
+    [Fact]
+    public void LoadCore_ReadsWorkbookMetadataInSinglePackagePass()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var metadataSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataReader.cs"));
+
+        adapterSource.Should().Contain("workbookMetadata = packageParts.HasWorkbook");
+        adapterSource.Should().Contain("XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageArchive)");
+        adapterSource.Should().NotContain("XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageStream)");
+        foreach (var legacyCall in new[]
+        {
+            "LoadUses1904DateSystem(packageStream)",
+            "LoadWorkbookProperties(packageStream)",
+            "LoadWorkbookViewProperties(packageStream)",
+            "LoadFileSharing(packageStream)",
+            "LoadFileRecoveryProperties(packageStream)",
+            "LoadFileVersion(packageStream)",
+            "LoadFunctionGroups(packageStream)",
+            "LoadSmartTags(packageStream)",
+            "LoadProtection(packageStream)",
+            "LoadProtectionMetadata(packageStream)",
+            "LoadCalculationProperties(packageStream)",
+            "LoadCustomViews(packageStream)"
+        })
+        {
+            adapterSource.Should().NotContain(legacyCall);
+        }
+
+        metadataSource.Should().Contain("public static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(Stream xlsxStream)");
+        metadataSource.Should().Contain("internal static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(ZipArchive archive)");
+        metadataSource.Should().Contain("var workbookEntry = archive.GetEntry(\"xl/workbook.xml\");");
+        metadataSource.Should().Contain("return LoadWorkbookMetadata(workbookXml);");
+    }
+
+    [Fact]
+    public void LoadCore_ReusesSingleStylesheetParseForLoadMetadata()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+
+        adapterSource.Should().Contain("stylesXml = packageParts.HasStyles");
+        adapterSource.Should().Contain("XlsxStylesheetReader.Load(packageArchive)");
+        adapterSource.Should().Contain("XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml)");
+        adapterSource.Should().Contain("XlsxIndexedColorPaletteMapper.Load(stylesXml)");
+        adapterSource.Should().Contain("XlsxPivotTableStyleMetadataReader.Load(stylesXml)");
+        adapterSource.Should().Contain("XlsxStructuredTableStyleMetadataReader.Load(stylesXml)");
+        adapterSource.Should().Contain("LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings)");
+        adapterSource.Should().NotContain("XlsxStylesheetReader.Load(packageStream)");
+        adapterSource.Should().NotContain("LoadNumberFormatCatalog(packageStream)");
+        adapterSource.Should().NotContain("XlsxIndexedColorPaletteMapper.Load(packageStream)");
+        adapterSource.Should().NotContain("XlsxPivotTableStyleMetadataReader.Load(packageStream)");
+        adapterSource.Should().NotContain("XlsxStructuredTableStyleMetadataReader.Load(packageStream)");
+        adapterSource.Should().NotContain("LoadSheetXmlLayout(packageStream);");
+    }
+
+    [Fact]
+    public void LoadCore_UsesPackagePartSummaryToSkipOptionalMetadataReaders()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+
+        adapterSource.Should().Contain("packageParts = XlsxLoadPackageParts.Inspect(packageArchive);");
+        adapterSource.Should().Contain("if (packageParts.HasPivotPackageParts)");
+        adapterSource.Should().Contain("if (packageParts.HasSlicerTimelinePackageParts)");
+        adapterSource.Should().Contain("if (packageParts.HasExternalLinks)");
+        adapterSource.Should().Contain("if (packageParts.HasStructuredTables)");
+        adapterSource.Should().Contain("XlsxPivotTableReader.Load(packageArchive, numberFormatCatalog)");
+        adapterSource.Should().Contain("XlsxSlicerTimelineMetadataReader.Load(packageArchive)");
+        adapterSource.Should().Contain("XlsxExternalLinkMetadataReader.Load(packageArchive)");
+        adapterSource.Should().Contain("XlsxStructuredTableMetadataReader.Load(packageArchive)");
+        adapterSource.Should().NotContain("XlsxPivotTableReader.Load(packageStream, numberFormatCatalog)");
+        adapterSource.Should().NotContain("XlsxSlicerTimelineMetadataReader.Load(packageStream)");
+        adapterSource.Should().NotContain("XlsxExternalLinkMetadataReader.Load(packageStream)");
+        adapterSource.Should().NotContain("XlsxStructuredTableMetadataReader.Load(packageStream)");
+    }
+
+    [Fact]
+    public void Save_UsesSaveScopedStyleCacheForStyleLookup()
+    {
+        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+
+        saveSource.Should().Contain("var styleCache = new Dictionary<StyleId, CellStyle>(workbook.StyleCount);");
+        saveSource.Should().Contain("GetCachedStyle(workbook, styleCache, cell.StyleId)");
+        saveSource.Should().Contain("GetCachedStyle(workbook, styleCache, seed.StyleId)");
+        saveSource.Should().Contain("style = workbook.GetStyle(styleId);");
+        saveSource.Should().NotContain("workbook.GetStyle(cell.StyleId)");
+        saveSource.Should().NotContain("workbook.GetStyle(seed.StyleId)");
+    }
+
+    [Fact]
+    public void Save_ExpandsStyleOnlyCellsInPostProcessingAfterClosedXmlStyleSeeding()
+    {
+        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+        var postProcessingSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var writerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStyleOnlyCellWriter.cs"));
+
+        saveSource.Should().Contain("ApplyStyleOnlySeedCells");
+        saveSource.Should().Contain("XlsxStyleOnlyCellWriter.GetSeedCells(sheet)");
+        saveSource.Should().NotContain("GetStyleOnlyRuns");
+        postProcessingSource.Should().Contain("featurePlan.HasStyleOnlyCells");
+        postProcessingSource.Should().Contain("XlsxStyleOnlyCellWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
+        writerSource.Should().Contain("ReadSeedStyleIndexes");
+        writerSource.Should().Contain("ApplyStyleOnlyCells");
+        writerSource.Should().Contain("UpdateDimension");
+    }
+
+    [Fact]
+    public void SavePostProcessing_BatchesWorkbookMetadataXmlWrites()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var writerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataWriter.cs"));
+
+        adapterSource.Should().Contain("XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);");
+        adapterSource.Should().Contain("if (featurePlan.HasWorkbookPostProcessingMetadata)");
+        adapterSource.Should().Contain("XlsxWorkbookMetadataWriter.SaveSourcePackageReplayMetadata(packageStream, workbook);");
+        adapterSource.Should().NotContain("XlsxWorkbookMetadataWriter.SaveWorkbookProperties(packageStream, workbook);");
+        adapterSource.Should().NotContain("XlsxWorkbookMetadataWriter.SaveCalculationProperties(packageStream, workbook);");
+        adapterSource.Should().NotContain("XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);");
+
+        writerSource.Should().Contain("public static bool HasPostProcessingMetadata(Workbook workbook)");
+        writerSource.Should().Contain("private static bool HasCalculationProperties(Workbook workbook)");
+        writerSource.Should().Contain("public static void SavePostProcessingMetadata(Stream xlsxStream, Workbook workbook)");
+        writerSource.Should().Contain("public static void SaveSourcePackageReplayMetadata(Stream xlsxStream, Workbook workbook)");
+        writerSource.Should().Contain("private static void SaveWorkbookXml(Stream xlsxStream, Workbook workbook");
+    }
+
+    [Fact]
+    public void SavePostProcessing_BatchesWorksheetNativeMetadataXmlWrites()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+        var batchSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetNativeMetadataBatchWriter.cs"));
+        var sourceIndependentBatchSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "XlsxWorksheetSourceIndependentMetadataBatchWriter.cs"));
+        var dataValidationNativeSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "XlsxDataValidationNativeMetadataMapper.cs"));
+        var sessionSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetXmlEditSession.cs"));
+
+        adapterSource.Should().Contain("XlsxWorksheetSourceIndependentMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
+        adapterSource.Should().Contain("XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata");
+        adapterSource.Should().NotContain("XlsxWorksheetNativeMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
+        adapterSource.Should().NotContain("XlsxWorksheetAutoFilterMapper.Save(packageStream, workbook, GetWorksheetPathMap());");
+        adapterSource.Should().NotContain("XlsxDataValidationNativeMetadataMapper.Save(packageStream, workbook);");
+        adapterSource.Should().NotContain("HasSourcePackageIndependentWorksheetNativeMetadata");
+        foreach (var legacyCall in new[]
+        {
+            "XlsxWorksheetProtectionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetPrintOptionsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetDimensionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetSheetPropertiesMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetPrimaryViewMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetPageMarginsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetPageBreaksMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetHeaderFooterMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());"
+        })
+        {
+            adapterSource.Should().NotContain(legacyCall);
+        }
+
+        batchSource.Should().Contain("using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);");
+        batchSource.Should().Contain("internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)");
+        batchSource.Should().Contain("XlsxWorksheetProtectionMetadataWriter.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetHeaderFooterMetadataWriter.Save(session, workbook);");
+        sourceIndependentBatchSource.Should().Contain("XlsxWorksheetAutoFilterMapper.Save(session, workbook);");
+        sourceIndependentBatchSource.Should().Contain("XlsxDataValidationNativeMetadataMapper.Save(session, workbook);");
+        sourceIndependentBatchSource.Should().Contain("XlsxWorksheetNativeMetadataBatchWriter.Save(session, workbook);");
+        saveSource.Should().Contain("if (!XlsxDataValidationNativeMetadataMapper.HasNativeMetadata(sheet))");
+        dataValidationNativeSource.Should().Contain("TryCreateDataValidationsElement(sheet, containerSource, out var replacement)");
+        dataValidationNativeSource.Should().Contain("AddDataValidationsInOrder(edit.Root, replacement);");
+        dataValidationNativeSource.Should().Contain("XlsxDataValidationClosedXmlMapper.NormalizeListFormulaForSave");
+        sessionSource.Should().Contain("private readonly Dictionary<string, XDocument> _documents");
+        sessionSource.Should().Contain("XlsxPackageXmlEditor.ReplaceXml(_archive, path, _documents[path]);");
+    }
+
+    [Fact]
+    public void SavePostProcessing_BatchesSourcePackageReplayWorksheetMetadataXmlWrites()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var batchSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "XlsxWorksheetPostProcessingMetadataBatchWriter.cs"));
+
+        adapterSource.Should().Contain(
+            "XlsxWorksheetPostProcessingMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
+        adapterSource.Should().Contain(
+            "XlsxWorksheetPostProcessingMetadataBatchWriter.SaveWorksheetElementMetadata(");
+        adapterSource.Should().Contain("XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata");
+        adapterSource.Should().Contain("XlsxWorksheetPostProcessingMetadataBatchWriter.HasWorksheetElementMetadata");
+        adapterSource.Should().NotContain("XlsxWorksheetSingleXmlCellMapper.Save(packageStream, workbook, GetWorksheetPathMap());");
+        batchSource.Should().Contain("using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);");
+        batchSource.Should().Contain("sheet.SingleXmlCells is not null");
+        batchSource.Should().Contain("XlsxWorksheetSmartTagMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetSortStateMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetAdditionalViewMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetDataConsolidationMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetSingleXmlCellMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetPageSetupMetadataWriter.Save(session, workbook);");
+    }
+}
