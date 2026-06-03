@@ -26,4 +26,65 @@ public sealed partial class MainWindowRibbonKeyTipTests
         });
     }
 
+    [Fact]
+    public void ViewZoomCommandKeyTips_ResetAndFitSelection()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.W, Key.Q);
+            harness.HandleKeyTip(Key.D2);
+            harness.StatusZoomText.Should().Be("200%");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.Z);
+
+            harness.KeyTipScope.Should().Be("Commands", "Z is a visible prefix for 100% and Zoom to Selection");
+
+            harness.HandleKeyTip(Key.D1);
+
+            harness.StatusZoomText.Should().Be("100%");
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+
+            harness.SelectRange(1, 1, 12, 6);
+            var expectedFitPercent = harness.ExpectedZoomSelectionPercent;
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.Z);
+            harness.HandleKeyTip(Key.S);
+
+            harness.StatusZoomText.Should().Be($"{expectedFitPercent}%");
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+
+            harness.OpenRibbonMenu(Key.H, Key.B);
+            harness.HandleKeyTip(Key.S);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemSubmenuIsOpen("Line Style").Should().BeTrue();
+            harness.ActiveMenuItemGestureText("Dashed").Should().Be("D");
+
+            harness.HandleKeyTip(Key.D);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public void ZoomCustomDialogCancel_ReturnsFocusToWorksheet()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenCustomZoomDialogAndCancel();
+
+            harness.FocusedElementIsWorksheet.Should().BeTrue();
+        });
+    }
 }
