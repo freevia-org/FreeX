@@ -437,7 +437,7 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-10);
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(1_000_000);
+        allocatedBytes.Should().BeLessThan(8_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
@@ -466,17 +466,17 @@ public sealed class FormulaEvaluatorPerformanceTests
 
     public static IEnumerable<object[]> AggregateNonSelectionStreamingCases()
     {
-        yield return ["=AGGREGATE(1,4,A1:A100000)", 50_000.5d, false, 1_000_000];
-        yield return ["=AGGREGATE(2,4,A1:A100000)", 100_000d, false, 1_000_000];
-        yield return ["=AGGREGATE(3,4,A1:A100000)", 100_000d, false, 1_000_000];
-        yield return ["=AGGREGATE(4,4,A1:A100000)", 100_000d, false, 1_000_000];
-        yield return ["=AGGREGATE(5,4,A1:A100000)", 1d, false, 1_000_000];
-        yield return ["=AGGREGATE(6,4,A1:A100000)", 2d, true, 1_000_000];
-        yield return ["=AGGREGATE(7,4,A1:A100000)", Math.Sqrt((double)RowCount * (RowCount + 1) / 12), false, 1_000_000];
-        yield return ["=AGGREGATE(8,4,A1:A100000)", Math.Sqrt(((double)RowCount * RowCount - 1) / 12), false, 1_000_000];
-        yield return ["=AGGREGATE(9,4,A1:A100000)", 5_000_050_000d, false, 1_000_000];
-        yield return ["=AGGREGATE(10,4,A1:A100000)", (double)RowCount * (RowCount + 1) / 12, false, 1_000_000];
-        yield return ["=AGGREGATE(11,4,A1:A100000)", ((double)RowCount * RowCount - 1) / 12, false, 1_000_000];
+        yield return ["=AGGREGATE(1,4,A1:A100000)", 50_000.5d, false, 8_000];
+        yield return ["=AGGREGATE(2,4,A1:A100000)", 100_000d, false, 8_000];
+        yield return ["=AGGREGATE(3,4,A1:A100000)", 100_000d, false, 8_000];
+        yield return ["=AGGREGATE(4,4,A1:A100000)", 100_000d, false, 8_000];
+        yield return ["=AGGREGATE(5,4,A1:A100000)", 1d, false, 8_000];
+        yield return ["=AGGREGATE(6,4,A1:A100000)", 2d, true, 8_000];
+        yield return ["=AGGREGATE(7,4,A1:A100000)", Math.Sqrt((double)RowCount * (RowCount + 1) / 12), false, 8_000];
+        yield return ["=AGGREGATE(8,4,A1:A100000)", Math.Sqrt(((double)RowCount * RowCount - 1) / 12), false, 8_000];
+        yield return ["=AGGREGATE(9,4,A1:A100000)", 5_000_050_000d, false, 8_000];
+        yield return ["=AGGREGATE(10,4,A1:A100000)", (double)RowCount * (RowCount + 1) / 12, false, 8_000];
+        yield return ["=AGGREGATE(11,4,A1:A100000)", ((double)RowCount * RowCount - 1) / 12, false, 8_000];
     }
 
     [Theory]
