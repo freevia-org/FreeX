@@ -485,6 +485,74 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstagePrimarySidebarButtons_ExposeStableAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var expectedButtons = new[]
+        {
+            (
+                Name: "SsBackBtn",
+                Click: "SsBackBtn_Click",
+                AutomationId: "BackstageBackButton",
+                AutomationName: "Back",
+                HelpTextFragment: "workbook"),
+            (
+                Name: "SsHomeNavBtn",
+                Click: "SsHomeNavBtn_Click",
+                AutomationId: "BackstageHomeButton",
+                AutomationName: "Home",
+                HelpTextFragment: "Home"),
+            (
+                Name: "SsNewNavBtn",
+                Click: "SsNewBtn_Click",
+                AutomationId: "BackstageNewButton",
+                AutomationName: "New",
+                HelpTextFragment: "new workbook"),
+            (
+                Name: "SsOpenNavBtn",
+                Click: "SsOpenBtn_Click",
+                AutomationId: "BackstageOpenButton",
+                AutomationName: "Open",
+                HelpTextFragment: "existing workbook"),
+            (
+                Name: "SsSaveNavBtn",
+                Click: "SaveButton_Click",
+                AutomationId: "BackstageSaveButton",
+                AutomationName: "Save",
+                HelpTextFragment: "Save the workbook"),
+            (
+                Name: "SsSaveAsNavBtn",
+                Click: "SaveAsButton_Click",
+                AutomationId: "BackstageSaveAsButton",
+                AutomationName: "Save As",
+                HelpTextFragment: "new name"),
+            (
+                Name: "SsCloseNavBtn",
+                Click: "SsCloseBtn_Click",
+                AutomationId: "BackstageCloseButton",
+                AutomationName: "Close",
+                HelpTextFragment: "Close")
+        };
+
+        foreach (var expected in expectedButtons)
+        {
+            var button = document
+                .Descendants(presentation + "Button")
+                .Single(element => element.Attribute(x + "Name")?.Value == expected.Name);
+
+            button.Attribute("Click")?.Value.Should().Be(expected.Click);
+            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(expected.AutomationId);
+            LocalizedAttribute(button, "AutomationProperties.Name").Should().Be(expected.AutomationName);
+            LocalizedAttribute(button, "AutomationProperties.HelpText")
+                .Should()
+                .Contain(expected.HelpTextFragment);
+        }
+    }
+
+    [Fact]
     public void BackstageShareInfoAndExportButtons_ExposeStableAutomationMetadata()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));

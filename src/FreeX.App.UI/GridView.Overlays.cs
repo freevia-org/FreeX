@@ -9,8 +9,10 @@ public partial class GridView
     // Spreadsheet overlays: sparklines, resize/fill/copy adorners, formula traces, and page layout guides.
 
     private const int FormulaTraceArrowHeadGeometryCacheLimit = 4096;
+    private const int FormulaTraceArrowDrawingCacheLimit = 4096;
 
     private readonly Dictionary<FormulaTraceArrowHeadGeometryKey, Geometry> _formulaTraceArrowHeadGeometryCache = new();
+    private readonly Dictionary<FormulaTraceArrowDrawingKey, Drawing> _formulaTraceArrowDrawingCache = new();
 
     private void RenderResizeLine(DrawingContext dc)
     {
@@ -111,13 +113,42 @@ public partial class GridView
             return;
         }
 
-        dc.DrawLine(FormulaTraceArrowPen, start, end);
+        dc.DrawDrawing(GetFormulaTraceArrowDrawing(start, end));
+    }
 
-        var vector = start - end;
-        if (vector.Length <= 0.1) return;
-        vector.Normalize();
-        var perpendicular = new Vector(-vector.Y, vector.X);
-        dc.DrawGeometry(FormulaTraceArrowBrush, null, GetFormulaTraceArrowHeadGeometry(start, end, vector, perpendicular));
+    private Drawing GetFormulaTraceArrowDrawing(Point start, Point end)
+    {
+        var key = new FormulaTraceArrowDrawingKey(start, end);
+        if (_formulaTraceArrowDrawingCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_formulaTraceArrowDrawingCache.Count >= FormulaTraceArrowDrawingCacheLimit)
+            _formulaTraceArrowDrawingCache.Clear();
+
+        var drawing = CreateFormulaTraceArrowDrawing(start, end);
+        _formulaTraceArrowDrawingCache.Add(key, drawing);
+        return drawing;
+    }
+
+    private Drawing CreateFormulaTraceArrowDrawing(Point start, Point end)
+    {
+        var drawing = new DrawingGroup();
+        using (var dc = drawing.Open())
+        {
+            dc.DrawLine(FormulaTraceArrowPen, start, end);
+
+            var vector = start - end;
+            if (vector.Length > 0.1)
+            {
+                vector.Normalize();
+                var perpendicular = new Vector(-vector.Y, vector.X);
+                dc.DrawGeometry(FormulaTraceArrowBrush, null, GetFormulaTraceArrowHeadGeometry(start, end, vector, perpendicular));
+            }
+        }
+
+        if (drawing.CanFreeze)
+            drawing.Freeze();
+        return drawing;
     }
 
     private Geometry GetFormulaTraceArrowHeadGeometry(Point start, Point end, Vector vector, Vector perpendicular)
@@ -153,9 +184,14 @@ public partial class GridView
         return geometry;
     }
 
-    private void ClearFormulaTraceArrowHeadGeometryCache() => _formulaTraceArrowHeadGeometryCache.Clear();
+    private void ClearFormulaTraceArrowHeadGeometryCache()
+    {
+        _formulaTraceArrowHeadGeometryCache.Clear();
+        _formulaTraceArrowDrawingCache.Clear();
+    }
 
     private readonly record struct FormulaTraceArrowHeadGeometryKey(Point Start, Point End);
+    private readonly record struct FormulaTraceArrowDrawingKey(Point Start, Point End);
 
     private static void DrawFormulaTraceMarker(DrawingContext dc, Point point, FormulaTraceArrowLayoutKind kind)
     {
