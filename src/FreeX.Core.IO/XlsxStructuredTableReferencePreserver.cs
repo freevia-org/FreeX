@@ -101,7 +101,7 @@ internal static class XlsxStructuredTableReferencePreserver
                 continue;
 
             targetRoot.Elements(workbookNs + "tableParts").Remove();
-            targetRoot.Add(new XElement(
+            InsertWorksheetTablePartsInOrder(targetRoot, workbookNs, new XElement(
                 workbookNs + "tableParts",
                 new XAttribute("count", preservedTableParts.Count.ToString(CultureInfo.InvariantCulture)),
                 preservedTableParts));
@@ -185,12 +185,24 @@ internal static class XlsxStructuredTableReferencePreserver
                 continue;
 
             targetRoot.Elements(context.WorkbookNs + "tableParts").Remove();
-            targetRoot.Add(new XElement(
+            InsertWorksheetTablePartsInOrder(targetRoot, context.WorkbookNs, new XElement(
                 context.WorkbookNs + "tableParts",
                 new XAttribute("count", preservedTableParts.Count.ToString(CultureInfo.InvariantCulture)),
                 preservedTableParts));
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static void InsertWorksheetTablePartsInOrder(
+        XElement worksheetRoot,
+        XNamespace workbookNs,
+        XElement tableParts)
+    {
+        var extLst = worksheetRoot.Elements(workbookNs + "extLst").FirstOrDefault();
+        if (extLst is null)
+            worksheetRoot.Add(tableParts);
+        else
+            extLst.AddBeforeSelf(tableParts);
     }
 
     private static HashSet<string> GetWorksheetPathsWithTableRelationships(

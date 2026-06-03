@@ -51,7 +51,9 @@ public sealed record PivotCacheFieldModel(
     double? MaxValue = null,
     string? MinDate = null,
     string? MaxDate = null,
-    IReadOnlyList<string>? SharedItems = null);
+    IReadOnlyList<string>? SharedItems = null,
+    string? Formula = null,
+    bool IsDatabaseField = true);
 
 public sealed class PivotTableModel
 {

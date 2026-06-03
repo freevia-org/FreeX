@@ -4,6 +4,7 @@ internal sealed record SmokeOptions(
     bool GenerateChartFixtures,
     bool GenerateFreexFixture,
     bool GenerateFreexFeatureFixtures,
+    bool GenerateSupportedCorpusFixtures,
     bool GenerateExcelFixture,
     bool FreeXResaveBeforeExcel,
     string? CorpusManifestPath,
@@ -14,7 +15,11 @@ internal sealed record SmokeOptions(
     IReadOnlyList<string> Inputs)
 {
     public bool HasGeneratedFixtures =>
-        GenerateChartFixtures || GenerateFreexFixture || GenerateFreexFeatureFixtures || GenerateExcelFixture;
+        GenerateChartFixtures ||
+        GenerateFreexFixture ||
+        GenerateFreexFeatureFixtures ||
+        GenerateSupportedCorpusFixtures ||
+        GenerateExcelFixture;
 
     public bool HasCorpusManifest => !string.IsNullOrWhiteSpace(CorpusManifestPath);
 
@@ -26,6 +31,7 @@ internal sealed record SmokeOptions(
         var generateChartFixtures = false;
         var generateFreexFixture = false;
         var generateFreexFeatureFixtures = false;
+        var generateSupportedCorpusFixtures = false;
         var generateExcelFixture = false;
         var freeXResaveBeforeExcel = false;
         string? corpusManifestPath = null;
@@ -42,7 +48,7 @@ internal sealed record SmokeOptions(
             {
                 case "--help":
                 case "-h":
-                    return new SmokeOptions(true, false, false, false, false, false, false, null, [], [], null, pattern, []);
+                    return new SmokeOptions(true, false, false, false, false, false, false, false, null, [], [], null, pattern, []);
                 case "--save-reopen":
                     saveReopen = true;
                     break;
@@ -54,6 +60,9 @@ internal sealed record SmokeOptions(
                     break;
                 case "--generate-freex-feature-fixtures":
                     generateFreexFeatureFixtures = true;
+                    break;
+                case "--generate-supported-corpus-fixtures":
+                    generateSupportedCorpusFixtures = true;
                     break;
                 case "--generate-excel-fixture":
                     generateExcelFixture = true;
@@ -90,6 +99,7 @@ internal sealed record SmokeOptions(
             generateChartFixtures,
             generateFreexFixture,
             generateFreexFeatureFixtures,
+            generateSupportedCorpusFixtures,
             generateExcelFixture,
             freeXResaveBeforeExcel,
             corpusManifestPath,

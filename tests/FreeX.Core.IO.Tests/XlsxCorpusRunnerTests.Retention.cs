@@ -1494,6 +1494,7 @@ public partial class XlsxCorpusRunnerTests
     private static void AssertWorksheetCustomProperties(Stream package, string because)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
@@ -1505,8 +1506,37 @@ public partial class XlsxCorpusRunnerTests
             .Subject;
 
         customProperty.Attribute("name")!.Value.Should().Be("FreeXNativeProperty", because);
-        customProperty.Attribute("id")!.Value.Should().Be("1", because);
+        if (customProperty.Attribute("id") is { } legacyId)
+        {
+            legacyId.Value.Should().Be("1", because);
+        }
+        else
+        {
+            var relationshipId = customProperty.Attribute(relNs + "id")!.Value;
+            AssertWorksheetCustomPropertyRelationship(archive, relationshipId, "sheet1-1-FreeXNativeProperty.bin", because);
+        }
         customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetCustomPropertyRelationship(
+        ZipArchive archive,
+        string relationshipId,
+        string expectedTargetFileName,
+        string because)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        relsEntry.Should().NotBeNull(because);
+
+        var relsXml = LoadPackageXml(relsEntry!);
+        var relationship = relsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .SingleOrDefault(element => element.Attribute("Id")?.Value == relationshipId);
+        relationship.Should().NotBeNull(because);
+        relationship!.Attribute("Type")!.Value.Should()
+            .Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty", because);
+        relationship.Attribute("Target")!.Value.Should().Be("../customProperty/" + expectedTargetFileName, because);
+        archive.GetEntry("xl/customProperty/" + expectedTargetFileName).Should().NotBeNull(because);
     }
 
     private static void AssertWorksheetDataConsolidation(Stream package, string because)

@@ -48,7 +48,9 @@ public partial class XlsxCorpusRunnerTests
                     field.MaxValue,
                     field.MinDate ?? "",
                     field.MaxDate ?? "",
-                    field.SharedItems?.ToArray() ?? []))
+                    field.SharedItems?.ToArray() ?? [],
+                    field.Formula ?? "",
+                    field.IsDatabaseField))
                 .ToArray());
 
     private static StructuredTableSummary CaptureStructuredTableSummary(StructuredTableModel table) =>
@@ -182,7 +184,10 @@ public partial class XlsxCorpusRunnerTests
             pivot.RowFields.Select(CapturePivotFieldSummary).ToArray(),
             pivot.ColumnFields.Select(CapturePivotFieldSummary).ToArray(),
             pivot.PageFields.Select(CapturePivotFieldSummary).ToArray(),
-            pivot.DataFields.Select(CapturePivotDataFieldSummary).ToArray());
+            pivot.DataFields.Select(CapturePivotDataFieldSummary).ToArray(),
+            pivot.CalculatedFields
+                .Select(field => new PivotCalculatedFieldSummary(field.Name, field.Formula))
+                .ToArray());
 
     private static PivotFieldSummary CapturePivotFieldSummary(PivotFieldModel field) =>
         new(

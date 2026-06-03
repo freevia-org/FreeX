@@ -23,6 +23,17 @@ internal static partial class XlsxPivotTableReader
         return !string.Equals(attribute.Value, "0", StringComparison.Ordinal);
     }
 
+    private static string? ReadFreeXTableText(XElement root, XNamespace workbookNs, string attributeName)
+    {
+        XNamespace freeXNs = FreeXPivotExtensionNamespace;
+        var props = root.Element(workbookNs + "extLst")?
+            .Elements(workbookNs + "ext")
+            .Select(ext => ext.Element(freeXNs + "tableProps"))
+            .FirstOrDefault(element => element is not null);
+        var value = props?.Attribute(attributeName)?.Value;
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
     private static Dictionary<int, IReadOnlyList<string>> ReadFreeXPivotFieldSelections(
         XElement root,
         XNamespace workbookNs)

@@ -17690,11 +17690,17 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         var customProperties = worksheetXml.Root!.Element(worksheetNs + "customProperties");
         customProperties.Should().NotBeNull();
-        customProperties!.ToString().Should().Contain("name=\"FreeXNativeProperty\"");
-        customProperties.ToString().Should().Contain("id=\"1\"");
-        customProperties.ToString().Should().Contain("unsupportedAttr=\"kept\"");
+        var customProperty = customProperties!
+            .Elements(worksheetNs + "customPr")
+            .Should().ContainSingle().Subject;
+        customProperty.Attribute("name")!.Value.Should().Be("FreeXNativeProperty");
+        customProperty.Attribute("id").Should().BeNull();
+        customProperty.Attribute(relNs + "id")!.Value.Should().NotBeNullOrWhiteSpace();
+        customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept");
+        AssertWorksheetCustomPropertyRelationship(archive, customProperty, "sheet1-1-FreeXNativeProperty.bin");
     }
 
     [Fact]
@@ -17750,15 +17756,18 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         var customProperty = worksheetXml.Root!
             .Element(worksheetNs + "customProperties")!
             .Elements(worksheetNs + "customPr")
             .Single();
 
         customProperty.Attribute("name")!.Value.Should().Be("FreeXModeledProperty");
-        customProperty.Attribute("id")!.Value.Should().Be("7");
+        customProperty.Attribute("id").Should().BeNull();
+        customProperty.Attribute(relNs + "id")!.Value.Should().NotBeNullOrWhiteSpace();
         customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept");
         customProperty.Elements(XName.Get("customPrChild", "urn:freex:test")).Should().ContainSingle();
+        AssertWorksheetCustomPropertyRelationship(archive, customProperty, "sheet1-7-FreeXModeledProperty.bin");
         worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
 
@@ -19426,8 +19435,7 @@ public partial class FileAdapterSmokeTests
             defaultTextProperties.Element(drawingNs + "solidFill")!
                 .Element(drawingNs + "srgbClr")!
                 .Attribute("val")!.Value.Should().Be("19232D");
-            var colorMap = chartXml.Root.Element(chartNs + "clrMapOvr")!
-                .Element(drawingNs + "overrideClrMapping")!;
+            var colorMap = chartXml.Root.Element(chartNs + "clrMapOvr")!;
             colorMap.Attribute("bg1")!.Value.Should().Be("lt1");
             colorMap.Attribute("tx1")!.Value.Should().Be("dk1");
             colorMap.Attribute("accent1")!.Value.Should().Be("accent2");
@@ -19552,7 +19560,13 @@ public partial class FileAdapterSmokeTests
         loadedChart.PivotFormatsXml.Should().Contain("4472C4");
         loadedChart.Uses1904DateSystem.Should().BeTrue();
         loadedChart.Language.Should().Be("en-US");
-        loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
+        loadedChart.ColorMapOverride.Should().NotBeNull();
+        loadedChart.ColorMapOverride!.UseMasterColorMapping.Should().BeFalse();
+        loadedChart.ColorMapOverride.OverrideMappings.Should().BeEquivalentTo(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["accent1"] = "accent2"
+            });
         loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
         loadedChart.TitleLayout.Should().BeEquivalentTo(chart.TitleLayout);
         loadedChart.TitleOverlay.Should().BeTrue();
@@ -19718,8 +19732,15 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("enableFieldProperties")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("editData")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("indent")!.Value.Should().Be("4");
-            pivotXml.Root!.Attribute("altText")!.Value.Should().Be("Sales pivot");
-            pivotXml.Root!.Attribute("altTextSummary")!.Value.Should().Be("Pivot summary for sales");
+            pivotXml.Root!.Attribute("altText").Should().BeNull();
+            pivotXml.Root!.Attribute("altTextSummary").Should().BeNull();
+            XNamespace freeXPivotNs = "urn:freex:pivot:2026";
+            var tableProps = pivotXml.Root!
+                .Element(workbookNs + "extLst")!
+                .Descendants(freeXPivotNs + "tableProps")
+                .Should().ContainSingle().Subject;
+            tableProps.Attribute("altTextTitle")!.Value.Should().Be("Sales pivot");
+            tableProps.Attribute("altTextDescription")!.Value.Should().Be("Pivot summary for sales");
             pivotXml.Root!.Attribute("dataCaption")!.Value.Should().Be("Values");
             pivotXml.Root!.Attribute("grandTotalCaption")!.Value.Should().Be("Overall Total");
             pivotXml.Root!.Attribute("missingCaption")!.Value.Should().Be("(missing)");
@@ -20431,6 +20452,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
         {
             var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+            var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!);
             pivotXml.ToString().Should().Contain("pageField");
             pivotXml.ToString().Should().Contain("colFields");
             pivotXml.ToString().Should().Contain("name=\"Domestic\"");
@@ -20473,10 +20495,13 @@ public partial class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("showColStripes=\"1\"");
             pivotXml.ToString().Should().Contain("defaultSubtotal=\"1\"");
             pivotXml.ToString().Should().Contain("subtotalTop=\"1\"");
-            pivotXml.ToString().Should().Contain("calculatedField");
+            pivotXml.ToString().Should().NotContain("calculatedFields");
             pivotXml.ToString().Should().Contain("calculatedItems");
             pivotXml.ToString().Should().Contain("formula=\"East+West\"");
-            pivotXml.ToString().Should().Contain("formula=\"Amount*2\"");
+            pivotXml.ToString().Should().NotContain("calculatedField=\"Revenue\"");
+            cacheXml.ToString().Should().Contain("databaseField=\"0\"");
+            cacheXml.ToString().Should().Contain("name=\"Revenue\"");
+            cacheXml.ToString().Should().Contain("formula=\"Amount*2\"");
             pivotXml.ToString().Should().Contain("subtotal=\"average\"");
             pivotXml.ToString().Should().Contain("showValuesAs=\"percentOfGrandTotal\"");
             pivotXml.ToString().Should().Contain("subtotal=\"max\"");
@@ -23374,6 +23399,36 @@ public partial class FileAdapterSmokeTests
         }
 
         packageStream.Position = 0;
+    }
+
+    private static void AssertWorksheetCustomPropertyRelationship(
+        ZipArchive archive,
+        XElement customProperty,
+        string expectedTargetFileName)
+    {
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var relationshipId = customProperty.Attribute(relNs + "id")!.Value;
+        AssertWorksheetCustomPropertyRelationship(archive, relationshipId, expectedTargetFileName);
+    }
+
+    private static void AssertWorksheetCustomPropertyRelationship(
+        ZipArchive archive,
+        string relationshipId,
+        string expectedTargetFileName)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        relsEntry.Should().NotBeNull();
+
+        var relsXml = LoadPackageXml(relsEntry!);
+        var relationship = relsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .SingleOrDefault(element => element.Attribute("Id")?.Value == relationshipId);
+        relationship.Should().NotBeNull();
+        relationship!.Attribute("Type")!.Value.Should()
+            .Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty");
+        relationship.Attribute("Target")!.Value.Should().Be("../customProperty/" + expectedTargetFileName);
+        archive.GetEntry("xl/customProperty/" + expectedTargetFileName).Should().NotBeNull();
     }
 
     private static void AddWorksheetSmartTags(MemoryStream packageStream)
