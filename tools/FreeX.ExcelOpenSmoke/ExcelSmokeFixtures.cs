@@ -10,7 +10,11 @@ internal static class ExcelSmokeFixtures
     private const int XlNoChange = 1;
     private const int XlLocalSessionChanges = 2;
     private const int XlYes = 1;
+    private const int XlDatabase = 1;
     private const int XlSrcRange = 1;
+    private const int XlRowField = 1;
+    private const int XlColumnField = 2;
+    private const int XlSum = -4157;
     private const int XlValidateList = 3;
     private const int XlValidAlertStop = 1;
     private const int XlBetween = 1;
@@ -121,6 +125,7 @@ internal static class ExcelSmokeFixtures
             AddExcelHyperlink(worksheet, "A5", "https://example.com/freex-excel-smoke", "Excel smoke link");
             AddExcelNamedRange(workbook, "ExcelAuthoredAmounts", "=ExcelData!$B$2:$B$4");
             AddExcelTextBox(worksheet, "Excel-authored text box");
+            AddExcelPivotTable(workbook, worksheet);
             AutoFitExcelColumns(worksheet, "A:D");
 
             ((dynamic)workbook).SaveAs(
@@ -931,6 +936,55 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(textFrame);
             ReleaseComObject(shape);
             ReleaseComObject(shapes);
+        }
+    }
+
+    private static void AddExcelPivotTable(object workbook, object sourceWorksheet)
+    {
+        object? worksheets = null;
+        object? pivotSheet = null;
+        object? pivotCaches = null;
+        object? pivotCache = null;
+        object? pivotTable = null;
+        object? itemField = null;
+        object? completeField = null;
+        object? amountField = null;
+        object? dataField = null;
+        try
+        {
+            worksheets = ((dynamic)workbook).Worksheets;
+            pivotSheet = ((dynamic)worksheets).Add(Missing.Value, sourceWorksheet);
+            ((dynamic)pivotSheet).Name = "ExcelPivot";
+            SetExcelCellValue(pivotSheet, 1, 1, "Excel-authored PivotTable");
+
+            pivotCaches = ((dynamic)workbook).PivotCaches();
+            pivotCache = ((dynamic)pivotCaches).Create(XlDatabase, "'ExcelData'!R1C1:R4C4");
+            pivotTable = ((dynamic)pivotCache).CreatePivotTable("'ExcelPivot'!R3C1", "ExcelAuthoredSmokePivot");
+
+            itemField = ((dynamic)pivotTable).PivotFields("Item");
+            ((dynamic)itemField).Orientation = XlRowField;
+
+            completeField = ((dynamic)pivotTable).PivotFields("Complete");
+            ((dynamic)completeField).Orientation = XlColumnField;
+
+            amountField = ((dynamic)pivotTable).PivotFields("Amount");
+            dataField = ((dynamic)pivotTable).AddDataField(amountField, "Sum of Amount", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0.00";
+
+            ((dynamic)pivotTable).TableStyle2 = "PivotStyleMedium9";
+            AutoFitExcelColumns(pivotSheet, "A:D");
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(amountField);
+            ReleaseComObject(completeField);
+            ReleaseComObject(itemField);
+            ReleaseComObject(pivotTable);
+            ReleaseComObject(pivotCache);
+            ReleaseComObject(pivotCaches);
+            ReleaseComObject(pivotSheet);
+            ReleaseComObject(worksheets);
         }
     }
 

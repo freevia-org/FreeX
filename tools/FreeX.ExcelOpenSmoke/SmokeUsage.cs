@@ -14,7 +14,8 @@ internal static class SmokeUsage
               --generate-freex-feature-fixtures
                                             Generate representative FreeX feature XLSX smoke files, including PivotTables.
               --generate-chart-fixtures     Generate FreeX histogram and waterfall XLSX smoke files.
-              --generate-excel-fixture      Generate an Excel-authored XLSX fixture through COM, then load/save it through FreeX.
+              --generate-excel-fixture      Generate an Excel-authored XLSX fixture through COM, including
+                                            a native PivotTable, then load/save it through FreeX.
               --freex-resave-before-excel   For user inputs, corpus rows, and generated FreeX fixtures,
                                             load/save through FreeX before Excel validation.
               --corpus-manifest <csv>       Add existing .xlsx rows from the XLSX corpus manifest.

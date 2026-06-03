@@ -409,25 +409,30 @@ internal static class ExcelOpenSmoke
             worksheets = ((dynamic)workbook).Worksheets;
             var worksheetCount = Convert.ToInt32(((dynamic)worksheets).Count, CultureInfo.InvariantCulture);
             var shapeCount = 0;
+            var pivotTableCount = 0;
 
             for (var index = 1; index <= worksheetCount; index++)
             {
                 object? worksheet = null;
                 object? shapes = null;
+                object? pivotTables = null;
                 try
                 {
                     worksheet = ((dynamic)worksheets)[index];
                     shapes = ((dynamic)worksheet).Shapes;
                     shapeCount += Convert.ToInt32(((dynamic)shapes).Count, CultureInfo.InvariantCulture);
+                    pivotTables = ((dynamic)worksheet).PivotTables();
+                    pivotTableCount += Convert.ToInt32(((dynamic)pivotTables).Count, CultureInfo.InvariantCulture);
                 }
                 finally
                 {
+                    ReleaseComObject(pivotTables);
                     ReleaseComObject(shapes);
                     ReleaseComObject(worksheet);
                 }
             }
 
-            return new ExcelWorkbookSummary(worksheetCount, shapeCount);
+            return new ExcelWorkbookSummary(worksheetCount, shapeCount, pivotTableCount);
         }
         finally
         {
@@ -467,7 +472,10 @@ internal static class ExcelOpenSmoke
         new(
             workbook.SheetCount,
             workbook.Sheets.Sum(sheet => sheet.CellCount),
-            workbook.Sheets.Sum(sheet => sheet.FormulaCellCount));
+            workbook.Sheets.Sum(sheet => sheet.FormulaCellCount),
+            workbook.Sheets.Sum(sheet => sheet.StructuredTables.Count),
+            workbook.Sheets.Sum(sheet => sheet.PivotTables.Count),
+            workbook.PivotCaches.Count);
 
     private static void AddFreeXSaveMarker(Workbook workbook)
     {
@@ -580,17 +588,17 @@ internal static class ExcelOpenSmoke
         if (result.FreeXPreSave is { } freeXPreSave)
         {
             Console.WriteLine(
-                $"  FreeX source load: sheets {freeXPreSave.SheetCount}; cells {freeXPreSave.CellCount}; formulas {freeXPreSave.FormulaCellCount}");
+                $"  FreeX source load: sheets {freeXPreSave.SheetCount}; cells {freeXPreSave.CellCount}; formulas {freeXPreSave.FormulaCellCount}; tables {freeXPreSave.StructuredTableCount}; pivots {freeXPreSave.PivotTableCount}; pivot caches {freeXPreSave.PivotCacheCount}");
         }
 
         if (result.Opened is { } opened)
-            Console.WriteLine($"  Excel open: worksheets {opened.WorksheetCount}; worksheet shapes {opened.ShapeCount}");
+            Console.WriteLine($"  Excel open: worksheets {opened.WorksheetCount}; worksheet shapes {opened.ShapeCount}; pivots {opened.PivotTableCount}");
         if (result.Reopened is { } reopened)
-            Console.WriteLine($"  Excel reopen: worksheets {reopened.WorksheetCount}; worksheet shapes {reopened.ShapeCount}");
+            Console.WriteLine($"  Excel reopen: worksheets {reopened.WorksheetCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
         if (result.FreeXReopenedExcelSave is { } freeXReopened)
         {
             Console.WriteLine(
-                $"  FreeX reopened Excel save: sheets {freeXReopened.SheetCount}; cells {freeXReopened.CellCount}; formulas {freeXReopened.FormulaCellCount}");
+                $"  FreeX reopened Excel save: sheets {freeXReopened.SheetCount}; cells {freeXReopened.CellCount}; formulas {freeXReopened.FormulaCellCount}; tables {freeXReopened.StructuredTableCount}; pivots {freeXReopened.PivotTableCount}; pivot caches {freeXReopened.PivotCacheCount}");
         }
 
         if (!result.Success)

@@ -48,8 +48,14 @@ internal sealed record WorkbookSmokeResult(
         new(false, input, null, freeXSavedPath, null, null, null, null, null, error);
 }
 
-internal sealed record ExcelWorkbookSummary(int WorksheetCount, int ShapeCount);
-internal sealed record FreeXWorkbookSummary(int SheetCount, int CellCount, int FormulaCellCount);
+internal sealed record ExcelWorkbookSummary(int WorksheetCount, int ShapeCount, int PivotTableCount);
+internal sealed record FreeXWorkbookSummary(
+    int SheetCount,
+    int CellCount,
+    int FormulaCellCount,
+    int StructuredTableCount,
+    int PivotTableCount,
+    int PivotCacheCount);
 internal sealed record FreeXSaveResult(string SavedPath, FreeXWorkbookSummary Summary);
 internal sealed record ExcelSaveReopenResult(
     string ExcelSavedPath,
