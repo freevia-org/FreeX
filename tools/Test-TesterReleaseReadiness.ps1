@@ -103,6 +103,9 @@ foreach ($marker in @(
     "accessibility_uia_catalog:",
     "accessibility_known_issues:",
     "contents: write",
+    "group: tester-release",
+    "Validate latest release source",
+    "refs/heads/main",
     "dotnet-version: 10.0.x",
     "tools\Test-RepositoryPreflight.ps1",
     "TestResults/tests.trx",
@@ -115,6 +118,7 @@ foreach ($marker in @(
     "Publish MSIX package",
     "-PublishMode Msix",
     "@signArgs",
+    "FREEX_MSIX_CERTIFICATE_BASE64 is required for tester-release MSIX assets.",
     "FreeX-latest-win-x64.exe",
     "FreeX-latest-win-x64.exe.sha256",
     "FreeX-latest-win-x64.msix",
@@ -127,6 +131,8 @@ $distributionPlan = Get-Content -LiteralPath $distributionPlanFile -Raw
 Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "At $overallCompletion% completion, default tester releases use the ``$stream`` stream." -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "Release dispatches must run from ``main`` because the workflow publishes stable latest assets" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "requires ``FREEX_MSIX_CERTIFICATE_BASE64``" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "Keyboard-only smoke validation" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "Screen-reader smoke validation" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "UI Automation catalog review" -Label "Test distribution plan"
@@ -137,6 +143,7 @@ Assert-Contains -Text $checklist -Expected "Test result artifact was uploaded, e
 Assert-Contains -Text $checklist -Expected "Versioned ``.exe``, latest ``.exe``, versioned MSIX, latest MSIX, and checksum artifacts" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Stable latest checksum assets were included for both the ``.exe`` and MSIX packages" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Latest ``.exe`` and MSIX download links were checked from the published release." -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "MSIX package was signed with the release certificate and the manifest Publisher came from that certificate subject." -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Known accessibility issues" -Label "Tester release checklist"
 
 $missingAccessibilityGate = @()

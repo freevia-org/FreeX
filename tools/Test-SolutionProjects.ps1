@@ -109,7 +109,7 @@ $discoveredProjectPaths = @(
                 $relativePath
             }
         } |
-        Where-Object { $_.StartsWith("src/") -or $_.StartsWith("tests/") } |
+        Where-Object { $_.StartsWith("src/") -or $_.StartsWith("tests/") -or $_.StartsWith("tools/") } |
         Sort-Object -Unique
 )
 

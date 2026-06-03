@@ -33,4 +33,11 @@ public sealed class AppInfoTests
         AppInfo.AboutText.Should().Contain("%LOCALAPPDATA%\\FreeX\\Diagnostics");
         AppInfo.AboutText.Should().NotContain("Claude Code");
     }
+
+    [Fact]
+    public void VersionText_UsesAssemblyInformationalVersionWithoutCommitMetadata()
+    {
+        AppInfo.FormatVersionText("0.8.42+abcdef12").Should().Be("Version 0.8.42 (Tester Release)");
+        AppInfo.FormatVersionText("0.5.0").Should().Be("Version 0.5 (Tester Release)");
+    }
 }

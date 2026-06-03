@@ -52,6 +52,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- ReachFramework provides System.Windows.Xps.* and System.Printing -->
     <UseReachFramework>true</UseReachFramework>
+    <Version>0.5.0</Version>
+    <InformationalVersion>0.5.0</InformationalVersion>
   </PropertyGroup>
 
 </Project>
