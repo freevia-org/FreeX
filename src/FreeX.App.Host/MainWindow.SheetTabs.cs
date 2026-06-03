@@ -517,6 +517,21 @@ public partial class MainWindow
 
             var nextTabIsActive = tabIndex < visibleTabs.Count - 1 &&
                                   visibleTabs[tabIndex + 1].Id == _currentSheetId;
+
+            if (tab.TabColor is not null || tab.IsGrouped)
+            {
+                var fillBrush = tab.TabColor is { } tabColor
+                    ? CreatePastelTabBrush(tabColor)
+                    : (Brush)FindResource("FreeXAccentSoftBrush");
+                SheetTabsChromeLayer.Children.Add(CreateSheetTabPath(
+                    CreateInactiveSheetTabFillGeometry(tabRect),
+                    fillBrush,
+                    null,
+                    0,
+                    tabClipGeometry,
+                    tab.IsGrouped ? 0.9 : 0.82));
+            }
+
             if (nextTabIsActive)
                 return;
 
@@ -876,6 +891,33 @@ public partial class MainWindow
         {
             context.BeginFigure(new Point(x, SheetTabGridRuleTop + 7.0), false, false);
             context.LineTo(new Point(x, SheetTabGridRuleTop + 21.0), true, true);
+        }
+
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static Geometry CreateInactiveSheetTabFillGeometry(Rect tab)
+    {
+        const double top = SheetTabGridRuleTop + 1.5;
+        const double bottom = SheetTabGridRuleTop + 26.5;
+        const double horizontalInset = 8.0;
+        const double radius = 4.0;
+        var left = tab.Left + horizontalInset;
+        var right = tab.Right - horizontalInset;
+        if (right <= left + radius * 2)
+            return Geometry.Empty;
+
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(new Point(left, top), true, true);
+            context.LineTo(new Point(right, top), true, true);
+            context.LineTo(new Point(right, bottom - radius), true, true);
+            context.QuadraticBezierTo(new Point(right, bottom), new Point(right - radius, bottom), true, true);
+            context.LineTo(new Point(left + radius, bottom), true, true);
+            context.QuadraticBezierTo(new Point(left, bottom), new Point(left, bottom - radius), true, true);
+            context.LineTo(new Point(left, top), true, true);
         }
 
         geometry.Freeze();

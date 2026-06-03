@@ -182,14 +182,14 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
         if (ignoredCellCount == 0)
             return [];
 
-        var ignoredCells = new List<CellAddress>(ignoredCellCount);
+        var ignoredCells = new List<(uint Row, uint Col)>(ignoredCellCount);
         foreach (var pair in occupiedCells)
         {
             if (!pair.Value.IgnoreFormulaError)
                 continue;
 
             var (row, col) = pair.Key;
-            ignoredCells.Add(new CellAddress(sheet.Id, row, col));
+            ignoredCells.Add((row, col));
         }
 
         ignoredCells.Sort(static (left, right) =>
@@ -203,15 +203,16 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
         var first = ignoredCells[0];
         var currentRun = new IgnoredErrorRun(
             first.Row,
+            first.Row,
             first.Col,
             first.Col,
-            nativeAttributeLookup.GetNativeAttributes(first));
+            nativeAttributeLookup.GetNativeAttributes(sheet.Id, first.Row, first.Col));
 
         for (var i = 1; i < ignoredCells.Count; i++)
         {
             var address = ignoredCells[i];
-            var nativeAttributes = nativeAttributeLookup.GetNativeAttributes(address);
-            if (address.Row == currentRun.Row &&
+            var nativeAttributes = nativeAttributeLookup.GetNativeAttributes(sheet.Id, address.Row, address.Col);
+            if (address.Row == currentRun.StartRow &&
                 address.Col == currentRun.EndCol + 1 &&
                 HaveSameIgnoredErrorNativeAttributes(currentRun.NativeAttributes, nativeAttributes))
             {
@@ -219,12 +220,30 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 continue;
             }
 
-            runs.Add(currentRun);
-            currentRun = new IgnoredErrorRun(address.Row, address.Col, address.Col, nativeAttributes);
+            AddMergedIgnoredErrorRun(runs, currentRun);
+            currentRun = new IgnoredErrorRun(address.Row, address.Row, address.Col, address.Col, nativeAttributes);
         }
 
-        runs.Add(currentRun);
+        AddMergedIgnoredErrorRun(runs, currentRun);
         return runs;
+    }
+
+    private static void AddMergedIgnoredErrorRun(List<IgnoredErrorRun> runs, IgnoredErrorRun run)
+    {
+        if (runs.Count > 0)
+        {
+            var previous = runs[^1];
+            if (previous.EndRow + 1 == run.StartRow &&
+                previous.StartCol == run.StartCol &&
+                previous.EndCol == run.EndCol &&
+                HaveSameIgnoredErrorNativeAttributes(previous.NativeAttributes, run.NativeAttributes))
+            {
+                runs[^1] = previous with { EndRow = run.EndRow };
+                return;
+            }
+        }
+
+        runs.Add(run);
     }
 
     private static bool HaveSameIgnoredErrorNativeAttributes(
@@ -377,8 +396,16 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
         return cells.Count > 0;
     }
 
-    private static bool IsSupportedIgnoredErrorElement(XElement ignoredError) =>
-        SupportedIgnoredErrorFlags.Any(flag => IsTruthy(ignoredError.Attribute(flag)?.Value));
+    private static bool IsSupportedIgnoredErrorElement(XElement ignoredError)
+    {
+        foreach (var flag in SupportedIgnoredErrorFlags)
+        {
+            if (IsTruthy(ignoredError.Attribute(flag)?.Value))
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool ShouldSkipIgnoredErrorNativeAttribute(string key) =>
         string.IsNullOrWhiteSpace(key) ||
@@ -392,18 +419,19 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
         sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private readonly record struct IgnoredErrorRun(
-        uint Row,
+        uint StartRow,
+        uint EndRow,
         uint StartCol,
         uint EndCol,
         IReadOnlyDictionary<string, string>? NativeAttributes)
     {
         public string ToSqref()
         {
-            var start = new CellAddress(default, Row, StartCol).ToA1();
-            if (StartCol == EndCol)
+            var start = new CellAddress(default, StartRow, StartCol).ToA1();
+            if (StartRow == EndRow && StartCol == EndCol)
                 return start;
 
-            var end = new CellAddress(default, Row, EndCol).ToA1();
+            var end = new CellAddress(default, EndRow, EndCol).ToA1();
             return $"{start}:{end}";
         }
     }
@@ -445,11 +473,12 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             return new IgnoredErrorNativeAttributeLookup(lookupSheet, metadata, ranges);
         }
 
-        public IReadOnlyDictionary<string, string>? GetNativeAttributes(CellAddress address)
+        public IReadOnlyDictionary<string, string>? GetNativeAttributes(SheetId sheetId, uint row, uint col)
         {
             if (_metadata is null)
                 return null;
 
+            var address = new CellAddress(sheetId, row, col);
             var reference = address.ToA1();
             if (_metadata.ErrorNativeAttributes.TryGetValue(reference, out var attributes))
                 return attributes;
@@ -457,7 +486,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             if (_ranges.Count == 0)
                 return null;
 
-            var lookupAddress = new CellAddress(_lookupSheet, address.Row, address.Col);
+            var lookupAddress = new CellAddress(_lookupSheet, row, col);
             foreach (var range in _ranges)
             {
                 if (range.Range.Contains(lookupAddress))
