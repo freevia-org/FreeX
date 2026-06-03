@@ -4,6 +4,96 @@ namespace FreeX.Core.Formula;
 
 public sealed partial class FormulaEvaluator
 {
+    private bool TryEvaluateNpvDirectRanges(
+        FunctionCallNode node,
+        IEvalContext context,
+        out ScalarValue result)
+    {
+        result = BlankValue.Instance;
+        if (node.Arguments.Count < 2 ||
+            TryAsRangeRef(node.Arguments[0], out _) ||
+            !IsNpvDirectScalarArgument(node.Arguments[0]))
+            return false;
+
+        var hasDirectRange = false;
+        for (var i = 1; i < node.Arguments.Count; i++)
+        {
+            var argument = node.Arguments[i];
+            if (TryAsRangeRef(argument, out var range))
+            {
+                hasDirectRange = true;
+                if (TryDirectRangeExceedsMaterializationLimit(range, context, out var rangeError))
+                {
+                    result = rangeError;
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (!IsNpvDirectScalarArgument(argument))
+                return false;
+        }
+
+        if (!hasDirectRange)
+            return false;
+
+        var rateValue = EvaluateNode(node.Arguments[0], context);
+        if (rateValue is RangeValue)
+            return false;
+        if (rateValue is ErrorValue rateError)
+        {
+            result = rateError;
+            return true;
+        }
+
+        if (!TryCoerceToNumberValue(rateValue, out var rate))
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+
+        if (!double.IsFinite(rate))
+        {
+            result = ErrorValue.Num;
+            return true;
+        }
+
+        double total = 0;
+        var valueIndex = 0;
+        for (var i = 1; i < node.Arguments.Count; i++)
+        {
+            var argument = node.Arguments[i];
+            if (TryAsRangeRef(argument, out var range))
+            {
+                if (!TryCreateDirectRangeCursor(range, context, out var cursor, out result))
+                    return true;
+
+                var rangeResult = AccumulateNpvDirectRange(ref cursor, context, rate, ref valueIndex, ref total);
+                if (rangeResult is not null)
+                {
+                    result = rangeResult;
+                    return true;
+                }
+
+                continue;
+            }
+
+            var scalarResult = AccumulateNpvDirectArgument(argument, context, rate, ref valueIndex, ref total);
+            if (scalarResult is not null)
+            {
+                result = scalarResult;
+                return true;
+            }
+        }
+
+        result = double.IsFinite(total) ? new NumberValue(total) : ErrorValue.Num;
+        return true;
+    }
+
+    private static bool IsNpvDirectScalarArgument(FormulaNode argument) =>
+        argument is CellRefNode or NumberNode or StringNode or BooleanNode or ErrorNode or OmittedArgumentNode;
+
     private bool TryEvaluateXnpvDirectRanges(
         FunctionCallNode node,
         IEvalContext context,
@@ -102,6 +192,98 @@ public sealed partial class FormulaEvaluator
         return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
     }
 
+    private static ErrorValue? AccumulateNpvDirectRange(
+        ref DirectRangeCursor cursor,
+        IEvalContext context,
+        double rate,
+        ref int valueIndex,
+        ref double total)
+    {
+        while (true)
+        {
+            var hasNumber = TryReadNextDirectRangeNumber(ref cursor, context, out var value, out var error);
+            if (error is not null)
+                return error;
+            if (!hasNumber)
+                return null;
+
+            valueIndex++;
+            total += value / Math.Pow(1 + rate, valueIndex);
+        }
+    }
+
+    private static ErrorValue? AccumulateNpvDirectArgument(
+        FormulaNode argument,
+        IEvalContext context,
+        double rate,
+        ref int valueIndex,
+        ref double total)
+    {
+        if (!TryGetNpvDirectArgumentNumber(argument, context, out var value, out var hasNumber, out var error))
+            return error;
+
+        if (hasNumber)
+        {
+            valueIndex++;
+            total += value / Math.Pow(1 + rate, valueIndex);
+        }
+
+        return null;
+    }
+
+    private static bool TryGetNpvDirectArgumentNumber(
+        FormulaNode argument,
+        IEvalContext context,
+        out double number,
+        out bool hasNumber,
+        out ErrorValue? error)
+    {
+        number = 0;
+        hasNumber = false;
+        error = null;
+
+        switch (argument)
+        {
+            case NumberNode n:
+                number = n.Value;
+                hasNumber = true;
+                return true;
+            case BooleanNode b:
+                number = b.Value ? 1.0 : 0.0;
+                hasNumber = true;
+                return true;
+            case StringNode s:
+                if (!ExcelTextNumberParser.TryParse(s.Value, out number))
+                {
+                    error = ErrorValue.Value;
+                    return false;
+                }
+
+                hasNumber = true;
+                return true;
+            case ErrorNode e:
+                error = e.Error;
+                return false;
+            case OmittedArgumentNode:
+                return true;
+            case CellRefNode cell:
+                if (cell.SheetName is not null && !context.SheetExists(cell.SheetName))
+                {
+                    error = ErrorValue.Ref;
+                    return false;
+                }
+
+                var cellValue = cell.SheetName is null
+                    ? context.GetCellValue(cell.Row, cell.ColumnNumber)
+                    : context.GetCellValue(cell.SheetName, cell.Row, cell.ColumnNumber);
+                if (TryDirectRangeNumber(cellValue, out number, out error))
+                    hasNumber = true;
+                return error is null;
+            default:
+                return true;
+        }
+    }
+
     private static bool TryCreateDirectRangeCursor(
         RangeRefNode rawRange,
         IEvalContext context,
@@ -132,6 +314,25 @@ public sealed partial class FormulaEvaluator
 
         cursor = new DirectRangeCursor(range.SheetName, startRow, endRow, startCol, endCol);
         return true;
+    }
+
+    private static bool TryDirectRangeExceedsMaterializationLimit(
+        RangeRefNode rawRange,
+        IEvalContext context,
+        out ErrorValue error)
+    {
+        error = ErrorValue.Ref;
+        if (rawRange.SheetName is not null && !context.SheetExists(rawRange.SheetName))
+            return false;
+
+        var range = ClampOpenEndedRangeToUsed(rawRange, context);
+        uint startRow = Math.Min(range.Start.Row, range.End.Row);
+        uint endRow = Math.Max(range.Start.Row, range.End.Row);
+        uint startCol = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        uint endCol = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+
+        return FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol) >
+            FormulaSafetyLimits.MaxMaterializedRangeCells;
     }
 
     private static bool TryFindDirectRangeError(
