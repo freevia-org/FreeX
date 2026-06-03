@@ -2463,6 +2463,28 @@ public sealed class FlashFillCommandTests
     }
 
     [Fact]
+    public void FlashFillCommand_SelectedRangeWithBlankSourceRow_FillsPopulatedRows()
+    {
+        var (wb, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Ada"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Lovelace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Ada Lovelace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Grace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Hopper"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("Grace Hopper"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Alan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("Turing"));
+
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 3, sourceColIndex: 2, startRow: 1, endRow: 4);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(3, 3).Should().BeOfType<BlankValue>();
+        sheet.GetCell(4, 3)!.Value.Should().Be(new TextValue("Alan Turing"));
+        outcome.AffectedCells.Should().Equal(new CellAddress(sheet.Id, 4, 3));
+    }
+
+    [Fact]
     public void FlashFillCommand_WithFirstLastEmailExamples_UsesInferredDomain()
     {
         var (wb, sheet, ctx) = Setup();
