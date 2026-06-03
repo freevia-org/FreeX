@@ -95,8 +95,8 @@ public sealed class BuiltInFunctionsPerformanceTests
         _output.WriteLine(
             $"UNIQUE large single-column elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(
-            900_000,
-            "UNIQUE should append discovered single-column values directly instead of tracking source row indexes");
+            250_000,
+            "strictly monotonic single-column numeric ranges are already unique and should skip HashSet/result copy allocation");
     }
 
     [Fact]
