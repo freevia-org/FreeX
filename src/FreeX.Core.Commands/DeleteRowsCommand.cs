@@ -7,6 +7,7 @@ namespace FreeX.Core.Commands;
 /// <summary>Deletes <paramref name="count"/> rows starting at <paramref name="startRow"/>.</summary>
 public sealed class DeleteRowsCommand : IWorkbookCommand
 {
+    private const uint FullSnapshotCapacityThreshold = 32;
     private readonly SheetId _sheetId;
     private readonly uint _startRow;
     private readonly uint _count;
@@ -162,8 +163,12 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private (List<CellStateSnapshot> Deleted, List<CellStateSnapshot> Shifted)
         CaptureDeletedAndShiftedCells(Sheet sheet, uint endRow)
     {
-        var deleted = new List<CellStateSnapshot>();
-        var shifted = new List<CellStateSnapshot>(sheet.CellCount);
+        if (_startRow <= FullSnapshotCapacityThreshold)
+            return CaptureDeletedAndShiftedCellsWithFullCapacity(sheet, endRow);
+
+        var (deletedCount, shiftedCount) = CountDeletedAndShiftedCells(sheet, endRow);
+        var deleted = new List<CellStateSnapshot>(deletedCount);
+        var shifted = new List<CellStateSnapshot>(shiftedCount);
 
         foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
         {
@@ -176,6 +181,47 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
             {
                 var addr = new CellAddress(sheet.Id, row, col);
                 deleted.Add(CellStateSnapshot.Capture(addr, cell));
+            }
+        }
+
+        return (deleted, shifted);
+    }
+
+    private (List<CellStateSnapshot> Deleted, List<CellStateSnapshot> Shifted)
+        CaptureDeletedAndShiftedCellsWithFullCapacity(Sheet sheet, uint endRow)
+    {
+        var deleted = new List<CellStateSnapshot>();
+        var shifted = new List<CellStateSnapshot>(sheet.CellCount);
+
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+        {
+            if (row > endRow)
+            {
+                shifted.Add(CellStateSnapshot.Capture(new CellAddress(sheet.Id, row, col), cell));
+            }
+            else if (row >= _startRow)
+            {
+                deleted.Add(CellStateSnapshot.Capture(new CellAddress(sheet.Id, row, col), cell));
+            }
+        }
+
+        return (deleted, shifted);
+    }
+
+    private (int Deleted, int Shifted) CountDeletedAndShiftedCells(Sheet sheet, uint endRow)
+    {
+        var deleted = 0;
+        var shifted = 0;
+
+        foreach (var ((row, _), _) in sheet.GetOccupiedCellMap())
+        {
+            if (row > endRow)
+            {
+                shifted++;
+            }
+            else if (row >= _startRow)
+            {
+                deleted++;
             }
         }
 

@@ -7,6 +7,7 @@ namespace FreeX.Core.Commands;
 /// <summary>Inserts <paramref name="count"/> blank rows before <paramref name="beforeRow"/>.</summary>
 public sealed class InsertRowsCommand : IWorkbookCommand
 {
+    private const uint FullSnapshotCapacityThreshold = 32;
     private readonly SheetId _sheetId;
     private readonly uint _beforeRow;
     private readonly uint _count;
@@ -134,6 +135,25 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
     private (uint MaxOccupied, List<CellStateSnapshot> Moved) CaptureMovedCells(Sheet sheet)
     {
+        if (_beforeRow <= FullSnapshotCapacityThreshold)
+            return CaptureMovedCellsWithFullCapacity(sheet);
+
+        var movedCount = CountMovedCells(sheet, out var maxOccupied);
+        var moved = new List<CellStateSnapshot>(movedCount);
+
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+        {
+            if (row < _beforeRow)
+                continue;
+
+            moved.Add(CellStateSnapshot.Capture(new CellAddress(sheet.Id, row, col), cell));
+        }
+
+        return (maxOccupied, moved);
+    }
+
+    private (uint MaxOccupied, List<CellStateSnapshot> Moved) CaptureMovedCellsWithFullCapacity(Sheet sheet)
+    {
         var moved = new List<CellStateSnapshot>(sheet.CellCount);
         uint maxOccupied = 0;
 
@@ -149,6 +169,24 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         }
 
         return (maxOccupied, moved);
+    }
+
+    private int CountMovedCells(Sheet sheet, out uint maxOccupied)
+    {
+        var movedCount = 0;
+        maxOccupied = 0;
+
+        foreach (var ((row, _), _) in sheet.GetOccupiedCellMap())
+        {
+            if (row < _beforeRow)
+                continue;
+
+            movedCount++;
+            if (row > maxOccupied)
+                maxOccupied = row;
+        }
+
+        return movedCount;
     }
 
     private static void MoveCellsForInsert(
