@@ -29,19 +29,27 @@ public sealed partial class ViewportService : IViewportService
         var cfContext = BuildConditionalFormatContext(sheet, workbook);
         var hasConditionalStyles = HasConditionalStyleRules(cfContext);
         var hasConditionalIcons = cfContext.IconRulesByPriority.Count != 0;
-        var cells = new List<DisplayCell>(EstimateDisplayCellCapacity(
-            rowMetrics.Count,
-            colMetrics.Count,
-            sheet,
-            hasAnyCellComments,
-            hasAnyStyleOnlyCells));
         var styleCache = new ViewportStyleCache();
         var visibleCellSlots = EstimateVisibleCellSlots(rowMetrics.Count, colMetrics.Count);
+        var scanOccupiedViewportCells = ShouldScanOccupiedViewportCells(
+            visibleCellSlots,
+            sheet,
+            hasAnyCellComments,
+            hasAnyStyleOnlyCells);
+        var cells = new List<DisplayCell>(
+            scanOccupiedViewportCells
+                ? EstimateOccupiedScanDisplayCellCapacity(rowMetrics, colMetrics, sheet)
+                : EstimateDisplayCellCapacity(
+                    rowMetrics.Count,
+                    colMetrics.Count,
+                    sheet,
+                    hasAnyCellComments,
+                    hasAnyStyleOnlyCells));
 
         // Calculate Row Metrics — iterate until we've filled the available height, skipping hidden rows
         // Calculate Column Metrics — iterate until we've filled the available width
         // Retrieve Cells in Viewport
-        if (ShouldScanOccupiedViewportCells(visibleCellSlots, sheet, hasAnyCellComments, hasAnyStyleOnlyCells))
+        if (scanOccupiedViewportCells)
         {
             AddOccupiedViewportCells(
                 cells,
@@ -165,6 +173,28 @@ public sealed partial class ViewportService : IViewportService
         !hasAnyCellComments &&
         !hasAnyStyleOnlyCells;
 
+    private static int EstimateOccupiedScanDisplayCellCapacity(
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        Sheet sheet)
+    {
+        if (sheet.GetUsedRange() is not { } usedRange ||
+            rowMetrics.Count == 0 ||
+            colMetrics.Count == 0 ||
+            !RangesOverlap(usedRange.Start.Row, usedRange.End.Row, rowMetrics[0].Row, rowMetrics[^1].Row) ||
+            !RangesOverlap(usedRange.Start.Col, usedRange.End.Col, colMetrics[0].Col, colMetrics[^1].Col))
+        {
+            return 0;
+        }
+
+        return ClampCapacityHint(Math.Min(
+            EstimateVisibleCellSlots(rowMetrics.Count, colMetrics.Count),
+            sheet.CellCount));
+    }
+
+    private static bool RangesOverlap(uint firstStart, uint firstEnd, uint secondStart, uint secondEnd) =>
+        firstStart <= secondEnd && secondStart <= firstEnd;
+
     private static void AddOccupiedViewportCells(
         List<DisplayCell> cells,
         Workbook workbook,
@@ -181,11 +211,15 @@ public sealed partial class ViewportService : IViewportService
     {
         foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
         {
-            if (!IsVisibleMetricRow(rowMetrics, row) ||
+            if (!IsWithinVisibleColumnRange(colMetrics, col) ||
+                !IsWithinVisibleRowRange(rowMetrics, row) ||
                 !TryGetVisibleColumnTargetWidth(colMetrics, col, out var targetWidthCharacters))
             {
                 continue;
             }
+
+            if (!IsVisibleMetricRow(rowMetrics, row))
+                continue;
 
             AddCellDisplayCell(
                 cells,
@@ -204,6 +238,16 @@ public sealed partial class ViewportService : IViewportService
                 ref styleCache);
         }
     }
+
+    private static bool IsWithinVisibleRowRange(IReadOnlyList<RowMetric> rowMetrics, uint row) =>
+        rowMetrics.Count != 0 &&
+        row >= rowMetrics[0].Row &&
+        row <= rowMetrics[^1].Row;
+
+    private static bool IsWithinVisibleColumnRange(IReadOnlyList<ColMetric> colMetrics, uint col) =>
+        colMetrics.Count != 0 &&
+        col >= colMetrics[0].Col &&
+        col <= colMetrics[^1].Col;
 
     private static bool IsVisibleMetricRow(IReadOnlyList<RowMetric> rowMetrics, uint row)
     {
