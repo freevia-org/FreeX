@@ -26,7 +26,7 @@ public static partial class PivotTableRefreshService
         var columnAggregateCache = CreateColumnAggregateCacheIfNeeded(rowsByColumnKey, pivotTable, headers, columnFields);
         columnKeys = ApplyValueFilters(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields, columnAggregateCache);
         columnKeys = ApplySorts(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields, columnAggregateCache);
-        var visibleRows = RowsForColumnKeys(rowsByColumnKey, columnKeys);
+        var visibleRows = RowsForColumnKeys(rowsByColumnKey, columnKeys, retainedRows);
         var visibleRowsByColumnKey = BuildColumnRowsByKey(visibleRows, columnFields);
         var singleDataField = pivotTable.DataFields.Count == 1;
 
@@ -148,7 +148,7 @@ public static partial class PivotTableRefreshService
             }
 
             var rowGroupRowsByColumnKey = BuildColumnRowsByKey(rowGroupRows, columnFields);
-            var visibleRowGroupRows = RowsForColumnKeys(rowGroupRowsByColumnKey, columnKeys);
+            var visibleRowGroupRows = RowsForColumnKeys(rowGroupRowsByColumnKey, columnKeys, rowGroupRows);
             outputColumn = valueStartCol;
             foreach (var columnKey in columnKeys)
             {
@@ -275,7 +275,7 @@ public static partial class PivotTableRefreshService
         sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{captionItem} Total"));
 
         var subtotalRowsByColumnKey = BuildColumnRowsByKey(subtotalRows, columnFields);
-        var visibleSubtotalRows = RowsForColumnKeys(subtotalRowsByColumnKey, columnKeys);
+        var visibleSubtotalRows = RowsForColumnKeys(subtotalRowsByColumnKey, columnKeys, subtotalRows);
         var outputColumn = valueStartCol;
         foreach (var columnKey in columnKeys)
         {
