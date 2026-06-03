@@ -330,6 +330,18 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=NPV(0,A1:A2)", sheet).Should().Be(new NumberValue(3));
     }
 
+    [Fact] public void Npv_DirectRangeFastPath_PreservesLiteralAndReferenceCoercion()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new TextValue("2")),
+            (3, 1, new BoolValue(true)),
+            (4, 1, new NumberValue(3)),
+            (5, 1, new BoolValue(true)));
+
+        _eval.Evaluate("=NPV(0,A1:A3,\"4\",A4,A5)", sheet).Should().Be(new NumberValue(8));
+    }
+
     [Fact]
     public void Npv_NonFiniteRate_ReturnsNumError()
     {
