@@ -390,24 +390,16 @@ public static class SplitPaneCellLayoutPlanner
 
     private readonly record struct OccupiedColumnSpan(uint Start, uint End);
 
-    private readonly struct SplitPaneOccupiedCellMap(Dictionary<uint, List<OccupiedColumnSpan>> spansByRow)
+    private readonly struct SplitPaneOccupiedCellMap(Dictionary<uint, OccupiedColumnSpans> spansByRow)
     {
-        private readonly Dictionary<uint, List<OccupiedColumnSpan>> _spansByRow = spansByRow;
+        private readonly Dictionary<uint, OccupiedColumnSpans> _spansByRow = spansByRow;
 
         public bool Contains(uint row, uint col)
         {
             if (!_spansByRow.TryGetValue(row, out var spans))
                 return false;
 
-            foreach (var span in spans)
-            {
-                if (col < span.Start)
-                    return false;
-                if (col <= span.End)
-                    return true;
-            }
-
-            return false;
+            return spans.Contains(col);
         }
     }
 
@@ -415,20 +407,19 @@ public static class SplitPaneCellLayoutPlanner
         IReadOnlyList<DisplayCell> cells,
         CellAddress? editingCell)
     {
-        var spansByRow = new Dictionary<uint, List<OccupiedColumnSpan>>();
+        var spansByRow = new Dictionary<uint, OccupiedColumnSpans>(EstimateRowSpanCapacity(cells));
         var needsNormalize = false;
         foreach (var cell in cells)
         {
             if (!GridView.IsOverflowOccupied(cell, editingCell))
                 continue;
 
-            if (!spansByRow.TryGetValue(cell.Row, out var spans))
-            {
-                spans = [];
+            var hasRow = spansByRow.TryGetValue(cell.Row, out var spans);
+            AddOccupiedColumn(ref spans, cell.Col, ref needsNormalize);
+            if (hasRow)
+                spansByRow[cell.Row] = spans;
+            else
                 spansByRow.Add(cell.Row, spans);
-            }
-
-            AddOccupiedColumn(spans, cell.Col, ref needsNormalize);
         }
 
         if (needsNormalize)
@@ -437,64 +428,224 @@ public static class SplitPaneCellLayoutPlanner
         return new SplitPaneOccupiedCellMap(spansByRow);
     }
 
-    private static void AddOccupiedColumn(List<OccupiedColumnSpan> spans, uint col, ref bool needsNormalize)
+    private static int EstimateRowSpanCapacity(IReadOnlyList<DisplayCell> cells)
     {
-        if (spans.Count == 0)
+        if (cells.Count == 0)
+            return 0;
+
+        var rowCount = 1;
+        var lastRow = cells[0].Row;
+        for (var i = 1; i < cells.Count; i++)
         {
-            spans.Add(new OccupiedColumnSpan(col, col));
-            return;
+            var row = cells[i].Row;
+            if (row == lastRow)
+                continue;
+
+            rowCount++;
+            lastRow = row;
         }
 
-        var last = spans[^1];
-        if (last.End < uint.MaxValue && col == last.End + 1)
-        {
-            spans[^1] = new OccupiedColumnSpan(last.Start, col);
-            return;
-        }
-
-        if (col > last.End)
-        {
-            spans.Add(new OccupiedColumnSpan(col, col));
-            return;
-        }
-
-        if (col >= last.Start)
-            return;
-
-        needsNormalize = true;
-        spans.Add(new OccupiedColumnSpan(col, col));
+        return rowCount;
     }
 
-    private static void NormalizeOccupiedColumnSpans(Dictionary<uint, List<OccupiedColumnSpan>> spansByRow)
+    private static void AddOccupiedColumn(ref OccupiedColumnSpans spans, uint col, ref bool needsNormalize) =>
+        spans.Add(col, ref needsNormalize);
+
+    private static void NormalizeOccupiedColumnSpans(Dictionary<uint, OccupiedColumnSpans> spansByRow)
     {
-        foreach (var spans in spansByRow.Values)
+        foreach (var row in spansByRow.Keys.ToArray())
         {
+            var spans = spansByRow[row];
             if (spans.Count <= 1)
                 continue;
 
-            spans.Sort(static (left, right) => left.Start.CompareTo(right.Start));
-            var writeIndex = 0;
-            for (var readIndex = 1; readIndex < spans.Count; readIndex++)
+            var normalized = spans;
+            normalized.Normalize();
+            spansByRow[row] = normalized;
+        }
+    }
+
+    private struct OccupiedColumnSpans
+    {
+        private OccupiedColumnSpan _first;
+        private OccupiedColumnSpan _second;
+        private List<OccupiedColumnSpan>? _overflow;
+        private int _count;
+
+        public readonly int Count => _count;
+
+        public void Add(uint col, ref bool needsNormalize)
+        {
+            if (_count == 0)
             {
-                var current = spans[readIndex];
-                var merged = spans[writeIndex];
-                if (current.Start <= merged.End ||
-                    (merged.End < uint.MaxValue && current.Start == merged.End + 1))
+                _first = new OccupiedColumnSpan(col, col);
+                _count = 1;
+                return;
+            }
+
+            if (TryAddToExisting(col))
+                return;
+
+            var span = new OccupiedColumnSpan(col, col);
+            if (_count == 1)
+            {
+                if (col < _first.Start)
+                    needsNormalize = true;
+
+                _second = span;
+                _count = 2;
+                return;
+            }
+
+            if (col < LastSpan.End)
+                needsNormalize = true;
+
+            _overflow ??= [];
+            _overflow.Add(span);
+            _count++;
+        }
+
+        public readonly bool Contains(uint col)
+        {
+            if (_count == 0 || col < _first.Start)
+                return false;
+
+            if (col <= _first.End)
+                return true;
+
+            if (_count == 1 || col < _second.Start)
+                return false;
+
+            if (col <= _second.End)
+                return true;
+
+            if (_overflow is null)
+                return false;
+
+            foreach (var span in _overflow)
+            {
+                if (col < span.Start)
+                    return false;
+
+                if (col <= span.End)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public void Normalize()
+        {
+            if (_count == 2 && _overflow is null)
+            {
+                NormalizePair();
+                return;
+            }
+
+            if (_overflow is null)
+                return;
+
+            _overflow.Add(_first);
+            _overflow.Add(_second);
+            _overflow.Sort(static (left, right) => left.Start.CompareTo(right.Start));
+
+            var writeIndex = 0;
+            for (var readIndex = 1; readIndex < _overflow.Count; readIndex++)
+            {
+                var current = _overflow[readIndex];
+                var merged = _overflow[writeIndex];
+                if (CanMerge(merged, current))
                 {
-                    spans[writeIndex] = new OccupiedColumnSpan(
-                        merged.Start,
-                        Math.Max(merged.End, current.End));
+                    _overflow[writeIndex] = Merge(merged, current);
                     continue;
                 }
 
                 writeIndex++;
-                spans[writeIndex] = current;
+                _overflow[writeIndex] = current;
             }
 
             var keepCount = writeIndex + 1;
-            if (keepCount < spans.Count)
-                spans.RemoveRange(keepCount, spans.Count - keepCount);
+            if (keepCount < _overflow.Count)
+                _overflow.RemoveRange(keepCount, _overflow.Count - keepCount);
+
+            _first = _overflow[0];
+            _count = _overflow.Count;
+            if (_count > 1)
+                _second = _overflow[1];
+
+            _overflow.RemoveRange(0, Math.Min(2, _overflow.Count));
+            if (_overflow.Count == 0)
+                _overflow = null;
         }
+
+        private readonly OccupiedColumnSpan LastSpan =>
+            _overflow is { Count: > 0 } overflow ? overflow[^1] :
+            _count > 1 ? _second :
+            _first;
+
+        private bool TryAddToExisting(uint col)
+        {
+            if (TryAddToSpan(ref _first, col))
+                return true;
+
+            if (_count > 1 && TryAddToSpan(ref _second, col))
+                return true;
+
+            if (_overflow is null)
+                return false;
+
+            for (var i = 0; i < _overflow.Count; i++)
+            {
+                var span = _overflow[i];
+                if (!TryAddToSpan(ref span, col))
+                    continue;
+
+                _overflow[i] = span;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void NormalizePair()
+        {
+            if (_second.Start < _first.Start)
+                (_first, _second) = (_second, _first);
+
+            if (!CanMerge(_first, _second))
+                return;
+
+            _first = Merge(_first, _second);
+            _second = default;
+            _count = 1;
+        }
+
+        private static bool TryAddToSpan(ref OccupiedColumnSpan span, uint col)
+        {
+            if (col >= span.Start && col <= span.End)
+                return true;
+
+            if (span.End < uint.MaxValue && col == span.End + 1)
+            {
+                span = new OccupiedColumnSpan(span.Start, col);
+                return true;
+            }
+
+            if (span.Start > 0 && col == span.Start - 1)
+            {
+                span = new OccupiedColumnSpan(col, span.End);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool CanMerge(OccupiedColumnSpan left, OccupiedColumnSpan right) =>
+            right.Start <= left.End ||
+            (left.End < uint.MaxValue && right.Start == left.End + 1);
+
+        private static OccupiedColumnSpan Merge(OccupiedColumnSpan left, OccupiedColumnSpan right) =>
+            new(left.Start, Math.Max(left.End, right.End));
     }
 
     private static double SumEmptyOverflowColumnWidths(
