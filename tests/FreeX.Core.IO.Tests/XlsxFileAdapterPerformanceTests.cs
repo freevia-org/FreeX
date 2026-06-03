@@ -371,6 +371,30 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void LoadDrawingPictures_TransfersOwnedImageBuffersWithoutSecondCopy()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.LoadSheetXmlLayoutApplication.cs"));
+        var pictureLoop = source[
+            source.IndexOf("foreach (var picturePart in layout.PictureParts)", StringComparison.Ordinal)..
+            source.IndexOf("foreach (var textBoxPart in layout.TextBoxParts)", StringComparison.Ordinal)];
+
+        pictureLoop.Should().Contain("ImageBytes = picturePart.ImageBytes,");
+        pictureLoop.Should().NotContain("ImageBytes = picturePart.ImageBytes.ToArray()");
+
+        var drawingPartsSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetDrawingParts.cs"));
+        var readPictureParts = drawingPartsSource[
+            drawingPartsSource.IndexOf("private static IReadOnlyList<XlsxPicturePackagePart> ReadPictureParts", StringComparison.Ordinal)..
+            drawingPartsSource.IndexOf("private static Dictionary<string, string> ReadRelationshipTargetsById", StringComparison.Ordinal)];
+
+        readPictureParts.Should().Contain("ReadEntryBytes(imageEntry)");
+        readPictureParts.Should().Contain("GC.AllocateUninitializedArray<byte>");
+        readPictureParts.Should().Contain("ReadNonVisualProperties(pictureElement)");
+        readPictureParts.Should().NotContain("ReadNonVisualName(pictureElement)");
+        readPictureParts.Should().NotContain("ReadNonVisualTitle(pictureElement)");
+        readPictureParts.Should().NotContain("ReadNonVisualDescription(pictureElement)");
+    }
+
+    [Fact]
     public void Benchmark_SaveIgnoredErrorsWorkbook_ReportsTiming()
     {
         const int iterations = 3;

@@ -146,22 +146,19 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XDocument drawingXml,
         XDocument? drawingRelsXml)
     {
-        var pictures = new List<XlsxPicturePackagePart>();
-        if (drawingRelsXml?.Root is null)
-            return pictures;
-
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        if (drawingRelsXml?.Root is null)
+            return [];
+
         var relationshipTargets = ReadRelationshipTargetsById(drawingRelsXml.Root, packageRelNs);
+        var pictures = new List<XlsxPicturePackagePart>(relationshipTargets.Count);
 
         foreach (var pictureElement in drawingXml.Descendants(spreadsheetDrawingNs + "pic"))
         {
-            var imageRelId = pictureElement
-                .Descendants(drawingNs + "blip")
-                .Select(element => element.Attribute(relNs + "embed")?.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            var imageRelId = ReadPictureEmbedRelationshipId(pictureElement, drawingNs, relNs);
             if (string.IsNullOrWhiteSpace(imageRelId))
                 continue;
 
@@ -173,30 +170,56 @@ internal static partial class XlsxWorksheetDrawingPartReader
             if (imageEntry is null)
                 continue;
 
-            using var imageStream = imageEntry.Open();
-            using var ms = new MemoryStream();
-            imageStream.CopyTo(ms);
-
             var sourceRectangle = pictureElement
                 .Element(spreadsheetDrawingNs + "blipFill")?
                 .Element(drawingNs + "srcRect");
+            var (name, title, altText) = ReadNonVisualProperties(pictureElement);
+            var anchorElement = FindNearestAnchorElement(pictureElement, spreadsheetDrawingNs);
 
             pictures.Add(new XlsxPicturePackagePart(
-                ms.ToArray(),
+                ReadEntryBytes(imageEntry),
                 XlsxPackagePath.GetImageContentType(imagePath),
-                ReadNonVisualName(pictureElement),
-                ReadNonVisualTitle(pictureElement),
-                ReadNonVisualDescription(pictureElement),
-                ReadNearestAnchor(pictureElement),
+                name,
+                title,
+                altText,
+                anchorElement is null ? null : TryReadAnchor(anchorElement, spreadsheetDrawingNs),
                 ReadDrawingRotation(pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm")),
                 ReadSourceRectangleRatio(sourceRectangle, "l"),
                 ReadSourceRectangleRatio(sourceRectangle, "t"),
                 ReadSourceRectangleRatio(sourceRectangle, "r"),
                 ReadSourceRectangleRatio(sourceRectangle, "b"),
-                ReadNearestAnchorOrderIndex(pictureElement)));
+                anchorElement is null ? -1 : ReadAnchorOrderIndex(anchorElement, spreadsheetDrawingNs)));
         }
 
         return pictures;
+    }
+
+    private static byte[] ReadEntryBytes(ZipArchiveEntry entry)
+    {
+        if (entry.Length <= int.MaxValue)
+        {
+            var bytes = GC.AllocateUninitializedArray<byte>((int)entry.Length);
+            using var stream = entry.Open();
+            stream.ReadExactly(bytes);
+            return bytes;
+        }
+
+        using var fallbackStream = entry.Open();
+        using var ms = new MemoryStream();
+        fallbackStream.CopyTo(ms);
+        return ms.ToArray();
+    }
+
+    private static string? ReadPictureEmbedRelationshipId(XElement pictureElement, XNamespace drawingNs, XNamespace relNs)
+    {
+        foreach (var blip in pictureElement.Descendants(drawingNs + "blip"))
+        {
+            var relationshipId = blip.Attribute(relNs + "embed")?.Value;
+            if (!string.IsNullOrWhiteSpace(relationshipId))
+                return relationshipId;
+        }
+
+        return null;
     }
 
     private static Dictionary<string, string> ReadRelationshipTargetsById(XElement relationshipRoot, XNamespace packageRelNs)
@@ -339,6 +362,23 @@ internal static partial class XlsxWorksheetDrawingPartReader
             .Select(item => item.Attribute("name")?.Value)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
         return string.IsNullOrWhiteSpace(name) ? null : name;
+    }
+
+    private static (string? Name, string? Title, string? Description) ReadNonVisualProperties(XElement element)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        foreach (var item in element.Descendants(spreadsheetDrawingNs + "cNvPr"))
+        {
+            var name = item.Attribute("name")?.Value;
+            var title = item.Attribute("title")?.Value;
+            var description = item.Attribute("descr")?.Value;
+            return (
+                string.IsNullOrWhiteSpace(name) ? null : name,
+                string.IsNullOrWhiteSpace(title) ? null : title,
+                string.IsNullOrWhiteSpace(description) ? null : description);
+        }
+
+        return (null, null, null);
     }
 
     private static string? ReadNonVisualDescription(XElement element)

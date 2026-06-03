@@ -99,7 +99,7 @@ public sealed partial class XlsxFileAdapter
                     picturePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
                 Kind = PictureKind.Image,
                 Name = picturePart.Name,
-                ImageBytes = picturePart.ImageBytes.ToArray(),
+                ImageBytes = picturePart.ImageBytes,
                 ContentType = picturePart.ContentType,
                 Title = picturePart.Title,
                 AltText = picturePart.AltText,
