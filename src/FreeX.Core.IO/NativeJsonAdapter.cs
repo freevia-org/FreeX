@@ -305,7 +305,9 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
             LoadConditionalFormats(sheet, sDto.ConditionalFormats);
 
-            foreach (var cDto in sDto.Cells ?? CellDtoSequence.Empty)
+            var cellDtos = sDto.Cells ?? CellDtoSequence.Empty;
+            sheet.EnsureCellCapacity(cellDtos.Count);
+            foreach (var cDto in cellDtos)
             {
                 if (cDto is null) continue;
                 try
