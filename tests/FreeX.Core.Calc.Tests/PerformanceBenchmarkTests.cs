@@ -585,7 +585,7 @@ public class PerformanceBenchmarkTests
     [Fact]
     public void Benchmark_DynamicArraySort_AvoidsLinqIndexListScaffolding()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Formula", "BuiltInFunctions.DynamicArrays.cs"));
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Formula", "BuiltInFunctions.DynamicArrays.FilterSort.cs"));
 
         source.Should().NotContain(
             "Enumerable.Range(0, arr.RowCount).ToList()",
