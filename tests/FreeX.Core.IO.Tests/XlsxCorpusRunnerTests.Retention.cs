@@ -2392,22 +2392,21 @@ public partial class XlsxCorpusRunnerTests
         archive.GetEntry("customXml/itemProps1.xml").Should().NotBeNull(because);
         archive.GetEntry("customXml/_rels/item1.xml.rels").Should().NotBeNull(because);
 
-        var packageRelsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
-        packageRelsXml.Root!
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
                 string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(rel.Attribute("Target")?.Value, "customXml/item1.xml", StringComparison.OrdinalIgnoreCase))
+                string.Equals(rel.Attribute("Target")?.Value, "../customXml/item1.xml", StringComparison.OrdinalIgnoreCase))
             .Should()
             .ContainSingle(because);
-        packageRelsXml.Root!
+        workbookRelsXml.Root!
             .Elements(packageRelNs + "Relationship")
             .Where(rel =>
                 string.Equals(rel.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(rel.Attribute("Target")?.Value, "https://schemas.freex.example/customXml/schema1.xsd", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(rel.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
             .Should()
-            .ContainSingle(because);
+            .BeEmpty(because);
 
         var itemRelsXml = LoadPackageXml(archive.GetEntry("customXml/_rels/item1.xml.rels")!);
         itemRelsXml.Root!

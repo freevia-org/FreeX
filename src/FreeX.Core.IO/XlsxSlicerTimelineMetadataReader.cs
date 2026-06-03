@@ -39,19 +39,19 @@ internal static class XlsxSlicerTimelineMetadataReader
                          entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
             {
                 var slicerXml = LoadXml(slicerEntry);
-                var root = slicerXml.Root;
-                var cacheName = root?.Attribute("cache")?.Value ?? "";
+                var slicerElement = RootOrFirstChild(slicerXml.Root, "slicer");
+                var cacheName = slicerElement?.Attribute("cache")?.Value ?? "";
                 slicerCaches.TryGetValue(cacheName, out var cache);
                 var packagePart = slicerEntry.FullName.Replace('\\', '/');
                 drawingMetadataByPart.TryGetValue(packagePart, out var drawingMetadata);
                 slicers.Add(new SlicerModel
                 {
-                    Name = root?.Attribute("name")?.Value ?? "",
-                    Caption = root?.Attribute("caption")?.Value,
+                    Name = slicerElement?.Attribute("name")?.Value ?? "",
+                    Caption = slicerElement?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
-                    StyleName = root?.Attribute("style")?.Value,
+                    StyleName = slicerElement?.Attribute("style")?.Value,
                     PackagePart = packagePart,
                     DrawingAnchor = drawingMetadata?.Anchor,
                     DrawingShapeName = drawingMetadata?.ShapeName
@@ -71,19 +71,19 @@ internal static class XlsxSlicerTimelineMetadataReader
                          entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
             {
                 var timelineXml = LoadXml(timelineEntry);
-                var root = timelineXml.Root;
-                var cacheName = root?.Attribute("cache")?.Value ?? "";
+                var timelineElement = RootOrFirstChild(timelineXml.Root, "timeline");
+                var cacheName = timelineElement?.Attribute("cache")?.Value ?? "";
                 timelineCaches.TryGetValue(cacheName, out var cache);
                 var packagePart = timelineEntry.FullName.Replace('\\', '/');
                 drawingMetadataByPart.TryGetValue(packagePart, out var drawingMetadata);
                 timelines.Add(new TimelineModel
                 {
-                    Name = root?.Attribute("name")?.Value ?? "",
-                    Caption = root?.Attribute("caption")?.Value,
+                    Name = timelineElement?.Attribute("name")?.Value ?? "",
+                    Caption = timelineElement?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
-                    StyleName = root?.Attribute("style")?.Value,
+                    StyleName = timelineElement?.Attribute("style")?.Value,
                     StartDate = cache?.StartDate,
                     EndDate = cache?.EndDate,
                     SelectedStartDate = cache?.SelectedStartDate,
@@ -105,6 +105,18 @@ internal static class XlsxSlicerTimelineMetadataReader
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
         return XlsxPackageXmlEditor.LoadXml(entry);
+    }
+
+    private static XElement? RootOrFirstChild(XElement? root, string localName)
+    {
+        if (root is null)
+            return null;
+
+        if (string.Equals(root.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+            return root;
+
+        return root.Elements()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static SlicerCacheMetadata ReadSlicerCache(XDocument xml)

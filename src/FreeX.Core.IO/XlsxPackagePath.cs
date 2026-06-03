@@ -61,6 +61,12 @@ public static class XlsxPackagePath
         else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/customProperty/", StringComparison.OrdinalIgnoreCase))
             target = $"../customProperty/{targetPath["xl/customProperty/".Length..]}";
+        else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase))
+            target = $"../slicers/{targetPath["xl/slicers/".Length..]}";
+        else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase))
+            target = $"../timelines/{targetPath["xl/timelines/".Length..]}";
         else if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
             target = $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";

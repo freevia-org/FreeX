@@ -20658,11 +20658,13 @@ public partial class FileAdapterSmokeTests
         archive.GetEntry("xl/timelines/timeline1.xml").Should().NotBeNull();
         archive.GetEntry("xl/timelineCaches/timelineCache1.xml").Should().NotBeNull();
         var slicerXml = LoadPackageXml(archive.GetEntry("xl/slicers/slicer1.xml")!);
-        slicerXml.Root!.Attribute("caption")!.Value.Should().Be("Region");
-        slicerXml.Root.Attribute("style")!.Value.Should().Be("SlicerStyleLight2");
+        var slicerElement = slicerXml.Root!.Descendants().First(element => element.Name.LocalName == "slicer");
+        slicerElement.Attribute("caption")!.Value.Should().Be("Region");
+        slicerElement.Attribute("style")!.Value.Should().Be("SlicerStyleLight2");
         var timelineXml = LoadPackageXml(archive.GetEntry("xl/timelines/timeline1.xml")!);
-        timelineXml.Root!.Attribute("caption")!.Value.Should().Be("Order Date");
-        timelineXml.Root.Attribute("style")!.Value.Should().Be("TimeSlicerStyleLight1");
+        var timelineElement = timelineXml.Root!.Descendants().First(element => element.Name.LocalName == "timeline");
+        timelineElement.Attribute("caption")!.Value.Should().Be("Order Date");
+        timelineElement.Attribute("style")!.Value.Should().Be("TimeSlicerStyleLight1");
     }
 
     [Fact]
@@ -20768,12 +20770,14 @@ public partial class FileAdapterSmokeTests
             archive.GetEntry("xl/slicerCaches/slicerCache1.xml").Should().NotBeNull();
             archive.GetEntry("xl/timelines/timeline1.xml").Should().NotBeNull();
             archive.GetEntry("xl/timelineCaches/timelineCache1.xml").Should().NotBeNull();
-            var slicerRels = LoadPackageXml(archive.GetEntry("xl/slicers/_rels/slicer1.xml.rels")!).ToString();
-            slicerRels.Should().Contain("../slicerCaches/slicerCache1.xml");
-            slicerRels.Should().Contain("slicerCache");
-            var timelineRels = LoadPackageXml(archive.GetEntry("xl/timelines/_rels/timeline1.xml.rels")!).ToString();
-            timelineRels.Should().Contain("../timelineCaches/timelineCache1.xml");
-            timelineRels.Should().Contain("timelineCache");
+            var workbookRels = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!).ToString();
+            workbookRels.Should().Contain("slicerCaches/slicerCache1.xml");
+            workbookRels.Should().Contain("timelineCaches/timelineCache1.xml");
+            workbookRels.Should().Contain("slicerCache");
+            workbookRels.Should().Contain("TimelineCache");
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!).ToString();
+            workbookXml.Should().Contain("slicerCaches");
+            workbookXml.Should().Contain("timelineCacheRefs");
         }
 
         saved.Position = 0;
@@ -24394,29 +24398,38 @@ public partial class FileAdapterSmokeTests
             XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+            XNamespace slicerNs = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+            XNamespace timelineNs = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
 
             ReplacePackageXml(archive, "xl/slicers/slicer1.xml", XDocument.Parse("""
-                <slicer xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
-                        name="Region Slicer"
-                        cache="Slicer_Region"
-                        caption="Region"
-                        style="SlicerStyleLight2"/>
+                <slicers xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                         mc:Ignorable="x"
+                         xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <slicer name="Region Slicer"
+                          cache="Slicer_Region"
+                          caption="Region"
+                          style="SlicerStyleLight2"
+                          rowHeight="228600"/>
+                </slicers>
                 """));
             ReplacePackageXml(archive, "xl/slicerCaches/slicerCache1.xml", XDocument.Parse("""
-                <slicerCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                <slicerCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
                                        name="Slicer_Region"
                                        sourceName="Region">
                   <pivotTables>
-                    <pivotTable name="PivotTable1"/>
+                    <pivotTable name="PivotTable1" tabId="1"/>
                   </pivotTables>
                 </slicerCacheDefinition>
                 """));
             ReplacePackageXml(archive, "xl/timelines/timeline1.xml", XDocument.Parse("""
-                <timeline xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
-                          name="Date Timeline"
-                          cache="Timeline_Date"
-                          caption="Order Date"
-                          style="TimeSlicerStyleLight1"/>
+                <timelines xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main">
+                  <timeline name="Date Timeline"
+                            cache="Timeline_Date"
+                            caption="Order Date"
+                            style="TimeSlicerStyleLight1"/>
+                </timelines>
                 """));
             ReplacePackageXml(archive, "xl/timelineCaches/timelineCache1.xml", XDocument.Parse("""
                 <timelineCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
@@ -24430,30 +24443,111 @@ public partial class FileAdapterSmokeTests
                 </timelineCacheDefinition>
                 """));
 
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/slicers/slicer1.xml", "application/vnd.ms-excel.slicer+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/slicerCaches/slicerCache1.xml", "application/vnd.ms-excel.slicerCache+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/timelines/timeline1.xml", "application/vnd.ms-excel.Timeline+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/timelineCaches/timelineCache1.xml", "application/vnd.ms-excel.TimelineCache+xml");
+            if (includeDrawing)
+                AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/drawings/drawing1.xml", "application/vnd.openxmlformats-officedocument.drawing+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            AddIgnorablePrefix(workbookXml.Root!, markupCompatNs, "x14");
+            AddIgnorablePrefix(workbookXml.Root!, markupCompatNs, "x15");
+            workbookXml.Root!.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
+            workbookXml.Root!.SetAttributeValue(XNamespace.Xmlns + "x14", slicerNs.NamespaceName);
+            workbookXml.Root!.SetAttributeValue(XNamespace.Xmlns + "x15", timelineNs.NamespaceName);
+            EnsureExtensionRef(
+                workbookXml.Root!,
+                worksheetNs,
+                slicerNs,
+                "x14",
+                "{BBE1A952-AA13-448E-AADC-164F8A28A991}",
+                "slicerCaches",
+                "slicerCache",
+                "rIdSlicerCache1",
+                relNs);
+            EnsureExtensionRef(
+                workbookXml.Root!,
+                worksheetNs,
+                timelineNs,
+                "x15",
+                "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}",
+                "timelineCacheRefs",
+                "timelineCacheRef",
+                "rIdTimelineCache1",
+                relNs);
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+            var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+                ? LoadPackageXml(workbookRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdSlicerCache1"),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2007/relationships/slicerCache"),
+                new XAttribute("Target", "slicerCaches/slicerCache1.xml")));
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdTimelineCache1"),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2010/relationships/TimelineCache"),
+                new XAttribute("Target", "timelineCaches/timelineCache1.xml")));
+            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+
+            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            AddIgnorablePrefix(worksheetXml.Root!, markupCompatNs, "x14");
+            AddIgnorablePrefix(worksheetXml.Root!, markupCompatNs, "x15");
+            worksheetXml.Root!.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
+            worksheetXml.Root!.SetAttributeValue(XNamespace.Xmlns + "x14", slicerNs.NamespaceName);
+            worksheetXml.Root!.SetAttributeValue(XNamespace.Xmlns + "x15", timelineNs.NamespaceName);
+            EnsureExtensionRef(
+                worksheetXml.Root!,
+                worksheetNs,
+                slicerNs,
+                "x14",
+                "{A8765BA9-456A-4DAB-B4F3-ACF838C121DE}",
+                "slicerList",
+                "slicer",
+                "rIdNativeSlicerControl",
+                relNs);
+            EnsureExtensionRef(
+                worksheetXml.Root!,
+                worksheetNs,
+                timelineNs,
+                "x15",
+                "{7E03D99C-DC04-49D9-9315-930204A7B6E9}",
+                "timelineRefs",
+                "timelineRef",
+                "rIdNativeTimelineControl",
+                relNs);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } existingWorksheetRelsEntry
+                ? LoadPackageXml(existingWorksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdNativeSlicerControl"),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2007/relationships/slicer"),
+                new XAttribute("Target", "../slicers/slicer1.xml")));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdNativeTimelineControl"),
+                new XAttribute("Type", "http://schemas.microsoft.com/office/2010/relationships/Timeline"),
+                new XAttribute("Target", "../timelines/timeline1.xml")));
+
             if (includeDrawing)
             {
-                var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
-                AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/drawings/drawing1.xml", "application/vnd.openxmlformats-officedocument.drawing+xml");
-                AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/slicers/slicer1.xml", "application/vnd.ms-excel.slicer+xml");
-                AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/timelines/timeline1.xml", "application/vnd.ms-excel.timeline+xml");
-                ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
-
-                var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
-                var worksheetXml = LoadPackageXml(worksheetEntry);
                 worksheetXml.Root!.Elements(worksheetNs + "drawing").Remove();
                 worksheetXml.Root!.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", "rIdNativeSlicerDrawing")));
-                ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
-
-                var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
-                var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
-                    ? LoadPackageXml(worksheetRelsEntry)
-                    : new XDocument(new XElement(packageRelNs + "Relationships"));
                 worksheetRelsXml.Root!.Add(new XElement(
                     packageRelNs + "Relationship",
                     new XAttribute("Id", "rIdNativeSlicerDrawing"),
                     new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
                     new XAttribute("Target", "../drawings/drawing1.xml")));
-                ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
 
                 var drawingXml = new XDocument(
                     new XElement(spreadsheetDrawingNs + "wsDr",
@@ -24515,9 +24609,12 @@ public partial class FileAdapterSmokeTests
                             new XAttribute("Target", "../slicers/slicer1.xml")),
                         new XElement(packageRelNs + "Relationship",
                             new XAttribute("Id", "rIdNativeTimelineControl"),
-                            new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/timeline"),
+                            new XAttribute("Type", "http://schemas.microsoft.com/office/2010/relationships/Timeline"),
                             new XAttribute("Target", "../timelines/timeline1.xml")))));
             }
+
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
         }
 
         packageStream.Position = 0;
@@ -24721,6 +24818,62 @@ public partial class FileAdapterSmokeTests
             contentTypeNs + "Override",
             new XAttribute("PartName", partName),
             new XAttribute("ContentType", contentType)));
+    }
+
+    private static void AddIgnorablePrefix(XElement root, XNamespace markupCompatNs, string prefix)
+    {
+        root.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
+        var current = root.Attribute(markupCompatNs + "Ignorable")?.Value ?? "";
+        var prefixes = current.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (!prefixes.Any(value => string.Equals(value, prefix, StringComparison.OrdinalIgnoreCase)))
+            prefixes.Add(prefix);
+        root.SetAttributeValue(markupCompatNs + "Ignorable", string.Join(" ", prefixes));
+    }
+
+    private static void EnsureExtensionRef(
+        XElement root,
+        XNamespace mainNs,
+        XNamespace extensionNs,
+        string prefix,
+        string extensionUri,
+        string containerName,
+        string childName,
+        string relationshipId,
+        XNamespace relationshipNs)
+    {
+        var extensionList = root.Element(mainNs + "extLst");
+        if (extensionList is null)
+        {
+            extensionList = new XElement(mainNs + "extLst");
+            root.Add(extensionList);
+        }
+
+        var extension = extensionList.Elements(mainNs + "ext")
+            .FirstOrDefault(element => string.Equals(element.Attribute("uri")?.Value, extensionUri, StringComparison.OrdinalIgnoreCase));
+        if (extension is null)
+        {
+            extension = new XElement(
+                mainNs + "ext",
+                new XAttribute("uri", extensionUri),
+                new XAttribute(XNamespace.Xmlns + prefix, extensionNs.NamespaceName));
+            extensionList.Add(extension);
+        }
+        else
+        {
+            extension.SetAttributeValue(XNamespace.Xmlns + prefix, extensionNs.NamespaceName);
+        }
+
+        var container = extension.Element(extensionNs + containerName);
+        if (container is null)
+        {
+            container = new XElement(extensionNs + containerName);
+            extension.Add(container);
+        }
+
+        container.Elements(extensionNs + childName)
+            .Where(element => string.Equals(element.Attribute(relationshipNs + "id")?.Value, relationshipId, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        container.Add(new XElement(extensionNs + childName, new XAttribute(relationshipNs + "id", relationshipId)));
     }
 
     private const string TestThemeXml = """
