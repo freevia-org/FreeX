@@ -170,6 +170,37 @@ public partial class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddExcelInternalChartDefinedNames(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            var definedNames = workbookXml.Root!.Element(workbookNs + "definedNames");
+            if (definedNames is null)
+            {
+                definedNames = new XElement(workbookNs + "definedNames");
+                workbookXml.Root!.Add(definedNames);
+            }
+
+            definedNames.Add(
+                new XElement(
+                    workbookNs + "definedName",
+                    new XAttribute("name", "_xlchart.v1.0"),
+                    new XAttribute("hidden", "1"),
+                    "Data!$A$1"),
+                new XElement(
+                    workbookNs + "definedName",
+                    new XAttribute("name", "_xlchart.v1.1"),
+                    new XAttribute("hidden", "1"),
+                    "Data!$A$2:$A$3"));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddAdditionalWorkbookView(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))

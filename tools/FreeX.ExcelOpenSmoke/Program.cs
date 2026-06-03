@@ -59,7 +59,8 @@ internal static class ExcelOpenSmoke
                     AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
                         generatedFile,
                         generatedWorkflow,
-                        DescribeGeneratedFixture("FreeX chart fixture", generatedWorkflow)));
+                        DescribeGeneratedFixture("FreeX chart fixture", generatedWorkflow),
+                        Expectations: ChartExpectations(options.SaveReopen, generatedWorkflow == WorkbookValidationWorkflow.FreeXSaveThenExcel)));
                 }
             }
 
@@ -544,6 +545,8 @@ internal static class ExcelOpenSmoke
         {
             worksheets = ((dynamic)workbook).Worksheets;
             var worksheetCount = Convert.ToInt32(((dynamic)worksheets).Count, CultureInfo.InvariantCulture);
+            var namedRangeCount = CountWorkbookUserDefinedNames(workbook);
+            var chartCount = CountWorkbookChartSheets(workbook);
             var shapeCount = 0;
             var formulaCellCount = 0;
             var structuredTableCount = 0;
@@ -560,12 +563,13 @@ internal static class ExcelOpenSmoke
                     worksheet = ((dynamic)worksheets)[index];
                     try
                     {
+                        chartCount += CountWorksheetChartObjects(worksheet);
                         shapes = ((dynamic)worksheet).Shapes;
                         shapeCount += Convert.ToInt32(((dynamic)shapes).Count, CultureInfo.InvariantCulture);
                     }
                     catch (COMException ex)
                     {
-                        throw new InvalidDataException($"Excel shape count failed for worksheet index {index}", ex);
+                        throw new InvalidDataException($"Excel chart/shape count failed for worksheet index {index}", ex);
                     }
 
                     try
@@ -606,11 +610,98 @@ internal static class ExcelOpenSmoke
                 }
             }
 
-            return new ExcelWorkbookSummary(worksheetCount, shapeCount, formulaCellCount, structuredTableCount, pivotTableCount);
+            return new ExcelWorkbookSummary(worksheetCount, namedRangeCount, chartCount, shapeCount, formulaCellCount, structuredTableCount, pivotTableCount);
         }
         finally
         {
             ReleaseComObject(worksheets);
+        }
+    }
+
+    private static int CountWorkbookUserDefinedNames(object workbook)
+    {
+        object? names = null;
+        try
+        {
+            names = ((dynamic)workbook).Names;
+            var count = Convert.ToInt32(((dynamic)names).Count, CultureInfo.InvariantCulture);
+            var userDefinedCount = 0;
+            for (var index = 1; index <= count; index++)
+            {
+                object? name = null;
+                try
+                {
+                    name = ((dynamic)names)[index];
+                    var nameText = Convert.ToString(((dynamic)name).Name, CultureInfo.InvariantCulture) ?? string.Empty;
+                    if (IsUserDefinedExcelName(nameText))
+                        userDefinedCount++;
+                }
+                finally
+                {
+                    ReleaseComObject(name);
+                }
+            }
+
+            return userDefinedCount;
+        }
+        catch (COMException ex)
+        {
+            throw new InvalidDataException("Excel named-range count failed.", ex);
+        }
+        finally
+        {
+            ReleaseComObject(names);
+        }
+    }
+
+    private static bool IsUserDefinedExcelName(string name)
+    {
+        var localName = name;
+        var scopeSeparator = localName.LastIndexOf('!');
+        if (scopeSeparator >= 0)
+            localName = localName[(scopeSeparator + 1)..];
+
+        localName = localName.Trim('\'');
+        return
+            !localName.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase) &&
+            !localName.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(localName, "Print_Area", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(localName, "Print_Titles", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(localName, "_FilterDatabase", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(localName, "Criteria", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(localName, "Database", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(localName, "Extract", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int CountWorkbookChartSheets(object workbook)
+    {
+        object? charts = null;
+        try
+        {
+            charts = ((dynamic)workbook).Charts;
+            return Convert.ToInt32(((dynamic)charts).Count, CultureInfo.InvariantCulture);
+        }
+        catch (COMException ex)
+        {
+            throw new InvalidDataException("Excel chartsheet count failed.", ex);
+        }
+        finally
+        {
+            ReleaseComObject(charts);
+        }
+    }
+
+    private static int CountWorksheetChartObjects(object worksheet)
+    {
+        object? chartObjects = null;
+        try
+        {
+            chartObjects = ((dynamic)worksheet).ChartObjects();
+            return Convert.ToInt32(((dynamic)chartObjects).Count, CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            ReleaseComObject(chartObjects);
         }
     }
 
@@ -733,6 +824,8 @@ internal static class ExcelOpenSmoke
             workbook.SheetCount,
             workbook.Sheets.Sum(sheet => sheet.CellCount),
             workbook.Sheets.Sum(sheet => sheet.FormulaCellCount),
+            workbook.NamedRanges.Count,
+            workbook.Sheets.Sum(sheet => sheet.Charts.Count),
             workbook.Sheets.Sum(sheet => sheet.StructuredTables.Count),
             workbook.Sheets.Sum(sheet => sheet.DataValidations.Count),
             workbook.Sheets.Sum(sheet => sheet.ConditionalFormats.Count),
@@ -944,7 +1037,9 @@ internal static class ExcelOpenSmoke
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         bool HasTag(string tag) => tags.Contains(tag);
         var minFormulaCells = HasTag("formulas") ? 1 : 0;
+        var minNamedRanges = HasTag("named-ranges") ? 1 : 0;
         var minStructuredTables = HasTag("structured-tables") || HasTag("listobjects") || HasTag("tables") ? 1 : 0;
+        var minCharts = HasTag("charts") ? 1 : 0;
         var minDataValidations = HasTag("data-validation") ? 1 : 0;
         var minConditionalFormats = HasTag("conditional-formatting") ? 1 : 0;
         var minHyperlinks = HasTag("hyperlinks") ? 1 : 0;
@@ -968,7 +1063,9 @@ internal static class ExcelOpenSmoke
                 : 0;
 
         if (minFormulaCells == 0 &&
+            minNamedRanges == 0 &&
             minStructuredTables == 0 &&
+            minCharts == 0 &&
             minDataValidations == 0 &&
             minConditionalFormats == 0 &&
             minHyperlinks == 0 &&
@@ -988,7 +1085,9 @@ internal static class ExcelOpenSmoke
 
         return new WorkbookSmokeExpectations(
             MinFreeXPreSaveFormulaCells: expectFreeXPreSave ? minFormulaCells : 0,
+            MinFreeXPreSaveNamedRanges: expectFreeXPreSave ? minNamedRanges : 0,
             MinFreeXPreSaveStructuredTables: expectFreeXPreSave ? minStructuredTables : 0,
+            MinFreeXPreSaveCharts: expectFreeXPreSave ? minCharts : 0,
             MinFreeXPreSaveDataValidations: expectFreeXPreSave ? minDataValidations : 0,
             MinFreeXPreSaveConditionalFormats: expectFreeXPreSave ? minConditionalFormats : 0,
             MinFreeXPreSaveHyperlinks: expectFreeXPreSave ? minHyperlinks : 0,
@@ -1020,9 +1119,15 @@ internal static class ExcelOpenSmoke
             MinFreeXPreSavePivotTables: expectFreeXPreSave ? minPivotTables : 0,
             MinFreeXPreSavePivotCaches: expectFreeXPreSave ? minPivotCaches : 0,
             MinExcelOpenedPivotTables: minPivotTables,
+            MinExcelOpenedNamedRanges: minNamedRanges,
+            MinExcelOpenedCharts: minCharts,
             MinExcelReopenedPivotTables: saveReopen ? minPivotTables : 0,
+            MinExcelReopenedNamedRanges: saveReopen ? minNamedRanges : 0,
+            MinExcelReopenedCharts: saveReopen ? minCharts : 0,
             MinFreeXReopenedPivotTables: saveReopen ? minPivotTables : 0,
-            MinFreeXReopenedPivotCaches: saveReopen ? minPivotCaches : 0);
+            MinFreeXReopenedPivotCaches: saveReopen ? minPivotCaches : 0,
+            MinFreeXReopenedNamedRanges: saveReopen ? minNamedRanges : 0,
+            MinFreeXReopenedCharts: saveReopen ? minCharts : 0);
     }
 
     private static WorkbookSmokeExpectations PartnerDashboardExpectations(
@@ -1066,7 +1171,7 @@ internal static class ExcelOpenSmoke
         WorkbookSmokeExpectations? expectations = null;
 
         if (fileName.Contains("grid_formulas", StringComparison.OrdinalIgnoreCase))
-            expectations = FormulaExpectations(saveReopen, expectFreeXPreSave, minFormulaCells: 4);
+            expectations = FormulaExpectations(saveReopen, expectFreeXPreSave, minFormulaCells: 4, minNamedRanges: 2);
         else if (fileName.Contains("validation_cf", StringComparison.OrdinalIgnoreCase))
             expectations = ValidationCfExpectations(saveReopen, expectFreeXPreSave);
         else if (fileName.Contains("tables", StringComparison.OrdinalIgnoreCase))
@@ -1093,6 +1198,7 @@ internal static class ExcelOpenSmoke
     private static WorkbookSmokeExpectations ExcelAuthoredFixtureExpectations(bool saveReopen) =>
         new(
             MinFreeXPreSaveFormulaCells: 1,
+            MinFreeXPreSaveNamedRanges: 1,
             MinFreeXPreSaveStructuredTables: 1,
             MinFreeXPreSaveDataValidations: 1,
             MinFreeXPreSaveConditionalFormats: 1,
@@ -1102,12 +1208,15 @@ internal static class ExcelOpenSmoke
             MinFreeXPreSaveProtectedSheets: 1,
             MinFreeXPreSaveStructureProtection: 1,
             MinExcelOpenedFormulaCells: 1,
+            MinExcelOpenedNamedRanges: 1,
             MinExcelOpenedStructuredTables: 1,
             MinExcelOpenedShapes: 2,
             MinExcelReopenedFormulaCells: saveReopen ? 1 : 0,
+            MinExcelReopenedNamedRanges: saveReopen ? 1 : 0,
             MinExcelReopenedStructuredTables: saveReopen ? 1 : 0,
             MinExcelReopenedShapes: saveReopen ? 2 : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? 1 : 0,
+            MinFreeXReopenedNamedRanges: saveReopen ? 1 : 0,
             MinFreeXReopenedStructuredTables: saveReopen ? 1 : 0,
             MinFreeXReopenedDataValidations: saveReopen ? 1 : 0,
             MinFreeXReopenedConditionalFormats: saveReopen ? 1 : 0,
@@ -1127,12 +1236,27 @@ internal static class ExcelOpenSmoke
     private static WorkbookSmokeExpectations FormulaExpectations(
         bool saveReopen,
         bool expectFreeXPreSave,
-        int minFormulaCells) =>
+        int minFormulaCells,
+        int minNamedRanges = 0) =>
         new(
             MinFreeXPreSaveFormulaCells: expectFreeXPreSave ? minFormulaCells : 0,
+            MinFreeXPreSaveNamedRanges: expectFreeXPreSave ? minNamedRanges : 0,
             MinExcelOpenedFormulaCells: minFormulaCells,
+            MinExcelOpenedNamedRanges: minNamedRanges,
             MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
-            MinFreeXReopenedFormulaCells: saveReopen ? minFormulaCells : 0);
+            MinExcelReopenedNamedRanges: saveReopen ? minNamedRanges : 0,
+            MinFreeXReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
+            MinFreeXReopenedNamedRanges: saveReopen ? minNamedRanges : 0);
+
+    private static WorkbookSmokeExpectations ChartExpectations(bool saveReopen, bool expectFreeXPreSave) =>
+        new(
+            MinFreeXPreSaveCharts: expectFreeXPreSave ? 1 : 0,
+            MinExcelOpenedCharts: 1,
+            MinExcelOpenedShapes: 1,
+            MinExcelReopenedCharts: saveReopen ? 1 : 0,
+            MinExcelReopenedShapes: saveReopen ? 1 : 0,
+            MinFreeXReopenedCharts: saveReopen ? 1 : 0,
+            RequireNoFreeXLoadWarnings: true);
 
     private static WorkbookSmokeExpectations ValidationCfExpectations(bool saveReopen, bool expectFreeXPreSave) =>
         new(
@@ -1216,9 +1340,19 @@ internal static class ExcelOpenSmoke
             expectations.MinFreeXPreSaveFormulaCells,
             input);
         AssertMin(
+            "FreeX source load named ranges",
+            freeXPreSave?.NamedRangeCount,
+            expectations.MinFreeXPreSaveNamedRanges,
+            input);
+        AssertMin(
             "FreeX source load structured tables",
             freeXPreSave?.StructuredTableCount,
             expectations.MinFreeXPreSaveStructuredTables,
+            input);
+        AssertMin(
+            "FreeX source load charts",
+            freeXPreSave?.ChartCount,
+            expectations.MinFreeXPreSaveCharts,
             input);
         AssertFreeXMetadataExpectations("FreeX source load", freeXPreSave, expectations, input, preSave: true);
         AssertMin(
@@ -1227,9 +1361,19 @@ internal static class ExcelOpenSmoke
             expectations.MinExcelOpenedFormulaCells,
             input);
         AssertMin(
+            "Excel open named ranges",
+            opened.NamedRangeCount,
+            expectations.MinExcelOpenedNamedRanges,
+            input);
+        AssertMin(
             "Excel open structured tables",
             opened.StructuredTableCount,
             expectations.MinExcelOpenedStructuredTables,
+            input);
+        AssertMin(
+            "Excel open charts",
+            opened.ChartCount,
+            expectations.MinExcelOpenedCharts,
             input);
         AssertMin(
             "Excel open worksheet shapes",
@@ -1242,9 +1386,19 @@ internal static class ExcelOpenSmoke
             expectations.MinExcelReopenedFormulaCells,
             input);
         AssertMin(
+            "Excel reopen named ranges",
+            reopened?.NamedRangeCount,
+            expectations.MinExcelReopenedNamedRanges,
+            input);
+        AssertMin(
             "Excel reopen structured tables",
             reopened?.StructuredTableCount,
             expectations.MinExcelReopenedStructuredTables,
+            input);
+        AssertMin(
+            "Excel reopen charts",
+            reopened?.ChartCount,
+            expectations.MinExcelReopenedCharts,
             input);
         AssertMin(
             "Excel reopen worksheet shapes",
@@ -1257,9 +1411,19 @@ internal static class ExcelOpenSmoke
             expectations.MinFreeXReopenedFormulaCells,
             input);
         AssertMin(
+            "FreeX reopened Excel save named ranges",
+            freeXReopenedExcelSave?.NamedRangeCount,
+            expectations.MinFreeXReopenedNamedRanges,
+            input);
+        AssertMin(
             "FreeX reopened Excel save structured tables",
             freeXReopenedExcelSave?.StructuredTableCount,
             expectations.MinFreeXReopenedStructuredTables,
+            input);
+        AssertMin(
+            "FreeX reopened Excel save charts",
+            freeXReopenedExcelSave?.ChartCount,
+            expectations.MinFreeXReopenedCharts,
             input);
         AssertFreeXMetadataExpectations("FreeX reopened Excel save", freeXReopenedExcelSave, expectations, input, preSave: false);
         AssertMin(
@@ -1420,12 +1584,12 @@ internal static class ExcelOpenSmoke
         if (result.Opened is { } opened)
         {
             Console.WriteLine(
-                $"  Excel open: worksheets {opened.WorksheetCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; worksheet shapes {opened.ShapeCount}; pivots {opened.PivotTableCount}");
+                $"  Excel open: worksheets {opened.WorksheetCount}; named ranges {opened.NamedRangeCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; charts {opened.ChartCount}; worksheet shapes {opened.ShapeCount}; pivots {opened.PivotTableCount}");
         }
         if (result.Reopened is { } reopened)
         {
             Console.WriteLine(
-                $"  Excel reopen: worksheets {reopened.WorksheetCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
+                $"  Excel reopen: worksheets {reopened.WorksheetCount}; named ranges {reopened.NamedRangeCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; charts {reopened.ChartCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
         }
         if (result.FreeXReopenedExcelSave is { } freeXReopened)
             WriteFreeXSummary("FreeX reopened Excel save", freeXReopened);
@@ -1438,7 +1602,7 @@ internal static class ExcelOpenSmoke
     private static void WriteFreeXSummary(string label, FreeXWorkbookSummary summary)
     {
         Console.WriteLine(
-            $"  {label}: sheets {summary.SheetCount}; cells {summary.CellCount}; formulas {summary.FormulaCellCount}; tables {summary.StructuredTableCount}; pivots {summary.PivotTableCount}; pivot caches {summary.PivotCacheCount}");
+            $"  {label}: sheets {summary.SheetCount}; cells {summary.CellCount}; named ranges {summary.NamedRangeCount}; formulas {summary.FormulaCellCount}; tables {summary.StructuredTableCount}; charts {summary.ChartCount}; pivots {summary.PivotTableCount}; pivot caches {summary.PivotCacheCount}");
         Console.WriteLine(
             $"  {label} metadata: validations {summary.DataValidationCount}; conditional formats {summary.ConditionalFormatCount}; hyperlinks {summary.HyperlinkCount}; comments {summary.CommentCount}; pictures {summary.PictureCount}; sparklines {summary.SparklineCount}; text boxes {summary.TextBoxCount}; drawing shapes {summary.DrawingShapeCount}; protected sheets {summary.ProtectedSheetCount}; structure protection {summary.StructureProtectionCount}");
     }

@@ -28,8 +28,8 @@ public sealed partial class DelimitedTextFileAdapterTests
             source.IndexOf("private static ScalarValue CoerceValue", StringComparison.Ordinal)..
             source.IndexOf("private static bool TryReadError", StringComparison.Ordinal)];
 
-        CountOccurrences(coercion, "field.Trim()").Should().Be(1);
-        coercion.Should().Contain("var trimmed = field.Trim();");
+        CountOccurrences(coercion, ".Trim()").Should().Be(1);
+        coercion.Should().Contain("var trimmed = value.Trim();");
         coercion.Should().NotContain("ToUpperInvariant()");
     }
 

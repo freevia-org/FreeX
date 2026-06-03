@@ -30,12 +30,13 @@ internal static partial class DelimitedTextWorkbookReader
         var workbook = new Workbook("Untitled");
         var sheet = workbook.AddSheet("Sheet1");
 
-        using var reader = CreateTextReader(stream);
+        var text = ReadText(stream);
+        var position = 0;
         uint row = 1;
         var canReadSeparatorDirective = allowSeparatorDirective;
         var fields = new DelimitedTextRecord();
-        var fieldBuilder = new StringBuilder();
-        while (TryReadRecord(reader, delimiter, fields, fieldBuilder))
+        var quotedFieldBuilder = new StringBuilder();
+        while (TryReadRecord(text, ref position, delimiter, fields, quotedFieldBuilder))
         {
             if (row > CellAddress.MaxRow)
                 break;
@@ -53,21 +54,22 @@ internal static partial class DelimitedTextWorkbookReader
                 if (i >= CellAddress.MaxCol)
                     break;
 
-                var field = fields[i].Value;
-                if (field.Length == 0)
+                var field = fields[i];
+                var fieldSpan = field.AsSpan();
+                if (fieldSpan.Length == 0)
                 {
-                    if (fields[i].WasQuoted)
+                    if (field.WasQuoted)
                         sheet.SetCell(new CellAddress(sheet.Id, row, (uint)(i + 1)), new TextValue(""));
                     continue;
                 }
 
                 var address = new CellAddress(sheet.Id, row, (uint)(i + 1));
-                if (!fields[i].WasQuoted && TryReadFormula(field, out var formulaText))
+                if (!field.WasQuoted && TryReadFormula(fieldSpan, out var formulaText))
                     sheet.SetCell(address, Cell.FromFormula(formulaText));
-                else if (TryReadQuotedTextMarker(fields[i], out var markedText))
+                else if (TryReadQuotedTextMarker(field, out var markedText))
                     sheet.SetCell(address, new TextValue(markedText));
-                else if (ShouldPreserveQuotedFormulaLikeText(fields[i]))
-                    sheet.SetCell(address, new TextValue(field));
+                else if (ShouldPreserveQuotedFormulaLikeText(field))
+                    sheet.SetCell(address, new TextValue(field.Value));
                 else
                     sheet.SetCell(address, CoerceValue(field));
             }
@@ -88,8 +90,8 @@ internal static partial class DelimitedTextWorkbookReader
         if (fields.Count == 2 &&
             !fields[0].WasQuoted &&
             !fields[1].WasQuoted &&
-            string.Equals(fields[0].Value, "sep=", StringComparison.OrdinalIgnoreCase) &&
-            fields[1].Value.Length == 0)
+            fields[0].AsSpan().Equals("sep=".AsSpan(), StringComparison.OrdinalIgnoreCase) &&
+            fields[1].AsSpan().Length == 0)
         {
             delimiter = currentDelimiter;
             return true;
@@ -98,8 +100,8 @@ internal static partial class DelimitedTextWorkbookReader
         if (fields.Count != 1 || fields[0].WasQuoted)
             return false;
 
-        var directive = fields[0].Value;
-        if (!directive.StartsWith("sep=", StringComparison.OrdinalIgnoreCase) || directive.Length != 5)
+        var directive = fields[0].AsSpan();
+        if (directive.Length != 5 || !directive.StartsWith("sep=".AsSpan(), StringComparison.OrdinalIgnoreCase))
             return false;
 
         delimiter = directive[4];
@@ -110,7 +112,9 @@ internal static partial class DelimitedTextWorkbookReader
     {
         fields = [];
         var record = new DelimitedTextRecord();
-        if (!TryReadRecord(reader, delimiter, record, new StringBuilder()))
+        var text = reader.ReadToEnd();
+        var position = 0;
+        if (!TryReadRecord(text, ref position, delimiter, record, new StringBuilder()))
             return false;
 
         fields.Capacity = record.Count;
@@ -120,30 +124,31 @@ internal static partial class DelimitedTextWorkbookReader
     }
 
     private static bool TryReadRecord(
-        TextReader reader,
+        string source,
+        ref int position,
         char delimiter,
         DelimitedTextRecord fields,
-        StringBuilder current)
+        StringBuilder quotedFieldBuilder)
     {
         fields.Clear();
-        current.Clear();
+        quotedFieldBuilder.Clear();
+        var fieldStart = position;
         var inQuotes = false;
         var atFieldStart = true;
         var currentWasQuoted = false;
 
-        int ch;
-        while ((ch = reader.Read()) != -1)
+        while (position < source.Length)
         {
-            var c = (char)ch;
+            var c = source[position++];
 
             if (inQuotes)
             {
                 if (c == '"')
                 {
-                    if (reader.Peek() == '"')
+                    if (position < source.Length && source[position] == '"')
                     {
-                        reader.Read();
-                        current.Append('"');
+                        position++;
+                        quotedFieldBuilder.Append('"');
                     }
                     else
                     {
@@ -152,7 +157,7 @@ internal static partial class DelimitedTextWorkbookReader
                 }
                 else
                 {
-                    current.Append(c);
+                    quotedFieldBuilder.Append(c);
                 }
 
                 continue;
@@ -166,40 +171,96 @@ internal static partial class DelimitedTextWorkbookReader
             }
             else if (c == delimiter)
             {
-                fields.Add(new DelimitedTextField(current.ToString(), currentWasQuoted));
-                current.Clear();
+                AddField(fields, source, fieldStart, position - fieldStart - 1, currentWasQuoted, quotedFieldBuilder);
+                fieldStart = position;
+                quotedFieldBuilder.Clear();
                 currentWasQuoted = false;
                 atFieldStart = true;
             }
             else if (c == '\r')
             {
-                if (reader.Peek() == '\n')
-                    reader.Read();
-                fields.Add(new DelimitedTextField(current.ToString(), currentWasQuoted));
+                var terminatorLength = 1;
+                if (position < source.Length && source[position] == '\n')
+                {
+                    position++;
+                    terminatorLength = 2;
+                }
+
+                AddField(fields, source, fieldStart, position - fieldStart - terminatorLength, currentWasQuoted, quotedFieldBuilder);
                 return true;
             }
             else if (c == '\n')
             {
-                fields.Add(new DelimitedTextField(current.ToString(), currentWasQuoted));
+                AddField(fields, source, fieldStart, position - fieldStart - 1, currentWasQuoted, quotedFieldBuilder);
                 return true;
             }
             else
             {
-                current.Append(c);
+                if (currentWasQuoted)
+                    quotedFieldBuilder.Append(c);
                 atFieldStart = false;
             }
         }
 
-        if (current.Length > 0 || fields.Count > 0 || currentWasQuoted)
+        if (position > fieldStart || fields.Count > 0 || currentWasQuoted)
         {
-            fields.Add(new DelimitedTextField(current.ToString(), currentWasQuoted));
+            AddField(fields, source, fieldStart, position - fieldStart, currentWasQuoted, quotedFieldBuilder);
             return true;
         }
 
         return false;
     }
 
-    internal readonly record struct DelimitedTextField(string Value, bool WasQuoted);
+    private static void AddField(
+        DelimitedTextRecord fields,
+        string source,
+        int start,
+        int length,
+        bool wasQuoted,
+        StringBuilder quotedFieldBuilder)
+    {
+        fields.Add(wasQuoted
+            ? new DelimitedTextField(quotedFieldBuilder.ToString(), wasQuoted)
+            : DelimitedTextField.FromSource(source, start, length));
+    }
+
+    internal readonly struct DelimitedTextField
+    {
+        private readonly string? materializedValue;
+        private readonly string? source;
+        private readonly int start;
+        private readonly int length;
+
+        public DelimitedTextField(string value, bool wasQuoted)
+        {
+            materializedValue = value;
+            source = null;
+            start = 0;
+            length = value.Length;
+            WasQuoted = wasQuoted;
+        }
+
+        private DelimitedTextField(string source, int start, int length)
+        {
+            materializedValue = null;
+            this.source = source;
+            this.start = start;
+            this.length = length;
+            WasQuoted = false;
+        }
+
+        public bool WasQuoted { get; }
+
+        public string Value => materializedValue ?? source!.Substring(start, length);
+
+        public ReadOnlySpan<char> AsSpan() =>
+            materializedValue is not null
+                ? materializedValue.AsSpan()
+                : source!.AsSpan(start, length);
+
+        public static DelimitedTextField FromSource(string source, int start, int length) =>
+            new(source, start, length);
+    }
 
     private sealed class DelimitedTextRecord
     {
@@ -222,10 +283,11 @@ internal static partial class DelimitedTextWorkbookReader
 
     private static bool ShouldPreserveQuotedFormulaLikeText(DelimitedTextField field)
     {
-        if (!field.WasQuoted || field.Value.Length == 0)
+        var value = field.AsSpan();
+        if (!field.WasQuoted || value.Length == 0)
             return false;
 
-        var trimmed = field.Value.Trim();
+        var trimmed = value.Trim();
         if (trimmed.Length == 0)
             return false;
 
@@ -248,13 +310,14 @@ internal static partial class DelimitedTextWorkbookReader
     private static bool TryReadQuotedTextMarker(DelimitedTextField field, out string text)
     {
         text = "";
-        if (!field.WasQuoted || field.Value.Length < 2 || field.Value[0] != '\'')
+        var value = field.AsSpan();
+        if (!field.WasQuoted || value.Length < 2 || value[0] != '\'')
             return false;
 
-        var candidate = field.Value[1..];
+        var candidate = value[1..];
         var trimmedCandidate = candidate.Trim();
         if (!IsBooleanLikeText(candidate) &&
-            !TryReadError(trimmedCandidate, out _) &&
+            !TryReadErrorLike(trimmedCandidate, out _) &&
             !TryParseDateTime(candidate, out _) &&
             !TryParseTime(candidate, out _) &&
             !TryParsePercentage(trimmedCandidate, out _) &&
@@ -265,21 +328,21 @@ internal static partial class DelimitedTextWorkbookReader
             return false;
         }
 
-        text = candidate;
+        text = candidate.ToString();
         return true;
     }
 
-    private static bool IsFormulaInjectionMarkerText(string value) =>
+    private static bool IsFormulaInjectionMarkerText(ReadOnlySpan<char> value) =>
         value.Length > 0 && value[0] is '=' or '+' or '-' or '@';
 
-    private static bool IsBooleanLikeText(string value)
+    private static bool IsBooleanLikeText(ReadOnlySpan<char> value)
     {
         var trimmed = value.Trim();
-        return string.Equals(trimmed, "TRUE", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(trimmed, "FALSE", StringComparison.OrdinalIgnoreCase);
+        return trimmed.Equals("TRUE".AsSpan(), StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("FALSE".AsSpan(), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static TextReader CreateTextReader(Stream stream)
+    private static string ReadText(Stream stream)
     {
         if (stream is MemoryStream sourceMemoryStream &&
             sourceMemoryStream.TryGetBuffer(out var sourceBytes))
@@ -287,7 +350,7 @@ internal static partial class DelimitedTextWorkbookReader
             var position = Math.Min(sourceMemoryStream.Position, sourceMemoryStream.Length);
             var remainingLength = checked((int)(sourceMemoryStream.Length - position));
             sourceMemoryStream.Position = sourceMemoryStream.Length;
-            return new StringReader(DecodeText(sourceBytes.AsSpan(checked((int)position), remainingLength)));
+            return DecodeText(sourceBytes.AsSpan(checked((int)position), remainingLength));
         }
 
         using var buffered = new MemoryStream();
@@ -295,7 +358,7 @@ internal static partial class DelimitedTextWorkbookReader
         if (!buffered.TryGetBuffer(out var bytes))
             throw new InvalidOperationException("Buffered delimited text stream is not accessible.");
 
-        return new StringReader(DecodeText(bytes.AsSpan(0, checked((int)buffered.Length))));
+        return DecodeText(bytes.AsSpan(0, checked((int)buffered.Length)));
     }
 
     private static string DecodeText(ReadOnlySpan<byte> bytes)
@@ -353,15 +416,18 @@ internal static partial class DelimitedTextWorkbookReader
         }
     }
 
-    private static ScalarValue CoerceValue(string field)
+    private static ScalarValue CoerceValue(DelimitedTextField field)
     {
-        var trimmed = field.Trim();
-        if (string.Equals(trimmed, "TRUE", StringComparison.OrdinalIgnoreCase))
+        var value = field.AsSpan();
+        var trimmed = value.Trim();
+        if (trimmed.Equals("TRUE".AsSpan(), StringComparison.OrdinalIgnoreCase))
             return new BoolValue(true);
-        if (string.Equals(trimmed, "FALSE", StringComparison.OrdinalIgnoreCase))
+        if (trimmed.Equals("FALSE".AsSpan(), StringComparison.OrdinalIgnoreCase))
             return new BoolValue(false);
-        if (TryReadError(trimmed, out var error))
+        if (TryReadErrorLike(trimmed, out var error))
             return error;
+        if (TryParseSimpleInteger(trimmed, out var integer))
+            return new NumberValue(integer);
         if (TryParsePercentage(trimmed, out var percentage))
             return new NumberValue(percentage);
         if (TryParseCurrency(trimmed, out var currency))
@@ -375,15 +441,34 @@ internal static partial class DelimitedTextWorkbookReader
         if (TryParseTime(trimmed, out var time))
             return new DateTimeValue(time.TotalDays);
 
-        return new TextValue(field);
+        return new TextValue(field.Value);
     }
 
-    private static bool TryReadError(string field, out ErrorValue error)
+    private static bool TryReadErrorLike(ReadOnlySpan<char> field, out ErrorValue error)
     {
-        return ErrorValues.TryGetValue(field, out error!);
+        if (field.Length > 0 && field[0] == '#')
+            return TryReadError(field, out error);
+
+        error = default!;
+        return false;
     }
 
-    private static bool TryParseDateTime(string field, out DateTime dateTime)
+    private static bool TryReadError(ReadOnlySpan<char> field, out ErrorValue error)
+    {
+        foreach (var errorValue in ErrorValues)
+        {
+            if (field.Equals(errorValue.Key.AsSpan(), StringComparison.OrdinalIgnoreCase))
+            {
+                error = errorValue.Value;
+                return true;
+            }
+        }
+
+        error = default!;
+        return false;
+    }
+
+    private static bool TryParseDateTime(ReadOnlySpan<char> field, out DateTime dateTime)
     {
         var trimmed = field.Trim();
         if (TryParseIsoDateTimeOffset(trimmed, out dateTime))
@@ -404,7 +489,7 @@ internal static partial class DelimitedTextWorkbookReader
             out dateTime);
     }
 
-    private static bool TryParseCurrentCultureDateTime(string field, out DateTime dateTime)
+    private static bool TryParseCurrentCultureDateTime(ReadOnlySpan<char> field, out DateTime dateTime)
     {
         dateTime = default;
         if (field.Length == 0 ||
@@ -422,7 +507,7 @@ internal static partial class DelimitedTextWorkbookReader
             dateTime.Date != DateTime.MinValue.Date;
     }
 
-    private static bool LooksLikeCurrentCultureDateCandidate(string field)
+    private static bool LooksLikeCurrentCultureDateCandidate(ReadOnlySpan<char> field)
     {
         var digitGroups = 0;
         var inDigitGroup = false;
@@ -462,7 +547,7 @@ internal static partial class DelimitedTextWorkbookReader
         return (hasDateSeparator && digitGroups >= 3) || hasLetter;
     }
 
-    private static bool TryParseIsoDateTimeOffset(string field, out DateTime dateTime)
+    private static bool TryParseIsoDateTimeOffset(ReadOnlySpan<char> field, out DateTime dateTime)
     {
         if (DateTimeOffset.TryParseExact(
             field,
@@ -479,7 +564,7 @@ internal static partial class DelimitedTextWorkbookReader
         return false;
     }
 
-    private static bool TryParseTime(string field, out TimeSpan time)
+    private static bool TryParseTime(ReadOnlySpan<char> field, out TimeSpan time)
     {
         if (TimeSpan.TryParseExact(
             field,
@@ -504,17 +589,51 @@ internal static partial class DelimitedTextWorkbookReader
         return false;
     }
 
-    private static bool TryReadFormula(string field, out string formulaText)
+    private static bool TryReadFormula(ReadOnlySpan<char> field, out string formulaText)
     {
         formulaText = "";
         if (field.Length <= 1 || field[0] != '=')
             return false;
 
-        formulaText = field[1..];
+        formulaText = field[1..].ToString();
         return true;
     }
 
-    private static bool TryParsePercentage(string field, out double value)
+    private static bool TryParseSimpleInteger(ReadOnlySpan<char> field, out double value)
+    {
+        value = default;
+        if (field.Length == 0)
+            return false;
+
+        var index = 0;
+        var isNegative = false;
+        if (field[index] is '+' or '-')
+        {
+            isNegative = field[index] == '-';
+            index++;
+            if (index == field.Length)
+                return false;
+        }
+
+        var digitCount = field.Length - index;
+        if (digitCount > 15)
+            return false;
+
+        long integer = 0;
+        for (; index < field.Length; index++)
+        {
+            var digit = field[index] - '0';
+            if ((uint)digit > 9)
+                return false;
+
+            integer = (integer * 10) + digit;
+        }
+
+        value = isNegative ? -integer : integer;
+        return true;
+    }
+
+    private static bool TryParsePercentage(ReadOnlySpan<char> field, out double value)
     {
         value = default;
         if (field.Length < 2 || field[^1] != '%')
@@ -529,12 +648,12 @@ internal static partial class DelimitedTextWorkbookReader
         return true;
     }
 
-    private static bool TryParseFiniteNumber(string field, NumberStyles styles, out double value) =>
+    private static bool TryParseFiniteNumber(ReadOnlySpan<char> field, NumberStyles styles, out double value) =>
         TryParseFiniteNumber(field, styles, CultureInfo.CurrentCulture, out value) ||
         TryParseFiniteNumber(field, styles, CultureInfo.InvariantCulture, out value);
 
     private static bool TryParseFiniteNumber(
-        string field,
+        ReadOnlySpan<char> field,
         NumberStyles styles,
         IFormatProvider formatProvider,
         out double value)
@@ -549,10 +668,10 @@ internal static partial class DelimitedTextWorkbookReader
         return false;
     }
 
-    private static bool TryParseCurrency(string field, out double value)
+    private static bool TryParseCurrency(ReadOnlySpan<char> field, out double value)
     {
         value = default;
-        if (!field.Contains('$', StringComparison.Ordinal))
+        if (field.IndexOf('$') < 0)
             return false;
 
         return double.TryParse(

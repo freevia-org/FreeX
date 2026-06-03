@@ -533,6 +533,9 @@ public sealed partial class FormulaEvaluator
         int searchMode,
         out int matchIndex)
     {
+        if (searchMode is 2 or -2 && matchMode != 2)
+            return TryFindDirectBinaryLookupIndex(lookupValue, reader, matchMode, searchMode == -2, out matchIndex);
+
         GetDirectLookupSearchBounds(reader.Count, searchMode, out var start, out var end, out var step);
 
         if (matchMode == 0)
@@ -549,6 +552,177 @@ public sealed partial class FormulaEvaluator
             step,
             nextSmaller: matchMode == -1,
             out matchIndex);
+    }
+
+    private static ErrorValue? TryFindDirectBinaryLookupIndex(
+        ScalarValue lookupValue,
+        DirectLookupRangeReader reader,
+        int matchMode,
+        bool descending,
+        out int matchIndex)
+    {
+        matchIndex = -1;
+        var error = TryFindDirectCompareRange(lookupValue, reader, descending, out var equalStart, out var equalEnd);
+        if (error is not null)
+            return error;
+
+        error = TryFindDirectScalarEqualInRange(lookupValue, reader, equalStart, equalEnd, descending, out matchIndex);
+        if (error is not null || matchIndex >= 0 || matchMode == 0)
+            return error;
+
+        if (equalStart < equalEnd)
+        {
+            matchIndex = descending ? equalEnd - 1 : equalStart;
+            return null;
+        }
+
+        return TryFindDirectBinaryApproximateLookupIndex(
+            reader,
+            equalStart,
+            descending,
+            nextSmaller: matchMode == -1,
+            out matchIndex);
+    }
+
+    private static ErrorValue? TryFindDirectScalarEqualInRange(
+        ScalarValue lookupValue,
+        DirectLookupRangeReader reader,
+        int start,
+        int end,
+        bool descending,
+        out int matchIndex)
+    {
+        matchIndex = -1;
+        if (start >= end)
+            return null;
+
+        if (descending)
+        {
+            for (var index = end - 1; index >= start; index--)
+            {
+                var candidate = reader.GetValue(index);
+                if (candidate is ErrorValue error)
+                    return error;
+
+                if (BuiltInFunctions.ScalarEquals(candidate, lookupValue))
+                {
+                    matchIndex = index;
+                    return null;
+                }
+            }
+
+            return null;
+        }
+
+        for (var index = start; index < end; index++)
+        {
+            var candidate = reader.GetValue(index);
+            if (candidate is ErrorValue error)
+                return error;
+
+            if (BuiltInFunctions.ScalarEquals(candidate, lookupValue))
+            {
+                matchIndex = index;
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static ErrorValue? TryFindDirectBinaryApproximateLookupIndex(
+        DirectLookupRangeReader reader,
+        int boundary,
+        bool descending,
+        bool nextSmaller,
+        out int matchIndex)
+    {
+        matchIndex = -1;
+        var candidateIndex = descending
+            ? (nextSmaller ? boundary : boundary - 1)
+            : (nextSmaller ? boundary - 1 : boundary);
+        if ((uint)candidateIndex >= (uint)reader.Count)
+            return null;
+
+        var candidate = reader.GetValue(candidateIndex);
+        if (candidate is ErrorValue error)
+            return error;
+
+        var rangeError = TryFindDirectCompareRange(candidate, reader, descending, out var candidateStart, out var candidateEnd);
+        if (rangeError is not null)
+            return rangeError;
+
+        matchIndex = descending ? candidateEnd - 1 : candidateStart;
+        return null;
+    }
+
+    private static ErrorValue? TryFindDirectCompareRange(
+        ScalarValue lookupValue,
+        DirectLookupRangeReader reader,
+        bool descending,
+        out int start,
+        out int end)
+    {
+        var error = TryFindDirectBinarySearchBoundary(
+            lookupValue,
+            reader,
+            descending,
+            upperBound: false,
+            out start);
+        if (error is not null)
+        {
+            end = 0;
+            return error;
+        }
+
+        return TryFindDirectBinarySearchBoundary(
+            lookupValue,
+            reader,
+            descending,
+            upperBound: true,
+            out end);
+    }
+
+    private static ErrorValue? TryFindDirectBinarySearchBoundary(
+        ScalarValue lookupValue,
+        DirectLookupRangeReader reader,
+        bool descending,
+        bool upperBound,
+        out int boundary)
+    {
+        var low = 0;
+        var high = reader.Count;
+        while (low < high)
+        {
+            var mid = low + ((high - low) / 2);
+            var candidate = reader.GetValue(mid);
+            if (candidate is ErrorValue error)
+            {
+                boundary = 0;
+                return error;
+            }
+
+            var comparison = CompareDirectLookupSortOrder(candidate, lookupValue, descending);
+            if (upperBound ? comparison <= 0 : comparison < 0)
+                low = mid + 1;
+            else
+                high = mid;
+        }
+
+        boundary = low;
+        return null;
+    }
+
+    private static int CompareDirectLookupSortOrder(ScalarValue candidate, ScalarValue lookupValue, bool descending)
+    {
+        var comparison = BuiltInFunctions.CompareScalar(candidate, lookupValue);
+        if (comparison == 0)
+            return 0;
+
+        if (comparison < 0)
+            return descending ? 1 : -1;
+
+        return descending ? -1 : 1;
     }
 
     private static ErrorValue? TryFindDirectExactLookupIndex(

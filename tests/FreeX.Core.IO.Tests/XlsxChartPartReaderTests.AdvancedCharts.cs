@@ -157,6 +157,53 @@ public sealed partial class XlsxChartPartReaderTests
             new CellAddress(sheetId, 4, 2)));
     }
 
+    [Fact]
+    public void TryReadSupportedChart_UsesFallbackRangeForExcelInternalChartExData()
+    {
+        var sheetId = SheetId.New();
+        var fallbackRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 15, 1));
+        var chartXml = XDocument.Parse("""
+            <cx:chartSpace xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                           xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
+              <cx:chartData>
+                <cx:data id="0">
+                  <cx:numDim type="val">
+                    <cx:f>_xlchart.v1.1</cx:f>
+                  </cx:numDim>
+                </cx:data>
+              </cx:chartData>
+              <cx:chart>
+                <cx:title pos="t" align="ctr" overlay="0">
+                  <cx:tx><cx:txData><cx:v>Histogram Smoke</cx:v></cx:txData></cx:tx>
+                  <cx:txPr><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Histogram Smoke</a:t></a:r></a:p></cx:txPr>
+                </cx:title>
+                <cx:plotArea>
+                  <cx:plotAreaRegion>
+                    <cx:series layoutId="clusteredColumn" uniqueId="{69E14533-78F2-48F9-8D7E-B586A45BF27B}">
+                      <cx:dataId val="0"/>
+                      <cx:layoutPr><cx:binning intervalClosed="r"/></cx:layoutPr>
+                    </cx:series>
+                  </cx:plotAreaRegion>
+                  <cx:axis id="0"><cx:catScaling/><cx:tickLabels/></cx:axis>
+                  <cx:axis id="1"><cx:valScaling/><cx:tickLabels/></cx:axis>
+                </cx:plotArea>
+              </cx:chart>
+            </cx:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, fallbackRange, out var chart)
+            .Should().BeTrue();
+
+        chart.Type.Should().Be(ChartType.Histogram);
+        chart.Title.Should().Be("Histogram Smoke");
+        chart.DataRange.Should().Be(fallbackRange);
+        chart.FirstRowIsHeader.Should().BeTrue();
+        chart.FirstColIsCategories.Should().BeFalse();
+    }
+
 
     [Fact]
     public void TryReadSupportedChart_DoesNotLetAdvancedExtensionOverrideDirectSupportedChart()

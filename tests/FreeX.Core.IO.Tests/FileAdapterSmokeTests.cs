@@ -2793,6 +2793,39 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Load_SkipsExcelInternalChartDefinedNames()
+    {
+        var workbook = new Workbook("ChartDefinedNameTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddExcelInternalChartDefinedNames(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.NamedRanges.Should().BeEmpty();
+
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new NumberValue(30));
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var xml = workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        xml.Should().Contain("_xlchart.v1.0");
+        xml.Should().Contain("_xlchart.v1.1");
+        xml.Should().Contain("hidden=\"1\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_Styles()
     {
         var workbook = new Workbook("StyleTest");

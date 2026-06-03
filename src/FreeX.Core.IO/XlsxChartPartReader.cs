@@ -9,6 +9,15 @@ public static partial class XlsxChartPartReader
 
     public static bool TryReadSupportedChart(XDocument chartXml, SheetId sheetId, out ChartModel chart)
     {
+        return TryReadSupportedChart(chartXml, sheetId, fallbackDataRange: null, out chart);
+    }
+
+    public static bool TryReadSupportedChart(
+        XDocument chartXml,
+        SheetId sheetId,
+        GridRange? fallbackDataRange,
+        out ChartModel chart)
+    {
         chart = new ChartModel();
         var plotArea = FindPlotArea(chartXml);
         var barCharts = plotArea?.Elements(ChartNs + "barChart").ToList() ?? [];
@@ -63,7 +72,7 @@ public static partial class XlsxChartPartReader
         else if (threeDBarChart is not null)
             read = TryReadThreeDBarChart(chartXml, threeDBarChart, sheetId, out chart);
         else if (deferredAdvancedChart is { } advanced)
-            read = TryReadDeferredAdvancedChart(chartXml, advanced.Element, sheetId, advanced.Type, out chart);
+            read = TryReadDeferredAdvancedChart(chartXml, advanced.Element, sheetId, advanced.Type, fallbackDataRange, out chart);
         else if (barChart is not null)
             read = TryReadBarChart(chartXml, plotArea, barCharts, sheetId, out chart);
         else
