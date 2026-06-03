@@ -96,6 +96,7 @@ internal static class XlsxWorksheetPhoneticPropertyMapper
             "customProperties",
             "cellWatches",
             "ignoredErrors",
+            "singleXmlCells",
             "smartTags",
             "drawing",
             "legacyDrawing",

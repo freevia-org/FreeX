@@ -354,6 +354,7 @@ internal static class XlsxDataValidationNativeMetadataMapper
         "customProperties" or
         "cellWatches" or
         "ignoredErrors" or
+        "singleXmlCells" or
         "smartTags" or
         "drawing" or
         "legacyDrawing" or

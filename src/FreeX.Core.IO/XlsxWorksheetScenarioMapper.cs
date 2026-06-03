@@ -215,6 +215,7 @@ internal static class XlsxWorksheetScenarioMapper
             "customProperties",
             "cellWatches",
             "ignoredErrors",
+            "singleXmlCells",
             "smartTags",
             "drawing",
             "legacyDrawing",

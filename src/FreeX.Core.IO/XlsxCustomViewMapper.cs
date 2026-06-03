@@ -246,6 +246,7 @@ internal static class XlsxCustomViewMapper
             "customProperties",
             "cellWatches",
             "ignoredErrors",
+            "singleXmlCells",
             "smartTags",
             "drawing",
             "legacyDrawing",

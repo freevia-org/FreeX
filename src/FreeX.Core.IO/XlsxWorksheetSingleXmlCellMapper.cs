@@ -123,14 +123,28 @@ internal static class XlsxWorksheetSingleXmlCellMapper
 
     private static void InsertSingleXmlCells(XElement root, XElement singleXmlCells)
     {
-        var smartTags = root.Element(WorksheetNs + "smartTags");
-        if (smartTags is not null)
-        {
-            smartTags.AddBeforeSelf(singleXmlCells);
-            return;
-        }
+        string[] laterWorksheetElements =
+        [
+            "smartTags",
+            "drawing",
+            "legacyDrawing",
+            "legacyDrawingHF",
+            "picture",
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts",
+            "extLst"
+        ];
 
-        root.Add(singleXmlCells);
+        var insertionPoint = root.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == WorksheetNs &&
+                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        if (insertionPoint is not null)
+            insertionPoint.AddBeforeSelf(singleXmlCells);
+        else
+            root.Add(singleXmlCells);
     }
 
     private static bool IsModeledSingleXmlCellAttribute(string name) =>

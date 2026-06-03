@@ -13,6 +13,7 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
         "customProperties",
         "cellWatches",
         "ignoredErrors",
+        "singleXmlCells",
         "smartTags",
         "drawing",
         "legacyDrawing",

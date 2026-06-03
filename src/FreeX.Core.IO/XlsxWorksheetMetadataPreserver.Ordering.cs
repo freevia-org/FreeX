@@ -34,6 +34,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 "customProperties",
                 "cellWatches",
                 "ignoredErrors",
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",
@@ -66,6 +67,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 "customProperties",
                 "cellWatches",
                 "ignoredErrors",
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",
@@ -97,6 +99,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 "customProperties",
                 "cellWatches",
                 "ignoredErrors",
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",
@@ -124,6 +127,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 "customProperties",
                 "cellWatches",
                 "ignoredErrors",
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",
@@ -149,6 +153,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 "customProperties",
                 "cellWatches",
                 "ignoredErrors",
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",
@@ -164,6 +169,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             [
                 "cellWatches",
                 "ignoredErrors",
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",
@@ -178,6 +184,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             "cellWatches" =>
             [
                 "ignoredErrors",
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",
@@ -195,6 +202,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             ],
             _ =>
             [
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",

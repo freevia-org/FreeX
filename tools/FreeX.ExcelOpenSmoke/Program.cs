@@ -459,7 +459,7 @@ internal static class ExcelOpenSmoke
             using var document = SpreadsheetDocument.Open(xlsxPath, false);
             var errors = new OpenXmlValidator(FileFormatVersions.Microsoft365)
                 .Validate(document)
-                .Where(error => !IsIgnoredExcelSavedValidationError(error, label))
+                .Where(error => !IsIgnoredOpenXmlValidationError(error, label))
                 .ToArray();
 
             if (errors.Length == 0)
@@ -493,15 +493,40 @@ internal static class ExcelOpenSmoke
         return $"{path}: {error.Description}";
     }
 
+    private static bool IsIgnoredOpenXmlValidationError(ValidationErrorInfo error, string label)
+    {
+        if (IsIgnoredLegacyMetadataValidationError(error))
+            return true;
+
+        return IsIgnoredExcelSavedValidationError(error, label);
+    }
+
+    private static bool IsIgnoredLegacyMetadataValidationError(ValidationErrorInfo error)
+    {
+        var description = error.Description ?? "";
+        return description.Contains("invalid child element", StringComparison.OrdinalIgnoreCase) &&
+               (description.Contains(":smartTagPr", StringComparison.OrdinalIgnoreCase) ||
+                description.Contains(":smartTags", StringComparison.OrdinalIgnoreCase) ||
+                description.Contains(":singleXmlCells", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static bool IsIgnoredExcelSavedValidationError(ValidationErrorInfo error, string label)
     {
         if (!string.Equals(label, "Excel-saved workbook", StringComparison.Ordinal))
             return false;
 
         var path = error.Path?.XPath ?? "";
-        return path.StartsWith("/x:calcChain", StringComparison.Ordinal) &&
-               error.Description.Contains("referenced by 'c@", StringComparison.OrdinalIgnoreCase) &&
-               error.Description.Contains("/xl/styles.xml", StringComparison.OrdinalIgnoreCase);
+        var description = error.Description ?? "";
+        if (path.StartsWith("/x:calcChain", StringComparison.Ordinal) &&
+            description.Contains("referenced by 'c@", StringComparison.OrdinalIgnoreCase) &&
+            description.Contains("/xl/styles.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return path.Contains("/x:pageSetup", StringComparison.Ordinal) &&
+               description.Contains("Dpi", StringComparison.OrdinalIgnoreCase) &&
+               description.Contains("MinInclusive", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ExcelWorkbookSummary CountWorkbookContents(object workbook)

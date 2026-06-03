@@ -94,6 +94,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             "cellWatches" =>
             [
                 "ignoredErrors",
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",
@@ -107,6 +108,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             ],
             _ =>
             [
+                "singleXmlCells",
                 "smartTags",
                 "drawing",
                 "legacyDrawing",

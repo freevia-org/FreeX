@@ -58,7 +58,7 @@ internal static partial class XlsxCorpusFixtureFactory
             ("xl/diagrams/data1.xml", "<dgm:dataModel/>"),
             ("xl/diagrams/layout1.xml", "<dgm:layoutDef/>"),
             ("xl/diagrams/quickStyle1.xml", "<dgm:styleDef/>")),
-        "generated-printer-settings-001" => CreatePackage(("xl/printerSettings/printerSettings1.bin", "FreeX generated printer settings placeholder")),
+        "generated-printer-settings-001" => CreatePackage(("xl/printerSettings/printerSettings1.bin", ReadFixtureBytes("PrinterSettings1.bin"))),
         "generated-calc-chain-001" => CreatePackage(
             ("xl/worksheets/sheet1.xml", """
                 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">

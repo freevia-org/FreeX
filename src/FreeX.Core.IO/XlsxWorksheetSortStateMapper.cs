@@ -151,6 +151,7 @@ internal static class XlsxWorksheetSortStateMapper
                     "customProperties",
                     "cellWatches",
                     "ignoredErrors",
+                    "singleXmlCells",
                     "smartTags",
                     "drawing",
                     "legacyDrawing",

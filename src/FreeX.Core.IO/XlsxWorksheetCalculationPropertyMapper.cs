@@ -85,6 +85,7 @@ internal static class XlsxWorksheetCalculationPropertyMapper
             "customProperties",
             "cellWatches",
             "ignoredErrors",
+            "singleXmlCells",
             "smartTags",
             "drawing",
             "legacyDrawing",

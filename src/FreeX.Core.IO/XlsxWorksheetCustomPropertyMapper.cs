@@ -140,6 +140,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
         [
             "cellWatches",
             "ignoredErrors",
+            "singleXmlCells",
             "smartTags",
             "drawing",
             "legacyDrawing",

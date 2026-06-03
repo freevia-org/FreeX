@@ -146,6 +146,7 @@ internal static class XlsxAllowEditRangeMapper
             "customProperties",
             "cellWatches",
             "ignoredErrors",
+            "singleXmlCells",
             "smartTags",
             "drawing",
             "legacyDrawing",

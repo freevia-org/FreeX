@@ -185,16 +185,17 @@ internal static class XlsxWorkbookSchemaNormalizer
         element.Name == workbookNs + "customProperties" ? 25 :
         element.Name == workbookNs + "cellWatches" ? 26 :
         element.Name == workbookNs + "ignoredErrors" ? 27 :
-        element.Name == workbookNs + "smartTags" ? 28 :
-        element.Name == workbookNs + "drawing" ? 29 :
-        element.Name == workbookNs + "legacyDrawing" ? 30 :
-        element.Name == workbookNs + "legacyDrawingHF" ? 31 :
-        element.Name == workbookNs + "drawingHF" ? 32 :
-        element.Name == workbookNs + "picture" ? 33 :
-        element.Name == workbookNs + "oleObjects" ? 34 :
-        element.Name == workbookNs + "controls" ? 35 :
-        element.Name == workbookNs + "webPublishItems" ? 36 :
-        element.Name == workbookNs + "tableParts" ? 37 :
+        element.Name == workbookNs + "singleXmlCells" ? 28 :
+        element.Name == workbookNs + "smartTags" ? 29 :
+        element.Name == workbookNs + "drawing" ? 30 :
+        element.Name == workbookNs + "legacyDrawing" ? 31 :
+        element.Name == workbookNs + "legacyDrawingHF" ? 32 :
+        element.Name == workbookNs + "drawingHF" ? 33 :
+        element.Name == workbookNs + "picture" ? 34 :
+        element.Name == workbookNs + "oleObjects" ? 35 :
+        element.Name == workbookNs + "controls" ? 36 :
+        element.Name == workbookNs + "webPublishItems" ? 37 :
+        element.Name == workbookNs + "tableParts" ? 38 :
         element.Name == workbookNs + "extLst" ? 100 :
         90;
 }

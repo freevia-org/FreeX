@@ -21,9 +21,9 @@ internal static class XlsxWorksheetConditionalFormattingPlacement
     private static readonly HashSet<string> ElementsAfterConditionalFormatting = new(StringComparer.Ordinal)
     {
         "dataValidations", "hyperlinks", "printOptions", "pageMargins", "pageSetup", "headerFooter",
-        "rowBreaks", "colBreaks", "customProperties", "cellWatches", "ignoredErrors", "smartTags",
-        "drawing", "legacyDrawing", "legacyDrawingHF", "drawingHF", "picture", "oleObjects", "controls",
-        "webPublishItems", "tableParts", "extLst",
+        "rowBreaks", "colBreaks", "customProperties", "cellWatches", "ignoredErrors", "singleXmlCells",
+        "smartTags", "drawing", "legacyDrawing", "legacyDrawingHF", "drawingHF", "picture", "oleObjects",
+        "controls", "webPublishItems", "tableParts", "extLst",
     };
 
     public static void AddConditionalFormatting(XElement root, XNamespace worksheetNs, XElement conditionalFormatting)
