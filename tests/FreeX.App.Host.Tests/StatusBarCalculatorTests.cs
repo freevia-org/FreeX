@@ -85,6 +85,28 @@ public sealed class StatusBarCalculatorTests
     }
 
     [Fact]
+    public void Calculate_SingleCellSelectionUsesDirectValueStats()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var address = new CellAddress(sheet.Id, 5, 3);
+        sheet.SetCell(address, Cell.FromValue(new NumberValue(42)));
+
+        var stats = StatusBarCalculator.Calculate(sheet, new GridRange(address, address));
+
+        stats.Should().Be(new StatusBarCalculator.Stats(42, 1, 1, 42, 42, 42));
+    }
+
+    [Fact]
+    public void Calculate_SingleCellStatusBypassesRangeScanSetup()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "StatusBarCalculator.cs"));
+
+        source.Should().Contain("range.Start == range.End");
+        source.Should().Contain("CalculateSingleCell(sheet.GetValue(range.Start.Row, range.Start.Col))");
+    }
+
+    [Fact]
     public void Calculate_LargeSelections_ScansSparseCellsWithoutCopyingUsedCellDictionary()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find(

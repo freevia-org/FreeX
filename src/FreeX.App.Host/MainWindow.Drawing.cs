@@ -421,7 +421,7 @@ public partial class MainWindow
         if (shape is null)
         {
             ShowOwnedMessage(
-                UiText.Get("MainWindowMessage_NoDrawingShapeOnSheet"),
+                UiText.Get("MainWindowMessage_NoDrawingShapesOnSheet"),
                 UiText.Get("MainWindowMessage_ShapeGradientTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
