@@ -98,11 +98,47 @@ internal static class NativeJsonScalarValueMapper
 
     private static bool TryParseFiniteNumber(string value, out double number)
     {
+        if (TryParseIntegerNumber(value, out number))
+            return true;
+
         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
             return double.IsFinite(number);
 
         return double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out number) &&
             double.IsFinite(number);
+    }
+
+    private static bool TryParseIntegerNumber(string value, out double number)
+    {
+        number = 0;
+        if (value.Length == 0)
+            return false;
+
+        var span = value.AsSpan();
+        var index = 0;
+        var negative = false;
+        if (span[index] is '-' or '+')
+        {
+            negative = span[index] == '-';
+            index++;
+            if (index == span.Length)
+                return false;
+        }
+
+        ulong integer = 0;
+        for (; index < span.Length; index++)
+        {
+            var digit = (uint)(span[index] - '0');
+            if (digit > 9)
+                return false;
+            if (integer > (ulong.MaxValue - digit) / 10)
+                return false;
+
+            integer = integer * 10 + digit;
+        }
+
+        number = negative ? -(double)integer : integer;
+        return double.IsFinite(number);
     }
 
     private static string FormatNumber(double value) =>

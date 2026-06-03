@@ -28,11 +28,31 @@ public static partial class ChartRenderer
     private static int GetSeriesIndex(ChartModel chart, uint col, uint dataStartCol) =>
         (int)(col - dataStartCol - (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories ? 1 : 0));
 
-    private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex) =>
-        chart.SeriesFormats.LastOrDefault(format => format.SeriesIndex == seriesIndex);
+    private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex)
+    {
+        var formats = chart.SeriesFormats;
+        for (var i = formats.Count - 1; i >= 0; i--)
+        {
+            var format = formats[i];
+            if (format.SeriesIndex == seriesIndex)
+                return format;
+        }
 
-    private static ChartPointDataLabelFormat? GetPointDataLabelFormat(ChartModel chart, int seriesIndex, int pointIndex) =>
-        chart.PointDataLabelFormats.LastOrDefault(format => format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex);
+        return null;
+    }
+
+    private static ChartPointDataLabelFormat? GetPointDataLabelFormat(ChartModel chart, int seriesIndex, int pointIndex)
+    {
+        var formats = chart.PointDataLabelFormats;
+        for (var i = formats.Count - 1; i >= 0; i--)
+        {
+            var format = formats[i];
+            if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
+                return format;
+        }
+
+        return null;
+    }
 
     private static void ApplyLineFormat(LineSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
