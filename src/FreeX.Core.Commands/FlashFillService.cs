@@ -57,6 +57,7 @@ public static partial class FlashFillService
             ?? TryDelimitedPartCaseTransform(examples)
             ?? TryDelimitedPartReorder(examples)
             ?? TryFinalWhitespaceToken(examples)
+            ?? TryExtractFinalPathSegmentStem(examples)
             ?? TryRemoveFinalDottedToken(examples)
             ?? TryExtractFinalDottedToken(examples)
             ?? TryRemoveFinalDelimitedToken(examples)

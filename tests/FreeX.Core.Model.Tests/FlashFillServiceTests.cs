@@ -174,6 +174,48 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData(
+        @"C:\Reports\Q1.xlsx",
+        "Q1",
+        @"D:\Archive\Sales.final.csv",
+        "Sales.final",
+        @"\\share\dept\Budget.v2.txt",
+        "Budget.v2")]
+    [InlineData(
+        "/reports/q1.xlsx",
+        "q1",
+        "/archive/sales.final.csv",
+        "sales.final",
+        "/mnt/ops/budget.v2.txt",
+        "budget.v2")]
+    public void Fill_ExtractFinalPathSegmentStem_RemovesPathAndExtension(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData(@"C:\Reports\README")]
+    [InlineData("report.xlsx")]
+    public void Fill_ExtractFinalPathSegmentStem_ReturnsNullWhenRemainingIsNotAFilePathStem(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [(@"C:\Reports\north.xlsx", "north"), (@"D:\Archive\sales.summary.csv", "sales.summary")],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_ExtractSemicolonDelimitedToken_ExtractsConsistentPart()
     {

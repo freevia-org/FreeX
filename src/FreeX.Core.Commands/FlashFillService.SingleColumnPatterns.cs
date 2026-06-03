@@ -284,6 +284,17 @@ public static partial class FlashFillService
         return null;
     }
 
+    private static Func<string, string?>? TryExtractFinalPathSegmentStem(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFinalPathSegmentStem(e.Source, out var stem) && stem == e.Expected))
+            return null;
+
+        var cache = new ExtractedSegmentCache();
+        return source => TryGetFinalPathSegmentStemRange(source, out var start, out var endExclusive)
+            ? cache.GetOrAdd(source, start, endExclusive)
+            : null;
+    }
+
     private static bool TryRemoveFinalDottedToken(string source, out string stem)
     {
         stem = string.Empty;
@@ -344,6 +355,45 @@ public static partial class FlashFillService
         }
 
         return false;
+    }
+
+    private static bool TryGetFinalPathSegmentStem(string source, out string stem)
+    {
+        stem = string.Empty;
+        if (!TryGetFinalPathSegmentStemRange(source, out var start, out var endExclusive))
+            return false;
+
+        stem = SliceSegment(source, start, endExclusive);
+        return true;
+    }
+
+    private static bool TryGetFinalPathSegmentStemRange(string source, out int stemStart, out int stemEndExclusive)
+    {
+        stemStart = 0;
+        stemEndExclusive = 0;
+        var lastSeparatorIndex = Math.Max(source.LastIndexOf('/'), source.LastIndexOf('\\'));
+        if (lastSeparatorIndex < 0 || lastSeparatorIndex == source.Length - 1)
+            return false;
+
+        var segmentStart = lastSeparatorIndex + 1;
+        var segmentEnd = source.Length - 1;
+        TrimSegment(source, ref segmentStart, ref segmentEnd);
+        if (segmentStart > segmentEnd)
+            return false;
+
+        var segmentLength = segmentEnd - segmentStart + 1;
+        var dotIndex = source.LastIndexOf('.', segmentEnd, segmentLength);
+        if (dotIndex <= segmentStart || dotIndex == segmentEnd)
+            return false;
+
+        stemStart = segmentStart;
+        var stemEnd = dotIndex - 1;
+        TrimSegment(source, ref stemStart, ref stemEnd);
+        if (stemStart > stemEnd)
+            return false;
+
+        stemEndExclusive = stemEnd + 1;
+        return true;
     }
 
     private static bool TryFindDelimitedPartIndex(
