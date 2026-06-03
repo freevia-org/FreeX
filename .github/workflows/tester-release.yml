@@ -221,17 +221,18 @@ jobs:
           $certificatePath = ""
           $env:FREEX_MSIX_CERTIFICATE_PASSWORD = "${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}"
           $certificateBase64 = "${{ secrets.FREEX_MSIX_CERTIFICATE_BASE64 }}"
-          if ([string]::IsNullOrWhiteSpace($certificateBase64)) {
-            throw "FREEX_MSIX_CERTIFICATE_BASE64 is required for tester-release MSIX assets."
-          }
+          $signArgs = @()
+          if (-not [string]::IsNullOrWhiteSpace($certificateBase64)) {
+            $certificatePath = Join-Path $env:RUNNER_TEMP "freex-msix-signing.pfx"
+            [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($certificateBase64))
+            $signArgs += @("-MsixCertificatePath", $certificatePath)
 
-          $certificatePath = Join-Path $env:RUNNER_TEMP "freex-msix-signing.pfx"
-          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($certificateBase64))
-
-          $signArgs = @("-MsixCertificatePath", $certificatePath)
-          $timestampUrl = "${{ vars.FREEX_MSIX_TIMESTAMP_URL }}"
-          if (-not [string]::IsNullOrWhiteSpace($timestampUrl)) {
-            $signArgs += @("-MsixTimestampUrl", $timestampUrl)
+            $timestampUrl = "${{ vars.FREEX_MSIX_TIMESTAMP_URL }}"
+            if (-not [string]::IsNullOrWhiteSpace($timestampUrl)) {
+              $signArgs += @("-MsixTimestampUrl", $timestampUrl)
+            }
+          } else {
+            $signArgs += "-AllowUnsignedMsix"
           }
 
           tools/Publish-UserTestBuild.ps1 `
@@ -357,7 +358,7 @@ jobs:
           Checksum for the latest MSIX package: FreeX-latest-win-x64.msix.sha256
 
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
-          The MSIX package is signed with the release certificate secret; the workflow fails before publishing latest MSIX assets when signing material is missing. Installer trust validation and Store submission remain release-gate tasks.
+          The MSIX package is signed when the release certificate secret is configured; otherwise it is published unsigned for tester continuity until a certificate is available. Installer trust validation and Store submission remain release-gate tasks.
 
           Public-preview accessibility gate:
           - Keyboard-only smoke validation: $keyboardOnlyStatus.

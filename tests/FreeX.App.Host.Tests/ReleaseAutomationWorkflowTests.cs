@@ -50,9 +50,9 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("secrets.FREEX_MSIX_CERTIFICATE_PASSWORD");
         workflow.Should().Contain("vars.FREEX_MSIX_TIMESTAMP_URL");
         workflow.Should().Contain("$env:FREEX_MSIX_CERTIFICATE_PASSWORD = \"${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}\"");
-        workflow.Should().Contain("FREEX_MSIX_CERTIFICATE_BASE64 is required for tester-release MSIX assets.");
+        workflow.Should().Contain("if (-not [string]::IsNullOrWhiteSpace($certificateBase64))");
         workflow.Should().Contain("-MsixCertificatePath");
-        workflow.Should().NotContain("-AllowUnsignedMsix");
+        workflow.Should().Contain("-AllowUnsignedMsix");
         workflow.Should().NotContain("-MsixCertificatePassword\", $certificatePassword");
         workflow.Should().Contain("-PublishMode Msix");
         workflow.Should().Contain("FreeX-latest-win-x64.exe");
@@ -179,8 +179,8 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("Download the stable latest asset: FreeX-latest-win-x64.exe");
         workflow.Should().Contain("Checksum for the latest single-file asset: FreeX-latest-win-x64.exe.sha256");
         workflow.Should().Contain("MSIX package: FreeX-latest-win-x64.msix");
-        workflow.Should().Contain("signed with the release certificate secret");
-        workflow.Should().Contain("fails before publishing latest MSIX assets when signing material is missing");
+        workflow.Should().Contain("signed when the release certificate secret is configured");
+        workflow.Should().Contain("published unsigned for tester continuity");
 
         var prereleaseInput = Regex.Match(workflow, @"(?ms)^\s+prerelease:\s*$.*?^\s+type:\s+boolean\s*$");
         prereleaseInput.Success.Should().BeTrue("the workflow should expose a prerelease dispatch input");
@@ -226,6 +226,7 @@ public sealed class ReleaseAutomationWorkflowTests
         plan.Should().Contain("FreeX-latest-win-x64.exe");
         plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe");
         plan.Should().Contain("FREEX_MSIX_CERTIFICATE_BASE64");
+        plan.Should().Contain("publishes an unsigned MSIX for tester continuity");
         plan.Should().Contain("Installer trust validation and Store-style submission remain release-gate work.");
     }
 }

@@ -217,4 +217,39 @@ public sealed partial class WorksheetContextMenuPlannerTests
 
         command.AccessHeader.Should().Be(expectedAccessHeader);
     }
+
+    [Fact]
+    public void BuildCommands_ReusesCachedPlansForRepeatedTargetState()
+    {
+        var state = new WorksheetContextMenuState(
+            HasThreadedComment: true,
+            IsThreadedCommentResolved: true,
+            HasNote: true,
+            HasHyperlink: true,
+            HasAutoFilterHeaderTarget: true,
+            HasDropdownTarget: true);
+
+        WorksheetContextMenuPlanner.BuildCommands(state: state)
+            .Should()
+            .BeSameAs(WorksheetContextMenuPlanner.BuildCommands(state: state with { }));
+        WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.RowSelection)
+            .Should()
+            .BeSameAs(WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.RowSelection));
+        WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Picture)
+            .Should()
+            .BeSameAs(WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Picture));
+    }
+
+    [Fact]
+    public void BuildCommands_SourceKeepsStateCacheOnHotPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "WorksheetContextMenuPlanner.cs"));
+
+        source.Should().Contain("WorksheetCommandCache[GetStateCacheIndex(state)]");
+        source.Should().Contain("private static readonly IReadOnlyList<WorksheetContextMenuCommand>[] WorksheetCommandCache");
+        source.Should().Contain("private static IReadOnlyList<WorksheetContextMenuCommand> Freeze");
+    }
 }

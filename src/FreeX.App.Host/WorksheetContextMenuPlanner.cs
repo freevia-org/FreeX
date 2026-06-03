@@ -2,6 +2,26 @@ namespace FreeX.App.Host;
 
 public static class WorksheetContextMenuPlanner
 {
+    private const int WorksheetStateCacheSize = 1 << 6;
+
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand> PictureCommands =
+        BuildPictureCommands();
+
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand> ShapeCommands =
+        BuildDrawingObjectCommands("Format Shape...", includeReorder: true);
+
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand> TextBoxCommands =
+        BuildDrawingObjectCommands("Format Text Box...", includeReorder: false);
+
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand> RowSelectionCommands =
+        BuildRowSelectionCommands();
+
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand> ColumnSelectionCommands =
+        BuildColumnSelectionCommands();
+
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand>[] WorksheetCommandCache =
+        CreateWorksheetCommandCache();
+
     public static IReadOnlyList<WorksheetContextMenuCommand> BuildCommands(
         WorksheetContextMenuTargetKind targetKind = WorksheetContextMenuTargetKind.Worksheet,
         WorksheetContextMenuState? state = null)
@@ -10,17 +30,57 @@ public static class WorksheetContextMenuPlanner
 
         return targetKind switch
         {
-            WorksheetContextMenuTargetKind.Picture => BuildPictureCommands(),
-            WorksheetContextMenuTargetKind.Shape => BuildDrawingObjectCommands("Format Shape...", includeReorder: true),
-            WorksheetContextMenuTargetKind.TextBox => BuildDrawingObjectCommands("Format Text Box...", includeReorder: false),
-            WorksheetContextMenuTargetKind.RowSelection => BuildRowSelectionCommands(),
-            WorksheetContextMenuTargetKind.ColumnSelection => BuildColumnSelectionCommands(),
-            _ => BuildWorksheetCommands(state)
+            WorksheetContextMenuTargetKind.Picture => PictureCommands,
+            WorksheetContextMenuTargetKind.Shape => ShapeCommands,
+            WorksheetContextMenuTargetKind.TextBox => TextBoxCommands,
+            WorksheetContextMenuTargetKind.RowSelection => RowSelectionCommands,
+            WorksheetContextMenuTargetKind.ColumnSelection => ColumnSelectionCommands,
+            _ => WorksheetCommandCache[GetStateCacheIndex(state)]
         };
     }
 
+    private static IReadOnlyList<WorksheetContextMenuCommand>[] CreateWorksheetCommandCache()
+    {
+        var cache = new IReadOnlyList<WorksheetContextMenuCommand>[WorksheetStateCacheSize];
+        for (var index = 0; index < cache.Length; index++)
+            cache[index] = BuildWorksheetCommands(CreateState(index));
+
+        return cache;
+    }
+
+    private static WorksheetContextMenuState CreateState(int index) =>
+        new(
+            HasThreadedComment: (index & 1) != 0,
+            IsThreadedCommentResolved: (index & (1 << 1)) != 0,
+            HasNote: (index & (1 << 2)) != 0,
+            HasHyperlink: (index & (1 << 3)) != 0,
+            HasAutoFilterHeaderTarget: (index & (1 << 4)) != 0,
+            HasDropdownTarget: (index & (1 << 5)) != 0);
+
+    private static int GetStateCacheIndex(WorksheetContextMenuState state)
+    {
+        var index = 0;
+        if (state.HasThreadedComment)
+            index |= 1;
+        if (state.IsThreadedCommentResolved)
+            index |= 1 << 1;
+        if (state.HasNote)
+            index |= 1 << 2;
+        if (state.HasHyperlink)
+            index |= 1 << 3;
+        if (state.HasAutoFilterHeaderTarget)
+            index |= 1 << 4;
+        if (state.HasDropdownTarget)
+            index |= 1 << 5;
+
+        return index;
+    }
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> Freeze(WorksheetContextMenuCommand[] commands) =>
+        Array.AsReadOnly(commands);
+
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildWorksheetCommands(WorksheetContextMenuState state) =>
-    [
+        Freeze([
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
         new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
         new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
@@ -72,52 +132,52 @@ public static class WorksheetContextMenuPlanner
         new("Clear Comments and Notes", WorksheetContextMenuAction.ClearComments, AccessHeader: "Clear Co_mments and Notes"),
         new("Clear Hyperlinks", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "Clear _Hyperlinks", IsEnabled: state.HasHyperlink),
         new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
-    ];
+    ]);
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildPictureCommands() =>
-    [
+        Freeze([
         new("Format Picture...", WorksheetContextMenuAction.FormatPicture, AccessHeader: "_Format Picture..."),
         new("Crop...", WorksheetContextMenuAction.CropPicture, AccessHeader: "_Crop..."),
         new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop"),
         WorksheetContextMenuCommand.Separator,
         new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text..."),
         new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
-    ];
+    ]);
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildRowSizingVisibilityCommands(
         bool rowSelectionOrder = false) =>
         rowSelectionOrder
-            ? [
+            ? Freeze([
                 new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
                 new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight"),
                 new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
                 new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws")
-            ]
-            : [
+            ])
+            : Freeze([
                 new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
                 new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws"),
                 new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
                 new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight")
-            ];
+            ]);
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildColumnSizingVisibilityCommands(
         bool columnSelectionOrder = false) =>
         columnSelectionOrder
-            ? [
+            ? Freeze([
                 new("Column Width...", WorksheetContextMenuAction.ColumnWidth, AccessHeader: "Column _Width..."),
                 new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth"),
                 new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
                 new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns")
-            ]
-            : [
+            ])
+            : Freeze([
                 new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
                 new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns"),
                 new("Column Width...", WorksheetContextMenuAction.ColumnWidth, AccessHeader: "Column _Width..."),
                 new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth")
-            ];
+            ]);
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildRowSelectionCommands() =>
-    [
+        Freeze([
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
         new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
         new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
@@ -132,7 +192,7 @@ public static class WorksheetContextMenuPlanner
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         WorksheetContextMenuCommand.Separator,
         new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
-    ];
+    ]);
 
     private static WorksheetContextMenuCommand BuildThreadedCommentResolveCommand(WorksheetContextMenuState state) =>
         state.IsThreadedCommentResolved
@@ -140,7 +200,7 @@ public static class WorksheetContextMenuPlanner
             : new("Resolve Comment", WorksheetContextMenuAction.ResolveComment, AccessHeader: "Resol_ve Comment", IsEnabled: state.HasThreadedComment);
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildColumnSelectionCommands() =>
-    [
+        Freeze([
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
         new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
         new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
@@ -155,7 +215,7 @@ public static class WorksheetContextMenuPlanner
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         WorksheetContextMenuCommand.Separator,
         new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
-    ];
+    ]);
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildDrawingObjectCommands(
         string formatHeader,
@@ -180,19 +240,19 @@ public static class WorksheetContextMenuPlanner
             commands.Add(new WorksheetContextMenuCommand("Send Backward", WorksheetContextMenuAction.SendBackward, AccessHeader: "Send _Backward"));
         }
 
-        return commands;
+        return Freeze(commands.ToArray());
     }
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildHyperlinkCommands(WorksheetContextMenuState state) =>
         state.HasHyperlink
-            ? [
+            ? Freeze([
                 new("Open Hyperlink", WorksheetContextMenuAction.OpenHyperlink, AccessHeader: "_Open Hyperlink"),
                 new("Edit Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Edit Hyperlink..."),
                 new("Remove Hyperlink", WorksheetContextMenuAction.RemoveHyperlinks, AccessHeader: "_Remove Hyperlink")
-            ]
-            : [
+            ])
+            : Freeze([
                 new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink...")
-            ];
+            ]);
 }
 
 public sealed record WorksheetContextMenuCommand(
