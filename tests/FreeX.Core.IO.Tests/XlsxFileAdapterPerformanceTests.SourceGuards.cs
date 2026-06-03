@@ -198,6 +198,11 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         writerSource.Should().Contain("ReadSeedStyleIndexes");
         writerSource.Should().Contain("ApplyStyleOnlyCells");
         writerSource.Should().Contain("UpdateDimension");
+        writerSource.Should().Contain("new List<StyleOnlyCell>(sheet.StyleOnlyCellCount)");
+        writerSource.Should().Contain("string.Create(");
+        writerSource.Should().NotContain(
+            "CellAddress.NumberToColumnName(col)",
+            "style-only post-processing should create the required A1 attribute text directly instead of allocating separate column and row strings for each cell");
         writerSource.Should().NotContain(
             ".ToDictionary(",
             "style-only worksheet post-processing walks cells row-by-row and should avoid a temporary reference map per row");
