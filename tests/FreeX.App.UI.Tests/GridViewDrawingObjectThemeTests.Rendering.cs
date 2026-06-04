@@ -128,10 +128,12 @@ public sealed partial class GridViewDrawingObjectThemeTests
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.Glow");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.SoftEdges");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.Bevel");
+        authoredEffect.Should().Contain("DrawingShapeEffectPreset.ThreeDRotation");
         authoredEffect.Should().Contain("DrawShapeShadowEffect");
         authoredEffect.Should().Contain("DrawShapeAuthoredInnerShadow");
         authoredEffect.Should().Contain("DrawShapeReflectionEffect");
         authoredEffect.Should().Contain("DrawShapeAuthoredBevelEffect");
+        authoredEffect.Should().Contain("DrawShapeThreeDRotationEffect");
         authoredEffect.Should().Contain("DrawShapeOutlineEffect");
         authoredEffect.Should().Contain("GetInnerShadowRect(rect, thickness, offsetX: 1.5, offsetY: 1.5)");
         authoredEffect.Should().Contain("GetReflectionRect(rect)");
@@ -195,6 +197,55 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
             highlightPixels.Should().BeGreaterThan(20, "the authored bevel should draw a light top edge");
             shadowPixels.Should().BeGreaterThan(20, "the authored bevel should draw a dark bottom edge");
+        });
+    }
+
+    [Fact]
+    public void DrawingObjectRendering_DrawsAuthoredThreeDRotationAsPerspectiveCue()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var grid = new GridView();
+            var visual = new DrawingVisual();
+            using (var drawingContext = visual.RenderOpen())
+            {
+                var drawThreeDRotation = typeof(GridView).GetMethod(
+                    "DrawShapeThreeDRotationEffect",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                drawThreeDRotation.Should().NotBeNull();
+                drawThreeDRotation!.Invoke(
+                    grid,
+                    [
+                        drawingContext,
+                        DrawingShapeKind.Rectangle,
+                        new Rect(24, 24, 44, 24),
+                        new DrawingObjectColors(new CellColor(31, 119, 180), new CellColor(20, 60, 100))
+                    ]);
+            }
+
+            var bitmap = new RenderTargetBitmap(
+                100,
+                70,
+                96,
+                96,
+                PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+
+            var pixels = new byte[100 * 70 * 4];
+            bitmap.CopyPixels(pixels, stride: 100 * 4, offset: 0);
+
+            var perspectivePixels = 0;
+            for (var y = 17; y <= 45; y++)
+            {
+                for (var x = 68; x <= 80; x++)
+                {
+                    var offset = (y * 100 + x) * 4;
+                    if (pixels[offset + 3] > 0)
+                        perspectivePixels++;
+                }
+            }
+
+            perspectivePixels.Should().BeGreaterThan(20, "the authored 3-D rotation cue should draw offset perspective edges");
         });
     }
 

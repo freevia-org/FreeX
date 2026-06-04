@@ -990,6 +990,9 @@
   <data name="ShapeEffects_Bevel" xml:space="preserve">
     <value>Bevel</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotation" xml:space="preserve">
+    <value>3-D Rotation</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Eliminați efectele de formă create.</value>
   </data>
@@ -1011,11 +1014,14 @@
   <data name="ShapeEffects_BevelDescription" xml:space="preserve">
     <value>Apply a raised bevel edge effect to the selected shape.</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotationDescription" xml:space="preserve">
+    <value>Apply a bounded 3-D rotation cue to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Efect de formă</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Descrierea efectului de formă</value>
@@ -2978,7 +2984,7 @@ Trimiteți rapoarte de blocare pentru această versiune de tester?</value>
     <value>Grilă de foi de calcul. Folosiți tastele săgeți pentru a naviga în celule, F2 pentru a edita și Tab/Enter pentru a muta focalizarea.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>Despre FreeX</value>
@@ -6221,7 +6227,7 @@ Trimiteți rapoarte de blocare pentru această versiune de tester?</value>
     <value>Comutați linia de tendință curentă a diagramei între tipurile de linii de tendință similare Excel acceptate.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Comutați limitele axei X automate sau bazate pe date pentru diagrama curentă.</value>

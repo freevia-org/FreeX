@@ -29,6 +29,23 @@ public sealed class TestLaneSolutionTests
         });
     }
 
+    [Fact]
+    public void DefaultAgentVerification_DocumentsNonUiTestLane()
+    {
+        var agents = File.ReadAllText(FindWorkspaceFile("AGENTS.md"));
+        var readme = File.ReadAllText(FindWorkspaceFile("README.md"));
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "TEST_DISTRIBUTION_PLAN.md"));
+
+        agents.Should().Contain("default agent verification path");
+        agents.Should().Contain("dotnet test FreeX.DefaultTests.slnx");
+        agents.Should().Contain("Do not run `dotnet test FreeX.slnx` or `dotnet test FreeX.UiTests.slnx` as routine/default verification.");
+        readme.Should().Contain("tests only the non-UI lane");
+        readme.Should().Contain("dotnet test FreeX.DefaultTests.slnx");
+        readme.Should().Contain("Run the UI lane separately only");
+        plan.Should().Contain("Default agent verification does not run the UI lane");
+        plan.Should().Contain("does not use `dotnet test FreeX.slnx`");
+    }
+
     private static string[] ReadSolutionProjects(string solutionPath)
     {
         var document = XDocument.Load(solutionPath);

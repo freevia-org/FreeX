@@ -58,7 +58,11 @@ internal static class ShapeEffectsDialogPlanner
         new(
             DrawingShapeEffectPreset.Bevel,
             UiText.Get("ShapeEffects_Bevel"),
-            UiText.Get("ShapeEffects_BevelDescription"))
+            UiText.Get("ShapeEffects_BevelDescription")),
+        new(
+            DrawingShapeEffectPreset.ThreeDRotation,
+            UiText.Get("ShapeEffects_ThreeDRotation"),
+            UiText.Get("ShapeEffects_ThreeDRotationDescription"))
     ];
 }
 
