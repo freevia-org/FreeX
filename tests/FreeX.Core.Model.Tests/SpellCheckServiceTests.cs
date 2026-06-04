@@ -460,6 +460,42 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversReferenceRangeValueVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "REFRENCE refrence referance refernece rang raange colomn cloumn transpos tranpose transopse vlaue valus. Keep prerefrence, colomn_name, ranging, https://refrence.example.com/rang, analyst@colomn.example.com, and \"C:\\referance folder\\vlaue file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("REFRENCE", "REFERENCE"),
+            ("refrence", "reference"),
+            ("referance", "reference"),
+            ("refernece", "reference"),
+            ("rang", "range"),
+            ("raange", "range"),
+            ("colomn", "column"),
+            ("cloumn", "column"),
+            ("transpos", "transpose"),
+            ("tranpose", "transpose"),
+            ("transopse", "transpose"),
+            ("vlaue", "value"),
+            ("valus", "values"));
+        plan.IssueCount.Should().Be(13);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "REFERENCE reference reference reference range range column column transpose transpose transpose value values. Keep prerefrence, colomn_name, ranging, https://refrence.example.com/rang, analyst@colomn.example.com, and \"C:\\referance folder\\vlaue file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(13);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversFinanceSpreadsheetMisspellings()
     {
         var wb = new Workbook("test");
