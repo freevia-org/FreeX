@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -6,17 +7,11 @@ namespace FreeX.App.Host;
 public static class FillSeriesPlanner
 {
     public static bool TryParseStep(string input, out double step)
-    {
-        if (double.TryParse(input.Trim(), out var parsed) &&
-            double.IsFinite(parsed))
-        {
-            step = parsed;
-            return true;
-        }
-
-        step = 0;
-        return false;
-    }
+        => NumericInputParser.TryParseFiniteDouble(
+            input,
+            NumberStyles.Float | NumberStyles.AllowThousands,
+            CultureInfo.CurrentCulture,
+            out step);
 
     public static bool CanFill(GridRange range, FillCellsDirection direction) =>
         direction is FillCellsDirection.Down or FillCellsDirection.Up
