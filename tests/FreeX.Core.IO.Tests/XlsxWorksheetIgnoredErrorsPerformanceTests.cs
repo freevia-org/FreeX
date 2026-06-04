@@ -97,10 +97,7 @@ public sealed class XlsxWorksheetIgnoredErrorsPerformanceTests
     }
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
-    {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
-    }
+        => XlsxPackageTestFixtures.LoadPackageXml(entry);
 
     private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }

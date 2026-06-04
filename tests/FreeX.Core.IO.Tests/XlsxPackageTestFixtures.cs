@@ -24,11 +24,20 @@ internal static class XlsxPackageTestFixtures
         return stream;
     }
 
-    public static XDocument LoadPackageXml(ZipArchive archive, string entryName)
+    public static XDocument LoadPackageXml(ZipArchive archive, string entryName, string? missingBecause = null)
     {
         var entry = archive.GetEntry(entryName);
-        entry.Should().NotBeNull();
-        using var stream = entry!.Open();
+        if (missingBecause is null)
+            entry.Should().NotBeNull();
+        else
+            entry.Should().NotBeNull(missingBecause);
+
+        return LoadPackageXml(entry!);
+    }
+
+    public static XDocument LoadPackageXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
         return XDocument.Load(stream);
     }
 
