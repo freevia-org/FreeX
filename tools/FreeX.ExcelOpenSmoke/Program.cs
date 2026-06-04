@@ -296,6 +296,7 @@ internal static class ExcelOpenSmoke
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
                 AssertPackageEntriesCanonical(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertNoExcelRecoveryLog(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
                 AssertPackageContentTypesComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPackageRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -459,7 +460,7 @@ internal static class ExcelOpenSmoke
                 throw new InvalidDataException($"Excel SaveCopyAs failed for '{stagedPath}'", ex);
             }
 
-            AssertNoExcelRecoveryLog(excelSavedPath);
+            AssertNoExcelRecoveryLog(excelSavedPath, "Excel-saved workbook", stagedPath);
             WithExcelBusyRetry(
                 () =>
                 {
@@ -562,7 +563,7 @@ internal static class ExcelOpenSmoke
         return workbook;
     }
 
-    private static void AssertNoExcelRecoveryLog(string xlsxPath)
+    private static void AssertNoExcelRecoveryLog(string xlsxPath, string label, string sourcePath)
     {
         using var archive = ZipFile.OpenRead(xlsxPath);
         var recoveryLogs = archive.Entries
@@ -576,7 +577,7 @@ internal static class ExcelOpenSmoke
         if (recoveryLogs.Length > 0)
         {
             throw new InvalidDataException(
-                $"Excel saved copy contains repair/recovery log parts: {string.Join(", ", recoveryLogs)}");
+                $"{label} for '{sourcePath}' contains repair/recovery log parts: {string.Join(", ", recoveryLogs)}");
         }
     }
 
