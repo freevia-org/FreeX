@@ -149,19 +149,8 @@ public sealed class GridViewMergeLookupPerformanceTests
             .Should().BeLessThan(source.IndexOf("RenderCells(dc);", StringComparison.Ordinal));
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
-            if (File.Exists(candidate))
-                return candidate;
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.Find(relativeParts);
 
     private static ViewportModel CreateViewport(int rowCount, int columnCount)
     {
