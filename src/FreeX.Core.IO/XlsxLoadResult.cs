@@ -12,7 +12,14 @@ namespace FreeX.Core.IO;
 /// Empty when the file loaded without any issues. Non-empty indicates data that could
 /// not be restored (e.g. conditional formatting, data validation, merged regions, named ranges).
 /// </param>
-public sealed record XlsxLoadResult(Workbook Workbook, IReadOnlyList<string> Warnings)
+/// <param name="FeatureReport">
+/// Optional unsupported-feature report collected while the package was already open for loading.
+/// Null when feature inspection was not requested.
+/// </param>
+public sealed record XlsxLoadResult(
+    Workbook Workbook,
+    IReadOnlyList<string> Warnings,
+    XlsxFeatureReport? FeatureReport = null)
 {
     /// <summary>Returns <c>true</c> if any warnings were collected during loading.</summary>
     public bool HasWarnings => Warnings.Count > 0;

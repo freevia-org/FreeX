@@ -50,18 +50,25 @@ public static class XlsxFeatureInspector
                 stream.Position = 0;
 
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-            var features = archive.Entries
-                .SelectMany(InspectEntry)
-                .Distinct()
-                .ToList();
-
-            return new XlsxFeatureReport(features);
+            return Inspect(archive);
         }
         finally
         {
             if (stream.CanSeek)
                 stream.Position = originalPosition;
         }
+    }
+
+    public static XlsxFeatureReport Inspect(ZipArchive archive)
+    {
+        ArgumentNullException.ThrowIfNull(archive);
+
+        var features = archive.Entries
+            .SelectMany(InspectEntry)
+            .Distinct()
+            .ToList();
+
+        return new XlsxFeatureReport(features);
     }
 
     private static IEnumerable<XlsxUnsupportedFeature> InspectEntry(ZipArchiveEntry entry)

@@ -36,17 +36,25 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     /// The workbook is always returned; warnings indicate partial data loss.
     /// </summary>
     public XlsxLoadResult LoadWithWarnings(Stream stream)
+        => LoadWithWarnings(stream, inspectFeatures: false);
+
+    public XlsxLoadResult LoadWithWarnings(Stream stream, bool inspectFeatures)
     {
         var warnings = new List<string>();
-        var workbook = LoadCore(stream, warnings);
-        return new XlsxLoadResult(workbook, warnings.AsReadOnly());
+        var workbook = LoadCore(stream, warnings, inspectFeatures, out var featureReport);
+        return new XlsxLoadResult(workbook, warnings.AsReadOnly(), featureReport);
     }
 
     /// <inheritdoc/>
     public Workbook Load(Stream stream) => LoadWithWarnings(stream).Workbook;
 
-    private Workbook LoadCore(Stream stream, List<string> warnings)
+    private Workbook LoadCore(
+        Stream stream,
+        List<string> warnings,
+        bool inspectFeatures,
+        out XlsxFeatureReport? featureReport)
     {
+        featureReport = null;
         var loadPackage = CreateLoadPackageStream(stream);
         using var packageStream = loadPackage.PackageStream;
         var packageParts = XlsxLoadPackageParts.Empty;
@@ -63,6 +71,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             using var packageArchive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
             // Reject zip-bomb / oversized packages before any decompression-heavy reads.
             WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(packageArchive);
+            if (inspectFeatures)
+                featureReport = XlsxFeatureInspector.Inspect(packageArchive);
+
             packageParts = XlsxLoadPackageParts.Inspect(packageArchive);
 
             workbookTheme = packageParts.HasTheme
