@@ -29,7 +29,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void CalculateSplitDividerLayout_ReusesRowHeaderWidthForVerticalSplit()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
         var calculateSplitDividerLayout = source[
             source.IndexOf("public static SplitDividerLayout CalculateSplitDividerLayout", StringComparison.Ordinal)..

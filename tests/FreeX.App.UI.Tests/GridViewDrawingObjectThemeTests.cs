@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Reflection;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -14,7 +13,4 @@ public sealed partial class GridViewDrawingObjectThemeTests
         field.Should().NotBeNull();
         return field!.GetValue(null).Should().BeAssignableTo<T>().Subject;
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }

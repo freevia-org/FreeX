@@ -33,6 +33,8 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("25%")]
     [InlineData("-12.5%")]
     [InlineData("'25%")]
+    [InlineData("\u221242")]
+    [InlineData("(\u2212 42%)")]
     public void FindFormulaErrorIssues_ReturnsFormattedNumbersStoredAsText(string value)
     {
         var wb = new Workbook("test");
@@ -120,6 +122,9 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\u20B425%")]
     [InlineData("(- 42 \u20B8)")]
     [InlineData("'(42 \u20A1)")]
+    [InlineData("\uFF0D $1,234.50")]
+    [InlineData("\uFE63\u20AC25%")]
+    [InlineData("\uFF0B 42 \u20B1")]
     public void FindFormulaErrorIssues_ReturnsCurrencyNumbersStoredAsText(string value)
     {
         var wb = new Workbook("test");
@@ -213,6 +218,10 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("-42-$")]
     [InlineData("+$+42")]
     [InlineData("+ $+42")]
+    [InlineData("\uFF0D $")]
+    [InlineData("\uFF0B USD 42")]
+    [InlineData("\u2212 \u20B1PHP 42")]
+    [InlineData("\uFE63\u20AC-25%")]
     [InlineData("\u20B1PHP 42")]
     [InlineData("VND \u20AB42")]
     [InlineData("42 NGN \u20A6")]
@@ -236,6 +245,16 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("Infinity")]
     [InlineData("(NaN)")]
     [InlineData("USD 42")]
+    [InlineData("\u2212")]
+    [InlineData("\uFF0D")]
+    [InlineData("\uFE63")]
+    [InlineData("\uFF0B")]
+    [InlineData("\u2212-42")]
+    [InlineData("\uFF0B+42")]
+    [InlineData("\uFF0D\u221242")]
+    [InlineData("42\u2212")]
+    [InlineData("42 \uFF0B")]
+    [InlineData("\u221242-")]
     public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidNumberText(string value)
     {
         var wb = new Workbook("test");

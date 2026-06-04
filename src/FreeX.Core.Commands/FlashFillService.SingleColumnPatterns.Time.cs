@@ -4,6 +4,82 @@ namespace FreeX.Core.Commands;
 
 public static partial class FlashFillService
 {
+    private enum TimeComponentKind
+    {
+        Hour,
+        Minute,
+        Second,
+        Meridiem
+    }
+
+    private enum TimeHourComponentStyle
+    {
+        SourceText,
+        Unpadded
+    }
+
+    private readonly record struct TimeLikeComponents(
+        string HourText,
+        string UnpaddedHourText,
+        string MinuteText,
+        string? SecondText,
+        string? MeridiemText);
+
+    private static Func<string, string?>? TryTimeComponentExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        TimeComponentKind? componentKind = null;
+        var sawComponentCandidate = false;
+        var sawNonComponentExpected = false;
+        var hourCanUseSourceText = true;
+        var hourCanUseUnpadded = true;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (!TryParseTimeLikeComponents(source, out var components))
+                return null;
+
+            var matches = GetTimeComponentMatches(components, expected);
+            if (matches.Count == 0)
+            {
+                sawNonComponentExpected = true;
+                continue;
+            }
+
+            if (matches.Count > 1)
+                return _ => null;
+
+            sawComponentCandidate = true;
+            var currentKind = matches[0];
+            if (componentKind is null)
+                componentKind = currentKind;
+            else if (componentKind.Value != currentKind)
+                return _ => null;
+
+            if (currentKind == TimeComponentKind.Hour)
+            {
+                hourCanUseSourceText &= components.HourText == expected;
+                hourCanUseUnpadded &= components.UnpaddedHourText == expected;
+                if (!hourCanUseSourceText && !hourCanUseUnpadded)
+                    return _ => null;
+            }
+        }
+
+        if (!sawComponentCandidate)
+            return null;
+
+        if (sawNonComponentExpected || componentKind is null)
+            return _ => null;
+
+        var kind = componentKind.Value;
+        var hourStyle = hourCanUseUnpadded
+            ? TimeHourComponentStyle.Unpadded
+            : TimeHourComponentStyle.SourceText;
+
+        return source => TryParseTimeLikeComponents(source, out var components)
+            ? GetTimeComponent(components, kind, hourStyle)
+            : null;
+    }
+
     private static Func<string, string?>? TryTimeNormalization(IReadOnlyList<(string Source, string Expected)> examples)
     {
         TimeOutputPattern? outputPattern = null;
@@ -86,6 +162,82 @@ public static partial class FlashFillService
                TryReadTimeTokenAt(candidate, 0, out var endExclusive, out time, out pattern) &&
                endExclusive == candidate.Length;
     }
+
+    private static bool TryParseTimeLikeComponents(string source, out TimeLikeComponents components)
+    {
+        components = default;
+
+        var candidate = source.Trim();
+        if (candidate.Length == 0 ||
+            !TryReadTimeTokenAt(candidate, 0, out var endExclusive, out _, out _) ||
+            endExclusive != candidate.Length)
+        {
+            return false;
+        }
+
+        var hourEnd = candidate.IndexOf(':', StringComparison.Ordinal);
+        var hourText = candidate[..hourEnd];
+        var minuteStart = hourEnd + 1;
+        var minuteText = candidate.Substring(minuteStart, 2);
+        var index = minuteStart + 2;
+
+        string? secondText = null;
+        if (index < candidate.Length && candidate[index] == ':')
+        {
+            var secondStart = index + 1;
+            secondText = candidate.Substring(secondStart, 2);
+            index = secondStart + 2;
+        }
+
+        while (index < candidate.Length && char.IsWhiteSpace(candidate[index]))
+            index++;
+
+        var meridiemText = index < candidate.Length ? candidate[index..] : null;
+        components = new TimeLikeComponents(
+            hourText,
+            FormatUnpaddedTimeHour(hourText),
+            minuteText,
+            secondText,
+            meridiemText);
+        return true;
+    }
+
+    private static List<TimeComponentKind> GetTimeComponentMatches(TimeLikeComponents components, string expected)
+    {
+        var matches = new List<TimeComponentKind>(1);
+
+        if (components.HourText == expected || components.UnpaddedHourText == expected)
+            matches.Add(TimeComponentKind.Hour);
+
+        if (components.MinuteText == expected)
+            matches.Add(TimeComponentKind.Minute);
+
+        if (components.SecondText == expected)
+            matches.Add(TimeComponentKind.Second);
+
+        if (components.MeridiemText == expected)
+            matches.Add(TimeComponentKind.Meridiem);
+
+        return matches;
+    }
+
+    private static string? GetTimeComponent(
+        TimeLikeComponents components,
+        TimeComponentKind kind,
+        TimeHourComponentStyle hourStyle) =>
+        kind switch
+        {
+            TimeComponentKind.Hour => hourStyle == TimeHourComponentStyle.Unpadded
+                ? components.UnpaddedHourText
+                : components.HourText,
+            TimeComponentKind.Minute => components.MinuteText,
+            TimeComponentKind.Second => components.SecondText,
+            _ => components.MeridiemText
+        };
+
+    private static string FormatUnpaddedTimeHour(string hourText) =>
+        int.Parse(hourText, NumberStyles.None, CultureInfo.InvariantCulture)
+            .ToString(CultureInfo.InvariantCulture);
 
     private static int CountEmbeddedTimeLikeValues(string source, out TimeParts time)
     {

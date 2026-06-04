@@ -24,7 +24,8 @@ public static partial class FlashFillService
         // Try each pattern in priority order.
         // Non-nullable patterns are widened to Func<string, string?> for uniform handling.
         Func<string, string?>? patternFn =
-            TryConstant(examples)
+            TryTimeComponentExtraction(examples)
+            ?? TryConstant(examples)
             ?? TryCaseTransform(examples)
             ?? TryInitials(examples)
             ?? TryNameAbbreviations(examples)
@@ -52,8 +53,8 @@ public static partial class FlashFillService
             ?? TryUsAddressComponentExtraction(examples)
             ?? TryStripThousandSeparators(examples)
             ?? TryExtractDigitsOnly(examples)
-            ?? TryExtractFinalDigitRun(examples)
             ?? TryDateComponentExtraction(examples)
+            ?? TryExtractFinalDigitRun(examples)
             ?? TryThreeTokenNameInitial(examples)
             ?? TryThreeTokenNameDropMiddle(examples)
             ?? TryPairedDelimiterExtraction(examples)

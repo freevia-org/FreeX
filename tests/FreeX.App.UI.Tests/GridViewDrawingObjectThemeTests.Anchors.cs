@@ -93,7 +93,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void TryCreateDrawingAnchorRect_UsesSinglePassAnchorMetricLookups()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridDrawingObjectPlanner.cs"));
         var anchorRange = source[
             source.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)..
@@ -119,11 +119,11 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void AnchoredObjectRendering_UsesSharedSinglePassMetricPlanner()
     {
-        var planner = File.ReadAllText(FindWorkspaceFile(
+        var planner = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridDrawingObjectPlanner.cs"));
-        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(FindWorkspaceFile(
+        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
         var plannerMethod = planner[
             planner.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)..
