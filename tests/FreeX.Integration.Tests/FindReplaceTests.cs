@@ -10,7 +10,7 @@ public class FindReplaceTests
     {
         var workbook = new Workbook("Test");
         var sheet = workbook.AddSheet("Sheet1");
-        var commandBus = new CommandBus(id => new SimpleCommandContext(workbook));
+        var commandBus = new CommandBus(id => new TestCommandContext(workbook));
         return (workbook, sheet, commandBus);
     }
 
@@ -170,7 +170,7 @@ public class FindReplaceTests
         var workbook = new Workbook("Test");
         var sheet1 = workbook.AddSheet("Sheet1");
         var sheet2 = workbook.AddSheet("Sheet2");
-        var commandBus = new CommandBus(id => new SimpleCommandContext(workbook));
+        var commandBus = new CommandBus(id => new TestCommandContext(workbook));
         var a1 = new CellAddress(sheet1.Id, 1, 1);
         var a2 = new CellAddress(sheet2.Id, 1, 1);
         sheet1.SetCell(a1, new TextValue("foo"));
@@ -226,17 +226,6 @@ public class FindReplaceTests
         result.Failure.Should().Be(new CommandOutcome(false, "The sheet is protected."));
         sheet.GetCell(a1)!.Value.Should().Be(new TextValue("foo"));
     }
-}
-
-/// <summary>Minimal ICommandContext for tests.</summary>
-file sealed class SimpleCommandContext : ICommandContext
-{
-    public Workbook Workbook { get; }
-
-    public SimpleCommandContext(Workbook workbook) => Workbook = workbook;
-
-    public Sheet GetSheet(SheetId sheetId) =>
-        Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
 }
 
 file sealed class RejectingCommandBus(string message) : ICommandBus

@@ -846,7 +846,7 @@ public class VolatileFunctionTests
     {
         var wb = new Workbook("Test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
         var a2 = new CellAddress(sheet.Id, 2, 1);
         var b1 = new CellAddress(sheet.Id, 1, 2);
@@ -1188,8 +1188,3 @@ public class AstCacheTests
     }
 }
 
-file sealed class SimpleCtx(Workbook wb) : ICommandContext
-{
-    public Workbook Workbook { get; } = wb;
-    public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-}

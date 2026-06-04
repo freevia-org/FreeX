@@ -82,7 +82,7 @@ public partial class SortFilterTests
     {
         var (wb, sheet, _) = MakeContext();
         var sid = sheet.Id;
-        var bus = new CommandBus(_ => new SimpleCommandContext(wb));
+        var bus = new CommandBus(_ => new TestCommandContext(wb));
 
         sheet.SetCell(new CellAddress(sid, 1, 1), new NumberValue(3));
         sheet.SetCell(new CellAddress(sid, 2, 1), new NumberValue(1));

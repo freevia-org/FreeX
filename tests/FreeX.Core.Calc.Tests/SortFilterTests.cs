@@ -12,15 +12,8 @@ public partial class SortFilterTests
     {
         var wb = new Workbook("Test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCommandContext(wb);
+        var ctx = new TestCommandContext(wb);
         return (wb, sheet, ctx);
-    }
-
-    // ICommandContext backed by a Workbook — same pattern used by CommandBus
-    private sealed class SimpleCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook => workbook;
-        public Sheet GetSheet(SheetId id) => workbook.GetSheet(id)!;
     }
 
     // ── Sort tests ────────────────────────────────────────────────────────────
