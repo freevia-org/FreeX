@@ -583,7 +583,11 @@ public class NumberFormatterTests
     [InlineData("[$\u20B9-445]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
     [InlineData("[$\u20B9-449]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
     [InlineData("[$\u20B9-44A]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
+    [InlineData("[$-44B]#,##0.00", 1234567.89, "12,34,567.89")]
+    [InlineData("[$-044B]#,##0.00", 1234567.89, "12,34,567.89")]
     [InlineData("[$\u20B9-44E]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
+    [InlineData("[$-457]#,##0.00", 1234567.89, "12,34,567.89")]
+    [InlineData("[$-0457]#,##0.00", 1234567.89, "12,34,567.89")]
     [InlineData("[$$-C0C]#,##0.00", 1234.5, "$1\u00A0234,50")]
     [InlineData("[$R-1C09]#,##0.00", 1234.5, "R1\u00A0234,50")]
     [InlineData("[$\u20AB-42A]#,##0.00", 1234.5, "\u20AB1.234,50")]
@@ -646,6 +650,19 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("[$-44B]#,##0.00%", 12345.6789, "12,34,567.89%")]
+    [InlineData("[$-457]#,##0.00%", 12345.6789, "12,34,567.89%")]
+    public void CustomNumberSubset_UsesKnownLcidPercentGroupSizes(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("[$-407]dd/mm/yyyy", "01.01.2024")]
     [InlineData("[$-414]dd/mm/yyyy", "01.01.2024")]
     [InlineData("[$-41F]dd/mm/yyyy", "01.01.2024")]
@@ -663,6 +680,8 @@ public class NumberFormatterTests
     [InlineData("[$-439]dd/mm/yyyy", "01-01-2024")]
     [InlineData("[$-445]dd/mm/yyyy", "01-01-2024")]
     [InlineData("[$-44A]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-44B]m/d/yyyy", "1-1-2024")]
+    [InlineData("[$-044B]dd/mm/yyyy", "01-01-2024")]
     [InlineData("[$-42A]dd/mm/yyyy", "01/01/2024")]
     [InlineData("[$-421]dd/mm/yyyy", "01/01/2024")]
     [InlineData("[$-43E]dd/mm/yyyy", "01/01/2024")]
@@ -704,6 +723,8 @@ public class NumberFormatterTests
     [InlineData("[$-42B]dd/mm/yyyy", "01.01.2024")]
     [InlineData("[$-450]dd/mm/yyyy", "01.01.2024")]
     [InlineData("[$-461]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-457]m/d/yyyy", "1-1-2024")]
+    [InlineData("[$-0457]dd/mm/yyyy", "01-01-2024")]
     [InlineData("[$-45B]dd/mm/yyyy", "01-01-2024")]
     [InlineData("[$-454]dd/mm/yyyy", "01/01/2024")]
     [InlineData("[$-453]dd/mm/yyyy", "01/01/2024")]
