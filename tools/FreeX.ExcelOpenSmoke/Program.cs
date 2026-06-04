@@ -76,6 +76,10 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
     private const string DrawingMlChartContentType =
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+    private const string CommentsContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
+    private const string CommentsRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     private const string HyperlinkRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
     private const string ImageRelationshipType =
@@ -116,6 +120,10 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
     private const string PivotTableRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+    private const string VmlDrawingContentType =
+        "application/vnd.openxmlformats-officedocument.vmlDrawing";
+    private const string VmlDrawingRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
     private const string WorkbookRelationshipPart = "xl/_rels/workbook.xml.rels";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
@@ -135,6 +143,10 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace SpreadsheetDrawingNs =
         "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+    private static readonly XNamespace VmlNs =
+        "urn:schemas-microsoft-com:vml";
+    private static readonly XNamespace VmlOfficeNs =
+        "urn:schemas-microsoft-com:office:office";
 
     public static int Run(string[] args)
     {
@@ -376,6 +388,7 @@ internal static class ExcelOpenSmoke
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDrawingPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertLegacyCommentPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPivotPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -571,6 +584,7 @@ internal static class ExcelOpenSmoke
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDrawingPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertLegacyCommentPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPivotPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
@@ -2428,6 +2442,326 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet drawing package graph: {sample}{suffix}");
+    }
+
+    private static void AssertLegacyCommentPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+        var validatedCommentParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validatedVmlDrawingParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetRelationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+
+            AddWorksheetCommentRelationshipIssues(
+                archive,
+                worksheetPart,
+                worksheetRelationshipPart,
+                validatedCommentParts,
+                issues);
+
+            AddWorksheetLegacyDrawingRelationshipIssues(
+                archive,
+                worksheetPart,
+                worksheetRelationshipPart,
+                worksheetXml,
+                validatedVmlDrawingParts,
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidLegacyCommentPackage(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetCommentRelationshipIssues(
+        ZipArchive archive,
+        string worksheetPart,
+        string worksheetRelationshipPart,
+        HashSet<string> validatedCommentParts,
+        List<string> issues)
+    {
+        foreach (var commentsRelationship in FindPackageRelationshipsByType(
+                     archive,
+                     worksheetRelationshipPart,
+                     CommentsRelationshipType))
+        {
+            var relationshipId = commentsRelationship.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(relationshipId))
+            {
+                issues.Add($"{worksheetRelationshipPart} has a comments relationship without Id");
+                continue;
+            }
+
+            if (!TryGetPackageRelationshipTarget(
+                    archive,
+                    worksheetRelationshipPart,
+                    relationshipId,
+                    CommentsRelationshipType,
+                    out var commentsTarget,
+                    out var commentsRelationshipIssue))
+            {
+                issues.Add($"{worksheetPart} comments relationship {relationshipId}: {commentsRelationshipIssue}");
+                continue;
+            }
+
+            if (!TryResolvePackageRelationshipTarget(
+                    worksheetRelationshipPart,
+                    commentsTarget!,
+                    out var commentsPart,
+                    out var commentsTargetIssue))
+            {
+                issues.Add($"{worksheetPart} comments relationship {relationshipId} has invalid Target {commentsTarget}: {commentsTargetIssue}");
+                continue;
+            }
+
+            AddCommentsPartPackageIssues(archive, worksheetPart, commentsPart, validatedCommentParts, issues);
+        }
+    }
+
+    private static void AddCommentsPartPackageIssues(
+        ZipArchive archive,
+        string worksheetPart,
+        string commentsPart,
+        HashSet<string> validatedCommentParts,
+        List<string> issues)
+    {
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, commentsPart, CommentsContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var commentsEntry = FindPackageEntry(archive, commentsPart);
+        if (commentsEntry is null)
+        {
+            issues.Add($"{worksheetPart} comments relationship targets missing package part {commentsPart}");
+            return;
+        }
+
+        if (!validatedCommentParts.Add(commentsPart))
+            return;
+
+        var commentsXml = LoadPackageXml(commentsEntry);
+        if (commentsXml.Root?.Name != SpreadsheetNs + "comments")
+        {
+            issues.Add($"{commentsPart} has an invalid comments root element");
+            return;
+        }
+
+        AddCommentListIssues(commentsPart, commentsXml, issues);
+    }
+
+    private static void AddCommentListIssues(
+        string commentsPart,
+        XDocument commentsXml,
+        List<string> issues)
+    {
+        var authors = commentsXml.Root?
+            .Element(SpreadsheetNs + "authors")?
+            .Elements(SpreadsheetNs + "author")
+            .ToArray() ?? [];
+        var comments = commentsXml.Root?
+            .Element(SpreadsheetNs + "commentList")?
+            .Elements(SpreadsheetNs + "comment")
+            .ToArray() ?? [];
+
+        if (comments.Length == 0)
+            return;
+
+        if (authors.Length == 0)
+        {
+            issues.Add($"{commentsPart} has comments but no authors");
+        }
+
+        var seenCommentRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var comment in comments)
+        {
+            var reference = comment.Attribute("ref")?.Value;
+            if (string.IsNullOrWhiteSpace(reference))
+            {
+                issues.Add($"{commentsPart} has a comment without ref");
+            }
+            else if (!seenCommentRefs.Add(reference))
+            {
+                issues.Add($"{commentsPart} has duplicate comment ref {reference}");
+            }
+
+            var authorIdText = comment.Attribute("authorId")?.Value;
+            if (!TryParseNonNegativePackageInt(authorIdText, out var authorId))
+            {
+                issues.Add($"{commentsPart} comment {reference ?? "(no ref)"} has invalid authorId '{authorIdText}'");
+                continue;
+            }
+
+            if (authors.Length > 0 && authorId >= authors.Length)
+                issues.Add($"{commentsPart} comment {reference ?? "(no ref)"} references authorId {authorId}, but only {authors.Length} author(s) exist");
+        }
+    }
+
+    private static void AddWorksheetLegacyDrawingRelationshipIssues(
+        ZipArchive archive,
+        string worksheetPart,
+        string worksheetRelationshipPart,
+        XDocument worksheetXml,
+        HashSet<string> validatedVmlDrawingParts,
+        List<string> issues)
+    {
+        var referencedRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var legacyDrawingReferences = worksheetXml
+            .Descendants()
+            .Where(element =>
+                element.Name == SpreadsheetNs + "legacyDrawing" ||
+                element.Name == SpreadsheetNs + "legacyDrawingHF")
+            .Select((legacyDrawing, index) => new LegacyDrawingReference(
+                legacyDrawing.Name.LocalName,
+                index + 1,
+                legacyDrawing.Attribute(OfficeRelationshipNs + "id")?.Value))
+            .ToArray();
+
+        foreach (var legacyDrawingReference in legacyDrawingReferences)
+        {
+            if (string.IsNullOrWhiteSpace(legacyDrawingReference.RelationshipId))
+            {
+                issues.Add($"{worksheetPart} {legacyDrawingReference.ElementName} #{legacyDrawingReference.Ordinal} has no relationship id");
+                continue;
+            }
+
+            referencedRelationshipIds.Add(legacyDrawingReference.RelationshipId);
+            AddVmlDrawingReferenceIssues(
+                archive,
+                worksheetPart,
+                worksheetRelationshipPart,
+                $"{legacyDrawingReference.ElementName} #{legacyDrawingReference.Ordinal}",
+                legacyDrawingReference.RelationshipId,
+                validatedVmlDrawingParts,
+                issues);
+        }
+
+        foreach (var vmlDrawingRelationship in FindPackageRelationshipsByType(
+                     archive,
+                     worksheetRelationshipPart,
+                     VmlDrawingRelationshipType))
+        {
+            var relationshipId = vmlDrawingRelationship.Attribute("Id")?.Value;
+            if (string.IsNullOrWhiteSpace(relationshipId) || referencedRelationshipIds.Contains(relationshipId))
+                continue;
+
+            AddVmlDrawingReferenceIssues(
+                archive,
+                worksheetPart,
+                worksheetRelationshipPart,
+                "vmlDrawing relationship",
+                relationshipId,
+                validatedVmlDrawingParts,
+                issues);
+        }
+    }
+
+    private static void AddVmlDrawingReferenceIssues(
+        ZipArchive archive,
+        string worksheetPart,
+        string worksheetRelationshipPart,
+        string referenceDescription,
+        string relationshipId,
+        HashSet<string> validatedVmlDrawingParts,
+        List<string> issues)
+    {
+        if (!TryGetPackageRelationshipTarget(
+                archive,
+                worksheetRelationshipPart,
+                relationshipId,
+                VmlDrawingRelationshipType,
+                out var vmlDrawingTarget,
+                out var vmlDrawingRelationshipIssue))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} reference {relationshipId}: {vmlDrawingRelationshipIssue}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                worksheetRelationshipPart,
+                vmlDrawingTarget!,
+                out var vmlDrawingPart,
+                out var vmlDrawingTargetIssue))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} reference {relationshipId} has invalid Target {vmlDrawingTarget}: {vmlDrawingTargetIssue}");
+            return;
+        }
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, vmlDrawingPart, VmlDrawingContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var vmlDrawingEntry = FindPackageEntry(archive, vmlDrawingPart);
+        if (vmlDrawingEntry is null)
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} reference {relationshipId} targets missing package part {vmlDrawingPart}");
+            return;
+        }
+
+        if (!validatedVmlDrawingParts.Add(vmlDrawingPart))
+            return;
+
+        var vmlDrawingXml = LoadPackageXml(vmlDrawingEntry);
+        if (!string.Equals(vmlDrawingXml.Root?.Name.LocalName, "xml", StringComparison.Ordinal))
+        {
+            issues.Add($"{vmlDrawingPart} has an invalid VML drawing root element");
+            return;
+        }
+
+        AddVmlImageRelationshipIssues(archive, vmlDrawingPart, vmlDrawingXml, issues);
+    }
+
+    private static void AddVmlImageRelationshipIssues(
+        ZipArchive archive,
+        string vmlDrawingPart,
+        XDocument vmlDrawingXml,
+        List<string> issues)
+    {
+        var relationshipPart = GetRelationshipPartForPackagePart(vmlDrawingPart);
+        foreach (var imageRelationshipId in vmlDrawingXml
+                     .Descendants(VmlNs + "imagedata")
+                     .SelectMany(GetVmlImageRelationshipIds)
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            AddDrawingRelationshipPartIssue(
+                archive,
+                vmlDrawingPart,
+                relationshipPart,
+                imageRelationshipId,
+                "VML image",
+                ImageRelationshipType,
+                expectedContentType: null,
+                issues);
+        }
+    }
+
+    private static IEnumerable<string> GetVmlImageRelationshipIds(XElement imageData)
+    {
+        var relationshipId = imageData.Attribute(OfficeRelationshipNs + "id")?.Value;
+        if (!string.IsNullOrWhiteSpace(relationshipId))
+            yield return relationshipId;
+
+        var officeRelationshipId = imageData.Attribute(VmlOfficeNs + "relid")?.Value;
+        if (!string.IsNullOrWhiteSpace(officeRelationshipId))
+            yield return officeRelationshipId;
+    }
+
+    private static void ThrowInvalidLegacyCommentPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid legacy comments/VML package graph: {sample}{suffix}");
     }
 
     private static void AssertWorksheetTablePackageComplete(string xlsxPath, string label, string sourcePath)
@@ -7195,6 +7529,11 @@ internal static class ExcelOpenSmoke
         string? ValueText);
 
     private sealed record TablePartReference(
+        int Ordinal,
+        string? RelationshipId);
+
+    private sealed record LegacyDrawingReference(
+        string ElementName,
         int Ordinal,
         string? RelationshipId);
 
