@@ -106,6 +106,14 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
     private const string SharedStringsRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+    private const string SlicerContentType =
+        "application/vnd.ms-excel.slicer+xml";
+    private const string SlicerCacheContentType =
+        "application/vnd.ms-excel.slicerCache+xml";
+    private const string SlicerRelationshipType =
+        "http://schemas.microsoft.com/office/2007/relationships/slicer";
+    private const string SlicerCacheRelationshipType =
+        "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
     private const string StylesContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
     private const string StylesRelationshipType =
@@ -114,6 +122,14 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
     private const string TableRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
+    private const string TimelineContentType =
+        "application/vnd.ms-excel.timeline+xml";
+    private const string TimelineCacheContentType =
+        "application/vnd.ms-excel.timelineCache+xml";
+    private const string TimelineRelationshipType =
+        "http://schemas.microsoft.com/office/2010/relationships/Timeline";
+    private const string TimelineCacheRelationshipType =
+        "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
     private const string PivotCacheDefinitionContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
     private const string PivotCacheDefinitionRelationshipType =
@@ -143,6 +159,10 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace SpreadsheetNs =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace SlicerNs =
+        "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+    private static readonly XNamespace TimelineNs =
+        "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
     private static readonly XNamespace DrawingNs =
         "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace DrawingChartNs =
@@ -400,6 +420,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPivotPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertExternalLinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertSlicerTimelinePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -599,6 +620,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPivotPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertExternalLinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertSlicerTimelinePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
@@ -3602,6 +3624,340 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid external link package graph: {sample}{suffix}");
+    }
+
+    private static void AssertSlicerTimelinePackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+        var validatedRelationships = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validatedPackageParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        AddWorkbookSlicerTimelineCacheIssues(archive, validatedRelationships, validatedPackageParts, issues);
+        AddWorksheetSlicerTimelineReferenceIssues(archive, validatedRelationships, validatedPackageParts, issues);
+        AddSlicerTimelineRelationshipPartIssues(archive, validatedRelationships, validatedPackageParts, issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidSlicerTimelinePackage(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookSlicerTimelineCacheIssues(
+        ZipArchive archive,
+        HashSet<string> validatedRelationships,
+        HashSet<string> validatedPackageParts,
+        List<string> issues)
+    {
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        AddSlicerTimelineReferenceIssues(
+            archive,
+            WorkbookRelationshipPart,
+            workbookXml.Descendants(SlicerNs + "slicerCache")
+                .Select((element, index) => new SlicerTimelineRelationshipReference(
+                    index + 1,
+                    "workbook slicerCache",
+                    element.Attribute(OfficeRelationshipNs + "id")?.Value)),
+            SlicerCacheRelationshipType,
+            SlicerCacheContentType,
+            SlicerNs + "slicerCacheDefinition",
+            "slicer cache",
+            validatedRelationships,
+            validatedPackageParts,
+            issues);
+        AddSlicerTimelineReferenceIssues(
+            archive,
+            WorkbookRelationshipPart,
+            workbookXml.Descendants(TimelineNs + "timelineCacheRef")
+                .Select((element, index) => new SlicerTimelineRelationshipReference(
+                    index + 1,
+                    "workbook timelineCacheRef",
+                    element.Attribute(OfficeRelationshipNs + "id")?.Value)),
+            TimelineCacheRelationshipType,
+            TimelineCacheContentType,
+            TimelineNs + "timelineCacheDefinition",
+            "timeline cache",
+            validatedRelationships,
+            validatedPackageParts,
+            issues);
+    }
+
+    private static void AddWorksheetSlicerTimelineReferenceIssues(
+        ZipArchive archive,
+        HashSet<string> validatedRelationships,
+        HashSet<string> validatedPackageParts,
+        List<string> issues)
+    {
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetRelationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            AddSlicerTimelineReferenceIssues(
+                archive,
+                worksheetRelationshipPart,
+                worksheetXml.Descendants(SlicerNs + "slicer")
+                    .Select((element, index) => new SlicerTimelineRelationshipReference(
+                        index + 1,
+                        $"{worksheetPart} slicer",
+                        element.Attribute(OfficeRelationshipNs + "id")?.Value)),
+                SlicerRelationshipType,
+                SlicerContentType,
+                SlicerNs + "slicers",
+                "slicer",
+                validatedRelationships,
+                validatedPackageParts,
+                issues);
+            AddSlicerTimelineReferenceIssues(
+                archive,
+                worksheetRelationshipPart,
+                worksheetXml.Descendants(TimelineNs + "timelineRef")
+                    .Select((element, index) => new SlicerTimelineRelationshipReference(
+                        index + 1,
+                        $"{worksheetPart} timelineRef",
+                        element.Attribute(OfficeRelationshipNs + "id")?.Value)),
+                TimelineRelationshipType,
+                TimelineContentType,
+                TimelineNs + "timelines",
+                "timeline",
+                validatedRelationships,
+                validatedPackageParts,
+                issues);
+        }
+    }
+
+    private static void AddSlicerTimelineReferenceIssues(
+        ZipArchive archive,
+        string relationshipPart,
+        IEnumerable<SlicerTimelineRelationshipReference> references,
+        string expectedRelationshipType,
+        string expectedContentType,
+        XName expectedRootElement,
+        string description,
+        HashSet<string> validatedRelationships,
+        HashSet<string> validatedPackageParts,
+        List<string> issues)
+    {
+        foreach (var reference in references)
+        {
+            if (string.IsNullOrWhiteSpace(reference.RelationshipId))
+            {
+                issues.Add($"{reference.Description} #{reference.Ordinal} has no relationship id");
+                continue;
+            }
+
+            var relationship = FindPackageRelationshipById(
+                archive,
+                relationshipPart,
+                reference.RelationshipId,
+                out var relationshipIssue);
+            if (relationship is null)
+            {
+                issues.Add($"{reference.Description} #{reference.Ordinal} reference {reference.RelationshipId}: {relationshipIssue}");
+                continue;
+            }
+
+            if (!string.Equals(relationship.Attribute("Type")?.Value, expectedRelationshipType, StringComparison.OrdinalIgnoreCase))
+            {
+                issues.Add($"{reference.Description} #{reference.Ordinal} relationship {reference.RelationshipId} in {relationshipPart} has Type={relationship.Attribute("Type")?.Value}; expected {expectedRelationshipType}");
+                continue;
+            }
+
+            AddSlicerTimelineRelationshipIssues(
+                archive,
+                relationshipPart,
+                relationship,
+                $"{reference.Description} #{reference.Ordinal}",
+                expectedContentType,
+                expectedRootElement,
+                description,
+                validatedRelationships,
+                validatedPackageParts,
+                issues);
+        }
+    }
+
+    private static XElement? FindPackageRelationshipById(
+        ZipArchive archive,
+        string relationshipPart,
+        string relationshipId,
+        out string? issue)
+    {
+        relationshipPart = NormalizePackagePart(relationshipPart);
+        var entry = FindPackageEntry(archive, relationshipPart);
+        if (entry is null)
+        {
+            issue = $"missing relationship part {relationshipPart}";
+            return null;
+        }
+
+        var relationship = LoadPackageXml(entry)
+            .Root?
+            .Elements(PackageRelationshipNs + "Relationship")
+            .FirstOrDefault(relationship =>
+                string.Equals(
+                    relationship.Attribute("Id")?.Value,
+                    relationshipId,
+                    StringComparison.OrdinalIgnoreCase));
+        issue = relationship is null
+            ? $"targets missing relationship {relationshipId} in {relationshipPart}"
+            : null;
+        return relationship;
+    }
+
+    private static void AddSlicerTimelineRelationshipPartIssues(
+        ZipArchive archive,
+        HashSet<string> validatedRelationships,
+        HashSet<string> validatedPackageParts,
+        List<string> issues)
+    {
+        foreach (var relationshipEntry in archive.Entries.Where(entry => IsPackageRelationshipPart(entry.FullName)))
+        {
+            var relationshipPart = NormalizePackagePart(relationshipEntry.FullName);
+            foreach (var relationship in LoadPackageXml(relationshipEntry).Root?.Elements(PackageRelationshipNs + "Relationship") ?? [])
+            {
+                var relationshipType = relationship.Attribute("Type")?.Value;
+                if (string.Equals(relationshipType, SlicerRelationshipType, StringComparison.OrdinalIgnoreCase))
+                {
+                    AddSlicerTimelineRelationshipIssues(
+                        archive,
+                        relationshipPart,
+                        relationship,
+                        $"{relationshipPart} slicer relationship",
+                        SlicerContentType,
+                        SlicerNs + "slicers",
+                        "slicer",
+                        validatedRelationships,
+                        validatedPackageParts,
+                        issues);
+                }
+                else if (string.Equals(relationshipType, SlicerCacheRelationshipType, StringComparison.OrdinalIgnoreCase))
+                {
+                    AddSlicerTimelineRelationshipIssues(
+                        archive,
+                        relationshipPart,
+                        relationship,
+                        $"{relationshipPart} slicer cache relationship",
+                        SlicerCacheContentType,
+                        SlicerNs + "slicerCacheDefinition",
+                        "slicer cache",
+                        validatedRelationships,
+                        validatedPackageParts,
+                        issues);
+                }
+                else if (string.Equals(relationshipType, TimelineRelationshipType, StringComparison.OrdinalIgnoreCase))
+                {
+                    AddSlicerTimelineRelationshipIssues(
+                        archive,
+                        relationshipPart,
+                        relationship,
+                        $"{relationshipPart} timeline relationship",
+                        TimelineContentType,
+                        TimelineNs + "timelines",
+                        "timeline",
+                        validatedRelationships,
+                        validatedPackageParts,
+                        issues);
+                }
+                else if (string.Equals(relationshipType, TimelineCacheRelationshipType, StringComparison.OrdinalIgnoreCase))
+                {
+                    AddSlicerTimelineRelationshipIssues(
+                        archive,
+                        relationshipPart,
+                        relationship,
+                        $"{relationshipPart} timeline cache relationship",
+                        TimelineCacheContentType,
+                        TimelineNs + "timelineCacheDefinition",
+                        "timeline cache",
+                        validatedRelationships,
+                        validatedPackageParts,
+                        issues);
+                }
+            }
+        }
+    }
+
+    private static void AddSlicerTimelineRelationshipIssues(
+        ZipArchive archive,
+        string relationshipPart,
+        XElement relationship,
+        string referenceDescription,
+        string expectedContentType,
+        XName expectedRootElement,
+        string packageDescription,
+        HashSet<string> validatedRelationships,
+        HashSet<string> validatedPackageParts,
+        List<string> issues)
+    {
+        var relationshipId = relationship.Attribute("Id")?.Value ?? "(no Id)";
+        var relationshipKey = $"{NormalizePackagePart(relationshipPart)}|{relationshipId}";
+        if (!validatedRelationships.Add(relationshipKey))
+            return;
+
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{referenceDescription} relationship {relationshipId} in {relationshipPart} is external");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{referenceDescription} relationship {relationshipId} in {relationshipPart} has no Target");
+            return;
+        }
+
+        target = target.Trim();
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add($"{referenceDescription} relationship {relationshipId} in {relationshipPart} targets external URI without TargetMode=External: {target}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                relationshipPart,
+                target,
+                out var packagePart,
+                out var targetIssue))
+        {
+            issues.Add($"{referenceDescription} relationship {relationshipId} in {relationshipPart} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, packagePart, expectedContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var packageEntry = FindPackageEntry(archive, packagePart);
+        if (packageEntry is null)
+        {
+            issues.Add($"{referenceDescription} relationship {relationshipId} in {relationshipPart} targets missing package part {packagePart}");
+            return;
+        }
+
+        if (!validatedPackageParts.Add(packagePart))
+            return;
+
+        var packageXml = LoadPackageXml(packageEntry);
+        if (packageXml.Root?.Name != expectedRootElement)
+            issues.Add($"{packagePart} has an invalid {packageDescription} root element");
+    }
+
+    private static void ThrowInvalidSlicerTimelinePackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid slicer/timeline package graph: {sample}{suffix}");
     }
 
     private static void AssertPackageRelationshipsComplete(string xlsxPath, string label, string sourcePath)
@@ -7896,5 +8252,10 @@ internal static class ExcelOpenSmoke
 
     private sealed record ExternalBookReference(
         int Ordinal,
+        string? RelationshipId);
+
+    private sealed record SlicerTimelineRelationshipReference(
+        int Ordinal,
+        string Description,
         string? RelationshipId);
 }
