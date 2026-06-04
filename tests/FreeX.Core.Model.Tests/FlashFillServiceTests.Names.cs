@@ -473,6 +473,19 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameTitlesAndSuffixes_RemovesCommaAttachedTrailingSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Dr. Ada Lovelace,Jr.,Ph.D.", "Ada Lovelace"),
+                ("Prof Grace Brewster Hopper,Sr.,M.D.", "Grace Brewster Hopper")
+            ],
+            ["Ms. Katherine Coleman Johnson,III,CPA"]);
+
+        result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameTitlesAndSuffixes_AbbreviatesCleanedNames()
     {
         var result = FlashFillService.Fill(
@@ -520,6 +533,19 @@ public sealed partial class FlashFillServiceTests
                 ("Grace Brewster Hopper, III", "Grace Brewster Hopper")
             ],
             ["Katherine Coleman Johnson Sr."]);
+
+        result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownNameSuffixes_RemovesCommaAttachedSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace,Jr.", "Ada Lovelace"),
+                ("Grace Brewster Hopper,Sr.", "Grace Brewster Hopper")
+            ],
+            ["Katherine Coleman Johnson,III"]);
 
         result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
     }
@@ -577,6 +603,19 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameSuffixes_RemovesCommaAttachedProfessionalCredentials()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace,CPA", "Ada Lovelace"),
+                ("Grace Brewster Hopper,M.B.A.", "Grace Brewster Hopper")
+            ],
+            ["Katherine Coleman Johnson,DVM"]);
+
+        result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameSuffixes_RemovesSuffixFromSingleTokenNames()
     {
         var result = FlashFillService.Fill(
@@ -611,6 +650,19 @@ public sealed partial class FlashFillServiceTests
                 ("Adventure Works Inc.", "Adventure Works")
             ],
             ["Contoso Ltd", "Fabrikam Research Corporation"]);
+
+        result.Should().BeEquivalentTo(["Contoso", "Fabrikam Research"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesCommaAttachedLegalSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders,LLC", "Northwind Traders"),
+                ("Adventure Works,Inc.", "Adventure Works")
+            ],
+            ["Contoso,Ltd", "Fabrikam Research,Corporation"]);
 
         result.Should().BeEquivalentTo(["Contoso", "Fabrikam Research"], o => o.WithStrictOrdering());
     }

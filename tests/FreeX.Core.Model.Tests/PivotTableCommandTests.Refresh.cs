@@ -12,7 +12,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -41,7 +41,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotProtectionTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -67,7 +67,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotProtectionTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -93,7 +93,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotChartRefreshTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",

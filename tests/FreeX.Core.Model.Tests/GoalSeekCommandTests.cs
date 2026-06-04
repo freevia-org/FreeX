@@ -15,7 +15,7 @@ public sealed class GoalSeekCommandTests
         sheet.SetCell(address, new NumberValue(4));
 
         var outcome = new GoalSeekCommand(address, 12.5)
-            .Apply(new SimpleCtx(workbook));
+            .Apply(new TestCommandContext(workbook));
 
         outcome.Success.Should().BeTrue();
         outcome.AffectedCells.Should().Equal(address);
@@ -35,7 +35,7 @@ public sealed class GoalSeekCommandTests
             Value = new NumberValue(8),
             StyleId = styleId
         });
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         var command = new GoalSeekCommand(address, 12);
 
         command.Apply(context).Success.Should().BeTrue();
@@ -60,16 +60,10 @@ public sealed class GoalSeekCommandTests
         sheet.SetCell(address, new NumberValue(4));
 
         var outcome = new GoalSeekCommand(address, value)
-            .Apply(new SimpleCtx(workbook));
+            .Apply(new TestCommandContext(workbook));
 
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("finite");
         sheet.GetValue(address).Should().Be(new NumberValue(4));
-    }
-
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook => workbook;
-        public Sheet GetSheet(SheetId sheetId) => workbook.GetSheet(sheetId)!;
     }
 }

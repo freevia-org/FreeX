@@ -47,7 +47,7 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
         sheet.SetCell(Addr(sheet, "A3"), new TextValue("B"));
         sheet.SetCell(Addr(sheet, "B3"), new NumberValue(20));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -133,7 +133,7 @@ public sealed partial class PivotTableCommandTests
             SourcePivotTableName = "PivotTable1",
             SourceFieldName = "Category"
         });
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -181,7 +181,7 @@ public sealed partial class PivotTableCommandTests
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
         sheet.PivotTables.Add(pivot);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var command = new AddSlicerCommand("Category Slicer", "PivotTable1", "Category");
 
         command.Apply(ctx).Success.Should().BeTrue();
@@ -209,7 +209,7 @@ public sealed partial class PivotTableCommandTests
         SeedData(sheet);
         sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddSlicerCommand("Category Slicer", "PivotTable1", "Category").Apply(ctx);
 
@@ -228,7 +228,7 @@ public sealed partial class PivotTableCommandTests
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddSlicerCommand("Category Slicer", "PivotTable1", "Category").Apply(ctx);
 
@@ -245,7 +245,7 @@ public sealed partial class PivotTableCommandTests
         sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddSlicerCommand("Category Slicer", "PivotTable1", "Category").Apply(ctx);
 
@@ -271,7 +271,7 @@ public sealed partial class PivotTableCommandTests
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
         pivotSheet.PivotTables.Add(pivot);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var command = new AddSlicerCommand("Category Slicer", "PivotTable1", "Category");
 
         command.Apply(ctx).Success.Should().BeTrue();
@@ -293,7 +293,7 @@ public sealed partial class PivotTableCommandTests
             SourcePivotTableName = "PivotTable1",
             SourceFieldName = "Category"
         });
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -336,7 +336,7 @@ public sealed partial class PivotTableCommandTests
             SourcePivotTableName = "PivotTable1",
             SourceFieldName = "Date"
         });
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -392,7 +392,7 @@ public sealed partial class PivotTableCommandTests
         pivot.RowFields.Add(new PivotFieldModel(0, Grouping: PivotFieldGrouping.Day));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
         sheet.PivotTables.Add(pivot);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var command = new AddTimelineCommand("Date Timeline", "PivotTable1", "Date");
 
         command.Apply(ctx).Success.Should().BeTrue();
@@ -435,7 +435,7 @@ public sealed partial class PivotTableCommandTests
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
         sheet.PivotTables.Add(pivot);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddTimelineCommand("Category Timeline", "PivotTable1", "Category").Apply(ctx);
 
@@ -458,7 +458,7 @@ public sealed partial class PivotTableCommandTests
         SeedTimelineData(sheet);
         sheet.PivotTables.Add(CreateDateAmountPivot(sheet));
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddTimelineCommand("Date Timeline", "PivotTable1", "Date").Apply(ctx);
 
@@ -477,7 +477,7 @@ public sealed partial class PivotTableCommandTests
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddTimelineCommand("Date Timeline", "PivotTable1", "Date").Apply(ctx);
 
@@ -494,7 +494,7 @@ public sealed partial class PivotTableCommandTests
         sheet.PivotTables.Add(CreateDateAmountPivot(sheet));
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddTimelineCommand("Date Timeline", "PivotTable1", "Date").Apply(ctx);
 
@@ -520,7 +520,7 @@ public sealed partial class PivotTableCommandTests
         pivot.RowFields.Add(new PivotFieldModel(0, Grouping: PivotFieldGrouping.Day));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
         pivotSheet.PivotTables.Add(pivot);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var command = new AddTimelineCommand("Date Timeline", "PivotTable1", "Date");
 
         command.Apply(ctx).Success.Should().BeTrue();
@@ -545,7 +545,7 @@ public sealed partial class PivotTableCommandTests
             SourcePivotTableName = "PivotTable1",
             SourceFieldName = "Date"
         });
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",

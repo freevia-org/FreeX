@@ -11,7 +11,7 @@ public sealed class DataTableCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var inputCell = new CellAddress(sheet.Id, 1, 2);
         var formulaCell = new CellAddress(sheet.Id, 1, 3);
         sheet.SetCell(inputCell, new NumberValue(10));
@@ -42,7 +42,7 @@ public sealed class DataTableCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var inputCell = new CellAddress(sheet.Id, 1, 2);
         var formulaCell = new CellAddress(sheet.Id, 2, 1);
         sheet.SetCell(inputCell, new NumberValue(10));
@@ -73,7 +73,7 @@ public sealed class DataTableCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var rowInputCell = new CellAddress(sheet.Id, 1, 2);
         var columnInputCell = new CellAddress(sheet.Id, 1, 3);
         var formulaCell = new CellAddress(sheet.Id, 1, 4);
@@ -103,11 +103,5 @@ public sealed class DataTableCommandTests
 
         sheet.GetValue(2, 5).Should().Be(new TextValue("old"));
         sheet.GetCell(3, 6).Should().BeNull();
-    }
-
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
     }
 }

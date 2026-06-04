@@ -15,7 +15,7 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
         sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
         sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var cache = new PivotCacheModel
         {
             CacheId = 7,

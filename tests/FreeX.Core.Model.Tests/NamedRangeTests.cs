@@ -140,7 +140,7 @@ public class NamedRangeTests
     {
         var wb = new Workbook();
         wb.AddSheet("Sheet1");
-        var ctx = new SimpleCommandContext(wb);
+        var ctx = new TestCommandContext(wb);
         return (wb, ctx);
     }
 
@@ -262,12 +262,5 @@ public class NamedRangeTests
         result.Should().Be(new NumberValue(24));
     }
 
-    // ── Helper ────────────────────────────────────────────────────────────────
 
-    private sealed class SimpleCommandContext(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
-    }
 }

@@ -11,7 +11,7 @@ public sealed class ForecastSheetCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sales");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Revenue"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
@@ -54,7 +54,7 @@ public sealed class ForecastSheetCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sales");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Revenue"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
@@ -91,7 +91,7 @@ public sealed class ForecastSheetCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sales");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var staleSheetId = SheetId.New();
 
         var command = new ForecastSheetCommand(
@@ -104,11 +104,5 @@ public sealed class ForecastSheetCommandTests
         outcome.ErrorMessage.Should().Contain("source range");
         workbook.SheetCount.Should().Be(1);
         workbook.GetSheetAt(0).Should().BeSameAs(sheet);
-    }
-
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
     }
 }

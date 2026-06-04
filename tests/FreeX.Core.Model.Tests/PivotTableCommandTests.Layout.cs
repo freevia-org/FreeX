@@ -20,7 +20,7 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "A3"), new TextValue("B"));
         sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q2"));
         sheet.SetCell(Addr(sheet, "C3"), new NumberValue(20));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -64,7 +64,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotFieldDropDownMetadataCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -115,7 +115,7 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q2"));
         sheet.SetCell(Addr(sheet, "C3"), new NumberValue(20));
         sheet.SetCell(Addr(sheet, "D3"), new NumberValue(3));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -170,7 +170,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotValuesOnlyLayoutCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -218,7 +218,7 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "A3"), new TextValue("B"));
         sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q2"));
         sheet.SetCell(Addr(sheet, "C3"), new NumberValue(20));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -316,7 +316,7 @@ public sealed partial class PivotTableCommandTests
         pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Units", "sum"));
         sheet.PivotTables.Add(pivot);
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new ConfigurePivotTableCalculatedItemsCommand(
             sheet.Id,
@@ -357,7 +357,7 @@ public sealed partial class PivotTableCommandTests
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
         sheet.PivotTables.Add(pivot);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new ConfigurePivotTableCalculatedItemsCommand(
             sheet.Id,

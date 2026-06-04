@@ -12,7 +12,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var source = Range(sheet, "A1", "B3");
         var target = Range(sheet, "D3", "E5");
 
@@ -60,7 +60,7 @@ public sealed partial class PivotTableCommandTests
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddPivotTableCommand(
             sheet.Id,
@@ -85,7 +85,7 @@ public sealed partial class PivotTableCommandTests
         SeedData(sheet);
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddPivotTableCommand(
             sheet.Id,
@@ -161,7 +161,7 @@ public sealed partial class PivotTableCommandTests
             SourceRange = Range(firstSheet, "A1", "B3"),
             TargetRange = Range(secondSheet, "D3", "F7")
         });
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new RenamePivotTableCommand(firstSheet.Id, "PivotTable1", "existingpivot").Apply(ctx);
 
@@ -206,7 +206,7 @@ public sealed partial class PivotTableCommandTests
         var sourceSheet = workbook.AddSheet("Data");
         var pivotSheet = workbook.AddSheet("Pivot");
         SeedData(sourceSheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new AddPivotTableCommand(
             pivotSheet.Id,
@@ -235,7 +235,7 @@ public sealed partial class PivotTableCommandTests
         var sourceSheet = workbook.AddSheet("Data");
         workbook.AddSheet("PivotTable");
         SeedData(sourceSheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new AddPivotTableToNewWorksheetCommand(
             Range(sourceSheet, "A1", "B3"),
@@ -271,7 +271,7 @@ public sealed partial class PivotTableCommandTests
         var sourceSheet = workbook.AddSheet("Data");
         SeedData(sourceSheet);
         workbook.IsStructureProtected = true;
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new AddPivotTableToNewWorksheetCommand(
             Range(sourceSheet, "A1", "B3"),
@@ -293,7 +293,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new AddPivotTableCommand(
             sheet.Id,
@@ -322,7 +322,7 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "A3"), new TextValue("A"));
         sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q2"));
         sheet.SetCell(Addr(sheet, "C3"), new NumberValue(20));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -366,7 +366,7 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
         sheet.SetCell(Addr(sheet, "B2"), new TextValue("Q1"));
         sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -397,7 +397,7 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
         sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
         sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -427,7 +427,7 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
         sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
         sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -470,7 +470,7 @@ public sealed partial class PivotTableCommandTests
         cache.Fields.Add(new PivotCacheFieldModel("Category"));
         cache.Fields.Add(new PivotCacheFieldModel("Amount"));
         workbook.PivotCaches.Add(cache);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -523,7 +523,7 @@ public sealed partial class PivotTableCommandTests
         cache.Fields.Add(new PivotCacheFieldModel("Category"));
         cache.Fields.Add(new PivotCacheFieldModel("Amount"));
         workbook.PivotCaches.Add(cache);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",

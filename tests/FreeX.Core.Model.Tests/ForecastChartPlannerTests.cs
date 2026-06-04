@@ -104,7 +104,6 @@ public sealed class ForecastChartPlannerTests
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Forecast");
         SeedForecastData(sheet);
-        var ctx = new SimpleCtx(workbook);
 
         var chart = ForecastChartPlanner.Plan(new ForecastChartLayout(sheet.Id, 1, 6));
 
@@ -126,11 +125,5 @@ public sealed class ForecastChartPlannerTests
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row - 1));
             sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue((row - 1) * 10));
         }
-    }
-
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
     }
 }

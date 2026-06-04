@@ -13,7 +13,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
 
         var command = new SaveScenarioCommand(
@@ -38,7 +38,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
 
         var command = new SaveScenarioCommand(
@@ -60,7 +60,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
         workbook.Scenarios.Add(new WorkbookScenario(
             "Best Case",
@@ -85,7 +85,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
         workbook.Scenarios.Add(new WorkbookScenario(
             "Best Case",
@@ -126,7 +126,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
         workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(address, new NumberValue(10))]));
         workbook.Scenarios.Add(new WorkbookScenario("Worst Case", [new ScenarioCellValue(address, new NumberValue(1))]));
@@ -149,7 +149,7 @@ public sealed class ScenarioManagerCommandTests
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
 
         var outcome = new SaveScenarioCommand(
@@ -168,7 +168,7 @@ public sealed class ScenarioManagerCommandTests
         var sheet = workbook.AddSheet("Sheet1");
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditScenarios);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
 
         var outcome = new SaveScenarioCommand(
@@ -184,7 +184,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var first = new CellAddress(sheet.Id, 1, 1);
         var second = new CellAddress(sheet.Id, 2, 1);
         sheet.SetCell(first, new NumberValue(10));
@@ -214,7 +214,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(address, new NumberValue(10));
         workbook.Scenarios.Add(new WorkbookScenario(
@@ -233,7 +233,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(address, new NumberValue(10));
         sheet.IsProtected = true;
@@ -253,7 +253,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
         workbook.Scenarios.Add(new WorkbookScenario("Base", [new ScenarioCellValue(address, new NumberValue(1))]));
         workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(address, new NumberValue(42))]));
@@ -273,7 +273,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
         workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(address, new NumberValue(42))]));
         sheet.IsProtected = true;
@@ -289,7 +289,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var address = new CellAddress(sheet.Id, 1, 1);
         workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(address, new NumberValue(42))]));
         sheet.IsProtected = true;
@@ -306,7 +306,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var price = new CellAddress(sheet.Id, 1, 1);
         var volume = new CellAddress(sheet.Id, 2, 1);
         workbook.Scenarios.Add(new WorkbookScenario(
@@ -348,7 +348,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var price = new CellAddress(sheet.Id, 1, 1);
         var profit = new CellAddress(sheet.Id, 2, 1);
         sheet.SetCell(price, new NumberValue(10));
@@ -386,7 +386,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var price = new CellAddress(sheet.Id, 1, 1);
         var profit = new CellAddress(sheet.Id, 1, 2);
         sheet.SetCell(price, new NumberValue(10));
@@ -420,7 +420,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var price = new CellAddress(sheet.Id, 1, 1);
         var profit = new CellAddress(sheet.Id, 1, 2);
         sheet.SetCell(price, new NumberValue(10));
@@ -442,7 +442,7 @@ public sealed class ScenarioManagerCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var price = new CellAddress(sheet.Id, 1, 1);
         var profit = new CellAddress(sheet.Id, 1, 2);
         sheet.SetCell(price, new NumberValue(10));
@@ -466,7 +466,7 @@ public sealed class ScenarioManagerCommandTests
         const int changingCellCount = 300;
         var workbook = new Workbook("scenario");
         var sheet = workbook.AddSheet("Inputs");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var changingCells = new List<CellAddress>(changingCellCount);
 
         for (uint row = 1; row <= changingCellCount; row++)
@@ -512,9 +512,4 @@ public sealed class ScenarioManagerCommandTests
             .Be(new NumberValue(scenarioCount * 1000 + changingCellCount - 1));
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
-    }
 }

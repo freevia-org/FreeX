@@ -17,7 +17,7 @@ public sealed class ImportSheetCommandTests
         sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 2, 2), new TextValue("hello"));
         var destination = new CellAddress(targetSheet.Id, 3, 3);
         targetSheet.SetCell(destination, new NumberValue(999));
-        var ctx = new SimpleCtx(targetWorkbook);
+        var ctx = new TestCommandContext(targetWorkbook);
 
         var command = new ImportSheetCommand(targetSheet.Id, destination, sourceSheet);
 
@@ -43,7 +43,7 @@ public sealed class ImportSheetCommandTests
         sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 2), new NumberValue(20));
         var destination = new CellAddress(targetSheet.Id, 1, CellAddress.MaxCol);
         targetSheet.SetCell(destination, new TextValue("keep"));
-        var ctx = new SimpleCtx(targetWorkbook);
+        var ctx = new TestCommandContext(targetWorkbook);
 
         var command = new ImportSheetCommand(targetSheet.Id, destination, sourceSheet);
 
@@ -65,7 +65,7 @@ public sealed class ImportSheetCommandTests
         var sourceWorkbook = new Workbook("source");
         var sourceSheet = sourceWorkbook.AddSheet("Imported");
         sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 1), new NumberValue(10));
-        var ctx = new SimpleCtx(targetWorkbook);
+        var ctx = new TestCommandContext(targetWorkbook);
 
         var command = new ImportSheetCommand(targetSheet.Id, destination, sourceSheet);
 
@@ -87,7 +87,7 @@ public sealed class ImportSheetCommandTests
         var sourceSheet = sourceWorkbook.AddSheet("Imported");
         sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 1), new NumberValue(10));
         targetSheet.IsProtected = true;
-        var ctx = new SimpleCtx(targetWorkbook);
+        var ctx = new TestCommandContext(targetWorkbook);
 
         var command = new ImportSheetCommand(targetSheet.Id, new CellAddress(targetSheet.Id, 1, 1), sourceSheet);
 
@@ -98,9 +98,4 @@ public sealed class ImportSheetCommandTests
         targetSheet.GetCell(1, 1).Should().BeNull();
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
