@@ -14,7 +14,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 4, 2);
 
         var command = new AddDrawingShapeCommand(sheet.Id, anchor, kind, 120, 70);
@@ -38,7 +38,7 @@ public sealed class ShapeCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new AddDrawingShapeCommand(
             sheet1.Id,
@@ -54,7 +54,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new AddDrawingShapeCommand(
             sheet.Id,
@@ -70,7 +70,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 4, 2);
 
         new AddDrawingShapeCommand(sheet.Id, anchor, DrawingShapeKind.Rectangle, double.PositiveInfinity, 70)
@@ -89,7 +89,7 @@ public sealed class ShapeCommandTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 4, 2);
 
         var outcome = new AddDrawingShapeCommand(sheet.Id, anchor, DrawingShapeKind.Rectangle).Apply(ctx);
@@ -106,7 +106,7 @@ public sealed class ShapeCommandTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 4, 2);
 
         var outcome = new AddDrawingShapeCommand(sheet.Id, anchor, DrawingShapeKind.Rectangle).Apply(ctx);
@@ -120,7 +120,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Rectangle };
         var front = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
         sheet.DrawingShapes.Add(back);
@@ -143,7 +143,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Rectangle };
         var front = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Ellipse };
         sheet.DrawingShapes.Add(back);
@@ -161,7 +161,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var back = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
         var front = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Ellipse };
         sheet.Pictures.Add(back);
@@ -188,7 +188,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Width = 120, Height = 70 };
         sheet.DrawingShapes.Add(shape);
 
@@ -209,7 +209,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), RotationDegrees = 15 };
         sheet.DrawingShapes.Add(shape);
 
@@ -228,7 +228,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Width = 120, Height = 70 };
         sheet.DrawingShapes.Add(shape);
 
@@ -247,7 +247,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Width = 120, Height = 70 };
         sheet.DrawingShapes.Add(shape);
         sheet.IsProtected = true;
@@ -264,7 +264,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -300,7 +300,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -324,7 +324,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -357,7 +357,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -390,7 +390,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -418,7 +418,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -450,7 +450,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -478,7 +478,7 @@ public sealed class ShapeCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -493,11 +493,5 @@ public sealed class ShapeCommandTests
 
         outcome.Success.Should().BeFalse();
         shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.SoftEdges);
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }

@@ -14,7 +14,7 @@ public sealed class SparklineCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dataRange = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 1, 5));
@@ -40,7 +40,7 @@ public sealed class SparklineCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dataRange = new GridRange(
             new CellAddress(sheet2.Id, 1, 1),
             new CellAddress(sheet2.Id, 1, 5));
@@ -57,7 +57,7 @@ public sealed class SparklineCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dataRange = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 1, 5));
@@ -70,11 +70,5 @@ public sealed class SparklineCommandTests
 
         command.Apply(ctx).Success.Should().BeFalse();
         sheet.Sparklines.Should().BeEmpty();
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }

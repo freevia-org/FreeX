@@ -10,7 +10,7 @@ public sealed class WaterfallTotalPointCommandTests
     public void SetWaterfallTotalPointCommand_SetsPointAsTotalAndUndoRestoresNullDefault()
     {
         var (workbook, sheet, chart) = CreateWaterfallChart();
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var command = new SetWaterfallTotalPointCommand(sheet.Id, chart.Id, pointIndex: 1, setAsTotal: true);
 
         command.Apply(ctx).Success.Should().BeTrue();
@@ -26,7 +26,7 @@ public sealed class WaterfallTotalPointCommandTests
     public void SetWaterfallTotalPointCommand_ClearsImplicitLastTotalAndUndoRestoresIt()
     {
         var (workbook, sheet, chart) = CreateWaterfallChart();
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var command = new SetWaterfallTotalPointCommand(sheet.Id, chart.Id, pointIndex: 3, setAsTotal: false);
 
         command.Apply(ctx).Success.Should().BeTrue();
@@ -45,7 +45,7 @@ public sealed class WaterfallTotalPointCommandTests
         chart.Type = ChartType.Column;
         var command = new SetWaterfallTotalPointCommand(sheet.Id, chart.Id, pointIndex: 1, setAsTotal: true);
 
-        var outcome = command.Apply(new SimpleCtx(workbook));
+        var outcome = command.Apply(new TestCommandContext(workbook));
 
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("waterfall");
@@ -67,11 +67,5 @@ public sealed class WaterfallTotalPointCommandTests
         };
         sheet.Charts.Add(chart);
         return (workbook, sheet, chart);
-    }
-
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }
