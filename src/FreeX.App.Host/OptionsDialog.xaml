@@ -230,6 +230,72 @@
                                   Content="{local:Loc Key=Options_FlagRepeatedWords}"
                                   IsEnabled="False"
                                   FontSize="12" Margin="0,0,0,12"/>
+                        <TextBlock Text="{local:Loc Key=Options_CustomDictionary}"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,18,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <TextBlock Text="{local:Loc Key=Options_CustomDictionaryDescription}"
+                                   FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <Label Content="{local:Loc Key=Options_CustomDictionaryWords}"
+                               Target="{Binding ElementName=ProofingCustomDictionaryWordsList}"
+                               Padding="0,0,0,4"
+                               FontSize="12"/>
+                        <ListBox x:Name="ProofingCustomDictionaryWordsList"
+                                 Height="108"
+                                 FontSize="12"
+                                 SelectionChanged="ProofingCustomDictionaryWordsList_SelectionChanged"
+                                 AutomationProperties.Name="{local:Loc Key=Options_CustomDictionaryWordsAutomationName}"
+                                 AutomationProperties.AutomationId="ProofingCustomDictionaryWordsList"
+                                 AutomationProperties.HelpText="{local:Loc Key=Options_CustomDictionaryWordsHelpText}"/>
+                        <Grid Margin="0,8,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="94"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="86"/>
+                            </Grid.ColumnDefinitions>
+                            <Label Grid.Column="0"
+                                   Content="{local:Loc Key=Options_CustomDictionaryAddWord}"
+                                   Target="{Binding ElementName=ProofingCustomDictionaryWordBox}"
+                                   Padding="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
+                            <TextBox x:Name="ProofingCustomDictionaryWordBox"
+                                     Grid.Column="1"
+                                     Height="24"
+                                     VerticalContentAlignment="Center"
+                                     Padding="6,0"
+                                     FontSize="12"
+                                     TextChanged="ProofingCustomDictionaryWordBox_TextChanged"
+                                     KeyDown="ProofingCustomDictionaryWordBox_KeyDown"
+                                     AutomationProperties.Name="{local:Loc Key=Options_CustomDictionaryWordAutomationName}"
+                                     AutomationProperties.AutomationId="ProofingCustomDictionaryWordBox"
+                                     AutomationProperties.HelpText="{local:Loc Key=Options_CustomDictionaryWordHelpText}"/>
+                            <Button x:Name="ProofingCustomDictionaryAddWordButton"
+                                    Grid.Column="2"
+                                    Content="{local:Loc Key=Options_CustomDictionaryAddWordButton}"
+                                    Width="78" Height="26"
+                                    Margin="8,0,0,0"
+                                    Click="ProofingCustomDictionaryAddWordButton_Click"
+                                    AutomationProperties.Name="{local:Loc Key=Options_CustomDictionaryAddWordButtonAutomationName}"
+                                    AutomationProperties.AutomationId="ProofingCustomDictionaryAddWordButton"
+                                    AutomationProperties.HelpText="{local:Loc Key=Options_CustomDictionaryAddWordHelpText}"/>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                            <Button x:Name="ProofingCustomDictionaryRemoveWordButton"
+                                    Content="{local:Loc Key=Options_CustomDictionaryRemoveWordButton}"
+                                    Width="92" Height="26"
+                                    Click="ProofingCustomDictionaryRemoveWordButton_Click"
+                                    AutomationProperties.Name="{local:Loc Key=Options_CustomDictionaryRemoveWordButtonAutomationName}"
+                                    AutomationProperties.AutomationId="ProofingCustomDictionaryRemoveWordButton"
+                                    AutomationProperties.HelpText="{local:Loc Key=Options_CustomDictionaryRemoveWordHelpText}"/>
+                            <Button x:Name="ProofingCustomDictionaryClearWordsButton"
+                                    Content="{local:Loc Key=Options_CustomDictionaryClearAllButton}"
+                                    Width="82" Height="26"
+                                    Margin="8,0,0,0"
+                                    Click="ProofingCustomDictionaryClearWordsButton_Click"
+                                    AutomationProperties.Name="{local:Loc Key=Options_CustomDictionaryClearAllButtonAutomationName}"
+                                    AutomationProperties.AutomationId="ProofingCustomDictionaryClearWordsButton"
+                                    AutomationProperties.HelpText="{local:Loc Key=Options_CustomDictionaryClearAllHelpText}"/>
+                        </StackPanel>
                         <Button x:Name="AutoCorrectOptionsButton" Content="{local:Loc Key=Options_AutoCorrectOptions2}" Width="150" Height="26"
                                 HorizontalAlignment="Left" Click="AutoCorrectOptionsButton_Click"/>
                     </StackPanel>

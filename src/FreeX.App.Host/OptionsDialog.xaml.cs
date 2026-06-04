@@ -15,6 +15,7 @@ public partial class OptionsDialog : Window
     private readonly HashSet<string> _disabledFormulaErrorCodes;
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _quickAccessCommandIds = [];
+    private readonly List<string> _customDictionaryWords = [];
     private const string QuickAccessImportMenuHeader = "_Import customization file...";
     private const string QuickAccessExportMenuHeader = "_Export customization file...";
     public FreeXOptions Result { get; private set; }
@@ -65,6 +66,7 @@ public partial class OptionsDialog : Window
         OptR1C1.IsChecked = _opts.UseR1C1ReferenceStyle;
         OptFormulasAutocomplete.IsChecked = true;
         PopulateErrorCheckingRules();
+        PopulateProofingCustomDictionaryWords();
 
         // Advanced
         OptMoveAfterEnter.IsChecked = _opts.MoveSelectionAfterEnter;
@@ -426,7 +428,7 @@ public partial class OptionsDialog : Window
             QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true,
             QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
             AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
-            SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords),
+            SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords),
             CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
             CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
             PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
@@ -458,6 +460,98 @@ public partial class OptionsDialog : Window
 
     private void AutoCorrectOptionsButton_Click(object sender, RoutedEventArgs e) =>
         ShowDeferredOptionsMessage(DeferredCommandMessages.AutoCorrectOptions());
+
+    private void PopulateProofingCustomDictionaryWords()
+    {
+        _customDictionaryWords.Clear();
+        _customDictionaryWords.AddRange(
+            FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords));
+        RefreshProofingCustomDictionaryWordsList();
+    }
+
+    private void RefreshProofingCustomDictionaryWordsList(string? selectedWord = null)
+    {
+        var previousSelection = selectedWord ?? ProofingCustomDictionaryWordsList.SelectedItem as string;
+        ProofingCustomDictionaryWordsList.ItemsSource = _customDictionaryWords.ToList();
+        if (!string.IsNullOrWhiteSpace(previousSelection))
+        {
+            ProofingCustomDictionaryWordsList.SelectedItem = _customDictionaryWords
+                .FirstOrDefault(word => string.Equals(word, previousSelection, StringComparison.OrdinalIgnoreCase));
+        }
+
+        UpdateProofingCustomDictionaryButtons();
+    }
+
+    private void UpdateProofingCustomDictionaryButtons()
+    {
+        if (ProofingCustomDictionaryAddWordButton is null)
+            return;
+
+        ProofingCustomDictionaryAddWordButton.IsEnabled =
+            FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text) is not null;
+        ProofingCustomDictionaryRemoveWordButton.IsEnabled =
+            ProofingCustomDictionaryWordsList.SelectedItem is string;
+        ProofingCustomDictionaryClearWordsButton.IsEnabled = _customDictionaryWords.Count > 0;
+    }
+
+    private void ProofingCustomDictionaryWordBox_TextChanged(object sender, TextChangedEventArgs e) =>
+        UpdateProofingCustomDictionaryButtons();
+
+    private void ProofingCustomDictionaryWordBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Return) || !ProofingCustomDictionaryAddWordButton.IsEnabled)
+            return;
+
+        ProofingCustomDictionaryAddWordButton_Click(
+            ProofingCustomDictionaryAddWordButton,
+            new RoutedEventArgs(ButtonBase.ClickEvent, ProofingCustomDictionaryAddWordButton));
+        e.Handled = true;
+    }
+
+    private void ProofingCustomDictionaryWordsList_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateProofingCustomDictionaryButtons();
+
+    private void ProofingCustomDictionaryAddWordButton_Click(object sender, RoutedEventArgs e)
+    {
+        var word = FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(ProofingCustomDictionaryWordBox.Text);
+        if (word is null)
+        {
+            ProofingCustomDictionaryWordBox.Clear();
+            UpdateProofingCustomDictionaryButtons();
+            return;
+        }
+
+        var normalized = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords.Append(word));
+        _customDictionaryWords.Clear();
+        _customDictionaryWords.AddRange(normalized);
+        ProofingCustomDictionaryWordBox.Clear();
+        RefreshProofingCustomDictionaryWordsList(word);
+    }
+
+    private void ProofingCustomDictionaryRemoveWordButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProofingCustomDictionaryWordsList.SelectedItem is not string selectedWord)
+            return;
+
+        var removedIndex = _customDictionaryWords.FindIndex(
+            word => string.Equals(word, selectedWord, StringComparison.OrdinalIgnoreCase));
+        if (removedIndex < 0)
+            return;
+
+        _customDictionaryWords.RemoveAt(removedIndex);
+        var nextWord = _customDictionaryWords.Count == 0
+            ? null
+            : _customDictionaryWords[Math.Clamp(removedIndex, 0, _customDictionaryWords.Count - 1)];
+        RefreshProofingCustomDictionaryWordsList(nextWord);
+    }
+
+    private void ProofingCustomDictionaryClearWordsButton_Click(object sender, RoutedEventArgs e)
+    {
+        _customDictionaryWords.Clear();
+        RefreshProofingCustomDictionaryWordsList();
+        ProofingCustomDictionaryWordBox.Focus();
+        Keyboard.Focus(ProofingCustomDictionaryWordBox);
+    }
 
     private void RibbonImportExportButton_Click(object sender, RoutedEventArgs e) =>
         ShowDeferredOptionsMessage(DeferredCommandMessages.RibbonCustomizationImportExport());
