@@ -12,6 +12,9 @@ internal static class LocalizedXamlTestSupport
     public static string ReadMainWindowXaml() =>
         System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
+    public static string ReadHostSourceFile(string fileName) =>
+        System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName));
+
     public static void ShouldContainInvariantCommandName(this string xaml, string commandName) =>
         xaml.Should().Contain($"local:RibbonMetadata.CommandName=\"{EscapeAttribute(WebUtility.HtmlDecode(commandName))}\"");
 
@@ -78,6 +81,12 @@ internal static class LocalizedXamlTestSupport
             searchIndex = commandIndex + needle.Length;
         }
     }
+
+    public static string ExtractButtonElementByInvariantCommandName(
+        this string xaml,
+        string commandName,
+        string? requiredSubstring = null) =>
+        xaml.ExtractElementByInvariantCommandName("Button", commandName, requiredSubstring);
 
     public static string ExtractElementByLocalizedAttributeValue(
         this string xaml,
