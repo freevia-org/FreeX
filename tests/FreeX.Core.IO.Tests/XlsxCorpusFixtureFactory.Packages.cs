@@ -706,7 +706,7 @@ internal static partial class XlsxCorpusFixtureFactory
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
                   <Relationship Id="rIdExternalBook1"
                                 Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath"
-                                Target="file:///C:/FreeX/ExternalWorkbook.xlsx"
+                                Target="ExternalWorkbook.xlsx"
                                 TargetMode="External"/>
                 </Relationships>
                 """)),
