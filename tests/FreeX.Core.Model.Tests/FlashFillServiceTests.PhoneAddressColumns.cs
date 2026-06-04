@@ -119,6 +119,99 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("Apt 4B", "Suite 200", "#12")]
+    [InlineData("4B", "200", "12")]
+    [InlineData("123 Pine St", "55 Burnside Ave", "1600 Amphitheatre Pkwy")]
+    public void Fill_AddressUnits_ExtractsConsistentUnitAndStreetWithoutUnitParts(
+        string firstExpected,
+        string secondExpected,
+        string remainingExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St Apt 4B, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave Suite 200, Portland, OR 97209", secondExpected)
+            ],
+            ["1600 Amphitheatre Pkwy #12, Mountain View, CA 94043"]);
+
+        result.Should().BeEquivalentTo([remainingExpected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("Apt #4B", "Ste #200", "No. 12")]
+    [InlineData("4B", "200", "12")]
+    [InlineData("123 Pine St", "55 Burnside Ave", "1600 Amphitheatre Pkwy")]
+    public void Fill_AddressUnits_ExtractsDesignatorWithHashIdentifierAndNoDesignatorParts(
+        string firstExpected,
+        string secondExpected,
+        string remainingExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St Apt #4B, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave Ste #200, Portland, OR 97209", secondExpected)
+            ],
+            ["1600 Amphitheatre Pkwy No. 12, Mountain View, CA 94043"]);
+
+        result.Should().BeEquivalentTo([remainingExpected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("Suite #200", "No. 12", "Apt #4B")]
+    [InlineData("200", "12", "4B")]
+    [InlineData("55 Burnside Ave", "1600 Amphitheatre Pkwy", "123 Pine St")]
+    public void Fill_AddressUnits_AppliesDesignatorWithHashIdentifierToRemainingRows(
+        string firstExpected,
+        string secondExpected,
+        string remainingExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("55 Burnside Ave Suite #200, Portland, OR 97209", firstExpected),
+                ("1600 Amphitheatre Pkwy No. 12, Mountain View, CA 94043", secondExpected)
+            ],
+            ["123 Pine St Apt #4B, Seattle, WA 98101"]);
+
+        result.Should().BeEquivalentTo([remainingExpected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("Apt 4B", "Suite 200")]
+    [InlineData("4B", "200")]
+    [InlineData("123 Pine St", "55 Burnside Ave")]
+    public void Fill_AddressUnits_ReturnsNullWhenRemainingStreetHasNoRecognizedUnit(
+        string firstExpected,
+        string secondExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St Apt 4B, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave Suite 200, Portland, OR 97209", secondExpected)
+            ],
+            ["1600 Amphitheatre Pkwy, Mountain View, CA 94043"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Apt 4B", "Suite 200")]
+    [InlineData("4B", "200")]
+    [InlineData("123 Pine St", "55 Burnside Ave")]
+    public void Fill_AddressUnits_ReturnsNullWhenRemainingAddressIsMalformed(
+        string firstExpected,
+        string secondExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St Apt 4B, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave Suite 200, Portland, OR 97209", secondExpected)
+            ],
+            ["1600 Amphitheatre Pkwy #12 Mountain View CA 94043"]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_AddressState_UsesStateBeforeZipWhenStreetAndCityTokenCountsVary()
     {
