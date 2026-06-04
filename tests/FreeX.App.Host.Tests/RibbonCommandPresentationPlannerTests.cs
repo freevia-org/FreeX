@@ -159,7 +159,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     public void GetIcon_DoesNotContainDuplicateContainsPredicates()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonCommandPresentationPlanner.Icons.cs"));
-        var getIconSource = ExtractMethodSource(source, "public static RibbonCommandIcon GetIcon(");
+        var getIconSource = SourceMethodExtractor.ExtractMethodSource(source, "public static RibbonCommandIcon GetIcon(");
         var duplicatePredicates = Regex
             .Matches(getIconSource, @"name\.Contains\(""(?<predicate>[^""]+)""\)")
             .Select(match => match.Groups["predicate"].Value)
@@ -170,31 +170,6 @@ public sealed class RibbonCommandPresentationPlannerTests
             .ToList();
 
         duplicatePredicates.Should().BeEmpty("duplicate contains predicates create unreachable icon mapping rules");
-    }
-
-    private static string ExtractMethodSource(string source, string signature)
-    {
-        var signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
-        signatureIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain {signature}");
-
-        var bodyStart = source.IndexOf('{', signatureIndex);
-        bodyStart.Should().BeGreaterThanOrEqualTo(signatureIndex, $"source should contain a body for {signature}");
-
-        var depth = 0;
-        for (var index = bodyStart; index < source.Length; index++)
-        {
-            depth += source[index] switch
-            {
-                '{' => 1,
-                '}' => -1,
-                _ => 0
-            };
-
-            if (depth == 0)
-                return source.Substring(signatureIndex, index - signatureIndex + 1);
-        }
-
-        throw new InvalidOperationException($"Could not find the end of {signature}.");
     }
 
     [Theory]
