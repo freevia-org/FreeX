@@ -331,7 +331,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("private const int ClosedXmlStyleOnlyStripCellThreshold = 16_384;");
         adapterSource.Should().Contain("if (sheetXmlLayoutHadWarnings || sheetXmlLayout.Count == 0)");
         adapterSource.Should().Contain("explicitStyleOnlyCellCount += layout.ExplicitStyleOnlyCells.Count;");
-        adapterSource.Should().Contain("explicitStyleOnlyCellCount > ClosedXmlStyleOnlyStripCellThreshold");
+        adapterSource.Should().Contain("explicitStyleOnlyCellCount <= ClosedXmlStyleOnlyStripCellThreshold");
+        adapterSource.Should().Contain("layout.HasDuplicateStyleOnlyCellStyleIndexes");
     }
 
     [Fact]

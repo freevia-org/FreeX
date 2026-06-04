@@ -36,7 +36,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new ReapplyStructuredTableStyleCommand(sheet.Id, table.Id, showRowStripes: false);
 
         var outcome = command.Apply(ctx);
@@ -88,7 +88,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new CompositeWorkbookCommand(
             "Table Style Options",
             [

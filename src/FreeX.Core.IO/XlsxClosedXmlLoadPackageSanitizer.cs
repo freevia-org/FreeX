@@ -4,6 +4,13 @@ using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
 
+internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
+    bool? HasPivotPackageMetadata,
+    bool? HasChartExChartParts,
+    bool? HasConditionalFormattingBlocks,
+    bool? HasUnsupportedConditionalFormattingBlocks,
+    bool? HasWorksheetDynamicFilters);
+
 internal static class XlsxClosedXmlLoadPackageSanitizer
 {
     public static MemoryStream Create(MemoryStream sourcePackage) =>
@@ -12,15 +19,15 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     public static MemoryStream Create(
         MemoryStream sourcePackage,
         bool removeUnsupportedConditionalFormatting = false,
-        bool removeAllConditionalFormatting = false)
+        bool removeAllConditionalFormatting = false,
+        XlsxClosedXmlLoadSanitizationHints? hints = null)
     {
         sourcePackage.Position = 0;
-        var requirements = removeAllConditionalFormatting
-            ? GetSanitizationRequirements(
-                sourcePackage,
-                removeUnsupportedConditionalFormatting,
-                removeAllConditionalFormatting)
-            : GetSanitizationRequirements(sourcePackage, removeUnsupportedConditionalFormatting);
+        var requirements = GetSanitizationRequirements(
+            sourcePackage,
+            removeUnsupportedConditionalFormatting,
+            removeAllConditionalFormatting,
+            hints);
         if (!requirements.RequiresAny)
         {
             sourcePackage.Position = 0;
@@ -62,17 +69,21 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     private static SanitizationRequirements GetSanitizationRequirements(
         Stream sourcePackage,
         bool scanUnsupportedConditionalFormatting = true,
-        bool scanAllConditionalFormatting = false)
+        bool scanAllConditionalFormatting = false,
+        XlsxClosedXmlLoadSanitizationHints? hints = null)
     {
         try
         {
             using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+            var knownHints = hints.GetValueOrDefault();
             return new SanitizationRequirements(
-                HasPivotPackageMetadata(archive),
-                HasChartExChartParts(archive),
-                scanAllConditionalFormatting && HasConditionalFormattingBlocks(archive),
-                scanUnsupportedConditionalFormatting && HasUnsupportedConditionalFormattingBlocks(archive),
-                HasWorksheetDynamicFilters(archive));
+                ResolveKnownOrScan(knownHints.HasPivotPackageMetadata, archive, HasPivotPackageMetadata),
+                ResolveKnownOrScan(knownHints.HasChartExChartParts, archive, HasChartExChartParts),
+                scanAllConditionalFormatting &&
+                ResolveKnownOrScan(knownHints.HasConditionalFormattingBlocks, archive, HasConditionalFormattingBlocks),
+                scanUnsupportedConditionalFormatting &&
+                ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks, archive, HasUnsupportedConditionalFormattingBlocks),
+                ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters, archive, HasWorksheetDynamicFilters));
         }
         catch
         {
@@ -84,6 +95,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 sourcePackage.Position = 0;
         }
     }
+
+    private static bool ResolveKnownOrScan(
+        bool? knownValue,
+        ZipArchive archive,
+        Func<ZipArchive, bool> scan) =>
+        knownValue ?? scan(archive);
 
     private readonly record struct SanitizationRequirements(
         bool HasPivotPackageMetadata,

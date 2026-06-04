@@ -12,7 +12,7 @@ public sealed class InsertDeleteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("B1"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("B2"));
@@ -38,7 +38,7 @@ public sealed class InsertDeleteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A2"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("B1"));
@@ -64,7 +64,7 @@ public sealed class InsertDeleteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
 
@@ -80,7 +80,7 @@ public sealed class InsertDeleteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
         sheet.IsProtected = true;
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
@@ -98,7 +98,7 @@ public sealed class InsertDeleteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("B1"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("C1"));
@@ -122,7 +122,7 @@ public sealed class InsertDeleteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A2"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("A3"));
@@ -146,7 +146,7 @@ public sealed class InsertDeleteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A2"));
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
@@ -163,7 +163,7 @@ public sealed class InsertDeleteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("B1"));
         sheet.IsProtected = true;
@@ -290,12 +290,6 @@ public sealed class InsertDeleteCellsCommandTests
                 sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * 1000 + col));
         }
 
-        return (workbook, sheet, new SimpleCtx(workbook));
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
+        return (workbook, sheet, new TestCommandContext(workbook));
     }
 }

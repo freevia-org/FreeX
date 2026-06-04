@@ -28,7 +28,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new RefreshStructuredTableTotalsCommand(sheet.Id, table.Id);
 
         var outcome = command.Apply(ctx);
@@ -84,7 +84,7 @@ public sealed partial class StructuredTableCommandTests
             table.Columns.Add(new StructuredTableColumnModel(index + 2, $"Value {index + 1}", TotalsRowFunction: functions[index % functions.Length]));
 
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var warmup = new RefreshStructuredTableTotalsCommand(sheet.Id, table.Id).Apply(ctx);
         warmup.Success.Should().BeTrue();
 
@@ -146,7 +146,7 @@ public sealed partial class StructuredTableCommandTests
         };
         sheet.StructuredTables.Add(table);
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new RefreshStructuredTableTotalsCommand(sheet.Id, table.Id).Apply(ctx);
 

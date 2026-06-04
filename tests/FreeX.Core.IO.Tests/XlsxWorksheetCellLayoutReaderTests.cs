@@ -48,6 +48,30 @@ public sealed class XlsxWorksheetCellLayoutReaderTests
     }
 
     [Fact]
+    public void Read_TracksDuplicateStyleOnlyCellStyleIndexes()
+    {
+        var worksheet = new XDocument(
+            new XElement(WorksheetNs + "worksheet",
+                new XElement(WorksheetNs + "sheetData",
+                    new XElement(WorksheetNs + "row",
+                        Cell("A1", style: "7"),
+                        Cell("B1", style: "07"),
+                        Cell("C1", style: "8")),
+                    new XElement(WorksheetNs + "row",
+                        Cell("A2", style: "7"),
+                        Cell("B2", "7", null, new XElement(WorksheetNs + "v", "42"))))));
+
+        var layout = XlsxWorksheetCellLayoutReader.Read(worksheet, WorksheetNs);
+
+        layout.HasDuplicateStyleOnlyCellStyleIndexes.Should().BeTrue();
+        layout.ExplicitStyleOnlyCells.Should().Equal(
+            (1u, 1u, 7),
+            (1u, 2u, 7),
+            (1u, 3u, 8),
+            (2u, 1u, 7));
+    }
+
+    [Fact]
     public void ReadCachedFormulaErrors_MapsFormulaErrorCellsOnly()
     {
         var worksheet = new XDocument(

@@ -109,11 +109,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var sheetXmlLayoutWarningCount = warnings.Count;
         var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);
         var sheetXmlLayoutHadWarnings = warnings.Count != sheetXmlLayoutWarningCount;
-        var shouldStripStyleOnlyCells = ShouldStripClosedXmlStyleOnlyCells(
+        var styleOnlyWorksheetPathsToStrip = GetClosedXmlStyleOnlyWorksheetPathsToStrip(
+            sheetXmlLayout,
+            sheetXmlLayoutHadWarnings);
+        var sanitizationHints = CreateClosedXmlLoadSanitizationHints(
+            packageParts,
             sheetXmlLayout,
             sheetXmlLayoutHadWarnings);
         packageStream.Position = 0;
-        var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(packageStream, shouldStripStyleOnlyCells);
+        var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(
+            packageStream,
+            styleOnlyWorksheetPathsToStrip,
+            sanitizationHints);
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
         var worksheetsWithPreservableSourceMetadata = GetWorksheetsWithPreservableSourceMetadata(
@@ -443,25 +450,61 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         return workbook;
     }
 
-    private static bool ShouldStripClosedXmlStyleOnlyCells(
+    private static IReadOnlySet<string>? GetClosedXmlStyleOnlyWorksheetPathsToStrip(
         IReadOnlyDictionary<string, SheetXmlLayout> sheetXmlLayout,
         bool sheetXmlLayoutHadWarnings)
     {
         if (sheetXmlLayoutHadWarnings || sheetXmlLayout.Count == 0)
-            return true;
+            return null;
 
         var explicitStyleOnlyCellCount = 0;
+        HashSet<string>? worksheetPathsToStrip = null;
         foreach (var layout in sheetXmlLayout.Values)
         {
             if (layout.HasStyleOnlyCells && layout.ExplicitStyleOnlyCells.Count == 0)
-                return true;
+                return null;
 
             explicitStyleOnlyCellCount += layout.ExplicitStyleOnlyCells.Count;
-            if (explicitStyleOnlyCellCount > ClosedXmlStyleOnlyStripCellThreshold)
-                return true;
+            if (layout.HasDuplicateStyleOnlyCellStyleIndexes)
+            {
+                worksheetPathsToStrip ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                worksheetPathsToStrip.Add(layout.WorksheetPath);
+            }
         }
 
-        return false;
+        if (explicitStyleOnlyCellCount <= ClosedXmlStyleOnlyStripCellThreshold)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        return worksheetPathsToStrip ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static XlsxClosedXmlLoadSanitizationHints CreateClosedXmlLoadSanitizationHints(
+        XlsxLoadPackageParts packageParts,
+        IReadOnlyDictionary<string, SheetXmlLayout> sheetXmlLayout,
+        bool sheetXmlLayoutHadWarnings)
+    {
+        bool? hasConditionalFormattingBlocks = null;
+        bool? hasClosedXmlUnsupportedConditionalFormatting = null;
+        bool? hasWorksheetDynamicFilters = null;
+        if (!sheetXmlLayoutHadWarnings && sheetXmlLayout.Count > 0)
+        {
+            hasConditionalFormattingBlocks = false;
+            hasClosedXmlUnsupportedConditionalFormatting = false;
+            hasWorksheetDynamicFilters = false;
+            foreach (var layout in sheetXmlLayout.Values)
+            {
+                hasConditionalFormattingBlocks |= layout.HasConditionalFormattingBlocks;
+                hasClosedXmlUnsupportedConditionalFormatting |= layout.HasClosedXmlUnsupportedConditionalFormatting;
+                hasWorksheetDynamicFilters |= layout.HasWorksheetDynamicFilters;
+            }
+        }
+
+        return new XlsxClosedXmlLoadSanitizationHints(
+            packageParts.HasInspected ? packageParts.HasPivotPackageParts : null,
+            null,
+            hasConditionalFormattingBlocks,
+            hasClosedXmlUnsupportedConditionalFormatting,
+            hasWorksheetDynamicFilters);
     }
 
     private static IReadOnlySet<string>? GetWorksheetsWithPreservableSourceMetadata(
@@ -548,6 +591,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     private readonly struct XlsxLoadPackageParts
     {
         private XlsxLoadPackageParts(
+            bool hasInspected,
             bool hasWorkbook,
             bool hasStyles,
             bool hasTheme,
@@ -556,6 +600,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             bool hasExternalLinks,
             bool hasStructuredTables)
         {
+            HasInspected = hasInspected;
             HasWorkbook = hasWorkbook;
             HasStyles = hasStyles;
             HasTheme = hasTheme;
@@ -566,6 +611,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         }
 
         public static XlsxLoadPackageParts Empty => default;
+        public bool HasInspected { get; }
         public bool HasWorkbook { get; }
         public bool HasStyles { get; }
         public bool HasTheme { get; }
@@ -614,6 +660,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             }
 
             return new XlsxLoadPackageParts(
+                hasInspected: true,
                 hasWorkbook,
                 hasStyles,
                 hasTheme,
@@ -719,11 +766,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
     private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithSanitizationFallback(
         MemoryStream packageStream,
-        bool stripStyleOnlyCells)
+        IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip,
+        XlsxClosedXmlLoadSanitizationHints sanitizationHints)
     {
         var closedXmlPackageStream = CreateClosedXmlParsePackage(
             packageStream,
-            stripStyleOnlyCells,
+            styleOnlyWorksheetPathsToStrip,
+            sanitizationHints,
             removeUnsupportedConditionalFormatting: false);
         try
         {
@@ -735,12 +784,16 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 closedXmlPackageStream.Dispose();
 
             if (IsClosedXmlConditionalFormattingLoadFailure(ex))
-                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(packageStream, stripStyleOnlyCells);
+                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(
+                    packageStream,
+                    styleOnlyWorksheetPathsToStrip,
+                    sanitizationHints);
 
             packageStream.Position = 0;
             var fallbackPackageStream = CreateClosedXmlParsePackage(
                 packageStream,
-                stripStyleOnlyCells,
+                styleOnlyWorksheetPathsToStrip,
+                sanitizationHints,
                 removeUnsupportedConditionalFormatting: true,
                 removeAllConditionalFormatting: false);
             try
@@ -752,19 +805,24 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 if (!ReferenceEquals(fallbackPackageStream, packageStream))
                     fallbackPackageStream.Dispose();
 
-                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(packageStream, stripStyleOnlyCells);
+                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(
+                    packageStream,
+                    styleOnlyWorksheetPathsToStrip,
+                    sanitizationHints);
             }
         }
     }
 
     private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithConditionalFormattingStripped(
         MemoryStream packageStream,
-        bool stripStyleOnlyCells)
+        IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip,
+        XlsxClosedXmlLoadSanitizationHints sanitizationHints)
     {
         packageStream.Position = 0;
         var conditionalFormattingStrippedPackageStream = CreateClosedXmlParsePackage(
             packageStream,
-            stripStyleOnlyCells,
+            styleOnlyWorksheetPathsToStrip,
+            sanitizationHints,
             removeUnsupportedConditionalFormatting: true,
             removeAllConditionalFormatting: true);
         try
@@ -792,19 +850,21 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
     private static MemoryStream CreateClosedXmlParsePackage(
         MemoryStream packageStream,
-        bool stripStyleOnlyCells,
+        IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip,
+        XlsxClosedXmlLoadSanitizationHints sanitizationHints,
         bool removeUnsupportedConditionalFormatting,
         bool removeAllConditionalFormatting = false)
     {
-        var styleOptimizedPackage = stripStyleOnlyCells
-            ? XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)
+        var styleOptimizedPackage = styleOnlyWorksheetPathsToStrip is not { Count: 0 }
+            ? XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)
             : packageStream;
         try
         {
             var sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(
                 styleOptimizedPackage,
                 removeUnsupportedConditionalFormatting,
-                removeAllConditionalFormatting);
+                removeAllConditionalFormatting,
+                sanitizationHints);
             if (!ReferenceEquals(sanitizedPackage, styleOptimizedPackage) &&
                 !ReferenceEquals(styleOptimizedPackage, packageStream))
             {

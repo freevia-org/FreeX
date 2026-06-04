@@ -9,7 +9,7 @@ public partial class InsertDeleteRowsTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        return (wb, sheet, new SimpleCtx(wb));
+        return (wb, sheet, new TestCommandContext(wb));
     }
 
     private const int DenseShiftRows = 500;
@@ -29,7 +29,7 @@ public partial class InsertDeleteRowsTests
                 sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * 1000 + col));
         }
 
-        return (workbook, sheet, new SimpleCtx(workbook));
+        return (workbook, sheet, new TestCommandContext(workbook));
     }
 
     private static (Workbook Workbook, Sheet Sheet, ICommandContext Context) SetupDenseRowMetadataWorkbook()
@@ -51,15 +51,10 @@ public partial class InsertDeleteRowsTests
             sheet.HyperlinkMetadata[hyperlinkAddress] = new HyperlinkMetadata(ScreenTip: $"Open row {row}");
         }
 
-        return (workbook, sheet, new SimpleCtx(workbook));
+        return (workbook, sheet, new TestCommandContext(workbook));
     }
 
     private static string FindWorkspaceFile(params string[] parts)
         => WorkspaceFileLocator.Find(parts);
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
