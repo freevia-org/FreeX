@@ -11,7 +11,8 @@ internal static partial class XlsxCorpusFixtureFactory
         Set(sheet, "A1", new TextValue("Text"));
         Set(sheet, "B1", new NumberValue(123.45));
         Set(sheet, "C1", new BoolValue(true));
-        Set(sheet, "D1", DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+        var dateTimeStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "m/d/yy h:mm" });
+        Set(sheet, "D1", DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)), dateTimeStyle);
         Set(sheet, "E1", ErrorValue.NA);
         Set(sheet, "A3", new TextValue("Sparse corner"));
         Set(sheet, "XFD10", new NumberValue(16384));

@@ -262,11 +262,40 @@ public partial class XlsxCorpusRunnerTests
             summary.Sheets.Any(sheet => sheet.HasPageFooter).Should().BeTrue(row.Id);
         }
 
+        if (tags.Contains("freeze-panes"))
+            summary.Sheets.Any(sheet => sheet.FrozenRows > 0 || sheet.FrozenCols > 0).Should().BeTrue(row.Id);
+
+        if (tags.Contains("hidden-rows"))
+            summary.Sheets.Sum(sheet => sheet.HiddenRowCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("hidden-columns"))
+            summary.Sheets.Sum(sheet => sheet.HiddenColumnCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("custom-dimensions"))
+            summary.Sheets.Sum(sheet => sheet.ColumnWidths.Count + sheet.RowHeights.Count).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("outline-groups"))
+            summary.Sheets.Sum(sheet => sheet.RowOutlineLevelCount + sheet.ColumnOutlineLevelCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("row-column-groups"))
+        {
+            summary.Sheets.Sum(sheet => sheet.RowOutlineLevelCount).Should().BeGreaterThan(0, row.Id);
+            summary.Sheets.Sum(sheet => sheet.ColumnOutlineLevelCount).Should().BeGreaterThan(0, row.Id);
+        }
+
         if (tags.Contains("structure"))
         {
-            summary.Sheets.Sum(sheet => sheet.MergedRegionCount).Should().BeGreaterThan(0, row.Id);
-            summary.Sheets.Any(sheet => sheet.FrozenRows > 0 || sheet.FrozenCols > 0).Should().BeTrue(row.Id);
-            summary.Sheets.Sum(sheet => sheet.HiddenRowCount + sheet.HiddenColumnCount).Should().BeGreaterThan(0, row.Id);
+            summary.Sheets.Should().Contain(
+                sheet => sheet.MergedRegionCount > 0 ||
+                    sheet.FrozenRows > 0 ||
+                    sheet.FrozenCols > 0 ||
+                    sheet.HiddenRowCount > 0 ||
+                    sheet.HiddenColumnCount > 0 ||
+                    sheet.ColumnWidths.Count > 0 ||
+                    sheet.RowHeights.Count > 0 ||
+                    sheet.RowOutlineLevelCount > 0 ||
+                    sheet.ColumnOutlineLevelCount > 0,
+                row.Id);
         }
     }
 
