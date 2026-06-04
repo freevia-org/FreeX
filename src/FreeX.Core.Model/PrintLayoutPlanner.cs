@@ -19,28 +19,14 @@ public static class PrintLayoutPlanner
         if (rowsPerPage == 0)
             throw new ArgumentOutOfRangeException(nameof(rowsPerPage), "Rows per page must be at least 1.");
 
-        var titleRows = BuildTitleIndexes(repeatRows, CellAddress.MaxRow);
-        var titleSet = titleRows.ToHashSet();
-        var bodyRows = new List<uint>();
-        for (var row = printRange.Start.Row; row <= printRange.End.Row; row++)
-        {
-            if (!titleSet.Contains(row))
-                bodyRows.Add(row);
-        }
-
-        var titleRowsOnPage = rowsPerPage > 1
-            ? Math.Min((uint)titleRows.Count, rowsPerPage - 1)
-            : 0;
-        var bodyRowsPerPage = Math.Max(1u, rowsPerPage - titleRowsOnPage);
-        var bodyPages = BuildBodyPages(bodyRows, bodyRowsPerPage, manualRowBreaks);
-        var pages = new List<PrintPageRowPlan>(bodyPages.Count);
-        foreach (var bodyPage in bodyPages)
-            pages.Add(new PrintPageRowPlan(titleRows, bodyPage));
-
-        if (pages.Count == 0 && titleRows.Count > 0)
-            pages.Add(new PrintPageRowPlan(titleRows, []));
-
-        return pages;
+        return BuildAxisPlans(
+            printRange.Start.Row,
+            printRange.End.Row,
+            repeatRows,
+            rowsPerPage,
+            CellAddress.MaxRow,
+            manualRowBreaks,
+            static (titleRows, bodyPage) => new PrintPageRowPlan(titleRows, bodyPage));
     }
 
     public static IReadOnlyList<PrintPageColumnPlan> BuildColumnPlans(
@@ -52,28 +38,14 @@ public static class PrintLayoutPlanner
         if (columnsPerPage == 0)
             throw new ArgumentOutOfRangeException(nameof(columnsPerPage), "Columns per page must be at least 1.");
 
-        var titleColumns = BuildTitleIndexes(repeatColumns, CellAddress.MaxCol);
-        var titleSet = titleColumns.ToHashSet();
-        var bodyColumns = new List<uint>();
-        for (var column = printRange.Start.Col; column <= printRange.End.Col; column++)
-        {
-            if (!titleSet.Contains(column))
-                bodyColumns.Add(column);
-        }
-
-        var titleColumnsOnPage = columnsPerPage > 1
-            ? Math.Min((uint)titleColumns.Count, columnsPerPage - 1)
-            : 0;
-        var bodyColumnsPerPage = Math.Max(1u, columnsPerPage - titleColumnsOnPage);
-        var bodyPages = BuildBodyPages(bodyColumns, bodyColumnsPerPage, manualColumnBreaks);
-        var pages = new List<PrintPageColumnPlan>(bodyPages.Count);
-        foreach (var bodyPage in bodyPages)
-            pages.Add(new PrintPageColumnPlan(titleColumns, bodyPage));
-
-        if (pages.Count == 0 && titleColumns.Count > 0)
-            pages.Add(new PrintPageColumnPlan(titleColumns, []));
-
-        return pages;
+        return BuildAxisPlans(
+            printRange.Start.Col,
+            printRange.End.Col,
+            repeatColumns,
+            columnsPerPage,
+            CellAddress.MaxCol,
+            manualColumnBreaks,
+            static (titleColumns, bodyPage) => new PrintPageColumnPlan(titleColumns, bodyPage));
     }
 
     public static PrintGridMeasurement MeasurePrintableGrid(
@@ -109,6 +81,46 @@ public static class PrintLayoutPlanner
         }
 
         return titleIndexes;
+    }
+
+    private static List<TPlan> BuildAxisPlans<TPlan>(
+        uint startValue,
+        uint endValue,
+        WorksheetRepeatRange? repeatRange,
+        uint valuesPerPage,
+        uint maxTitleIndex,
+        IReadOnlyCollection<uint>? manualBreaks,
+        Func<IReadOnlyList<uint>, IReadOnlyList<uint>, TPlan> createPlan)
+    {
+        var titleValues = BuildTitleIndexes(repeatRange, maxTitleIndex);
+        var titleSet = titleValues.ToHashSet();
+        var bodyValues = BuildBodyValues(startValue, endValue, titleSet);
+
+        var titleValuesOnPage = valuesPerPage > 1
+            ? Math.Min((uint)titleValues.Count, valuesPerPage - 1)
+            : 0;
+        var bodyValuesPerPage = Math.Max(1u, valuesPerPage - titleValuesOnPage);
+        var bodyPages = BuildBodyPages(bodyValues, bodyValuesPerPage, manualBreaks);
+        var pages = new List<TPlan>(bodyPages.Count);
+        foreach (var bodyPage in bodyPages)
+            pages.Add(createPlan(titleValues, bodyPage));
+
+        if (pages.Count == 0 && titleValues.Count > 0)
+            pages.Add(createPlan(titleValues, []));
+
+        return pages;
+    }
+
+    private static List<uint> BuildBodyValues(uint startValue, uint endValue, HashSet<uint> titleValues)
+    {
+        var bodyValues = new List<uint>();
+        for (var value = startValue; value <= endValue; value++)
+        {
+            if (!titleValues.Contains(value))
+                bodyValues.Add(value);
+        }
+
+        return bodyValues;
     }
 
     private static int ToPageItemCount(uint itemsPerPage) =>
