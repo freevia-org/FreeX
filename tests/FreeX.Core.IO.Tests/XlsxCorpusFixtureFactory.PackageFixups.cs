@@ -925,8 +925,10 @@ internal static partial class XlsxCorpusFixtureFactory
 
         var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
         if (!isSlicer)
+        {
             EnsureRelationship(drawingRelsXml, "rIdFreeXNativeControl1", nativeRelationshipType, nativePartTarget);
-        ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", drawingRelsXml);
+            ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", drawingRelsXml);
+        }
     }
 
     private static void EnsureSlicerTimelineWorkbookExtensionRef(

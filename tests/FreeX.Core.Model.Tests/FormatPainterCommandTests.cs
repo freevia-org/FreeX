@@ -11,7 +11,7 @@ public sealed class FormatPainterCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var target = new CellAddress(sheet.Id, 3, 2);
         var sourceStyle = wb.RegisterStyle(new CellStyle
@@ -46,7 +46,7 @@ public sealed class FormatPainterCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 4, 4);
         var target = new CellAddress(sheet.Id, 6, 4);
         var sourceStyle = wb.RegisterStyle(new CellStyle
@@ -72,7 +72,7 @@ public sealed class FormatPainterCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var topLeft = new CellAddress(sheet.Id, 2, 2);
         var bottomRight = new CellAddress(sheet.Id, 3, 3);
@@ -109,7 +109,7 @@ public sealed class FormatPainterCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceTopLeft = new CellAddress(sheet.Id, 1, 1);
         var sourceBottomRight = new CellAddress(sheet.Id, 2, 2);
         var targetTopLeft = new CellAddress(sheet.Id, 4, 4);
@@ -145,11 +145,5 @@ public sealed class FormatPainterCommandTests
         StyleAt(6, 4).Should().Be(red);
         StyleAt(6, 5).Should().Be(green);
         StyleAt(6, 6).Should().Be(red);
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }
