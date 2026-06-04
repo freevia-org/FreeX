@@ -439,8 +439,12 @@ public sealed class ShapeCommandTests
         shape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.Shadow);
     }
 
-    [Fact]
-    public void SetDrawingShapeEffectCommand_SetsNamedPresetAndUndoRestoresMetadata()
+    [Theory]
+    [InlineData(DrawingShapeEffectPreset.InnerShadow)]
+    [InlineData(DrawingShapeEffectPreset.Glow)]
+    [InlineData(DrawingShapeEffectPreset.SoftEdges)]
+    [InlineData(DrawingShapeEffectPreset.Reflection)]
+    public void SetDrawingShapeEffectCommand_SetsNamedPresetAndUndoRestoresMetadata(DrawingShapeEffectPreset preset)
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
@@ -453,12 +457,12 @@ public sealed class ShapeCommandTests
         };
         sheet.DrawingShapes.Add(shape);
 
-        var command = new SetDrawingShapeEffectCommand(sheet.Id, shape.Id, DrawingShapeEffectPreset.InnerShadow);
+        var command = new SetDrawingShapeEffectCommand(sheet.Id, shape.Id, preset);
 
         command.Apply(ctx).Success.Should().BeTrue();
-        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.InnerShadow);
+        shape.EffectPreset.Should().Be(preset);
         shape.HasShadowEffect.Should().BeFalse();
-        shape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.InnerShadow);
+        shape.GetEffectiveEffectPreset().Should().Be(preset);
 
         command.Revert(ctx);
 
