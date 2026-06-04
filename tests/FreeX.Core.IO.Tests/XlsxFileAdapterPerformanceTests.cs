@@ -356,10 +356,15 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
         saveSource.Should().Contain("string? currentModelFingerprint = null;");
         saveSource.Should().Contain("sourcePackage.Matches(workbook, out currentModelFingerprint)");
+        saveSource.Should().Contain("sourcePackage.TrySavePatchedCellValues(workbook, stream, ref currentModelFingerprint)");
         postProcessingSource.Should().Contain("currentModelFingerprint,");
         postProcessingSource.Should().Contain("sourcePackage?.WorksheetsWithPreservableSourceMetadata");
         snapshotSource.Should().Contain("public bool Matches(Workbook workbook, out string? currentModelFingerprint)");
+        snapshotSource.Should().Contain("ref string? currentModelFingerprint");
+        snapshotSource.Should().Contain("currentModelFingerprint,");
         snapshotSource.Should().Contain("GetModelFingerprint(workbook, currentModelFingerprint)");
+        snapshotSource.Should().Contain("patchedPackage.TryGetBuffer");
+        snapshotSource.Should().Contain("WithAppliedChanges(changes, patchedModelFingerprint)");
     }
 
     [Fact]

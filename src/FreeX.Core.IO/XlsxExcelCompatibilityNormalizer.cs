@@ -461,7 +461,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
             : XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target);
     }
 
-    private static void RemoveCalcChain(ZipArchive archive)
+    internal static void RemoveCalcChain(ZipArchive archive)
     {
         archive.GetEntry("xl/calcChain.xml")?.Delete();
 
