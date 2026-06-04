@@ -11,7 +11,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new[]
         {
             (new CellAddress(sheet.Id, 1, 1), "Q1"),
@@ -45,7 +45,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2));
         var source = new[]
         {
@@ -75,7 +75,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var bytes = new byte[] { 1, 2, 3, 4 };
         var anchor = new CellAddress(sheet.Id, 4, 2);
 
@@ -107,7 +107,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 4, 2);
 
         new InsertPictureCommand(sheet.Id, anchor, [1], "image/png", double.NaN, 72)
@@ -125,7 +125,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 2, 3);
 
         var command = ClipboardPictureService.CreateInsertCommand(
@@ -151,7 +151,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -180,7 +180,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -203,7 +203,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -229,7 +229,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),

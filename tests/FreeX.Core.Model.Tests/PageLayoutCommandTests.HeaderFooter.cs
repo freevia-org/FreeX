@@ -12,7 +12,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PageHeader = new WorksheetHeaderFooter("Old left", "", "Old right");
         sheet.PageFooter = new WorksheetHeaderFooter("", "Page &[Page]", "");
         sheet.FirstPageHeader = new WorksheetHeaderFooter("Old first", "", "");
@@ -68,7 +68,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var oldPicture = new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "old.png", 16, 16);
         var newPicture = new WorksheetHeaderFooterPicture([4, 5, 6], "image/png", "logo.png", 120, 40);
         sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(oldPicture, null, null);

@@ -11,7 +11,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 3, 2);
         var untouchedSourceComment = new CellAddress(sheet.Id, 1, 2);
@@ -43,7 +43,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceStart = new CellAddress(sheet.Id, 1, 1);
         var sourceEnd = new CellAddress(sheet.Id, 1, 2);
         var destination = new CellAddress(sheet.Id, 5, 5);
@@ -65,7 +65,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 3, 2);
         var sourceReplies = new List<CommentReply> { new("first", "User") };
@@ -109,7 +109,7 @@ public sealed partial class PasteSpecialCommandTests
         var wb = new Workbook("test");
         var sourceSheet = wb.AddSheet("Source");
         var targetSheet = wb.AddSheet("Target");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sourceSheet.Id, 1, 1);
         var destination = new CellAddress(targetSheet.Id, 3, 2);
         sourceSheet.Comments[source] = "copy me";
@@ -136,7 +136,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 3, 2);
         sheet.Comments[source] = "copy me";
@@ -159,7 +159,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 3, 2);
         sheet.Comments[source] = "copy me";
