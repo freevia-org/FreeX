@@ -10,7 +10,7 @@ public class ApplyStyleCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         return (wb, sheet, ctx);
     }
 
@@ -529,7 +529,7 @@ public class ApplyStyleCommandTests
         var wb = new Workbook("T");
         var sheet1 = wb.AddSheet("S1");
         var sheet2 = wb.AddSheet("S2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var range = new GridRange(
             new CellAddress(sheet1.Id, 1, 1),
@@ -550,7 +550,7 @@ public class ApplyStyleCommandTests
     {
         var wb = new Workbook("T");
         var sheet = wb.AddSheet("S");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         var range = new GridRange(addr, addr);
 
@@ -563,11 +563,5 @@ public class ApplyStyleCommandTests
 
         sheet.CellCount.Should().Be(0);
         sheet.GetStyleOnly(1, 1).Should().BeNull("undo must remove the style-only entry");
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }

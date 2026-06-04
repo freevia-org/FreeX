@@ -11,7 +11,7 @@ public sealed class StyleOnlyUndoCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var address = new CellAddress(sheet.Id, 2, 3);
         var style = wb.RegisterStyle(new CellStyle { Bold = true });
         sheet.SetStyleOnly(address.Row, address.Col, style);
@@ -33,7 +33,7 @@ public sealed class StyleOnlyUndoCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var address = new CellAddress(sheet.Id, 4, 2);
         var style = wb.RegisterStyle(new CellStyle { Italic = true });
         sheet.SetStyleOnly(address.Row, address.Col, style);
@@ -55,7 +55,7 @@ public sealed class StyleOnlyUndoCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var address = new CellAddress(sheet.Id, 6, 1);
         var oldStyle = wb.RegisterStyle(new CellStyle { Underline = true });
         var newStyle = wb.RegisterStyle(new CellStyle { Strikethrough = true });
@@ -71,11 +71,5 @@ public sealed class StyleOnlyUndoCommandTests
 
         sheet.GetCell(address).Should().BeNull();
         sheet.GetStyleOnly(address.Row, address.Col).Should().Be(oldStyle);
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }
