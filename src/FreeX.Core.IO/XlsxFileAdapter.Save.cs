@@ -16,6 +16,12 @@ public sealed partial class XlsxFileAdapter
             return;
         }
 
+        if (sourcePackage is not null &&
+            sourcePackage.TrySavePatchedCellValues(workbook, stream, out currentModelFingerprint))
+        {
+            return;
+        }
+
         using var xlWorkbook = new XLWorkbook();
         xlWorkbook.CalculateMode = workbook.CalculationMode == WorkbookCalculationMode.Manual
             ? XLCalculateMode.Manual

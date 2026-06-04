@@ -11,7 +11,7 @@ public sealed class PictureCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -44,7 +44,7 @@ public sealed class PictureCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -70,7 +70,7 @@ public sealed class PictureCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -88,9 +88,4 @@ public sealed class PictureCommandTests
         picture.LockAspectRatio.Should().BeTrue();
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

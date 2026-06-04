@@ -11,7 +11,7 @@ public sealed class SelectionPaneCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), IsVisible = true };
         sheet.DrawingShapes.Add(shape);
 
@@ -37,7 +37,7 @@ public sealed class SelectionPaneCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var id = AddObject(sheet, kind, isVisible: true);
 
         var command = new SetSelectionPaneObjectVisibilityCommand(sheet.Id, kind, id, isVisible: false);
@@ -52,7 +52,7 @@ public sealed class SelectionPaneCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
         var middle = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
         var front = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 3) };
@@ -78,7 +78,7 @@ public sealed class SelectionPaneCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
         var middle = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
         var front = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 3) };
@@ -107,7 +107,7 @@ public sealed class SelectionPaneCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -138,7 +138,7 @@ public sealed class SelectionPaneCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var id = AddObject(sheet, kind, isVisible: true);
 
         var command = new RenameSelectionPaneObjectCommand(sheet.Id, kind, id, "Dashboard Object");
@@ -153,7 +153,7 @@ public sealed class SelectionPaneCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new SetSelectionPaneObjectVisibilityCommand(
             sheet.Id,
@@ -213,9 +213,4 @@ public sealed class SelectionPaneCommandTests
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
         };
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
