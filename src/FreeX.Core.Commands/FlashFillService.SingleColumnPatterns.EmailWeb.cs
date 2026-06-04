@@ -161,6 +161,15 @@ public static partial class FlashFillService
         return source => TryGetFinalUrlPathSegmentStem(source, out var stem) ? stem : null;
     }
 
+    private static Func<string, string?>? TryExtractFinalUrlPathSegmentSlugTitle(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFinalUrlPathSegmentSlugTitle(e.Source, out var title) && title == e.Expected))
+            return null;
+
+        return source => TryGetFinalUrlPathSegmentSlugTitle(source, out var title) ? title : null;
+    }
+
     private static Func<string, string?>? TryUrlQueryParameterValue(IReadOnlyList<(string Source, string Expected)> examples)
     {
         List<string>? candidateNames = null;
@@ -258,6 +267,146 @@ public static partial class FlashFillService
             return false;
 
         stemEndExclusive = stemEnd + 1;
+        return true;
+    }
+
+    private static bool TryGetFinalUrlPathSegmentSlugTitle(string source, out string title)
+    {
+        title = string.Empty;
+        if (!TryGetFinalUrlPathSegmentSlugStem(source, out var stem) ||
+            !TryFormatSlugStemAsTitle(stem, out title))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryGetFinalUrlPathSegmentSlugStem(string source, out string stem)
+    {
+        stem = string.Empty;
+
+        var candidate = source.Trim();
+        if (candidate.Length == 0 ||
+            candidate.Any(char.IsWhiteSpace) ||
+            !IsHttpOrHttpsUrlCandidate(candidate) ||
+            !Uri.TryCreate(candidate, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            uri.UserInfo.Length > 0 ||
+            !TryNormalizeWebHost(uri.Host, out _))
+        {
+            return false;
+        }
+
+        var authorityStart = candidate.IndexOf("://", StringComparison.Ordinal) + 3;
+        var pathStart = candidate.IndexOf('/', authorityStart);
+        if (pathStart < 0)
+            return false;
+
+        var queryIndex = candidate.IndexOf('?', pathStart);
+        var fragmentIndex = candidate.IndexOf('#', pathStart);
+        var pathEndExclusive = MinPositiveIndexOrLength(candidate.Length, queryIndex, fragmentIndex);
+        if (pathEndExclusive <= pathStart + 1)
+            return false;
+
+        var segmentEnd = pathEndExclusive - 1;
+        if (candidate[segmentEnd] == '/')
+            return false;
+
+        var lastSlashIndex = candidate.LastIndexOf('/', segmentEnd, segmentEnd - pathStart + 1);
+        var segmentStart = lastSlashIndex + 1;
+        TrimSegment(candidate, ref segmentStart, ref segmentEnd);
+        if (segmentStart > segmentEnd)
+            return false;
+
+        var segmentLength = segmentEnd - segmentStart + 1;
+        var dotIndex = candidate.LastIndexOf('.', segmentEnd, segmentLength);
+        var stemStart = segmentStart;
+        var stemEnd = segmentEnd;
+        if (dotIndex >= segmentStart)
+        {
+            if (dotIndex == segmentStart || dotIndex == segmentEnd)
+                return false;
+
+            stemEnd = dotIndex - 1;
+            TrimSegment(candidate, ref stemStart, ref stemEnd);
+            if (stemStart > stemEnd)
+                return false;
+        }
+
+        var rawStem = SliceSegment(candidate, stemStart, stemEnd + 1);
+        if (!HasValidPercentEscapes(rawStem))
+            return false;
+
+        try
+        {
+            stem = Uri.UnescapeDataString(rawStem);
+        }
+        catch (UriFormatException)
+        {
+            stem = string.Empty;
+            return false;
+        }
+
+        return stem.Length > 0;
+    }
+
+    private static bool TryFormatSlugStemAsTitle(string stem, out string title)
+    {
+        title = string.Empty;
+
+        if (stem.Length == 0 ||
+            !stem.Any(char.IsLetter) ||
+            stem.All(c => char.IsDigit(c) || c == '-' || c == '_' || c == ' '))
+        {
+            return false;
+        }
+
+        var parts = stem.Split(['-', '_', ' '], StringSplitOptions.None);
+        if (parts.Length == 0)
+            return false;
+
+        var titleParts = new string[parts.Length];
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            if (part.Length == 0 ||
+                part.All(char.IsDigit) ||
+                !part.Any(char.IsLetter))
+            {
+                return false;
+            }
+
+            for (var j = 0; j < part.Length; j++)
+            {
+                if (!char.IsLetterOrDigit(part[j]))
+                    return false;
+            }
+
+            titleParts[i] = ToProperCase(part);
+        }
+
+        title = string.Join(' ', titleParts);
+        return title.Length > 0;
+    }
+
+    private static bool HasValidPercentEscapes(string source)
+    {
+        for (var i = 0; i < source.Length; i++)
+        {
+            if (source[i] != '%')
+                continue;
+
+            if (i + 2 >= source.Length ||
+                !Uri.IsHexDigit(source[i + 1]) ||
+                !Uri.IsHexDigit(source[i + 2]))
+            {
+                return false;
+            }
+
+            i += 2;
+        }
+
         return true;
     }
 
