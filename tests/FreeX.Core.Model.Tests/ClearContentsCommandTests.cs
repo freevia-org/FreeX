@@ -133,7 +133,7 @@ public sealed class ClearContentsCommandTests
     [Fact]
     public void ClearContents_DoesNotMaterializeRangeForProtectionPreflight()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "ClearContentsCommand.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "ClearContentsCommand.cs"));
         var apply = source[
             source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
             source.IndexOf("public void Revert", StringComparison.Ordinal)];
@@ -179,6 +179,4 @@ public sealed class ClearContentsCommandTests
         sheet.GetCell(address)!.StyleId.Should().Be(unlockedStyle);
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 }

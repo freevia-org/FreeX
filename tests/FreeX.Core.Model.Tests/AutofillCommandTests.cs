@@ -306,7 +306,7 @@ public class AutofillCommandTests
     [Fact]
     public void Apply_ScansFillTargetsWithoutMaterializingAddressList()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "AutofillCommand.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "AutofillCommand.cs"));
         var apply = source[
             source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
             source.IndexOf("public void Revert", StringComparison.Ordinal)];
@@ -317,6 +317,4 @@ public class AutofillCommandTests
         apply.Should().Contain("for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)");
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 }

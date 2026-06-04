@@ -32,13 +32,11 @@ public sealed class BuiltInNumberFormatCatalogTests
     [Fact]
     public void CatalogLookups_UseStaticDictionariesInsteadOfLinearScans()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Model", "BuiltInNumberFormatCatalog.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Model", "BuiltInNumberFormatCatalog.cs"));
 
         source.Should().Contain("FormatCodesById.TryGetValue");
         source.Should().Contain("NumberFormatIdsByCode.TryGetValue");
         source.Should().NotContain("FirstOrDefault");
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 }

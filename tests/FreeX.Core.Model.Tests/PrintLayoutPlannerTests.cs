@@ -148,7 +148,7 @@ public sealed class PrintLayoutPlannerTests
     [Fact]
     public void BuildPagePlans_AvoidLinqPageSlicing()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Model", "PrintLayoutPlanner.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Model", "PrintLayoutPlanner.cs"));
 
         source.Should().Contain("CopyPageValues(");
         source.Should().NotContain(".Skip(");
@@ -171,6 +171,4 @@ public sealed class PrintLayoutPlannerTests
         size.RowHeight.Should().Be(20);
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 }
