@@ -639,6 +639,124 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithChartAndOutsideCellEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateChartSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Charts.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("outside patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/drawing1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/drawing1.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/drawing1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/drawing1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/charts/chart1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/charts/chart1.xml"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("outside patched");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new TextValue("outside patched"));
+        reloadedSheet.Charts.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithChartSourceCellEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateChartSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Charts.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(99));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        saved.Length.Should().BeGreaterThan(0);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_chart_source_cell");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithPivotAndOutsideCellEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreatePivotSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PivotTables.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("outside patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/pivotCache/pivotCacheDefinition1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/pivotCache/pivotCacheDefinition1.xml"));
+        ReadPackageEntry(savedBytes, "xl/pivotTables/pivotTable1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/pivotTables/pivotTable1.xml"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("outside patched");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new TextValue("outside patched"));
+        reloadedSheet.PivotTables.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithPivotSourceCellEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreatePivotSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PivotTables.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(99));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        saved.Length.Should().BeGreaterThan(0);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_pivot_source_cell");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithClearedLiteralCell_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
@@ -816,6 +934,110 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         reloaded.GetCell(1, 1)!.Value.Should().Be(new TextValue("patched value"));
     }
 
+    [Fact]
+    public void Save_LoadedWorkbookWithCustomWorkbookViewsAndCellEdit_PatchesSourcePackageAndRemovesCustomViews()
+    {
+        var sourceBytes = AddCustomWorkbookViews(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadWorkbookCustomWorkbookViews(savedBytes).Should().BeNull();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched value");
+        ReadPackageEntry(savedBytes, "xl/styles.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithNativeOnlyCustomSheetViewsAndCellEdit_PatchesSourcePackageAndRemovesCustomViews()
+    {
+        var sourceBytes = AddMinimalCustomSheetViews(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        workbook.CustomViews.Should().BeEmpty();
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadWorksheetCustomSheetViews(savedBytes, "xl/worksheets/sheet1.xml").Should().BeNull();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched value");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithModeledCustomViewsAndCellEdit_PatchesSourcePackageAndPreservesCustomViews()
+    {
+        var sourceBytes = AddMatchedCustomViews(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        workbook.CustomViews.Should().ContainSingle();
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadWorkbookCustomWorkbookViews(savedBytes).Should().NotBeNull();
+        ReadWorksheetCustomSheetViews(savedBytes, "xl/worksheets/sheet1.xml").Should().NotBeNull();
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched value");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reloadStream).CustomViews.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithRichSharedStringFontAndCellEdit_PatchesSourcePackageAndSanitizesFont()
+    {
+        var sourceBytes = AddCssFontFamilyRichSharedString(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(456));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadRichSharedStringFontValue(savedBytes, "original value")
+            .Should()
+            .Be("Google Sans");
+    }
+
     private static byte[] CreateSourcePackage()
     {
         using var stream = new MemoryStream();
@@ -829,6 +1051,178 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         }
 
         return stream.ToArray();
+    }
+
+    private static byte[] AddCssFontFamilyRichSharedString(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
+            sharedStringsEntry.Should().NotBeNull();
+            XDocument sharedStringsXml;
+            using (var sharedStringsStream = sharedStringsEntry!.Open())
+                sharedStringsXml = XDocument.Load(sharedStringsStream);
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sharedString = sharedStringsXml.Root!
+                .Elements(workbookNs + "si")
+                .Single(element => element.Element(workbookNs + "t")?.Value == "original value");
+            sharedString.ReplaceNodes(new XElement(
+                workbookNs + "r",
+                new XElement(
+                    workbookNs + "rPr",
+                    new XElement(workbookNs + "rFont", new XAttribute("val", "\"Google Sans\", Roboto, sans-serif")),
+                    new XElement(workbookNs + "sz", new XAttribute("val", "11"))),
+                new XElement(workbookNs + "t", "original value")));
+
+            sharedStringsEntry.Delete();
+            var replacement = archive.CreateEntry("xl/sharedStrings.xml");
+            using var replacementStream = replacement.Open();
+            sharedStringsXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddMinimalCustomSheetViews(byte[] sourceBytes)
+    {
+        return UpdateWorksheetXml(sourceBytes, worksheetXml =>
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            worksheetXml.Root!.AddFirst(new XElement(
+                worksheetNs + "customSheetViews",
+                new XElement(
+                    worksheetNs + "customSheetView",
+                    new XAttribute("guid", "{11111111-1111-1111-1111-111111111111}"),
+                    new XAttribute("view", "normal"),
+                    new XAttribute("scale", "120"),
+                    new XAttribute("state", "visible"))));
+        });
+    }
+
+    private static byte[] AddMatchedCustomViews(byte[] sourceBytes)
+    {
+        var withWorkbookViews = AddCustomWorkbookViews(sourceBytes);
+        return UpdateWorksheetXml(withWorkbookViews, worksheetXml =>
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            worksheetXml.Root!.AddFirst(new XElement(
+                worksheetNs + "customSheetViews",
+                new XElement(
+                    worksheetNs + "customSheetView",
+                    new XAttribute("guid", "{22222222-2222-2222-2222-222222222222}"),
+                    new XAttribute("view", "normal"),
+                    new XAttribute("scale", "120"),
+                    new XAttribute("showGridLines", "0"),
+                    new XAttribute("state", "visible"),
+                    new XElement(
+                        worksheetNs + "pane",
+                        new XAttribute("xSplit", "1"),
+                        new XAttribute("ySplit", "1"),
+                        new XAttribute("state", "split")))));
+        });
+    }
+
+    private static byte[] UpdateWorksheetXml(byte[] sourceBytes, Action<XDocument> update)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+            worksheetEntry.Should().NotBeNull();
+            XDocument worksheetXml;
+            using (var worksheetStream = worksheetEntry!.Open())
+                worksheetXml = XDocument.Load(worksheetStream);
+
+            update(worksheetXml);
+
+            worksheetEntry.Delete();
+            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
+            using var replacementStream = replacement.Open();
+            worksheetXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddCustomWorkbookViews(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            workbookEntry.Should().NotBeNull();
+            XDocument workbookXml;
+            using (var workbookStream = workbookEntry!.Open())
+                workbookXml = XDocument.Load(workbookStream);
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "customWorkbookViews",
+                new XElement(
+                    workbookNs + "customWorkbookView",
+                    new XAttribute("name", "FreeXView"),
+                    new XAttribute("guid", "{22222222-2222-2222-2222-222222222222}"),
+                    new XAttribute("autoUpdate", "0"),
+                    new XAttribute("mergeInterval", "0"),
+                    new XAttribute("personalView", "0"),
+                    new XAttribute("includePrintSettings", "1"),
+                    new XAttribute("includeHiddenRowCol", "1"))));
+
+            workbookEntry.Delete();
+            var replacement = archive.CreateEntry("xl/workbook.xml");
+            using var replacementStream = replacement.Open();
+            workbookXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static XElement? ReadWorkbookCustomWorkbookViews(byte[] packageBytes)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry("xl/workbook.xml");
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return document.Root!.Element(workbookNs + "customWorkbookViews");
+    }
+
+    private static XElement? ReadWorksheetCustomSheetViews(byte[] packageBytes, string worksheetPath)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry(worksheetPath);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return document.Root!.Element(worksheetNs + "customSheetViews");
+    }
+
+    private static string? ReadRichSharedStringFontValue(byte[] packageBytes, string plainText)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry("xl/sharedStrings.xml");
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return document.Root!
+            .Elements(workbookNs + "si")
+            .Single(element => string.Concat(element.Descendants(workbookNs + "t").Select(text => text.Value)) == plainText)
+            .Element(workbookNs + "r")?
+            .Element(workbookNs + "rPr")?
+            .Element(workbookNs + "rFont")?
+            .Attribute("val")
+            ?.Value;
     }
 
     private static byte[] CreateStyledSourcePackage()
@@ -1176,6 +1570,202 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                 CreateStructuredTableXml(includeFilter)));
 
         return package.ToArray();
+    }
+
+    private static byte[] CreateChartSourcePackage()
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(
+            (
+                "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                  <Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
+                  <Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>
+                </Types>
+                """),
+            (
+                "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Data" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                </workbook>
+                """),
+            (
+                "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+                  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+                  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+                  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+                  <dxfs count="0"/>
+                  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+                </styleSheet>
+                """),
+            (
+                "xl/worksheets/sheet1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <dimension ref="A1:D4"/>
+                  <sheetData>
+                    <row r="1"><c r="A1" t="inlineStr"><is><t>Region</t></is></c><c r="B1" t="inlineStr"><is><t>Sales</t></is></c></row>
+                    <row r="2"><c r="A2" t="inlineStr"><is><t>East</t></is></c><c r="B2"><v>10</v></c></row>
+                    <row r="3"><c r="A3" t="inlineStr"><is><t>West</t></is></c><c r="B3"><v>20</v></c></row>
+                    <row r="4"><c r="D4" t="inlineStr"><is><t>outside</t></is></c></row>
+                  </sheetData>
+                  <drawing r:id="rId1"/>
+                </worksheet>
+                """),
+            (
+                "xl/worksheets/_rels/sheet1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/drawings/drawing1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <xdr:twoCellAnchor>
+                    <xdr:from><xdr:col>3</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                    <xdr:to><xdr:col>8</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>10</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+                    <xdr:graphicFrame macro="">
+                      <xdr:nvGraphicFramePr>
+                        <xdr:cNvPr id="2" name="Sales Chart"/>
+                        <xdr:cNvGraphicFramePr/>
+                      </xdr:nvGraphicFramePr>
+                      <xdr:xfrm>
+                        <a:off x="0" y="0"/>
+                        <a:ext cx="0" cy="0"/>
+                      </xdr:xfrm>
+                      <a:graphic>
+                        <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                          <c:chart r:id="rId1"/>
+                        </a:graphicData>
+                      </a:graphic>
+                    </xdr:graphicFrame>
+                    <xdr:clientData/>
+                  </xdr:twoCellAnchor>
+                </xdr:wsDr>
+                """),
+            (
+                "xl/drawings/_rels/drawing1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/charts/chart1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                              xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <c:chart>
+                    <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
+                    <c:plotArea>
+                      <c:barChart>
+                        <c:barDir val="col"/>
+                        <c:ser>
+                          <c:idx val="0"/>
+                          <c:order val="0"/>
+                          <c:tx><c:strRef><c:f>Data!$B$1</c:f></c:strRef></c:tx>
+                          <c:cat><c:strRef><c:f>Data!$A$2:$A$3</c:f></c:strRef></c:cat>
+                          <c:val><c:numRef><c:f>Data!$B$2:$B$3</c:f></c:numRef></c:val>
+                        </c:ser>
+                      </c:barChart>
+                    </c:plotArea>
+                  </c:chart>
+                </c:chartSpace>
+                """));
+
+        return package.ToArray();
+    }
+
+    private static byte[] CreatePivotSourcePackage()
+    {
+        var workbook = new Workbook("PivotPatch");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("outside"));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = sourceRange.ToString(),
+            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml",
+            RecordCount = 2,
+            CreatedVersion = 8,
+            MinRefreshableVersion = 4
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Category"));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", 4));
+        workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = sourceRange,
+            TargetRange = new GridRange(
+                new CellAddress(sheet.Id, 6, 4),
+                new CellAddress(sheet.Id, 9, 5)),
+            PackagePart = "xl/pivotTables/pivotTable1.xml"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
+        sheet.PivotTables.Add(pivot);
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+        return stream.ToArray();
     }
 
     private static string CreateStructuredTableXml(bool includeFilter) =>
