@@ -10,7 +10,7 @@ public sealed class FormulaRegexCachePerformanceTests
     [Fact]
     public void TextNumberParser_UsesCachedRegexesForRepeatedCoercionChecks()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "ExcelTextNumberParser.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "ExcelTextNumberParser.cs"));
 
         source.Should().Contain("private static readonly Regex FakeLeapDayTextRegex");
         source.Should().Contain("private static readonly Regex MonthNameRegex");
@@ -21,7 +21,7 @@ public sealed class FormulaRegexCachePerformanceTests
     [Fact]
     public void DateTimeFunctions_UseCachedRegexesForRepeatedComponentChecks()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "BuiltInFunctions.DateTime.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "BuiltInFunctions.DateTime.cs"));
 
         source.Should().Contain("private static readonly Regex DateTimeTextHasTimeSeparatorRegex");
         source.Should().Contain("private static readonly Regex DateTimeTextHasDateSeparatorRegex");
@@ -31,8 +31,8 @@ public sealed class FormulaRegexCachePerformanceTests
     [Fact]
     public void WildcardAndSearchRegexCaches_AreBoundedAndTimed()
     {
-        var criteriaSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "BuiltInFunctions.Criteria.cs"));
-        var textSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "BuiltInFunctions.TextCore.cs"));
+        var criteriaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "BuiltInFunctions.Criteria.cs"));
+        var textSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "BuiltInFunctions.TextCore.cs"));
 
         criteriaSource.Should().Contain("FormulaSafetyLimits.MaxRegexCacheEntries");
         criteriaSource.Should().Contain("FormulaSafetyLimits.RegexTimeout");
@@ -42,6 +42,4 @@ public sealed class FormulaRegexCachePerformanceTests
 
     private const string StaticRegexCallPattern = @"\bRegex\.(?:Match|IsMatch)\s*\(";
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-        => WorkspaceFileLocator.Find(relativeParts);
 }

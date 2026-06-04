@@ -386,7 +386,7 @@ public static partial class FlashFillService
 
         if (!TryReadMonthNameToken(source, ref index) ||
             !TryReadRequiredWhitespace(source, ref index) ||
-            !TryReadDigitToken(source, ref index, minLength: 1, maxLength: 2, allowTrailingComma: true) ||
+            !TryReadDigitToken(source, ref index, minLength: 1, maxLength: 2, allowTrailingComma: true, allowOrdinalSuffix: true) ||
             !TryReadRequiredWhitespace(source, ref index) ||
             !TryReadDigitToken(source, ref index, minLength: 4, maxLength: 4, allowTrailingComma: false))
         {
@@ -402,7 +402,7 @@ public static partial class FlashFillService
         endExclusive = start;
         var index = start;
 
-        if (!TryReadDigitToken(source, ref index, minLength: 1, maxLength: 2, allowTrailingComma: false) ||
+        if (!TryReadDigitToken(source, ref index, minLength: 1, maxLength: 2, allowTrailingComma: false, allowOrdinalSuffix: true) ||
             !TryReadRequiredWhitespace(source, ref index) ||
             !TryReadMonthNameToken(source, ref index) ||
             !TryReadRequiredWhitespace(source, ref index) ||
@@ -424,7 +424,7 @@ public static partial class FlashFillService
             !TryReadRequiredWhitespace(source, ref index) ||
             !TryReadMonthNameToken(source, ref index) ||
             !TryReadRequiredWhitespace(source, ref index) ||
-            !TryReadDigitToken(source, ref index, minLength: 1, maxLength: 2, allowTrailingComma: false))
+            !TryReadDigitToken(source, ref index, minLength: 1, maxLength: 2, allowTrailingComma: false, allowOrdinalSuffix: true))
         {
             return false;
         }
@@ -453,7 +453,8 @@ public static partial class FlashFillService
         ref int index,
         int minLength,
         int maxLength,
-        bool allowTrailingComma)
+        bool allowTrailingComma,
+        bool allowOrdinalSuffix = false)
     {
         var start = index;
         while (index < source.Length &&
@@ -467,9 +468,38 @@ public static partial class FlashFillService
         if (length < minLength)
             return false;
 
+        if (allowOrdinalSuffix &&
+            !TryReadOrdinalDaySuffixIfPresent(source, start, index, ref index))
+        {
+            return false;
+        }
+
         if (allowTrailingComma && index < source.Length && source[index] == ',')
             index++;
 
+        return true;
+    }
+
+    private static bool TryReadOrdinalDaySuffixIfPresent(
+        string source,
+        int digitStart,
+        int suffixStart,
+        ref int index)
+    {
+        if (suffixStart + 2 > source.Length ||
+            !char.IsLetter(source[suffixStart]) ||
+            !char.IsLetter(source[suffixStart + 1]))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(source.AsSpan(digitStart, suffixStart - digitStart), NumberStyles.None, CultureInfo.InvariantCulture, out var day) ||
+            !IsValidOrdinalDaySuffix(day, source.Substring(suffixStart, 2)))
+        {
+            return false;
+        }
+
+        index = suffixStart + 2;
         return true;
     }
 
@@ -543,9 +573,36 @@ public static partial class FlashFillService
         if (allowTrailingComma && part.EndsWith(",", StringComparison.Ordinal))
             part = part[..^1];
 
-        return part.Length is >= 1 and <= 2 &&
-            part.All(char.IsDigit) &&
-            int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out day);
+        var digitLength = 0;
+        while (digitLength < part.Length && char.IsDigit(part[digitLength]))
+            digitLength++;
+
+        if (digitLength is < 1 or > 2 ||
+            !int.TryParse(part[..digitLength], NumberStyles.None, CultureInfo.InvariantCulture, out day))
+        {
+            return false;
+        }
+
+        if (digitLength == part.Length)
+            return true;
+
+        return part.Length - digitLength == 2 &&
+            IsValidOrdinalDaySuffix(day, part[digitLength..]);
+    }
+
+    private static bool IsValidOrdinalDaySuffix(int day, string suffix)
+    {
+        var expected = (day % 100) is >= 11 and <= 13
+            ? "th"
+            : (day % 10) switch
+            {
+                1 => "st",
+                2 => "nd",
+                3 => "rd",
+                _ => "th"
+            };
+
+        return string.Equals(suffix, expected, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryParseYearPart(string part, out int year)

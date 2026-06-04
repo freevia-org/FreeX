@@ -90,7 +90,7 @@ public sealed class FormulaParityCatalogTests
 
     private static IReadOnlyList<(string Name, string Status)> ReadDocumentedFunctions()
     {
-        var path = FindWorkspaceFile("docs", "parity/functions.md");
+        var path = WorkspaceFileLocator.FindFromCurrentDirectoryOrSourceFile(["docs", "parity/functions.md"]);
         var rows = new List<(string Name, string Status)>();
         var rowPattern = new Regex(@"^\|\s*(?<name>[A-Z][A-Z0-9._]*)\s*\|\s*(?<status>[^|]+?)\s*\|$");
 
@@ -113,7 +113,7 @@ public sealed class FormulaParityCatalogTests
 
     private static IReadOnlyDictionary<string, IReadOnlyList<(string Name, string Status)>> ReadDocumentedFunctionsBySection()
     {
-        var path = FindWorkspaceFile("docs", "parity/functions.md");
+        var path = WorkspaceFileLocator.FindFromCurrentDirectoryOrSourceFile(["docs", "parity/functions.md"]);
         var sections = new Dictionary<string, List<(string Name, string Status)>>(StringComparer.Ordinal);
         var currentSection = "";
         var rowPattern = new Regex(@"^\|\s*(?<name>[A-Z][A-Z0-9._]*)\s*\|\s*(?<status>[^|]+?)\s*\|$");
@@ -149,7 +149,7 @@ public sealed class FormulaParityCatalogTests
 
     private static IReadOnlyDictionary<string, CoverageSummaryCounts> ReadCoverageSummary()
     {
-        var path = FindWorkspaceFile("docs", "parity/functions.md");
+        var path = WorkspaceFileLocator.FindFromCurrentDirectoryOrSourceFile(["docs", "parity/functions.md"]);
         var rows = new Dictionary<string, CoverageSummaryCounts>(StringComparer.Ordinal);
         var inSummary = false;
 
@@ -196,8 +196,5 @@ public sealed class FormulaParityCatalogTests
         int NotImplemented,
         int Excluded,
         int InScopeTotal);
-
-    private static string FindWorkspaceFile(params string[] relativeParts)
-        => WorkspaceFileLocator.FindFromCurrentDirectoryOrSourceFile(relativeParts);
 
 }
