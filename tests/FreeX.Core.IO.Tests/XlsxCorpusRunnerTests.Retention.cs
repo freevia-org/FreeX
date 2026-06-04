@@ -497,6 +497,60 @@ public partial class XlsxCorpusRunnerTests
         cfRules.Should().HaveCount(16, "generated-cf-retention-package-003 embeds sixteen cfRule elements across its conditionalFormatting blocks");
     }
 
+    [Fact]
+    public void GeneratedTableRefFormulaRow_MaterializesTableGraphAndFormulasAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-table-ref-formulas-package-003");
+        AssertTableRefFormulaPackageGraph(source, "generated-table-ref-formulas-package-003 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-table-formula-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-table-ref-formulas-package-003");
+        AssertTableRefFormulaPackageGraph(saved, "generated-table-ref-formulas-package-003 saved");
+    }
+
+    [Fact]
+    public void GeneratedCrossSheetRangeRow_MaterializesCrossSheetFormulasAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-cross-sheet-range-package-003");
+        AssertCrossSheetFormulaPackageGraph(source, "generated-cross-sheet-range-package-003 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-cross-sheet-formula-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-cross-sheet-range-package-003");
+        AssertCrossSheetFormulaPackageGraph(saved, "generated-cross-sheet-range-package-003 saved");
+    }
+
+    [Fact]
+    public void GeneratedNamedRangeCountRow_MaterializesTwelveDefinedNamesAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-named-range-count-package-003");
+        AssertNamedRangeCountPackageGraph(source, "generated-named-range-count-package-003 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-named-range-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-named-range-count-package-003");
+        AssertNamedRangeCountPackageGraph(saved, "generated-named-range-count-package-003 saved");
+    }
+
 
     [Theory]
     [InlineData("generated-slicers-001", "xl/drawings/drawing1.xml", "../slicers/slicer1.xml")]
@@ -2220,6 +2274,154 @@ public partial class XlsxCorpusRunnerTests
             .Should()
             .Be("Jpan", because);
     }
+
+    private static void AssertTableRefFormulaPackageGraph(Stream package, string because)
+    {
+        if (package.CanSeek)
+            package.Position = 0;
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.Descendants(worksheetNs + "f")
+            .Select(formula => formula.Value)
+            .Where(formula =>
+                formula.Contains("Price", StringComparison.OrdinalIgnoreCase) &&
+                formula.Contains("Qty", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .HaveCount(2, because);
+
+        var tableParts = worksheetXml.Root!.Element(worksheetNs + "tableParts");
+        tableParts.Should().NotBeNull(because);
+        tableParts!.Attribute("count")!.Value.Should().Be("1", because);
+        var tablePart = tableParts.Elements(worksheetNs + "tablePart")
+            .Should()
+            .ContainSingle(because)
+            .Which;
+        var tableRelId = tablePart.Attribute(officeRelNs + "id")?.Value;
+        tableRelId.Should().NotBeNullOrWhiteSpace(because);
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Should()
+            .ContainSingle(rel =>
+                string.Equals(AttributeValue(rel, "Id"), tableRelId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(AttributeValue(rel, "Type"), "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(AttributeValue(rel, "Target"), "../tables/table1.xml", StringComparison.OrdinalIgnoreCase),
+                because);
+
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+        tableXml.Root!.Name.Should().Be(worksheetNs + "table", because);
+        tableXml.Root.Attribute("displayName")!.Value.Should().Be("SalesTable", because);
+        tableXml.Root.Attribute("ref")!.Value.Should().Be("A1:D3", because);
+        tableXml.Root.Element(worksheetNs + "autoFilter")!.Attribute("ref")!.Value.Should().Be("A1:D3", because);
+        tableXml.Root.Element(worksheetNs + "tableColumns")!
+            .Elements(worksheetNs + "tableColumn")
+            .Select(column => column.Attribute("name")?.Value)
+            .Should()
+            .Equal("Item", "Price", "Qty", "Total");
+        AssertContentTypeOverride(
+            archive,
+            "/xl/tables/table1.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml",
+            because);
+    }
+
+    private static void AssertCrossSheetFormulaPackageGraph(Stream package, string because)
+    {
+        if (package.CanSeek)
+            package.Position = 0;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/worksheets/sheet2.xml").Should().NotBeNull(because);
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.Descendants(workbookNs + "f")
+            .Select(formula => formula.Value)
+            .Where(formula =>
+                formula.Contains("SUMIF", StringComparison.OrdinalIgnoreCase) &&
+                formula.Contains("Lookup", StringComparison.OrdinalIgnoreCase))
+            .Should()
+            .HaveCount(2, because);
+
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var lookupSheet = workbookXml.Root!
+            .Element(workbookNs + "sheets")!
+            .Elements(workbookNs + "sheet")
+            .Should()
+            .ContainSingle(sheet => string.Equals(AttributeValue(sheet, "name"), "Lookup", StringComparison.OrdinalIgnoreCase), because)
+            .Which;
+        var lookupRelId = lookupSheet.Attribute(officeRelNs + "id")?.Value;
+        lookupRelId.Should().NotBeNullOrWhiteSpace(because);
+
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Should()
+            .ContainSingle(rel =>
+                string.Equals(AttributeValue(rel, "Id"), lookupRelId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(AttributeValue(rel, "Type"), "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet", StringComparison.OrdinalIgnoreCase) &&
+                AttributeValue(rel, "Target") != null &&
+                AttributeValue(rel, "Target")!.EndsWith("worksheets/sheet2.xml", StringComparison.OrdinalIgnoreCase),
+                because);
+        AssertContentTypeOverride(
+            archive,
+            "/xl/worksheets/sheet2.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml",
+            because);
+    }
+
+    private static void AssertNamedRangeCountPackageGraph(Stream package, string because)
+    {
+        if (package.CanSeek)
+            package.Position = 0;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var definedNames = workbookXml.Root!
+            .Element(workbookNs + "definedNames")!
+            .Elements(workbookNs + "definedName")
+            .ToArray();
+
+        definedNames.Should().HaveCount(12, because);
+        definedNames.Select(name => name.Attribute("name")?.Value)
+            .Should()
+            .Equal(Enumerable.Range(1, 12).Select(index => $"Range{index:00}"), because);
+        NormalizeDefinedNameReference(definedNames[0].Value).Should().Contain("Sheet1!A1:A3", because);
+        NormalizeDefinedNameReference(definedNames[11].Value).Should().Contain("Sheet1!L1:L3", because);
+    }
+
+    private static string NormalizeDefinedNameReference(string reference) =>
+        reference.Replace("'", "", StringComparison.Ordinal).Replace("$", "", StringComparison.Ordinal);
+
+    private static void AssertContentTypeOverride(
+        ZipArchive archive,
+        string partName,
+        string contentType,
+        string because)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Should()
+            .ContainSingle(element =>
+                string.Equals(AttributeValue(element, "PartName"), partName, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(AttributeValue(element, "ContentType"), contentType, StringComparison.OrdinalIgnoreCase),
+                because);
+    }
+
+    private static string? AttributeValue(XElement element, XName name) => element.Attribute(name)?.Value;
 
     private static void AssertHeaderFooterLegacyDrawingPackageGraph(Stream package, string because)
     {
