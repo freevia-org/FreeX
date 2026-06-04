@@ -124,6 +124,43 @@ public sealed partial class FormulaAuditingServiceTests
         issue.Description.Should().Contain("stored as text");
     }
 
+    [Theory]
+    [InlineData("'=SUM(A1:A2)")]
+    [InlineData("   '=SUM(A1:A2)")]
+    [InlineData("'   =SUM(A1:A2)")]
+    public void FindFormulaErrorIssues_ReturnsApostrophePrefixedFormulaStoredAsText(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue(value));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.Cell.Should().Be("A3");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.FormulaStoredAsTextErrorCode);
+        issue.FormulaText.Should().BeNull();
+        issue.Description.Should().Contain("stored as text");
+    }
+
+    [Theory]
+    [InlineData("'")]
+    [InlineData("'Budget")]
+    [InlineData("   'Budget")]
+    [InlineData("''=SUM(A1:A2)")]
+    [InlineData("   ''=SUM(A1:A2)")]
+    public void FindFormulaErrorIssues_DoesNotReturnFormulaStoredAsTextForApostropheNonFormulas(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(value));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaStoredAsTextErrorCode);
+    }
+
     [Fact]
     public void FindFormulaErrorIssues_DoesNotReturnFormulaStoredAsTextForActualFormulas()
     {

@@ -162,7 +162,7 @@ public static partial class FormulaAuditingService
                         address.ToA1(),
                         FormulaStoredAsTextErrorCode,
                         null,
-                        "The text in this cell starts with '=' and is stored as text instead of a formula.");
+                        "The text in this cell starts with '=' or an apostrophe-prefixed '=' and is stored as text instead of a formula.");
                 }
             }
         }
@@ -1268,6 +1268,9 @@ public static partial class FormulaAuditingService
     private static bool IsFormulaTextLiteral(string text)
     {
         var trimmed = text.TrimStart();
+        if (trimmed.Length > 0 && trimmed[0] == '\'')
+            trimmed = trimmed[1..].TrimStart();
+
         return trimmed.Length > 1 && trimmed[0] == '=';
     }
 

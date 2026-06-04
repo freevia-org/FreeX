@@ -157,7 +157,7 @@ Press **Shift+F3** to open the Insert Function dialog with category search.
 
 Formulas tab -> Trace Precedents / Trace Dependents draws arrows showing cell relationships. Evaluate Formula steps through a formula's calculation order.
 
-Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, text-number/date warnings including apostrophe-prefixed, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, and month-name text dates with two-digit years, blank references, omitted aggregate cells, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
+Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, formulas stored as text including apostrophe-prefixed formulas, text-number/date warnings including apostrophe-prefixed, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, and month-name text dates with two-digit years, blank references, omitted aggregate cells, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
 
 ### Calculation
 
