@@ -15,7 +15,7 @@ public sealed class SaveWorkbookWriterTests
         {
             var workbook = new Workbook("Saved");
             workbook.AddSheet("Sheet1");
-            var adapter = new FakeAdapter((savedWorkbook, stream) =>
+            var adapter = new FakeAdapter(save: (savedWorkbook, stream) =>
             {
                 savedWorkbook.Should().BeSameAs(workbook);
                 stream.Should().BeOfType<FileStream>();
@@ -54,7 +54,7 @@ public sealed class SaveWorkbookWriterTests
         {
             var workbook = new Workbook("Saved");
             workbook.AddSheet("Sheet1");
-            var adapter = new FakeAdapter((_, _) => throw new InvalidOperationException("boom"));
+            var adapter = new FakeAdapter(save: (_, _) => throw new InvalidOperationException("boom"));
             var saver = new SaveWorkbookWriter();
 
             var act = async () => await saver.SaveAsync(
@@ -70,14 +70,6 @@ public sealed class SaveWorkbookWriterTests
         {
             File.Delete(tempPath);
         }
-    }
-
-    private sealed class FakeAdapter(Action<Workbook, Stream> save) : IFileAdapter
-    {
-        public string Extension => ".fxjson";
-        public string FormatName => "Fake";
-        public Workbook Load(Stream stream) => throw new NotSupportedException();
-        public void Save(Workbook workbook, Stream stream) => save(workbook, stream);
     }
 
     private sealed class ImmediateProgress<T>(Action<T> report) : IProgress<T>
