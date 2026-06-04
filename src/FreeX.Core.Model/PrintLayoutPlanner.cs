@@ -19,7 +19,7 @@ public static class PrintLayoutPlanner
         if (rowsPerPage == 0)
             throw new ArgumentOutOfRangeException(nameof(rowsPerPage), "Rows per page must be at least 1.");
 
-        var titleRows = BuildTitleRows(repeatRows);
+        var titleRows = BuildTitleIndexes(repeatRows, CellAddress.MaxRow);
         var titleSet = titleRows.ToHashSet();
         var bodyRows = new List<uint>();
         for (var row = printRange.Start.Row; row <= printRange.End.Row; row++)
@@ -52,7 +52,7 @@ public static class PrintLayoutPlanner
         if (columnsPerPage == 0)
             throw new ArgumentOutOfRangeException(nameof(columnsPerPage), "Columns per page must be at least 1.");
 
-        var titleColumns = BuildTitleColumns(repeatColumns);
+        var titleColumns = BuildTitleIndexes(repeatColumns, CellAddress.MaxCol);
         var titleSet = titleColumns.ToHashSet();
         var bodyColumns = new List<uint>();
         for (var column = printRange.Start.Col; column <= printRange.End.Col; column++)
@@ -96,34 +96,19 @@ public static class PrintLayoutPlanner
             rowHeight);
     }
 
-    private static List<uint> BuildTitleRows(WorksheetRepeatRange? repeatRows)
+    private static List<uint> BuildTitleIndexes(WorksheetRepeatRange? repeatRange, uint maxIndex)
     {
-        var titleRows = new List<uint>();
-        if (repeatRows is not { } rows)
-            return titleRows;
+        var titleIndexes = new List<uint>();
+        if (repeatRange is not { } range)
+            return titleIndexes;
 
-        for (var row = rows.Start; row <= rows.End && row <= CellAddress.MaxRow; row++)
+        for (var row = range.Start; row <= range.End && row <= maxIndex; row++)
         {
             if (row >= 1)
-                titleRows.Add(row);
+                titleIndexes.Add(row);
         }
 
-        return titleRows;
-    }
-
-    private static List<uint> BuildTitleColumns(WorksheetRepeatRange? repeatColumns)
-    {
-        var titleColumns = new List<uint>();
-        if (repeatColumns is not { } columns)
-            return titleColumns;
-
-        for (var column = columns.Start; column <= columns.End && column <= CellAddress.MaxCol; column++)
-        {
-            if (column >= 1)
-                titleColumns.Add(column);
-        }
-
-        return titleColumns;
+        return titleIndexes;
     }
 
     private static int ToPageItemCount(uint itemsPerPage) =>
