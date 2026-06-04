@@ -460,6 +460,42 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversSpreadsheetWorkflowVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "FILTRE fliter fitler SORTNG srot sroting subtoal subtotl subttoal Tabl tbale FORMATING formatng. Keep prefiltre, tabl_name, https://fliter.example.com/subtoal, analyst@formatng.example.com, and \"C:\\formating folder\\filtre file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("FILTRE", "FILTER"),
+            ("fliter", "filter"),
+            ("fitler", "filter"),
+            ("SORTNG", "SORTING"),
+            ("srot", "sorting"),
+            ("sroting", "sorting"),
+            ("subtoal", "subtotal"),
+            ("subtotl", "subtotal"),
+            ("subttoal", "subtotal"),
+            ("Tabl", "Table"),
+            ("tbale", "table"),
+            ("FORMATING", "FORMATTING"),
+            ("formatng", "formatting"));
+        plan.IssueCount.Should().Be(13);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "FILTER filter filter SORTING sorting sorting subtotal subtotal subtotal Table table FORMATTING formatting. Keep prefiltre, tabl_name, https://fliter.example.com/subtoal, analyst@formatng.example.com, and \"C:\\formating folder\\filtre file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(13);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversReferenceRangeValueVocabularyTypos()
     {
         var wb = new Workbook("test");
