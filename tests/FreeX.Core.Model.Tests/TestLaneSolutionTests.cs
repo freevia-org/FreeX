@@ -34,7 +34,7 @@ public sealed class TestLaneSolutionTests
     {
         var agents = File.ReadAllText(FindWorkspaceFile("AGENTS.md"));
         var readme = File.ReadAllText(FindWorkspaceFile("README.md"));
-        var plan = File.ReadAllText(FindWorkspaceFile("docs", "TEST_DISTRIBUTION_PLAN.md"));
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "release/test-distribution.md"));
 
         agents.Should().Contain("default agent verification path");
         agents.Should().Contain("dotnet test FreeX.DefaultTests.slnx");

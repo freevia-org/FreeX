@@ -17,12 +17,12 @@ Tester builds are published on the [FreeX releases page](https://github.com/tony
 
 ## Documentation
 
-Start with the [user guide](docs/USER_GUIDE.md) and the [documentation index](docs/README.md). Current build scope and known limitations are tracked in [OUTSTANDING_BUILD.md](docs/OUTSTANDING_BUILD.md) and [FIDELITY_CONTRACT.md](docs/FIDELITY_CONTRACT.md).
+Start with the [user guide](docs/user/guide.md) and the [documentation index](docs/README.md). Current build scope and known limitations are tracked in [outstanding build](docs/planning/outstanding-build.md) and [fidelity contract](docs/formats/fidelity-contract.md).
 
 ## Legal And Privacy
 
-- [Legal notices](docs/LEGAL_NOTICES.md)
-- [Privacy notice](docs/PRIVACY.md)
+- [Legal notices](docs/legal/legal-notices.md)
+- [Privacy notice](docs/legal/privacy.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [Third-party license texts](THIRD_PARTY_LICENSES.md)
 - [Project license](LICENSE)
