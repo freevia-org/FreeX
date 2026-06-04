@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.Core.IO;
-using FreeX.Core.Model;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -59,7 +58,7 @@ public sealed class FileSavePlannerTests
     [Fact]
     public void TryResolveExistingPath_UsesOnlySaveCapableFormats()
     {
-        var adapter = new FakeAdapter([
+        var adapter = new TestFileAdapter([
             new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
             new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
         ]);
@@ -73,7 +72,7 @@ public sealed class FileSavePlannerTests
     [Fact]
     public void TryResolveExistingPath_ResolvesSaveCapableAlias()
     {
-        var adapter = new FakeAdapter([
+        var adapter = new TestFileAdapter([
             new FileFormatDescriptor(".fxjson", "FreeX Workbook", CanOpen: true, CanSave: true)
         ]);
 
@@ -88,7 +87,7 @@ public sealed class FileSavePlannerTests
     [Fact]
     public void TryResolveExistingPath_TrimsCurrentPathBeforeReturningTarget()
     {
-        var adapter = new FakeAdapter([
+        var adapter = new TestFileAdapter([
             new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true)
         ]);
 
@@ -103,7 +102,7 @@ public sealed class FileSavePlannerTests
     [Fact]
     public void TryResolveExistingPath_ReturnsFalseForMalformedCurrentPath()
     {
-        var adapter = new FakeAdapter([
+        var adapter = new TestFileAdapter([
             new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true)
         ]);
 
@@ -155,15 +154,6 @@ public sealed class FileSavePlannerTests
         FileSavePlanner.TryResolveExistingPath("Data.xml", adapters, out var xmlTarget).Should().BeTrue();
         xmlTarget.Should().NotBeNull();
         xmlTarget!.Adapter.Should().BeOfType<SpreadsheetXmlFileAdapter>();
-    }
-
-    private sealed class FakeAdapter(IReadOnlyList<FileFormatDescriptor> formats) : IFileAdapter
-    {
-        public string Extension => formats[0].Extension;
-        public string FormatName => formats[0].FormatName;
-        public IReadOnlyList<FileFormatDescriptor> Formats => formats;
-        public Workbook Load(Stream stream) => throw new NotSupportedException();
-        public void Save(Workbook workbook, Stream stream) => throw new NotSupportedException();
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);

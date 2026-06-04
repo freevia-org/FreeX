@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.Core.IO;
-using FreeX.Core.Model;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -11,7 +10,7 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: false, CanSave: false)
             ])
         };
@@ -25,7 +24,7 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
             ])
         };
@@ -39,12 +38,12 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
                 new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false),
                 new FileFormatDescriptor(".xltx", "XLTX Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
             ]),
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true)
             ])
         };
@@ -65,10 +64,10 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true)
             ]),
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".XLSX", "XLSX Workbook Alias", CanOpen: true, CanSave: false),
                 new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
             ])
@@ -84,11 +83,11 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
                 new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
             ]),
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".xls", "XLS 97-2003 Workbook", CanOpen: true, CanSave: false)
             ])
         };
@@ -102,7 +101,7 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor("csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true)
             ])
         };
@@ -152,11 +151,11 @@ public sealed class FileDialogFilterBuilderTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
                 new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
             ]),
-            new FakeAdapter([
+            new TestFileAdapter([
                 new FileFormatDescriptor(".csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true),
                 new FileFormatDescriptor(".fxl", "FreeX Workbook", CanOpen: true, CanSave: true)
             ])
@@ -178,7 +177,7 @@ public sealed class FileDialogFilterBuilderTests
     [Fact]
     public void FindOpenAdapter_ResolvesAliasesCaseInsensitively()
     {
-        var adapter = new FakeAdapter([
+        var adapter = new TestFileAdapter([
             new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
             new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
         ]);
@@ -289,12 +288,4 @@ public sealed class FileDialogFilterBuilderTests
         saveFormat.Should().BeNull();
     }
 
-    private sealed class FakeAdapter(IReadOnlyList<FileFormatDescriptor> formats) : IFileAdapter
-    {
-        public string Extension => formats[0].Extension;
-        public string FormatName => formats[0].FormatName;
-        public IReadOnlyList<FileFormatDescriptor> Formats => formats;
-        public Workbook Load(Stream stream) => throw new NotSupportedException();
-        public void Save(Workbook workbook, Stream stream) => throw new NotSupportedException();
-    }
 }
