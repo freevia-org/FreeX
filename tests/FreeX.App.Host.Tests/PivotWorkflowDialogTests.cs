@@ -1,5 +1,3 @@
-using System.IO;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -14,45 +12,27 @@ public sealed partial class PivotWorkflowDialogTests
 {
     private static string ReadPivotWorkflowSource()
     {
-        return string.Join(
+        return DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             "\n",
-            new[]
-            {
-                "PivotFieldGroupingDialog.cs",
-                "PivotTableDataSourceDialog.cs",
-                "PivotChartTypeDialog.cs",
-                "PivotDialogLayout.cs",
-                "PivotChartOptionsDialog.cs",
-                "PivotSlicerTimelineDialogs.cs",
-                "PivotCalculatedDialogs.cs",
-                "PivotStyleCatalog.cs",
-                "PivotStyleGalleryDialog.cs",
-                "PivotTableOptionsDialog.cs",
-                "PivotTableOptionsDialog.Result.cs"
-            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName))));
+            "PivotFieldGroupingDialog.cs",
+            "PivotTableDataSourceDialog.cs",
+            "PivotChartTypeDialog.cs",
+            "PivotDialogLayout.cs",
+            "PivotChartOptionsDialog.cs",
+            "PivotSlicerTimelineDialogs.cs",
+            "PivotCalculatedDialogs.cs",
+            "PivotStyleCatalog.cs",
+            "PivotStyleGalleryDialog.cs",
+            "PivotTableOptionsDialog.cs",
+            "PivotTableOptionsDialog.Result.cs");
     }
 
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)
-    {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName));
-        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0);
-        var end = string.IsNullOrEmpty(endMarker)
-            ? source.Length
-            : source.IndexOf(endMarker, start, StringComparison.Ordinal);
-        if (end < 0)
-            end = source.Length;
-        end.Should().BeGreaterThan(start);
-        return source[start..end];
-    }
+        => DialogSourceTestSupport.ReadClassSource(fileName, startMarker, endMarker);
 
     private static T GetPrivateField<T>(object instance, string name)
         where T : class
-    {
-        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(instance, name);
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
         where T : DependencyObject
