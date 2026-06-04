@@ -285,11 +285,52 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumericLiterals()
+    {
+        AssertFormulaBooleanContrastLocations("=1", "B1", "B2", "B3", "B4");
+        AssertFormulaBooleanContrastLocations("=0");
+        AssertFormulaBooleanContrastLocations("=-1", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumericReferencePredicate()
+    {
+        AssertFormulaNumericTruthyContrastLocations("=$A1", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateReferencePredicate()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var firstLabel = new CellAddress(sheet.Id, 1, 2);
+        var secondLabel = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), DateTimeValue.FromDateTime(DateTime.Today));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new DateTimeValue(0));
+        sheet.SetCell(firstLabel, new TextValue("Current date"));
+        sheet.SetCell(secondLabel, new TextValue("Zero date"));
+        AddFormulaContrastRule(sheet, firstLabel, secondLabel, "=$A1");
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal("B1");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLogicalBooleanReference()
     {
         AssertFormulaBooleanContrastLocations("AND($A1>=100,$C1)", "B2");
         AssertFormulaBooleanContrastLocations("OR($A1>=100,$C1)", "B1", "B2", "B3");
         AssertFormulaBooleanContrastLocations("NOT($C1)", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLogicalNumericReference()
+    {
+        AssertFormulaNumericTruthyContrastLocations("=AND($A1,$C1)", "B1");
+        AssertFormulaNumericTruthyContrastLocations("=OR($A1,$C1)", "B1", "B2", "B3");
+        AssertFormulaNumericTruthyContrastLocations("=NOT($A1)", "B3", "B4");
     }
 
     [Fact]
@@ -330,6 +371,23 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,SUM($A1)>0)");
+
+        FindLowContrastCellTextIssues(workbook).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatTextBlankOrErrorReferencePredicate()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var firstLabel = new CellAddress(sheet.Id, 1, 2);
+        var lastLabel = new CellAddress(sheet.Id, 3, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), ErrorValue.Value);
+        sheet.SetCell(firstLabel, new TextValue("Text"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Blank"));
+        sheet.SetCell(lastLabel, new TextValue("Error"));
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "=$A1");
 
         FindLowContrastCellTextIssues(workbook).Should().BeEmpty();
     }
@@ -453,9 +511,50 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new BoolValue(flag));
     }
 
+    private static Workbook CreateFormulaNumericTruthyContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        SetFormulaNumericTruthyContrastRow(sheet, 1, left: 1, right: 1, "Both nonzero");
+        SetFormulaNumericTruthyContrastRow(sheet, 2, left: 1, right: 0, "Left nonzero");
+        SetFormulaNumericTruthyContrastRow(sheet, 3, left: 0, right: 1, "Right nonzero");
+        SetFormulaNumericTruthyContrastRow(sheet, 4, left: 0, right: 0, "Both zero");
+
+        return workbook;
+    }
+
+    private static void SetFormulaNumericTruthyContrastRow(
+        Sheet sheet,
+        uint row,
+        double left,
+        double right,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(left));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(right));
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaNumericTruthyContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaNumericTruthyContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
