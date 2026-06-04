@@ -669,6 +669,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "srot"))
+                {
+                    suggestion = "sorting";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "tabl"))
+                {
+                    suggestion = "table";
+                    return true;
+                }
+
                 break;
             case 5:
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "chrat"))
@@ -707,6 +719,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "tbale"))
+                {
+                    suggestion = "table";
+                    return true;
+                }
+
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "thier"))
                 {
                     suggestion = "their";
@@ -730,6 +748,24 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fomula"))
                 {
                     suggestion = "formula";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "filtre"))
+                {
+                    suggestion = "filter";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fliter"))
+                {
+                    suggestion = "filter";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fitler"))
+                {
+                    suggestion = "filter";
                     return true;
                 }
 
@@ -802,6 +838,12 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "slcier"))
                 {
                     suggestion = "slicer";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sortng"))
+                {
+                    suggestion = "sorting";
                     return true;
                 }
 
@@ -897,6 +939,24 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sroting"))
+                {
+                    suggestion = "sorting";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "subtoal"))
+                {
+                    suggestion = "subtotal";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "subtotl"))
+                {
+                    suggestion = "subtotal";
+                    return true;
+                }
+
                 break;
             case 8:
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acheived"))
@@ -938,6 +998,12 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formular"))
                 {
                     suggestion = "formula";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formatng"))
+                {
+                    suggestion = "formatting";
                     return true;
                 }
 
@@ -1004,6 +1070,12 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "summarry"))
                 {
                     suggestion = "summary";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "subttoal"))
+                {
+                    suggestion = "subtotal";
                     return true;
                 }
 
@@ -1084,6 +1156,12 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "forcasted"))
                 {
                     suggestion = "forecasted";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formating"))
+                {
+                    suggestion = "formatting";
                     return true;
                 }
 
