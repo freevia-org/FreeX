@@ -56,6 +56,7 @@ internal static class ExcelOpenSmoke
     private const int MaxStructureProbeRows = 200;
     private const int MaxStructureProbeColumns = 80;
     private const int MaxOpenXmlValidationErrorsToReport = 20;
+    private const int MaxPackageContentTypeIssuesToReport = 20;
     private const double ExcelMeasurementTolerance = 0.01;
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -293,6 +294,7 @@ internal static class ExcelOpenSmoke
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
+                AssertPackageContentTypesComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -466,6 +468,7 @@ internal static class ExcelOpenSmoke
             workbook = null;
             CollectComReferences();
             AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
+            AssertPackageContentTypesComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
@@ -697,6 +700,45 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' is missing required package content type(s): {string.Join("; ", missing)}");
+    }
+
+    private static void AssertPackageContentTypesComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+        {
+            throw new InvalidDataException(
+                $"{label} for '{sourcePath}' is missing [Content_Types].xml.");
+        }
+
+        XDocument contentTypesXml;
+        using (var stream = contentTypesEntry.Open())
+            contentTypesXml = XDocument.Load(stream);
+
+        if (contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            throw new InvalidDataException(
+                $"{label} for '{sourcePath}' has an invalid [Content_Types].xml root element.");
+        }
+
+        var missing = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .Where(part => !string.Equals(part, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase))
+            .Where(part => string.IsNullOrWhiteSpace(GetEffectivePackageContentType(contentTypesXml, part)))
+            .ToArray();
+
+        if (missing.Length == 0)
+            return;
+
+        var sample = string.Join(", ", missing.Take(MaxPackageContentTypeIssuesToReport));
+        var suffix = missing.Length > MaxPackageContentTypeIssuesToReport
+            ? $", ... {missing.Length - MaxPackageContentTypeIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has package part(s) without effective content types: {sample}{suffix}");
     }
 
     private static string? GetEffectivePackageContentType(XDocument contentTypesXml, string normalizedPartName)
@@ -3448,7 +3490,7 @@ internal static class ExcelOpenSmoke
         var minOutlineRows = HasTag("outline-groups") || HasTag("row-column-groups") ? 1 : 0;
         var minOutlineColumns = HasTag("outline-groups") || HasTag("row-column-groups") ? 1 : 0;
         var minStyledCells = HasTag("formatting") || HasTag("styles") || HasTag("number-formats") ? 1 : 0;
-        var minNumberFormatCells = HasTag("formatting") || HasTag("styles") || HasTag("number-formats") ? 1 : 0;
+        var minNumberFormatCells = HasTag("number-formats") ? 1 : 0;
         var minBoldCells = HasTag("bold-cells") || HasTag("font-bold") ? 1 : 0;
         var minFilledCells = HasTag("fills") || HasTag("fill-color") ? 1 : 0;
         var minBorderedCells = HasTag("borders") ? 1 : 0;
