@@ -54,14 +54,15 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("tools\\Test-RepositoryPreflight.ps1");
         source.Should().Contain("dotnet restore FreeX.slnx");
         source.Should().Contain("dotnet build FreeX.slnx --configuration Release --no-restore");
-        source.Should().Contain("dotnet test FreeX.slnx --configuration Release --no-build");
+        source.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build");
+        source.Should().Contain("dotnet test FreeX.UiTests.slnx --configuration Release --no-build");
         source.Should().Contain("validates tracked JSON/XML-backed files");
         source.Should().Contain("--disable-build-servers");
         source.Should().Contain("-p:UseSharedCompilation=false");
         source.Should().Contain("-p:NodeReuse=false");
         source.Should().Contain("/nr:false");
         source.Should().Contain("-m:1");
-        source.Should().Contain("zero failed tests");
+        source.Should().Contain("both Release test lane runs report zero failed tests");
         source.Should().Contain("stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process");
     }
 
