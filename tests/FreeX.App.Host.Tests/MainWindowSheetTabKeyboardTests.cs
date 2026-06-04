@@ -846,12 +846,4 @@ public sealed class MainWindowSheetTabKeyboardTests
         using var stream = File.Create(outputPath);
         encoder.Save(stream);
     }
-
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
-    }
 }
