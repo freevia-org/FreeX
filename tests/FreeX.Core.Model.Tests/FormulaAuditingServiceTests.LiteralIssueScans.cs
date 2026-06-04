@@ -277,7 +277,7 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("Wed Jan 32, 24")]
     [InlineData("Thu Jan 1nd, 24")]
     [InlineData("Friday, Jax 2, 24")]
-    [InlineData("Wednesday, 32 Jan 26")]
+    [InlineData("Wednesday, 99 Jan 32")]
     [InlineData("2nd/Jan/2026")]
     [InlineData("2026/Jan/2nd")]
     [InlineData("2026 Jan 2nd")]
