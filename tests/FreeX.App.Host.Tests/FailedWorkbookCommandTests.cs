@@ -29,12 +29,4 @@ public sealed class FailedWorkbookCommandTests
 
         context.Workbook.Should().BeSameAs(workbook);
     }
-
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.Sheets.First(sheet => sheet.Id.Equals(sheetId));
-    }
 }

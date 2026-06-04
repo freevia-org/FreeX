@@ -13,6 +13,7 @@ internal static class XlsxWorksheetCellLayoutReader
         XNamespace worksheetNs)
     {
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
+        var explicitPopulatedCellStyles = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
         var populatedCellCount = 0;
         var styleOnlyStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
@@ -22,6 +23,7 @@ internal static class XlsxWorksheetCellLayoutReader
             worksheetXml.Root?.Element(worksheetNs + "sheetData"),
             worksheetNs,
             explicitStyleOnlyCells,
+            explicitPopulatedCellStyles,
             cachedFormulaErrors,
             styleOnlyStyleIndexes,
             ref hasDuplicateStyleOnlyCellStyleIndexes,
@@ -29,6 +31,7 @@ internal static class XlsxWorksheetCellLayoutReader
 
         return new XlsxWorksheetCellLayout(
             cachedFormulaErrors,
+            explicitPopulatedCellStyles,
             explicitStyleOnlyCells,
             hasStyleOnlyCells,
             hasDuplicateStyleOnlyCellStyleIndexes,
@@ -49,6 +52,7 @@ internal static class XlsxWorksheetCellLayoutReader
         XElement? sheetData,
         XNamespace worksheetNs,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
+        List<(uint Row, uint Col, int StyleIndex)> explicitPopulatedCellStyles,
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
         HashSet<string> styleOnlyStyleIndexes,
         ref bool hasDuplicateStyleOnlyCellStyleIndexes,
@@ -74,6 +78,7 @@ internal static class XlsxWorksheetCellLayoutReader
                     valueName,
                     inlineStringName,
                     explicitStyleOnlyCells,
+                    explicitPopulatedCellStyles,
                     cachedFormulaErrors,
                     styleOnlyStyleIndexes,
                     ref hasDuplicateStyleOnlyCellStyleIndexes,
@@ -88,6 +93,7 @@ internal static class XlsxWorksheetCellLayoutReader
         XElement cell,
         XNamespace worksheetNs,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
+        List<(uint Row, uint Col, int StyleIndex)> explicitPopulatedCellStyles,
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
         HashSet<string> styleOnlyStyleIndexes,
         ref bool hasDuplicateStyleOnlyCellStyleIndexes,
@@ -98,6 +104,7 @@ internal static class XlsxWorksheetCellLayoutReader
             worksheetNs + "v",
             worksheetNs + "is",
             explicitStyleOnlyCells,
+            explicitPopulatedCellStyles,
             cachedFormulaErrors,
             styleOnlyStyleIndexes,
             ref hasDuplicateStyleOnlyCellStyleIndexes,
@@ -109,6 +116,7 @@ internal static class XlsxWorksheetCellLayoutReader
         XName valueName,
         XName inlineStringName,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
+        List<(uint Row, uint Col, int StyleIndex)> explicitPopulatedCellStyles,
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
         HashSet<string> styleOnlyStyleIndexes,
         ref bool hasDuplicateStyleOnlyCellStyleIndexes,
@@ -134,7 +142,8 @@ internal static class XlsxWorksheetCellLayoutReader
         var isStyleOnly = hasStyle && formula is null && value is null && !hasInlineString;
         var rawValue = value?.Value;
         var hasCachedFormulaError = isErrorType && formula is not null && !string.IsNullOrWhiteSpace(rawValue);
-        if (!isStyleOnly && !hasCachedFormulaError)
+        var isExplicitlyStyledPopulatedCell = hasStyle && !isStyleOnly;
+        if (!isStyleOnly && !hasCachedFormulaError && !isExplicitlyStyledPopulatedCell)
             return false;
 
         if (isStyleOnly && !styleOnlyStyleIndexes.Add(rawStyleIndex!))
@@ -146,6 +155,9 @@ internal static class XlsxWorksheetCellLayoutReader
 
         if (isStyleOnly)
             explicitStyleOnlyCells.Add((address.Row, address.Col, styleIndex));
+
+        if (isExplicitlyStyledPopulatedCell)
+            explicitPopulatedCellStyles.Add((address.Row, address.Col, styleIndex));
 
         if (hasCachedFormulaError)
             cachedFormulaErrors[(address.Row, address.Col)] = MapCachedFormulaError(rawValue!);
@@ -171,6 +183,7 @@ internal static class XlsxWorksheetCellLayoutReader
 
 internal sealed record XlsxWorksheetCellLayout(
     Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
+    IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitPopulatedCellStyles,
     IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
     bool HasStyleOnlyCells,
     bool HasDuplicateStyleOnlyCellStyleIndexes,

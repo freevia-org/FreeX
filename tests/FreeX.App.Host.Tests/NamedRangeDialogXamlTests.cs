@@ -540,12 +540,4 @@ public sealed class NamedRangeDialogXamlTests
 
     private static ICommandBus CreateCommandBus(Workbook workbook) =>
         new CommandBus(_ => new TestCommandContext(workbook));
-
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException("Sheet not found.");
-    }
 }

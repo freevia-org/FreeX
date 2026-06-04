@@ -336,6 +336,26 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         cell!.StyleId = styleId;
     }
 
+    private static void ApplyGeneratedStyleHeavyExistingStyleMutation(Workbook workbook)
+    {
+        var sheet = workbook.Sheets[0];
+        var styleId = sheet.GetStyleOnlyEntries().Select(entry => entry.StyleId).First();
+        var cell = sheet.GetCell(1, 1);
+        cell.Should().NotBeNull();
+        cell!.StyleId = styleId;
+    }
+
+    private static void ApplyGeneratedStyleHeavyDimensionMutation(Workbook workbook, int iteration)
+    {
+        var sheet = workbook.Sheets[0];
+        var row = (uint)(1 + iteration);
+        var column = (uint)(2 + iteration);
+        sheet.RowHeights[row] = 24 + iteration;
+        sheet.HiddenRows.Add((uint)(20 + iteration));
+        sheet.ColumnWidths[column] = 14.25 + iteration;
+        sheet.HiddenCols.Add((uint)(30 + iteration));
+    }
+
     private static void ReplaceZipEntryXml(ZipArchive archive, string entryName, XDocument document)
     {
         archive.GetEntry(entryName)?.Delete();

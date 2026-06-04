@@ -60,6 +60,18 @@ internal static class ExcelOpenSmoke
     private const int MaxPackageContentTypeIssuesToReport = 20;
     private const int MaxPackageRelationshipIssuesToReport = 20;
     private const double ExcelMeasurementTolerance = 0.01;
+    private const string ChartRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+    private const string ChartSheetContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml";
+    private const string ChartSheetRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
+    private const string DrawingContentType =
+        "application/vnd.openxmlformats-officedocument.drawing+xml";
+    private const string DrawingRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+    private const string DrawingMlChartContentType =
+        "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
     private const string HyperlinkRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
     private static readonly XNamespace PackageContentTypeNs =
@@ -70,6 +82,8 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace SpreadsheetNs =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace DrawingChartNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
     public static int Run(string[] args)
     {
@@ -634,6 +648,17 @@ internal static class ExcelOpenSmoke
             issues.Add("missing xl/styles.xml for public styles/formatting tag");
         }
 
+        if ((tags.Contains("styles") || tags.Contains("formatting")) &&
+            !PackageRelationshipExists(
+                archive,
+                new PackageRelationshipExpectation(
+                    "xl/_rels/workbook.xml.rels",
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles",
+                    "xl/styles.xml")))
+        {
+            issues.Add("missing workbook relationship to xl/styles.xml for public styles/formatting tag");
+        }
+
         if (tags.Contains("shared-strings") &&
             !PackageEntryExists(archive, "xl/sharedStrings.xml"))
         {
@@ -693,7 +718,11 @@ internal static class ExcelOpenSmoke
             issues.Add("missing 31-character workbook sheet name for public sheet-names boundary tags");
         }
 
-        if (tags.Contains("unsupported-sheet-types") &&
+        if (tags.Contains("chartsheet"))
+        {
+            issues.AddRange(FindPublicChartsheetPackageIssues(archive));
+        }
+        else if (tags.Contains("unsupported-sheet-types") &&
             !archive.Entries.Any(entry =>
                 NormalizePackagePart(entry.FullName).StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase)))
         {
@@ -738,6 +767,120 @@ internal static class ExcelOpenSmoke
 
     private static IEnumerable<XElement> PublicWorksheetCells(IReadOnlyList<XDocument> worksheetXmlDocuments) =>
         PublicWorksheetElements(worksheetXmlDocuments, "c");
+
+    private static IEnumerable<string> FindPublicChartsheetPackageIssues(ZipArchive archive)
+    {
+        var chartsheetEntries = archive.Entries
+            .Where(entry =>
+                NormalizePackagePart(entry.FullName).StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) &&
+                entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (chartsheetEntries.Length == 0)
+        {
+            yield return "missing chartsheet package parts for public chartsheet tag";
+            yield break;
+        }
+
+        foreach (var chartsheetEntry in chartsheetEntries)
+        {
+            var chartsheetPart = NormalizePackagePart(chartsheetEntry.FullName);
+            var chartsheetContentTypeIssue = FindPackageContentTypeIssue(
+                archive,
+                chartsheetPart,
+                ChartSheetContentType);
+            if (chartsheetContentTypeIssue is not null)
+                yield return chartsheetContentTypeIssue;
+
+            if (!PackageRelationshipExists(
+                    archive,
+                    new PackageRelationshipExpectation(
+                        "xl/_rels/workbook.xml.rels",
+                        ChartSheetRelationshipType,
+                        chartsheetPart)))
+            {
+                yield return $"missing workbook relationship to {chartsheetPart} for public chartsheet tag";
+            }
+
+            var drawingIds = LoadPackageXml(chartsheetEntry)
+                .Descendants(SpreadsheetNs + "drawing")
+                .Select(drawing => drawing.Attribute(OfficeRelationshipNs + "id")?.Value)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => id!)
+                .ToArray();
+            if (drawingIds.Length == 0)
+            {
+                yield return $"{chartsheetPart} has no drawing relationship reference for public chartsheet tag";
+                continue;
+            }
+
+            var chartsheetRelationshipPart = GetRelationshipPartForPackagePart(chartsheetPart);
+            foreach (var drawingId in drawingIds)
+            {
+                if (!TryGetPackageRelationshipTarget(
+                        archive,
+                        chartsheetRelationshipPart,
+                        drawingId,
+                        DrawingRelationshipType,
+                        out var drawingTarget,
+                        out var drawingRelationshipIssue))
+                {
+                    yield return $"{chartsheetPart} drawing reference {drawingId}: {drawingRelationshipIssue}";
+                    continue;
+                }
+
+                var drawingPart = ResolvePackageRelationshipTarget(chartsheetRelationshipPart, drawingTarget!);
+                var drawingContentTypeIssue = FindPackageContentTypeIssue(
+                    archive,
+                    drawingPart,
+                    DrawingContentType);
+                if (drawingContentTypeIssue is not null)
+                    yield return drawingContentTypeIssue;
+
+                var drawingEntry = FindPackageEntry(archive, drawingPart);
+                if (drawingEntry is null)
+                {
+                    yield return $"{chartsheetPart} drawing reference {drawingId} targets missing package part {drawingPart}";
+                    continue;
+                }
+
+                var chartIds = LoadPackageXml(drawingEntry)
+                    .Descendants(DrawingChartNs + "chart")
+                    .Select(chart => chart.Attribute(OfficeRelationshipNs + "id")?.Value)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id!)
+                    .ToArray();
+                if (chartIds.Length == 0)
+                {
+                    yield return $"{drawingPart} has no chart relationship reference for public chartsheet tag";
+                    continue;
+                }
+
+                var drawingRelationshipPart = GetRelationshipPartForPackagePart(drawingPart);
+                foreach (var chartId in chartIds)
+                {
+                    if (!TryGetPackageRelationshipTarget(
+                            archive,
+                            drawingRelationshipPart,
+                            chartId,
+                            ChartRelationshipType,
+                            out var chartTarget,
+                            out var chartRelationshipIssue))
+                    {
+                        yield return $"{drawingPart} chart reference {chartId}: {chartRelationshipIssue}";
+                        continue;
+                    }
+
+                    var chartPart = ResolvePackageRelationshipTarget(drawingRelationshipPart, chartTarget!);
+                    var chartContentTypeIssue = FindPackageContentTypeIssue(
+                        archive,
+                        chartPart,
+                        DrawingMlChartContentType);
+                    if (chartContentTypeIssue is not null)
+                        yield return chartContentTypeIssue;
+                }
+            }
+        }
+    }
 
     private static IEnumerable<string> FindPublicHyperlinkRelationshipIssues(ZipArchive archive)
     {
@@ -836,6 +979,72 @@ internal static class ExcelOpenSmoke
         var relationshipsXml = LoadPackageXml(entry);
         return relationshipsXml.Root?.Elements(PackageRelationshipNs + "Relationship")
             .Any(relationship => PackageRelationshipMatches(relationshipPart, relationship, expectation)) == true;
+    }
+
+    private static string? FindPackageContentTypeIssue(
+        ZipArchive archive,
+        string packagePart,
+        string expectedContentType)
+    {
+        var contentTypesEntry = FindPackageEntry(archive, "[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return $"missing [Content_Types].xml for package content type assertion on {packagePart}";
+
+        var actualContentType = GetEffectivePackageContentType(LoadPackageXml(contentTypesEntry), packagePart);
+        if (actualContentType is null)
+            return $"{packagePart} has no effective package content type";
+
+        return string.Equals(actualContentType, expectedContentType, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : $"{packagePart} has ContentType={actualContentType}; expected {expectedContentType}";
+    }
+
+    private static bool TryGetPackageRelationshipTarget(
+        ZipArchive archive,
+        string relationshipPart,
+        string relationshipId,
+        string expectedRelationshipType,
+        out string? target,
+        out string? issue)
+    {
+        target = null;
+        relationshipPart = NormalizePackagePart(relationshipPart);
+        var entry = FindPackageEntry(archive, relationshipPart);
+        if (entry is null)
+        {
+            issue = $"missing relationship part {relationshipPart}";
+            return false;
+        }
+
+        var relationship = LoadPackageXml(entry)
+            .Root?
+            .Elements(PackageRelationshipNs + "Relationship")
+            .FirstOrDefault(relationship =>
+                string.Equals(
+                    relationship.Attribute("Id")?.Value,
+                    relationshipId,
+                    StringComparison.OrdinalIgnoreCase));
+        if (relationship is null)
+        {
+            issue = $"targets missing relationship {relationshipId} in {relationshipPart}";
+            return false;
+        }
+
+        if (!string.Equals(relationship.Attribute("Type")?.Value, expectedRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            issue = $"relationship {relationshipId} in {relationshipPart} has Type={relationship.Attribute("Type")?.Value}; expected {expectedRelationshipType}";
+            return false;
+        }
+
+        target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issue = $"relationship {relationshipId} in {relationshipPart} has no Target";
+            return false;
+        }
+
+        issue = null;
+        return true;
     }
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)

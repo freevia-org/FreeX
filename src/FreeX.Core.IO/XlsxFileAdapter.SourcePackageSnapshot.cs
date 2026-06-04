@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -140,6 +141,22 @@ public sealed partial class XlsxFileAdapter
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting);
 
+        public static XlsxSourcePackage Capture(
+            MemoryStream stream,
+            Workbook workbook,
+            bool allowBufferReuse,
+            IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
+            bool? hasUnsupportedConditionalFormatting,
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout)
+            => Capture(
+                stream,
+                workbook,
+                allowBufferReuse,
+                currentModelFingerprint: null,
+                worksheetsWithPreservableSourceMetadata,
+                hasUnsupportedConditionalFormatting,
+                sheetXmlLayout);
+
         private static XlsxSourcePackage Capture(
             MemoryStream stream,
             Workbook workbook,
@@ -159,7 +176,8 @@ public sealed partial class XlsxFileAdapter
             bool allowBufferReuse,
             string? currentModelFingerprint,
             IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
-            bool? hasUnsupportedConditionalFormatting)
+            bool? hasUnsupportedConditionalFormatting,
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null)
         {
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             if (stream.TryGetBuffer(out var buffer))
@@ -183,7 +201,8 @@ public sealed partial class XlsxFileAdapter
                             buffer.Offset,
                             (int)stream.Length,
                             workbook,
-                            CellPatchBaselineLimit));
+                            CellPatchBaselineLimit,
+                            sheetXmlLayout));
                 }
 
                 var copiedBytes = buffer.Array is not null &&
@@ -200,7 +219,13 @@ public sealed partial class XlsxFileAdapter
                     worksheetsWithPreservableSourceMetadata,
                     hasUnsupportedConditionalFormatting,
                     AllowsCellPatchSaveForPackage(copiedBytes, 0, copiedBytes.Length, workbook),
-                    XlsxCellPatchBaseline.TryCreate(copiedBytes, 0, copiedBytes.Length, workbook, CellPatchBaselineLimit));
+                    XlsxCellPatchBaseline.TryCreate(
+                        copiedBytes,
+                        0,
+                        copiedBytes.Length,
+                        workbook,
+                        CellPatchBaselineLimit,
+                        sheetXmlLayout));
             }
 
             var bytes = ReadBytes(stream);
@@ -212,7 +237,13 @@ public sealed partial class XlsxFileAdapter
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting,
                 AllowsCellPatchSaveForPackage(bytes, 0, bytes.Length, workbook),
-                XlsxCellPatchBaseline.TryCreate(bytes, 0, bytes.Length, workbook, CellPatchBaselineLimit));
+                XlsxCellPatchBaseline.TryCreate(
+                    bytes,
+                    0,
+                    bytes.Length,
+                    workbook,
+                    CellPatchBaselineLimit,
+                    sheetXmlLayout));
         }
 
         private static byte[] ReadBytes(Stream stream)
@@ -281,7 +312,8 @@ public sealed partial class XlsxFileAdapter
                     workbook,
                     CellPatchChangeLimit,
                     currentModelFingerprint,
-                    out var changes))
+                    out var changes,
+                    out var dimensionChanges))
             {
                 return false;
             }
@@ -289,7 +321,7 @@ public sealed partial class XlsxFileAdapter
             currentModelFingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var patchedModelFingerprint = currentModelFingerprint ?? CreateModelFingerprint(workbook);
             currentModelFingerprint = patchedModelFingerprint;
-            if (changes.Count == 0)
+            if (changes.Count == 0 && dimensionChanges.Count == 0)
             {
                 CopyTo(stream);
                 return true;
@@ -299,17 +331,35 @@ public sealed partial class XlsxFileAdapter
             patchedPackage.Write(Buffer, Offset, Count);
             using (var archive = new ZipArchive(patchedPackage, ZipArchiveMode.Update, leaveOpen: true))
             {
-                foreach (var group in changes.GroupBy(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase))
+                var cellChangesByWorksheet = changes
+                    .GroupBy(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+                var dimensionChangesByWorksheet = dimensionChanges
+                    .ToDictionary(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+                var worksheetPaths = cellChangesByWorksheet.Keys
+                    .Concat(dimensionChangesByWorksheet.Keys)
+                    .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var worksheetPath in worksheetPaths)
                 {
-                    var worksheetEntry = archive.GetEntry(group.Key);
+                    var worksheetEntry = archive.GetEntry(worksheetPath);
                     if (worksheetEntry is null)
                         return false;
 
                     var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                    if (!XlsxCellPatchBaseline.ApplyChanges(worksheetXml, group))
+                    if (cellChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetCellChanges) &&
+                        !XlsxCellPatchBaseline.ApplyChanges(worksheetXml, worksheetCellChanges))
+                    {
                         return false;
+                    }
 
-                    XlsxPackageXmlEditor.ReplaceXml(archive, group.Key, worksheetXml);
+                    if (dimensionChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetDimensionPatch) &&
+                        !XlsxCellPatchBaseline.ApplyDimensionChanges(worksheetXml, worksheetDimensionPatch))
+                    {
+                        return false;
+                    }
+
+                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
                 }
 
                 if (changes.Any(change =>
@@ -345,7 +395,7 @@ public sealed partial class XlsxFileAdapter
                     WorksheetsWithPreservableSourceMetadata,
                     HasUnsupportedConditionalFormatting,
                     AllowsCellPatchSave,
-                    CellPatchBaseline.WithAppliedChanges(changes, patchedModelFingerprint)));
+                    CellPatchBaseline.WithAppliedChanges(changes, dimensionChanges, patchedModelFingerprint)));
             }
             else
             {
@@ -564,13 +614,16 @@ public sealed partial class XlsxFileAdapter
     private sealed class XlsxCellPatchBaseline
     {
         private readonly IReadOnlyList<XlsxWorksheetCellPatchBaseline> _worksheets;
+        private readonly IReadOnlyDictionary<StyleId, string?> _sourceStyleIndexesByStyleId;
         private readonly string _modelFingerprint;
 
         private XlsxCellPatchBaseline(
             IReadOnlyList<XlsxWorksheetCellPatchBaseline> worksheets,
+            IReadOnlyDictionary<StyleId, string?> sourceStyleIndexesByStyleId,
             string modelFingerprint)
         {
             _worksheets = worksheets;
+            _sourceStyleIndexesByStyleId = sourceStyleIndexesByStyleId;
             _modelFingerprint = modelFingerprint;
         }
 
@@ -579,7 +632,8 @@ public sealed partial class XlsxFileAdapter
             int offset,
             int count,
             Workbook workbook,
-            int cellLimit)
+            int cellLimit,
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null)
         {
             try
             {
@@ -598,18 +652,50 @@ public sealed partial class XlsxFileAdapter
                     return null;
 
                 var worksheets = new List<XlsxWorksheetCellPatchBaseline>(workbook.SheetCount);
+                var sourceStyleIndexesByStyleId = new Dictionary<StyleId, string?>();
+                var ambiguousSourceStyleIds = new HashSet<StyleId>();
+                sourceStyleIndexesByStyleId[StyleId.Default] = null;
                 foreach (var sheet in workbook.Sheets)
                 {
                     if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                         return null;
 
+                    var sourceCellStyleIndexes =
+                        sheetXmlLayout is not null &&
+                        sheetXmlLayout.TryGetValue(sheet.Name, out var layout) &&
+                        string.Equals(layout.WorksheetPath, worksheetPath, StringComparison.OrdinalIgnoreCase)
+                            ? ReadSourceCellStyleIndexes(
+                                layout,
+                                sheet,
+                                sourceStyleIndexesByStyleId,
+                                ambiguousSourceStyleIds)
+                            : ReadSourceCellStyleIndexes(
+                                archive,
+                                worksheetPath,
+                                sheet,
+                                sourceStyleIndexesByStyleId,
+                                ambiguousSourceStyleIds);
+                    if (sourceCellStyleIndexes is null)
+                        return null;
+
                     var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(sheet.CellCount);
                     foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
                     {
+                        var hasExplicitSourceStyleIndex = sourceCellStyleIndexes.TryGetValue((row, col), out var sourceStyleIndex);
+                        if (cell.StyleId == StyleId.Default || hasExplicitSourceStyleIndex)
+                        {
+                            AddSourceStyleIndex(
+                                sourceStyleIndexesByStyleId,
+                                ambiguousSourceStyleIds,
+                                cell.StyleId,
+                                sourceStyleIndex);
+                        }
+
                         cells[(row, col)] = new XlsxPatchCell(
                             cell.Value,
                             cell.FormulaText,
                             cell.StyleId,
+                            sourceStyleIndex,
                             cell.IgnoreFormulaError);
                     }
 
@@ -619,10 +705,14 @@ public sealed partial class XlsxFileAdapter
                         worksheetPath,
                         sheet.CellCount,
                         sheet.StyleOnlyCellCount,
+                        XlsxWorksheetDimensionBaseline.Capture(sheet),
                         cells));
                 }
 
-                return new XlsxCellPatchBaseline(worksheets, CreateSourceModelFingerprint(workbook));
+                return new XlsxCellPatchBaseline(
+                    worksheets,
+                    sourceStyleIndexesByStyleId,
+                    CreateSourceModelFingerprint(workbook));
             }
             catch
             {
@@ -634,9 +724,11 @@ public sealed partial class XlsxFileAdapter
             Workbook workbook,
             int changeLimit,
             string? currentModelFingerprint,
-            out List<XlsxCellValuePatch> changes)
+            out List<XlsxCellValuePatch> changes,
+            out List<XlsxWorksheetDimensionPatch> dimensionChanges)
         {
             changes = [];
+            dimensionChanges = [];
             if (workbook.SheetCount != _worksheets.Count)
                 return false;
 
@@ -651,6 +743,24 @@ public sealed partial class XlsxFileAdapter
                     return false;
                 }
 
+                if (!XlsxWorksheetDimensionPatch.TryCreate(
+                        baseline.SheetId,
+                        baseline.WorksheetPath,
+                        baseline.Dimensions,
+                        XlsxWorksheetDimensionBaseline.Capture(sheet),
+                        out var dimensionPatch))
+                {
+                    return false;
+                }
+
+                if (dimensionPatch is not null)
+                {
+                    if (dimensionPatch.ChangeCount > changeLimit)
+                        return false;
+
+                    dimensionChanges.Add(dimensionPatch);
+                }
+
                 var addedCells = 0;
                 var currentCells = sheet.GetOccupiedCellMap();
                 foreach (var ((row, col), cell) in currentCells)
@@ -658,10 +768,10 @@ public sealed partial class XlsxFileAdapter
                     if (!baseline.Cells.TryGetValue((row, col), out var original))
                     {
                         if (cell.HasFormula ||
-                            cell.StyleId != StyleId.Default ||
                             cell.IgnoreFormulaError ||
                             cell.Value is BlankValue ||
-                            !IsPatchableScalarValue(cell.Value))
+                            !IsPatchableScalarValue(cell.Value) ||
+                            !TryGetSourceStyleIndex(cell.StyleId, out var insertedSourceStyleIndex))
                         {
                             return false;
                         }
@@ -677,6 +787,9 @@ public sealed partial class XlsxFileAdapter
                             OriginalFormulaText: null,
                             NewFormulaText: null,
                             OriginalStyleId: StyleId.Default,
+                            NewStyleId: cell.StyleId,
+                            OriginalSourceStyleIndex: null,
+                            NewSourceStyleIndex: insertedSourceStyleIndex,
                             OriginalIgnoreFormulaError: false));
                         if (changes.Count > changeLimit)
                             return false;
@@ -685,24 +798,32 @@ public sealed partial class XlsxFileAdapter
                         continue;
                     }
 
-                    if (cell.StyleId != original.StyleId ||
-                        cell.IgnoreFormulaError != original.IgnoreFormulaError)
+                    if (cell.IgnoreFormulaError != original.IgnoreFormulaError)
                     {
                         return false;
                     }
 
+                    var styleChanged = cell.StyleId != original.StyleId;
+                    var newSourceStyleIndex = original.SourceStyleIndex;
+                    if (styleChanged && !TryGetSourceStyleIndex(cell.StyleId, out newSourceStyleIndex))
+                        return false;
+
                     var formulaChanged = !string.Equals(cell.FormulaText, original.FormulaText, StringComparison.Ordinal);
                     var valueChanged = !Equals(cell.Value, original.Value);
-                    if (!formulaChanged && !valueChanged)
+                    if (!formulaChanged && !valueChanged && !styleChanged)
                         continue;
 
-                    if (!IsPatchableScalarValue(cell.Value))
+                    if ((formulaChanged || valueChanged) && !IsPatchableScalarValue(cell.Value))
                     {
                         return false;
                     }
 
                     XlsxCellValuePatchKind patchKind;
-                    if (formulaChanged)
+                    if (!formulaChanged && !valueChanged)
+                    {
+                        patchKind = XlsxCellValuePatchKind.CellStyle;
+                    }
+                    else if (formulaChanged)
                     {
                         if (string.IsNullOrWhiteSpace(original.FormulaText) ||
                             string.IsNullOrWhiteSpace(cell.FormulaText))
@@ -732,6 +853,9 @@ public sealed partial class XlsxFileAdapter
                         original.FormulaText,
                         cell.FormulaText,
                         original.StyleId,
+                        cell.StyleId,
+                        original.SourceStyleIndex,
+                        newSourceStyleIndex,
                         original.IgnoreFormulaError));
                     if (changes.Count > changeLimit)
                         return false;
@@ -754,6 +878,9 @@ public sealed partial class XlsxFileAdapter
                         original.FormulaText,
                         NewFormulaText: null,
                         original.StyleId,
+                        NewStyleId: StyleId.Default,
+                        original.SourceStyleIndex,
+                        NewSourceStyleIndex: null,
                         original.IgnoreFormulaError));
                     if (changes.Count > changeLimit)
                         return false;
@@ -765,9 +892,9 @@ public sealed partial class XlsxFileAdapter
                     return false;
             }
 
-            return changes.Count == 0 && currentModelFingerprint is not null
+            return changes.Count == 0 && dimensionChanges.Count == 0 && currentModelFingerprint is not null
                 ? string.Equals(_modelFingerprint, currentModelFingerprint, StringComparison.Ordinal)
-                : ModelMatchesWithOriginalValues(workbook, changes);
+                : ModelMatchesWithOriginalValues(workbook, changes, dimensionChanges);
         }
 
         public static bool ApplyChanges(XDocument worksheetXml, IEnumerable<XlsxCellValuePatch> changes)
@@ -787,7 +914,13 @@ public sealed partial class XlsxFileAdapter
                 if (change.Kind == XlsxCellValuePatchKind.InsertedLiteralValue)
                 {
                     if (cell is not null ||
-                        !InsertLiteralCell(sheetData, worksheetNs, change.Row, change.Col, change.NewValue))
+                        !InsertLiteralCell(
+                            sheetData,
+                            worksheetNs,
+                            change.Row,
+                            change.Col,
+                            change.NewValue,
+                            change.NewSourceStyleIndex))
                     {
                         return false;
                     }
@@ -818,10 +951,17 @@ public sealed partial class XlsxFileAdapter
                     if (!RewriteFormulaCachedCellValue(cell, worksheetNs, change.NewValue))
                         return false;
                 }
+                else if (change.Kind == XlsxCellValuePatchKind.CellStyle)
+                {
+                    // Style-only changes intentionally leave cell contents and formulas untouched.
+                }
                 else
                 {
                     RewriteLiteralCellValue(cell, worksheetNs, change.NewValue);
                 }
+
+                if (change.HasStyleChange)
+                    ApplyCellStyle(cell, change.NewSourceStyleIndex);
             }
 
             UpdateDimension(sheetData, root, worksheetNs);
@@ -829,20 +969,288 @@ public sealed partial class XlsxFileAdapter
             return true;
         }
 
+        public static bool ApplyDimensionChanges(
+            XDocument worksheetXml,
+            XlsxWorksheetDimensionPatch patch)
+        {
+            var root = worksheetXml.Root;
+            if (root is null)
+                return false;
+
+            var worksheetNs = root.Name.Namespace;
+            var sheetData = root.Element(worksheetNs + "sheetData");
+            if (sheetData is null)
+                return false;
+
+            foreach (var row in patch.ChangedRows)
+            {
+                if (!ApplyRowDimension(sheetData, worksheetNs, patch.Current, row))
+                    return false;
+            }
+
+            return ApplyColumnDimensions(root, worksheetNs, patch);
+        }
+
+        private static bool ApplyRowDimension(
+            XElement sheetData,
+            XNamespace worksheetNs,
+            XlsxWorksheetDimensionBaseline current,
+            uint row)
+        {
+            var hasHeight = TryGetFinitePositiveDimension(current.RowHeights, row, out var height);
+            var hidden = current.HiddenRows.Contains(row);
+            if (!hasHeight && !hidden)
+            {
+                var existingRow = FindRow(sheetData, worksheetNs, row);
+                if (existingRow is null)
+                    return true;
+
+                existingRow.SetAttributeValue("ht", null);
+                existingRow.SetAttributeValue("customHeight", null);
+                existingRow.SetAttributeValue("hidden", null);
+                if (!HasMeaningfulRowContent(existingRow, worksheetNs))
+                    existingRow.Remove();
+                return true;
+            }
+
+            var rowElement = FindOrCreateRow(sheetData, worksheetNs, row);
+            if (rowElement is null)
+                return false;
+
+            if (hasHeight)
+            {
+                rowElement.SetAttributeValue("ht", FormatDimensionDouble(height * (72.0 / 96.0)));
+                rowElement.SetAttributeValue("customHeight", "1");
+            }
+            else
+            {
+                rowElement.SetAttributeValue("ht", null);
+                rowElement.SetAttributeValue("customHeight", null);
+            }
+
+            if (hidden)
+                rowElement.SetAttributeValue("hidden", "1");
+            else
+                rowElement.SetAttributeValue("hidden", null);
+
+            return true;
+        }
+
+        private static bool ApplyColumnDimensions(
+            XElement root,
+            XNamespace worksheetNs,
+            XlsxWorksheetDimensionPatch patch)
+        {
+            if (patch.ChangedColumns.Count == 0)
+                return true;
+
+            var cols = root.Element(worksheetNs + "cols");
+            if (cols is null)
+            {
+                cols = new XElement(worksheetNs + "cols");
+                InsertColsElement(root, worksheetNs, cols);
+            }
+
+            foreach (var column in patch.ChangedColumns)
+            {
+                var columnElement = FindOrCreateColumn(cols, worksheetNs, column);
+                if (columnElement is null)
+                    return false;
+
+                var hasWidth = TryGetFinitePositiveDimension(patch.Current.ColumnWidths, column, out var width);
+                if (hasWidth)
+                {
+                    columnElement.SetAttributeValue("width", FormatDimensionDouble(width));
+                    columnElement.SetAttributeValue("customWidth", "1");
+                    if (columnElement.Attribute("style")?.Value == "0")
+                        columnElement.SetAttributeValue("style", null);
+                }
+                else
+                {
+                    columnElement.SetAttributeValue("width", null);
+                    columnElement.SetAttributeValue("customWidth", null);
+                }
+
+                if (patch.Current.HiddenCols.Contains(column))
+                    columnElement.SetAttributeValue("hidden", "1");
+                else
+                    columnElement.SetAttributeValue("hidden", null);
+
+                if (!HasMeaningfulColumnAttributes(columnElement))
+                    columnElement.Remove();
+            }
+
+            if (!cols.Elements(worksheetNs + "col").Any())
+                cols.Remove();
+
+            return true;
+        }
+
+        private static XElement? FindRow(XElement sheetData, XNamespace worksheetNs, uint row)
+        {
+            foreach (var rowElement in sheetData.Elements(worksheetNs + "row"))
+            {
+                if (uint.TryParse(rowElement.Attribute("r")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNumber) &&
+                    rowNumber == row)
+                {
+                    return rowElement;
+                }
+            }
+
+            return null;
+        }
+
+        private static XElement? FindOrCreateColumn(XElement cols, XNamespace worksheetNs, uint column)
+        {
+            var colName = worksheetNs + "col";
+            foreach (var col in cols.Elements(colName).ToList())
+            {
+                if (!uint.TryParse(col.Attribute("min")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var min) ||
+                    !uint.TryParse(col.Attribute("max")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var max) ||
+                    min == 0 ||
+                    max < min ||
+                    column < min ||
+                    column > max)
+                {
+                    continue;
+                }
+
+                var replacements = new List<XElement>(3);
+                if (min < column)
+                {
+                    var before = new XElement(col);
+                    before.SetAttributeValue("min", min.ToString(CultureInfo.InvariantCulture));
+                    before.SetAttributeValue("max", (column - 1).ToString(CultureInfo.InvariantCulture));
+                    replacements.Add(before);
+                }
+
+                var target = new XElement(col);
+                target.SetAttributeValue("min", column.ToString(CultureInfo.InvariantCulture));
+                target.SetAttributeValue("max", column.ToString(CultureInfo.InvariantCulture));
+                replacements.Add(target);
+
+                if (column < max)
+                {
+                    var after = new XElement(col);
+                    after.SetAttributeValue("min", (column + 1).ToString(CultureInfo.InvariantCulture));
+                    after.SetAttributeValue("max", max.ToString(CultureInfo.InvariantCulture));
+                    replacements.Add(after);
+                }
+
+                col.ReplaceWith(replacements);
+                return target;
+            }
+
+            var created = new XElement(
+                colName,
+                new XAttribute("min", column.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("max", column.ToString(CultureInfo.InvariantCulture)));
+            foreach (var existing in cols.Elements(colName))
+            {
+                if (uint.TryParse(existing.Attribute("min")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var existingMin) &&
+                    existingMin > column)
+                {
+                    existing.AddBeforeSelf(created);
+                    return created;
+                }
+            }
+
+            cols.Add(created);
+            return created;
+        }
+
+        private static bool HasMeaningfulRowContent(XElement row, XNamespace worksheetNs)
+        {
+            if (row.Elements(worksheetNs + "c").Any())
+                return true;
+
+            foreach (var attribute in row.Attributes())
+            {
+                if (attribute.Name.LocalName is not ("r" or "ht" or "customHeight" or "hidden" or "spans"))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasMeaningfulColumnAttributes(XElement col)
+        {
+            foreach (var attribute in col.Attributes())
+            {
+                var name = attribute.Name.LocalName;
+                if (name == "width")
+                    return true;
+
+                if (name == "hidden")
+                    return XlsxWorksheetXmlValueParser.IsTruthy(attribute.Value);
+
+                if (name is "min" or "max" or "customWidth")
+                    continue;
+
+                if (name == "style" && attribute.Value == "0")
+                    continue;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void InsertColsElement(XElement root, XNamespace worksheetNs, XElement cols)
+        {
+            if (root.Element(worksheetNs + "sheetData") is { } sheetData)
+            {
+                sheetData.AddBeforeSelf(cols);
+                return;
+            }
+
+            var anchor = root.Element(worksheetNs + "sheetFormatPr") ??
+                root.Element(worksheetNs + "sheetViews") ??
+                root.Element(worksheetNs + "dimension");
+            if (anchor is not null)
+                anchor.AddAfterSelf(cols);
+            else
+                root.AddFirst(cols);
+        }
+
+        private static bool TryGetFinitePositiveDimension(
+            IReadOnlyDictionary<uint, double> values,
+            uint key,
+            out double value)
+        {
+            if (values.TryGetValue(key, out value) &&
+                double.IsFinite(value) &&
+                value > 0)
+            {
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        private static string FormatDimensionDouble(double value) =>
+            value.ToString("0.################", CultureInfo.InvariantCulture);
+
         public XlsxCellPatchBaseline WithAppliedChanges(
             IReadOnlyList<XlsxCellValuePatch> changes,
+            IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges,
             string modelFingerprint)
         {
-            if (changes.Count == 0)
-                return new XlsxCellPatchBaseline(_worksheets, modelFingerprint);
+            if (changes.Count == 0 && dimensionChanges.Count == 0)
+                return new XlsxCellPatchBaseline(_worksheets, _sourceStyleIndexesByStyleId, modelFingerprint);
 
             var changesBySheet = changes
                 .GroupBy(change => change.SheetId)
                 .ToDictionary(group => group.Key, group => group.ToList());
+            var dimensionChangesBySheet = dimensionChanges
+                .ToDictionary(change => change.SheetId);
             var worksheets = new List<XlsxWorksheetCellPatchBaseline>(_worksheets.Count);
             foreach (var baseline in _worksheets)
             {
-                if (!changesBySheet.TryGetValue(baseline.SheetId, out var sheetChanges))
+                changesBySheet.TryGetValue(baseline.SheetId, out var sheetChanges);
+                dimensionChangesBySheet.TryGetValue(baseline.SheetId, out var dimensionPatch);
+                if ((sheetChanges is null || sheetChanges.Count == 0) && dimensionPatch is null)
                 {
                     worksheets.Add(baseline);
                     continue;
@@ -851,7 +1259,7 @@ public sealed partial class XlsxFileAdapter
                 var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(baseline.Cells);
                 var inserted = 0;
                 var deleted = 0;
-                foreach (var change in sheetChanges)
+                foreach (var change in sheetChanges ?? [])
                 {
                     var key = (change.Row, change.Col);
                     if (change.Kind == XlsxCellValuePatchKind.InsertedLiteralValue)
@@ -859,7 +1267,8 @@ public sealed partial class XlsxFileAdapter
                         cells[key] = new XlsxPatchCell(
                             change.NewValue,
                             null,
-                            StyleId.Default,
+                            change.NewStyleId,
+                            change.NewSourceStyleIndex,
                             false);
                         inserted++;
                         continue;
@@ -880,27 +1289,51 @@ public sealed partial class XlsxFileAdapter
                         Value = change.NewValue,
                         FormulaText = change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue
                             ? change.NewFormulaText
-                            : original.FormulaText
+                            : original.FormulaText,
+                        StyleId = change.NewStyleId,
+                        SourceStyleIndex = change.HasStyleChange
+                            ? change.NewSourceStyleIndex
+                            : original.SourceStyleIndex
                     };
                 }
 
                 worksheets.Add(baseline with
                 {
                     CellCount = baseline.CellCount + inserted - deleted,
+                    Dimensions = dimensionPatch?.Current ?? baseline.Dimensions,
                     Cells = cells
                 });
             }
 
-            return new XlsxCellPatchBaseline(worksheets, modelFingerprint);
+            return new XlsxCellPatchBaseline(worksheets, _sourceStyleIndexesByStyleId, modelFingerprint);
         }
 
-        private bool ModelMatchesWithOriginalValues(Workbook workbook, IReadOnlyList<XlsxCellValuePatch> changes)
+        private bool ModelMatchesWithOriginalValues(
+            Workbook workbook,
+            IReadOnlyList<XlsxCellValuePatch> changes,
+            IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges)
         {
-            var restoredCells = new List<(Cell Cell, ScalarValue CurrentValue, string? CurrentFormulaText)>(changes.Count);
+            var restoredCells = new List<(
+                Cell Cell,
+                ScalarValue CurrentValue,
+                string? CurrentFormulaText,
+                StyleId CurrentStyleId,
+                bool CurrentIgnoreFormulaError)>(changes.Count);
             var insertedCells = new List<(Sheet Sheet, uint Row, uint Col, Cell CurrentCell)>();
             var deletedCells = new List<(Sheet Sheet, uint Row, uint Col)>();
+            var restoredDimensions = new List<(Sheet Sheet, XlsxWorksheetDimensionBaseline Current)>(dimensionChanges.Count);
             try
             {
+                foreach (var dimensionChange in dimensionChanges)
+                {
+                    var sheet = workbook.GetSheet(dimensionChange.SheetId);
+                    if (sheet is null)
+                        return false;
+
+                    restoredDimensions.Add((sheet, XlsxWorksheetDimensionBaseline.Capture(sheet)));
+                    ApplyDimensionBaseline(sheet, dimensionChange.Original);
+                }
+
                 foreach (var change in changes)
                 {
                     var sheet = workbook.GetSheet(change.SheetId);
@@ -939,9 +1372,16 @@ public sealed partial class XlsxFileAdapter
                     if (changedCell is null)
                         return false;
 
-                    restoredCells.Add((changedCell, changedCell.Value, changedCell.FormulaText));
+                    restoredCells.Add((
+                        changedCell,
+                        changedCell.Value,
+                        changedCell.FormulaText,
+                        changedCell.StyleId,
+                        changedCell.IgnoreFormulaError));
                     changedCell.Value = change.OriginalValue;
                     changedCell.FormulaText = change.OriginalFormulaText;
+                    changedCell.StyleId = change.OriginalStyleId;
+                    changedCell.IgnoreFormulaError = change.OriginalIgnoreFormulaError;
                 }
 
                 return string.Equals(
@@ -951,10 +1391,12 @@ public sealed partial class XlsxFileAdapter
             }
             finally
             {
-                foreach (var (cell, currentValue, currentFormulaText) in restoredCells)
+                foreach (var (cell, currentValue, currentFormulaText, currentStyleId, currentIgnoreFormulaError) in restoredCells)
                 {
                     cell.Value = currentValue;
                     cell.FormulaText = currentFormulaText;
+                    cell.StyleId = currentStyleId;
+                    cell.IgnoreFormulaError = currentIgnoreFormulaError;
                 }
 
                 foreach (var (sheet, row, col, currentCell) in insertedCells)
@@ -962,11 +1404,203 @@ public sealed partial class XlsxFileAdapter
 
                 foreach (var (sheet, row, col) in deletedCells)
                     sheet.ClearCell(row, col);
+
+                foreach (var (sheet, current) in restoredDimensions)
+                    ApplyDimensionBaseline(sheet, current);
             }
+        }
+
+        private static void ApplyDimensionBaseline(Sheet sheet, XlsxWorksheetDimensionBaseline baseline)
+        {
+            sheet.DefaultColumnWidth = baseline.DefaultColumnWidth;
+            sheet.DefaultRowHeight = baseline.DefaultRowHeight;
+            ReplaceDictionary(sheet.RowHeights, baseline.RowHeights);
+            ReplaceDictionary(sheet.ColumnWidths, baseline.ColumnWidths);
+            ReplaceSet(sheet.HiddenRows, baseline.HiddenRows);
+            ReplaceSet(sheet.FilterHiddenRows, baseline.FilterHiddenRows);
+            ReplaceSet(sheet.HiddenCols, baseline.HiddenCols);
+            ReplaceDictionary(sheet.RowOutlineLevels, baseline.RowOutlineLevels);
+            ReplaceDictionary(sheet.ColOutlineLevels, baseline.ColOutlineLevels);
+            ReplaceSet(sheet.GroupHiddenRows, baseline.GroupHiddenRows);
+            ReplaceSet(sheet.GroupHiddenCols, baseline.GroupHiddenCols);
+            sheet.OutlineSummaryBelow = baseline.OutlineSummaryBelow;
+            sheet.OutlineSummaryRight = baseline.OutlineSummaryRight;
+            sheet.ShowOutlineSymbols = baseline.ShowOutlineSymbols;
+            sheet.ApplyOutlineStyles = baseline.ApplyOutlineStyles;
+        }
+
+        private static void ReplaceDictionary<TValue>(
+            Dictionary<uint, TValue> target,
+            IReadOnlyDictionary<uint, TValue> source)
+        {
+            target.Clear();
+            foreach (var (key, value) in source)
+                target[key] = value;
+        }
+
+        private static void ReplaceSet(HashSet<uint> target, IReadOnlySet<uint> source)
+        {
+            target.Clear();
+            foreach (var value in source)
+                target.Add(value);
         }
 
         private static bool IsPatchableScalarValue(ScalarValue value) =>
             value is BlankValue or NumberValue or BoolValue or TextValue or DateTimeValue or ErrorValue;
+
+        private bool TryGetSourceStyleIndex(StyleId styleId, out string? sourceStyleIndex) =>
+            _sourceStyleIndexesByStyleId.TryGetValue(styleId, out sourceStyleIndex);
+
+        private static void AddSourceStyleIndex(
+            Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
+            HashSet<StyleId> ambiguousStyleIds,
+            StyleId styleId,
+            string? sourceStyleIndex)
+        {
+            if (ambiguousStyleIds.Contains(styleId))
+                return;
+
+            if (!sourceStyleIndexesByStyleId.TryGetValue(styleId, out var existingSourceStyleIndex))
+            {
+                sourceStyleIndexesByStyleId[styleId] = sourceStyleIndex;
+                return;
+            }
+
+            if (string.Equals(existingSourceStyleIndex, sourceStyleIndex, StringComparison.Ordinal))
+                return;
+
+            sourceStyleIndexesByStyleId.Remove(styleId);
+            ambiguousStyleIds.Add(styleId);
+        }
+
+        private static Dictionary<(uint Row, uint Col), string?>? ReadSourceCellStyleIndexes(
+            SheetXmlLayout layout,
+            Sheet sheet,
+            Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
+            HashSet<StyleId> ambiguousStyleIds)
+        {
+            var result = new Dictionary<(uint Row, uint Col), string?>(Math.Min(sheet.CellCount, layout.ExplicitPopulatedCellStyles.Count));
+            var sourceStyleIndexCache = new Dictionary<int, string?>();
+            foreach (var (row, col, styleIndex) in layout.ExplicitPopulatedCellStyles)
+            {
+                if (styleIndex < 0)
+                    continue;
+
+                if (sheet.GetCell(row, col) is not { } cell)
+                    continue;
+
+                var sourceStyleIndex = GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex);
+                result[(row, col)] = sourceStyleIndex;
+                AddSourceStyleIndex(
+                    sourceStyleIndexesByStyleId,
+                    ambiguousStyleIds,
+                    cell.StyleId,
+                    sourceStyleIndex);
+            }
+
+            foreach (var (row, col, styleIndex) in layout.ExplicitStyleOnlyCells)
+            {
+                if (styleIndex < 0)
+                    continue;
+
+                if (sheet.GetStyleOnly(row, col) is not { } styleOnlyStyleId)
+                    continue;
+
+                AddSourceStyleIndex(
+                    sourceStyleIndexesByStyleId,
+                    ambiguousStyleIds,
+                    styleOnlyStyleId,
+                    GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex));
+            }
+
+            return result;
+        }
+
+        private static string? GetCachedSourceStyleIndex(Dictionary<int, string?> cache, int styleIndex)
+        {
+            if (cache.TryGetValue(styleIndex, out var sourceStyleIndex))
+                return sourceStyleIndex;
+
+            sourceStyleIndex = NormalizeSourceStyleIndex(styleIndex);
+            cache[styleIndex] = sourceStyleIndex;
+            return sourceStyleIndex;
+        }
+
+        private static Dictionary<(uint Row, uint Col), string?>? ReadSourceCellStyleIndexes(
+            ZipArchive archive,
+            string worksheetPath,
+            Sheet sheet,
+            Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
+            HashSet<StyleId> ambiguousStyleIds)
+        {
+            var entry = archive.GetEntry(worksheetPath);
+            if (entry is null)
+                return null;
+
+            var result = new Dictionary<(uint Row, uint Col), string?>(sheet.CellCount);
+            using var stream = entry.Open();
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element ||
+                    !string.Equals(reader.LocalName, "c", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var rawStyleIndex = reader.GetAttribute("s");
+                if (!TryNormalizeSourceStyleIndex(rawStyleIndex, out var sourceStyleIndex))
+                    continue;
+
+                var reference = reader.GetAttribute("r");
+                if (!TryParseCellReference(reference, out var row, out var col))
+                    continue;
+
+                if (sheet.GetCell(row, col) is { } cell)
+                {
+                    result[(row, col)] = sourceStyleIndex;
+                    AddSourceStyleIndex(
+                        sourceStyleIndexesByStyleId,
+                        ambiguousStyleIds,
+                        cell.StyleId,
+                        sourceStyleIndex);
+                    continue;
+                }
+
+                if (sheet.GetStyleOnly(row, col) is { } styleOnlyStyleId)
+                {
+                    AddSourceStyleIndex(
+                        sourceStyleIndexesByStyleId,
+                        ambiguousStyleIds,
+                        styleOnlyStyleId,
+                        sourceStyleIndex);
+                }
+            }
+
+            return result;
+        }
+
+        private static string? NormalizeSourceStyleIndex(int sourceStyleIndex) =>
+            sourceStyleIndex <= 0
+                ? null
+                : sourceStyleIndex.ToString(CultureInfo.InvariantCulture);
+
+        private static bool TryNormalizeSourceStyleIndex(string? rawStyleIndex, out string? sourceStyleIndex)
+        {
+            sourceStyleIndex = null;
+            if (string.IsNullOrWhiteSpace(rawStyleIndex))
+                return false;
+
+            var span = rawStyleIndex.AsSpan().Trim();
+            if (!uint.TryParse(span, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+                return false;
+
+            if (parsed == 0)
+                return true;
+
+            sourceStyleIndex = parsed.ToString(CultureInfo.InvariantCulture);
+            return true;
+        }
 
         private static XElement? FindCell(XElement sheetData, XNamespace worksheetNs, uint row, uint col)
         {
@@ -1091,16 +1725,26 @@ public sealed partial class XlsxFileAdapter
             XNamespace worksheetNs,
             uint row,
             uint col,
-            ScalarValue value)
+            ScalarValue value,
+            string? sourceStyleIndex)
         {
             var rowElement = FindOrCreateRow(sheetData, worksheetNs, row);
             if (rowElement is null)
                 return false;
 
             var cellElement = new XElement(worksheetNs + "c", new XAttribute("r", ToReference(row, col)));
+            ApplyCellStyle(cellElement, sourceStyleIndex);
             RewriteLiteralCellValue(cellElement, worksheetNs, value);
             InsertCellInColumnOrder(rowElement, worksheetNs, cellElement, col);
             return true;
+        }
+
+        private static void ApplyCellStyle(XElement cell, string? sourceStyleIndex)
+        {
+            if (string.IsNullOrEmpty(sourceStyleIndex))
+                cell.Attribute("s")?.Remove();
+            else
+                cell.SetAttributeValue("s", sourceStyleIndex);
         }
 
         private static XElement? FindOrCreateRow(XElement sheetData, XNamespace worksheetNs, uint row)
@@ -1250,18 +1894,206 @@ public sealed partial class XlsxFileAdapter
             row < 1_000_000 ? 6 : 7;
     }
 
+    private sealed record XlsxWorksheetDimensionBaseline(
+        double DefaultColumnWidth,
+        double DefaultRowHeight,
+        IReadOnlyDictionary<uint, double> RowHeights,
+        IReadOnlyDictionary<uint, double> ColumnWidths,
+        IReadOnlySet<uint> HiddenRows,
+        IReadOnlySet<uint> FilterHiddenRows,
+        IReadOnlySet<uint> HiddenCols,
+        IReadOnlyDictionary<uint, int> RowOutlineLevels,
+        IReadOnlyDictionary<uint, int> ColOutlineLevels,
+        IReadOnlySet<uint> GroupHiddenRows,
+        IReadOnlySet<uint> GroupHiddenCols,
+        bool? OutlineSummaryBelow,
+        bool? OutlineSummaryRight,
+        bool? ShowOutlineSymbols,
+        bool? ApplyOutlineStyles)
+    {
+        public static XlsxWorksheetDimensionBaseline Capture(Sheet sheet) => new(
+            sheet.DefaultColumnWidth,
+            sheet.DefaultRowHeight,
+            CopyDictionary(sheet.RowHeights),
+            CopyDictionary(sheet.ColumnWidths),
+            CopySet(sheet.HiddenRows),
+            CopySet(sheet.FilterHiddenRows),
+            CopySet(sheet.HiddenCols),
+            CopyDictionary(sheet.RowOutlineLevels),
+            CopyDictionary(sheet.ColOutlineLevels),
+            CopySet(sheet.GroupHiddenRows),
+            CopySet(sheet.GroupHiddenCols),
+            sheet.OutlineSummaryBelow,
+            sheet.OutlineSummaryRight,
+            sheet.ShowOutlineSymbols,
+            sheet.ApplyOutlineStyles);
+
+        public bool UnsupportedFieldsMatch(XlsxWorksheetDimensionBaseline current) =>
+            DefaultColumnWidth.Equals(current.DefaultColumnWidth) &&
+            DefaultRowHeight.Equals(current.DefaultRowHeight) &&
+            SetEquals(FilterHiddenRows, current.FilterHiddenRows) &&
+            DictionaryEquals(RowOutlineLevels, current.RowOutlineLevels) &&
+            DictionaryEquals(ColOutlineLevels, current.ColOutlineLevels) &&
+            SetEquals(GroupHiddenRows, current.GroupHiddenRows) &&
+            SetEquals(GroupHiddenCols, current.GroupHiddenCols) &&
+            OutlineSummaryBelow == current.OutlineSummaryBelow &&
+            OutlineSummaryRight == current.OutlineSummaryRight &&
+            ShowOutlineSymbols == current.ShowOutlineSymbols &&
+            ApplyOutlineStyles == current.ApplyOutlineStyles;
+
+        private static Dictionary<uint, TValue> CopyDictionary<TValue>(IReadOnlyDictionary<uint, TValue> source) =>
+            new(source);
+
+        private static HashSet<uint> CopySet(IEnumerable<uint> source) => [.. source];
+
+        private static bool DictionaryEquals<TValue>(
+            IReadOnlyDictionary<uint, TValue> left,
+            IReadOnlyDictionary<uint, TValue> right)
+            where TValue : IEquatable<TValue>
+        {
+            if (left.Count != right.Count)
+                return false;
+
+            foreach (var (key, value) in left)
+            {
+                if (!right.TryGetValue(key, out var other) || !value.Equals(other))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool SetEquals(IReadOnlySet<uint> left, IReadOnlySet<uint> right) =>
+            left.Count == right.Count && left.SetEquals(right);
+    }
+
+    private sealed record XlsxWorksheetDimensionPatch(
+        SheetId SheetId,
+        string WorksheetPath,
+        XlsxWorksheetDimensionBaseline Original,
+        XlsxWorksheetDimensionBaseline Current,
+        IReadOnlyList<uint> ChangedRows,
+        IReadOnlyList<uint> ChangedColumns)
+    {
+        public int ChangeCount => ChangedRows.Count + ChangedColumns.Count;
+
+        public static bool TryCreate(
+            SheetId sheetId,
+            string worksheetPath,
+            XlsxWorksheetDimensionBaseline original,
+            XlsxWorksheetDimensionBaseline current,
+            out XlsxWorksheetDimensionPatch? patch)
+        {
+            patch = null;
+            if (!original.UnsupportedFieldsMatch(current) ||
+                !HasValidRowHeights(current.RowHeights) ||
+                !HasValidColumnWidths(current.ColumnWidths) ||
+                !HasValidRows(current.HiddenRows) ||
+                !HasValidColumns(current.HiddenCols))
+            {
+                return false;
+            }
+
+            var changedRows = GetChangedRows(original, current);
+            var changedColumns = GetChangedColumns(original, current);
+            if (changedRows.Count == 0 && changedColumns.Count == 0)
+                return true;
+
+            patch = new XlsxWorksheetDimensionPatch(
+                sheetId,
+                worksheetPath,
+                original,
+                current,
+                changedRows,
+                changedColumns);
+            return true;
+        }
+
+        private static List<uint> GetChangedRows(
+            XlsxWorksheetDimensionBaseline original,
+            XlsxWorksheetDimensionBaseline current)
+        {
+            var rows = original.RowHeights.Keys
+                .Concat(current.RowHeights.Keys)
+                .Concat(original.HiddenRows)
+                .Concat(current.HiddenRows)
+                .Where(IsValidWorksheetRow)
+                .Distinct()
+                .OrderBy(row => row)
+                .ToList();
+
+            rows.RemoveAll(row =>
+                TryGetFinitePositive(original.RowHeights, row, out var originalHeight) ==
+                TryGetFinitePositive(current.RowHeights, row, out var currentHeight) &&
+                originalHeight.Equals(currentHeight) &&
+                original.HiddenRows.Contains(row) == current.HiddenRows.Contains(row));
+            return rows;
+        }
+
+        private static List<uint> GetChangedColumns(
+            XlsxWorksheetDimensionBaseline original,
+            XlsxWorksheetDimensionBaseline current)
+        {
+            var columns = original.ColumnWidths.Keys
+                .Concat(current.ColumnWidths.Keys)
+                .Concat(original.HiddenCols)
+                .Concat(current.HiddenCols)
+                .Where(IsValidWorksheetColumn)
+                .Distinct()
+                .OrderBy(column => column)
+                .ToList();
+
+            columns.RemoveAll(column =>
+                TryGetFinitePositive(original.ColumnWidths, column, out var originalWidth) ==
+                TryGetFinitePositive(current.ColumnWidths, column, out var currentWidth) &&
+                originalWidth.Equals(currentWidth) &&
+                original.HiddenCols.Contains(column) == current.HiddenCols.Contains(column));
+            return columns;
+        }
+
+        private static bool TryGetFinitePositive(
+            IReadOnlyDictionary<uint, double> values,
+            uint key,
+            out double value)
+        {
+            if (values.TryGetValue(key, out value) &&
+                double.IsFinite(value) &&
+                value > 0)
+            {
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+
+        private static bool HasValidRowHeights(IReadOnlyDictionary<uint, double> rowHeights) =>
+            rowHeights.All(pair => IsValidWorksheetRow(pair.Key) && double.IsFinite(pair.Value) && pair.Value > 0);
+
+        private static bool HasValidColumnWidths(IReadOnlyDictionary<uint, double> columnWidths) =>
+            columnWidths.All(pair => IsValidWorksheetColumn(pair.Key) && double.IsFinite(pair.Value) && pair.Value > 0);
+
+        private static bool HasValidRows(IReadOnlySet<uint> rows) =>
+            rows.All(IsValidWorksheetRow);
+
+        private static bool HasValidColumns(IReadOnlySet<uint> columns) =>
+            columns.All(IsValidWorksheetColumn);
+    }
+
     private sealed record XlsxWorksheetCellPatchBaseline(
         SheetId SheetId,
         string SheetName,
         string WorksheetPath,
         int CellCount,
         int StyleOnlyCellCount,
+        XlsxWorksheetDimensionBaseline Dimensions,
         IReadOnlyDictionary<(uint Row, uint Col), XlsxPatchCell> Cells);
 
     private sealed record XlsxPatchCell(
         ScalarValue Value,
         string? FormulaText,
         StyleId StyleId,
+        string? SourceStyleIndex,
         bool IgnoreFormulaError);
 
     private sealed record XlsxCellValuePatch(
@@ -1275,13 +2107,20 @@ public sealed partial class XlsxFileAdapter
         string? OriginalFormulaText,
         string? NewFormulaText,
         StyleId OriginalStyleId,
-        bool OriginalIgnoreFormulaError);
+        StyleId NewStyleId,
+        string? OriginalSourceStyleIndex,
+        string? NewSourceStyleIndex,
+        bool OriginalIgnoreFormulaError)
+    {
+        public bool HasStyleChange => OriginalStyleId != NewStyleId;
+    }
 
     private enum XlsxCellValuePatchKind
     {
         LiteralValue,
         FormulaCachedValue,
         FormulaTextAndCachedValue,
+        CellStyle,
         InsertedLiteralValue,
         DeletedCell
     }
