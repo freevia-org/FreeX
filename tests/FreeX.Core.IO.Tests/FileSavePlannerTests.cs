@@ -115,7 +115,7 @@ public sealed class FileSavePlannerTests
     [Fact]
     public void TryResolveExistingPath_UsesSharedFileFormatResolver()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "FileSavePlanner.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "FileSavePlanner.cs"));
 
         source.Should().Contain("FileFormatResolver.FindSaveAdapter(adapters, extension, out _)");
     }
@@ -155,6 +155,4 @@ public sealed class FileSavePlannerTests
         xmlTarget.Should().NotBeNull();
         xmlTarget!.Adapter.Should().BeOfType<SpreadsheetXmlFileAdapter>();
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }
