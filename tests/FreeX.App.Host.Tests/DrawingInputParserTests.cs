@@ -1,4 +1,3 @@
-using System.Globalization;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -24,16 +23,9 @@ public sealed class DrawingInputParserTests
     [InlineData(0, "0")]
     public void FormatCropPercent_FormatsRatiosAsPercentText(double value, string expected)
     {
-        var priorCulture = CultureInfo.CurrentCulture;
-        try
-        {
-            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-            DrawingInputParser.FormatCropPercent(value).Should().Be(expected);
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = priorCulture;
-        }
+        using var cultureScope = TestCultureScope.InvariantCurrentCulture();
+
+        DrawingInputParser.FormatCropPercent(value).Should().Be(expected);
     }
 
     [Theory]
@@ -150,21 +142,13 @@ public sealed class DrawingInputParserTests
     [Fact]
     public void FormatPictureCellText_MapsScalarValuesToExcelDisplayText()
     {
-        var priorCulture = CultureInfo.CurrentCulture;
-        try
-        {
-            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        using var cultureScope = TestCultureScope.InvariantCurrentCulture();
 
-            DrawingInputParser.FormatPictureCellText(BlankValue.Instance).Should().Be("");
-            DrawingInputParser.FormatPictureCellText(new NumberValue(12.5)).Should().Be("12.5");
-            DrawingInputParser.FormatPictureCellText(new BoolValue(true)).Should().Be("TRUE");
-            DrawingInputParser.FormatPictureCellText(new BoolValue(false)).Should().Be("FALSE");
-            DrawingInputParser.FormatPictureCellText(new TextValue("East")).Should().Be("East");
-            DrawingInputParser.FormatPictureCellText(new ErrorValue("#DIV/0!")).Should().Be("#DIV/0!");
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = priorCulture;
-        }
+        DrawingInputParser.FormatPictureCellText(BlankValue.Instance).Should().Be("");
+        DrawingInputParser.FormatPictureCellText(new NumberValue(12.5)).Should().Be("12.5");
+        DrawingInputParser.FormatPictureCellText(new BoolValue(true)).Should().Be("TRUE");
+        DrawingInputParser.FormatPictureCellText(new BoolValue(false)).Should().Be("FALSE");
+        DrawingInputParser.FormatPictureCellText(new TextValue("East")).Should().Be("East");
+        DrawingInputParser.FormatPictureCellText(new ErrorValue("#DIV/0!")).Should().Be("#DIV/0!");
     }
 }

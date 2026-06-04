@@ -11,7 +11,7 @@ public sealed partial class LocalizationResourceTests
     [Fact]
     public void UiText_CommonProperties_ReturnNeutralStrings()
     {
-        using var cultureScope = new CultureScope(currentCulture: "ja-JP", currentUICulture: "ja-JP");
+        using var cultureScope = TestCultureScope.CurrentCultureAndUICulture(currentCulture: "ja-JP", currentUICulture: "ja-JP");
 
         UiText.Ok.Should().Be("_OK");
         UiText.Cancel.Should().Be("_Cancel");
@@ -30,7 +30,7 @@ public sealed partial class LocalizationResourceTests
     [Fact]
     public void UiText_Format_UsesCurrentCultureForArguments()
     {
-        using var cultureScope = new CultureScope(currentCulture: "fr-FR", currentUICulture: "en-US");
+        using var cultureScope = TestCultureScope.CurrentCultureAndUICulture(currentCulture: "fr-FR", currentUICulture: "en-US");
         const string key = "Missing_Format_{0:N2}";
 
         var expected = string.Format(CultureInfo.CurrentCulture, "[[Missing_Format_{0:N2}]]", 1234.5);
@@ -59,7 +59,7 @@ public sealed partial class LocalizationResourceTests
     [Fact]
     public void AppLocalization_ApplyAppLanguage_UpdatesUiCultureWithoutChangingRegionalCulture()
     {
-        using var cultureScope = new CultureScope(currentCulture: "fr-FR", currentUICulture: "fr-FR");
+        using var cultureScope = TestCultureScope.CurrentCultureAndUICulture(currentCulture: "fr-FR", currentUICulture: "fr-FR");
         var expectedDefaultCulture = CultureInfo.DefaultThreadCurrentCulture;
 
         AppLocalization.ApplyAppLanguage("uk-UA");
@@ -120,25 +120,4 @@ public sealed partial class LocalizationResourceTests
     [GeneratedRegex("<(?<control>ListBoxItem|ComboBoxItem|TreeViewItem)\\b[^>]*(?:Content|Header)=\"\\{local:Loc Key=(?<key>[^}]+)\\}\"", RegexOptions.CultureInvariant)]
     private static partial Regex LocalizedSelectorItemPattern();
 
-    private sealed class CultureScope : IDisposable
-    {
-        private readonly CultureInfo _previousCulture = CultureInfo.CurrentCulture;
-        private readonly CultureInfo _previousUICulture = CultureInfo.CurrentUICulture;
-        private readonly CultureInfo? _previousDefaultCulture = CultureInfo.DefaultThreadCurrentCulture;
-        private readonly CultureInfo? _previousDefaultUICulture = CultureInfo.DefaultThreadCurrentUICulture;
-
-        public CultureScope(string currentCulture, string currentUICulture)
-        {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(currentCulture);
-            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(currentUICulture);
-        }
-
-        public void Dispose()
-        {
-            CultureInfo.CurrentCulture = _previousCulture;
-            CultureInfo.CurrentUICulture = _previousUICulture;
-            CultureInfo.DefaultThreadCurrentCulture = _previousDefaultCulture;
-            CultureInfo.DefaultThreadCurrentUICulture = _previousDefaultUICulture;
-        }
-    }
 }

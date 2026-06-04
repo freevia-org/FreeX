@@ -1,4 +1,3 @@
-using System.Globalization;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -17,18 +16,10 @@ public sealed class WorksheetSizeInputParserTests
     [Fact]
     public void TryParsePositiveSize_UsesCurrentCultureNumberFormatting()
     {
-        var originalCulture = CultureInfo.CurrentCulture;
-        try
-        {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+        using var cultureScope = TestCultureScope.CurrentCulture("fr-FR");
 
-            WorksheetSizeInputParser.TryParsePositiveSize("8,5", out var size).Should().BeTrue();
-            size.Should().Be(8.5);
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = originalCulture;
-        }
+        WorksheetSizeInputParser.TryParsePositiveSize("8,5", out var size).Should().BeTrue();
+        size.Should().Be(8.5);
     }
 
     [Theory]
