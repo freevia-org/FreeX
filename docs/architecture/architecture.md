@@ -388,7 +388,9 @@ dotted/underscored/hyphenated email display-name cleanup, plus-address email loc
 spaced or compact pipe/arrow label-value splitting, digit-mask formatting
 such as phone-number punctuation copied from examples, calendar-valid embedded-date extraction/normalization from
 labeled text with ambiguous multi-date sources rejected, English month-name date component extraction that preserves
-raw month tokens while normalizing ordinal day tokens, and two-part full-name reordering such as `Ada Lovelace` to
+raw month tokens while normalizing ordinal day tokens, pure time component extraction for hour, minute, second, and
+meridiem from time-like values with ambiguous component examples rejected, embedded time extraction/normalization with
+ambiguous multi-time sources rejected, and two-part full-name reordering such as `Ada Lovelace` to
 `Lovelace, Ada`, plus a small multi-column pattern set. First/last-name,
 first-initial/last-name, and last-name/first-initial email generation learn constant
 domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/last-initial aliases. It returns no result when the examples are ambiguous.
@@ -396,7 +398,7 @@ domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/
 Spell Check remains a deterministic known-corrections service in `Core.Commands`, not dictionary-backed proofing. It
 scans literal text cells, notes, threaded comment roots, and threaded comment replies in deterministic sheet/address order
 and plans undoable replacement edits while leaving formula cells alone. The known-corrections catalog covers bounded
-office, spreadsheet, planning, risk/action, and invoice/supply-chain vocabulary while preserving ignored URL, email,
+office, spreadsheet, planning, risk/action, invoice/supply-chain, and meeting/communication vocabulary while preserving ignored URL, email,
 file path, identifier, and prefixed-word spans.
 The host workflow keeps Ignore All case-insensitive for the current pass and persists Add to Dictionary custom words
 through `FreeXOptions` so matching scanner results stay suppressed across sessions/workbooks without introducing a full
@@ -442,7 +444,8 @@ stating that Microsoft 365 sign-in, cloud links, and coauthoring are not impleme
 through Save As, and hands Windows Share the normalized local path.
 
 Error Checking remains a deterministic model-backed audit in `Core.Commands`, not a full Excel heuristic inference
-engine. It reports cached formula error values, text cells that parse as finite invariant-culture numbers, formulas
+engine. It reports cached formula error values, text cells that parse as finite invariant-culture numbers including
+supported currency, percent, accounting-parentheses, and Unicode/fullwidth leading-sign forms, formulas
 stored as text, formulas whose direct parser-extracted precedents include missing or blank cells, table calculated
 column formulas that differ from the column formula, and common aggregate formulas (`SUM`, `AVERAGE`, `AVERAGEA`,
 `COUNT`, `COUNTA`, `MEDIAN`, `MIN`, `MINA`, `MAX`, `MAXA`, `PRODUCT`, `STDEV`, `STDEVP`, `STDEV.S`, `STDEV.P`, `VAR`, `VARP`,
