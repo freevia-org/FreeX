@@ -8,7 +8,7 @@ public sealed class SelectionMarqueeLayoutPlannerPerformanceTests
     [Fact]
     public void CalculateVisibleRangeRect_AccumulatesBoundsWithoutMaterializedMetricLists()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "SelectionMarqueeLayoutPlanner.cs"));
 
         source.Should().Contain("foreach (var row in viewport.RowMetrics)");
@@ -23,6 +23,4 @@ public sealed class SelectionMarqueeLayoutPlannerPerformanceTests
         source.Should().NotContain("using System.Linq;");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }

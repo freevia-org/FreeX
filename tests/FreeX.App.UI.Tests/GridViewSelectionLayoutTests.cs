@@ -291,7 +291,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void CalculateQuickAnalysisDataBarPreviewRects_CalculatesMaxWithoutNumericCellList()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "QuickAnalysisPreviewLayoutPlanner.cs"));
         var publicDataBars = source[
             source.IndexOf("public static IReadOnlyList<Rect> CalculateDataBarPreviewRects", StringComparison.Ordinal)..
@@ -325,7 +325,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void CalculateQuickAnalysisCellAndSparklinePreviews_AvoidFilteredMetricLists()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "QuickAnalysisPreviewLayoutPlanner.cs"));
         var cellPreview = source[
             source.IndexOf("internal static void VisitCellPreviewRects", StringComparison.Ordinal)..
@@ -353,7 +353,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void QuickAnalysisRendering_StreamsPreviewRectsWithoutMaterializingLists()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
         var renderPreview = source[
             source.IndexOf("private void RenderQuickAnalysisPreview", StringComparison.Ordinal)..
@@ -382,7 +382,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void QuickAnalysisChartPreviewRendering_ReusesCoefficientTables()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
         var chartPreviewRendering = source[
             source.IndexOf("private static void DrawQuickAnalysisColumnChartPreview", StringComparison.Ordinal)..
@@ -404,7 +404,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void SelectionEdgeLookup_StopsAfterRangeEdgesAreFound()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
         var getRangePixels = source[
             source.IndexOf("private (double? top, double? left, double? bottom, double? right) GetRangePixels(", StringComparison.Ordinal)..
@@ -420,9 +420,9 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void RenderSelectionRange_UsesUnifiedVisibleSelectionLayout()
     {
-        var rendering = File.ReadAllText(FindWorkspaceFile(
+        var rendering = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
-        var planner = File.ReadAllText(FindWorkspaceFile(
+        var planner = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "SelectionMarqueeLayoutPlanner.cs"));
         var renderSelectionRange = rendering[
             rendering.IndexOf("private void RenderSelectionRange", StringComparison.Ordinal)..
@@ -583,6 +583,4 @@ public sealed class GridViewSelectionLayoutTests
             [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20), new RowMetric(3, 20, 40)],
             [new ColMetric(1, 60, 0), new ColMetric(2, 80, 60), new ColMetric(3, 60, 140)]);
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }
