@@ -54,7 +54,11 @@ internal static class ShapeEffectsDialogPlanner
         new(
             DrawingShapeEffectPreset.SoftEdges,
             UiText.Get("ShapeEffects_SoftEdges"),
-            UiText.Get("ShapeEffects_SoftEdgesDescription"))
+            UiText.Get("ShapeEffects_SoftEdgesDescription")),
+        new(
+            DrawingShapeEffectPreset.Bevel,
+            UiText.Get("ShapeEffects_Bevel"),
+            UiText.Get("ShapeEffects_BevelDescription"))
     ];
 }
 

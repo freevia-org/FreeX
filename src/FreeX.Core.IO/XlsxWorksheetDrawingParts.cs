@@ -268,7 +268,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                                     XlsxDrawingColorReader.TryReadThemeColorReference(outlineFill, drawingNs, out var readOutlineThemeColor)
                 ? readOutlineThemeColor
                 : (WorkbookThemeColorReference?)null;
-            var effectPreset = ReadDrawingShapeEffectPreset(spPr?.Element(drawingNs + "effectLst"), drawingNs);
+            var effectPreset = ReadDrawingShapeEffectPreset(spPr, drawingNs);
             var hasShadowEffect = effectPreset == DrawingShapeEffectPreset.Shadow;
             var text = string.Concat(shapeElement
                 .Element(spreadsheetDrawingNs + "txBody")?
@@ -492,9 +492,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
     }
 
     private static DrawingShapeEffectPreset ReadDrawingShapeEffectPreset(
-        XElement? effectList,
+        XElement? shapeProperties,
         XNamespace drawingNs)
     {
+        var effectList = shapeProperties?.Element(drawingNs + "effectLst");
         if (effectList?.Element(drawingNs + "outerShdw") is not null)
             return DrawingShapeEffectPreset.Shadow;
         if (effectList?.Element(drawingNs + "innerShdw") is not null)
@@ -505,6 +506,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return DrawingShapeEffectPreset.Glow;
         if (effectList?.Element(drawingNs + "softEdge") is not null)
             return DrawingShapeEffectPreset.SoftEdges;
+        if (shapeProperties?.Element(drawingNs + "sp3d")?.Element(drawingNs + "bevelT") is not null)
+            return DrawingShapeEffectPreset.Bevel;
 
         return DrawingShapeEffectPreset.None;
     }
