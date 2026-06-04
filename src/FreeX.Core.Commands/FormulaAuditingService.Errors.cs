@@ -1339,17 +1339,26 @@ public static partial class FormulaAuditingService
         if (value.Length < 6)
             return false;
 
+        var hasNumericTrailingYear = Regex.IsMatch(value, @"^\d{1,2}([/\-.])\d{1,2}\1\d{2}$", RegexOptions.CultureInvariant);
+        var hasNumericLeadingYear = Regex.IsMatch(value, @"^\d{2}([/\-.])\d{1,2}\1\d{1,2}$", RegexOptions.CultureInvariant);
+        var hasMonthNameLeading = Regex.IsMatch(value, @"^[A-Za-z]{3,9}([ \-.])\d{1,2},?\1?\s*\d{2}$", RegexOptions.CultureInvariant);
+        var hasDayMonthNameLeading = Regex.IsMatch(value, @"^\d{1,2}([ \-.])[A-Za-z]{3,9},?\1?\s*\d{2}$", RegexOptions.CultureInvariant);
+        var hasYearMonthNameLeading = Regex.IsMatch(value, @"^\d{2}([ \-.])[A-Za-z]{3,9}\1\d{1,2}$", RegexOptions.CultureInvariant);
+
         string[] formats;
-        if (Regex.IsMatch(value, @"^\d{1,2}([/\-.])\d{1,2}\1\d{2}$", RegexOptions.CultureInvariant))
+        if (hasNumericTrailingYear || hasNumericLeadingYear)
         {
             formats =
             [
                 "M/d/yy",
                 "M-d-yy",
-                "M.d.yy"
+                "M.d.yy",
+                "yy/M/d",
+                "yy-M-d",
+                "yy.M.d"
             ];
         }
-        else if (Regex.IsMatch(value, @"^[A-Za-z]{3,9}([ \-.])\d{1,2},?\1?\s*\d{2}$", RegexOptions.CultureInvariant))
+        else if (hasMonthNameLeading || hasDayMonthNameLeading || hasYearMonthNameLeading)
         {
             formats =
             [
@@ -1360,13 +1369,7 @@ public static partial class FormulaAuditingService
                 "MMMM d yy",
                 "MMMM d, yy",
                 "MMMM-d-yy",
-                "MMMM.d.yy"
-            ];
-        }
-        else if (Regex.IsMatch(value, @"^\d{1,2}([ \-.])[A-Za-z]{3,9},?\1?\s*\d{2}$", RegexOptions.CultureInvariant))
-        {
-            formats =
-            [
+                "MMMM.d.yy",
                 "d MMM yy",
                 "d MMM, yy",
                 "d-MMM-yy",
@@ -1374,7 +1377,13 @@ public static partial class FormulaAuditingService
                 "d MMMM yy",
                 "d MMMM, yy",
                 "d-MMMM-yy",
-                "d.MMMM.yy"
+                "d.MMMM.yy",
+                "yy MMM d",
+                "yy-MMM-d",
+                "yy.MMM.d",
+                "yy MMMM d",
+                "yy-MMMM-d",
+                "yy.MMMM.d"
             ];
         }
         else
