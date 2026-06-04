@@ -255,7 +255,7 @@ function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect,
         EvidenceApp = "Microsoft Excel"
         OutputDirectory = $scriptOutDir
         OutputNaming = "excel_<WidthLabel>_<RibbonTab>.png"
-        CatalogEvidenceTarget = "docs/UI_TEST_CATALOG.md"
+        CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
         WidthSource = "RibbonScreenshotTourPlanner.DefaultWidths"
         PlannedCaptureCount = $tabNames.Count * $widths.Count
         Pairing = [pscustomobject]@{

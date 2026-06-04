@@ -15,30 +15,27 @@ public sealed partial class DocumentationIndexTests
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var readme = File.ReadAllText(Path.Combine(docsDirectory, "README.md"));
-        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Select(path => Path.GetFileName(path)!)
-            .Order(StringComparer.Ordinal)
-            .Last();
+        var newestStatusReport = NewestStatusReportRelativePath(docsDirectory);
 
         readme.Should().Contain($"[{newestStatusReport}]({newestStatusReport})");
-        readme.Should().Contain("[OUTSTANDING_BUILD.md](OUTSTANDING_BUILD.md)");
-        readme.Should().Contain("[NEXT_PHASES_PLAN.md](NEXT_PHASES_PLAN.md)");
-        readme.Should().Contain("[COMMAND_SURFACE_PARITY.md](COMMAND_SURFACE_PARITY.md)");
-        readme.Should().Contain("[MENU_TOOLBAR_PARITY.md](MENU_TOOLBAR_PARITY.md)");
-        readme.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
-        readme.Should().Contain("[FUNCTION_PARITY.md](FUNCTION_PARITY.md)");
-        readme.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
-        readme.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
-        readme.Should().Contain("[XLSX_TEST_CORPUS_PLAN.md](XLSX_TEST_CORPUS_PLAN.md)");
-        readme.Should().Contain("[CODE_REVIEW_COMPREHENSIVE_2026-05-28.md](CODE_REVIEW_COMPREHENSIVE_2026-05-28.md)");
-        readme.Should().Contain("[TESTER_RELEASE_CHECKLIST.md](TESTER_RELEASE_CHECKLIST.md)");
-        readme.Should().Contain("[CODE_REVIEW.md](CODE_REVIEW.md)");
-        readme.Should().Contain("[DECISIONS/008-code-review-hardening-2026-05-28.md](DECISIONS/008-code-review-hardening-2026-05-28.md)");
-        readme.Should().Contain("[PERF_BASELINE.md](PERF_BASELINE.md)");
-        File.Exists(Path.Combine(docsDirectory, "COMMAND_INVENTORY.json")).Should().BeTrue();
-        File.Exists(Path.Combine(docsDirectory, "CODE_REVIEW_COMPREHENSIVE_2026-05-28.md")).Should().BeTrue();
-        File.Exists(Path.Combine(docsDirectory, "CODE_REVIEW.md")).Should().BeTrue();
-        File.Exists(Path.Combine(docsDirectory, "DECISIONS", "008-code-review-hardening-2026-05-28.md")).Should().BeTrue();
+        readme.Should().Contain("[planning/outstanding-build.md](planning/outstanding-build.md)");
+        readme.Should().Contain("[planning/next-phases.md](planning/next-phases.md)");
+        readme.Should().Contain("[parity/command-surface.md](parity/command-surface.md)");
+        readme.Should().Contain("[parity/menu-toolbar.md](parity/menu-toolbar.md)");
+        readme.Should().Contain("[parity/shortcuts.md](parity/shortcuts.md)");
+        readme.Should().Contain("[parity/functions.md](parity/functions.md)");
+        readme.Should().Contain("[formats/fidelity-contract.md](formats/fidelity-contract.md)");
+        readme.Should().Contain("[formats/xlsx-corpus-report.md](formats/xlsx-corpus-report.md)");
+        readme.Should().Contain("[formats/xlsx-test-corpus-plan.md](formats/xlsx-test-corpus-plan.md)");
+        readme.Should().Contain("[reviews/comprehensive-code-review-2026-05-28.md](reviews/comprehensive-code-review-2026-05-28.md)");
+        readme.Should().Contain("[release/tester-release-checklist.md](release/tester-release-checklist.md)");
+        readme.Should().Contain("[reviews/code-review-log.md](reviews/code-review-log.md)");
+        readme.Should().Contain("[architecture/decisions/008-code-review-hardening-2026-05-28.md](architecture/decisions/008-code-review-hardening-2026-05-28.md)");
+        readme.Should().Contain("[performance/baseline.md](performance/baseline.md)");
+        File.Exists(Path.Combine(docsDirectory, "parity/command-inventory.json")).Should().BeTrue();
+        File.Exists(Path.Combine(docsDirectory, "reviews/comprehensive-code-review-2026-05-28.md")).Should().BeTrue();
+        File.Exists(Path.Combine(docsDirectory, "reviews/code-review-log.md")).Should().BeTrue();
+        File.Exists(Path.Combine(docsDirectory, "architecture", "decisions", "008-code-review-hardening-2026-05-28.md")).Should().BeTrue();
         ProjectStatusReportLink().Matches(readme).Should().NotBeEmpty();
     }
 
@@ -46,30 +43,26 @@ public sealed partial class DocumentationIndexTests
     public void NewestStatusReport_NamesCurrentPlanningSources()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
-        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Order(StringComparer.Ordinal)
-            .Last();
+        var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
 
-        report.Should().Contain("[OUTSTANDING_BUILD.md](OUTSTANDING_BUILD.md)");
-        report.Should().Contain("[NEXT_PHASES_PLAN.md](NEXT_PHASES_PLAN.md)");
-        report.Should().Contain("[COMMAND_SURFACE_PARITY.md](COMMAND_SURFACE_PARITY.md)");
-        report.Should().Contain("[MENU_TOOLBAR_PARITY.md](MENU_TOOLBAR_PARITY.md)");
-        report.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
-        report.Should().Contain("[FUNCTION_PARITY.md](FUNCTION_PARITY.md)");
-        report.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
-        report.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
-        report.Should().Contain("[TEST_DISTRIBUTION_PLAN.md](TEST_DISTRIBUTION_PLAN.md)");
-        report.Should().Contain("[PERF_BASELINE.md](PERF_BASELINE.md)");
+        report.Should().Contain("[planning/outstanding-build.md](../planning/outstanding-build.md)");
+        report.Should().Contain("[planning/next-phases.md](../planning/next-phases.md)");
+        report.Should().Contain("[parity/command-surface.md](../parity/command-surface.md)");
+        report.Should().Contain("[parity/menu-toolbar.md](../parity/menu-toolbar.md)");
+        report.Should().Contain("[parity/shortcuts.md](../parity/shortcuts.md)");
+        report.Should().Contain("[parity/functions.md](../parity/functions.md)");
+        report.Should().Contain("[formats/fidelity-contract.md](../formats/fidelity-contract.md)");
+        report.Should().Contain("[formats/xlsx-corpus-report.md](../formats/xlsx-corpus-report.md)");
+        report.Should().Contain("[release/test-distribution.md](../release/test-distribution.md)");
+        report.Should().Contain("[performance/baseline.md](../performance/baseline.md)");
     }
 
     [Fact]
     public void NewestStatusReport_UsesBranchNeutralMainlineMetadata()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
-        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Order(StringComparer.Ordinal)
-            .Last();
+        var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
 
         report.Should().Contain("Mainline observed: branch-neutral `origin/main` snapshot");
@@ -89,15 +82,13 @@ public sealed partial class DocumentationIndexTests
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var repositoryRoot = Directory.GetParent(docsDirectory)!.FullName;
-        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Order(StringComparer.Ordinal)
-            .Last();
+        var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
         using var progressDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(repositoryRoot, "release", "progress.json")));
         var overallCompletion = progressDocument.RootElement.GetProperty("overallCompletion").GetInt32();
         var expectedReleaseStream = GetExpectedTesterReleaseStream(overallCompletion);
 
-        report.Should().Contain("[release/progress.json](../release/progress.json)");
+        report.Should().Contain("[release/progress.json](../../release/progress.json)");
         report.Should().Contain($"overallCompletion: {overallCompletion}");
         report.Should().Contain($"Overall completion estimate is now **{overallCompletion}%**");
         report.Should().Contain($"`{expectedReleaseStream}` stream");
@@ -113,9 +104,9 @@ public sealed partial class DocumentationIndexTests
 
         var releaseFacingDocs = new[]
         {
-            "OUTSTANDING_BUILD.md",
-            "TEST_DISTRIBUTION_PLAN.md",
-            Path.GetFileName(Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md").Order(StringComparer.Ordinal).Last())
+            "planning/outstanding-build.md",
+            "release/test-distribution.md",
+            NewestStatusReportRelativePath(docsDirectory)
         };
 
         foreach (var doc in releaseFacingDocs)
@@ -134,9 +125,7 @@ public sealed partial class DocumentationIndexTests
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var repositoryRoot = Directory.GetParent(docsDirectory)!.FullName;
-        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Order(StringComparer.Ordinal)
-            .Last();
+        var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
         var metrics = ReadMetricTable(report);
         var trackedFiles = RunGitLines(repositoryRoot, "ls-files");
@@ -147,7 +136,7 @@ public sealed partial class DocumentationIndexTests
         // A dated status report is a point-in-time snapshot, not a live mirror of HEAD. With many
         // concurrent sessions merging to main, asserting byte-exact equality against `git ls-files`
         // flipped this test red on essentially every merge (the file census changes whenever any
-        // session adds/removes a file) — see docs/CODE_REVIEW_COMPREHENSIVE_2026-05-30.md s7.3.
+        // session adds/removes a file) — see docs/reviews/comprehensive-code-review-2026-05-30.md s7.3.
         // Require each metric to be present, positive, and within a snapshot tolerance of live:
         // this still catches fabricated or grossly-stale counts but ignores routine per-merge churn.
         AssertMetricTracksLive(metrics, "Tracked files", trackedFiles.Count);
@@ -179,10 +168,8 @@ public sealed partial class DocumentationIndexTests
     public void NewestStatusReport_KeyOpenItemsMatchOutstandingBuildHighestPriorityItems()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
-        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Order(StringComparer.Ordinal)
-            .Last();
-        var outstandingBuild = File.ReadAllLines(Path.Combine(docsDirectory, "OUTSTANDING_BUILD.md"));
+        var newestStatusReport = NewestStatusReportPath(docsDirectory);
+        var outstandingBuild = File.ReadAllLines(Path.Combine(docsDirectory, "planning/outstanding-build.md"));
         var report = File.ReadAllLines(newestStatusReport);
 
         ReadNumberedBoldItems(outstandingBuild, "## Highest Priority Outstanding Work")
@@ -195,11 +182,9 @@ public sealed partial class DocumentationIndexTests
     public void CurrentPlanningDocs_ConditionalFormattingRemainingScopeStaysAligned()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
-        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Order(StringComparer.Ordinal)
-            .Last();
-        var outstandingBuild = File.ReadAllText(Path.Combine(docsDirectory, "OUTSTANDING_BUILD.md"));
-        var nextPhasesPlan = File.ReadAllText(Path.Combine(docsDirectory, "NEXT_PHASES_PLAN.md"));
+        var newestStatusReport = NewestStatusReportPath(docsDirectory);
+        var outstandingBuild = File.ReadAllText(Path.Combine(docsDirectory, "planning/outstanding-build.md"));
+        var nextPhasesPlan = File.ReadAllText(Path.Combine(docsDirectory, "planning/next-phases.md"));
         var report = File.ReadAllText(newestStatusReport);
 
         outstandingBuild.Should().Contain("Remaining: any deeper color-scale XLSX edge semantics.");
@@ -215,17 +200,17 @@ public sealed partial class DocumentationIndexTests
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var readme = File.ReadAllText(Path.Combine(docsDirectory, "README.md"));
 
-        readme.Should().Contain("[USER_GUIDE.md](USER_GUIDE.md)");
-        readme.Should().Contain("[TROUBLESHOOTING.md](TROUBLESHOOTING.md)");
-        new FileInfo(Path.Combine(docsDirectory, "USER_GUIDE.md")).Length.Should().BeGreaterThan(0);
-        new FileInfo(Path.Combine(docsDirectory, "TROUBLESHOOTING.md")).Length.Should().BeGreaterThan(0);
+        readme.Should().Contain("[user/guide.md](user/guide.md)");
+        readme.Should().Contain("[user/troubleshooting.md](user/troubleshooting.md)");
+        new FileInfo(Path.Combine(docsDirectory, "user/guide.md")).Length.Should().BeGreaterThan(0);
+        new FileInfo(Path.Combine(docsDirectory, "user/troubleshooting.md")).Length.Should().BeGreaterThan(0);
     }
 
     [Fact]
     public void UiTestCatalog_EvidenceScreenshotCountMatchesArtifacts()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
-        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "testing/ui-test-catalog.md"));
         var screenshotCount = Directory.GetFiles(Path.Combine(docsDirectory, "ui-test-artifacts"), "*.png").Length;
         var declaredCount = int.Parse(UiEvidenceScreenshotCount().Match(catalog).Groups["count"].Value);
 
@@ -236,7 +221,7 @@ public sealed partial class DocumentationIndexTests
     public void UiTestCatalog_XamlClickWiredControlCountMatchesMainWindow()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
-        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "testing/ui-test-catalog.md"));
         var mainWindow = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var clickWiredCount = XamlClickHandler().Matches(mainWindow).Count;
         var declaredCount = int.Parse(UiCatalogXamlClickWiredCount().Match(catalog).Groups["count"].Value);
@@ -248,9 +233,9 @@ public sealed partial class DocumentationIndexTests
     public void UiTestCatalog_UsesCanonicalBranchNeutralMetadata()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
-        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "testing/ui-test-catalog.md"));
 
-        catalog.Should().Contain("Canonical path: `docs/UI_TEST_CATALOG.md`");
+        catalog.Should().Contain("Canonical path: `docs/testing/ui-test-catalog.md`");
         catalog.Should().NotContain("Last updated:");
         catalog.Should().NotContain("Branch:");
         catalog.Should().NotContain("Current catalog branch:");
@@ -260,27 +245,24 @@ public sealed partial class DocumentationIndexTests
     public void CurrentPlanningDocs_LocalMarkdownLinksResolve()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
-        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Select(path => Path.GetFileName(path)!)
-            .Order(StringComparer.Ordinal)
-            .Last();
+        var newestStatusReport = NewestStatusReportRelativePath(docsDirectory);
         var currentDocs = new[]
         {
             "README.md",
             newestStatusReport,
-            "OUTSTANDING_BUILD.md",
-            "NEXT_PHASES_PLAN.md",
-            "UI_TEST_CATALOG.md",
-            "SHORTCUT_PARITY_MATRIX.md",
-            "FUNCTION_PARITY.md",
-            "COMMAND_SURFACE_PARITY.md",
-            "MENU_TOOLBAR_PARITY.md",
-            "FIDELITY_CONTRACT.md",
-            "XLSX_CORPUS_REPORT.md",
-            "XLSX_TEST_CORPUS_PLAN.md",
-            "TEST_DISTRIBUTION_PLAN.md",
-            "TESTER_RELEASE_CHECKLIST.md",
-            "PERF_BASELINE.md"
+            "planning/outstanding-build.md",
+            "planning/next-phases.md",
+            "testing/ui-test-catalog.md",
+            "parity/shortcuts.md",
+            "parity/functions.md",
+            "parity/command-surface.md",
+            "parity/menu-toolbar.md",
+            "formats/fidelity-contract.md",
+            "formats/xlsx-corpus-report.md",
+            "formats/xlsx-test-corpus-plan.md",
+            "release/test-distribution.md",
+            "release/tester-release-checklist.md",
+            "performance/baseline.md"
         };
 
         foreach (var doc in currentDocs)
@@ -304,7 +286,9 @@ public sealed partial class DocumentationIndexTests
             var resolvedPath = Path.GetFullPath(
                 string.IsNullOrWhiteSpace(targetWithoutFragment)
                     ? sourcePath
-                    : Path.Combine(docsDirectory, targetWithoutFragment.Replace('/', Path.DirectorySeparatorChar)));
+                    : Path.Combine(
+                        Path.GetDirectoryName(sourcePath)!,
+                        targetWithoutFragment.Replace('/', Path.DirectorySeparatorChar)));
 
             (File.Exists(resolvedPath) || Directory.Exists(resolvedPath)).Should().BeTrue(
                 "{0} links to {1}",
@@ -399,6 +383,15 @@ public sealed partial class DocumentationIndexTests
     private static string ToPlatformPath(string path) =>
         path.Replace('/', Path.DirectorySeparatorChar);
 
+    private static string NewestStatusReportRelativePath(string docsDirectory) =>
+        Directory.GetFiles(Path.Combine(docsDirectory, "history"), "status-*.md")
+            .Select(path => Path.GetRelativePath(docsDirectory, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Order(StringComparer.Ordinal)
+            .Last();
+
+    private static string NewestStatusReportPath(string docsDirectory) =>
+        Path.Combine(docsDirectory, ToPlatformPath(NewestStatusReportRelativePath(docsDirectory)));
+
     private static string GetExpectedTesterReleaseStream(int overallCompletion)
     {
         var minor = overallCompletion >= 99 ? 9
@@ -424,7 +417,7 @@ public sealed partial class DocumentationIndexTests
             .ToArray();
     }
 
-    [GeneratedRegex(@"\[PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\]\(PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\)")]
+    [GeneratedRegex(@"\[history/status-\d{4}-\d{2}-\d{2}\.md\]\(history/status-\d{4}-\d{2}-\d{2}\.md\)")]
     private static partial Regex ProjectStatusReportLink();
 
     [GeneratedRegex(@"(?<!!)\[[^\]]+\]\((?<target>[^)]+)\)")]

@@ -202,7 +202,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
 
     private static RibbonInventoryRows LoadRibbonInventoryRows()
     {
-        using var document = JsonDocument.Parse(File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_INVENTORY.json")));
+        using var document = JsonDocument.Parse(File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-inventory.json")));
         var rowsBySection = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         var allRows = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var section in document.RootElement.GetProperty("menuToolbarRows").EnumerateArray()
