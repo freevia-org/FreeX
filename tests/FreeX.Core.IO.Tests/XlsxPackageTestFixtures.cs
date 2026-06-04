@@ -7,7 +7,7 @@ namespace FreeX.Core.IO.Tests;
 
 internal static class XlsxPackageTestFixtures
 {
-    public static MemoryStream CreatePackage(params (string Path, string Content)[] entries)
+    internal static MemoryStream CreatePackage(params (string Path, string Content)[] entries)
     {
         var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
@@ -24,7 +24,7 @@ internal static class XlsxPackageTestFixtures
         return stream;
     }
 
-    public static XDocument LoadPackageXml(ZipArchive archive, string entryName, string? missingBecause = null)
+    internal static XDocument LoadPackageXml(ZipArchive archive, string entryName, string? missingBecause = null)
     {
         var entry = archive.GetEntry(entryName);
         if (missingBecause is null)
@@ -35,19 +35,19 @@ internal static class XlsxPackageTestFixtures
         return LoadPackageXml(entry!);
     }
 
-    public static XDocument LoadPackageXml(ZipArchiveEntry entry)
+    internal static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {
         using var stream = entry.Open();
         return XDocument.Load(stream);
     }
 
-    public static string RelationshipsXml(params string[] relationships) =>
+    internal static string RelationshipsXml(params string[] relationships) =>
         $$"""
         <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
           {{string.Join(Environment.NewLine, relationships)}}
         </Relationships>
         """;
 
-    public static string Relationship(string id, string type, string target) =>
+    internal static string Relationship(string id, string type, string target) =>
         $"""<Relationship Id="{id}" Type="{type}" Target="{target}" />""";
 }

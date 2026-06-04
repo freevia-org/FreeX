@@ -106,10 +106,29 @@ public static partial class FlashFillService
 
     private static Func<string, string?>? TryEmailDomainStem(IReadOnlyList<(string Source, string Expected)> examples)
     {
-        if (!examples.All(e => TryExtractEmailDomainStem(e.Source, out var domainStem) && domainStem == e.Expected))
-            return null;
+        var allowDomainStem = true;
+        var allowRootDomainStem = true;
 
-        return source => TryExtractEmailDomainStem(source, out var domainStem) ? domainStem : null;
+        foreach (var (source, expected) in examples)
+        {
+            if (!TryExtractEmailDomainStem(source, out var domainStem))
+                return null;
+
+            allowDomainStem &= expected == domainStem;
+            allowRootDomainStem &= TryExtractEmailRootDomainStem(source, out var rootDomainStem) &&
+                                   expected == rootDomainStem;
+
+            if (!allowDomainStem && !allowRootDomainStem)
+                return null;
+        }
+
+        if (allowDomainStem)
+            return source => TryExtractEmailDomainStem(source, out var domainStem) ? domainStem : null;
+
+        if (allowRootDomainStem)
+            return source => TryExtractEmailRootDomainStem(source, out var rootDomainStem) ? rootDomainStem : null;
+
+        return null;
     }
 
     private static bool TryExtractEmailLocalPartWithoutPlusTag(string source, out string localPart)
@@ -147,11 +166,27 @@ public static partial class FlashFillService
         return domainStem.Length > 0;
     }
 
+    private static bool TryExtractEmailRootDomainStem(string source, out string rootDomainStem)
+    {
+        rootDomainStem = string.Empty;
+
+        var atIndex = source.IndexOf('@', StringComparison.Ordinal);
+        if (atIndex <= 0 || atIndex == source.Length - 1)
+            return false;
+
+        var domain = source[(atIndex + 1)..].Trim();
+        if (domain.Length == 0 || domain.Any(char.IsWhiteSpace))
+            return false;
+
+        return TryExtractRootDomainStem(domain, out rootDomainStem);
+    }
+
     private static Func<string, string?>? TryWebAddressCleanup(IReadOnlyList<(string Source, string Expected)> examples)
     {
         var allowHost = true;
         var allowHostWithoutWww = true;
         var allowDomainStem = true;
+        var allowRootDomainStem = true;
 
         foreach (var (source, expected) in examples)
         {
@@ -161,14 +196,17 @@ public static partial class FlashFillService
             allowHost &= expected == parts.Host;
             allowHostWithoutWww &= expected == parts.HostWithoutWww;
             allowDomainStem &= expected == parts.DomainStem;
+            allowRootDomainStem &= expected == parts.RootDomainStem;
 
-            if (!allowHost && !allowHostWithoutWww && !allowDomainStem)
+            if (!allowHost && !allowHostWithoutWww && !allowDomainStem && !allowRootDomainStem)
                 return null;
         }
 
         WebAddressOutputKind kind;
         if (allowDomainStem)
             kind = WebAddressOutputKind.DomainStem;
+        else if (allowRootDomainStem)
+            kind = WebAddressOutputKind.RootDomainStem;
         else if (allowHostWithoutWww && !allowHost)
             kind = WebAddressOutputKind.HostWithoutWww;
         else if (allowHost)
@@ -682,7 +720,10 @@ public static partial class FlashFillService
         if (!TryRemoveFinalDottedToken(hostWithoutWww, out var domainStem))
             return false;
 
-        parts = new WebAddressParts(host, hostWithoutWww, domainStem);
+        if (!TryExtractRootDomainStem(hostWithoutWww, out var rootDomainStem))
+            return false;
+
+        parts = new WebAddressParts(host, hostWithoutWww, domainStem, rootDomainStem);
         return true;
     }
 
@@ -752,12 +793,28 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static bool TryExtractRootDomainStem(string host, out string rootDomainStem)
+    {
+        rootDomainStem = string.Empty;
+
+        if (!TryNormalizeWebHost(host, out var normalized))
+            return false;
+
+        var labels = normalized.Split('.');
+        if (labels.Length < 2)
+            return false;
+
+        rootDomainStem = labels[^2];
+        return rootDomainStem.Length > 0;
+    }
+
     private static string GetWebAddressOutput(WebAddressParts parts, WebAddressOutputKind kind) =>
         kind switch
         {
             WebAddressOutputKind.Host => parts.Host,
             WebAddressOutputKind.HostWithoutWww => parts.HostWithoutWww,
             WebAddressOutputKind.DomainStem => parts.DomainStem,
+            WebAddressOutputKind.RootDomainStem => parts.RootDomainStem,
             _ => parts.Host
         };
 }

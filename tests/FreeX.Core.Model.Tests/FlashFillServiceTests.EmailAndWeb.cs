@@ -202,6 +202,19 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDomainStem_ExtractsRootStemFromVariableSubdomainDepth()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada@eu.sales.contoso.com", "contoso"),
+                ("grace@research.fabrikam.org", "fabrikam")
+            ],
+            ["alan@labs.northwind.net", "katherine@north.america.adatum.co"]);
+
+        result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_EmailDomainStem_PreservesSubdomainStemBeforeTopLevelDomain()
     {
         var result = FlashFillService.Fill(
@@ -221,6 +234,19 @@ public sealed partial class FlashFillServiceTests
             [
                 ("ada@contoso.com", "contoso"),
                 ("grace@fabrikam.org", "fabrikam")
+            ],
+            ["alan@localhost"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmailDomainStem_ReturnsNullWhenRootStemRemainingDomainHasNoSuffix()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada@eu.sales.contoso.com", "contoso"),
+                ("grace@research.fabrikam.org", "fabrikam")
             ],
             ["alan@localhost"]);
 
@@ -264,6 +290,45 @@ public sealed partial class FlashFillServiceTests
             ["https://www.northwind.net/catalog/list?page=2#details", "http://adatum.co/about"]);
 
         result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressDomainStem_ExtractsRootStemFromVariableSubdomainDepth()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://eu.sales.contoso.com/path", "contoso"),
+                ("http://research.fabrikam.org/x", "fabrikam")
+            ],
+            ["https://labs.northwind.net/catalog/list?page=2#details", "north.america.adatum.co/products"]);
+
+        result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressDomainStem_PreservesSubdomainStemBeforeTopLevelDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://sales.contoso.com/products?id=1", "sales.contoso"),
+                ("http://research.fabrikam.org/support#top", "research.fabrikam")
+            ],
+            ["https://labs.northwind.net/catalog/list?page=2#details"]);
+
+        result.Should().BeEquivalentTo(["labs.northwind"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressDomainStem_ReturnsNullWhenRootStemRemainingHostHasNoSuffix()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://eu.sales.contoso.com/path", "contoso"),
+                ("http://research.fabrikam.org/x", "fabrikam")
+            ],
+            ["http://localhost/x"]);
+
+        result.Should().BeNull();
     }
 
     [Fact]
