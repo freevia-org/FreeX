@@ -171,6 +171,36 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void LoadCore_ReusesSheetXmlLayoutFactsForClosedXmlPackagePreparation()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var layoutSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+        var sanitizerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
+        var stripperSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
+
+        adapterSource.Should().Contain("GetClosedXmlStyleOnlyWorksheetPathsToStrip(");
+        adapterSource.Should().Contain("CreateClosedXmlLoadSanitizationHints(");
+        adapterSource.Should().Contain("layout.HasDuplicateStyleOnlyCellStyleIndexes");
+        adapterSource.Should().Contain("layout.HasClosedXmlUnsupportedConditionalFormatting");
+        adapterSource.Should().Contain("layout.HasWorksheetDynamicFilters");
+        adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)");
+        adapterSource.Should().Contain("sanitizationHints");
+
+        layoutSource.Should().Contain("cellLayout.HasDuplicateStyleOnlyCellStyleIndexes");
+        layoutSource.Should().Contain("HasDynamicFilter(autoFilter)");
+        layoutSource.Should().Contain("allowBlankType: false");
+
+        sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints");
+        sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasPivotPackageMetadata");
+        sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks");
+        sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters");
+
+        stripperSource.Should().Contain("IReadOnlySet<string>? worksheetPathsToStrip");
+        stripperSource.Should().Contain("worksheetPathsToStrip.Contains(NormalizeEntryPath(sourceEntry.FullName))");
+        stripperSource.Should().Contain("ContainsDuplicateStyleOnlyCells(scanStream)");
+    }
+
+    [Fact]
     public void Save_UsesSaveScopedStyleCacheForStyleLookup()
     {
         var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));

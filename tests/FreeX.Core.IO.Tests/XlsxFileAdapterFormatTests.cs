@@ -167,11 +167,14 @@ public sealed class XlsxFileAdapterFormatTests
         diagnosticsSource.Should().NotContain("GetUsedCells()");
         adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
-        sanitizerSource.Should().Contain("GetSanitizationRequirements(sourcePackage, removeUnsupportedConditionalFormatting)");
+        sanitizerSource.Should().Contain("GetSanitizationRequirements(");
+        sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints? hints = null");
         adapterSource.Should().Contain("var sheetXmlLayoutWarningCount = warnings.Count;");
         adapterSource.Should().Contain("var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);");
         adapterSource.Should().Contain("warnings.Count != sheetXmlLayoutWarningCount");
-        adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(packageStream, shouldStripStyleOnlyCells)");
+        adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(");
+        adapterSource.Should().Contain("styleOnlyWorksheetPathsToStrip");
+        adapterSource.Should().Contain("sanitizationHints");
         sanitizerSource.Should().Contain("removeUnsupportedConditionalFormatting");
         sanitizerSource.Should().Contain("return sourcePackage;");
         worksheetMetadataSource.Should().NotContain(".Descendants(workbookNs + \"c\")\n                .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute(\"r\")?.Value))\n                .ToList();");
@@ -184,8 +187,8 @@ public sealed class XlsxFileAdapterFormatTests
         pivotReferencePreserverSource.Should().Contain("GetWorksheetPathsWithPivotTableRelationships(sourceArchive, context)");
         pivotReferencePreserverSource.Should().Contain("PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths)");
         tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");
-        adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)");
-        adapterSource.Should().Contain("stripStyleOnlyCells");
+        adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)");
+        adapterSource.Should().Contain("styleOnlyWorksheetPathsToStrip is not { Count: 0 }");
         styleOnlyStripperSource.Should().Contain("XmlWriter.Create(outputStream, writerSettings)");
         styleOnlyStripperSource.Should().Contain("reader.IsEmptyElement");
         styleOnlyStripperSource.Should().Contain("XNode.ReadFrom(reader)");

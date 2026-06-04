@@ -108,6 +108,46 @@ public sealed class XlsxLoadPackageStreamTests
         ReadWorksheetCellReferences(stripped).Should().Equal("A1", "B1", "D1");
     }
 
+    [Fact]
+    public void StyleOnlyCellStripper_KnownWorksheetPathsStripOnlyTargetWorksheets()
+    {
+        using var package = CreatePackageWithWorksheets(
+            [
+                ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="1">
+                      <c r="A1" s="1"/>
+                      <c r="B1" s="1"/>
+                    </row>
+                  </sheetData>
+                </worksheet>
+                """),
+                ("xl/worksheets/sheet2.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="1">
+                      <c r="A1" s="1"/>
+                      <c r="B1" s="1"/>
+                    </row>
+                  </sheetData>
+                </worksheet>
+                """)
+            ],
+            includeLargePayload: false);
+
+        using var stripped = CreateStyleOnlyStrippedPackage(
+            package,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "xl/worksheets/sheet2.xml"
+            });
+
+        stripped.Should().NotBeSameAs(package);
+        ReadWorksheetCellReferences(stripped, "xl/worksheets/sheet1.xml").Should().Equal("A1", "B1");
+        ReadWorksheetCellReferences(stripped, "xl/worksheets/sheet2.xml").Should().Equal("A1");
+    }
+
     [BenchmarkFact]
     public void Benchmark_StyleOnlyCellStripper_DuplicateWorksheetReportsTimingAndAllocatedBytes()
     {
@@ -328,16 +368,37 @@ public sealed class XlsxLoadPackageStreamTests
         return stripped;
     }
 
+    private static MemoryStream CreateStyleOnlyStrippedPackage(MemoryStream package, IReadOnlySet<string> worksheetPathsToStrip)
+    {
+        var type = typeof(XlsxFileAdapter).Assembly.GetType("FreeX.Core.IO.XlsxClosedXmlStyleOnlyCellStripper");
+        type.Should().NotBeNull();
+        var method = type!.GetMethod(
+            "Create",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            binder: null,
+            [typeof(MemoryStream), typeof(IReadOnlySet<string>)],
+            modifiers: null);
+        method.Should().NotBeNull();
+        var stripped = method!.Invoke(null, [package, worksheetPathsToStrip]).Should().BeOfType<MemoryStream>().Subject;
+        return stripped;
+    }
+
     private static MemoryStream CreatePackageWithWorksheet(string worksheetXml, bool includeLargePayload)
+        => CreatePackageWithWorksheets([("xl/worksheets/sheet1.xml", worksheetXml)], includeLargePayload);
+
+    private static MemoryStream CreatePackageWithWorksheets(
+        IReadOnlyList<(string Path, string Xml)> worksheets,
+        bool includeLargePayload)
     {
         var package = new MemoryStream();
         using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
         {
-            var worksheetEntry = archive.CreateEntry("xl/worksheets/sheet1.xml", CompressionLevel.Optimal);
-            using (var worksheetStream = worksheetEntry.Open())
-            using (var writer = new StreamWriter(worksheetStream))
+            foreach (var (path, xml) in worksheets)
             {
-                writer.Write(worksheetXml);
+                var worksheetEntry = archive.CreateEntry(path, CompressionLevel.Optimal);
+                using var worksheetStream = worksheetEntry.Open();
+                using var writer = new StreamWriter(worksheetStream);
+                writer.Write(xml);
             }
 
             if (includeLargePayload)
@@ -429,10 +490,13 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     private static IReadOnlyList<string> ReadWorksheetCellReferences(MemoryStream package)
+        => ReadWorksheetCellReferences(package, "xl/worksheets/sheet1.xml");
+
+    private static IReadOnlyList<string> ReadWorksheetCellReferences(MemoryStream package, string worksheetPath)
     {
         package.Position = 0;
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
-        using var worksheetStream = archive.GetEntry("xl/worksheets/sheet1.xml")!.Open();
+        using var worksheetStream = archive.GetEntry(worksheetPath)!.Open();
         var worksheet = XDocument.Load(worksheetStream);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var references = worksheet.Descendants(worksheetNs + "c")
