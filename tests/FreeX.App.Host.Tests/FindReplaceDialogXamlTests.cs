@@ -79,7 +79,7 @@ public sealed class FindReplaceDialogXamlTests
         {
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
-            var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
             var dialog = new FindReplaceDialog(() => workbook, commandBus, _ => { });
             dialog.Show();
             try
@@ -224,7 +224,7 @@ public sealed class FindReplaceDialogXamlTests
     {
         var workbook = new Workbook("Test");
         var sheet = workbook.AddSheet("Sheet1");
-        var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+        var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
         var a1 = new CellAddress(sheet.Id, 1, 1);
         var a2 = new CellAddress(sheet.Id, 2, 1);
         sheet.SetCell(a1, new TextValue("foo one"));
@@ -328,7 +328,7 @@ public sealed class FindReplaceDialogXamlTests
             });
             sheet.SetCell(address, Cell.FromValue(new TextValue("Budget")));
             sheet.GetCell(address)!.StyleId = styleId;
-            var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
             var dialog = new FindReplaceDialog(
                 () => workbook,
                 commandBus,
@@ -401,7 +401,7 @@ public sealed class FindReplaceDialogXamlTests
         {
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
-            var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
             var dialog = new FindReplaceDialog(() => workbook, commandBus, _ => { });
             dialog.Show();
             try
@@ -536,16 +536,6 @@ public sealed class FindReplaceDialogXamlTests
             .Equal(values);
     }
 
-}
-
-file sealed class SimpleCommandContext : ICommandContext
-{
-    public Workbook Workbook { get; }
-
-    public SimpleCommandContext(Workbook workbook) => Workbook = workbook;
-
-    public Sheet GetSheet(SheetId sheetId) =>
-        Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
 }
 
 file sealed class RejectingCommandBus(string message) : ICommandBus

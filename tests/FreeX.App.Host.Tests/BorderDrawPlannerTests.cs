@@ -238,7 +238,7 @@ public sealed class BorderDrawPlannerTests
     {
         var workbook = new Workbook("BorderDrawPlannerTests");
         var sheet = workbook.AddSheet("Sheet1");
-        return (workbook, sheet, new SimpleContext(workbook));
+        return (workbook, sheet, new TestCommandContext(workbook));
     }
 
     private static GridRange Range(SheetId sheetId, uint startRow, uint startCol, uint endRow, uint endCol) =>
@@ -267,10 +267,4 @@ public sealed class BorderDrawPlannerTests
         style.BorderLeft.Should().Be(left);
     }
 
-    private sealed class SimpleContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
-    }
 }

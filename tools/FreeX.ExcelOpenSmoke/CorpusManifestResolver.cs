@@ -30,12 +30,19 @@ internal static class CorpusManifestResolver
         var statusFilter = options.CorpusStatuses.Count > 0
             ? ToFilter(options.CorpusStatuses)
             : DefaultStatuses;
+        var idFilter = ToFilter(options.CorpusIds);
 
         var inputs = new List<WorkbookSmokeInput>();
         var skipped = new List<CorpusManifestSkip>();
 
         foreach (var row in ReadRows(manifestPath))
         {
+            if (idFilter.Count > 0 && !idFilter.Contains(row.Id))
+            {
+                skipped.Add(new CorpusManifestSkip(row, "id-filter", null));
+                continue;
+            }
+
             if (sourceFilter.Count > 0 && !sourceFilter.Contains(row.SourceType))
             {
                 skipped.Add(new CorpusManifestSkip(row, "source-filter", null));
@@ -87,6 +94,7 @@ internal static class CorpusManifestResolver
         var statusFilter = options.CorpusStatuses.Count > 0
             ? ToFilter(options.CorpusStatuses)
             : GeneratedFixtureDefaultStatuses;
+        var idFilter = ToFilter(options.CorpusIds);
 
         Directory.CreateDirectory(outputDirectory);
         var inputs = new List<WorkbookSmokeInput>();
@@ -94,6 +102,12 @@ internal static class CorpusManifestResolver
 
         foreach (var row in ReadRows(manifestPath))
         {
+            if (idFilter.Count > 0 && !idFilter.Contains(row.Id))
+            {
+                skipped.Add(new CorpusManifestSkip(row, "id-filter", null));
+                continue;
+            }
+
             if (sourceFilter.Count > 0 && !sourceFilter.Contains(row.SourceType))
             {
                 skipped.Add(new CorpusManifestSkip(row, "source-filter", null));

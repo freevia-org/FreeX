@@ -10,6 +10,7 @@ internal sealed record SmokeOptions(
     string? CorpusManifestPath,
     IReadOnlyList<string> CorpusSources,
     IReadOnlyList<string> CorpusStatuses,
+    IReadOnlyList<string> CorpusIds,
     string? OutputDirectory,
     string Pattern,
     IReadOnlyList<string> Inputs)
@@ -37,6 +38,7 @@ internal sealed record SmokeOptions(
         string? corpusManifestPath = null;
         var corpusSources = new List<string>();
         var corpusStatuses = new List<string>();
+        var corpusIds = new List<string>();
         string? outputDirectory = null;
         var pattern = "*.xlsx";
         var inputs = new List<string>();
@@ -48,7 +50,7 @@ internal sealed record SmokeOptions(
             {
                 case "--help":
                 case "-h":
-                    return new SmokeOptions(true, false, false, false, false, false, false, false, null, [], [], null, pattern, []);
+                    return new SmokeOptions(true, false, false, false, false, false, false, false, null, [], [], [], null, pattern, []);
                 case "--save-reopen":
                     saveReopen = true;
                     break;
@@ -79,6 +81,9 @@ internal sealed record SmokeOptions(
                 case "--corpus-status":
                     corpusStatuses.Add(ReadOptionValue(args, ref index, arg));
                     break;
+                case "--corpus-id":
+                    corpusIds.Add(ReadOptionValue(args, ref index, arg));
+                    break;
                 case "--out":
                     outputDirectory = ReadOptionValue(args, ref index, arg);
                     break;
@@ -105,6 +110,7 @@ internal sealed record SmokeOptions(
             corpusManifestPath,
             corpusSources,
             corpusStatuses,
+            corpusIds,
             outputDirectory,
             pattern,
             inputs);

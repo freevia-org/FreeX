@@ -13,6 +13,19 @@ public static partial class FlashFillService
         Day
     }
 
+    private enum TimeOutputKind
+    {
+        TwentyFourHour,
+        TwelveHour
+    }
+
+    private enum TimeMeridiemCasing
+    {
+        Upper,
+        Lower,
+        Title
+    }
+
     private enum UsAddressComponentKind
     {
         Street,
@@ -38,6 +51,8 @@ public static partial class FlashFillService
 
     private readonly record struct DateParts(int Year, int Month, int Day);
 
+    private readonly record struct TimeParts(int Hour, int Minute, int Second);
+
     private readonly record struct UsAddressParts(string Street, string City, string State, string Zip);
 
     private readonly record struct WebAddressParts(string Host, string HostWithoutWww, string DomainStem);
@@ -50,6 +65,13 @@ public static partial class FlashFillService
         int YearWidth,
         int MonthWidth,
         int DayWidth);
+
+    private readonly record struct TimeOutputPattern(
+        TimeOutputKind Kind,
+        bool IncludeSeconds,
+        int HourWidth,
+        bool SpaceBeforeMeridiem,
+        TimeMeridiemCasing MeridiemCasing);
 
     private sealed class ExtractedSegmentCache
     {

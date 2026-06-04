@@ -35,9 +35,4 @@ public sealed partial class AutoFilterDialogTests
         }
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
-    }
 }

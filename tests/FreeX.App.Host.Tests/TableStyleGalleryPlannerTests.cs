@@ -141,7 +141,7 @@ public sealed class TableStyleGalleryPlannerTests
             firstRowHasHeaders: true,
             option.Banding);
 
-        command.Apply(new SimpleCtx(workbook)).Success.Should().BeTrue();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
 
         sheet.StructuredTables.Should().ContainSingle()
             .Which.StyleName.Should().Be("TableStyleMedium2");
@@ -177,7 +177,7 @@ public sealed class TableStyleGalleryPlannerTests
             firstRowHasHeaders: true,
             option.Banding);
 
-        command.Apply(new SimpleCtx(workbook)).Success.Should().BeTrue();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
 
         sheet.StructuredTables.Should().ContainSingle()
             .Which.StyleName.Should().Be("TableStyleLight16");
@@ -185,12 +185,6 @@ public sealed class TableStyleGalleryPlannerTests
         StyleAt(workbook, sheet, 1, 1).FontColor.Should().Be(CellColor.Black);
         StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(CellColor.White);
         StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.95));
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 
     private static WorkbookTheme CreateDistinctAccentTheme() =>
