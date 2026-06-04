@@ -11,7 +11,7 @@ public class SheetTabCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var a1 = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(a1, new TextValue("hello"));
         sheet.ColumnWidths[1] = 18;
@@ -252,7 +252,7 @@ public class SheetTabCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var a1 = new CellAddress(sheet.Id, 1, 1);
         var sourceDataTable = new ChartDataTableModel
         {
@@ -292,7 +292,7 @@ public class SheetTabCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetSheetHiddenCommand(sheet1.Id, hidden: true);
 
@@ -311,7 +311,7 @@ public class SheetTabCommandTests
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
         sheet2.IsHidden = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new SetSheetHiddenCommand(sheet1.Id, hidden: true).Apply(ctx);
 
@@ -325,7 +325,7 @@ public class SheetTabCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.TabColor = new CellColor(255, 0, 0);
 
         var command = new SetSheetTabColorCommand(sheet.Id, new CellColor(0, 176, 80));
@@ -338,9 +338,4 @@ public class SheetTabCommandTests
         sheet.TabColor.Should().Be(new CellColor(255, 0, 0));
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
