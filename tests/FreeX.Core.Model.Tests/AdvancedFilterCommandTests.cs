@@ -434,7 +434,7 @@ public sealed class AdvancedFilterCommandTests
     [Fact]
     public void CommandGuards_CanEditCell_AvoidsCapturedAllowEditRangePredicate()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "CommandGuards.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "CommandGuards.cs"));
 
         source.Should().NotContain("AllowEditRanges.Any(");
         source.Should().Contain("foreach (var range in sheet.AllowEditRanges)");
@@ -559,8 +559,5 @@ public sealed class AdvancedFilterCommandTests
     private static CellAddress Addr(Sheet sheet, uint row, uint col) => new(sheet.Id, row, col);
     private static void Set(Sheet sheet, uint row, uint col, string text) => sheet.SetCell(Addr(sheet, row, col), new TextValue(text));
     private static void Set(Sheet sheet, uint row, uint col, double number) => sheet.SetCell(Addr(sheet, row, col), new NumberValue(number));
-
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 
 }

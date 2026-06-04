@@ -415,7 +415,7 @@ public sealed partial class FormulaAuditingServiceTests
     [Fact]
     public void FindFormulaErrorIssues_CombinesLiteralIssueScans()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "FormulaAuditingService.Errors.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "FormulaAuditingService.Errors.cs"));
 
         source.Should().Contain("FindLiteralFormulaErrorIssues(workbook, sheetId)");
         source.Should().Contain("foreach (var (address, cell) in sheet.EnumerateCells())");

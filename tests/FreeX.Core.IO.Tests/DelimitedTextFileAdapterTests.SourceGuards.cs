@@ -11,7 +11,7 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Load_DecodesBufferedTextWithoutCopyingMemoryStreamToArray()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "DelimitedTextWorkbookReader.cs"));
 
         source.Should().NotContain(
@@ -22,7 +22,7 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Load_CoercesValuesWithoutRepeatedTrimOrUppercaseAllocations()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "DelimitedTextWorkbookReader.cs"));
         var coercion = source[
             source.IndexOf("private static ScalarValue CoerceValue", StringComparison.Ordinal)..
@@ -36,7 +36,7 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Save_ReusesDelimiterBuffersInsteadOfAllocatingPerChunk()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "DelimitedTextWorkbookWriter.cs"));
 
         source.Should().NotContain(
@@ -47,7 +47,7 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Save_StreamsNumericValuesWithoutPerCellStringAllocation()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "DelimitedTextWorkbookWriter.cs"));
 
         source.Should().Contain("WriteNumberValue(writer, number.Value);");
@@ -58,7 +58,7 @@ public sealed partial class DelimitedTextFileAdapterTests
     [Fact]
     public void Save_UsesSinglePassDateTimeShapeProbeWithoutLinq()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "DelimitedTextWorkbookWriter.cs"));
         var shapeProbe = source[
             source.IndexOf("private static bool HasSupportedDateTimeShape", StringComparison.Ordinal)..

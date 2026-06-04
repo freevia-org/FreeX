@@ -63,7 +63,7 @@ public sealed class WorkbookStatisticsServiceTests
     [Fact]
     public void GetStatistics_UsesTrackedFormulaCount()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "WorkbookStatisticsService.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "WorkbookStatisticsService.cs"));
         var getSheetStatistics = source[
             source.IndexOf("private static SheetStatistics GetSheetStatistics", StringComparison.Ordinal)..
             source.IndexOf("private readonly record struct SheetStatistics", StringComparison.Ordinal)];
@@ -72,6 +72,4 @@ public sealed class WorkbookStatisticsServiceTests
         getSheetStatistics.Should().NotContain("EnumerateCells().Count");
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 }

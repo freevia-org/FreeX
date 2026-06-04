@@ -46,7 +46,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void PivotChartFieldButtons_AddAnnotationsWithoutCaptionList()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartRenderer.Annotations.cs"));
         var fieldButtons = source[
             source.IndexOf("private static void AddPivotChartFieldButtons", StringComparison.Ordinal)..

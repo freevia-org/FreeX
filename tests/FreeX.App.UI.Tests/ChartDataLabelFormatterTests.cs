@@ -123,7 +123,8 @@ public sealed class ChartDataLabelFormatterTests
     [Fact]
     public void FormatDataLabel_AssemblesAnnotationTextWithoutListOrJoin()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.FindWithFailureMessage(
+            "Unable to locate workspace file",
             "src", "FreeX.App.UI", "ChartDataLabelFormatter.cs"));
         var formatDataLabel = source[
             source.IndexOf("public static string FormatDataLabel", StringComparison.Ordinal)..
@@ -164,7 +165,4 @@ public sealed class ChartDataLabelFormatterTests
         ChartDataLabelFormatter.GetPieLabelFormat(chart, "Share")
             .Should().Be($"Share{Environment.NewLine}{{1}}{Environment.NewLine}{{2:0%}}");
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.FindWithFailureMessage("Unable to locate workspace file", relativeParts);
 }

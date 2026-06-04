@@ -77,7 +77,4 @@ public sealed partial class FormulaAuditingServiceTests
         allocatedBytes.Should().BeLessThan(6_500_000);
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
-
 }

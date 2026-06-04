@@ -83,7 +83,7 @@ public sealed class GroupedApplyStyleCommandTests
     [Fact]
     public void Apply_UsesStyleDiffRegistrationCache()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "GroupedApplyStyleCommand.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "GroupedApplyStyleCommand.cs"));
         var apply = source[
             source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
             source.IndexOf("public void Revert", StringComparison.Ordinal)];
@@ -147,6 +147,4 @@ public sealed class GroupedApplyStyleCommandTests
         sheet2.GetCell(address2)!.StyleId.Should().Be(oldStyle2);
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 }
