@@ -37,6 +37,10 @@ public sealed partial class Sheet
     private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
     private readonly Dictionary<(uint Row, uint Col), StyleId> _styleOnly = [];
+    private List<StyleOnlyRun>? _styleOnlyRuns;
+    private HashSet<(uint Row, uint Col)>? _styleOnlyRunTombstones;
+    private int _styleOnlyRunCellCount;
+    private int _styleOnlyOverlayNewCellCount;
     private readonly HashSet<(uint Row, uint Col)> _formulaCells = [];
     private MergeRegionIndex? _mergeIndex;
     private GridRange? _usedRangeCache;
@@ -456,7 +460,7 @@ public sealed partial class Sheet
         {
             _cells[(address.Row, address.Col)] = Cell.FromValue(value);
         }
-        _styleOnly.Remove((address.Row, address.Col));
+        ClearStyleOnly(address.Row, address.Col);
     }
 
     /// <summary>
@@ -478,7 +482,7 @@ public sealed partial class Sheet
             _cells[(address.Row, address.Col)] = Cell.FromFormula(formulaText);
             _formulaCells.Add((address.Row, address.Col));
         }
-        _styleOnly.Remove((address.Row, address.Col));
+        ClearStyleOnly(address.Row, address.Col);
     }
 
     /// <summary>Set a cell directly.</summary>
@@ -492,7 +496,7 @@ public sealed partial class Sheet
             _formulaCells.Add((address.Row, address.Col));
 
         _cells[(address.Row, address.Col)] = cell;
-        _styleOnly.Remove((address.Row, address.Col));
+        ClearStyleOnly(address.Row, address.Col);
     }
 
     /// <summary>Remove a cell (clear its contents).</summary>

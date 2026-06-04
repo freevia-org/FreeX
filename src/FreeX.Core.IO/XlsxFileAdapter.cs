@@ -192,6 +192,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheetXmlLayout.TryGetValue(xlSheet.Name, out var xmlLayout);
             if (xmlLayout is { PopulatedCellCount: > 0 } layoutWithCells)
                 sheet.EnsureCellCapacity(layoutWithCells.PopulatedCellCount);
+            if (xmlLayout is { ExplicitStyleOnlyCells.Count: > 0 } layoutWithStyleOnlyCells)
+                sheet.EnsureStyleOnlyCapacity(layoutWithStyleOnlyCells.ExplicitStyleOnlyCells.Count);
 
             sheet.IsVeryHidden = xlSheet.Visibility == XLWorksheetVisibility.VeryHidden;
             sheet.IsHidden = xlSheet.Visibility != XLWorksheetVisibility.Visible;
@@ -235,6 +237,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheet.SetCell(addr, cell);
             }
 
+            List<StyleOnlyRun>? explicitStyleOnlyRuns = null;
             foreach (var (row, col, styleIndex) in xmlLayout?.ExplicitStyleOnlyCells ?? [])
             {
                 if (sheet.GetCell(row, col) is not null)
@@ -251,8 +254,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 }
 
                 if (styleId is { } nonDefaultStyleId)
-                    sheet.SetStyleOnly(row, col, nonDefaultStyleId);
+                    AddStyleOnlyRun(ref explicitStyleOnlyRuns, row, col, nonDefaultStyleId);
             }
+
+            if (explicitStyleOnlyRuns is { Count: > 0 })
+                sheet.SetStyleOnlyRuns(explicitStyleOnlyRuns);
 
             foreach (var hyperlink in xlSheet.Hyperlinks)
             {
@@ -450,6 +456,29 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             hasUnsupportedConditionalFormatting,
             sheetXmlLayout));
         return workbook;
+    }
+
+    private static void AddStyleOnlyRun(
+        ref List<StyleOnlyRun>? runs,
+        uint row,
+        uint col,
+        StyleId styleId)
+    {
+        runs ??= [];
+        if (runs.Count > 0)
+        {
+            var last = runs[^1];
+            if (last.Row == row &&
+                last.EndCol != uint.MaxValue &&
+                last.EndCol + 1 == col &&
+                last.StyleId == styleId)
+            {
+                runs[^1] = last with { EndCol = col };
+                return;
+            }
+        }
+
+        runs.Add(new StyleOnlyRun(row, col, col, styleId));
     }
 
     private static IReadOnlySet<string>? GetClosedXmlStyleOnlyWorksheetPathsToStrip(
