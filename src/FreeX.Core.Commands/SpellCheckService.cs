@@ -637,6 +637,12 @@ public static partial class SpellCheckService
         switch (word.Length)
         {
             case 3:
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "axs"))
+                {
+                    suggestion = "axis";
+                    return true;
+                }
+
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "teh"))
                 {
                     suggestion = "the";
@@ -683,9 +689,27 @@ public static partial class SpellCheckService
 
                 break;
             case 5:
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "axies"))
+                {
+                    suggestion = "axis";
+                    return true;
+                }
+
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "chrat"))
                 {
                     suggestion = "chart";
+                    return true;
+                }
+
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "lable"))
+                {
+                    suggestion = "label";
+                    return true;
+                }
+
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "legnd"))
+                {
+                    suggestion = "legend";
                     return true;
                 }
 
@@ -787,6 +811,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "lables"))
+                {
+                    suggestion = "labels";
+                    return true;
+                }
+
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "legned"))
+                {
+                    suggestion = "legend";
+                    return true;
+                }
+
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "piviot"))
                 {
                     suggestion = "pivot";
@@ -814,6 +850,18 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "sumary"))
                 {
                     suggestion = "summary";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sereis"))
+                {
+                    suggestion = "series";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "serise"))
+                {
+                    suggestion = "series";
                     return true;
                 }
 
@@ -1061,6 +1109,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sparklne"))
+                {
+                    suggestion = "sparkline";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "statment"))
                 {
                     suggestion = "statement";
@@ -1204,6 +1258,12 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "succesful"))
                 {
                     suggestion = "successful";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sparklins"))
+                {
+                    suggestion = "sparklines";
                     return true;
                 }
 

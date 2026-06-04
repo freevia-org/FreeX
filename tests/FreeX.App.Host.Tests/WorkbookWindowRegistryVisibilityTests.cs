@@ -5,38 +5,13 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class WorkbookWindowRegistryVisibilityTests
 {
-    private sealed class FakeWindow : IWorkbookWindow
-    {
-        public bool IsWindowVisible { get; private set; } = true;
-        public int SetVisibleTrueCount { get; private set; }
-        public int SetVisibleFalseCount { get; private set; }
-        public int ActivateCount { get; private set; }
-
-        public void ApplyWindowTitleSuffix(string suffix) { }
-        public void RefreshFromSharedWorkbook() { }
-        public void ActivateWindow() => ActivateCount++;
-
-        public void SetWindowVisible(bool visible)
-        {
-            IsWindowVisible = visible;
-            if (visible)
-                SetVisibleTrueCount++;
-            else
-                SetVisibleFalseCount++;
-        }
-
-        public WorkbookScrollOffset GetScrollOffset() => default;
-        public void SetScrollOffset(WorkbookScrollOffset offset) { }
-        public void TileToWorkArea(System.Windows.Rect bounds) { }
-    }
-
-    private static (WorkbookWindowRegistry Registry, FakeWindow[] Windows) RegisterWindows(int count)
+    private static (WorkbookWindowRegistry Registry, TestWorkbookWindow[] Windows) RegisterWindows(int count)
     {
         var registry = new WorkbookWindowRegistry();
-        var windows = new FakeWindow[count];
+        var windows = new TestWorkbookWindow[count];
         for (var i = 0; i < count; i++)
         {
-            windows[i] = new FakeWindow();
+            windows[i] = new TestWorkbookWindow();
             registry.Register(windows[i]);
         }
 
@@ -166,7 +141,7 @@ public sealed class WorkbookWindowRegistryVisibilityTests
     public void CanHide_IsFalse_WhenWindowIsNotRegistered()
     {
         var registry = new WorkbookWindowRegistry();
-        var stranger = new FakeWindow();
+        var stranger = new TestWorkbookWindow();
 
         registry.CanHide(stranger).Should().BeFalse();
     }

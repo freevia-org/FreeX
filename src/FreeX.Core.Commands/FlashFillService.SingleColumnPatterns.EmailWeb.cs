@@ -386,7 +386,7 @@ public static partial class FlashFillService
         if (parts.Length == 0)
             return false;
 
-        var titleParts = new string[parts.Length];
+        var titleParts = new List<string>(parts.Length);
         for (var i = 0; i < parts.Length; i++)
         {
             var part = parts[i];
@@ -403,11 +403,26 @@ public static partial class FlashFillService
                     return false;
             }
 
-            titleParts[i] = ToProperCase(part);
+            AddSlugTitleWords(part, titleParts);
         }
 
         title = string.Join(' ', titleParts);
         return title.Length > 0;
+    }
+
+    private static void AddSlugTitleWords(string part, List<string> titleParts)
+    {
+        var wordStart = 0;
+        for (var i = 1; i < part.Length; i++)
+        {
+            if (char.IsUpper(part[i]) && char.IsLower(part[i - 1]))
+            {
+                titleParts.Add(ToProperCase(part[wordStart..i]));
+                wordStart = i;
+            }
+        }
+
+        titleParts.Add(ToProperCase(part[wordStart..]));
     }
 
     private static bool HasValidPercentEscapes(string source)
