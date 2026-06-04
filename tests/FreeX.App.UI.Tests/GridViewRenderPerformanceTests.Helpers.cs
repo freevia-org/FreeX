@@ -1,6 +1,4 @@
 using System;
-using System.IO;
-using System.Reflection;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -32,9 +30,6 @@ public sealed partial class GridViewRenderPerformanceTests
         if (exception is not null)
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception).Throw();
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 
     private static DisplayCell Cell(uint row, uint col, string text, CellStyle? style = null) =>
         new(row, col, new TextValue(text), text, null, StyleId.Default, null, style);
