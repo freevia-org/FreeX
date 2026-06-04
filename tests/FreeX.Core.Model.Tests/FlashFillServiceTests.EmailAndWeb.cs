@@ -293,6 +293,78 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_FinalUrlPathSegmentSlugTitle_ConvertsUrlSlugStemToTitle()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike.html", "Road Bike"),
+                ("https://docs.example.com/help/safety-guide.pdf?download=1#top", "Safety Guide")
+            ],
+            ["https://example.com/releases/electric-cargo-bike?x=1#details"]);
+
+        result.Should().BeEquivalentTo(["Electric Cargo Bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FinalUrlPathSegmentSlugTitle_HandlesSegmentsWithoutExtensions()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike", "Road Bike"),
+                ("https://docs.example.com/help/safety-guide", "Safety Guide")
+            ],
+            ["https://example.com/releases/electric-cargo-bike"]);
+
+        result.Should().BeEquivalentTo(["Electric Cargo Bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FinalUrlPathSegmentSlugTitle_HandlesUnderscoresAndDecodedSpaces()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road_bike.html", "Road Bike"),
+                ("https://docs.example.com/help/safety%20guide.pdf", "Safety Guide")
+            ],
+            ["https://example.com/releases/electric_cargo%20bike"]);
+
+        result.Should().BeEquivalentTo(["Electric Cargo Bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FinalUrlPathSegmentSlugTitle_PreservesDigitsInsideWords()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike2.html", "Road Bike2"),
+                ("https://docs.example.com/help/safety2-guide.pdf", "Safety2 Guide")
+            ],
+            ["https://example.com/releases/electric2-cargo-bike"]);
+
+        result.Should().BeEquivalentTo(["Electric2 Cargo Bike"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("ftp://example.com/releases/electric-cargo-bike")]
+    [InlineData("https://user@example.com/releases/electric-cargo-bike")]
+    [InlineData("https://example.com")]
+    [InlineData("https://example.com/releases/")]
+    [InlineData("https://example.com/releases/%ZZ")]
+    [InlineData("https://example.com/releases/2026")]
+    [InlineData("https://example.com/releases/electric--cargo-bike")]
+    public void Fill_FinalUrlPathSegmentSlugTitle_ReturnsNullForDubiousRemainingUrl(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike.html", "Road Bike"),
+                ("https://docs.example.com/help/safety-guide.pdf?download=1#top", "Safety Guide")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_UrlQueryParameterValue_ExtractsDecodedParameterValue()
     {
         var result = FlashFillService.Fill(
