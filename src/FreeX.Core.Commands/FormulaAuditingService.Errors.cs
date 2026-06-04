@@ -1234,18 +1234,24 @@ public static partial class FormulaAuditingService
         if (TryParseFiniteNumberOrCurrencyText(value))
             return true;
 
+        if (TryStripTrailingPercent(value, out var percentValue) &&
+            TryParseFiniteNumberOrCurrencyText(percentValue))
+        {
+            return true;
+        }
+
         if (value.Length > 2 && value[0] == '(' && value[^1] == ')')
         {
             var accountingValue = value[1..^1].Trim();
             if (accountingValue.Length > 0 && TryParseFiniteNumberOrCurrencyText(accountingValue))
                 return true;
-        }
 
-        if (value.Length > 1 && value[^1] == '%')
-        {
-            var percentValue = value[..^1].Trim();
-            if (percentValue.Length > 0 && TryParseFiniteNumberOrCurrencyText(percentValue))
+            if (accountingValue.Length > 0 &&
+                TryStripTrailingPercent(accountingValue, out var accountingPercentValue) &&
+                TryParseFiniteNumberOrCurrencyText(accountingPercentValue))
+            {
                 return true;
+            }
         }
 
         return false;
@@ -1263,15 +1269,43 @@ public static partial class FormulaAuditingService
     private static bool TryStripSupportedCurrencySymbol(string text, out string numberText)
     {
         numberText = string.Empty;
-        if (text.Length <= 1 || !IsSupportedCurrencySymbol(text[0]))
+        if (text.Length <= 1)
             return false;
 
-        numberText = text[1..].Trim();
+        var symbolIndex = 0;
+        if (text[0] is '+' or '-')
+        {
+            if (text.Length <= 2)
+                return false;
+
+            symbolIndex = 1;
+        }
+
+        if (!IsSupportedCurrencySymbol(text[symbolIndex]))
+            return false;
+
+        var numericText = text[(symbolIndex + 1)..].Trim();
+        if (numericText.Length == 0)
+            return false;
+
+        numberText = symbolIndex == 0
+            ? numericText
+            : string.Concat(text[0], numericText);
         return numberText.Length > 0;
     }
 
     private static bool IsSupportedCurrencySymbol(char value) =>
         value is '$' or '\u20AC' or '\u00A3';
+
+    private static bool TryStripTrailingPercent(string text, out string numberText)
+    {
+        numberText = string.Empty;
+        if (text.Length <= 1 || text[^1] != '%')
+            return false;
+
+        numberText = text[..^1].Trim();
+        return numberText.Length > 0;
+    }
 
     private static bool TryParseFiniteNumberText(string text) =>
         double.TryParse(
