@@ -398,7 +398,7 @@ public sealed class RowColumnShiftAddressStateTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        return (workbook, sheet, new SimpleCtx(workbook));
+        return (workbook, sheet, new TestCommandContext(workbook));
     }
 
     private const int StyleOnlyShiftRows = 800;
@@ -420,7 +420,7 @@ public sealed class RowColumnShiftAddressStateTests
                 sheet.SetStyleOnly(row, col, style);
         }
 
-        return (workbook, sheet, new SimpleCtx(workbook));
+        return (workbook, sheet, new TestCommandContext(workbook));
     }
 
     private static string FindRepoFile(params string[] relativeParts)
@@ -496,10 +496,4 @@ public sealed class RowColumnShiftAddressStateTests
                 new WorksheetDataConsolidationReferenceModel { Sheet = sheetName, Reference = reference }
             }
         };
-
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
