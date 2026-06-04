@@ -17,18 +17,5 @@ public sealed partial class NativeJsonSchemaTests
         return stream;
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current is not null)
-        {
-            var candidate = Path.Combine(new[] { current.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            current = current.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate workspace file {Path.Combine(parts)}.");
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }

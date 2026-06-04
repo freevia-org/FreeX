@@ -166,18 +166,5 @@ public sealed class FileSavePlannerTests
         public void Save(Workbook workbook, Stream stream) => throw new NotSupportedException();
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, parts));
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }

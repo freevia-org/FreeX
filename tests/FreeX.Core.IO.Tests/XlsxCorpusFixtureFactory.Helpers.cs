@@ -129,21 +129,5 @@ internal static partial class XlsxCorpusFixtureFactory
         return File.ReadAllBytes(path);
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        foreach (var root in new[] { Environment.CurrentDirectory, AppContext.BaseDirectory })
-        {
-            var directory = new DirectoryInfo(root);
-            while (directory is not null)
-            {
-                var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
-                if (File.Exists(candidate))
-                    return candidate;
-
-                directory = directory.Parent;
-            }
-        }
-
-        throw new FileNotFoundException($"Could not find workspace file '{Path.Combine(relativeParts)}'.");
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }
