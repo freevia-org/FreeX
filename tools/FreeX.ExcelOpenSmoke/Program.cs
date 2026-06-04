@@ -387,6 +387,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetHyperlinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDrawingPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertLegacyCommentPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -583,6 +584,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetHyperlinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDrawingPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertLegacyCommentPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -1086,61 +1088,8 @@ internal static class ExcelOpenSmoke
         }
     }
 
-    private static IEnumerable<string> FindPublicHyperlinkRelationshipIssues(ZipArchive archive)
-    {
-        foreach (var worksheetEntry in archive.Entries.Where(entry =>
-                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
-        {
-            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
-            var linkedHyperlinks = LoadPackageXml(worksheetEntry)
-                .Descendants(SpreadsheetNs + "hyperlink")
-                .Select(hyperlink => new
-                {
-                    Ref = hyperlink.Attribute("ref")?.Value ?? "(missing ref)",
-                    RelationshipId = hyperlink.Attribute(OfficeRelationshipNs + "id")?.Value
-                })
-                .Where(hyperlink => !string.IsNullOrWhiteSpace(hyperlink.RelationshipId))
-                .ToArray();
-            if (linkedHyperlinks.Length == 0)
-                continue;
-
-            var relationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
-            var relationshipEntry = FindPackageEntry(archive, relationshipPart);
-            if (relationshipEntry is null)
-            {
-                yield return $"missing {relationshipPart} for public hyperlink relationships in {worksheetPart}";
-                continue;
-            }
-
-            var relationshipsXml = LoadPackageXml(relationshipEntry);
-            var relationships = relationshipsXml.Root?.Elements(PackageRelationshipNs + "Relationship").ToArray() ?? [];
-            foreach (var linkedHyperlink in linkedHyperlinks)
-            {
-                var relationship = relationships.FirstOrDefault(relationship =>
-                    string.Equals(
-                        relationship.Attribute("Id")?.Value,
-                        linkedHyperlink.RelationshipId,
-                        StringComparison.OrdinalIgnoreCase));
-                if (relationship is null)
-                {
-                    yield return $"{worksheetPart} hyperlink {linkedHyperlink.Ref} targets missing relationship {linkedHyperlink.RelationshipId}";
-                    continue;
-                }
-
-                if (!string.Equals(relationship.Attribute("Type")?.Value, HyperlinkRelationshipType, StringComparison.OrdinalIgnoreCase))
-                {
-                    yield return $"{worksheetPart} hyperlink {linkedHyperlink.Ref} relationship {linkedHyperlink.RelationshipId} is not a hyperlink relationship";
-                    continue;
-                }
-
-                if (!string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
-                {
-                    yield return $"{worksheetPart} hyperlink {linkedHyperlink.Ref} relationship {linkedHyperlink.RelationshipId} is not external";
-                }
-            }
-        }
-    }
+    private static IEnumerable<string> FindPublicHyperlinkRelationshipIssues(ZipArchive archive) =>
+        FindWorksheetHyperlinkPackageIssues(archive);
 
     private static bool IsInlineStringCell(XElement cell) =>
         string.Equals(cell.Attribute("t")?.Value, "inlineStr", StringComparison.Ordinal) ||
@@ -2251,6 +2200,115 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid styles package graph: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetHyperlinkPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = FindWorksheetHyperlinkPackageIssues(archive).ToArray();
+        if (issues.Length == 0)
+            return;
+
+        ThrowInvalidWorksheetHyperlinkPackage(label, sourcePath, issues);
+    }
+
+    private static IEnumerable<string> FindWorksheetHyperlinkPackageIssues(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var hyperlinks = LoadPackageXml(worksheetEntry)
+                .Descendants(SpreadsheetNs + "hyperlink")
+                .Select((hyperlink, index) => new WorksheetHyperlinkReference(
+                    index + 1,
+                    hyperlink.Attribute("ref")?.Value,
+                    hyperlink.Attribute(OfficeRelationshipNs + "id")?.Value,
+                    hyperlink.Attribute("location")?.Value))
+                .ToArray();
+            if (hyperlinks.Length == 0)
+                continue;
+
+            foreach (var hyperlink in hyperlinks)
+            {
+                if (string.IsNullOrWhiteSpace(hyperlink.Reference))
+                {
+                    yield return $"{worksheetPart} hyperlink #{hyperlink.Ordinal} has no cell reference";
+                }
+
+                if (string.IsNullOrWhiteSpace(hyperlink.RelationshipId) &&
+                    string.IsNullOrWhiteSpace(hyperlink.Location))
+                {
+                    yield return $"{worksheetPart} {FormatWorksheetHyperlinkReference(hyperlink)} has neither a relationship id nor an internal location";
+                }
+            }
+
+            var linkedHyperlinks = hyperlinks
+                .Where(hyperlink => !string.IsNullOrWhiteSpace(hyperlink.RelationshipId))
+                .ToArray();
+            if (linkedHyperlinks.Length == 0)
+                continue;
+
+            var relationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var relationshipEntry = FindPackageEntry(archive, relationshipPart);
+            if (relationshipEntry is null)
+            {
+                yield return $"missing {relationshipPart} for worksheet hyperlink relationships in {worksheetPart}";
+                continue;
+            }
+
+            var relationships = LoadPackageXml(relationshipEntry)
+                .Root?
+                .Elements(PackageRelationshipNs + "Relationship")
+                .ToArray() ?? [];
+            foreach (var linkedHyperlink in linkedHyperlinks)
+            {
+                var relationship = relationships.FirstOrDefault(relationship =>
+                    string.Equals(
+                        relationship.Attribute("Id")?.Value,
+                        linkedHyperlink.RelationshipId,
+                        StringComparison.OrdinalIgnoreCase));
+                if (relationship is null)
+                {
+                    yield return $"{worksheetPart} {FormatWorksheetHyperlinkReference(linkedHyperlink)} targets missing relationship {linkedHyperlink.RelationshipId}";
+                    continue;
+                }
+
+                if (!string.Equals(relationship.Attribute("Type")?.Value, HyperlinkRelationshipType, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return $"{worksheetPart} {FormatWorksheetHyperlinkReference(linkedHyperlink)} relationship {linkedHyperlink.RelationshipId} is not a hyperlink relationship";
+                    continue;
+                }
+
+                if (!string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return $"{worksheetPart} {FormatWorksheetHyperlinkReference(linkedHyperlink)} relationship {linkedHyperlink.RelationshipId} is not external";
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
+                {
+                    yield return $"{worksheetPart} {FormatWorksheetHyperlinkReference(linkedHyperlink)} relationship {linkedHyperlink.RelationshipId} has no Target";
+                }
+            }
+        }
+    }
+
+    private static string FormatWorksheetHyperlinkReference(WorksheetHyperlinkReference hyperlink) =>
+        string.IsNullOrWhiteSpace(hyperlink.Reference)
+            ? $"hyperlink #{hyperlink.Ordinal}"
+            : $"hyperlink {hyperlink.Reference}";
+
+    private static void ThrowInvalidWorksheetHyperlinkPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet hyperlink package graph: {sample}{suffix}");
     }
 
     private static void AssertWorksheetDrawingPackageComplete(string xlsxPath, string label, string sourcePath)
@@ -7527,6 +7585,12 @@ internal static class ExcelOpenSmoke
         string WorksheetPart,
         string Description,
         string? ValueText);
+
+    private sealed record WorksheetHyperlinkReference(
+        int Ordinal,
+        string? Reference,
+        string? RelationshipId,
+        string? Location);
 
     private sealed record TablePartReference(
         int Ordinal,
