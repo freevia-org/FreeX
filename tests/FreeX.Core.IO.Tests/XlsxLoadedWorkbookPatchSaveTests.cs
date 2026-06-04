@@ -486,6 +486,118 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithStructuredTableDataBodyEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateStructuredTableSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.StructuredTables.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(99));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/worksheets/_rels/sheet1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/tables/table1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/tables/table1.xml"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "B2")
+            .Should()
+            .Be("99");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        reloadedSheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(99));
+        reloadedSheet.StructuredTables.Should().ContainSingle()
+            .Which.Range.ToString().Should().Be("A1:B3");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithStructuredTableOutsideTableEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateStructuredTableSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.StructuredTables.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new TextValue("outside patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/worksheets/_rels/sheet1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/tables/table1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/tables/table1.xml"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "C4")
+            .Should()
+            .Be("outside patched");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithStructuredTableHeaderEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateStructuredTableSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Changed"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .NotEqual(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithFilteredStructuredTableDataBodyEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateStructuredTableSourcePackage(includeFilter: true);
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.StructuredTables.Should().ContainSingle()
+            .Which.FilterColumns.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(99));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .NotEqual(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithClearedLiteralCell_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
@@ -936,6 +1048,114 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
 
         return package.ToArray();
     }
+
+    private static byte[] CreateStructuredTableSourcePackage(bool includeFilter = false)
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(
+            (
+                "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                  <Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>
+                </Types>
+                """),
+            (
+                "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Data" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                </workbook>
+                """),
+            (
+                "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+                  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+                  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+                  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+                  <dxfs count="0"/>
+                  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="TableStyleLight16"/>
+                </styleSheet>
+                """),
+            (
+                "xl/worksheets/sheet1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <dimension ref="A1:C4"/>
+                  <sheetData>
+                    <row r="1"><c r="A1" t="inlineStr"><is><t>Category</t></is></c><c r="B1" t="inlineStr"><is><t>Amount</t></is></c></row>
+                    <row r="2"><c r="A2" t="inlineStr"><is><t>East</t></is></c><c r="B2"><v>10</v></c></row>
+                    <row r="3"><c r="A3" t="inlineStr"><is><t>West</t></is></c><c r="B3"><v>20</v></c></row>
+                    <row r="4"><c r="C4" t="inlineStr"><is><t>outside</t></is></c></row>
+                  </sheetData>
+                  <tableParts count="1"><tablePart r:id="rId1"/></tableParts>
+                </worksheet>
+                """),
+            (
+                "xl/worksheets/_rels/sheet1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/tables/table1.xml",
+                CreateStructuredTableXml(includeFilter)));
+
+        return package.ToArray();
+    }
+
+    private static string CreateStructuredTableXml(bool includeFilter) =>
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="Table1" displayName="Table1" ref="A1:B3" totalsRowShown="0">
+          AUTOFILTER
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>
+        </table>
+        """.Replace(
+            "AUTOFILTER",
+            includeFilter
+                ? """
+                  <autoFilter ref="A1:B3"><filterColumn colId="0"><filters><filter val="East"/></filters></filterColumn></autoFilter>
+                  """
+                : """<autoFilter ref="A1:B3"/>""",
+            StringComparison.Ordinal);
 
     private static byte[] CreateFormulaSourcePackage(string formulaElement = "<f>1+1</f>")
     {

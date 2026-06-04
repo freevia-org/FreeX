@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Globalization;
 using System.IO.Compression;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -473,7 +474,7 @@ public sealed partial class XlsxFileAdapter
             {
                 using var packageStream = new MemoryStream(package, offset, count, writable: false);
                 using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read);
-                return PackageAllowsCellPatchSave(archive);
+                return PackageAllowsCellPatchSave(archive, workbook);
             }
             catch
             {
@@ -500,7 +501,7 @@ public sealed partial class XlsxFileAdapter
             return false;
         }
 
-        private static bool PackageAllowsCellPatchSave(ZipArchive archive)
+        private static bool PackageAllowsCellPatchSave(ZipArchive archive, Workbook workbook)
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -515,9 +516,26 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
 
+            var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+            if (worksheetPathMap is null)
+                return false;
+
+            var sheetsByWorksheetPath = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
+            foreach (var sheet in workbook.Sheets)
+            {
+                if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+                    return false;
+
+                sheetsByWorksheetPath[worksheetPath] = sheet;
+            }
+
             var allowedVmlDrawingPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry))
             {
+                var worksheetPath = XlsxPackagePath.NormalizeZipPath(worksheetEntry.FullName.Replace('\\', '/'));
+                if (!sheetsByWorksheetPath.TryGetValue(worksheetPath, out var sheet))
+                    return false;
+
                 var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
                 var root = worksheetXml.Root;
                 if (root is null ||
@@ -525,7 +543,8 @@ public sealed partial class XlsxFileAdapter
                     root.Element(workbookNs + "customProperties") is not null ||
                     root.Element(workbookNs + "drawing") is not null ||
                     root.Element(workbookNs + "legacyDrawingHF") is not null ||
-                    HasWorksheetTableParts(root, workbookNs) ||
+                    root.Element(workbookNs + "queryTableParts") is not null ||
+                    HasUnsupportedWorksheetTableParts(archive, worksheetPath, root, workbookNs, sheet) ||
                     HasOfficeRevisionAttributes(root))
                 {
                     return false;
@@ -534,7 +553,7 @@ public sealed partial class XlsxFileAdapter
                 if (root.Element(workbookNs + "legacyDrawing") is { } legacyDrawing &&
                     !TryAddPatchSafeLegacyNoteVmlDrawingPath(
                         archive,
-                        XlsxPackagePath.NormalizeZipPath(worksheetEntry.FullName.Replace('\\', '/')),
+                        worksheetPath,
                         legacyDrawing,
                         allowedVmlDrawingPaths))
                 {
@@ -566,6 +585,7 @@ public sealed partial class XlsxFileAdapter
             path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/revisionHeaders/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase);
 
@@ -780,14 +800,102 @@ public sealed partial class XlsxFileAdapter
                     string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
                     attribute.Name.NamespaceName.Contains("/revision", StringComparison.Ordinal));
 
-        private static bool HasWorksheetTableParts(XElement worksheetRoot, XNamespace workbookNs)
+        private static bool HasUnsupportedWorksheetTableParts(
+            ZipArchive archive,
+            string worksheetPath,
+            XElement worksheetRoot,
+            XNamespace workbookNs,
+            Sheet sheet)
         {
             var tableParts = worksheetRoot.Element(workbookNs + "tableParts");
             if (tableParts is null)
                 return false;
 
-            return tableParts.Elements(workbookNs + "tablePart").Any() ||
-                   !string.Equals(tableParts.Attribute("count")?.Value, "0", StringComparison.Ordinal);
+            var tablePartElements = tableParts.Elements(workbookNs + "tablePart").ToList();
+            if (tablePartElements.Count == 0)
+            {
+                return !string.Equals(tableParts.Attribute("count")?.Value, "0", StringComparison.Ordinal);
+            }
+
+            if (!int.TryParse(
+                    tableParts.Attribute("count")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var declaredCount) ||
+                declaredCount != tablePartElements.Count ||
+                sheet.StructuredTables.Count != tablePartElements.Count)
+            {
+                return true;
+            }
+
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (relationshipsEntry is null)
+                return true;
+
+            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            var relationshipsRoot = relationshipsXml.Root;
+            if (relationshipsRoot is null)
+                return true;
+
+            var tableModelsByPath = sheet.StructuredTables
+                .Where(table => !string.IsNullOrWhiteSpace(table.PackagePart))
+                .ToDictionary(
+                    table => XlsxPackagePath.NormalizeZipPath(table.PackagePart.TrimStart('/').Replace('\\', '/')),
+                    table => table,
+                    StringComparer.OrdinalIgnoreCase);
+            if (tableModelsByPath.Count != sheet.StructuredTables.Count)
+                return true;
+
+            var seenTablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var tablePart in tablePartElements)
+            {
+                var relationshipId = tablePart.Attribute(relNs + "id")?.Value;
+                if (string.IsNullOrWhiteSpace(relationshipId))
+                    return true;
+
+                var relationship = relationshipsRoot
+                    .Elements(packageRelNs + "Relationship")
+                    .SingleOrDefault(candidate =>
+                        string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                        string.Equals(
+                            candidate.Attribute("Type")?.Value,
+                            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table",
+                            StringComparison.OrdinalIgnoreCase));
+                var target = relationship?.Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(target))
+                    return true;
+
+                var tablePath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
+                if (!tablePath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) ||
+                    !tablePath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                    !seenTablePaths.Add(tablePath) ||
+                    !tableModelsByPath.TryGetValue(tablePath, out var tableModel) ||
+                    archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(tablePath)) is not null)
+                {
+                    return true;
+                }
+
+                var tableEntry = archive.GetEntry(tablePath);
+                if (tableEntry is null || HasUnsupportedTablePart(tableEntry, workbookNs, tableModel))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasUnsupportedTablePart(
+            ZipArchiveEntry tableEntry,
+            XNamespace workbookNs,
+            StructuredTableModel tableModel)
+        {
+            var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
+            var root = tableXml.Root;
+            return root is null ||
+                   root.Name != workbookNs + "table" ||
+                   root.Attribute("connectionId") is not null ||
+                   !string.Equals(root.Attribute("ref")?.Value, tableModel.Range.ToString(), StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool HasUnsupportedRichSharedStringFonts(ZipArchive archive, XNamespace workbookNs)
@@ -946,6 +1054,7 @@ public sealed partial class XlsxFileAdapter
                         sourceHyperlinks,
                         XlsxWorksheetCommentBaseline.Capture(sheet),
                         sourceComments,
+                        XlsxWorksheetTablePatchBaseline.Capture(sheet),
                         cells));
                 }
 
@@ -989,6 +1098,9 @@ public sealed partial class XlsxFileAdapter
                     return false;
                 }
 
+                if (!baseline.Tables.EqualsModel(XlsxWorksheetTablePatchBaseline.Capture(sheet)))
+                    return false;
+
                 if (!XlsxWorksheetDimensionPatch.TryCreate(
                         baseline.SheetId,
                         baseline.WorksheetPath,
@@ -1001,6 +1113,9 @@ public sealed partial class XlsxFileAdapter
 
                 if (dimensionPatch is not null)
                 {
+                    if (baseline.Tables.HasTables)
+                        return false;
+
                     if (dimensionPatch.ChangeCount > changeLimit)
                         return false;
 
@@ -1019,6 +1134,9 @@ public sealed partial class XlsxFileAdapter
 
                 if (mergeRegionPatch is not null)
                 {
+                    if (baseline.Tables.HasTables)
+                        return false;
+
                     if (mergeRegionPatch.ChangeCount > changeLimit)
                         return false;
 
@@ -1038,6 +1156,9 @@ public sealed partial class XlsxFileAdapter
 
                 if (hyperlinkPatch is not null)
                 {
+                    if (baseline.Tables.HasTables)
+                        return false;
+
                     if (hyperlinkPatch.ChangeCount > changeLimit)
                         return false;
 
@@ -1057,6 +1178,9 @@ public sealed partial class XlsxFileAdapter
 
                 if (commentPatch is not null)
                 {
+                    if (baseline.Tables.HasTables)
+                        return false;
+
                     if (commentPatch.ChangeCount > changeLimit)
                         return false;
 
@@ -1069,6 +1193,9 @@ public sealed partial class XlsxFileAdapter
                 {
                     if (!baseline.Cells.TryGetValue((row, col), out var original))
                     {
+                        if (baseline.Tables.HasTables)
+                            return false;
+
                         if (cell.HasFormula ||
                             cell.IgnoreFormulaError ||
                             cell.Value is BlankValue ||
@@ -1114,6 +1241,17 @@ public sealed partial class XlsxFileAdapter
                     var valueChanged = !Equals(cell.Value, original.Value);
                     if (!formulaChanged && !valueChanged && !styleChanged)
                         continue;
+
+                    if (baseline.Tables.HasTables &&
+                        (!valueChanged ||
+                         styleChanged ||
+                         formulaChanged ||
+                         original.FormulaText is not null ||
+                         cell.HasFormula ||
+                         !baseline.Tables.AllowsExistingScalarValueCellPatch(row, col)))
+                    {
+                        return false;
+                    }
 
                     if ((formulaChanged || valueChanged) && !IsPatchableScalarValue(cell.Value))
                     {
@@ -1168,6 +1306,9 @@ public sealed partial class XlsxFileAdapter
                 {
                     if (currentCells.ContainsKey((row, col)))
                         continue;
+
+                    if (baseline.Tables.HasTables)
+                        return false;
 
                     changes.Add(new XlsxCellValuePatch(
                         XlsxCellValuePatchKind.DeletedCell,
@@ -3203,6 +3344,203 @@ public sealed partial class XlsxFileAdapter
         string Reference,
         string NewText);
 
+    private sealed record XlsxWorksheetTablePatchBaseline(
+        IReadOnlyList<XlsxPatchStructuredTable> Tables)
+    {
+        public bool HasTables => Tables.Count > 0;
+
+        public static XlsxWorksheetTablePatchBaseline Capture(Sheet sheet) =>
+            new(sheet.StructuredTables.Select(XlsxPatchStructuredTable.Capture).ToArray());
+
+        public bool EqualsModel(XlsxWorksheetTablePatchBaseline current)
+        {
+            if (Tables.Count != current.Tables.Count)
+                return false;
+
+            for (var i = 0; i < Tables.Count; i++)
+            {
+                if (!Tables[i].EqualsModel(current.Tables[i]))
+                    return false;
+            }
+
+            return true;
+        }
+
+        public bool AllowsExistingScalarValueCellPatch(uint row, uint col)
+        {
+            foreach (var table in Tables)
+            {
+                if (!table.Contains(row, col))
+                    continue;
+
+                return table.AllowsExistingScalarDataBodyCellPatch(row, col);
+            }
+
+            return true;
+        }
+    }
+
+    private sealed record XlsxPatchStructuredTable(
+        string MetadataKey,
+        GridRange Range,
+        uint DataBodyStartRow,
+        uint DataBodyEndRow,
+        bool AllowsScalarDataBodyEdits,
+        IReadOnlySet<uint> CalculatedFormulaColumns)
+    {
+        public static XlsxPatchStructuredTable Capture(StructuredTableModel table)
+        {
+            var rowCount = checked((int)table.Range.RowCount);
+            var headerRows = Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
+            var remainingRows = rowCount - headerRows;
+            var totalsRows = table.TotalsRowShown
+                ? Math.Clamp(table.TotalsRowCount ?? 1, 0, remainingRows)
+                : 0;
+            var dataRows = rowCount - headerRows - totalsRows;
+            var dataBodyStartRow = table.Range.Start.Row + checked((uint)headerRows);
+            var dataBodyEndRow = dataRows <= 0
+                ? dataBodyStartRow - 1
+                : dataBodyStartRow + checked((uint)dataRows) - 1;
+            var allowsScalarDataBodyEdits = dataRows > 0 &&
+                table.FilterColumns.Count == 0 &&
+                (table.NativeAutoFilterAttributes?.Count ?? 0) == 0 &&
+                (table.NativeAutoFilterChildXmls?.Count ?? 0) == 0 &&
+                string.IsNullOrWhiteSpace(table.NativeSortStateXml);
+            var calculatedFormulaColumns = table.Columns
+                .Where(column => !string.IsNullOrWhiteSpace(column.CalculatedColumnFormula))
+                .Select(column => table.Range.Start.Col + checked((uint)column.Id) - 1)
+                .Where(column => column >= table.Range.Start.Col && column <= table.Range.End.Col)
+                .ToHashSet();
+
+            return new XlsxPatchStructuredTable(
+                CreateMetadataKey(table),
+                table.Range,
+                dataBodyStartRow,
+                dataBodyEndRow,
+                allowsScalarDataBodyEdits,
+                calculatedFormulaColumns);
+        }
+
+        public bool EqualsModel(XlsxPatchStructuredTable current) =>
+            string.Equals(MetadataKey, current.MetadataKey, StringComparison.Ordinal);
+
+        public bool Contains(uint row, uint col) =>
+            row >= Range.Start.Row &&
+            row <= Range.End.Row &&
+            col >= Range.Start.Col &&
+            col <= Range.End.Col;
+
+        public bool AllowsExistingScalarDataBodyCellPatch(uint row, uint col) =>
+            AllowsScalarDataBodyEdits &&
+            row >= DataBodyStartRow &&
+            row <= DataBodyEndRow &&
+            col >= Range.Start.Col &&
+            col <= Range.End.Col &&
+            !CalculatedFormulaColumns.Contains(col);
+
+        private static string CreateMetadataKey(StructuredTableModel table)
+        {
+            var builder = new StringBuilder();
+            Append(builder, table.Id);
+            Append(builder, table.Name);
+            Append(builder, table.DisplayName);
+            Append(builder, table.Range.ToString());
+            Append(builder, table.HasAutoFilter);
+            Append(builder, table.TotalsRowShown);
+            Append(builder, table.HeaderRowCount);
+            Append(builder, table.TotalsRowCount);
+            Append(builder, table.InsertRow);
+            Append(builder, table.InsertRowShift);
+            Append(builder, table.Published);
+            Append(builder, table.Comment);
+            Append(builder, table.StyleName);
+            Append(builder, table.ShowFirstColumn);
+            Append(builder, table.ShowLastColumn);
+            Append(builder, table.ShowRowStripes);
+            Append(builder, table.ShowColumnStripes);
+            Append(builder, NormalizePackagePart(table.PackagePart));
+            Append(builder, table.NativeSortStateXml);
+            AppendDictionary(builder, table.NativeAttributes);
+            AppendList(builder, table.NativeChildXmls);
+            AppendDictionary(builder, table.NativeAutoFilterAttributes);
+            AppendList(builder, table.NativeAutoFilterChildXmls);
+            AppendDictionary(builder, table.NativeStyleInfoAttributes);
+            AppendList(builder, table.NativeStyleInfoChildXmls);
+            Append(builder, table.Columns.Count);
+            foreach (var column in table.Columns)
+            {
+                Append(builder, column.Id);
+                Append(builder, column.Name);
+                Append(builder, column.TotalsRowLabel);
+                Append(builder, column.TotalsRowFunction);
+                Append(builder, column.CalculatedColumnFormula);
+                Append(builder, column.TotalsRowFormula);
+                AppendList(builder, column.NativeChildXmls);
+                AppendDictionary(builder, column.NativeAttributes);
+            }
+
+            Append(builder, table.FilterColumns.Count);
+            foreach (var filter in table.FilterColumns)
+            {
+                Append(builder, filter.ColumnId);
+                AppendList(builder, filter.Values);
+                Append(builder, filter.IncludeBlank);
+                Append(builder, filter.CustomFiltersAnd);
+                Append(builder, filter.CustomFiltersAndRaw);
+                AppendDictionary(builder, filter.NativeCustomFiltersAttributes);
+                AppendList(builder, filter.NativeFilterXmls);
+                AppendDictionary(builder, filter.NativeAttributes);
+                Append(builder, filter.CustomFilters.Count);
+                foreach (var customFilter in filter.CustomFilters)
+                {
+                    Append(builder, customFilter.Operator);
+                    Append(builder, customFilter.Value);
+                    AppendDictionary(builder, customFilter.NativeAttributes);
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private static string NormalizePackagePart(string packagePart) =>
+            XlsxPackagePath.NormalizeZipPath(packagePart.TrimStart('/').Replace('\\', '/'));
+
+        private static void Append(StringBuilder builder, object? value)
+        {
+            var text = value switch
+            {
+                null => "",
+                bool boolean => boolean ? "1" : "0",
+                IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+                _ => value.ToString() ?? ""
+            };
+            builder.Append(text.Length.ToString(CultureInfo.InvariantCulture));
+            builder.Append(':');
+            builder.Append(text);
+            builder.Append('|');
+        }
+
+        private static void AppendList(StringBuilder builder, IReadOnlyList<string>? values)
+        {
+            Append(builder, values?.Count ?? 0);
+            foreach (var value in values ?? [])
+                Append(builder, value);
+        }
+
+        private static void AppendDictionary(StringBuilder builder, IReadOnlyDictionary<string, string>? values)
+        {
+            Append(builder, values?.Count ?? 0);
+            if (values is null)
+                return;
+
+            foreach (var (key, value) in values.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            {
+                Append(builder, key);
+                Append(builder, value);
+            }
+        }
+    }
+
     private sealed record XlsxWorksheetCellPatchBaseline(
         SheetId SheetId,
         string SheetName,
@@ -3215,6 +3553,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> SourceHyperlinks,
         XlsxWorksheetCommentBaseline Comments,
         IReadOnlyDictionary<CellAddress, XlsxSourceComment> SourceComments,
+        XlsxWorksheetTablePatchBaseline Tables,
         IReadOnlyDictionary<(uint Row, uint Col), XlsxPatchCell> Cells);
 
     private sealed record XlsxPatchCell(
