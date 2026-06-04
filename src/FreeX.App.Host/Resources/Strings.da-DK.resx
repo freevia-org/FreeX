@@ -4357,6 +4357,9 @@ Vil du sende nedbrudsrapporter for denne testversion?</value>
   <data name="MainWindow_Header_Draw" xml:space="preserve">
     <value>Tegn</value>
   </data>
+  <data name="MainWindow_Header_DrawBorder" xml:space="preserve">
+    <value>Draw Border</value>
+  </data>
   <data name="MainWindow_Header_DrawBorderGrid" xml:space="preserve">
     <value>Tegn kantgitter</value>
   </data>

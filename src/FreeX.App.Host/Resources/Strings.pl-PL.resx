@@ -4357,6 +4357,9 @@ Wysłać raporty o awariach dla tej wersji testowej?</value>
   <data name="MainWindow_Header_Draw" xml:space="preserve">
     <value>Rysowanie</value>
   </data>
+  <data name="MainWindow_Header_DrawBorder" xml:space="preserve">
+    <value>Draw Border</value>
+  </data>
   <data name="MainWindow_Header_DrawBorderGrid" xml:space="preserve">
     <value>Narysuj siatkę graniczną</value>
   </data>

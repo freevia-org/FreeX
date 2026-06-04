@@ -439,6 +439,9 @@
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="TopAndDoubleBottom"/></MenuItem.Icon>
                                                 </MenuItem>
                                                 <Separator/>
+                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_DrawBorder}" local:RibbonTooltip.KeyTip="W" Click="BorderDrawMenuItem_Click" local:RibbonMetadata.CommandName="Draw Border">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="Outside"/></MenuItem.Icon>
+                                                </MenuItem>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_DrawBorderGrid}" local:RibbonTooltip.KeyTip="G" Click="BorderDrawGridMenuItem_Click" local:RibbonMetadata.CommandName="Draw Border Grid">
                                                     <MenuItem.Icon><local:BorderMenuIcon Kind="All"/></MenuItem.Icon>
                                                 </MenuItem>

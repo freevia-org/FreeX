@@ -1209,6 +1209,7 @@ public sealed partial class MainWindowSourceHygieneTests
             "Top and Bottom Border",
             "Top and Thick Bottom Border",
             "Top and Double Bottom Border",
+            "Draw Border",
             "Draw Border Grid",
             "Erase Border",
             "Line Color",
@@ -1229,6 +1230,7 @@ public sealed partial class MainWindowSourceHygieneTests
             "BorderTopAndBottomMenuItem_Click",
             "BorderTopAndThickBottomMenuItem_Click",
             "BorderTopAndDoubleBottomMenuItem_Click",
+            "BorderDrawMenuItem_Click",
             "BorderDrawGridMenuItem_Click",
             "BorderEraseMenuItem_Click",
             "BorderLineColorBlackMenuItem_Click",
@@ -1247,6 +1249,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
         source.Should().Contain("_borderPickerColor");
         source.Should().Contain("_borderPickerStyle");
+        source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Draw)");
         source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.DrawGrid)");
         source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Erase)");
         source.Should().Contain("ApplyBorderDrawMode");

@@ -31,6 +31,7 @@ public sealed class HomeBorderCommandSourceTests
     [InlineData("Top and Bottom Border", "U", "BorderTopAndBottomMenuItem_Click", "TopAndBottom")]
     [InlineData("Top and Thick Bottom Border", "H", "BorderTopAndThickBottomMenuItem_Click", "TopAndThickBottom")]
     [InlineData("Top and Double Bottom Border", "J", "BorderTopAndDoubleBottomMenuItem_Click", "TopAndDoubleBottom")]
+    [InlineData("Draw Border", "W", "BorderDrawMenuItem_Click", "Outside")]
     [InlineData("Draw Border Grid", "G", "BorderDrawGridMenuItem_Click", "All")]
     [InlineData("Erase Border", "E", "BorderEraseMenuItem_Click", "None")]
     [InlineData("More Borders...", "M", "BorderMoreMenuItem_Click", "More")]
@@ -86,6 +87,7 @@ public sealed class HomeBorderCommandSourceTests
         source.Should().Contain("BorderShortcutService.GetOutlineBorderDiff(range, address, _borderPickerStyle, _borderPickerColor)");
         source.Should().Contain("BorderShortcutService.GetInsideBorderDiff(range, address, _borderPickerStyle, _borderPickerColor)");
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
+        source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Draw)");
         source.Should().Contain("BorderDrawPlanner.CommandTitle(mode)");
         source.Should().Contain("BorderDrawPlanner.CreateCommand(");
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
