@@ -290,27 +290,34 @@ public sealed class SpellCheckServiceTests
         sheet.SetCell(
             textAddress,
             new TextValue(
-                "Alot of thier neccessary maintainance was mispelled, with a commited arguement about the reciept and existance."));
+                "Buisness begining excelent recieved acheived beleived reports described an enviroment, enviromental review, occurence, occurrance, sucessful, succesful accomodate, accomodation, caluclation, and calcuation."));
 
         var issues = SpellCheckService.FindIssues(wb, sheet.Id);
         var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
 
         issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
-            ("Alot", "A lot"),
-            ("thier", "their"),
-            ("neccessary", "necessary"),
-            ("maintainance", "maintenance"),
-            ("mispelled", "misspelled"),
-            ("commited", "committed"),
-            ("arguement", "argument"),
-            ("reciept", "receipt"),
-            ("existance", "existence"));
-        plan.IssueCount.Should().Be(9);
+            ("Buisness", "Business"),
+            ("begining", "beginning"),
+            ("excelent", "excellent"),
+            ("recieved", "received"),
+            ("acheived", "achieved"),
+            ("beleived", "believed"),
+            ("enviroment", "environment"),
+            ("enviromental", "environmental"),
+            ("occurence", "occurrence"),
+            ("occurrance", "occurrence"),
+            ("sucessful", "successful"),
+            ("succesful", "successful"),
+            ("accomodate", "accommodate"),
+            ("accomodation", "accommodation"),
+            ("caluclation", "calculation"),
+            ("calcuation", "calculation"));
+        plan.IssueCount.Should().Be(16);
         plan.Edits.Should().ContainSingle();
         plan.Edits[0].Address.Should().Be(textAddress);
         plan.Edits[0].CorrectedText.Should().Be(
-            "A lot of their necessary maintenance was misspelled, with a committed argument about the receipt and existence.");
-        plan.Edits[0].ReplacementCount.Should().Be(9);
+            "Business beginning excellent received achieved believed reports described an environment, environmental review, occurrence, occurrence, successful, successful accommodate, accommodation, calculation, and calculation.");
+        plan.Edits[0].ReplacementCount.Should().Be(16);
     }
 
     [Fact]
@@ -319,14 +326,20 @@ public sealed class SpellCheckServiceTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var textAddress = new CellAddress(sheet.Id, 1, 1);
-        sheet.SetCell(textAddress, new TextValue("Open https://teh.example.com and \"C:\\adn folder\\teh file.txt\", then recieve teh package."));
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Open https://buisness.example.com, email excelent@example.com, and \"C:\\enviroment folder\\buisness file.txt\", then buisness enviroment excelent."));
 
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
         var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
 
-        plan.IssueCount.Should().Be(2);
+        issues.Select(issue => issue.Word).Should().Equal("buisness", "enviroment", "excelent");
+        plan.IssueCount.Should().Be(3);
         plan.Edits.Should().ContainSingle();
-        plan.Edits[0].CorrectedText.Should().Be("Open https://teh.example.com and \"C:\\adn folder\\teh file.txt\", then receive the package.");
-        plan.Edits[0].ReplacementCount.Should().Be(2);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Open https://buisness.example.com, email excelent@example.com, and \"C:\\enviroment folder\\buisness file.txt\", then business environment excellent.");
+        plan.Edits[0].ReplacementCount.Should().Be(3);
     }
 
     [Fact]
