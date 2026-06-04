@@ -21,6 +21,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var columnWidths = new Dictionary<uint, double>();
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
+        var styleOnlyStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
+        var hasDuplicateStyleOnlyCellStyleIndexes = false;
         var hasStyleOnlyCells = false;
         var populatedCellCount = 0;
 
@@ -46,6 +48,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                         inlineStringName,
                         explicitStyleOnlyCells,
                         cachedFormulaErrors,
+                        styleOnlyStyleIndexes,
+                        ref hasDuplicateStyleOnlyCellStyleIndexes,
                         ref populatedCellCount);
                 }
             }
@@ -67,7 +71,12 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 groupHiddenCols,
                 rowHeights,
                 columnWidths),
-            new XlsxWorksheetCellLayout(cachedFormulaErrors, explicitStyleOnlyCells, hasStyleOnlyCells, populatedCellCount));
+            new XlsxWorksheetCellLayout(
+                cachedFormulaErrors,
+                explicitStyleOnlyCells,
+                hasStyleOnlyCells,
+                hasDuplicateStyleOnlyCellStyleIndexes,
+                populatedCellCount));
     }
 
     private static void ReadRowLayout(

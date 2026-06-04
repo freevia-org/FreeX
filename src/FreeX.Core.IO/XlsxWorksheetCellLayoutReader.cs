@@ -15,15 +15,24 @@ internal static class XlsxWorksheetCellLayoutReader
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
         var populatedCellCount = 0;
+        var styleOnlyStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
+        var hasDuplicateStyleOnlyCellStyleIndexes = false;
 
         var hasStyleOnlyCells = ReadSheetDataCells(
             worksheetXml.Root?.Element(worksheetNs + "sheetData"),
             worksheetNs,
             explicitStyleOnlyCells,
             cachedFormulaErrors,
+            styleOnlyStyleIndexes,
+            ref hasDuplicateStyleOnlyCellStyleIndexes,
             ref populatedCellCount);
 
-        return new XlsxWorksheetCellLayout(cachedFormulaErrors, explicitStyleOnlyCells, hasStyleOnlyCells, populatedCellCount);
+        return new XlsxWorksheetCellLayout(
+            cachedFormulaErrors,
+            explicitStyleOnlyCells,
+            hasStyleOnlyCells,
+            hasDuplicateStyleOnlyCellStyleIndexes,
+            populatedCellCount);
     }
 
     public static IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ReadExplicitStyleOnlyCells(
@@ -41,6 +50,8 @@ internal static class XlsxWorksheetCellLayoutReader
         XNamespace worksheetNs,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
+        HashSet<string> styleOnlyStyleIndexes,
+        ref bool hasDuplicateStyleOnlyCellStyleIndexes,
         ref int populatedCellCount)
     {
         if (sheetData is null)
@@ -64,6 +75,8 @@ internal static class XlsxWorksheetCellLayoutReader
                     inlineStringName,
                     explicitStyleOnlyCells,
                     cachedFormulaErrors,
+                    styleOnlyStyleIndexes,
+                    ref hasDuplicateStyleOnlyCellStyleIndexes,
                     ref populatedCellCount);
             }
         }
@@ -76,6 +89,8 @@ internal static class XlsxWorksheetCellLayoutReader
         XNamespace worksheetNs,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
+        HashSet<string> styleOnlyStyleIndexes,
+        ref bool hasDuplicateStyleOnlyCellStyleIndexes,
         ref int populatedCellCount)
         => ReadCell(
             cell,
@@ -84,6 +99,8 @@ internal static class XlsxWorksheetCellLayoutReader
             worksheetNs + "is",
             explicitStyleOnlyCells,
             cachedFormulaErrors,
+            styleOnlyStyleIndexes,
+            ref hasDuplicateStyleOnlyCellStyleIndexes,
             ref populatedCellCount);
 
     internal static bool ReadCell(
@@ -93,6 +110,8 @@ internal static class XlsxWorksheetCellLayoutReader
         XName inlineStringName,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
+        HashSet<string> styleOnlyStyleIndexes,
+        ref bool hasDuplicateStyleOnlyCellStyleIndexes,
         ref int populatedCellCount)
     {
         var formula = cell.Element(formulaName);
@@ -101,8 +120,9 @@ internal static class XlsxWorksheetCellLayoutReader
         if (formula is not null || value is not null || hasInlineString)
             populatedCellCount++;
 
+        var rawStyleIndex = cell.Attribute("s")?.Value;
         var hasStyle = int.TryParse(
-            cell.Attribute("s")?.Value,
+            rawStyleIndex,
             NumberStyles.Integer,
             CultureInfo.InvariantCulture,
             out var styleIndex);
@@ -116,6 +136,9 @@ internal static class XlsxWorksheetCellLayoutReader
         var hasCachedFormulaError = isErrorType && formula is not null && !string.IsNullOrWhiteSpace(rawValue);
         if (!isStyleOnly && !hasCachedFormulaError)
             return false;
+
+        if (isStyleOnly && !styleOnlyStyleIndexes.Add(rawStyleIndex!))
+            hasDuplicateStyleOnlyCellStyleIndexes = true;
 
         var reference = cell.Attribute("r")?.Value;
         if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, ParseOnlySheetId, out var address))
@@ -150,4 +173,5 @@ internal sealed record XlsxWorksheetCellLayout(
     Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
     IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
     bool HasStyleOnlyCells,
+    bool HasDuplicateStyleOnlyCellStyleIndexes,
     int PopulatedCellCount);

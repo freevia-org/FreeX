@@ -8,6 +8,11 @@ namespace FreeX.Core.IO;
 internal static class XlsxClosedXmlStyleOnlyCellStripper
 {
     public static MemoryStream Create(MemoryStream sourcePackage)
+        => Create(sourcePackage, worksheetPathsToStrip: null);
+
+    internal static MemoryStream Create(
+        MemoryStream sourcePackage,
+        IReadOnlySet<string>? worksheetPathsToStrip)
     {
         sourcePackage.Position = 0;
         MemoryStream? strippedPackage = null;
@@ -22,7 +27,7 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
                 for (var index = 0; index < sourceEntries.Count; index++)
                 {
                     var sourceEntry = sourceEntries[index];
-                    var shouldStripWorksheet = ShouldStripWorksheet(sourceEntry);
+                    var shouldStripWorksheet = ShouldStripWorksheet(sourceEntry, worksheetPathsToStrip);
 
                     if (strippedArchive is null)
                     {
@@ -66,10 +71,15 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         }
     }
 
-    private static bool ShouldStripWorksheet(ZipArchiveEntry sourceEntry)
+    private static bool ShouldStripWorksheet(
+        ZipArchiveEntry sourceEntry,
+        IReadOnlySet<string>? worksheetPathsToStrip)
     {
         if (!IsWorksheetXml(sourceEntry))
             return false;
+
+        if (worksheetPathsToStrip is not null)
+            return worksheetPathsToStrip.Contains(NormalizeEntryPath(sourceEntry.FullName));
 
         using (var scanStream = sourceEntry.Open())
         {
@@ -163,6 +173,9 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
     private static bool IsWorksheetXml(ZipArchiveEntry entry) =>
         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeEntryPath(string path) =>
+        path.IndexOf('\\') < 0 ? path : path.Replace('\\', '/');
 
     private static void StripRedundantStyleOnlyCells(Stream worksheetStream, Stream outputStream)
     {

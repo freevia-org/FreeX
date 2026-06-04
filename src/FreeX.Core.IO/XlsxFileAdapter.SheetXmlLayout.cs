@@ -87,8 +87,13 @@ public sealed partial class XlsxFileAdapter
         int PopulatedCellCount,
         bool HasStyleOnlyCells,
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
+        bool HasDuplicateStyleOnlyCellStyleIndexes,
+        string WorksheetPath,
+        bool HasConditionalFormattingBlocks,
         bool HasPreservableSourceWorksheetMetadata,
+        bool HasClosedXmlUnsupportedConditionalFormatting,
         bool HasUnsupportedConditionalFormatting,
+        bool HasWorksheetDynamicFilters,
         string? CodeName);
 
     private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(
@@ -254,11 +259,17 @@ public sealed partial class XlsxFileAdapter
         var sortState = XlsxWorksheetSortStateMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sortState"));
         var singleXmlCells = XlsxWorksheetSingleXmlCellMapper.Read(worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
         var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
+        var autoFilter = ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter"));
+        var hasWorksheetDynamicFilters = HasDynamicFilter(autoFilter);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
         var threadedComments = XlsxWorksheetThreadedCommentMapper.Read(archive, worksheetPath);
         var codeName = sheetPr?.Attribute("codeName")?.Value;
         var hasPreservableSourceWorksheetMetadata = HasRetainedWorksheetMetadataElement(worksheetXml.Root, worksheetNs) ||
             XlsxWorksheetMetadataPreserver.HasPreservableSourceWorksheetMetadata(worksheetXml, worksheetNs);
+        var hasConditionalFormattingBlocks =
+            worksheetXml.Root?.Elements(worksheetNs + "conditionalFormatting").Any() == true;
+        var hasClosedXmlUnsupportedConditionalFormatting =
+            XlsxConditionalFormatRuleSupport.HasUnsupportedRule(worksheetXml, worksheetNs, allowBlankType: false);
         var hasUnsupportedConditionalFormatting =
             XlsxConditionalFormatRuleSupport.HasUnsupportedRule(worksheetXml, worksheetNs, allowBlankType: true);
 
@@ -292,7 +303,7 @@ public sealed partial class XlsxFileAdapter
             activeCell?.Row,
             activeCell?.Col,
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetPrintOptionsMetadata(printOptions),
-            ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter")),
+            autoFilter,
             ParseOptionalBool(pageSetup?.Attribute("usePrinterDefaults")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("copies")?.Value),
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetPageMarginsMetadata(pageMargins),
@@ -342,9 +353,26 @@ public sealed partial class XlsxFileAdapter
             cellLayout.PopulatedCellCount,
             cellLayout.HasStyleOnlyCells,
             cellLayout.ExplicitStyleOnlyCells,
+            cellLayout.HasDuplicateStyleOnlyCellStyleIndexes,
+            worksheetPath,
+            hasConditionalFormattingBlocks,
             hasPreservableSourceWorksheetMetadata,
+            hasClosedXmlUnsupportedConditionalFormatting,
             hasUnsupportedConditionalFormatting,
+            hasWorksheetDynamicFilters,
             codeName);
+    }
+
+    private static bool HasDynamicFilter(WorksheetAutoFilterModel? autoFilter)
+    {
+        if (autoFilter is null)
+            return false;
+
+        foreach (var filterColumn in autoFilter.FilterColumns)
+            if (filterColumn.DynamicFilter is not null)
+                return true;
+
+        return false;
     }
 
     private static bool HasRetainedWorksheetMetadataElement(XElement? root, XNamespace worksheetNs) =>
