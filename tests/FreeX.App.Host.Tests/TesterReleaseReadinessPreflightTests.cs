@@ -25,7 +25,7 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void DistributionPlan_DocumentsReadinessPreflight()
     {
-        var plan = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md"));
+        var plan = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
 
         plan.Should().Contain("tools/Test-TesterReleaseReadiness.ps1");
         plan.Should().Contain("-PublicPreviewCandidate");

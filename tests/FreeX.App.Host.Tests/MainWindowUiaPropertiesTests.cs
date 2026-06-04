@@ -8,7 +8,7 @@ namespace FreeX.App.Host.Tests;
 /// <summary>
 /// Tests that the shell XAML tree has correct UI Automation properties for screen-reader
 /// and keyboard-only navigation compatibility - the accessibility gate defined in
-/// docs/TEST_DISTRIBUTION_PLAN.md Phase 8.
+/// docs/release/test-distribution.md Phase 8.
 /// </summary>
 public sealed class MainWindowUiaPropertiesTests
 {

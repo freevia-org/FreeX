@@ -8,7 +8,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
     [Fact]
     public void UiTestCatalog_WorksheetContextMenuCommandCountMatchesPlanner()
     {
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
         var commandCount = WorksheetContextMenuPlanner.BuildCommands()
             .Count(command => !command.IsSeparator);
 

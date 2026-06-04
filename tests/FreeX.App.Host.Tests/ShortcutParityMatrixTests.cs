@@ -8,7 +8,7 @@ public sealed class ShortcutParityMatrixTests
     [Fact]
     public void ShortcutParityMatrix_CoverageSummaryMatchesRows()
     {
-        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
+        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
         var summary = ReadCoverageSummary(matrix);
         var matrixStart = Array.FindIndex(matrix, line => line.StartsWith("| Area | Excel Shortcut |", StringComparison.Ordinal));
         matrixStart.Should().BeGreaterThanOrEqualTo(0);
@@ -35,7 +35,7 @@ public sealed class ShortcutParityMatrixTests
     [Fact]
     public void ShortcutParityMatrix_NextWorkBacklogKeepsCurrentPriorityOrder()
     {
-        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
+        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
         var nextWork = ReadNextWorkItems(matrix);
         var nextWorkIntro = ReadNextWorkIntro(matrix);
 
@@ -58,22 +58,22 @@ public sealed class ShortcutParityMatrixTests
     [Fact]
     public void UiTestCatalog_ShortcutInventoryCountsMatchShortcutMatrix()
     {
-        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
         var summary = ReadCoverageSummary(matrix);
 
         catalog.Should().Contain(
-            $"| Documented shortcut rows | {summary.TotalInScope} | From `SHORTCUT_PARITY_MATRIX.md`: {summary.Parity} parity, {summary.Partial} partial. |");
+            $"| Documented shortcut rows | {summary.TotalInScope} | From `parity/shortcuts.md`: {summary.Parity} parity, {summary.Partial} partial. |");
         catalog.Should().Contain($"{summary.TotalInScope} documented shortcut rows;");
     }
 
     [Fact]
     public void NewestStatusReport_ShortcutSnapshotMatchesShortcutMatrixSummary()
     {
-        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
+        var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var newestStatusReport = Directory
-            .GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .GetFiles(Path.Combine(docsDirectory, "history"), "status-*.md")
             .Order(StringComparer.Ordinal)
             .Last();
         var report = File.ReadAllText(newestStatusReport);

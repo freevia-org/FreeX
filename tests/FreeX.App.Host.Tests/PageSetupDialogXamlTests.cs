@@ -485,7 +485,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void UiTestCatalog_PageSetupRowNoLongerListsCenterAndPageOrderProofAsRemaining()
     {
-        var catalog = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var catalog = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
         var pageSetupRow = catalog.Single(line => line.StartsWith("| UI-CMD-PAGE-003 |", StringComparison.Ordinal));
 
         pageSetupRow.Should().Contain("Center on Page and Page Order dialog choices flow through the command builder into the worksheet model");
