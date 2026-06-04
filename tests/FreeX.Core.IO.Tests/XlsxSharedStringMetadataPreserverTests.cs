@@ -98,7 +98,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
     [Fact]
     public void UniqueSharedStringLookup_AvoidsLinqGroupingAllocations()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxSharedStringMetadataPreserver.cs"));
         var method = source[
             source.IndexOf("private static Dictionary<string, XElement> GetUniqueSharedStringsByPlainText", StringComparison.Ordinal)..
@@ -128,6 +128,4 @@ public sealed class XlsxSharedStringMetadataPreserverTests
         builder.AppendLine("</sst>");
         return builder.ToString();
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }

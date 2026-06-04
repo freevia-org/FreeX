@@ -150,7 +150,7 @@ public sealed class XlsxRelationshipReaderTests
     [Fact]
     public void ReadTargets_UsesSingleDictionarySlotProbeWhenAddingRelationshipIds()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxRelationshipReader.cs"));
         var readTargets = source[
             source.IndexOf("public static Dictionary<string, string> ReadTargets", StringComparison.Ordinal)..
@@ -239,6 +239,4 @@ public sealed class XlsxRelationshipReaderTests
         targets.Should().ContainKey("rIdDot").WhoseValue.Should().Be("xl/drawings/%2E/media/image.png");
         targets.Should().ContainKey("rIdDotDot").WhoseValue.Should().Be("xl/drawings/%2E%2E/media/image.png");
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }
