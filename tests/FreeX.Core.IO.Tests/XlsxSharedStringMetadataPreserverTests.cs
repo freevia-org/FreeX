@@ -117,21 +117,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
     }
 
     private static MemoryStream CreatePackage(params (string Path, string Xml)[] entries)
-    {
-        var package = new MemoryStream();
-        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            foreach (var (path, xml) in entries)
-            {
-                var entry = archive.CreateEntry(path);
-                using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
-                writer.Write(xml);
-            }
-        }
-
-        package.Position = 0;
-        return package;
-    }
+        => XlsxPackageTestFixtures.CreatePackage(entries);
 
     private static string CreatePlainSharedStringsXml(int count)
     {
