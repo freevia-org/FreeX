@@ -669,7 +669,7 @@ public partial class GridView
 
     private void DrawTextBoxThemeEffect(DrawingContext dc, Rect rect, WorkbookThemeEffectStyle effect)
     {
-        if (!effect.HasShadow && !effect.HasGlow)
+        if (!effect.HasShadow && !effect.HasGlow && !effect.HasSoftEdge)
             return;
 
         if (effect.HasShadow)
@@ -689,11 +689,20 @@ public partial class GridView
             var thickness = Math.Max(2, effect.GlowRadius);
             dc.DrawRectangle(null, GetDrawingObjectPen(alpha, glowColor, thickness), glowRect);
         }
+
+        if (effect.HasSoftEdge)
+        {
+            var softEdgeRect = rect;
+            var inflate = GetSoftEdgeInflate(effect.SoftEdgeRadius);
+            var thickness = GetSoftEdgeThickness(effect.SoftEdgeRadius);
+            softEdgeRect.Inflate(inflate, inflate);
+            dc.DrawRectangle(null, GetDrawingObjectPen(54, 128, 128, 128, thickness), softEdgeRect);
+        }
     }
 
     private void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookThemeEffectStyle effect)
     {
-        if (!effect.HasShadow && !effect.HasGlow)
+        if (!effect.HasShadow && !effect.HasGlow && !effect.HasSoftEdge)
             return;
 
         if (effect.HasShadow)
@@ -734,7 +743,27 @@ public partial class GridView
                 thickness,
                 effect.GlowRadius);
         }
+
+        if (effect.HasSoftEdge)
+        {
+            DrawShapeOutlineEffect(
+                dc,
+                kind,
+                rect,
+                alpha: 54,
+                r: 128,
+                g: 128,
+                b: 128,
+                thickness: GetSoftEdgeThickness(effect.SoftEdgeRadius),
+                inflate: GetSoftEdgeInflate(effect.SoftEdgeRadius));
+        }
     }
+
+    private static double GetSoftEdgeThickness(double radius) =>
+        Math.Max(2, radius * 2);
+
+    private static double GetSoftEdgeInflate(double radius) =>
+        Math.Max(1, radius / 2);
 
     public static DrawingObjectColors ResolveDrawingShapeColors(DrawingShapeModel shape, WorkbookTheme theme) =>
         GridDrawingObjectPlanner.ResolveDrawingShapeColors(shape, theme);

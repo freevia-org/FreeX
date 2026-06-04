@@ -148,6 +148,31 @@ public sealed partial class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectRendering_UsesThemeSoftEdgesForTextBoxesAndShapesOnly()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var textBoxThemeEffect = drawingObjects[
+            drawingObjects.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)];
+        var shapeThemeEffect = drawingObjects[
+            drawingObjects.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("public static DrawingObjectColors ResolveDrawingShapeColors", StringComparison.Ordinal)];
+
+        textBoxThemeEffect.Should().Contain("effect.HasSoftEdge");
+        textBoxThemeEffect.Should().Contain("effect.SoftEdgeRadius");
+        textBoxThemeEffect.Should().Contain("GetSoftEdgeThickness(effect.SoftEdgeRadius)");
+        shapeThemeEffect.Should().Contain("effect.HasSoftEdge");
+        shapeThemeEffect.Should().Contain("DrawShapeOutlineEffect(");
+        shapeThemeEffect.Should().Contain("GetSoftEdgeInflate(effect.SoftEdgeRadius)");
+        pictures.Should().NotContain("WorkbookThemeEffectStyle");
+        pictures.Should().NotContain("HasSoftEdge");
+        pictures.Should().NotContain("SoftEdgeRadius");
+    }
+
+    [Fact]
     public void DrawingObjectRendering_UsesAuthoredGradientDirectionMetadata()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

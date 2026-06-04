@@ -174,15 +174,23 @@ public sealed record WorkbookTheme(
 
             XElement? shadowEffect = null;
             XElement? glowEffect = null;
+            var softEdgeRadius = 0d;
             foreach (var effectStyle in effectStyleList.Elements(drawingNs + "effectStyle"))
             {
-                shadowEffect = FindThemeShadow(effectStyle, drawingNs);
-                glowEffect = FindThemeGlow(effectStyle, drawingNs);
-                if (shadowEffect is not null || glowEffect is not null)
+                var candidateShadow = FindThemeShadow(effectStyle, drawingNs);
+                var candidateGlow = FindThemeGlow(effectStyle, drawingNs);
+                var candidateSoftEdgeRadius = ReadPositiveCoordinatePixels(
+                    FindThemeSoftEdge(effectStyle, drawingNs)?.Attribute("rad")?.Value);
+                if (candidateShadow is not null || candidateGlow is not null || candidateSoftEdgeRadius > 0)
+                {
+                    shadowEffect = candidateShadow;
+                    glowEffect = candidateGlow;
+                    softEdgeRadius = candidateSoftEdgeRadius;
                     break;
+                }
             }
 
-            if (shadowEffect is null && glowEffect is null)
+            if (shadowEffect is null && glowEffect is null && softEdgeRadius <= 0)
                 return null;
 
             var shadowOpacity = 0d;
@@ -207,7 +215,8 @@ public sealed record WorkbookTheme(
                 offsetY,
                 glowOpacity,
                 glowRadius,
-                glowColor);
+                glowColor,
+                softEdgeRadius);
         }
         catch
         {
@@ -238,6 +247,16 @@ public sealed record WorkbookTheme(
             .Element(drawingNs + "effectDag")?
             .Descendants()
             .FirstOrDefault(effect => effect.Name == drawingNs + "glow");
+
+    private static XElement? FindThemeSoftEdge(XElement effectStyle, XNamespace drawingNs) =>
+        effectStyle
+            .Element(drawingNs + "effectLst")?
+            .Elements()
+            .FirstOrDefault(effect => effect.Name == drawingNs + "softEdge")
+        ?? effectStyle
+            .Element(drawingNs + "effectDag")?
+            .Descendants()
+            .FirstOrDefault(effect => effect.Name == drawingNs + "softEdge");
 
     private static double ReadEffectOpacity(XElement effect, XNamespace drawingNs)
     {
@@ -362,11 +381,13 @@ public sealed record WorkbookThemeEffectDefaults(
     double ShadowOffsetY = 0,
     double GlowOpacity = 0,
     double GlowRadius = 0,
-    CellColor? GlowColor = null)
+    CellColor? GlowColor = null,
+    double SoftEdgeRadius = 0)
 {
     public bool HasShadow => ShadowOpacity > 0;
     public bool HasGlow => GlowOpacity > 0 && GlowRadius > 0;
-    public bool HasAnyEffect => HasShadow || HasGlow;
+    public bool HasSoftEdge => SoftEdgeRadius > 0;
+    public bool HasAnyEffect => HasShadow || HasGlow || HasSoftEdge;
 }
 
 public readonly record struct WorkbookThemeColorReference(

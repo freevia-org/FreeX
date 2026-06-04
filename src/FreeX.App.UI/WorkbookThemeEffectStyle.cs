@@ -8,10 +8,12 @@ public readonly record struct WorkbookThemeEffectStyle(
     double ShadowOffsetY,
     double GlowOpacity = 0,
     double GlowRadius = 0,
-    CellColor? GlowColor = null)
+    CellColor? GlowColor = null,
+    double SoftEdgeRadius = 0)
 {
     public bool HasShadow => ShadowOpacity > 0;
     public bool HasGlow => GlowOpacity > 0 && GlowRadius > 0;
+    public bool HasSoftEdge => SoftEdgeRadius > 0;
 
     public static WorkbookThemeEffectStyle FromTheme(WorkbookTheme theme)
     {
@@ -25,7 +27,8 @@ public readonly record struct WorkbookThemeEffectStyle(
                 effectDefaults.ShadowOffsetY,
                 effectDefaults.GlowOpacity,
                 effectDefaults.GlowRadius,
-                effectDefaults.GlowColor);
+                effectDefaults.GlowColor,
+                effectDefaults.SoftEdgeRadius);
         }
 
         return theme.EffectsName.Trim().ToUpperInvariant() switch

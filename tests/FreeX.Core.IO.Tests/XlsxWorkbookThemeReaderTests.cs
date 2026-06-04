@@ -127,6 +127,19 @@ public sealed class XlsxWorkbookThemeReaderTests
     }
 
     [Fact]
+    public void Load_ReadsFormatSchemeSoftEdgeEffectDefaults()
+    {
+        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithSoftEdgeXml));
+
+        var theme = XlsxWorkbookThemeReader.Load(package);
+
+        theme.NativeFormatSchemeXml.Should().Contain("softEdge");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasSoftEdge.Should().BeTrue();
+        theme.EffectDefaults.SoftEdgeRadius.Should().BeApproximately(4, 0.0001);
+    }
+
+    [Fact]
     public void LoadSave_PreservesThemeSupplementElementsBesideThemeElements()
     {
         using var package = CreatePackage(("xl/theme/theme1.xml", """
@@ -578,6 +591,23 @@ public sealed class XlsxWorkbookThemeReaderTests
                     <a:glow rad="38100">
                       <a:srgbClr val="5B9BD5"><a:alpha val="42000"/></a:srgbClr>
                     </a:glow>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+          </a:themeElements>
+        </a:theme>
+        """;
+
+    private const string NativeThemeWithSoftEdgeXml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Soft Edge Theme">
+          <a:themeElements>
+            <a:fmtScheme name="Soft Edge Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:softEdge rad="38100"/>
                   </a:effectLst>
                 </a:effectStyle>
               </a:effectStyleLst>

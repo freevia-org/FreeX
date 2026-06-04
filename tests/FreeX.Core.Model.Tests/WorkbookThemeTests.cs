@@ -85,6 +85,69 @@ public sealed class WorkbookThemeTests
     }
 
     [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_InterpretsSoftEdgeEffectDefaults()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml(NativeFormatSchemeWithSoftEdge);
+
+        theme.NativeFormatSchemeXml.Should().Contain("softEdge");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeFalse();
+        theme.EffectDefaults.HasGlow.Should().BeFalse();
+        theme.EffectDefaults.HasSoftEdge.Should().BeTrue();
+        theme.EffectDefaults.SoftEdgeRadius.Should().BeApproximately(4, 0.0001);
+        theme.EffectDefaults.HasAnyEffect.Should().BeTrue();
+    }
+
+    [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_ReadsFirstSupportedSoftEdgeFromEffectDag()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml("""
+            <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Dag Soft Edge Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:softEdge rad="0"/>
+                  </a:effectLst>
+                </a:effectStyle>
+                <a:effectStyle>
+                  <a:effectDag>
+                    <a:cont>
+                      <a:softEdge rad="19050"/>
+                    </a:cont>
+                  </a:effectDag>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+            """);
+
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasSoftEdge.Should().BeTrue();
+        theme.EffectDefaults.SoftEdgeRadius.Should().BeApproximately(2, 0.0001);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("rad=\"0\"")]
+    [InlineData("rad=\"-1\"")]
+    [InlineData("rad=\"not-a-number\"")]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_IgnoresUnsupportedSoftEdgeRadii(string softEdgeAttributes)
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml($"""
+            <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Invalid Soft Edge Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:softEdge {softEdgeAttributes}/>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+            """);
+
+        theme.EffectDefaults.Should().BeNull();
+    }
+
+    [Fact]
     public void WorkbookTheme_WithNativeFormatSchemeXml_UsesOneSupportedEffectStyleGroup()
     {
         var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml("""
@@ -262,6 +325,21 @@ public sealed class WorkbookThemeTests
                 <a:glow rad="38100">
                   <a:srgbClr val="5B9BD5"><a:alpha val="42000"/></a:srgbClr>
                 </a:glow>
+              </a:effectLst>
+            </a:effectStyle>
+          </a:effectStyleLst>
+          <a:bgFillStyleLst/>
+        </a:fmtScheme>
+        """;
+
+    private const string NativeFormatSchemeWithSoftEdge = """
+        <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+          <a:fillStyleLst/>
+          <a:lnStyleLst/>
+          <a:effectStyleLst>
+            <a:effectStyle>
+              <a:effectLst>
+                <a:softEdge rad="38100"/>
               </a:effectLst>
             </a:effectStyle>
           </a:effectStyleLst>
