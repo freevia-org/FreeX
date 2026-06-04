@@ -42,7 +42,7 @@ public sealed partial class StructuredTableCommandTests
         };
         sheet.StructuredTables.Add(table);
         sheet.StructuredTables.Add(lowerTable);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new SetStructuredTableTotalsRowCommand(sheet.Id, table.Id, showTotalsRow: true);
 
         var outcome = command.Apply(ctx);
@@ -94,7 +94,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new SetStructuredTableTotalsRowCommand(sheet.Id, table.Id, showTotalsRow: false);
 
         var outcome = command.Apply(ctx);

@@ -12,7 +12,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -38,7 +38,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -60,7 +60,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = CreateChartRange(sheet);
         new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
         var chart = sheet.Charts[0];
@@ -77,7 +77,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = CreateChartRange(sheet);
         new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
         var chart = sheet.Charts[0];
@@ -97,7 +97,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 4));
@@ -404,7 +404,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 3));
@@ -444,7 +444,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetChartLayoutCommand(
             sheet.Id,
@@ -459,7 +459,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 2));
@@ -487,7 +487,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 2));
@@ -540,7 +540,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 3));
@@ -587,7 +587,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 2));
@@ -609,7 +609,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var chart = new ChartModel { Type = ChartType.Column, DataRange = CreateChartRange(sheet) };
         sheet.Charts.Add(chart);
 
@@ -624,7 +624,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var chart = new ChartModel { Type = ChartType.Column, DataRange = CreateChartRange(sheet) };
         sheet.Charts.Add(chart);
 
@@ -640,7 +640,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var chart = new ChartModel { Type = ChartType.Bar, DataRange = CreateChartRange(sheet) };
         sheet.Charts.Add(chart);
 
@@ -659,7 +659,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var chart = new ChartModel { Type = ChartType.Bubble, DataRange = CreateChartRange(sheet) };
         sheet.Charts.Add(chart);
 
@@ -675,7 +675,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var chart = new ChartModel { Type = ChartType.Bubble, DataRange = CreateChartRange(sheet) };
         sheet.Charts.Add(chart);
 
@@ -691,7 +691,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var chart = new ChartModel { Type = ChartType.Column, DataRange = CreateChartRange(sheet), BarGapWidth = 100, BarOverlap = 10 };
         sheet.Charts.Add(chart);
 

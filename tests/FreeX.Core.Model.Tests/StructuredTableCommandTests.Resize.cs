@@ -36,7 +36,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var newRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 6, 4));
         var command = new ResizeStructuredTableCommand(sheet.Id, table.Id, newRange);
 
@@ -66,7 +66,7 @@ public sealed partial class StructuredTableCommandTests
         var other = wb.AddSheet("Other");
         var table = CreateSalesTable(sheet);
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         new ResizeStructuredTableCommand(
                 sheet.Id,

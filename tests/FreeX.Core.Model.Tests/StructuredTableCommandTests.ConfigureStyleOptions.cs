@@ -50,7 +50,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new ConfigureStructuredTableStyleOptionsCommand(
             sheet.Id,
             table.Id,
@@ -97,7 +97,7 @@ public sealed partial class StructuredTableCommandTests
         var sheet = wb.AddSheet("Sheet1");
         var table = CreateSalesTable(sheet);
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new ConfigureStructuredTableStyleOptionsCommand(
             sheet.Id,
@@ -132,7 +132,7 @@ public sealed partial class StructuredTableCommandTests
         var sheet = wb.AddSheet("Sheet1");
         var table = CreateSalesTable(sheet);
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new ConfigureStructuredTableStyleOptionsCommand(
             sheet.Id,
@@ -155,7 +155,7 @@ public sealed partial class StructuredTableCommandTests
         var table = CreateSalesTable(sheet);
         sheet.StructuredTables.Add(table);
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new ConfigureStructuredTableStyleOptionsCommand(
             sheet.Id,

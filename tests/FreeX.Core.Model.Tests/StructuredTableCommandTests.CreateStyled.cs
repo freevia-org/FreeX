@@ -13,7 +13,7 @@ public sealed partial class StructuredTableCommandTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         SeedTable(sheet);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var preexistingBodyStyleId = wb.RegisterStyle(new CellStyle
         {
             FontColor = new CellColor(192, 0, 0),
@@ -70,7 +70,7 @@ public sealed partial class StructuredTableCommandTests
         sheet.SetCell(new CellAddress(sheet.Id, headerRow + 1, 2), new TextValue("Open"));
         sheet.SetCell(new CellAddress(sheet.Id, headerRow + 2, 1), new TextValue("South"));
         sheet.SetCell(new CellAddress(sheet.Id, headerRow + 2, 2), new TextValue("Closed"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var firstDataRowFill = new CellColor(255, 255, 255);
         var secondDataRowFill = new CellColor(222, 235, 247);
         var range = new GridRange(
