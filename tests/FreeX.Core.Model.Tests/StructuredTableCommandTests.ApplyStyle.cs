@@ -36,7 +36,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new ApplyStructuredTableStyleCommand(
             sheet.Id,
             table.Id,
@@ -99,7 +99,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new ApplyStructuredTableStyleCommand(
             sheet.Id,
             table.Id,

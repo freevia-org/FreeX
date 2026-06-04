@@ -18,7 +18,7 @@ public sealed partial class StructuredTableCommandTests
         table.FilterColumns.Add(new StructuredTableFilterColumnModel(1, ["Open"], IncludeBlank: true));
         sheet.StructuredTables.Add(table);
         sheet.FilterHiddenRows.Add(20u);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id);
 
         var outcome = command.Apply(ctx);
@@ -43,7 +43,7 @@ public sealed partial class StructuredTableCommandTests
         table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["North"]));
         table.FilterColumns.Add(new StructuredTableFilterColumnModel(1, ["Open"], IncludeBlank: true));
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
 
@@ -62,7 +62,7 @@ public sealed partial class StructuredTableCommandTests
         table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["north"]));
         table.FilterColumns.Add(new StructuredTableFilterColumnModel(1, ["OPEN"], IncludeBlank: true));
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
 
@@ -79,7 +79,7 @@ public sealed partial class StructuredTableCommandTests
         var table = CreateSalesTable(sheet);
         sheet.StructuredTables.Add(table);
         sheet.FilterHiddenRows.UnionWith([2u, 3u, 20u]);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
 
@@ -98,7 +98,7 @@ public sealed partial class StructuredTableCommandTests
         table.FilterColumns.Add(new StructuredTableFilterColumnModel(99, ["North"]));
         sheet.StructuredTables.Add(table);
         sheet.FilterHiddenRows.UnionWith([2u, 20u]);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
 
@@ -146,7 +146,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var warmup = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
         warmup.Success.Should().BeTrue();
         sheet.FilterHiddenRows.Count.Should().BeGreaterThan(0);

@@ -33,7 +33,7 @@ public sealed partial class StructuredTableCommandTests
             }
         };
         sheet.StructuredTables.Add(table);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new RenameStructuredTableCommand(sheet.Id, table.Id, "  Revenue2026  ");
 
         var outcome = command.Apply(ctx);
@@ -73,7 +73,7 @@ public sealed partial class StructuredTableCommandTests
         wb.DefineNamedRange(
             "Budget",
             new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         new RenameStructuredTableCommand(sheet.Id, table.Id, "A1").Apply(ctx).Success.Should().BeFalse();
         new RenameStructuredTableCommand(sheet.Id, table.Id, "Inventory").Apply(ctx).Success.Should().BeFalse();

@@ -23,7 +23,7 @@ public sealed partial class StructuredTableCommandTests
         };
         sheet.StructuredTables.Add(table);
         sheet.StructuredTables.Add(lowerTable);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new ConvertStructuredTableToRangeCommand(sheet.Id, table.Id);
 
         var outcome = command.Apply(ctx);
@@ -46,7 +46,7 @@ public sealed partial class StructuredTableCommandTests
         var table = CreateSalesTable(sheet);
         sheet.StructuredTables.Add(table);
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new ConvertStructuredTableToRangeCommand(sheet.Id, table.Id).Apply(ctx);
 
