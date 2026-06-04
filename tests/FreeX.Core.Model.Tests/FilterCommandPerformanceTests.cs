@@ -19,7 +19,7 @@ public sealed class FilterCommandPerformanceTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 1));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new FilterCommand(sheet.Id, range, 0, []).Apply(ctx);
 
@@ -43,7 +43,7 @@ public sealed class FilterCommandPerformanceTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, (uint)rows + 1, 1));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var expectedHiddenRows = rows - rows / 100;
 
         var warmup = new FilterCommand(sheet.Id, range, 0, ["Keep"]).Apply(ctx);
@@ -104,7 +104,7 @@ public sealed class FilterCommandPerformanceTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, (uint)rows + 1, 1));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         const int expectedHiddenRows = 30_000;
 
         var warmup = new AverageFilterCommand(sheet.Id, range, 0, above: true).Apply(ctx);
@@ -166,7 +166,7 @@ public sealed class FilterCommandPerformanceTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, (uint)rows + 1, 1));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         const int keepRows = 600;
         const int expectedHiddenRows = rows - keepRows;
 
@@ -213,9 +213,4 @@ public sealed class FilterCommandPerformanceTests
             $"allocated_bytes={allocatedBytes:N0}");
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
-    }
 }

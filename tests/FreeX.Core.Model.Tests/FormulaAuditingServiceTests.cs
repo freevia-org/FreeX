@@ -80,9 +80,4 @@ public sealed partial class FormulaAuditingServiceTests
     private static string FindWorkspaceFile(params string[] parts)
         => WorkspaceFileLocator.Find(parts);
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

@@ -182,7 +182,7 @@ public sealed partial class FormulaAuditingServiceTests
     public void SetFormulaErrorCheckingRuleCommand_TogglesRuleAndUndoRestores()
     {
         var wb = new Workbook("test");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorCheckingRuleCommand(ErrorValue.DivByZero.Code, enabled: false);
 
