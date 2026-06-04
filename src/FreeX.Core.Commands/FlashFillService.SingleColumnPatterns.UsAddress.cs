@@ -94,6 +94,7 @@ public static partial class FlashFillService
             UsAddressComponentKind.State => parts.State,
             UsAddressComponentKind.Zip5 => parts.Zip[..5],
             UsAddressComponentKind.Zip when parts.Zip.Contains('-', StringComparison.Ordinal) => parts.Zip,
+            UsAddressComponentKind.Zip4 when parts.Zip.Contains('-', StringComparison.Ordinal) => parts.Zip[6..],
             UsAddressComponentKind.StateZip => parts.State + " " + parts.Zip,
             _ => string.Empty
         };

@@ -11,7 +11,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(source, Cell.FromFormula("B1+$C$1"));
 
@@ -35,7 +35,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceStart = new CellAddress(sheet.Id, 1, 1);
         var sourceEnd = new CellAddress(sheet.Id, 1, 2);
         var edge = new CellAddress(sheet.Id, 5, CellAddress.MaxCol);
@@ -64,7 +64,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceStart = new CellAddress(sheet.Id, 1, 1);
         var sourceEnd = new CellAddress(sheet.Id, 1, 2);
         var destinationStart = new CellAddress(sheet.Id, 5, CellAddress.MaxCol - 1);
@@ -98,7 +98,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 2, 1);
         sheet.SetCell(source, Cell.FromValue(new TextValue("copy")));

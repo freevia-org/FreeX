@@ -1,5 +1,5 @@
-using System.IO;
 using FluentAssertions;
+using static FreeX.App.Host.Tests.LocalizedXamlTestSupport;
 
 namespace FreeX.App.Host.Tests;
 
@@ -14,7 +14,7 @@ public sealed class ViewCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ReadMainWindowXaml().ExtractButtonElementByInvariantCommandName(title);
 
         button.ShouldContainLocalizedAttribute("Content", title);
         button.ShouldContainInvariantCommandName(title);
@@ -53,7 +53,7 @@ public sealed class ViewCommandSourceTests
     [Fact]
     public void ViewZoomHandlers_RouteThroughZoomMapperDialogAndSelectionPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        var source = ReadHostSourceFile("MainWindow.ViewCommands.cs");
 
         source.Should().Contain("OpenRibbonContextMenu(btn, cm)");
         source.Should().Contain("FreeX.App.UI.ZoomLevelMapper.TryParseZoomPercent(tag, out var zoomPercent)");
@@ -156,7 +156,7 @@ public sealed class ViewCommandSourceTests
     [Fact]
     public void ViewWindowHandlers_RouteThroughExpectedPlannersAndCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        var source = ReadHostSourceFile("MainWindow.ViewCommands.cs");
 
         source.Should().Contain("ArrangeAllMenuPlanner.IsChecked(item.Tag, _workbook.WindowArrangement)");
         source.Should().Contain("ArrangeAllMenuPlanner.TryParseArrangement(");
@@ -177,7 +177,7 @@ public sealed class ViewCommandSourceTests
     [Fact]
     public void ViewWindowLiveHandlers_RouteThroughRegistryAndWindowLayoutPlanners()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.MultiWindow.cs"));
+        var source = ReadHostSourceFile("MainWindow.MultiWindow.cs");
 
         // Hide / Unhide are registry-driven, with owned IUserMessageService messages on refusal.
         source.Should().Contain("private void ViewHideWindowBtn_Click(object sender, RoutedEventArgs e)");
@@ -193,7 +193,7 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("SystemParameters.WorkArea");
 
         // Arrange All stores the workbook choice, then applies the live visible-window layout.
-        var viewCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        var viewCommandsSource = ReadHostSourceFile("MainWindow.ViewCommands.cs");
         viewCommandsSource.Should().Contain("new SetWorkbookWindowArrangementCommand(arrangement)");
         viewCommandsSource.Should().Contain("_windowRegistry?.ArrangeVisibleWindows(arrangement, workArea.Width, workArea.Height)");
 
@@ -209,9 +209,6 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("_windowRegistry?.BroadcastScrollOffset(this, GetScrollOffset())");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
     private static string ExtractViewWindowGroup(string xaml)
     {
         var start = xaml.IndexOf("local:RibbonMetadata.CatalogId=\"ViewWindowGroup\"", StringComparison.Ordinal);
@@ -221,20 +218,13 @@ public sealed class ViewCommandSourceTests
         return xaml[start..end];
     }
 
-    private static string ExtractButtonElementByTitle(string xaml, string title)
+    private static string ExtractCommandElementByTitle(string xaml, string title)
     {
         if (title is "Split" or "View Side by Side" or "Synchronous Scrolling")
             return xaml.ExtractElementByInvariantCommandName("ToggleButton", title);
 
-        var button = xaml.ExtractElementByInvariantCommandName("Button", title);
-        if (button.Contains($"local:RibbonMetadata.CommandName=\"{LocalizedXamlTestSupport.EscapeAttribute(title)}\"", StringComparison.Ordinal))
-            return button;
-
-        return xaml.ExtractElementByInvariantCommandName("ToggleButton", title);
+        return xaml.ExtractButtonElementByInvariantCommandName(title);
     }
-
-    private static string ExtractCommandElementByTitle(string xaml, string title) =>
-        ExtractButtonElementByTitle(xaml, title);
 
     private static string ExtractMenuItemElementByHeader(string xaml, string header, string? clickHandler = null)
         => xaml.ExtractElementByLocalizedAttributeValue(

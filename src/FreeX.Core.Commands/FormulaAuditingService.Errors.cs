@@ -1218,7 +1218,40 @@ public static partial class FormulaAuditingService
         return cell is null || (!cell.HasFormula && cell.Value is BlankValue);
     }
 
-    private static bool IsNumberStoredAsText(string text) =>
+    private static bool IsNumberStoredAsText(string text)
+    {
+        var value = text.Trim();
+        if (value.Length == 0)
+            return false;
+
+        if (value[0] == '\'')
+        {
+            value = value[1..].Trim();
+            if (value.Length == 0)
+                return false;
+        }
+
+        if (TryParseFiniteNumberText(value))
+            return true;
+
+        if (value.Length > 2 && value[0] == '(' && value[^1] == ')')
+        {
+            var accountingValue = value[1..^1].Trim();
+            if (accountingValue.Length > 0 && TryParseFiniteNumberText(accountingValue))
+                return true;
+        }
+
+        if (value.Length > 1 && value[^1] == '%')
+        {
+            var percentValue = value[..^1].Trim();
+            if (percentValue.Length > 0 && TryParseFiniteNumberText(percentValue))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseFiniteNumberText(string text) =>
         double.TryParse(
             text,
             NumberStyles.Float | NumberStyles.AllowThousands,
@@ -1241,26 +1274,61 @@ public static partial class FormulaAuditingService
     private static bool IsTextDateWithTwoDigitYear(string text)
     {
         var value = text.Trim();
+        if (value.Length > 0 && value[0] == '\'')
+            value = value[1..].TrimStart();
+
         if (value.Length < 6)
             return false;
 
-        if (Regex.IsMatch(value, @"^\d{1,2}[/-]\d{1,2}[/-]\d{2}$", RegexOptions.CultureInvariant))
-            return DateTime.TryParseExact(
-                value,
-                ["M/d/yy", "MM/dd/yy", "M-d-yy", "MM-dd-yy"],
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out _);
+        string[] formats;
+        if (Regex.IsMatch(value, @"^\d{1,2}([/\-.])\d{1,2}\1\d{2}$", RegexOptions.CultureInvariant))
+        {
+            formats =
+            [
+                "M/d/yy",
+                "M-d-yy",
+                "M.d.yy"
+            ];
+        }
+        else if (Regex.IsMatch(value, @"^[A-Za-z]{3,9}([ \-.])\d{1,2},?\1?\s*\d{2}$", RegexOptions.CultureInvariant))
+        {
+            formats =
+            [
+                "MMM d yy",
+                "MMM d, yy",
+                "MMM-d-yy",
+                "MMM.d.yy",
+                "MMMM d yy",
+                "MMMM d, yy",
+                "MMMM-d-yy",
+                "MMMM.d.yy"
+            ];
+        }
+        else if (Regex.IsMatch(value, @"^\d{1,2}([ \-.])[A-Za-z]{3,9},?\1?\s*\d{2}$", RegexOptions.CultureInvariant))
+        {
+            formats =
+            [
+                "d MMM yy",
+                "d MMM, yy",
+                "d-MMM-yy",
+                "d.MMM.yy",
+                "d MMMM yy",
+                "d MMMM, yy",
+                "d-MMMM-yy",
+                "d.MMMM.yy"
+            ];
+        }
+        else
+        {
+            return false;
+        }
 
-        if (Regex.IsMatch(value, @"^[A-Za-z]{3,9}\s+\d{1,2},\s*\d{2}$", RegexOptions.CultureInvariant))
-            return DateTime.TryParseExact(
-                value,
-                ["MMM d, yy", "MMM dd, yy", "MMMM d, yy", "MMMM dd, yy"],
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out _);
-
-        return false;
+        return DateTime.TryParseExact(
+            value,
+            formats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out _);
     }
 
     private static IEnumerable<FormulaErrorIssue> FindInvalidDataValidationIssues(Workbook workbook, SheetId? sheetId)

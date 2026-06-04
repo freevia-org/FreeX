@@ -20,6 +20,7 @@ public static partial class FlashFillService
         State,
         Zip5,
         Zip,
+        Zip4,
         StateZip
     }
 
@@ -91,6 +92,7 @@ public static partial class FlashFillService
         UsAddressComponentKind.State,
         UsAddressComponentKind.Zip5,
         UsAddressComponentKind.Zip,
+        UsAddressComponentKind.Zip4,
         UsAddressComponentKind.StateZip
     ];
     private static readonly HashSet<string> KnownNameTitles = new(StringComparer.OrdinalIgnoreCase)

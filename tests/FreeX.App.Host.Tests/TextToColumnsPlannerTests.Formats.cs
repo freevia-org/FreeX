@@ -1,4 +1,3 @@
-using System.Globalization;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -55,26 +54,19 @@ public sealed partial class TextToColumnsPlannerTests
     [Fact]
     public void BuildEdits_UsesCurrentCultureForGeneralNumbersWithInvariantFallback()
     {
-        var originalCulture = CultureInfo.CurrentCulture;
-        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-        try
-        {
-            var sheet = new Sheet(SheetId.New(), "Sheet1");
-            var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
-            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("1,25;1.25;NaN;Infinity"));
+        using var cultureScope = TestCultureScope.CurrentCulture("fr-FR");
 
-            var edits = TextToColumnsPlanner.BuildEdits(sheet, range, new CellAddress(sheet.Id, 2, 3), ";");
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("1,25;1.25;NaN;Infinity"));
 
-            edits.Select(edit => edit.NewCell.Value).Should().Equal(
-                new NumberValue(1.25),
-                new NumberValue(1.25),
-                new TextValue("NaN"),
-                new TextValue("Infinity"));
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = originalCulture;
-        }
+        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, new CellAddress(sheet.Id, 2, 3), ";");
+
+        edits.Select(edit => edit.NewCell.Value).Should().Equal(
+            new NumberValue(1.25),
+            new NumberValue(1.25),
+            new TextValue("NaN"),
+            new TextValue("Infinity"));
     }
 
     [Fact]

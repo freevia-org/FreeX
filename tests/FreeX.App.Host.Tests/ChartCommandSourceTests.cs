@@ -1,6 +1,5 @@
-using System;
-using System.IO;
 using FluentAssertions;
+using static FreeX.App.Host.Tests.LocalizedXamlTestSupport;
 
 namespace FreeX.App.Host.Tests;
 
@@ -23,7 +22,7 @@ public sealed class ChartCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ReadMainWindowXaml().ExtractButtonElementByInvariantCommandName(title);
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -45,7 +44,7 @@ public sealed class ChartCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ReadMainWindowXaml().ExtractButtonElementByInvariantCommandName(title);
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -56,7 +55,7 @@ public sealed class ChartCommandSourceTests
     [Fact]
     public void ChartHandlers_RouteThroughExpectedDialogsCommandsAndDeferredPath()
     {
-        var source = ReadChartCommandSource();
+        var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
 
         source.Should().Contain("private void InsertChartPickerBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new InsertChartDialog { Owner = this }");
@@ -80,7 +79,7 @@ public sealed class ChartCommandSourceTests
     public void MapChartCommand_IsNotSurfacedAsDeferredRibbonButton()
     {
         var xaml = ReadMainWindowXaml();
-        var source = ReadChartCommandSource();
+        var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
 
         xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Map Chart\"");
         xaml.Should().NotContain("Click=\"DeferredChartFamilyMenuItem_Click\"");
@@ -91,27 +90,4 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferredTitle\")");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
-    private static string ReadChartCommandSource() =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ChartCommands.cs"));
-
-    private static string ExtractButtonElementByTitle(string xaml, string title)
-    {
-        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} chart command should be present");
-
-        var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} chart command should be a Button");
-
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + "</Button>".Length
-            : selfClosingEnd + 2;
-
-        end.Should().BeGreaterThan(titleIndex, $"the {title} chart button should have a closing marker");
-        return xaml[start..end];
-    }
 }

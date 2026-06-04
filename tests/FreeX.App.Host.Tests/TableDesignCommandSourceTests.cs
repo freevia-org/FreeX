@@ -1,5 +1,5 @@
-using System.IO;
 using FluentAssertions;
+using static FreeX.App.Host.Tests.LocalizedXamlTestSupport;
 
 namespace FreeX.App.Host.Tests;
 
@@ -16,7 +16,7 @@ public sealed class TableDesignCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadTableDesignTabXaml(), title);
+        var button = ReadTableDesignTabXaml().ExtractButtonElementByInvariantCommandName(title);
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -30,7 +30,7 @@ public sealed class TableDesignCommandSourceTests
     public void TableDesignHeaderRow_IsHiddenUntilARealHeaderRowCommandExists()
     {
         var xaml = ReadTableDesignTabXaml();
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.TableDesignCommands.cs"));
+        var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
 
         xaml.Should().NotContain("TableDesignHeaderRowBtn");
         xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Header Row\"");
@@ -41,7 +41,7 @@ public sealed class TableDesignCommandSourceTests
     [Fact]
     public void TableDesignTotalRow_UsesPhysicalTotalsRowCommandAndReappliesKnownGalleryStyle()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.TableDesignCommands.cs"));
+        var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
 
         source.Should().Contain("new SetStructuredTableTotalsRowCommand(");
         source.Should().Contain("var totalsRowChanged = false;");
@@ -54,7 +54,7 @@ public sealed class TableDesignCommandSourceTests
     [Fact]
     public void TableDesignOptions_ReapplyNonGalleryStylesInsteadOfMetadataOnlyConfigure()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.TableDesignCommands.cs"));
+        var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
 
         source.Should().Contain("else if (styleOptionChanged)");
         source.Should().Contain("new ReapplyStructuredTableStyleCommand(");
@@ -64,7 +64,7 @@ public sealed class TableDesignCommandSourceTests
     [Fact]
     public void TableDesignDeferredSliceHandlers_RouteThroughModelCommandsAndPivotCreationApis()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.TableDesignCommands.cs"));
+        var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
 
         source.Should().Contain("new TextEntryDialog(");
         source.Should().Contain("new RenameStructuredTableCommand(_currentSheetId, table.Id, dialog.Result.Text)");
@@ -77,7 +77,7 @@ public sealed class TableDesignCommandSourceTests
 
     private static string ReadTableDesignTabXaml()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = ReadMainWindowXaml();
         var start = xaml.IndexOf("Header=\"{local:Loc Key=MainWindow_Header_TableDesign}\"", StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0, "the Table Design contextual tab should be present");
 
@@ -86,21 +86,4 @@ public sealed class TableDesignCommandSourceTests
         return xaml[start..end];
     }
 
-    private static string ExtractButtonElementByTitle(string xaml, string title)
-    {
-        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Table Design command should be present");
-
-        var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} Table Design command should be a Button");
-
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + "</Button>".Length
-            : selfClosingEnd + 2;
-
-        end.Should().BeGreaterThan(titleIndex, $"the {title} Table Design button should have a closing marker");
-        return xaml[start..end];
-    }
 }
