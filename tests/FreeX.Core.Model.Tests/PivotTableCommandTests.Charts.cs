@@ -12,7 +12,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotChartCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -48,7 +48,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotChartCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new AddPivotChartCommand(sheet.Id, "MissingPivot", ChartType.Column);
 
@@ -63,7 +63,7 @@ public sealed partial class PivotTableCommandTests
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
         sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddPivotChartCommand(sheet.Id, "PivotTable1", ChartType.Map).Apply(ctx);
 
@@ -81,7 +81,7 @@ public sealed partial class PivotTableCommandTests
         sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddPivotChartCommand(sheet.Id, "PivotTable1", ChartType.Column).Apply(ctx);
 
@@ -100,7 +100,7 @@ public sealed partial class PivotTableCommandTests
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new AddPivotChartCommand(sheet.Id, "PivotTable1", ChartType.Column).Apply(ctx);
 
@@ -114,7 +114,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotChartTypeCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -165,7 +165,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotChartTypeCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var chart = new ChartModel
         {
             Type = ChartType.Column,
@@ -186,7 +186,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotChartTypeCommandTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var chart = new ChartModel
         {
             Type = ChartType.Column,
@@ -221,7 +221,7 @@ public sealed partial class PivotTableCommandTests
         sheet.Charts.Add(chart);
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var outcome = new ChangePivotChartTypeCommand(sheet.Id, chart.Id, ChartType.Line).Apply(ctx);
 

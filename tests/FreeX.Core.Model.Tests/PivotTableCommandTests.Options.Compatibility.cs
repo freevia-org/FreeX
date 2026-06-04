@@ -12,7 +12,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotOptionsArgumentOrderTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -69,7 +69,7 @@ public sealed partial class PivotTableCommandTests
         var workbook = new Workbook("PivotCompactIndentCompatibilityTest");
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",

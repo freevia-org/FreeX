@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -16,12 +15,12 @@ public sealed partial class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "B3"), new NumberValue(20));
     }
 
-    private static (Sheet Sheet, ICommandContext Context, PivotTableModel Pivot) CreateBasicPivotReport(string workbookName)
+    private static (Sheet Sheet, TestCommandContext Context, PivotTableModel Pivot) CreateBasicPivotReport(string workbookName)
     {
         var workbook = new Workbook(workbookName);
         var sheet = workbook.AddSheet("Data");
         SeedData(sheet);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var pivot = new PivotTableModel
         {
             Name = "PivotTable1",
@@ -94,10 +93,4 @@ public sealed partial class PivotTableCommandTests
     private static GridRange Range(Sheet sheet, string start, string end) =>
         new(Addr(sheet, start), Addr(sheet, end));
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
