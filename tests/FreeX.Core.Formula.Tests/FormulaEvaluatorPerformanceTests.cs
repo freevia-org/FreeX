@@ -19,7 +19,7 @@ public sealed class FormulaEvaluatorPerformanceTests
     [Fact]
     public void FunctionArgumentClassification_UsesCachedLookupSets()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaEvaluator.FunctionClassification.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "FormulaEvaluator.FunctionClassification.cs"));
         var classificationHelpers = source[
             source.IndexOf("private static bool IsAggregateFunction", StringComparison.Ordinal)..];
 
@@ -33,7 +33,7 @@ public sealed class FormulaEvaluatorPerformanceTests
     [Fact]
     public void LexerIdentifierScanning_AvoidsDuplicateIdentifierStringAllocation()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "Lexer.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "Lexer.cs"));
         var identifierScanner = source[
             source.IndexOf("private Token ReadIdentifierOrRef", StringComparison.Ordinal)..
             source.IndexOf("private Token ReadQuotedSheetQualifier", StringComparison.Ordinal)];
@@ -55,7 +55,7 @@ public sealed class FormulaEvaluatorPerformanceTests
     [Fact]
     public void NumberValueCache_CoversCommonSmallIntegerFormulaResults()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaEvaluator.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "FormulaEvaluator.cs"));
 
         source.Should().Contain(
             "private const int CachedIntegerNumberMax = 64",
@@ -65,7 +65,7 @@ public sealed class FormulaEvaluatorPerformanceTests
     [Fact]
     public void ParsedReferenceNodes_CacheColumnNumbers()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaNode.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "FormulaNode.cs"));
 
         source.Should().Contain(
             "public uint ColumnNumber { get; } = Model.CellAddress.ColumnNameToNumber(ColumnName);",
@@ -81,7 +81,7 @@ public sealed class FormulaEvaluatorPerformanceTests
     [Fact]
     public void DirectLookupFastPaths_ReuseResolvedSheetReader()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaEvaluator.LookupFastPaths.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "FormulaEvaluator.LookupFastPaths.cs"));
         var reader = source[
             source.IndexOf("private readonly record struct DirectLookupRangeReader", StringComparison.Ordinal)..
             source.IndexOf("private readonly record struct DirectLookupRangeVector", StringComparison.Ordinal)];
@@ -993,6 +993,4 @@ public sealed class FormulaEvaluatorPerformanceTests
             : TimeSpan.FromSeconds(2);
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-        => WorkspaceFileLocator.Find(relativeParts);
 }
