@@ -19,7 +19,7 @@ public sealed class CustomViewCommandTests
         sheet.ShowFormulas = true;
         sheet.FrozenRows = 1;
         sheet.SplitColumn = 3;
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new SaveCustomViewCommand("Audit View");
 
@@ -52,7 +52,7 @@ public sealed class CustomViewCommandTests
             includePrintSettings: false,
             includeHiddenRowsColumnsAndFilterSettings: true);
 
-        command.Apply(new SimpleCtx(workbook)).Success.Should().BeTrue();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
 
         var view = workbook.CustomViews.Should().ContainSingle().Subject;
         view.IncludePrintSettings.Should().BeFalse();
@@ -68,7 +68,7 @@ public sealed class CustomViewCommandTests
         sheet.FrozenCols = 2;
         sheet.SplitRow = 4;
         sheet.SplitColumn = 5;
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new SaveCustomViewCommand("Sanitized");
 
@@ -100,7 +100,7 @@ public sealed class CustomViewCommandTests
                 ShowRulers: false,
                 ZoomPercent: 150,
                 ShowFormulas: true)]));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         sheet.ViewMode = WorksheetViewMode.Normal;
         sheet.ShowGridlines = true;
         sheet.ShowHeadings = true;
@@ -148,7 +148,7 @@ public sealed class CustomViewCommandTests
                 FrozenCols: 1,
                 SplitRow: 6,
                 SplitColumn: 4)]));
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new ApplyCustomViewCommand("Saved");
 
@@ -239,7 +239,7 @@ public sealed class CustomViewCommandTests
             "Review",
             [new WorksheetCustomViewState("Sheet1", WorksheetViewMode.Normal, 0, 0, null, null)]);
         workbook.CustomViews.Add(view);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new DeleteCustomViewCommand("Review");
 
@@ -249,12 +249,6 @@ public sealed class CustomViewCommandTests
         command.Revert(ctx);
 
         workbook.CustomViews.Should().ContainSingle().Which.Should().Be(view);
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 
     private static string FindWorkspaceFile(params string[] parts)

@@ -46,6 +46,43 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_PhoneExtensionExtraction_ExtractsDigitsFromMarkerVariants()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("425-555-0101 x123", "123"),
+                ("(206) 555-0199 ext. 45", "45")
+            ],
+            [
+                "360.555.0142 x 678",
+                "+1 (212) 555-0198 ext 7",
+                "503 555 0112 extension 99"
+            ]);
+
+        result.Should().BeEquivalentTo(["678", "7", "99"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("360-555-0142")]
+    [InlineData("360-555-0142 ext")]
+    [InlineData("360-555-0142 ext. ")]
+    [InlineData("360-555-0142 ext45")]
+    [InlineData("360-555-0142 extension99")]
+    [InlineData("360-555-0142 extn 99")]
+    [InlineData("main 3605550142 x99")]
+    public void Fill_PhoneExtensionExtraction_ReturnsNullForRowsWithoutUsablePhoneExtension(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("425-555-0101 x123", "123"),
+                ("(206) 555-0199 ext. 45", "45")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("123 Pine St", "55 Burnside Ave", "1600 Amphitheatre Pkwy")]
     [InlineData("Seattle", "Portland", "Mountain View")]
