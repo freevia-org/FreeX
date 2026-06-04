@@ -904,7 +904,7 @@ public static partial class FlashFillService
     private static bool TryRemoveKnownOrganizationSuffix(string source, out string name)
     {
         name = string.Empty;
-        var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var tokens = SplitTrailingKnownAffixTokens(source, KnownOrganizationSuffixes);
         if (tokens.Length < 2)
             return false;
 
@@ -921,7 +921,7 @@ public static partial class FlashFillService
     private static bool TryRemoveKnownTrailingNameSuffixes(string source, bool removeAll, out string name)
     {
         name = string.Empty;
-        var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var tokens = SplitTrailingKnownAffixTokens(source, KnownNameSuffixes);
         if (tokens.Length < 2)
             return false;
 
@@ -950,6 +950,36 @@ public static partial class FlashFillService
 
     private static string NormalizeKnownNameAffixToken(string token) =>
         token.TrimEnd('.', ',');
+
+    private static string[] SplitTrailingKnownAffixTokens(string source, HashSet<string> knownAffixes)
+    {
+        var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0)
+            return tokens;
+
+        var lastToken = tokens[^1];
+        if (!lastToken.Contains(',', StringComparison.Ordinal))
+            return tokens;
+
+        var commaParts = lastToken.Split(',');
+        if (commaParts.Length < 2 || commaParts.Any(part => part.Length == 0))
+            return tokens;
+
+        var suffixStart = commaParts.Length;
+        while (suffixStart > 0 &&
+               knownAffixes.Contains(NormalizeKnownNameAffixToken(commaParts[suffixStart - 1])))
+        {
+            suffixStart--;
+        }
+
+        if (suffixStart == commaParts.Length || (suffixStart == 0 && tokens.Length == 1))
+            return tokens;
+
+        var splitTokens = new string[tokens.Length - 1 + commaParts.Length];
+        Array.Copy(tokens, splitTokens, tokens.Length - 1);
+        Array.Copy(commaParts, 0, splitTokens, tokens.Length - 1, commaParts.Length);
+        return splitTokens;
+    }
 
     private static Func<string, string?>? TryDigitMask(IReadOnlyList<(string Source, string Expected)> examples)
     {
