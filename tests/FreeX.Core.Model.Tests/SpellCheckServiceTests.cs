@@ -707,6 +707,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversCalendarStatusVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Calandar tommorrow dedline deadlne stauts aproval APPROVL complte compelte pendng reivew reveiw. Keep calendar, tomorrow, deadline, status, approval, complete, pending, review, precalandar, aproval_code, https://calandar.example.com/dedline, owner@stauts.example.com, and \"C:\\pendng folder\\reivew file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Calandar", "Calendar"),
+            ("tommorrow", "tomorrow"),
+            ("dedline", "deadline"),
+            ("deadlne", "deadline"),
+            ("stauts", "status"),
+            ("aproval", "approval"),
+            ("APPROVL", "APPROVAL"),
+            ("complte", "complete"),
+            ("compelte", "complete"),
+            ("pendng", "pending"),
+            ("reivew", "review"),
+            ("reveiw", "review"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Calendar tomorrow deadline deadline status approval APPROVAL complete complete pending review review. Keep calendar, tomorrow, deadline, status, approval, complete, pending, review, precalandar, aproval_code, https://calandar.example.com/dedline, owner@stauts.example.com, and \"C:\\pendng folder\\reivew file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");

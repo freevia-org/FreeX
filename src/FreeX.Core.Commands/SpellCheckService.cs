@@ -865,6 +865,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pendng"))
+                {
+                    suggestion = "pending";
+                    return true;
+                }
+
                 if (first == 'q' && EqualAsciiWordIgnoreCase(word, "quater"))
                 {
                     suggestion = "quarter";
@@ -886,6 +892,18 @@ public static partial class SpellCheckService
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "refesh"))
                 {
                     suggestion = "refresh";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "reivew"))
+                {
+                    suggestion = "review";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "reveiw"))
+                {
+                    suggestion = "review";
                     return true;
                 }
 
@@ -937,6 +955,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "stauts"))
+                {
+                    suggestion = "status";
+                    return true;
+                }
+
                 break;
             case 7:
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acheive"))
@@ -954,6 +978,18 @@ public static partial class SpellCheckService
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "analsys"))
                 {
                     suggestion = "analysis";
+                    return true;
+                }
+
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "aproval"))
+                {
+                    suggestion = "approval";
+                    return true;
+                }
+
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "approvl"))
+                {
+                    suggestion = "approval";
                     return true;
                 }
 
@@ -1014,6 +1050,24 @@ public static partial class SpellCheckService
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "capcity"))
                 {
                     suggestion = "capacity";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "complte"))
+                {
+                    suggestion = "complete";
+                    return true;
+                }
+
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "dedline"))
+                {
+                    suggestion = "deadline";
+                    return true;
+                }
+
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "deadlne"))
+                {
+                    suggestion = "deadline";
                     return true;
                 }
 
@@ -1184,6 +1238,18 @@ public static partial class SpellCheckService
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "commited"))
                 {
                     suggestion = "committed";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "calandar"))
+                {
+                    suggestion = "calendar";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "compelte"))
+                {
+                    suggestion = "complete";
                     return true;
                 }
 
@@ -1390,6 +1456,12 @@ public static partial class SpellCheckService
                 if (first == 'w' && EqualAsciiWordIgnoreCase(word, "workboook"))
                 {
                     suggestion = "workbook";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "tommorrow"))
+                {
+                    suggestion = "tomorrow";
                     return true;
                 }
 
