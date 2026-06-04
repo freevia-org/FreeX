@@ -1,5 +1,4 @@
 using FreeX.Core.Calc;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Calc.Tests;
@@ -21,12 +20,6 @@ public partial class ConditionalFormatTests
 
     private static DisplayCell GetCell(ViewportModel vp, uint row, uint col) =>
         vp.Cells.Single(c => c.Row == row && c.Col == col);
-
-    private sealed class TestCommandContext(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook => wb;
-        public Sheet GetSheet(SheetId id) => wb.GetSheet(id)!;
-    }
 
     private static string FindWorkspaceFile(params string[] parts)
         => WorkspaceFileLocator.Find(parts);

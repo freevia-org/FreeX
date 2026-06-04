@@ -1,4 +1,3 @@
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
 
@@ -23,9 +22,4 @@ public partial class DataValidationTests
 
     // ─── List validation ──────────────────────────────────────────────────────
 
-    private sealed class TestCommandContext(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook => wb;
-        public Sheet GetSheet(SheetId id) => wb.GetSheet(id)!;
-    }
 }
