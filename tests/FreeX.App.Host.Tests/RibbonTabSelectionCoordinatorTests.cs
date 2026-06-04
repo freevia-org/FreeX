@@ -219,12 +219,4 @@ public sealed partial class RibbonTabSelectionCoordinatorTests
             return null;
         }
     }
-
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
-    }
 }

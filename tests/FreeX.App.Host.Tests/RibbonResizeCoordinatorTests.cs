@@ -469,12 +469,4 @@ public sealed class RibbonResizeCoordinatorTests
 
         public void Reset() => GetViewportCallCount = 0;
     }
-
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
-    }
 }

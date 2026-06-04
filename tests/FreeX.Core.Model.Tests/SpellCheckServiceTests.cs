@@ -426,6 +426,40 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversChartPivotWorkbookVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "CHRT chrat piviot pviot pivto workbok workboook workshet worsheet slicre slcier. Keep charting, prepiviot, workbok_path, https://chrat.example.com/piviot, analyst@workbok.example.com, and \"C:\\workshet folder\\slicre file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("CHRT", "CHART"),
+            ("chrat", "chart"),
+            ("piviot", "pivot"),
+            ("pviot", "pivot"),
+            ("pivto", "pivot"),
+            ("workbok", "workbook"),
+            ("workboook", "workbook"),
+            ("workshet", "worksheet"),
+            ("worsheet", "worksheet"),
+            ("slicre", "slicer"),
+            ("slcier", "slicer"));
+        plan.IssueCount.Should().Be(11);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "CHART chart pivot pivot pivot workbook workbook worksheet worksheet slicer slicer. Keep charting, prepiviot, workbok_path, https://chrat.example.com/piviot, analyst@workbok.example.com, and \"C:\\workshet folder\\slicre file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(11);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversFinanceSpreadsheetMisspellings()
     {
         var wb = new Workbook("test");
