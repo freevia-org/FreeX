@@ -326,7 +326,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void PieRenderer_DataLabelAnnotationsAggregatePositiveTotalsWithoutLinq()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartRenderer.SeriesFormatting.cs"));
         var annotations = source[
             source.IndexOf("private static void AddPieDataLabelAnnotations", StringComparison.Ordinal)..
@@ -342,7 +342,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void DataLabelFormatLookups_UseSparseReverseScansAndDenseIndexWithoutLinqPredicates()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartRenderer.SeriesFormatting.cs"));
         var pointLookup = source[
             source.IndexOf("private readonly struct ChartPointDataLabelFormatLookup", StringComparison.Ordinal)..
