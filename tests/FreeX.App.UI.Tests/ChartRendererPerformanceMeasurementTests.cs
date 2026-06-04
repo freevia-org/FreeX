@@ -9,7 +9,7 @@ namespace FreeX.App.UI.Tests;
 
 public sealed class ChartRendererPerformanceMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_BuildPlotModelWithDenseDataLabelFormats_ReportsTiming()
     {
         const int iterations = 64;

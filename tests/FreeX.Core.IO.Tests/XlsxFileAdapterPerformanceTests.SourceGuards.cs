@@ -11,7 +11,7 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxFileAdapterPerformanceTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_StructuredTableWriterTrailingNumber_AvoidsReverseIteratorAllocation()
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableWriter.cs"));

@@ -11,7 +11,7 @@ using FluentAssertions;
 namespace FreeX.App.UI.Tests;
 public sealed partial class GridViewPerformanceMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderQuickAnalysisDataBarPreview_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -54,7 +54,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderQuickAnalysisDataBarPreview_NoPositiveValues_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -102,7 +102,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_CalculateQuickAnalysisDataBarPreviewRects_NoNumericCells_ReportsTiming()
     {
         const int iterations = 64;
@@ -159,7 +159,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         allocatedBytes.Should().BeLessThan(250_000);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_CalculateQuickAnalysisDataBarPreviewRects_NoPositiveValues_ReportsTiming()
     {
         const int iterations = 64;

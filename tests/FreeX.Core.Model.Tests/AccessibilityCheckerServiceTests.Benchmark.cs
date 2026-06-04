@@ -28,7 +28,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         source.Should().Contain("SharedAppliesToRange");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_LowContrastTextWithConditionalFormats_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 20_000;

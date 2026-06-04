@@ -378,7 +378,7 @@ public sealed class AdvancedFilterCommandTests
         command.Apply(ctx).Success.Should().BeFalse();
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_AdvancedFilterCopyUniqueDenseRows_ReportsTimingAndAllocatedBytes()
     {

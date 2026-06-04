@@ -27,7 +27,7 @@ public sealed class FilterCommandPerformanceTests
         sheet.FilterHiddenRows.Should().BeEquivalentTo([10u]);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ApplyRegularFilterDenseRows_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 60_000;
@@ -88,7 +88,7 @@ public sealed class FilterCommandPerformanceTests
             $"allocated_bytes={allocatedBytes:N0}");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ApplyAverageFilterDenseRows_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 60_000;
@@ -150,7 +150,7 @@ public sealed class FilterCommandPerformanceTests
             $"allocated_bytes={allocatedBytes:N0}");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ApplyTopBottomFilterDenseRows_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 60_000;

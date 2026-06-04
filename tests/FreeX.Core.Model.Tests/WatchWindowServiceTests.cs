@@ -136,7 +136,7 @@ public sealed class WatchWindowServiceTests
             .Should().ContainSingle().Which.Should().Be(fallback);
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_AddWatchesDenseSelection_ReportsTimingAndAllocatedBytes()
     {
@@ -170,7 +170,7 @@ public sealed class WatchWindowServiceTests
         added.Should().Be((int)range.CellCount);
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_RemoveWatchesSparseSelection_ReportsTimingAndAllocatedBytes()
     {
@@ -207,7 +207,7 @@ public sealed class WatchWindowServiceTests
         workbook.WatchedCells.Should().BeEmpty();
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_GetEntriesManyWatches_ReportsTimingAndAllocatedBytes()
     {

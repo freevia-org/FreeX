@@ -14,6 +14,8 @@ public sealed class SolutionProjectsPreflightTests
 
         script.Should().Contain("FreeX.slnx");
         script.Should().Contain("SelectNodes(\"//*[local-name()='Project']\")");
+        script.Should().Contain("Get-ProjectFiles -Directory");
+        script.Should().Contain("Test-IsIgnoredDirectoryName");
         script.Should().Contain("*_wpftmp.csproj");
         script.Should().Contain("$segments -contains \".worktrees\"");
         script.Should().Contain("$segments -contains \".claude\"");
@@ -34,12 +36,32 @@ public sealed class SolutionProjectsPreflightTests
     public void SolutionProjectsPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Included"));
 
-        var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), "");
+        try
+        {
+            var solutionPath = Path.Combine(tempDirectory, "FreeX.slnx");
+            File.WriteAllText(
+                solutionPath,
+                """
+                <Solution>
+                  <Folder Name="/src/">
+                    <Project Path="src/Included/Included.csproj" />
+                  </Folder>
+                </Solution>
+                """);
+            File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
 
-        result.ExitCode.Should().Be(0, result.Error);
-        result.Output.Should().Contain("Validated ");
-        result.Output.Should().Contain("solution project entry(s).");
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{solutionPath}\"");
+
+            result.ExitCode.Should().Be(0, result.Error);
+            result.Output.Should().Contain("Validated 1 solution project entry(s).");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]

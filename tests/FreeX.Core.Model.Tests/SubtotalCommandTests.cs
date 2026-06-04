@@ -404,7 +404,7 @@ public sealed class SubtotalCommandTests
         sheet.GetCell(10_000, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B5001:B9999)");
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_SubtotalRowFinderSparseFormulas_ReportsTimingAndAllocatedBytes()
     {
@@ -476,7 +476,7 @@ public sealed class SubtotalCommandTests
         sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(25));
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SubtotalPlanManyGroupsWithPageBreaks_ReportsTimingAndAllocatedBytes()
     {
         const int groups = 2_500;

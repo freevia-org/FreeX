@@ -139,7 +139,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_DataTabRepeatedCompact_ReusesCachedOverrideLayout()
     {
         StaTestRunner.Run(() =>

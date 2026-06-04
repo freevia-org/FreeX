@@ -340,7 +340,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.AutoFilter.FilterColumns.Select(column => column.ColumnId).Should().Equal(1, 3);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_InsertRowsWithStyleOnlyCells_ReportsTiming()
     {
         const int iterations = 5;

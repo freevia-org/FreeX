@@ -5,7 +5,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class PerformanceReviewMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_WorksheetContextMenuPlanning_ReportsTimingAndAllocatedBytes()
     {
         var targetKinds = new[]

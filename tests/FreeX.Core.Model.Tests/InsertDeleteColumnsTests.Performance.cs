@@ -7,7 +7,7 @@ namespace FreeX.Core.Model.Tests;
 
 public partial class InsertDeleteColumnsTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_InsertColumnsWithDenseMovedCells_ReportsTiming()
     {
         const int iterations = 3;
@@ -54,7 +54,7 @@ public partial class InsertDeleteColumnsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_DeleteColumnsWithDenseMovedCells_ReportsTiming()
     {
         const int iterations = 3;
@@ -101,7 +101,7 @@ public partial class InsertDeleteColumnsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_InsertColumnsWithDenseColumnMetadata_ReportsTiming()
     {
         const int iterations = 3;
@@ -151,7 +151,7 @@ public partial class InsertDeleteColumnsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_DeleteColumnsWithDenseColumnMetadata_ReportsTiming()
     {
         const int iterations = 3;

@@ -90,7 +90,7 @@ public sealed class ClipboardSerializerTests
             options => options.WithStrictOrdering());
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SerializeDenseViewport_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 250;
@@ -146,7 +146,7 @@ public sealed class ClipboardSerializerTests
             $"allocated_bytes={allocatedBytes:N0}");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_DeserializeDensePlainText_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 250;

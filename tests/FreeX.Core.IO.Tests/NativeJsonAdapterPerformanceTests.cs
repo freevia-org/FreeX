@@ -71,7 +71,7 @@ public sealed class NativeJsonAdapterPerformanceTests
         styleOnlyAddress.Should().Be("XFD12");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveDenseWorkbook_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;
@@ -115,7 +115,7 @@ public sealed class NativeJsonAdapterPerformanceTests
         allocatedBytes.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_LoadDenseWorkbook_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;
@@ -164,7 +164,7 @@ public sealed class NativeJsonAdapterPerformanceTests
         allocatedBytes.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_LoadRepeatedCustomStyles_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;
@@ -213,7 +213,7 @@ public sealed class NativeJsonAdapterPerformanceTests
         allocatedBytes.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveWorkbookReferences_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;

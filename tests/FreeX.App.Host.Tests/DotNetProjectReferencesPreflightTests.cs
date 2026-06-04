@@ -12,7 +12,8 @@ public sealed class DotNetProjectReferencesPreflightTests
     {
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1"));
 
-        script.Should().Contain("Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter \"*.csproj\" -File -Recurse");
+        script.Should().Contain("Get-ProjectFiles -Directory");
+        script.Should().Contain("Test-IsIgnoredDirectoryName");
         script.Should().Contain("*_wpftmp.csproj");
         script.Should().Contain("$segments -contains \".worktrees\"");
         script.Should().Contain("$segments -contains \".claude\"");
@@ -27,12 +28,32 @@ public sealed class DotNetProjectReferencesPreflightTests
     public void DotNetProjectReferencesPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-project-reference-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "A"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "B"));
 
-        var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), "");
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "src", "A", "A.csproj"),
+                """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <ItemGroup>
+                    <ProjectReference Include="..\B\B.csproj" />
+                  </ItemGroup>
+                </Project>
+                """);
+            File.WriteAllText(Path.Combine(tempDirectory, "src", "B", "B.csproj"), "<Project />");
 
-        result.ExitCode.Should().Be(0, result.Error);
-        result.Output.Should().Contain("Validated ProjectReference targets for ");
-        result.Output.Should().Contain(".NET project file(s).");
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+
+            result.ExitCode.Should().Be(0, result.Error);
+            result.Output.Should().Contain("Validated ProjectReference targets for 2 .NET project file(s).");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]

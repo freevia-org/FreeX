@@ -10,7 +10,7 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class CsvFileAdapterTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Save_DenseSyntheticSheet_ReportsThroughputAndAllocatedBytes()
     {
         const int rowCount = 300;
@@ -39,7 +39,7 @@ public sealed partial class CsvFileAdapterTests
         stream.Length.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Save_SparseWideSyntheticSheet_ReportsThroughputAndAllocatedBytes()
     {
         const int rowCount = 5_000;
@@ -70,7 +70,7 @@ public sealed partial class CsvFileAdapterTests
         stream.Length.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Load_LargeAccessibleMemoryStream_ReportsThroughputAndAllocatedBytes()
     {
         const int rowCount = 20_000;

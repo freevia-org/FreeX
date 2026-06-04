@@ -32,7 +32,7 @@ public sealed partial class FormulaAuditingServiceTests
                 (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SparseFormulaErrorIssues_ReportsTimingAndAllocatedBytes()
     {
         const int valueRows = 100_000;

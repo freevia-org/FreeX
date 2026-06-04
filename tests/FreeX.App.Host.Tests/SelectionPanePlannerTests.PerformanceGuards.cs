@@ -38,7 +38,7 @@ public sealed partial class SelectionPanePlannerTests
         createRenameChanges.Should().NotContain("names[item.Id]");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SelectionPaneDefaultFilter_AvoidsCopyAllocation()
     {
         const int itemCount = 10_000;
