@@ -1,5 +1,5 @@
 param(
-    [string[]]$XmlRoots = @("Directory.Build.props", "FreeX.slnx", "src", "tests"),
+    [string[]]$XmlRoots = @("Directory.Build.props", "FreeX.slnx", "FreeX.DefaultTests.slnx", "FreeX.UiTests.slnx", "src", "tests"),
     [string[]]$XmlExtensions = @(".xml", ".xaml", ".slnx", ".csproj", ".props", ".targets", ".resx", ".config", ".ruleset")
 )
 

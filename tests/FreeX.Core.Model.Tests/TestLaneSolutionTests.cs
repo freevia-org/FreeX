@@ -1,0 +1,60 @@
+using System.IO;
+using System.Xml.Linq;
+using FluentAssertions;
+
+namespace FreeX.Core.Model.Tests;
+
+public sealed class TestLaneSolutionTests
+{
+    [Fact]
+    public void DefaultTestLane_ExcludesUiTestProjects()
+    {
+        var defaultLaneProjects = ReadSolutionProjects(FindWorkspaceFile("FreeX.DefaultTests.slnx"));
+        var uiLaneProjects = ReadSolutionProjects(FindWorkspaceFile("FreeX.UiTests.slnx"));
+
+        defaultLaneProjects.Should().BeEquivalentTo(new[]
+        {
+            "tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj",
+            "tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj",
+            "tests/FreeX.Core.IO.Tests/FreeX.Core.IO.Tests.csproj",
+            "tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj",
+            "tests/FreeX.Fixtures/FreeX.Fixtures.csproj",
+            "tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj"
+        });
+
+        uiLaneProjects.Should().BeEquivalentTo(new[]
+        {
+            "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj",
+            "tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj"
+        });
+    }
+
+    private static string[] ReadSolutionProjects(string solutionPath)
+    {
+        var document = XDocument.Load(solutionPath);
+        return document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "Project")
+            .Select(element => element.Attribute("Path")?.Value)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Cast<string>()
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            {
+                return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not locate {Path.Combine(parts)} from {AppContext.BaseDirectory}.");
+    }
+}
