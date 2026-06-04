@@ -388,7 +388,8 @@ public sealed class RowColumnShiftAddressStateTests
     [Fact]
     public void AddressStateStyleOnlyClear_UsesSheetClearAllPath()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Commands", "RowColumnShiftHelpers.AddressState.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(
+            "src", "FreeX.Core.Commands", "RowColumnShiftHelpers.AddressState.cs"));
 
         source.Should().Contain("sheet.ClearStyleOnlyEntries();");
         source.Should().NotContain("GetStyleOnlyEntries().ToList()");
@@ -422,9 +423,6 @@ public sealed class RowColumnShiftAddressStateTests
 
         return (workbook, sheet, new TestCommandContext(workbook));
     }
-
-    private static string FindRepoFile(params string[] relativeParts)
-        => WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(relativeParts);
 
     private static CellAddress Addr(Sheet sheet, uint row, uint col) => new(sheet.Id, row, col);
 

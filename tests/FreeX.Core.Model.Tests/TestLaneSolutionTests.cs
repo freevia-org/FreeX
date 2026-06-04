@@ -9,8 +9,10 @@ public sealed class TestLaneSolutionTests
     [Fact]
     public void DefaultTestLane_ExcludesUiTestProjects()
     {
-        var defaultLaneProjects = ReadSolutionProjects(FindWorkspaceFile("FreeX.DefaultTests.slnx"));
-        var uiLaneProjects = ReadSolutionProjects(FindWorkspaceFile("FreeX.UiTests.slnx"));
+        var defaultLaneProjects = ReadSolutionProjects(WorkspaceFileLocator.FindFromWorkspaceRoot(
+            "FreeX.DefaultTests.slnx"));
+        var uiLaneProjects = ReadSolutionProjects(WorkspaceFileLocator.FindFromWorkspaceRoot(
+            "FreeX.UiTests.slnx"));
 
         defaultLaneProjects.Should().BeEquivalentTo(new[]
         {
@@ -32,9 +34,10 @@ public sealed class TestLaneSolutionTests
     [Fact]
     public void DefaultAgentVerification_DocumentsNonUiTestLane()
     {
-        var agents = File.ReadAllText(FindWorkspaceFile("AGENTS.md"));
-        var readme = File.ReadAllText(FindWorkspaceFile("README.md"));
-        var plan = File.ReadAllText(FindWorkspaceFile("docs", "release/test-distribution.md"));
+        var agents = File.ReadAllText(WorkspaceFileLocator.FindFromWorkspaceRoot("AGENTS.md"));
+        var readme = File.ReadAllText(WorkspaceFileLocator.FindFromWorkspaceRoot("README.md"));
+        var plan = File.ReadAllText(WorkspaceFileLocator.FindFromWorkspaceRoot(
+            "docs", "release/test-distribution.md"));
 
         agents.Should().Contain("default agent verification path");
         agents.Should().Contain("dotnet test FreeX.DefaultTests.slnx");
@@ -58,7 +61,4 @@ public sealed class TestLaneSolutionTests
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
     }
-
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.FindFromWorkspaceRoot(parts);
 }

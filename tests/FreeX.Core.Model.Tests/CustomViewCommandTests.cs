@@ -221,7 +221,7 @@ public sealed class CustomViewCommandTests
     [Fact]
     public void CustomViewCommands_DelegateStatePlanning()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "CustomViewCommands.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "CustomViewCommands.cs"));
 
         source.Should().Contain("CustomViewStatePlanner.FindViewIndex(workbook, name)");
         source.Should().Contain("CustomViewStatePlanner.CaptureSheetState(sheet)");
@@ -250,7 +250,4 @@ public sealed class CustomViewCommandTests
 
         workbook.CustomViews.Should().ContainSingle().Which.Should().Be(view);
     }
-
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 }
