@@ -11,6 +11,8 @@ public sealed class WorkbookThemeEffectStyleTests
     {
         WorkbookThemeEffectStyle.FromTheme(WorkbookTheme.Office).HasShadow.Should().BeFalse();
         WorkbookThemeEffectStyle.FromTheme(WorkbookTheme.Office).HasInnerShadow.Should().BeFalse();
+        WorkbookThemeEffectStyle.FromTheme(WorkbookTheme.Office).HasBevel.Should().BeFalse();
+        WorkbookThemeEffectStyle.FromTheme(WorkbookTheme.Office).HasThreeDRotation.Should().BeFalse();
     }
 
     [Fact]
@@ -22,6 +24,8 @@ public sealed class WorkbookThemeEffectStyleTests
         style.ShadowOpacity.Should().Be(0.18);
         style.ShadowOffsetX.Should().Be(2);
         style.ShadowOffsetY.Should().Be(2);
+        style.HasBevel.Should().BeFalse();
+        style.HasThreeDRotation.Should().BeFalse();
     }
 
     [Fact]
@@ -33,6 +37,8 @@ public sealed class WorkbookThemeEffectStyleTests
         style.ShadowOpacity.Should().Be(0.28);
         style.ShadowOffsetX.Should().Be(3);
         style.ShadowOffsetY.Should().Be(3);
+        style.HasBevel.Should().BeFalse();
+        style.HasThreeDRotation.Should().BeFalse();
     }
 
     [Fact]
@@ -143,6 +149,35 @@ public sealed class WorkbookThemeEffectStyleTests
         style.InnerShadowOffsetX.Should().Be(0);
         style.InnerShadowOffsetY.Should().Be(2);
         style.InnerShadowBlurRadius.Should().BeApproximately(4, 0.0001);
+    }
+
+    [Fact]
+    public void FromTheme_UsesImportedFormatSchemeBevelAndThreeDRotation()
+    {
+        var theme = WorkbookTheme.Office
+            .WithEffects("Office")
+            .WithNativeFormatSchemeXml("""
+                <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+                  <a:effectStyleLst>
+                    <a:effectStyle>
+                      <a:effectLst/>
+                      <a:scene3d>
+                        <a:camera prst="orthographicFront"/>
+                      </a:scene3d>
+                      <a:sp3d>
+                        <a:bevelT w="76200" h="38100"/>
+                      </a:sp3d>
+                    </a:effectStyle>
+                  </a:effectStyleLst>
+                </a:fmtScheme>
+                """);
+
+        var style = WorkbookThemeEffectStyle.FromTheme(theme);
+
+        style.HasShadow.Should().BeFalse();
+        style.HasBevel.Should().BeTrue();
+        style.HasThreeDRotation.Should().BeTrue();
+        style.HasAnyEffect.Should().BeTrue();
     }
 
     [Fact]
