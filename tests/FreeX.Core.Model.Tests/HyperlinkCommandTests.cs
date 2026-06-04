@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using Xunit;
 
 namespace FreeX.Core.Model.Tests;
 
@@ -12,7 +11,7 @@ public sealed class HyperlinkCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(addr, new TextValue("old"));
 
@@ -40,7 +39,7 @@ public sealed class HyperlinkCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
 
         new SetHyperlinkCommand(sheet.Id, addr, "https://example.com", "Example").Apply(ctx)
@@ -59,7 +58,7 @@ public sealed class HyperlinkCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var address1 = new CellAddress(sheet1.Id, 3, 2);
         var address2 = new CellAddress(sheet2.Id, 3, 2);
         sheet1.SetCell(address1, new TextValue("old1"));
@@ -110,7 +109,7 @@ public sealed class HyperlinkCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(addr, new TextValue("Example"));
         sheet.Hyperlinks[addr] = "https://example.com";
@@ -143,7 +142,7 @@ public sealed class HyperlinkCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         var hyperlinkStyle = wb.RegisterStyle(new CellStyle
         {
@@ -189,7 +188,7 @@ public sealed class HyperlinkCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(addr, new TextValue("Example"));
         sheet.Hyperlinks[addr] = "https://example.com";
@@ -207,7 +206,7 @@ public sealed class HyperlinkCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         var unlockedStyle = wb.RegisterStyle(new CellStyle { Locked = false });
         var cell = Cell.FromValue(new TextValue("Example"));
@@ -228,7 +227,7 @@ public sealed class HyperlinkCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.IsProtected = true;
 
@@ -244,7 +243,7 @@ public sealed class HyperlinkCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.InsertHyperlinks);
@@ -256,9 +255,4 @@ public sealed class HyperlinkCommandTests
         sheet.Hyperlinks[addr].Should().Be("https://example.com");
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
