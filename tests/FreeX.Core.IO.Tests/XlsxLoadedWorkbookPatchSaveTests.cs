@@ -370,6 +370,122 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithLegacyCommentTextEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateLegacyCommentSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        var address = new CellAddress(sheet.Id, 2, 3);
+        sheet.Comments[address].Should().Be("Original note");
+        sheet.Comments[address] = "Patched note";
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/worksheets/sheet1.xml"));
+        ReadPackageEntry(savedBytes, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/worksheets/_rels/sheet1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/drawings/vmlDrawing1.vml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/vmlDrawing1.vml"));
+        ReadCommentText(savedBytes, "xl/comments1.xml", "C2")
+            .Should()
+            .Be("Patched note");
+        ReadCommentAttribute(savedBytes, "xl/comments1.xml", "C2", "nativeCommentAttr")
+            .Should()
+            .Be("kept-comment");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        var reloadedAddress = new CellAddress(reloadedSheet.Id, 2, 3);
+        reloadedSheet.Comments[reloadedAddress].Should().Be("Patched note");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithLegacyCommentAndCellEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateLegacyCommentSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("cell patched"));
+        sheet.Comments[new CellAddress(sheet.Id, 2, 3)] = "Comment patched";
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("cell patched");
+        ReadCommentText(savedBytes, "xl/comments1.xml", "C2")
+            .Should()
+            .Be("Comment patched");
+        ReadPackageEntry(savedBytes, "xl/drawings/vmlDrawing1.vml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/vmlDrawing1.vml"));
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithAddedLegacyComment_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateLegacyCommentSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Comments[new CellAddress(sheet.Id, 1, 1)] = "New note";
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .NotEqual(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithNonNoteVmlLegacyCommentEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateLegacyCommentSourcePackage(vmlObjectType: "Button");
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Comments[new CellAddress(sheet.Id, 2, 3)] = "Patched note";
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .NotEqual(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithClearedLiteralCell_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
@@ -700,6 +816,127 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return package.ToArray();
     }
 
+    private static byte[] CreateLegacyCommentSourcePackage(string vmlObjectType = "Note")
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(
+            (
+                "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                  <Override PartName="/xl/comments1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>
+                </Types>
+                """),
+            (
+                "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Data" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                </workbook>
+                """),
+            (
+                "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+                  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+                  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+                  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+                  <dxfs count="0"/>
+                  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="TableStyleLight16"/>
+                </styleSheet>
+                """),
+            (
+                "xl/worksheets/sheet1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <dimension ref="A1:C2"/>
+                  <sheetData>
+                    <row r="1"><c r="A1" t="inlineStr"><is><t>source</t></is></c></row>
+                    <row r="2"><c r="C2" t="inlineStr"><is><t>review</t></is></c></row>
+                  </sheetData>
+                  <legacyDrawing r:id="rId2"/>
+                </worksheet>
+                """),
+            (
+                "xl/worksheets/_rels/sheet1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="../comments1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" Target="../drawings/vmlDrawing1.vml"/>
+                </Relationships>
+                """),
+            (
+                "xl/comments1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <authors>
+                    <author>Excel Reviewer</author>
+                  </authors>
+                  <commentList nativeCommentListAttr="kept-list">
+                    <comment ref="C2" authorId="0" nativeCommentAttr="kept-comment">
+                      <text><r><t>Original note</t></r></text>
+                    </comment>
+                  </commentList>
+                </comments>
+                """),
+            (
+                "xl/drawings/vmlDrawing1.vml",
+                $$"""
+                <?xml version="1.0" encoding="UTF-8"?>
+                <xml xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+                  <v:shape id="_x0000_s1025" type="#_x0000_t202" style="position:absolute;margin-left:80pt;margin-top:6pt;width:108pt;height:59.25pt;z-index:1;visibility:hidden" fillcolor="#ffffe1" o:insetmode="auto">
+                    <v:fill color2="#ffffe1"/>
+                    <v:shadow color="black" obscured="t"/>
+                    <v:path o:connecttype="none"/>
+                    <v:textbox style="mso-direction-alt:auto"><div style="text-align:left"/></v:textbox>
+                    <x:ClientData ObjectType="{{vmlObjectType}}">
+                      <x:MoveWithCells/>
+                      <x:SizeWithCells/>
+                      <x:Anchor>2, 15, 1, 2, 4, 15, 5, 3</x:Anchor>
+                      <x:AutoFill>False</x:AutoFill>
+                      <x:Row>1</x:Row>
+                      <x:Column>2</x:Column>
+                    </x:ClientData>
+                  </v:shape>
+                </xml>
+                """));
+
+        return package.ToArray();
+    }
+
     private static byte[] CreateFormulaSourcePackage(string formulaElement = "<f>1+1</f>")
     {
         using var package = XlsxPackageTestFixtures.CreatePackage(
@@ -973,6 +1210,41 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         var document = XDocument.Load(entryStream);
         var ns = document.Root!.Name.Namespace;
         return document.Root.Element(ns + "hyperlinks");
+    }
+
+    private static string? ReadCommentText(byte[] packageBytes, string commentsPath, string reference)
+    {
+        var comment = ReadCommentElement(packageBytes, commentsPath, reference);
+        var ns = comment.Name.Namespace;
+        return string.Concat(comment
+            .Element(ns + "text")?
+            .Descendants(ns + "t")
+            .Select(element => element.Value) ?? []);
+    }
+
+    private static string? ReadCommentAttribute(
+        byte[] packageBytes,
+        string commentsPath,
+        string reference,
+        string attributeName) =>
+        ReadCommentElement(packageBytes, commentsPath, reference)
+            .Attribute(attributeName)
+            ?.Value;
+
+    private static XElement ReadCommentElement(byte[] packageBytes, string commentsPath, string reference)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry(commentsPath);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        var ns = document.Root!.Name.Namespace;
+        var comment = document
+            .Descendants(ns + "comment")
+            .SingleOrDefault(element => string.Equals(element.Attribute("ref")?.Value, reference, StringComparison.OrdinalIgnoreCase));
+        comment.Should().NotBeNull();
+        return comment!;
     }
 
     private static string? ReadCellTextSpaceMode(byte[] packageBytes, string worksheetPath, string reference)

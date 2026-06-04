@@ -37,6 +37,8 @@ public sealed partial class XlsxFileAdapter
         private const int FingerprintCellLimit = 25_000;
         private const int CellPatchBaselineLimit = 250_000;
         private const int CellPatchChangeLimit = 256;
+        private const string CommentsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+        private const string VmlDrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 
         public static XlsxSourcePackage Capture(Stream stream, Workbook workbook)
             => Capture(stream, workbook, allowBufferReuse: false);
@@ -315,7 +317,8 @@ public sealed partial class XlsxFileAdapter
                     out var changes,
                     out var dimensionChanges,
                     out var mergeRegionChanges,
-                    out var hyperlinkChanges))
+                    out var hyperlinkChanges,
+                    out var commentChanges))
             {
                 return false;
             }
@@ -326,7 +329,8 @@ public sealed partial class XlsxFileAdapter
             if (changes.Count == 0 &&
                 dimensionChanges.Count == 0 &&
                 mergeRegionChanges.Count == 0 &&
-                hyperlinkChanges.Count == 0)
+                hyperlinkChanges.Count == 0 &&
+                commentChanges.Count == 0)
             {
                 CopyTo(stream);
                 return true;
@@ -345,6 +349,9 @@ public sealed partial class XlsxFileAdapter
                     .ToDictionary(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase);
                 var hyperlinkChangesByWorksheet = hyperlinkChanges
                     .ToDictionary(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+                var commentChangesByPart = commentChanges
+                    .GroupBy(change => change.CommentPartPath, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
                 var worksheetPaths = cellChangesByWorksheet.Keys
                     .Concat(dimensionChangesByWorksheet.Keys)
                     .Concat(mergeRegionChangesByWorksheet.Keys)
@@ -385,6 +392,19 @@ public sealed partial class XlsxFileAdapter
                     XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
                 }
 
+                foreach (var (commentPartPath, commentPartChanges) in commentChangesByPart)
+                {
+                    var commentEntry = archive.GetEntry(commentPartPath);
+                    if (commentEntry is null)
+                        return false;
+
+                    var commentsXml = XlsxPackageXmlEditor.LoadXml(commentEntry);
+                    if (!XlsxCellPatchBaseline.ApplyCommentChanges(commentsXml, commentPartChanges))
+                        return false;
+
+                    XlsxPackageXmlEditor.ReplaceXml(archive, commentPartPath, commentsXml);
+                }
+
                 if (changes.Any(change =>
                         change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue ||
                         (change.Kind == XlsxCellValuePatchKind.DeletedCell && change.OriginalFormulaText is not null)))
@@ -423,6 +443,7 @@ public sealed partial class XlsxFileAdapter
                         dimensionChanges,
                         mergeRegionChanges,
                         hyperlinkChanges,
+                        commentChanges,
                         patchedModelFingerprint)));
             }
             else
@@ -481,19 +502,6 @@ public sealed partial class XlsxFileAdapter
 
         private static bool PackageAllowsCellPatchSave(ZipArchive archive)
         {
-            foreach (var entry in archive.Entries)
-            {
-                var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-                if (IsPatchUnsafePackagePart(path))
-                    return false;
-
-                if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
-                    !IsValidRelationshipPart(entry))
-                {
-                    return false;
-                }
-            }
-
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
             if (workbookEntry is null)
@@ -507,6 +515,7 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
 
+            var allowedVmlDrawingPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry))
             {
                 var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
@@ -515,8 +524,32 @@ public sealed partial class XlsxFileAdapter
                     root.Element(workbookNs + "customSheetViews") is not null ||
                     root.Element(workbookNs + "customProperties") is not null ||
                     root.Element(workbookNs + "drawing") is not null ||
+                    root.Element(workbookNs + "legacyDrawingHF") is not null ||
                     HasWorksheetTableParts(root, workbookNs) ||
                     HasOfficeRevisionAttributes(root))
+                {
+                    return false;
+                }
+
+                if (root.Element(workbookNs + "legacyDrawing") is { } legacyDrawing &&
+                    !TryAddPatchSafeLegacyNoteVmlDrawingPath(
+                        archive,
+                        XlsxPackagePath.NormalizeZipPath(worksheetEntry.FullName.Replace('\\', '/')),
+                        legacyDrawing,
+                        allowedVmlDrawingPaths))
+                {
+                    return false;
+                }
+            }
+
+            foreach (var entry in archive.Entries)
+            {
+                var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+                if (IsPatchUnsafePackagePart(path, allowedVmlDrawingPaths))
+                    return false;
+
+                if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
+                    !IsValidRelationshipPart(entry))
                 {
                     return false;
                 }
@@ -525,13 +558,185 @@ public sealed partial class XlsxFileAdapter
             return !HasUnsupportedRichSharedStringFonts(archive, workbookNs);
         }
 
-        private static bool IsPatchUnsafePackagePart(string path) =>
-            path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+        private static bool IsPatchUnsafePackagePart(
+            string path,
+            IReadOnlySet<string> allowedVmlDrawingPaths) =>
+            (path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) &&
+             !allowedVmlDrawingPaths.Contains(path)) ||
             path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/revisionHeaders/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase);
+
+        private static bool TryAddPatchSafeLegacyNoteVmlDrawingPath(
+            ZipArchive archive,
+            string worksheetPath,
+            XElement legacyDrawing,
+            HashSet<string> allowedVmlDrawingPaths)
+        {
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relationshipId = legacyDrawing.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(relationshipId))
+                return false;
+
+            var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (relationshipsEntry is null)
+                return false;
+
+            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            var relationshipsRoot = relationshipsXml.Root;
+            if (relationshipsRoot is null)
+                return false;
+
+            var vmlRelationship = relationshipsRoot
+                .Elements(packageRelNs + "Relationship")
+                .SingleOrDefault(relationship =>
+                    string.Equals(relationship.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                    string.Equals(relationship.Attribute("Type")?.Value, VmlDrawingRelationshipType, StringComparison.OrdinalIgnoreCase));
+            var target = vmlRelationship?.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+                return false;
+
+            var vmlPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
+            var fileName = vmlPath[(vmlPath.LastIndexOf('/') + 1)..];
+            if (!vmlPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+                !fileName.StartsWith("vmlDrawing", StringComparison.OrdinalIgnoreCase) ||
+                !vmlPath.EndsWith(".vml", StringComparison.OrdinalIgnoreCase) ||
+                archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(vmlPath)) is not null)
+            {
+                return false;
+            }
+
+            var vmlEntry = archive.GetEntry(vmlPath);
+            if (vmlEntry is null ||
+                !TryReadWorksheetCommentReferences(archive, worksheetPath, relationshipsRoot, packageRelNs, out var commentReferences) ||
+                !IsPatchSafeLegacyNoteVmlDrawing(vmlEntry, commentReferences))
+            {
+                return false;
+            }
+
+            allowedVmlDrawingPaths.Add(vmlPath);
+            return true;
+        }
+
+        private static bool TryReadWorksheetCommentReferences(
+            ZipArchive archive,
+            string worksheetPath,
+            XElement relationshipsRoot,
+            XNamespace packageRelNs,
+            out HashSet<(uint Row, uint Col)> commentReferences)
+        {
+            commentReferences = [];
+            var commentPartPaths = relationshipsRoot
+                .Elements(packageRelNs + "Relationship")
+                .Where(relationship =>
+                    string.Equals(relationship.Attribute("Type")?.Value, CommentsRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
+                .Select(relationship => XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, relationship.Attribute("Target")!.Value))
+                .Where(path => archive.GetEntry(path) is not null)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (commentPartPaths.Count != 1)
+                return false;
+
+            var commentsEntry = archive.GetEntry(commentPartPaths[0]);
+            if (commentsEntry is null)
+                return false;
+
+            var commentsXml = XlsxPackageXmlEditor.LoadXml(commentsEntry);
+            var root = commentsXml.Root;
+            if (root is null)
+                return false;
+
+            var worksheetNs = root.Name.Namespace;
+            foreach (var comment in root.Element(worksheetNs + "commentList")?.Elements(worksheetNs + "comment") ?? [])
+            {
+                if (!TryParsePackageCellReference(comment.Attribute("ref")?.Value, out var row, out var col) ||
+                    !IsValidWorksheetRow(row) ||
+                    !IsValidWorksheetColumn(col) ||
+                    !commentReferences.Add((row, col)))
+                {
+                    return false;
+                }
+            }
+
+            return commentReferences.Count > 0;
+        }
+
+        private static bool TryParsePackageCellReference(string? reference, out uint row, out uint col)
+        {
+            row = 0;
+            col = 0;
+            if (string.IsNullOrWhiteSpace(reference) ||
+                reference.Contains(':', StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var index = 0;
+            while (index < reference.Length && char.IsAsciiLetter(reference[index]))
+            {
+                col = checked((col * 26) + (uint)(char.ToUpperInvariant(reference[index]) - 'A' + 1));
+                index++;
+            }
+
+            if (col == 0 || index == reference.Length)
+                return false;
+
+            var rowSpan = reference.AsSpan(index);
+            return uint.TryParse(rowSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out row) && row > 0;
+        }
+
+        private static bool IsPatchSafeLegacyNoteVmlDrawing(
+            ZipArchiveEntry vmlEntry,
+            IReadOnlySet<(uint Row, uint Col)> commentReferences)
+        {
+            XNamespace vmlNs = "urn:schemas-microsoft-com:vml";
+            XNamespace excelNs = "urn:schemas-microsoft-com:office:excel";
+            var vmlXml = XlsxPackageXmlEditor.LoadXml(vmlEntry);
+            var shapes = vmlXml.Descendants(vmlNs + "shape").ToList();
+            if (shapes.Count != commentReferences.Count)
+                return false;
+
+            var shapeReferences = new HashSet<(uint Row, uint Col)>();
+            foreach (var shape in shapes)
+            {
+                if (shape.Descendants(vmlNs + "imagedata").Any())
+                    return false;
+
+                var clientData = shape.Elements(excelNs + "ClientData").SingleOrDefault();
+                if (clientData is null ||
+                    !string.Equals(clientData.Attribute("ObjectType")?.Value, "Note", StringComparison.OrdinalIgnoreCase) ||
+                    !TryReadZeroBasedClientDataIndex(clientData.Element(excelNs + "Row"), out var zeroBasedRow) ||
+                    !TryReadZeroBasedClientDataIndex(clientData.Element(excelNs + "Column"), out var zeroBasedColumn))
+                {
+                    return false;
+                }
+
+                var row = zeroBasedRow + 1;
+                var col = zeroBasedColumn + 1;
+                if (!IsValidWorksheetRow(row) ||
+                    !IsValidWorksheetColumn(col) ||
+                    !shapeReferences.Add((row, col)))
+                {
+                    return false;
+                }
+            }
+
+            return shapeReferences.SetEquals(commentReferences);
+        }
+
+        private static bool TryReadZeroBasedClientDataIndex(XElement? element, out uint oneBasedIndex)
+        {
+            oneBasedIndex = 0;
+            return uint.TryParse(
+                element?.Value,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out oneBasedIndex);
+        }
 
         private static bool IsValidRelationshipPart(ZipArchiveEntry entry)
         {
@@ -707,6 +912,7 @@ public sealed partial class XlsxFileAdapter
                         return null;
 
                     var sourceHyperlinks = ReadSourceHyperlinks(archive, worksheetPath, sheet.Id);
+                    var sourceComments = ReadSourceComments(archive, worksheetPath, sheet);
                     var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(sheet.CellCount);
                     foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
                     {
@@ -738,6 +944,8 @@ public sealed partial class XlsxFileAdapter
                         sheet.MergedRegions.ToArray(),
                         XlsxWorksheetHyperlinkBaseline.Capture(sheet),
                         sourceHyperlinks,
+                        XlsxWorksheetCommentBaseline.Capture(sheet),
+                        sourceComments,
                         cells));
                 }
 
@@ -759,12 +967,14 @@ public sealed partial class XlsxFileAdapter
             out List<XlsxCellValuePatch> changes,
             out List<XlsxWorksheetDimensionPatch> dimensionChanges,
             out List<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
-            out List<XlsxWorksheetHyperlinkPatch> hyperlinkChanges)
+            out List<XlsxWorksheetHyperlinkPatch> hyperlinkChanges,
+            out List<XlsxWorksheetCommentPatch> commentChanges)
         {
             changes = [];
             dimensionChanges = [];
             mergeRegionChanges = [];
             hyperlinkChanges = [];
+            commentChanges = [];
             if (workbook.SheetCount != _worksheets.Count)
                 return false;
 
@@ -832,6 +1042,25 @@ public sealed partial class XlsxFileAdapter
                         return false;
 
                     hyperlinkChanges.Add(hyperlinkPatch);
+                }
+
+                if (!XlsxWorksheetCommentPatch.TryCreate(
+                        baseline.SheetId,
+                        baseline.WorksheetPath,
+                        baseline.Comments,
+                        baseline.SourceComments,
+                        XlsxWorksheetCommentBaseline.Capture(sheet),
+                        out var commentPatch))
+                {
+                    return false;
+                }
+
+                if (commentPatch is not null)
+                {
+                    if (commentPatch.ChangeCount > changeLimit)
+                        return false;
+
+                    commentChanges.Add(commentPatch);
                 }
 
                 var addedCells = 0;
@@ -969,9 +1198,16 @@ public sealed partial class XlsxFileAdapter
                    dimensionChanges.Count == 0 &&
                    mergeRegionChanges.Count == 0 &&
                    hyperlinkChanges.Count == 0 &&
+                   commentChanges.Count == 0 &&
                    currentModelFingerprint is not null
                 ? string.Equals(_modelFingerprint, currentModelFingerprint, StringComparison.Ordinal)
-                : ModelMatchesWithOriginalValues(workbook, changes, dimensionChanges, mergeRegionChanges, hyperlinkChanges);
+                : ModelMatchesWithOriginalValues(
+                    workbook,
+                    changes,
+                    dimensionChanges,
+                    mergeRegionChanges,
+                    hyperlinkChanges,
+                    commentChanges);
         }
 
         public static bool ApplyChanges(XDocument worksheetXml, IEnumerable<XlsxCellValuePatch> changes)
@@ -1165,6 +1401,92 @@ public sealed partial class XlsxFileAdapter
                     hyperlink.SetAttributeValue("tooltip", change.NewTooltip);
             }
 
+            return true;
+        }
+
+        public static bool ApplyCommentChanges(
+            XDocument commentsXml,
+            IEnumerable<XlsxWorksheetCommentPatch> patches)
+        {
+            var root = commentsXml.Root;
+            if (root is null)
+                return false;
+
+            var worksheetNs = root.Name.Namespace;
+            var commentList = root.Element(worksheetNs + "commentList");
+            if (commentList is null)
+                return false;
+
+            var commentsByReference = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+            foreach (var comment in commentList.Elements(worksheetNs + "comment"))
+            {
+                var reference = comment.Attribute("ref")?.Value;
+                if (string.IsNullOrWhiteSpace(reference) ||
+                    !commentsByReference.TryAdd(reference, comment))
+                {
+                    return false;
+                }
+            }
+
+            foreach (var patch in patches)
+            {
+                foreach (var change in patch.Changes)
+                {
+                    if (!commentsByReference.TryGetValue(change.Reference, out var comment) ||
+                        !TryGetPatchableCommentTextElement(comment, worksheetNs, out var textElement))
+                    {
+                        return false;
+                    }
+
+                    textElement.Value = change.NewText;
+                    if (change.NewText.Length > 0 &&
+                        (char.IsWhiteSpace(change.NewText[0]) || char.IsWhiteSpace(change.NewText[^1])))
+                    {
+                        textElement.SetAttributeValue(XNamespace.Xml + "space", "preserve");
+                    }
+                    else
+                    {
+                        textElement.SetAttributeValue(XNamespace.Xml + "space", null);
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryGetPatchableCommentTextElement(
+            XElement comment,
+            XNamespace worksheetNs,
+            out XElement textElement)
+        {
+            textElement = null!;
+            var text = comment.Element(worksheetNs + "text");
+            if (text is null)
+                return false;
+
+            var runs = text.Elements(worksheetNs + "r").ToList();
+            if (runs.Count == 1)
+            {
+                var run = runs[0];
+                if (run.Elements().Any(element => element.Name != worksheetNs + "t"))
+                    return false;
+
+                var t = run.Element(worksheetNs + "t");
+                if (t is null || run.Elements(worksheetNs + "t").Skip(1).Any())
+                    return false;
+
+                textElement = t;
+                return true;
+            }
+
+            if (runs.Count > 0 || text.Elements().Any(element => element.Name != worksheetNs + "t"))
+                return false;
+
+            var directText = text.Element(worksheetNs + "t");
+            if (directText is null || text.Elements(worksheetNs + "t").Skip(1).Any())
+                return false;
+
+            textElement = directText;
             return true;
         }
 
@@ -1464,12 +1786,14 @@ public sealed partial class XlsxFileAdapter
             IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges,
             IReadOnlyList<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
             IReadOnlyList<XlsxWorksheetHyperlinkPatch> hyperlinkChanges,
+            IReadOnlyList<XlsxWorksheetCommentPatch> commentChanges,
             string modelFingerprint)
         {
             if (changes.Count == 0 &&
                 dimensionChanges.Count == 0 &&
                 mergeRegionChanges.Count == 0 &&
-                hyperlinkChanges.Count == 0)
+                hyperlinkChanges.Count == 0 &&
+                commentChanges.Count == 0)
             {
                 return new XlsxCellPatchBaseline(_worksheets, _sourceStyleIndexesByStyleId, modelFingerprint);
             }
@@ -1483,6 +1807,8 @@ public sealed partial class XlsxFileAdapter
                 .ToDictionary(change => change.SheetId);
             var hyperlinkChangesBySheet = hyperlinkChanges
                 .ToDictionary(change => change.SheetId);
+            var commentChangesBySheet = commentChanges
+                .ToDictionary(change => change.SheetId);
             var worksheets = new List<XlsxWorksheetCellPatchBaseline>(_worksheets.Count);
             foreach (var baseline in _worksheets)
             {
@@ -1490,10 +1816,12 @@ public sealed partial class XlsxFileAdapter
                 dimensionChangesBySheet.TryGetValue(baseline.SheetId, out var dimensionPatch);
                 mergeRegionChangesBySheet.TryGetValue(baseline.SheetId, out var mergeRegionPatch);
                 hyperlinkChangesBySheet.TryGetValue(baseline.SheetId, out var hyperlinkPatch);
+                commentChangesBySheet.TryGetValue(baseline.SheetId, out var commentPatch);
                 if ((sheetChanges is null || sheetChanges.Count == 0) &&
                     dimensionPatch is null &&
                     mergeRegionPatch is null &&
-                    hyperlinkPatch is null)
+                    hyperlinkPatch is null &&
+                    commentPatch is null)
                 {
                     worksheets.Add(baseline);
                     continue;
@@ -1547,6 +1875,8 @@ public sealed partial class XlsxFileAdapter
                     MergedRegions = mergeRegionPatch?.Current ?? baseline.MergedRegions,
                     Hyperlinks = hyperlinkPatch?.Current ?? baseline.Hyperlinks,
                     SourceHyperlinks = hyperlinkPatch?.CurrentSource ?? baseline.SourceHyperlinks,
+                    Comments = commentPatch?.Current ?? baseline.Comments,
+                    SourceComments = commentPatch?.CurrentSource ?? baseline.SourceComments,
                     Cells = cells
                 });
             }
@@ -1559,7 +1889,8 @@ public sealed partial class XlsxFileAdapter
             IReadOnlyList<XlsxCellValuePatch> changes,
             IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges,
             IReadOnlyList<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
-            IReadOnlyList<XlsxWorksheetHyperlinkPatch> hyperlinkChanges)
+            IReadOnlyList<XlsxWorksheetHyperlinkPatch> hyperlinkChanges,
+            IReadOnlyList<XlsxWorksheetCommentPatch> commentChanges)
         {
             var restoredCells = new List<(
                 Cell Cell,
@@ -1572,6 +1903,7 @@ public sealed partial class XlsxFileAdapter
             var restoredDimensions = new List<(Sheet Sheet, XlsxWorksheetDimensionBaseline Current)>(dimensionChanges.Count);
             var restoredMergedRegions = new List<(Sheet Sheet, GridRange[] Current)>(mergeRegionChanges.Count);
             var restoredHyperlinks = new List<(Sheet Sheet, XlsxWorksheetHyperlinkBaseline Current)>(hyperlinkChanges.Count);
+            var restoredComments = new List<(Sheet Sheet, XlsxWorksheetCommentBaseline Current)>(commentChanges.Count);
             try
             {
                 foreach (var dimensionChange in dimensionChanges)
@@ -1602,6 +1934,16 @@ public sealed partial class XlsxFileAdapter
 
                     restoredHyperlinks.Add((sheet, XlsxWorksheetHyperlinkBaseline.Capture(sheet)));
                     ApplyHyperlinkBaseline(sheet, hyperlinkChange.Original);
+                }
+
+                foreach (var commentChange in commentChanges)
+                {
+                    var sheet = workbook.GetSheet(commentChange.SheetId);
+                    if (sheet is null)
+                        return false;
+
+                    restoredComments.Add((sheet, XlsxWorksheetCommentBaseline.Capture(sheet)));
+                    ApplyCommentBaseline(sheet, commentChange.Original);
                 }
 
                 foreach (var change in changes)
@@ -1681,6 +2023,8 @@ public sealed partial class XlsxFileAdapter
                     sheet.ReplaceMergedRegions(current);
                 foreach (var (sheet, current) in restoredHyperlinks)
                     ApplyHyperlinkBaseline(sheet, current);
+                foreach (var (sheet, current) in restoredComments)
+                    ApplyCommentBaseline(sheet, current);
             }
         }
 
@@ -1715,6 +2059,13 @@ public sealed partial class XlsxFileAdapter
                     hyperlink.ScreenTip,
                     hyperlink.Bookmark);
             }
+        }
+
+        private static void ApplyCommentBaseline(Sheet sheet, XlsxWorksheetCommentBaseline baseline)
+        {
+            sheet.Comments.Clear();
+            foreach (var (address, text) in baseline.Comments)
+                sheet.Comments[address] = text;
         }
 
         private static void ReplaceDictionary<TValue>(
@@ -1919,6 +2270,87 @@ public sealed partial class XlsxFileAdapter
             catch
             {
                 return new Dictionary<CellAddress, XlsxSourceHyperlink>();
+            }
+        }
+
+        private static IReadOnlyDictionary<CellAddress, XlsxSourceComment> ReadSourceComments(
+            ZipArchive archive,
+            string worksheetPath,
+            Sheet sheet)
+        {
+            var relationshipsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
+            var relationshipsEntry = archive.GetEntry(relationshipsPath);
+            if (relationshipsEntry is null || sheet.Comments.Count == 0)
+                return new Dictionary<CellAddress, XlsxSourceComment>();
+
+            try
+            {
+                XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+                var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+                var commentPartPaths = relationshipsXml.Root?
+                    .Elements(packageRelNs + "Relationship")
+                    .Where(element =>
+                        string.Equals(
+                            element.Attribute("Type")?.Value,
+                            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(element.Attribute("Target")?.Value))
+                    .Select(element => XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, element.Attribute("Target")!.Value))
+                    .Where(path => archive.GetEntry(path) is not null)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+                    ?? [];
+                if (commentPartPaths.Count != 1)
+                    return new Dictionary<CellAddress, XlsxSourceComment>();
+
+                var commentPartPath = commentPartPaths[0];
+                var commentEntry = archive.GetEntry(commentPartPath);
+                if (commentEntry is null)
+                    return new Dictionary<CellAddress, XlsxSourceComment>();
+
+                var commentsXml = XlsxPackageXmlEditor.LoadXml(commentEntry);
+                var root = commentsXml.Root;
+                if (root is null)
+                    return new Dictionary<CellAddress, XlsxSourceComment>();
+
+                var worksheetNs = root.Name.Namespace;
+                var commentList = root.Element(worksheetNs + "commentList");
+                if (commentList is null)
+                    return new Dictionary<CellAddress, XlsxSourceComment>();
+
+                var result = new Dictionary<CellAddress, XlsxSourceComment>();
+                var ambiguous = new HashSet<CellAddress>();
+                foreach (var comment in commentList.Elements(worksheetNs + "comment"))
+                {
+                    var reference = comment.Attribute("ref")?.Value;
+                    if (!TryParseSingleCellReference(reference, sheet.Id, out var address) ||
+                        ambiguous.Contains(address) ||
+                        !sheet.Comments.TryGetValue(address, out var modelText) ||
+                        !TryGetPatchableCommentTextElement(comment, worksheetNs, out var textElement))
+                    {
+                        continue;
+                    }
+
+                    var source = new XlsxSourceComment(
+                        address,
+                        commentPartPath,
+                        reference!,
+                        textElement.Value);
+                    if (!string.Equals(source.Text, modelText, StringComparison.Ordinal))
+                        continue;
+
+                    if (result.TryAdd(address, source))
+                        continue;
+
+                    result.Remove(address);
+                    ambiguous.Add(address);
+                }
+
+                return result;
+            }
+            catch
+            {
+                return new Dictionary<CellAddress, XlsxSourceComment>();
             }
         }
 
@@ -2669,6 +3101,108 @@ public sealed partial class XlsxFileAdapter
         string NewLocation,
         string? NewTooltip);
 
+    private sealed record XlsxWorksheetCommentBaseline(
+        IReadOnlyDictionary<CellAddress, string> Comments)
+    {
+        public static XlsxWorksheetCommentBaseline Capture(Sheet sheet) =>
+            new(new Dictionary<CellAddress, string>(sheet.Comments));
+
+        public bool EqualsModel(XlsxWorksheetCommentBaseline current)
+        {
+            if (Comments.Count != current.Comments.Count)
+                return false;
+
+            foreach (var (address, comment) in Comments)
+            {
+                if (!current.Comments.TryGetValue(address, out var currentComment) ||
+                    !string.Equals(comment, currentComment, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    private sealed record XlsxWorksheetCommentPatch(
+        SheetId SheetId,
+        string WorksheetPath,
+        XlsxWorksheetCommentBaseline Original,
+        XlsxWorksheetCommentBaseline Current,
+        IReadOnlyDictionary<CellAddress, XlsxSourceComment> CurrentSource,
+        string CommentPartPath,
+        IReadOnlyList<XlsxCommentPatchChange> Changes)
+    {
+        public int ChangeCount => Changes.Count;
+
+        public static bool TryCreate(
+            SheetId sheetId,
+            string worksheetPath,
+            XlsxWorksheetCommentBaseline original,
+            IReadOnlyDictionary<CellAddress, XlsxSourceComment> originalSource,
+            XlsxWorksheetCommentBaseline current,
+            out XlsxWorksheetCommentPatch? patch)
+        {
+            patch = null;
+            if (original.EqualsModel(current))
+                return true;
+
+            if (original.Comments.Count != current.Comments.Count)
+                return false;
+
+            var changes = new List<XlsxCommentPatchChange>();
+            var currentSource = new Dictionary<CellAddress, XlsxSourceComment>(originalSource);
+            string? commentPartPath = null;
+            foreach (var (address, currentComment) in current.Comments)
+            {
+                if (!original.Comments.TryGetValue(address, out var originalComment))
+                    return false;
+
+                if (string.Equals(originalComment, currentComment, StringComparison.Ordinal))
+                    continue;
+
+                if (string.IsNullOrEmpty(currentComment) ||
+                    !originalSource.TryGetValue(address, out var source) ||
+                    !string.Equals(source.Text, originalComment, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                if (commentPartPath is null)
+                    commentPartPath = source.CommentPartPath;
+                else if (!string.Equals(commentPartPath, source.CommentPartPath, StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                changes.Add(new XlsxCommentPatchChange(source.Reference, currentComment));
+                currentSource[address] = source with { Text = currentComment };
+            }
+
+            if (changes.Count == 0)
+                return true;
+
+            patch = new XlsxWorksheetCommentPatch(
+                sheetId,
+                worksheetPath,
+                original,
+                current,
+                currentSource,
+                commentPartPath!,
+                changes);
+            return true;
+        }
+    }
+
+    private sealed record XlsxSourceComment(
+        CellAddress Address,
+        string CommentPartPath,
+        string Reference,
+        string Text);
+
+    private sealed record XlsxCommentPatchChange(
+        string Reference,
+        string NewText);
+
     private sealed record XlsxWorksheetCellPatchBaseline(
         SheetId SheetId,
         string SheetName,
@@ -2679,6 +3213,8 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<GridRange> MergedRegions,
         XlsxWorksheetHyperlinkBaseline Hyperlinks,
         IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> SourceHyperlinks,
+        XlsxWorksheetCommentBaseline Comments,
+        IReadOnlyDictionary<CellAddress, XlsxSourceComment> SourceComments,
         IReadOnlyDictionary<(uint Row, uint Col), XlsxPatchCell> Cells);
 
     private sealed record XlsxPatchCell(

@@ -113,12 +113,16 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
     private static byte[] CreateGeneratedStyleHeavyXlsxPackage(
         bool formulaMarker = false,
-        bool internalHyperlinkMarker = false)
+        bool internalHyperlinkMarker = false,
+        bool legacyCommentMarker = false)
     {
         using var stream = new MemoryStream(capacity: 8 * 1024 * 1024);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
-            WriteTextEntry(archive, "[Content_Types].xml", WriteGeneratedStyleHeavyContentTypes);
+            WriteTextEntry(
+                archive,
+                "[Content_Types].xml",
+                writer => WriteGeneratedStyleHeavyContentTypes(writer, legacyCommentMarker));
             WriteTextEntry(archive, "_rels/.rels", WriteGeneratedStyleHeavyRootRelationships);
             WriteTextEntry(archive, "xl/workbook.xml", WriteGeneratedStyleHeavyWorkbook);
             WriteTextEntry(archive, "xl/_rels/workbook.xml.rels", WriteGeneratedStyleHeavyWorkbookRelationships);
@@ -136,7 +140,15 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                         writer,
                         sheetIndex,
                         formulaMarker,
-                        internalHyperlinkMarker));
+                        internalHyperlinkMarker,
+                        legacyCommentMarker));
+            }
+
+            if (legacyCommentMarker)
+            {
+                WriteTextEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", WriteGeneratedStyleHeavyWorksheetRelationships);
+                WriteTextEntry(archive, "xl/comments1.xml", WriteGeneratedStyleHeavyComments);
+                WriteTextEntry(archive, "xl/drawings/vmlDrawing1.vml", WriteGeneratedStyleHeavyVmlDrawing);
             }
         }
 
@@ -150,7 +162,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         write(writer);
     }
 
-    private static void WriteGeneratedStyleHeavyContentTypes(TextWriter writer)
+    private static void WriteGeneratedStyleHeavyContentTypes(TextWriter writer, bool legacyCommentMarker)
     {
         writer.Write(
             """
@@ -158,9 +170,28 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
               <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
               <Default Extension="xml" ContentType="application/xml"/>
+            """);
+        if (legacyCommentMarker)
+        {
+            writer.Write(
+                """
+                  <Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>
+                """);
+        }
+
+        writer.Write(
+            """
               <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
               <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
             """);
+        if (legacyCommentMarker)
+        {
+            writer.Write(
+                """
+                  <Override PartName="/xl/comments1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>
+                """);
+        }
+
         for (var sheetIndex = 1; sheetIndex <= GeneratedStyleHeavySheetCount; sheetIndex++)
         {
             writer.Write($"""
@@ -265,13 +296,14 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         TextWriter writer,
         int sheetIndex,
         bool formulaMarker,
-        bool internalHyperlinkMarker)
+        bool internalHyperlinkMarker,
+        bool legacyCommentMarker)
     {
         var lastColumn = GeneratedStyleHeavyStyleOnlyStartColumn + GeneratedStyleHeavyStyleOnlyColumnsPerSheet - 1;
         var lastReference = $"{CellAddress.NumberToColumnName((uint)lastColumn)}{GeneratedStyleHeavyRowsPerSheet}";
         writer.Write($"""
             <?xml version="1.0" encoding="UTF-8"?>
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
               <dimension ref="A1:{lastReference}"/>
               <sheetViews><sheetView workbookViewId="0"/></sheetViews>
               <sheetFormatPr defaultRowHeight="15"/>
@@ -319,11 +351,63 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                 """);
         }
 
+        if (legacyCommentMarker && sheetIndex == 1)
+        {
+            writer.Write(
+                """
+                  <legacyDrawing r:id="rId2"/>
+                """);
+        }
+
         writer.Write(
             """
             </worksheet>
             """);
     }
+
+    private static void WriteGeneratedStyleHeavyWorksheetRelationships(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="../comments1.xml"/>
+              <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" Target="../drawings/vmlDrawing1.vml"/>
+            </Relationships>
+            """);
+
+    private static void WriteGeneratedStyleHeavyComments(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <authors><author>FreeX Benchmark</author></authors>
+              <commentList>
+                <comment ref="A1" authorId="0"><text><r><t>Comment 0</t></r></text></comment>
+              </commentList>
+            </comments>
+            """);
+
+    private static void WriteGeneratedStyleHeavyVmlDrawing(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xml xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+              <v:shape id="_x0000_s1025" type="#_x0000_t202" style="position:absolute;margin-left:80pt;margin-top:6pt;width:108pt;height:59.25pt;z-index:1;visibility:hidden" fillcolor="#ffffe1" o:insetmode="auto">
+                <v:fill color2="#ffffe1"/>
+                <v:shadow color="black" obscured="t"/>
+                <v:path o:connecttype="none"/>
+                <v:textbox style="mso-direction-alt:auto"><div style="text-align:left"/></v:textbox>
+                <x:ClientData ObjectType="Note">
+                  <x:MoveWithCells/>
+                  <x:SizeWithCells/>
+                  <x:Anchor>1, 15, 0, 2, 3, 15, 4, 3</x:Anchor>
+                  <x:AutoFill>False</x:AutoFill>
+                  <x:Row>0</x:Row>
+                  <x:Column>0</x:Column>
+                </x:ClientData>
+              </v:shape>
+            </xml>
+            """);
 
     private static void AssertIgnoredErrorAndStyleOnlyMetadata(Workbook workbook)
     {
@@ -398,6 +482,13 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             HyperlinkTargetKind.PlaceInThisDocument,
             $"Jump {iteration}",
             target);
+    }
+
+    private static void ApplyGeneratedStyleHeavyLegacyCommentMutation(Workbook workbook, int iteration)
+    {
+        var sheet = workbook.Sheets[0];
+        sheet.Comments[new CellAddress(sheet.Id, 1, 1)] =
+            string.Create(CultureInfo.InvariantCulture, $"Comment {iteration + 1}");
     }
 
     private static void ReplaceZipEntryXml(ZipArchive archive, string entryName, XDocument document)
