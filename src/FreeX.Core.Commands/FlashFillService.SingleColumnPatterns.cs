@@ -90,6 +90,7 @@ public static partial class FlashFillService
     private static readonly char[] FinalDelimitedTokenDelimiters = [',', ';', ':', '|', '-', '_', '/', '\\'];
     private static readonly char[] DateComponentSeparators = ['/', '-', '.'];
     private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "-", "/", "|"];
+    private static readonly string[] PhoneExtensionMarkers = ["extension", "ext", "x"];
     private static readonly UsAddressComponentKind[] UsAddressComponentKinds =
     [
         UsAddressComponentKind.Street,
@@ -1024,6 +1025,10 @@ public static partial class FlashFillService
 
     private static Func<string, string?>? TryPhoneNumberNormalization(IReadOnlyList<(string Source, string Expected)> examples)
     {
+        var extensionPattern = TryPhoneExtensionExtraction(examples);
+        if (extensionPattern is not null)
+            return extensionPattern;
+
         string? mask = null;
         int? digitCount = null;
         var sawFormattedSource = false;
@@ -1067,6 +1072,145 @@ public static partial class FlashFillService
 
             return ApplyDigitMask(digits[^digitCount.Value..], mask);
         };
+    }
+
+    private static Func<string, string?>? TryPhoneExtensionExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (source, expected) in examples)
+        {
+            if (expected.Length == 0 ||
+                !expected.All(char.IsDigit) ||
+                !TryExtractPhoneExtension(source, out var extension) ||
+                extension != expected)
+            {
+                return null;
+            }
+        }
+
+        return source => TryExtractPhoneExtension(source, out var extension) ? extension : null;
+    }
+
+    private static bool TryExtractPhoneExtension(string source, out string extension)
+    {
+        extension = string.Empty;
+        for (var markerStart = 0; markerStart < source.Length; markerStart++)
+        {
+            if (!TryMatchPhoneExtensionMarker(source, markerStart, out var markerEnd) ||
+                !IsPhoneLikeBeforeExtensionMarker(source, markerStart))
+            {
+                continue;
+            }
+
+            var digitStart = markerEnd;
+            while (digitStart < source.Length && char.IsWhiteSpace(source[digitStart]))
+                digitStart++;
+
+            if (digitStart >= source.Length || !char.IsDigit(source[digitStart]))
+                continue;
+
+            var digitEnd = digitStart + 1;
+            while (digitEnd < source.Length && char.IsDigit(source[digitEnd]))
+                digitEnd++;
+
+            if (!source.AsSpan(digitEnd).IsWhiteSpace())
+                continue;
+
+            extension = source[digitStart..digitEnd];
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryMatchPhoneExtensionMarker(string source, int markerStart, out int markerEnd)
+    {
+        markerEnd = 0;
+        if (!HasPhoneExtensionMarkerBoundaryBefore(source, markerStart))
+            return false;
+
+        foreach (var marker in PhoneExtensionMarkers)
+        {
+            if (!source.AsSpan(markerStart).StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var candidateEnd = markerStart + marker.Length;
+            if (marker == "x")
+            {
+                if (candidateEnd < source.Length && char.IsLetter(source[candidateEnd]))
+                    return false;
+
+                markerEnd = candidateEnd;
+                return true;
+            }
+
+            if (candidateEnd < source.Length && char.IsLetter(source[candidateEnd]))
+                return false;
+
+            var consumedPeriod = false;
+            if (marker == "ext" && candidateEnd < source.Length && source[candidateEnd] == '.')
+            {
+                candidateEnd++;
+                consumedPeriod = true;
+            }
+
+            if (!HasPhoneExtensionMarkerSeparatorAfter(source, candidateEnd, consumedPeriod))
+                return false;
+
+            markerEnd = candidateEnd;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasPhoneExtensionMarkerBoundaryBefore(string source, int markerStart)
+    {
+        if (markerStart == 0)
+            return true;
+
+        var previous = source[markerStart - 1];
+        return !char.IsLetter(previous);
+    }
+
+    private static bool HasPhoneExtensionMarkerSeparatorAfter(string source, int markerEnd, bool allowImmediateDigit)
+    {
+        if (markerEnd >= source.Length)
+            return false;
+
+        return char.IsWhiteSpace(source[markerEnd]) ||
+               (allowImmediateDigit && char.IsDigit(source[markerEnd]));
+    }
+
+    private static bool IsPhoneLikeBeforeExtensionMarker(string source, int markerStart)
+    {
+        var digitCount = 0;
+        var sawPhoneSeparator = false;
+        for (var i = 0; i < markerStart; i++)
+        {
+            var current = source[i];
+            if (char.IsDigit(current))
+            {
+                digitCount++;
+                continue;
+            }
+
+            if (char.IsWhiteSpace(current))
+            {
+                sawPhoneSeparator = true;
+                continue;
+            }
+
+            if (current is '+' or '(' or ')' or '-' or '.')
+            {
+                sawPhoneSeparator = true;
+                continue;
+            }
+
+            return false;
+        }
+
+        return digitCount is >= 7 and <= 15 &&
+               (sawPhoneSeparator || digitCount is 7 or 10 or 11);
     }
 
     private static bool TryDelimitedPartReorder(
