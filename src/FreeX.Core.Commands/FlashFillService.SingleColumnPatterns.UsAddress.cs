@@ -2,6 +2,60 @@ namespace FreeX.Core.Commands;
 
 public static partial class FlashFillService
 {
+    private static readonly Dictionary<string, string> UsStateNameAbbreviations = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Alabama"] = "AL",
+        ["Alaska"] = "AK",
+        ["Arizona"] = "AZ",
+        ["Arkansas"] = "AR",
+        ["California"] = "CA",
+        ["Colorado"] = "CO",
+        ["Connecticut"] = "CT",
+        ["Delaware"] = "DE",
+        ["Florida"] = "FL",
+        ["Georgia"] = "GA",
+        ["Hawaii"] = "HI",
+        ["Idaho"] = "ID",
+        ["Illinois"] = "IL",
+        ["Indiana"] = "IN",
+        ["Iowa"] = "IA",
+        ["Kansas"] = "KS",
+        ["Kentucky"] = "KY",
+        ["Louisiana"] = "LA",
+        ["Maine"] = "ME",
+        ["Maryland"] = "MD",
+        ["Massachusetts"] = "MA",
+        ["Michigan"] = "MI",
+        ["Minnesota"] = "MN",
+        ["Mississippi"] = "MS",
+        ["Missouri"] = "MO",
+        ["Montana"] = "MT",
+        ["Nebraska"] = "NE",
+        ["Nevada"] = "NV",
+        ["New Hampshire"] = "NH",
+        ["New Jersey"] = "NJ",
+        ["New Mexico"] = "NM",
+        ["New York"] = "NY",
+        ["North Carolina"] = "NC",
+        ["North Dakota"] = "ND",
+        ["Ohio"] = "OH",
+        ["Oklahoma"] = "OK",
+        ["Oregon"] = "OR",
+        ["Pennsylvania"] = "PA",
+        ["Rhode Island"] = "RI",
+        ["South Carolina"] = "SC",
+        ["South Dakota"] = "SD",
+        ["Tennessee"] = "TN",
+        ["Texas"] = "TX",
+        ["Utah"] = "UT",
+        ["Vermont"] = "VT",
+        ["Virginia"] = "VA",
+        ["Washington"] = "WA",
+        ["West Virginia"] = "WV",
+        ["Wisconsin"] = "WI",
+        ["Wyoming"] = "WY"
+    };
+
     private static Func<string, string?>? TryUsAddressComponentExtraction(
         IReadOnlyList<(string Source, string Expected)> examples)
     {
@@ -44,15 +98,33 @@ public static partial class FlashFillService
             return false;
         }
 
-        var stateZipTokens = segments[2].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (stateZipTokens.Length != 2 ||
-            !IsUsStateAbbreviation(stateZipTokens[0]) ||
-            !IsUsZipCode(stateZipTokens[1]))
+        if (!TryParseUsStateZipSegment(segments[2], out var state, out var zip))
         {
             return false;
         }
 
-        parts = new UsAddressParts(segments[0], segments[1], stateZipTokens[0], stateZipTokens[1]);
+        parts = new UsAddressParts(segments[0], segments[1], state, zip);
+        return true;
+    }
+
+    private static bool TryParseUsStateZipSegment(string segment, out string state, out string zip)
+    {
+        state = string.Empty;
+        zip = string.Empty;
+
+        var tokens = segment.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length < 2)
+            return false;
+
+        var zipCandidate = tokens[^1];
+        if (!IsUsZipCode(zipCandidate))
+            return false;
+
+        var stateCandidate = string.Join(' ', tokens[..^1]);
+        if (!TryNormalizeUsState(stateCandidate, out state))
+            return false;
+
+        zip = zipCandidate;
         return true;
     }
 
@@ -239,6 +311,23 @@ public static partial class FlashFillService
 
     private static bool IsUsStateAbbreviation(string value) =>
         value.Length == 2 && value.All(char.IsLetter);
+
+    private static bool TryNormalizeUsState(string value, out string state)
+    {
+        state = string.Empty;
+
+        if (IsUsStateAbbreviation(value))
+        {
+            state = value;
+            return true;
+        }
+
+        if (!UsStateNameAbbreviations.TryGetValue(value, out var abbreviation))
+            return false;
+
+        state = abbreviation;
+        return true;
+    }
 
     private static bool IsUsZipCode(string value) =>
         IsFiveDigitZipCode(value) ||
