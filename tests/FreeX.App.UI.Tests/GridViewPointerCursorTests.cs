@@ -8,7 +8,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void MouseMoveUsesObjectDragCursorOverSelectedObject()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var hoverCursorBlock = source[
             source.IndexOf("var selectedObjectDragKind = ObjectDragKind.None;", StringComparison.Ordinal)..
@@ -25,7 +25,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void MouseMoveUsesMoveCursorOverUnselectedObjectBody()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var hoverCursorBlock = source[
             source.IndexOf("var selectedObjectDragKind = ObjectDragKind.None;", StringComparison.Ordinal)..
@@ -42,7 +42,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void MouseMoveUsesPictureCropCursorBeforeObjectResizeCursor()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var hoverCursorBlock = source[
             source.IndexOf("var selectedPictureCropHandle = HitTestPictureCropHandle(pos);", StringComparison.Ordinal)..
@@ -57,9 +57,9 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void RightClickObjectRoutesContextMenuToObjectAnchor()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
-        var objectDragSource = File.ReadAllText(FindWorkspaceFile(
+        var objectDragSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
         var rightClickBlock = inputSource[
             inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..];
@@ -77,7 +77,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void LeftClickObjectInvalidatesSelectionBeforeCapturingDrag()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var objectClickBlock = inputSource[
             inputSource.IndexOf("// Check if clicking on a new drawing object", StringComparison.Ordinal)..
@@ -93,7 +93,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void SelectedObjectDragStartInvalidatesPreviewBeforeCapturingMouse()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var selectedObjectDragBlock = inputSource[
             inputSource.IndexOf("// Check if clicking on an already-selected object's handles", StringComparison.Ordinal)..
@@ -109,7 +109,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void SelectedObjectDragStartRefreshesEventPayloadState()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var selectedObjectDragBlock = inputSource[
             inputSource.IndexOf("// Check if clicking on an already-selected object's handles", StringComparison.Ordinal)..
@@ -124,7 +124,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void SelectedPictureCropDragStartsBeforeObjectDragHandles()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseDownBlock = inputSource[
             inputSource.IndexOf("if (TryGetSelectedImagePicture", StringComparison.Ordinal)..
@@ -139,7 +139,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void LeftMouseDownIgnoresReentrantClicksWhileCapturedDragIsActive()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseDownBlock = source[
             source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)..
@@ -158,7 +158,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void CapturedGridDragPredicateCoversAllMouseDragStates()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var helperBlock = source[
             source.IndexOf("private bool HasActiveCapturedGridDrag", StringComparison.Ordinal)..
@@ -176,7 +176,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void MouseMoveCancelsCapturedGridDragWhenLeftButtonIsReleased()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseMoveBlock = source[
             source.IndexOf("protected override void OnMouseMove", StringComparison.Ordinal)..
@@ -193,7 +193,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void SplitPaneScrollbarDragPreservesOrientationCursor()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var dragBlock = source[
             source.IndexOf("if (_splitPaneScrollbarDragging)", StringComparison.Ordinal)..
@@ -208,7 +208,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void SplitPaneScrollbarTrackClickClearsDragOnlyState()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseDownBlock = source[
             source.IndexOf("if (HitTestSplitPaneScrollbar(chrome, pos) is { } scrollbarHit)", StringComparison.Ordinal)..
@@ -227,7 +227,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void SplitPaneScrollbarMouseUpPreservesThumbDragOffset()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var mouseUpBlock = source[
@@ -243,7 +243,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void ObjectMoveMouseUpSnapsAnchorFromPreviewTopLeft()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var objectMoveBlock = source[
@@ -257,7 +257,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void ObjectRotationDragUpdatesPreviewAndCommitsPreviewAngle()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var rotationMouseMoveBlock = source[
             source.IndexOf("if (_objectDragKind == ObjectDragKind.Rotate)", StringComparison.Ordinal)..
@@ -284,7 +284,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void ObjectDragMouseUpClearsCursorAndCaptureAfterCommit()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var objectMouseUpBlock = source[
@@ -303,7 +303,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void PictureCropMouseUpRaisesCropEventAfterClearingDragState()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var pictureCropBlock = source[
@@ -320,7 +320,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void SplitPaneDividerMouseDownCapturesDragBeforeAutofillAndResize()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseDownBlock = source[
             source.IndexOf("if (Viewport is not null && HitTestSplitDividerHandle", StringComparison.Ordinal)..
@@ -337,7 +337,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void SplitPaneDividerHoverCursorTakesPriorityBeforeResizeHitTesting()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var hoverCursorBlock = source[
             source.IndexOf("var splitHandle = Viewport is null", StringComparison.Ordinal)..
@@ -355,7 +355,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void HoverCursorStopsAfterResizeOrSplitPaneScrollbarHit()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var hoverCursorBlock = source[
             source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
@@ -374,7 +374,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void SplitPaneDividerMouseUpRaisesMoveEventAndClearsCaptureState()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var mouseUpBlock = source[
@@ -393,7 +393,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void PageMarginGuideMouseDownCapturesDragBeforeSplitPaneAndResize()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var marginGuideStart = source.IndexOf("if (HitTestPageMarginGuide(pos) is { } marginEdge)", StringComparison.Ordinal);
         var mouseDownBlock = source[
@@ -411,7 +411,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void PageMarginGuideMouseMoveUpdatesPreviewMarginsAndKeepsResizeCursor()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseMoveBlock = source[
             source.IndexOf("if (_marginDragEdge.HasValue)", StringComparison.Ordinal)..
@@ -429,7 +429,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void PageMarginGuideMouseUpCommitsMarginsAndClearsCaptureState()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var mouseUpBlock = source[
@@ -449,7 +449,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void AutofillDragMouseMoveKeepsCrossCursorAndHandlesEvent()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var dragBlock = source[
             source.IndexOf("if (_autofillDragging && Viewport != null && _autofillSourceRange.HasValue)", StringComparison.Ordinal)..
@@ -462,7 +462,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void AutofillDragMouseMoveKeepsCaptureWhenViewportDisappears()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var resizeStart = source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal);
         var fallbackStart = source.LastIndexOf("if (_autofillDragging)", resizeStart, StringComparison.Ordinal);
@@ -476,7 +476,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void ResizeDragMouseMoveKeepsResizeCursorAndHandlesEvent()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var resizeBlock = source[
             source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
@@ -491,7 +491,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void ResizeDragMouseMoveKeepsCaptureWhenMetricDisappears()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var resizeBlock = source[
             source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
@@ -507,7 +507,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void ResizeDragMouseMoveKeepsCaptureWhenViewportDisappears()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var resizeBlock = source[
             source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
@@ -527,7 +527,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void AutofillMouseUpInvalidatesAfterClearingPreview()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseUp = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var releaseStart = source.IndexOf("if (_autofillDragging)", mouseUp, StringComparison.Ordinal);
@@ -545,7 +545,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void MouseLeavePreservesCursorDuringCapturedDrags()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseLeave = source[
             source.IndexOf("protected override void OnMouseLeave", StringComparison.Ordinal)..];
@@ -557,9 +557,9 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void LostMouseCaptureCancelsActiveResize()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
-        var eventsSource = File.ReadAllText(FindWorkspaceFile(
+        var eventsSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Events.cs"));
         var cancellationHelper = source[
             source.IndexOf("private void CancelActiveCapturedGridDrag", StringComparison.Ordinal)..
@@ -579,7 +579,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void ResizeMouseUpAndLostCaptureClearPreviewState()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         var resizeMouseUp = source[
@@ -608,7 +608,7 @@ public sealed class GridViewPointerCursorTests
     [Fact]
     public void LostMouseCaptureClearsCapturedPointerDragStates()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var cancellationHelper = source[
             source.IndexOf("private void CancelActiveCapturedGridDrag", StringComparison.Ordinal)..
@@ -635,6 +635,4 @@ public sealed class GridViewPointerCursorTests
         cancellationHelper.Should().Contain("Cursor = null;");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }

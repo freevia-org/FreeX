@@ -158,7 +158,7 @@ public sealed class SparklineLayoutPlannerTests
     [Fact]
     public void SparklineLayoutPlanner_AvoidsLinqAndIntermediatePointArrays()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "SparklineLayoutPlanner.cs"));
 
         source.Should().Contain("for (var i = firstIndex + 1; i < values.Count; i++)");
@@ -174,6 +174,4 @@ public sealed class SparklineLayoutPlannerTests
         source.Should().NotContain(".DefaultIfEmpty(");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }
