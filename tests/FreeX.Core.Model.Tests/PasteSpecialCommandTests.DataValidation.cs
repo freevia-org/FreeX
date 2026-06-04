@@ -11,7 +11,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
         var existingDestinationRule = new DataValidation
         {
@@ -60,7 +60,7 @@ public sealed partial class PasteSpecialCommandTests
         var wb = new Workbook("test");
         var sourceSheet = wb.AddSheet("Source");
         var targetSheet = wb.AddSheet("Target");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceRange = new GridRange(new CellAddress(sourceSheet.Id, 1, 1), new CellAddress(sourceSheet.Id, 1, 2));
         sourceSheet.DataValidations.Add(new DataValidation
         {
@@ -91,7 +91,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
         var existingDestinationRule = new DataValidation
         {
@@ -127,7 +127,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         sheet.DataValidations.Add(new DataValidation
         {
@@ -153,7 +153,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 4, 1);
         sheet.DataValidations.Add(new DataValidation
         {
@@ -182,7 +182,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 3, 1));
         sheet.DataValidations.Add(new DataValidation
         {
@@ -216,7 +216,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
         sheet.DataValidations.Add(new DataValidation
         {
@@ -246,7 +246,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 3, 1);
         sheet.DataValidations.Add(new DataValidation
         {

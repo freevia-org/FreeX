@@ -11,7 +11,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceStart = new CellAddress(sheet.Id, 1, 1);
         var sourceEnd = new CellAddress(sheet.Id, 1, 2);
         var destinationStart = new CellAddress(sheet.Id, 3, 3);
@@ -60,7 +60,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 2, 1);
         var sourceStyle = wb.RegisterStyle(new CellStyle { Bold = true });
@@ -93,7 +93,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceStart = new CellAddress(sheet.Id, 1, 1);
         var sourceEnd = new CellAddress(sheet.Id, 1, 2);
         var blankSource = Cell.FromValue(BlankValue.Instance);
@@ -126,7 +126,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 2, 1);
         var sourceStyle = wb.RegisterStyle(new CellStyle
@@ -175,7 +175,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 2, 1);
         var sourceStyle = wb.RegisterStyle(new CellStyle
@@ -225,7 +225,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 2, 1);
         var sourceStyle = wb.RegisterStyle(new CellStyle
@@ -276,7 +276,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 2, 1);
         var sourceStyle = wb.RegisterStyle(new CellStyle
@@ -327,7 +327,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 3, 2);
         var sourceStyle = wb.RegisterStyle(new CellStyle
@@ -373,7 +373,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceStart = new CellAddress(sheet.Id, 1, 1);
         var sourceEnd = new CellAddress(sheet.Id, 2, 1);
         var destinationStart = new CellAddress(sheet.Id, 4, 3);
