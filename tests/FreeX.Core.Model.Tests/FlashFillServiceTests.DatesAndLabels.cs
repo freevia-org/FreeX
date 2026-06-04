@@ -47,11 +47,61 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_DateNormalization_FormatsMonthNameSourcesWithLearnedNumericPattern()
+    {
+        var result = FlashFillService.Fill(
+            [("Jan 5, 2024", "01/05/2024"), ("February 9 2023", "02/09/2023")],
+            ["5 Mar 2022", "2026 apr 7", "SEPT 30 2021"]);
+
+        result.Should().BeEquivalentTo(["03/05/2022", "04/07/2026", "09/30/2021"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateNormalization_FormatsOrdinalMonthNameSourcesWithLearnedNumericPattern()
+    {
+        var result = FlashFillService.Fill(
+            [("Jan 5th, 2024", "01/05/2024"), ("February 21st 2023", "02/21/2023")],
+            ["5th Mar 2022", "April 22nd, 2021", "May 11th 2020", "December 31st 2020"]);
+
+        result.Should().BeEquivalentTo(["03/05/2022", "04/22/2021", "05/11/2020", "12/31/2020"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateNormalization_FormatsDayFirstOrdinalMonthNameExamples()
+    {
+        var result = FlashFillService.Fill(
+            [("5th Mar 2022", "2022-03-05"), ("9th February 2023", "2023-02-09")],
+            ["Jan 1st, 2024", "2026 apr 2nd"]);
+
+        result.Should().BeEquivalentTo(["2024-01-01", "2026-04-02"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_DateNormalization_ReturnsNullWhenRemainingIsInvalidDate()
     {
         var result = FlashFillService.Fill(
             [("1/5/2024", "2024-01-05"), ("2/9/2023", "2023-02-09")],
             ["2/30/2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_DateNormalization_ReturnsNullWhenMonthNameRemainingIsInvalidDate()
+    {
+        var result = FlashFillService.Fill(
+            [("Jan 5, 2024", "2024-01-05"), ("Feb 9, 2023", "2023-02-09")],
+            ["February 30 2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_DateNormalization_ReturnsNullWhenOrdinalMonthNameRemainingIsInvalidDate()
+    {
+        var result = FlashFillService.Fill(
+            [("Jan 5th, 2024", "2024-01-05"), ("Feb 9th, 2023", "2023-02-09")],
+            ["February 30th, 2022"]);
 
         result.Should().BeNull();
     }
@@ -67,6 +117,32 @@ public sealed partial class FlashFillServiceTests
             ["Paid on 2022-11-3", "Renewal 2026.12.31 confirmed"]);
 
         result.Should().BeEquivalentTo(["11/03/2022", "12/31/2026"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateExtraction_NormalizesMonthNameDateInsideLabels()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Invoice INV-1001 due Jan 5, 2024", "2024-01-05"),
+                ("Ship date: 9 February 2023", "2023-02-09")
+            ],
+            ["Paid on 2022 Mar 7.", "Renewal SEPT 30 2021 confirmed"]);
+
+        result.Should().BeEquivalentTo(["2022-03-07", "2021-09-30"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateExtraction_NormalizesOrdinalMonthNameDateInsideLabels()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Due Jan 5th, 2024", "2024-01-05"),
+                ("Ship 9th February 2023", "2023-02-09")
+            ],
+            ["Paid on 2022 Mar 7th.", "Renewal February 21st 2021 confirmed"]);
+
+        result.Should().BeEquivalentTo(["2022-03-07", "2021-02-21"], o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -91,6 +167,58 @@ public sealed partial class FlashFillServiceTests
                 ("Start: 2023-02-09", "2023-02-09")
             ],
             ["Window: 2022-11-03 to 2022-11-04"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateExtraction_ReturnsNullWhenRemainingHasMultipleMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Start: Jan 5, 2024", "2024-01-05"),
+                ("Start: Feb 9, 2023", "2023-02-09")
+            ],
+            ["Window: Mar 3, 2022 to Apr 4, 2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateExtraction_ReturnsNullWhenRemainingHasMultipleOrdinalMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Start: Jan 5th, 2024", "2024-01-05"),
+                ("Start: Feb 9th, 2023", "2023-02-09")
+            ],
+            ["Window: Mar 3rd, 2022 to Apr 4th, 2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateExtraction_ReturnsNullWhenRemainingHasInvalidMonthNameDate()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Start: Jan 5, 2024", "2024-01-05"),
+                ("Start: Feb 9, 2023", "2023-02-09")
+            ],
+            ["Start: February 30, 2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateExtraction_ReturnsNullWhenRemainingHasInvalidOrdinalMonthNameDate()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Start: Jan 5th, 2024", "2024-01-05"),
+                ("Start: Feb 9th, 2023", "2023-02-09")
+            ],
+            ["Start: February 30th, 2022"]);
 
         result.Should().BeNull();
     }

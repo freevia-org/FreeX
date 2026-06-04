@@ -97,7 +97,7 @@ public static partial class FlashFillService
         foreach (var (source, expected) in examples)
         {
             if (!TryFindEmbeddedDateLikeValue(source, out var sourceDate, out _) ||
-                !TryParseDateLikeValue(expected, out var expectedDate, out var currentPattern) ||
+                !TryParseDateOutputValue(expected, out var expectedDate, out var currentPattern) ||
                 sourceDate != expectedDate)
             {
                 return null;
@@ -128,7 +128,7 @@ public static partial class FlashFillService
         foreach (var (source, expected) in examples)
         {
             if (!TryParseDateLikeValue(source, out var sourceDate, out _) ||
-                !TryParseDateLikeValue(expected, out var expectedDate, out var currentPattern) ||
+                !TryParseDateOutputValue(expected, out var expectedDate, out var currentPattern) ||
                 sourceDate != expectedDate)
             {
                 return null;
@@ -152,6 +152,17 @@ public static partial class FlashFillService
     }
 
     private static bool TryParseDateLikeValue(
+        string source,
+        out DateParts date,
+        out DateOutputPattern pattern)
+    {
+        if (TryParseDateOutputValue(source, out date, out pattern))
+            return true;
+
+        return TryParseMonthNameDateLikeValue(source, out date, out pattern);
+    }
+
+    private static bool TryParseDateOutputValue(
         string source,
         out DateParts date,
         out DateOutputPattern pattern)
@@ -188,6 +199,54 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static bool TryParseMonthNameDateLikeValue(
+        string source,
+        out DateParts date,
+        out DateOutputPattern pattern)
+    {
+        date = default;
+        pattern = default;
+
+        var parts = source.Split((char[]?)null, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 3)
+            return false;
+
+        if (TryParseEnglishMonthNamePart(parts[0], out var month) &&
+            TryParseDayPart(parts[1], allowTrailingComma: true, out var day) &&
+            TryParseYearPart(parts[2], out var year) &&
+            TryCreateDateParts(year, month, day, out date))
+        {
+            pattern = CreateMonthNameDatePattern(DatePartKind.Month, DatePartKind.Day, DatePartKind.Year);
+            return true;
+        }
+
+        if (TryParseDayPart(parts[0], allowTrailingComma: false, out day) &&
+            TryParseEnglishMonthNamePart(parts[1], out month) &&
+            TryParseYearPart(parts[2], out year) &&
+            TryCreateDateParts(year, month, day, out date))
+        {
+            pattern = CreateMonthNameDatePattern(DatePartKind.Day, DatePartKind.Month, DatePartKind.Year);
+            return true;
+        }
+
+        if (TryParseYearPart(parts[0], out year) &&
+            TryParseEnglishMonthNamePart(parts[1], out month) &&
+            TryParseDayPart(parts[2], allowTrailingComma: false, out day) &&
+            TryCreateDateParts(year, month, day, out date))
+        {
+            pattern = CreateMonthNameDatePattern(DatePartKind.Year, DatePartKind.Month, DatePartKind.Day);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static DateOutputPattern CreateMonthNameDatePattern(
+        DatePartKind first,
+        DatePartKind second,
+        DatePartKind third) =>
+        new(first, second, third, ' ', 4, 2, 2);
+
     private static bool TrySplitDateLikeText(string source, out string[] parts, out char separator)
     {
         foreach (var candidate in DateComponentSeparators)
@@ -218,24 +277,9 @@ public static partial class FlashFillService
         var found = false;
         for (var start = 0; start < source.Length; start++)
         {
-            if (!char.IsDigit(source[start]) ||
-                (start > 0 && char.IsDigit(source[start - 1])))
+            if (TryFindEmbeddedNumericDateLikeValueAt(source, start, out var currentDate, out var currentPattern) ||
+                TryFindEmbeddedMonthNameDateLikeValueAt(source, start, out currentDate, out currentPattern))
             {
-                continue;
-            }
-
-            foreach (var separator in DateComponentSeparators)
-            {
-                if (!TryReadDateTokenAt(source, start, separator, out var endExclusive) ||
-                    !HasDateTokenBoundary(source, start, endExclusive, separator))
-                {
-                    continue;
-                }
-
-                var token = source[start..endExclusive];
-                if (!TryParseDateLikeValue(token, out var currentDate, out var currentPattern))
-                    continue;
-
                 if (found)
                     return false;
 
@@ -246,6 +290,57 @@ public static partial class FlashFillService
         }
 
         return found;
+    }
+
+    private static bool TryFindEmbeddedNumericDateLikeValueAt(
+        string source,
+        int start,
+        out DateParts date,
+        out DateOutputPattern pattern)
+    {
+        date = default;
+        pattern = default;
+
+        if (!char.IsDigit(source[start]) ||
+            (start > 0 && char.IsDigit(source[start - 1])))
+        {
+            return false;
+        }
+
+        foreach (var separator in DateComponentSeparators)
+        {
+            if (!TryReadDateTokenAt(source, start, separator, out var endExclusive) ||
+                !HasDateTokenBoundary(source, start, endExclusive, separator))
+            {
+                continue;
+            }
+
+            var token = source[start..endExclusive];
+            if (TryParseDateOutputValue(token, out date, out pattern))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryFindEmbeddedMonthNameDateLikeValueAt(
+        string source,
+        int start,
+        out DateParts date,
+        out DateOutputPattern pattern)
+    {
+        date = default;
+        pattern = default;
+
+        if (!char.IsLetterOrDigit(source[start]) ||
+            (start > 0 && char.IsLetterOrDigit(source[start - 1])) ||
+            !TryReadMonthNameDateTokenAt(source, start, out var endExclusive) ||
+            !HasMonthNameDateTokenBoundary(source, start, endExclusive))
+        {
+            return false;
+        }
+
+        return TryParseMonthNameDateLikeValue(source[start..endExclusive], out date, out pattern);
     }
 
     private static bool TryReadDateTokenAt(
@@ -279,6 +374,144 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static bool TryReadMonthNameDateTokenAt(string source, int start, out int endExclusive) =>
+        TryReadMonthDayYearTokenAt(source, start, out endExclusive) ||
+        TryReadDayMonthYearTokenAt(source, start, out endExclusive) ||
+        TryReadYearMonthDayTokenAt(source, start, out endExclusive);
+
+    private static bool TryReadMonthDayYearTokenAt(string source, int start, out int endExclusive)
+    {
+        endExclusive = start;
+        var index = start;
+
+        if (!TryReadMonthNameToken(source, ref index) ||
+            !TryReadRequiredWhitespace(source, ref index) ||
+            !TryReadDigitToken(source, ref index, minLength: 1, maxLength: 2, allowTrailingComma: true, allowOrdinalSuffix: true) ||
+            !TryReadRequiredWhitespace(source, ref index) ||
+            !TryReadDigitToken(source, ref index, minLength: 4, maxLength: 4, allowTrailingComma: false))
+        {
+            return false;
+        }
+
+        endExclusive = index;
+        return true;
+    }
+
+    private static bool TryReadDayMonthYearTokenAt(string source, int start, out int endExclusive)
+    {
+        endExclusive = start;
+        var index = start;
+
+        if (!TryReadDigitToken(source, ref index, minLength: 1, maxLength: 2, allowTrailingComma: false, allowOrdinalSuffix: true) ||
+            !TryReadRequiredWhitespace(source, ref index) ||
+            !TryReadMonthNameToken(source, ref index) ||
+            !TryReadRequiredWhitespace(source, ref index) ||
+            !TryReadDigitToken(source, ref index, minLength: 4, maxLength: 4, allowTrailingComma: false))
+        {
+            return false;
+        }
+
+        endExclusive = index;
+        return true;
+    }
+
+    private static bool TryReadYearMonthDayTokenAt(string source, int start, out int endExclusive)
+    {
+        endExclusive = start;
+        var index = start;
+
+        if (!TryReadDigitToken(source, ref index, minLength: 4, maxLength: 4, allowTrailingComma: false) ||
+            !TryReadRequiredWhitespace(source, ref index) ||
+            !TryReadMonthNameToken(source, ref index) ||
+            !TryReadRequiredWhitespace(source, ref index) ||
+            !TryReadDigitToken(source, ref index, minLength: 1, maxLength: 2, allowTrailingComma: false, allowOrdinalSuffix: true))
+        {
+            return false;
+        }
+
+        endExclusive = index;
+        return true;
+    }
+
+    private static bool TryReadMonthNameToken(string source, ref int index)
+    {
+        var start = index;
+        while (index < source.Length && char.IsLetter(source[index]))
+            index++;
+
+        if (index == start)
+            return false;
+
+        if (index < source.Length && source[index] == '.')
+            index++;
+
+        return true;
+    }
+
+    private static bool TryReadDigitToken(
+        string source,
+        ref int index,
+        int minLength,
+        int maxLength,
+        bool allowTrailingComma,
+        bool allowOrdinalSuffix = false)
+    {
+        var start = index;
+        while (index < source.Length &&
+            index - start < maxLength &&
+            char.IsDigit(source[index]))
+        {
+            index++;
+        }
+
+        var length = index - start;
+        if (length < minLength)
+            return false;
+
+        if (allowOrdinalSuffix &&
+            !TryReadOrdinalDaySuffixIfPresent(source, start, index, ref index))
+        {
+            return false;
+        }
+
+        if (allowTrailingComma && index < source.Length && source[index] == ',')
+            index++;
+
+        return true;
+    }
+
+    private static bool TryReadOrdinalDaySuffixIfPresent(
+        string source,
+        int digitStart,
+        int suffixStart,
+        ref int index)
+    {
+        if (suffixStart + 2 > source.Length ||
+            !char.IsLetter(source[suffixStart]) ||
+            !char.IsLetter(source[suffixStart + 1]))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(source.AsSpan(digitStart, suffixStart - digitStart), NumberStyles.None, CultureInfo.InvariantCulture, out var day) ||
+            !IsValidOrdinalDaySuffix(day, source.Substring(suffixStart, 2)))
+        {
+            return false;
+        }
+
+        index = suffixStart + 2;
+        return true;
+    }
+
+    private static bool TryReadRequiredWhitespace(string source, ref int index)
+    {
+        var start = index;
+        while (index < source.Length && char.IsWhiteSpace(source[index]))
+            index++;
+
+        return index > start;
+    }
+
     private static bool HasDateTokenBoundary(
         string source,
         int start,
@@ -300,6 +533,86 @@ public static partial class FlashFillService
             !char.IsDigit(source[endExclusive + 1]);
     }
 
+    private static bool HasMonthNameDateTokenBoundary(string source, int start, int endExclusive)
+    {
+        if (start > 0 && char.IsLetterOrDigit(source[start - 1]))
+            return false;
+
+        return endExclusive >= source.Length || !char.IsLetterOrDigit(source[endExclusive]);
+    }
+
+    private static bool TryParseEnglishMonthNamePart(string part, out int month)
+    {
+        var normalized = part.EndsWith(".", StringComparison.Ordinal)
+            ? part[..^1].ToLowerInvariant()
+            : part.ToLowerInvariant();
+
+        month = normalized switch
+        {
+            "jan" or "january" => 1,
+            "feb" or "february" => 2,
+            "mar" or "march" => 3,
+            "apr" or "april" => 4,
+            "may" => 5,
+            "jun" or "june" => 6,
+            "jul" or "july" => 7,
+            "aug" or "august" => 8,
+            "sep" or "sept" or "september" => 9,
+            "oct" or "october" => 10,
+            "nov" or "november" => 11,
+            "dec" or "december" => 12,
+            _ => 0
+        };
+
+        return month != 0;
+    }
+
+    private static bool TryParseDayPart(string part, bool allowTrailingComma, out int day)
+    {
+        day = 0;
+        if (allowTrailingComma && part.EndsWith(",", StringComparison.Ordinal))
+            part = part[..^1];
+
+        var digitLength = 0;
+        while (digitLength < part.Length && char.IsDigit(part[digitLength]))
+            digitLength++;
+
+        if (digitLength is < 1 or > 2 ||
+            !int.TryParse(part[..digitLength], NumberStyles.None, CultureInfo.InvariantCulture, out day))
+        {
+            return false;
+        }
+
+        if (digitLength == part.Length)
+            return true;
+
+        return part.Length - digitLength == 2 &&
+            IsValidOrdinalDaySuffix(day, part[digitLength..]);
+    }
+
+    private static bool IsValidOrdinalDaySuffix(int day, string suffix)
+    {
+        var expected = (day % 100) is >= 11 and <= 13
+            ? "th"
+            : (day % 10) switch
+            {
+                1 => "st",
+                2 => "nd",
+                3 => "rd",
+                _ => "th"
+            };
+
+        return string.Equals(suffix, expected, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryParseYearPart(string part, out int year)
+    {
+        year = 0;
+        return part.Length == 4 &&
+        part.All(char.IsDigit) &&
+        int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out year);
+    }
+
     private static bool TryCreateDateParts(string[] parts, DatePartKind[] order, out DateParts date)
     {
         date = default;
@@ -308,8 +621,18 @@ public static partial class FlashFillService
 
         if (!TryGetDatePartValue(parts, order, DatePartKind.Year, out var year) ||
             !TryGetDatePartValue(parts, order, DatePartKind.Month, out var month) ||
-            !TryGetDatePartValue(parts, order, DatePartKind.Day, out var day) ||
-            year is < 1000 or > 9999 ||
+            !TryGetDatePartValue(parts, order, DatePartKind.Day, out var day))
+        {
+            return false;
+        }
+
+        return TryCreateDateParts(year, month, day, out date);
+    }
+
+    private static bool TryCreateDateParts(int year, int month, int day, out DateParts date)
+    {
+        date = default;
+        if (year is < 1000 or > 9999 ||
             month is < 1 or > 12 ||
             day < 1 ||
             day > DateTime.DaysInMonth(year, month))

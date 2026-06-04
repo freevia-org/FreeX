@@ -70,7 +70,7 @@ public sealed class GridViewPageLayoutTests
     [Fact]
     public void PageMarginGuideLayoutPlanner_CalculatesVisibleEdgesWithSingleMetricPasses()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "PageMarginGuideLayoutPlanner.cs"));
         var calculateGuide = source[
             source.IndexOf("public static PageMarginGuideLayout? CalculateGuide", StringComparison.Ordinal)..
@@ -211,6 +211,4 @@ public sealed class GridViewPageLayoutTests
         margins.Left.Should().BeApproximately(0.85, 0.001);
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }

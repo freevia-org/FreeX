@@ -157,7 +157,7 @@ Press **Shift+F3** to open the Insert Function dialog with category search.
 
 Formulas tab -> Trace Precedents / Trace Dependents draws arrows showing cell relationships. Evaluate Formula steps through a formula's calculation order.
 
-Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, formulas stored as text including apostrophe-prefixed formulas, text-number/date warnings including apostrophe-prefixed, currency-symbol including yen/fullwidth yen, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, month-name, and weekday-prefixed numeric or month-name text dates with two-digit years, blank references, omitted aggregate cells, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
+Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, formulas stored as text including apostrophe-prefixed formulas, text-number/date warnings including apostrophe-prefixed, currency-symbol including yen/fullwidth yen plus Indian rupee, won, shekel, baht, ruble, and lira symbols, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, month-name, and weekday-prefixed numeric or month-name text dates with two-digit years, blank references, omitted aggregate cells across aggregate-family formulas including `AVERAGEA`, `MINA`, and `MAXA`, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
 
 ### Calculation
 
@@ -382,6 +382,7 @@ FreeX supports deterministic Flash Fill patterns rather than Excel's full ML-lik
 - Cleaning known title, credential, and organization suffixes such as `Dr. Ada Lovelace Jr.`, comma-attached `Dr. Ada Lovelace,Jr.,Ph.D.`, or `Northwind Traders,LLC`.
 - Building first/last-name email aliases with learned constant domains and `.`, `_`, or `-` separators, including first-initial/last-name, last-name/first-initial, and first/last-initial forms.
 - Applying digit-mask punctuation copied from examples, such as phone-number formatting, extracting US phone area codes/local numbers, and extracting phone extensions from `x`, `ext`, `ext.`, or `extension` markers.
+- Normalizing calendar-valid numeric or English month-name dates, including ordinal day suffixes and month-name dates embedded in labels.
 - Extracting US address components such as street, street number, street name, street without trailing unit/suite, unit/suite suffix, unit/suite identifier, city, state, ZIP, ZIP+4 base ZIP, and the ZIP+4 extension.
 
 If the examples are ambiguous, inconsistent, or outside the supported pattern set, Flash Fill leaves the remaining cells unchanged.
@@ -547,4 +548,4 @@ If a workbook contains features FreeX cannot fully model (VBA, Power Query, embe
 - **Custom Number Formats:** In Format Cells -> Number -> Custom, enter XLSX number-format codes (e.g., `#,##0.00` for two-decimal thousands, `dd/mm/yyyy` for dates).
 - **Freeze Headers:** View -> Freeze Top Row keeps row 1 visible while scrolling.
 - **Multiple Sheets:** Right-click a sheet tab for color, rename, move, copy, hide/unhide, and insert options. Hold Ctrl while clicking tabs to select multiple sheets and edit them together.
-- **Spell Check (F7):** Checks the active sheet's text content, including common office, spreadsheet/business-report, operations/planning, and report-typo misspellings such as `availible`, `statment`, `milstone`, `dependancy`, `feild`, `flitered`, and `timline`.
+- **Spell Check (F7):** Checks the active sheet's text content, including common office, spreadsheet/business-report, operations/planning, calendar/status, report-typo, and risk/action tracking misspellings such as `availible`, `statment`, `milstone`, `dependancy`, `calandar`, `dedline`, `stauts`, `feild`, `flitered`, `timline`, `risck`, `actoin`, `mitgation`, and `escallate`.

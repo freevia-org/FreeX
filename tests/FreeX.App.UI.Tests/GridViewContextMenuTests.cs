@@ -11,9 +11,9 @@ public sealed class GridViewContextMenuTests
     [Fact]
     public void GridViewRightClick_RoutesRowAndColumnHeadersToHeaderContextMenuEvent()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
-        var eventsSource = File.ReadAllText(FindWorkspaceFile(
+        var eventsSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Events.cs"));
 
         eventsSource.Should().Contain("HeaderContextMenuRequested");
@@ -110,7 +110,7 @@ public sealed class GridViewContextMenuTests
     [Fact]
     public void GridViewRightClick_RoutesCellContextMenuThroughSplitAwareViewportHitTesting()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var cellFallbackStart = inputSource.IndexOf("if (HitTestViewportCell(Viewport, default, pos) is { } contextCell)", StringComparison.Ordinal);
         var rightClickBlock = inputSource[
@@ -126,7 +126,7 @@ public sealed class GridViewContextMenuTests
     [Fact]
     public void GridViewRightClick_RoutesDrawingObjectContextMenuBeforeCellFallback()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var rightClickBlock = inputSource[
             inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..
@@ -147,7 +147,7 @@ public sealed class GridViewContextMenuTests
     [Fact]
     public void GridViewRightClick_IgnoresContextMenuWhileCapturedDragIsActive()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var rightClickBlock = inputSource[
             inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..
@@ -169,9 +169,9 @@ public sealed class GridViewContextMenuTests
     [Fact]
     public void GridViewDoubleClickResizeBorder_RoutesToAutoFitEventsBeforeDragResize()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
-        var eventsSource = File.ReadAllText(FindWorkspaceFile(
+        var eventsSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Events.cs"));
         var resizeStart = inputSource[
             inputSource.IndexOf("var (target, index, size) = HitTestResize(pos);", StringComparison.Ordinal)..
@@ -198,6 +198,4 @@ public sealed class GridViewContextMenuTests
                 new ColMetric(3, 40, 80)
             ]);
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }
