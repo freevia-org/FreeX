@@ -66,6 +66,10 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml";
     private const string ChartSheetRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
+    private const string DialogSheetContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml";
+    private const string DialogSheetRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet";
     private const string DrawingContentType =
         "application/vnd.openxmlformats-officedocument.drawing+xml";
     private const string DrawingRelationshipType =
@@ -74,6 +78,10 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
     private const string HyperlinkRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+    private const string MacroSheetContentType =
+        "application/vnd.ms-excel.macrosheet+xml";
+    private const string MacroSheetRelationshipType =
+        "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet";
     private const string OfficeDocumentRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string PackageRootRelationshipPart = "_rels/.rels";
@@ -338,6 +346,7 @@ internal static class ExcelOpenSmoke
                 AssertPackageContentTypesComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPackageRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -527,6 +536,7 @@ internal static class ExcelOpenSmoke
             AssertPackageContentTypesComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPackageRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
@@ -1793,6 +1803,151 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid XLSX workbook package root: {string.Join("; ", issues)}");
+    }
+
+    private static void AssertWorkbookSheetRelationshipsComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is null)
+            issues.Add($"missing {WorkbookPart} for workbook sheet graph");
+
+        var relationshipEntry = FindPackageEntry(archive, WorkbookRelationshipPart);
+        if (relationshipEntry is null)
+            issues.Add($"missing {WorkbookRelationshipPart} for workbook sheet graph");
+
+        if (workbookEntry is null || relationshipEntry is null)
+        {
+            ThrowInvalidWorkbookSheetGraph(label, sourcePath, issues);
+            return;
+        }
+
+        var relationships = LoadPackageXml(relationshipEntry)
+            .Root?
+            .Elements(PackageRelationshipNs + "Relationship")
+            .ToArray() ?? [];
+        var sheets = LoadPackageXml(workbookEntry)
+            .Descendants(SpreadsheetNs + "sheet")
+            .ToArray();
+        if (sheets.Length == 0)
+            issues.Add("workbook has no sheet elements");
+
+        var seenRelationshipIds = new HashSet<string>(StringComparer.Ordinal);
+        var seenSheetParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sheet in sheets)
+        {
+            var sheetName = sheet.Attribute("name")?.Value ?? "(unnamed sheet)";
+            var relationshipId = sheet.Attribute(OfficeRelationshipNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(relationshipId))
+            {
+                issues.Add($"workbook sheet '{sheetName}' has no relationship id");
+                continue;
+            }
+
+            if (!seenRelationshipIds.Add(relationshipId))
+            {
+                issues.Add($"workbook sheet '{sheetName}' reuses relationship id {relationshipId}");
+                continue;
+            }
+
+            var relationship = relationships.FirstOrDefault(relationship =>
+                string.Equals(
+                    relationship.Attribute("Id")?.Value,
+                    relationshipId,
+                    StringComparison.Ordinal));
+            if (relationship is null)
+            {
+                issues.Add($"workbook sheet '{sheetName}' targets missing relationship {relationshipId} in {WorkbookRelationshipPart}");
+                continue;
+            }
+
+            var relationshipType = relationship.Attribute("Type")?.Value;
+            if (!TryGetWorkbookSheetExpectedContentType(relationshipType, out var expectedContentType))
+            {
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} has unsupported Type={relationshipType}");
+                continue;
+            }
+
+            var targetMode = relationship.Attribute("TargetMode")?.Value;
+            if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+            {
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} must not target an external sheet package part");
+                continue;
+            }
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} has no Target");
+                continue;
+            }
+
+            if (!TryResolvePackageRelationshipTarget(WorkbookRelationshipPart, target, out var sheetPart, out var targetError))
+            {
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} has invalid Target {target}: {targetError}");
+                continue;
+            }
+
+            if (!PackageEntryExists(archive, sheetPart))
+            {
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} targets missing package part {sheetPart}");
+                continue;
+            }
+
+            if (!seenSheetParts.Add(sheetPart))
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} reuses package part {sheetPart}");
+
+            var contentTypeIssue = FindPackageContentTypeIssue(archive, sheetPart, expectedContentType);
+            if (contentTypeIssue is not null)
+                issues.Add(contentTypeIssue);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookSheetGraph(label, sourcePath, issues);
+    }
+
+    private static bool TryGetWorkbookSheetExpectedContentType(string? relationshipType, out string expectedContentType)
+    {
+        expectedContentType = string.Empty;
+        if (string.Equals(relationshipType, WorksheetRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            expectedContentType = WorksheetContentType;
+            return true;
+        }
+
+        if (string.Equals(relationshipType, ChartSheetRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            expectedContentType = ChartSheetContentType;
+            return true;
+        }
+
+        if (string.Equals(relationshipType, DialogSheetRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            expectedContentType = DialogSheetContentType;
+            return true;
+        }
+
+        if (string.Equals(relationshipType, MacroSheetRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            expectedContentType = MacroSheetContentType;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void ThrowInvalidWorkbookSheetGraph(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook sheet package graph: {sample}{suffix}");
     }
 
     private static void AssertPackageRelationshipsComplete(string xlsxPath, string label, string sourcePath)
