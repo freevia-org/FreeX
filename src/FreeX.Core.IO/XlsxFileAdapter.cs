@@ -191,7 +191,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     cell = Cell.FromFormula(XlsxClosedXmlCellMapper.NormalizeFormulaText(xlCell.FormulaA1));
                     // Preserve the cached formula result so callers see the last-calculated value
                     // without needing to recalculate immediately.
-                    var cached = XlsxClosedXmlCellMapper.MapValue(xlCell);
+                    var cached = XlsxClosedXmlCellMapper.MapFormulaValue(xlCell);
                     if (cached is not BlankValue)
                         cell.Value = cached;
                     else if (xmlLayout?.CachedFormulaErrors.TryGetValue(((uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber), out var cachedFormulaError) == true)

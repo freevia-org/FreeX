@@ -134,16 +134,14 @@ internal static class XlsxWorksheetColumnWidthWriter
     // or a non-default (non-"0") style. A bare min/max (or default style="0") entry is dropped.
     private static bool HasMeaningfulColumnAttributes(XElement col)
     {
-        if (IsTruthy(col.Attribute("hidden")?.Value) || IsTruthy(col.Attribute("collapsed")?.Value))
+        if (XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("hidden")?.Value) ||
+            XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("collapsed")?.Value))
             return true;
         if (int.TryParse(col.Attribute("outlineLevel")?.Value, out var level) && level > 0)
             return true;
         var style = col.Attribute("style")?.Value;
         return !string.IsNullOrEmpty(style) && style != "0";
     }
-
-    private static bool IsTruthy(string? value) =>
-        value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
     // CT_Worksheet order: ...sheetViews, sheetFormatPr, cols, sheetData...
     private static void InsertColsElement(XElement root, XNamespace ns, XElement cols)
