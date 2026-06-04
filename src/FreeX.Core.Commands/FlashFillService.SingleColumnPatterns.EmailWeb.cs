@@ -6,13 +6,13 @@ public static partial class FlashFillService
 {
     private static Func<string, string?>? TryEmailDisplayName(IReadOnlyList<(string Source, string Expected)> examples)
     {
-        if (!examples.All(e => TryFormatDottedEmailUserName(e.Source, out var displayName) && displayName == e.Expected))
+        if (!examples.All(e => TryFormatEmailUserNameDisplayName(e.Source, out var displayName) && displayName == e.Expected))
             return null;
 
-        return s => TryFormatDottedEmailUserName(s, out var displayName) ? displayName : null;
+        return s => TryFormatEmailUserNameDisplayName(s, out var displayName) ? displayName : null;
     }
 
-    private static bool TryFormatDottedEmailUserName(string source, out string displayName)
+    private static bool TryFormatEmailUserNameDisplayName(string source, out string displayName)
     {
         displayName = string.Empty;
         var atIndex = source.IndexOf('@', StringComparison.Ordinal);
@@ -31,7 +31,7 @@ public static partial class FlashFillService
             !userName.Contains('_', StringComparison.Ordinal) &&
             !userName.Contains('-', StringComparison.Ordinal))
         {
-            return false;
+            return TryFormatCamelCaseEmailUserName(userName, out displayName);
         }
 
         var parts = userName.Split(['.', '_', '-'], StringSplitOptions.RemoveEmptyEntries);
@@ -46,6 +46,35 @@ public static partial class FlashFillService
         }
 
         displayName = string.Join(' ', nameParts.Select(ToProperCase));
+        return true;
+    }
+
+    private static bool TryFormatCamelCaseEmailUserName(string userName, out string displayName)
+    {
+        displayName = string.Empty;
+
+        if (!TryNormalizeEmailDisplayNamePart(userName, out var normalized) ||
+            !normalized.All(char.IsLetter))
+        {
+            return false;
+        }
+
+        var nameParts = new List<string>();
+        var wordStart = 0;
+        for (var i = 1; i < normalized.Length; i++)
+        {
+            if (!char.IsUpper(normalized[i]) || !char.IsLower(normalized[i - 1]))
+                continue;
+
+            nameParts.Add(ToProperCase(normalized[wordStart..i]));
+            wordStart = i;
+        }
+
+        if (nameParts.Count == 0)
+            return false;
+
+        nameParts.Add(ToProperCase(normalized[wordStart..]));
+        displayName = string.Join(' ', nameParts);
         return true;
     }
 
