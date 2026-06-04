@@ -306,7 +306,7 @@ public partial class GridView
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
         var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
         var fill = CreateDrawingShapeFill(shape, colors.Fill);
-        DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);
+        DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);
         DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
         switch (shape.Kind)
         {
@@ -321,6 +321,7 @@ public partial class GridView
                 break;
         }
         DrawShapeAuthoredBevelEffect(dc, shape.Kind, rect, shape);
+        DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);
         DrawShapeAuthoredInnerShadow(dc, shape.Kind, rect, shape);
         DrawShapeThemeInnerShadow(dc, shape.Kind, rect, themeEffect);
         if (rotationPushed) dc.Pop();
@@ -694,6 +695,19 @@ public partial class GridView
         if (shape.GetEffectiveEffectPreset() != DrawingShapeEffectPreset.Bevel)
             return;
 
+        DrawShapeBevelEffect(dc, kind, rect);
+    }
+
+    private void DrawShapeThemeBevelEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookThemeEffectStyle effect)
+    {
+        if (!effect.HasBevel)
+            return;
+
+        DrawShapeBevelEffect(dc, kind, rect);
+    }
+
+    private void DrawShapeBevelEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect)
+    {
         var thickness = Math.Clamp(Math.Min(rect.Width, rect.Height) / 12, 2, 5);
         var inset = thickness / 2;
         var bevelRect = new Rect(
@@ -901,10 +915,20 @@ public partial class GridView
         dc.Pop();
     }
 
-    private void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookThemeEffectStyle effect)
+    private void DrawShapeThemeEffect(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        WorkbookThemeEffectStyle effect,
+        DrawingObjectColors colors)
     {
-        if (!effect.HasShadow && !effect.HasGlow && !effect.HasSoftEdge)
+        if (!effect.HasShadow && !effect.HasGlow && !effect.HasSoftEdge && !effect.HasThreeDRotation)
             return;
+
+        if (effect.HasThreeDRotation)
+        {
+            DrawShapeThreeDRotationEffect(dc, kind, rect, colors);
+        }
 
         if (effect.HasShadow)
         {

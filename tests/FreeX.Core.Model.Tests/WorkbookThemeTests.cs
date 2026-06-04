@@ -115,6 +115,20 @@ public sealed class WorkbookThemeTests
     }
 
     [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_InterpretsBevelAndThreeDRotationEffectDefaults()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml(NativeFormatSchemeWithBevelAndThreeDRotation);
+
+        theme.NativeFormatSchemeXml.Should().Contain("bevelT");
+        theme.NativeFormatSchemeXml.Should().Contain("camera");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeFalse();
+        theme.EffectDefaults.HasBevel.Should().BeTrue();
+        theme.EffectDefaults.HasThreeDRotation.Should().BeTrue();
+        theme.EffectDefaults.HasAnyEffect.Should().BeTrue();
+    }
+
+    [Fact]
     public void WorkbookTheme_WithNativeFormatSchemeXml_ReadsFirstSupportedSoftEdgeFromEffectDag()
     {
         var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml("""
@@ -258,6 +272,41 @@ public sealed class WorkbookThemeTests
         theme.EffectDefaults!.HasShadow.Should().BeFalse();
         theme.EffectDefaults.HasGlow.Should().BeTrue();
         theme.EffectDefaults.GlowOpacity.Should().BeApproximately(0.42, 0.0001);
+    }
+
+    [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_UsesFirstSupportedBevelAndThreeDRotationGroup()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml("""
+            <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Grouped Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst/>
+                </a:effectStyle>
+                <a:effectStyle>
+                  <a:effectLst/>
+                  <a:scene3d>
+                    <a:camera prst="orthographicFront"/>
+                  </a:scene3d>
+                  <a:sp3d>
+                    <a:bevelT w="76200" h="38100"/>
+                  </a:sp3d>
+                </a:effectStyle>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:outerShdw blurRad="40000" dist="19050" dir="5400000" rotWithShape="0">
+                      <a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr>
+                    </a:outerShdw>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+            """);
+
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasBevel.Should().BeTrue();
+        theme.EffectDefaults.HasThreeDRotation.Should().BeTrue();
+        theme.EffectDefaults.HasShadow.Should().BeFalse();
     }
 
     [Fact]
@@ -438,6 +487,25 @@ public sealed class WorkbookThemeTests
                   <a:srgbClr val="000000"><a:alpha val="35000"/></a:srgbClr>
                 </a:innerShdw>
               </a:effectLst>
+            </a:effectStyle>
+          </a:effectStyleLst>
+          <a:bgFillStyleLst/>
+        </a:fmtScheme>
+        """;
+
+    private const string NativeFormatSchemeWithBevelAndThreeDRotation = """
+        <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+          <a:fillStyleLst/>
+          <a:lnStyleLst/>
+          <a:effectStyleLst>
+            <a:effectStyle>
+              <a:effectLst/>
+              <a:scene3d>
+                <a:camera prst="orthographicFront"/>
+              </a:scene3d>
+              <a:sp3d>
+                <a:bevelT w="76200" h="38100"/>
+              </a:sp3d>
             </a:effectStyle>
           </a:effectStyleLst>
           <a:bgFillStyleLst/>

@@ -34,7 +34,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
         renderTextBoxes.Should().Contain("DrawTextBoxThemeEffect(dc, rect, themeEffect);");
         renderTextBoxes.Should().NotContain("DrawTextBoxThemeEffect(dc, rect, WorkbookTheme);");
         renderDrawingShapes.Should().Contain("var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);");
-        renderDrawingShapes.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);");
+        renderDrawingShapes.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);");
         renderDrawingShapes.Should().NotContain("DrawShapeThemeEffect(dc, shape.Kind, rect, WorkbookTheme);");
         drawTextBoxEffect.Should().Contain("WorkbookThemeEffectStyle effect");
         drawTextBoxEffect.Should().NotContain("WorkbookThemeEffectStyle.FromTheme");
@@ -346,6 +346,47 @@ public sealed partial class GridViewDrawingObjectThemeTests
         pictures.Should().NotContain("WorkbookThemeEffectStyle");
         pictures.Should().NotContain("HasSoftEdge");
         pictures.Should().NotContain("SoftEdgeRadius");
+    }
+
+    [Fact]
+    public void DrawingObjectRendering_UsesThemeBevelAndThreeDRotationForShapesOnly()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var renderCharts = drawingObjects[
+            drawingObjects.IndexOf("private void RenderCharts", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)];
+        var renderTextBox = drawingObjects[
+            drawingObjects.IndexOf("private void RenderTextBox", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
+        var renderDrawingShape = drawingObjects[
+            drawingObjects.IndexOf("private void RenderDrawingShape", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private bool HasExplicitDrawingObjectZOrder", StringComparison.Ordinal)];
+        var shapeThemeBevel = drawingObjects[
+            drawingObjects.IndexOf("private void DrawShapeThemeBevelEffect", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void DrawShapeAuthoredInnerShadow", StringComparison.Ordinal)];
+        var shapeThemeEffect = drawingObjects[
+            drawingObjects.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void DrawShapeThemeInnerShadow", StringComparison.Ordinal)];
+
+        renderDrawingShape.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);");
+        renderDrawingShape.Should().Contain("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);");
+        renderDrawingShape.IndexOf("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect, colors);", StringComparison.Ordinal)
+            .Should().BeLessThan(renderDrawingShape.IndexOf("switch (shape.Kind)", StringComparison.Ordinal));
+        renderDrawingShape.IndexOf("switch (shape.Kind)", StringComparison.Ordinal)
+            .Should().BeLessThan(renderDrawingShape.IndexOf("DrawShapeThemeBevelEffect(dc, shape.Kind, rect, themeEffect);", StringComparison.Ordinal));
+        shapeThemeEffect.Should().Contain("effect.HasThreeDRotation");
+        shapeThemeEffect.Should().Contain("DrawShapeThreeDRotationEffect(dc, kind, rect, colors);");
+        shapeThemeBevel.Should().Contain("effect.HasBevel");
+        shapeThemeBevel.Should().Contain("DrawShapeBevelEffect(dc, kind, rect);");
+        renderTextBox.Should().NotContain("HasBevel");
+        renderTextBox.Should().NotContain("HasThreeDRotation");
+        renderCharts.Should().NotContain("WorkbookThemeEffectStyle");
+        pictures.Should().NotContain("WorkbookThemeEffectStyle");
+        pictures.Should().NotContain("HasBevel");
+        pictures.Should().NotContain("HasThreeDRotation");
     }
 
     [Fact]
