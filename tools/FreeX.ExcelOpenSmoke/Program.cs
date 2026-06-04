@@ -1253,20 +1253,11 @@ internal static class ExcelOpenSmoke
                     : 0;
             var headerFooterSheetCount = HasHeaderFooterText(pageSetup) ? 1 : 0;
 
-            var manualPageBreakCount = 0;
-            if (printAreaSheetCount > 0 ||
-                printTitleSheetCount > 0 ||
-                landscapeSheetCount > 0 ||
-                scaleToFitSheetCount > 0 ||
-                printOptionsSheetCount > 0 ||
-                headerFooterSheetCount > 0)
-            {
-                horizontalPageBreaks = ((dynamic)worksheet).HPageBreaks;
-                verticalPageBreaks = ((dynamic)worksheet).VPageBreaks;
-                manualPageBreakCount =
-                    CountManualPageBreaks(horizontalPageBreaks) +
-                    CountManualPageBreaks(verticalPageBreaks);
-            }
+            horizontalPageBreaks = ((dynamic)worksheet).HPageBreaks;
+            verticalPageBreaks = ((dynamic)worksheet).VPageBreaks;
+            var manualPageBreakCount =
+                CountManualPageBreaks(horizontalPageBreaks) +
+                CountManualPageBreaks(verticalPageBreaks);
 
             var allowEditRangeCount = 0;
             try
@@ -2302,19 +2293,28 @@ internal static class ExcelOpenSmoke
                     expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel));
         }
 
+        if (IsSupportedMetadataPass(row))
+        {
+            return ApplyFreeXLoadWarningExpectation(
+                row,
+                SupportedMetadataCorpusExpectations(row, saveReopen));
+        }
+
         if (HasSupportedFeatureExpectations(row))
         {
-            var isMetadataPass = string.Equals(row.ExpectedStatus, "supported-metadata-pass", StringComparison.OrdinalIgnoreCase);
             var supportedExpectations = SupportedCorpusExpectations(
                 row,
                 saveReopen,
-                expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel && !isMetadataPass,
-                expectFreeXReopened: saveReopen && !isMetadataPass);
+                expectFreeXPreSave: workflow == WorkbookValidationWorkflow.FreeXSaveThenExcel,
+                expectFreeXReopened: saveReopen);
             return ApplyFreeXLoadWarningExpectation(row, supportedExpectations);
         }
 
         return ApplyFreeXLoadWarningExpectation(row, null);
     }
+
+    private static bool IsSupportedMetadataPass(CorpusManifestRow row) =>
+        string.Equals(row.ExpectedStatus, "supported-metadata-pass", StringComparison.OrdinalIgnoreCase);
 
     private static bool HasSupportedFeatureExpectations(CorpusManifestRow row) =>
         string.Equals(row.ExpectedStatus, "supported-pass", StringComparison.OrdinalIgnoreCase) ||
@@ -2341,6 +2341,73 @@ internal static class ExcelOpenSmoke
             tags.Contains("charts") ||
             tags.Contains("data-validation") ||
             tags.Contains("conditional-formatting");
+    }
+
+    private static WorkbookSmokeExpectations? SupportedMetadataCorpusExpectations(
+        CorpusManifestRow row,
+        bool saveReopen)
+    {
+        var expectations = HasConcreteMetadataFeatureExpectations(row)
+            ? SupportedCorpusExpectations(
+                row,
+                saveReopen,
+                expectFreeXPreSave: false,
+                expectFreeXReopened: false)
+            : null;
+
+        WorkbookSmokeExpectations EnsureExpectations() => expectations ??= new WorkbookSmokeExpectations();
+        var reopen = saveReopen ? 1 : 0;
+
+        if (string.Equals(row.Id, "generated-workbook-protection-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinExcelOpenedStructureProtection = 1,
+                MinExcelReopenedStructureProtection = reopen
+            };
+        }
+        else if (string.Equals(row.Id, "generated-worksheet-protection-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinExcelOpenedProtectedSheets = 1,
+                MinExcelReopenedProtectedSheets = reopen
+            };
+        }
+        else if (string.Equals(row.Id, "generated-worksheet-protected-ranges-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinExcelOpenedAllowEditRanges = 1,
+                MinExcelReopenedAllowEditRanges = reopen
+            };
+        }
+        else if (string.Equals(row.Id, "generated-workbook-defined-names-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinExcelOpenedNamedRanges = 1,
+                MinExcelReopenedNamedRanges = reopen
+            };
+        }
+        else if (string.Equals(row.Id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinExcelOpenedHeaderFooterSheets = 1,
+                MinExcelReopenedHeaderFooterSheets = reopen
+            };
+        }
+        else if (string.Equals(row.Id, "generated-worksheet-extension-list-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinExcelOpenedSparklines = 1,
+                MinExcelReopenedSparklines = reopen
+            };
+        }
+
+        return expectations;
     }
 
     private static WorkbookSmokeExpectations? ApplyFreeXLoadWarningExpectation(
