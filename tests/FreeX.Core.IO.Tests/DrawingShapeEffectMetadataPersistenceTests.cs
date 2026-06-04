@@ -10,6 +10,7 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
     [Theory]
     [InlineData(DrawingShapeEffectPreset.Shadow)]
     [InlineData(DrawingShapeEffectPreset.InnerShadow)]
+    [InlineData(DrawingShapeEffectPreset.Reflection)]
     [InlineData(DrawingShapeEffectPreset.Glow)]
     [InlineData(DrawingShapeEffectPreset.SoftEdges)]
     public void NativeJsonAdapter_RoundTripsDrawingShapeEffectPreset(DrawingShapeEffectPreset effectPreset)
@@ -29,6 +30,7 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
 
     [Theory]
     [InlineData(DrawingShapeEffectPreset.InnerShadow, "innerShdw")]
+    [InlineData(DrawingShapeEffectPreset.Reflection, "reflection")]
     [InlineData(DrawingShapeEffectPreset.Glow, "glow")]
     public void XlsxAdapter_RoundTripsDrawingShapeEffectPreset(DrawingShapeEffectPreset effectPreset, string effectElementName)
     {

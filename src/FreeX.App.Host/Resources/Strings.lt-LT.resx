@@ -978,6 +978,9 @@
   <data name="ShapeEffects_InnerShadow" xml:space="preserve">
     <value>Inner Shadow</value>
   </data>
+  <data name="ShapeEffects_Reflection" xml:space="preserve">
+    <value>Reflection</value>
+  </data>
   <data name="ShapeEffects_Glow" xml:space="preserve">
     <value>Švytėjimas</value>
   </data>
@@ -993,6 +996,9 @@
   <data name="ShapeEffects_InnerShadowDescription" xml:space="preserve">
     <value>Apply a bounded inside shadow effect to the selected shape.</value>
   </data>
+  <data name="ShapeEffects_ReflectionDescription" xml:space="preserve">
+    <value>Apply a bounded reflection effect below the selected shape.</value>
+  </data>
   <data name="ShapeEffects_GlowDescription" xml:space="preserve">
     <value>Pasirinktai formai pritaikykite švytėjimo kontūro efektą.</value>
   </data>
@@ -1003,7 +1009,7 @@
     <value>Formos efektas</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, glow, or soft edges for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, or soft edges for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Formos efekto aprašymas</value>

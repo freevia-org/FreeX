@@ -304,10 +304,10 @@ public partial class GridView
 
         var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
-        DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);
-        DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape);
         var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
         var fill = CreateDrawingShapeFill(shape, colors.Fill);
+        DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);
+        DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
         switch (shape.Kind)
         {
             case DrawingShapeKind.Rectangle:
@@ -598,7 +598,12 @@ public partial class GridView
         return GetDrawingObjectBrush(32, startColor);
     }
 
-    private void DrawShapeAuthoredEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
+    private void DrawShapeAuthoredEffect(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        DrawingShapeModel shape,
+        DrawingObjectColors colors)
     {
         switch (shape.GetEffectiveEffectPreset())
         {
@@ -610,6 +615,9 @@ public partial class GridView
                 break;
             case DrawingShapeEffectPreset.SoftEdges:
                 DrawShapeOutlineEffect(dc, kind, rect, alpha: 54, r: 128, g: 128, b: 128, thickness: 8, inflate: 2);
+                break;
+            case DrawingShapeEffectPreset.Reflection:
+                DrawShapeReflectionEffect(dc, kind, rect, colors);
                 break;
         }
     }
@@ -691,6 +699,42 @@ public partial class GridView
                 dc.DrawLine(pen, effectRect.TopLeft, effectRect.BottomRight);
                 break;
         }
+    }
+
+    private void DrawShapeReflectionEffect(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        DrawingObjectColors colors)
+    {
+        var reflectionRect = GetReflectionRect(rect);
+        var fill = GetDrawingObjectBrush(36, colors.Fill);
+        var pen = GetDrawingObjectPen(70, colors.Outline, 1);
+
+        switch (kind)
+        {
+            case DrawingShapeKind.Rectangle:
+                dc.DrawRectangle(fill, pen, reflectionRect);
+                break;
+            case DrawingShapeKind.Ellipse:
+                dc.DrawEllipse(
+                    fill,
+                    pen,
+                    new Point(reflectionRect.Left + reflectionRect.Width / 2, reflectionRect.Top + reflectionRect.Height / 2),
+                    reflectionRect.Width / 2,
+                    reflectionRect.Height / 2);
+                break;
+            case DrawingShapeKind.Line:
+                dc.DrawLine(pen, reflectionRect.BottomLeft, reflectionRect.TopRight);
+                break;
+        }
+    }
+
+    private static Rect GetReflectionRect(Rect rect)
+    {
+        var gap = Math.Clamp(rect.Height * 0.08, 2, 6);
+        var height = Math.Max(1, rect.Height * 0.45);
+        return new Rect(rect.Left, rect.Bottom + gap, rect.Width, height);
     }
 
     private void DrawTextBoxThemeEffect(DrawingContext dc, Rect rect, WorkbookThemeEffectStyle effect)
