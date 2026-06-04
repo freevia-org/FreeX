@@ -13,10 +13,17 @@ using static ExcelSmokeCom;
 using static ExcelSmokeFixtures;
 using static SmokeUsage;
 
-Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
-Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+internal static class Program
+{
+    [STAThread]
+    public static int Main(string[] args)
+    {
+        Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 
-return ExcelOpenSmoke.Run(args);
+        return ExcelOpenSmoke.Run(args);
+    }
+}
 
 internal static class ExcelOpenSmoke
 {
@@ -209,6 +216,7 @@ internal static class ExcelOpenSmoke
             var excelType = Type.GetTypeFromProgID("Excel.Application")
                 ?? throw new InvalidOperationException("Excel.Application COM registration was not found. Install Microsoft Excel desktop before running this smoke check.");
 
+            using var messageFilter = RegisterExcelBusyMessageFilter();
             excel = Activator.CreateInstance(excelType)
                 ?? throw new InvalidOperationException("Excel.Application COM activation returned null.");
 
@@ -289,7 +297,7 @@ internal static class ExcelOpenSmoke
             var stagedPath = CopyToStagingDirectory(sourceForExcel, stagingDirectory);
             if (!saveReopen)
             {
-                var opened = OpenWorkbook(workbooks, stagedPath, readOnly: true);
+                var opened = OpenWorkbook(workbooks, stagedPath, true, input.Expectations);
                 AssertSmokeExpectations(input, freeXPreSave, opened, null, null);
                 return WorkbookSmokeResult.Pass(
                     input,
@@ -305,7 +313,7 @@ internal static class ExcelOpenSmoke
             }
 
             var excelSavedPath = CreateDerivedOutputPath(excelSavedDirectory, stagedPath, "excel-saved");
-            var saveReopenResult = OpenSaveCloseReopenWorkbook(workbooks, stagedPath, excelSavedPath);
+            var saveReopenResult = OpenSaveCloseReopenWorkbook(workbooks, stagedPath, excelSavedPath, input.Expectations);
             var freeXReopenedExcelSave = LoadWorkbookSummary(saveReopenResult.ExcelSavedPath);
             AssertFreeXLoadWarnings(input, "FreeX reopened Excel save", freeXReopenedExcelSave.Warnings);
             AssertSmokeExpectations(input, freeXPreSave, saveReopenResult.Opened, saveReopenResult.Reopened, freeXReopenedExcelSave.Summary);
@@ -331,7 +339,11 @@ internal static class ExcelOpenSmoke
         }
     }
 
-    private static ExcelWorkbookSummary OpenWorkbook(dynamic workbooks, string stagedPath, bool readOnly)
+    private static ExcelWorkbookSummary OpenWorkbook(
+        dynamic workbooks,
+        string stagedPath,
+        bool readOnly,
+        WorkbookSmokeExpectations? expectations)
     {
         object? workbook = null;
         var closed = false;
@@ -341,14 +353,22 @@ internal static class ExcelOpenSmoke
             ExcelWorkbookSummary contents;
             try
             {
-                contents = CountWorkbookContents(workbook);
+                contents = WithExcelBusyRetry(
+                    () => CountWorkbookContents(workbook, expectations),
+                    "Excel content count");
             }
             catch (COMException ex)
             {
                 throw new InvalidDataException($"Excel content count failed for '{stagedPath}'", ex);
             }
 
-            ((dynamic)workbook).Close(false);
+            WithExcelBusyRetry(
+                () =>
+                {
+                    ((dynamic)workbook).Close(false);
+                    return true;
+                },
+                "Excel workbook close");
             closed = true;
             return contents;
         }
@@ -361,7 +381,15 @@ internal static class ExcelOpenSmoke
             try
             {
                 if (workbook is not null && !closed)
-                    ((dynamic)workbook).Close(false);
+                {
+                    WithExcelBusyRetry(
+                        () =>
+                        {
+                            ((dynamic)workbook).Close(false);
+                            return true;
+                        },
+                        "Excel workbook cleanup close");
+                }
             }
             catch
             {
@@ -375,7 +403,8 @@ internal static class ExcelOpenSmoke
     private static ExcelSaveReopenResult OpenSaveCloseReopenWorkbook(
         dynamic workbooks,
         string stagedPath,
-        string excelSavedPath)
+        string excelSavedPath,
+        WorkbookSmokeExpectations? expectations)
     {
         object? workbook = null;
         object? reopenedWorkbook = null;
@@ -388,7 +417,9 @@ internal static class ExcelOpenSmoke
             ExcelWorkbookSummary opened;
             try
             {
-                opened = CountWorkbookContents(workbook);
+                opened = WithExcelBusyRetry(
+                    () => CountWorkbookContents(workbook, expectations),
+                    "Excel content count after open");
             }
             catch (COMException ex)
             {
@@ -401,7 +432,13 @@ internal static class ExcelOpenSmoke
 
             try
             {
-                ((dynamic)workbook).SaveCopyAs(excelSavedPath);
+                WithExcelBusyRetry(
+                    () =>
+                    {
+                        ((dynamic)workbook).SaveCopyAs(excelSavedPath);
+                        return true;
+                    },
+                    "Excel SaveCopyAs");
             }
             catch (COMException ex)
             {
@@ -409,7 +446,13 @@ internal static class ExcelOpenSmoke
             }
 
             AssertNoExcelRecoveryLog(excelSavedPath);
-            ((dynamic)workbook).Close(false);
+            WithExcelBusyRetry(
+                () =>
+                {
+                    ((dynamic)workbook).Close(false);
+                    return true;
+                },
+                "Excel workbook close after SaveCopyAs");
             workbookClosed = true;
             ReleaseComObject(workbook);
             workbook = null;
@@ -420,14 +463,22 @@ internal static class ExcelOpenSmoke
             ExcelWorkbookSummary reopened;
             try
             {
-                reopened = CountWorkbookContents(reopenedWorkbook);
+                reopened = WithExcelBusyRetry(
+                    () => CountWorkbookContents(reopenedWorkbook, expectations),
+                    "Excel content count after reopen");
             }
             catch (COMException ex)
             {
                 throw new InvalidDataException($"Excel content count failed after reopening '{excelSavedPath}'", ex);
             }
 
-            ((dynamic)reopenedWorkbook).Close(false);
+            WithExcelBusyRetry(
+                () =>
+                {
+                    ((dynamic)reopenedWorkbook).Close(false);
+                    return true;
+                },
+                "Excel reopened workbook close");
             reopenedClosed = true;
 
             return new ExcelSaveReopenResult(excelSavedPath, opened, reopened);
@@ -441,7 +492,15 @@ internal static class ExcelOpenSmoke
             try
             {
                 if (workbook is not null && !workbookClosed)
-                    ((dynamic)workbook).Close(false);
+                {
+                    WithExcelBusyRetry(
+                        () =>
+                        {
+                            ((dynamic)workbook).Close(false);
+                            return true;
+                        },
+                        "Excel workbook cleanup close");
+                }
             }
             catch
             {
@@ -451,7 +510,15 @@ internal static class ExcelOpenSmoke
             try
             {
                 if (reopenedWorkbook is not null && !reopenedClosed)
-                    ((dynamic)reopenedWorkbook).Close(false);
+                {
+                    WithExcelBusyRetry(
+                        () =>
+                        {
+                            ((dynamic)reopenedWorkbook).Close(false);
+                            return true;
+                        },
+                        "Excel reopened workbook cleanup close");
+                }
             }
             catch
             {
@@ -463,11 +530,17 @@ internal static class ExcelOpenSmoke
         }
     }
 
-    private static object OpenExcelWorkbook(dynamic workbooks, string path, bool readOnly) =>
-        workbooks.Open(
-            path,
-            0,
-            readOnly);
+    private static object OpenExcelWorkbook(dynamic workbooks, string path, bool readOnly)
+    {
+        var workbook = WithExcelBusyRetry<object>(
+            () => workbooks.Open(
+                path,
+                0,
+                readOnly),
+            "Excel workbook open");
+        WaitForExcelReady(((dynamic)workbook).Application);
+        return workbook;
+    }
 
     private static void AssertNoExcelRecoveryLog(string xlsxPath)
     {
@@ -599,6 +672,123 @@ internal static class ExcelOpenSmoke
         int AlignedCellCount,
         int WrappedCellCount);
 
+    private readonly record struct ExcelContentProbePlan(
+        bool NamedRanges,
+        bool Charts,
+        bool DataValidations,
+        bool ConditionalFormats,
+        bool Hyperlinks,
+        bool Comments,
+        bool ProtectedSheets,
+        bool StructureProtection,
+        bool Shapes,
+        bool Sparklines,
+        bool PageSetup,
+        bool Structure,
+        bool Formatting,
+        bool Formulas,
+        bool StructuredTables,
+        bool PivotTables)
+    {
+        public static ExcelContentProbePlan OpenabilityOnly { get; } = new(
+            NamedRanges: false,
+            Charts: false,
+            DataValidations: false,
+            ConditionalFormats: false,
+            Hyperlinks: false,
+            Comments: false,
+            ProtectedSheets: false,
+            StructureProtection: false,
+            Shapes: false,
+            Sparklines: false,
+            PageSetup: false,
+            Structure: false,
+            Formatting: false,
+            Formulas: false,
+            StructuredTables: false,
+            PivotTables: false);
+
+        public static ExcelContentProbePlan From(WorkbookSmokeExpectations? expectations)
+        {
+            if (expectations is null)
+                return OpenabilityOnly;
+
+            static bool Any(params int[] values) => values.Any(value => value > 0);
+
+            return new ExcelContentProbePlan(
+                NamedRanges: Any(expectations.MinExcelOpenedNamedRanges, expectations.MinExcelReopenedNamedRanges),
+                Charts: Any(expectations.MinExcelOpenedCharts, expectations.MinExcelReopenedCharts),
+                DataValidations: Any(expectations.MinExcelOpenedDataValidationCells, expectations.MinExcelReopenedDataValidationCells),
+                ConditionalFormats: Any(expectations.MinExcelOpenedConditionalFormats, expectations.MinExcelReopenedConditionalFormats),
+                Hyperlinks: Any(expectations.MinExcelOpenedHyperlinks, expectations.MinExcelReopenedHyperlinks),
+                Comments: Any(expectations.MinExcelOpenedComments, expectations.MinExcelReopenedComments),
+                ProtectedSheets: Any(expectations.MinExcelOpenedProtectedSheets, expectations.MinExcelReopenedProtectedSheets),
+                StructureProtection: Any(expectations.MinExcelOpenedStructureProtection, expectations.MinExcelReopenedStructureProtection),
+                Shapes: Any(
+                    expectations.MinExcelOpenedPictures,
+                    expectations.MinExcelReopenedPictures,
+                    expectations.MinExcelOpenedTextBoxes,
+                    expectations.MinExcelReopenedTextBoxes,
+                    expectations.MinExcelOpenedDrawingShapes,
+                    expectations.MinExcelReopenedDrawingShapes,
+                    expectations.MinExcelOpenedShapes,
+                    expectations.MinExcelReopenedShapes),
+                Sparklines: Any(expectations.MinExcelOpenedSparklines, expectations.MinExcelReopenedSparklines),
+                PageSetup: Any(
+                    expectations.MinExcelOpenedPrintAreaSheets,
+                    expectations.MinExcelReopenedPrintAreaSheets,
+                    expectations.MinExcelOpenedPrintTitleSheets,
+                    expectations.MinExcelReopenedPrintTitleSheets,
+                    expectations.MinExcelOpenedLandscapeSheets,
+                    expectations.MinExcelReopenedLandscapeSheets,
+                    expectations.MinExcelOpenedScaleToFitSheets,
+                    expectations.MinExcelReopenedScaleToFitSheets,
+                    expectations.MinExcelOpenedPrintOptionsSheets,
+                    expectations.MinExcelReopenedPrintOptionsSheets,
+                    expectations.MinExcelOpenedHeaderFooterSheets,
+                    expectations.MinExcelReopenedHeaderFooterSheets,
+                    expectations.MinExcelOpenedManualPageBreaks,
+                    expectations.MinExcelReopenedManualPageBreaks,
+                    expectations.MinExcelOpenedAllowEditRanges,
+                    expectations.MinExcelReopenedAllowEditRanges),
+                Structure: Any(
+                    expectations.MinExcelOpenedMergedAreas,
+                    expectations.MinExcelReopenedMergedAreas,
+                    expectations.MinExcelOpenedFreezePaneSheets,
+                    expectations.MinExcelReopenedFreezePaneSheets,
+                    expectations.MinExcelOpenedHiddenRows,
+                    expectations.MinExcelReopenedHiddenRows,
+                    expectations.MinExcelOpenedHiddenColumns,
+                    expectations.MinExcelReopenedHiddenColumns,
+                    expectations.MinExcelOpenedCustomRowHeights,
+                    expectations.MinExcelReopenedCustomRowHeights,
+                    expectations.MinExcelOpenedCustomColumnWidths,
+                    expectations.MinExcelReopenedCustomColumnWidths,
+                    expectations.MinExcelOpenedOutlineRows,
+                    expectations.MinExcelReopenedOutlineRows,
+                    expectations.MinExcelOpenedOutlineColumns,
+                    expectations.MinExcelReopenedOutlineColumns),
+                Formatting: Any(
+                    expectations.MinExcelOpenedStyledCells,
+                    expectations.MinExcelReopenedStyledCells,
+                    expectations.MinExcelOpenedNumberFormatCells,
+                    expectations.MinExcelReopenedNumberFormatCells,
+                    expectations.MinExcelOpenedBoldCells,
+                    expectations.MinExcelReopenedBoldCells,
+                    expectations.MinExcelOpenedFilledCells,
+                    expectations.MinExcelReopenedFilledCells,
+                    expectations.MinExcelOpenedBorderedCells,
+                    expectations.MinExcelReopenedBorderedCells,
+                    expectations.MinExcelOpenedAlignedCells,
+                    expectations.MinExcelReopenedAlignedCells,
+                    expectations.MinExcelOpenedWrappedCells,
+                    expectations.MinExcelReopenedWrappedCells),
+                Formulas: Any(expectations.MinExcelOpenedFormulaCells, expectations.MinExcelReopenedFormulaCells),
+                StructuredTables: Any(expectations.MinExcelOpenedStructuredTables, expectations.MinExcelReopenedStructuredTables),
+                PivotTables: Any(expectations.MinExcelOpenedPivotTables, expectations.MinExcelReopenedPivotTables));
+        }
+    }
+
     private readonly record struct FreeXFormattingSummary(
         int StyledCellCount,
         int NumberFormatCellCount,
@@ -608,21 +798,26 @@ internal static class ExcelOpenSmoke
         int AlignedCellCount,
         int WrappedCellCount);
 
-    private static ExcelWorkbookSummary CountWorkbookContents(object workbook)
+    private static ExcelWorkbookSummary CountWorkbookContents(
+        object workbook,
+        WorkbookSmokeExpectations? expectations)
     {
+        var probePlan = ExcelContentProbePlan.From(expectations);
         object? worksheets = null;
         try
         {
             worksheets = ((dynamic)workbook).Worksheets;
             var worksheetCount = Convert.ToInt32(((dynamic)worksheets).Count, CultureInfo.InvariantCulture);
-            var namedRangeCount = CountWorkbookUserDefinedNames(workbook);
-            var chartCount = CountWorkbookChartSheets(workbook);
+            var namedRangeCount = probePlan.NamedRanges ? CountWorkbookUserDefinedNames(workbook) : 0;
+            var chartCount = probePlan.Charts ? CountWorkbookChartSheets(workbook) : 0;
             var dataValidationCellCount = 0;
             var conditionalFormatCount = 0;
             var hyperlinkCount = 0;
             var commentCount = 0;
             var protectedSheetCount = 0;
-            var structureProtectionCount = CountWorkbookStructureProtection(workbook);
+            var structureProtectionCount = probePlan.StructureProtection
+                ? CountWorkbookStructureProtection(workbook)
+                : 0;
             var pictureCount = 0;
             var sparklineCount = 0;
             var textBoxCount = 0;
@@ -663,145 +858,185 @@ internal static class ExcelOpenSmoke
                 try
                 {
                     worksheet = ((dynamic)worksheets)[index];
-                    try
+                    if (probePlan.Charts || probePlan.Shapes)
                     {
-                        chartCount += CountWorksheetChartObjects(worksheet);
-                        var worksheetShapes = CountWorksheetShapes(worksheet);
-                        shapeCount += worksheetShapes.TotalCount;
-                        pictureCount += worksheetShapes.PictureCount;
-                        textBoxCount += worksheetShapes.TextBoxCount;
-                        drawingShapeCount += worksheetShapes.DrawingShapeCount;
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel chart/shape count failed for worksheet index {index}", ex);
-                    }
-
-                    try
-                    {
-                        formulaCellCount += CountWorksheetFormulaCells(worksheet);
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel formula count failed for worksheet index {index}", ex);
+                        try
+                        {
+                            if (probePlan.Charts)
+                                chartCount += CountWorksheetChartObjects(worksheet);
+                            if (probePlan.Shapes)
+                            {
+                                var worksheetShapes = CountWorksheetShapes(worksheet);
+                                shapeCount += worksheetShapes.TotalCount;
+                                pictureCount += worksheetShapes.PictureCount;
+                                textBoxCount += worksheetShapes.TextBoxCount;
+                                drawingShapeCount += worksheetShapes.DrawingShapeCount;
+                            }
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel chart/shape count failed for worksheet index {index}", ex);
+                        }
                     }
 
-                    try
+                    if (probePlan.Formulas)
                     {
-                        dataValidationCellCount += CountWorksheetDataValidationCells(worksheet);
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel data-validation count failed for worksheet index {index}", ex);
-                    }
-
-                    try
-                    {
-                        conditionalFormatCount += CountWorksheetConditionalFormats(worksheet);
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel conditional-format count failed for worksheet index {index}", ex);
+                        try
+                        {
+                            formulaCellCount += CountWorksheetFormulaCells(worksheet);
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel formula count failed for worksheet index {index}", ex);
+                        }
                     }
 
-                    try
+                    if (probePlan.DataValidations)
                     {
-                        hyperlinkCount += CountWorksheetHyperlinks(worksheet);
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel hyperlink count failed for worksheet index {index}", ex);
-                    }
-
-                    try
-                    {
-                        commentCount += CountWorksheetComments(worksheet);
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel comment count failed for worksheet index {index}", ex);
+                        try
+                        {
+                            dataValidationCellCount += CountWorksheetDataValidationCells(worksheet);
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel data-validation count failed for worksheet index {index}", ex);
+                        }
                     }
 
-                    if (IsWorksheetProtected(worksheet))
+                    if (probePlan.ConditionalFormats)
+                    {
+                        try
+                        {
+                            conditionalFormatCount += CountWorksheetConditionalFormats(worksheet);
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel conditional-format count failed for worksheet index {index}", ex);
+                        }
+                    }
+
+                    if (probePlan.Hyperlinks)
+                    {
+                        try
+                        {
+                            hyperlinkCount += CountWorksheetHyperlinks(worksheet);
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel hyperlink count failed for worksheet index {index}", ex);
+                        }
+                    }
+
+                    if (probePlan.Comments)
+                    {
+                        try
+                        {
+                            commentCount += CountWorksheetComments(worksheet);
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel comment count failed for worksheet index {index}", ex);
+                        }
+                    }
+
+                    if (probePlan.ProtectedSheets && IsWorksheetProtected(worksheet))
                         protectedSheetCount++;
 
-                    try
+                    if (probePlan.PageSetup)
                     {
-                        var worksheetPageSetup = CountWorksheetPageSetup(worksheet);
-                        printAreaSheetCount += worksheetPageSetup.PrintAreaSheetCount;
-                        printTitleSheetCount += worksheetPageSetup.PrintTitleSheetCount;
-                        landscapeSheetCount += worksheetPageSetup.LandscapeSheetCount;
-                        scaleToFitSheetCount += worksheetPageSetup.ScaleToFitSheetCount;
-                        printOptionsSheetCount += worksheetPageSetup.PrintOptionsSheetCount;
-                        headerFooterSheetCount += worksheetPageSetup.HeaderFooterSheetCount;
-                        manualPageBreakCount += worksheetPageSetup.ManualPageBreakCount;
-                        allowEditRangeCount += worksheetPageSetup.AllowEditRangeCount;
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel page-setup count failed for worksheet index {index}", ex);
-                    }
-
-                    try
-                    {
-                        var worksheetStructure = CountWorksheetStructure(workbook, worksheet);
-                        mergedAreaCount += worksheetStructure.MergedAreaCount;
-                        freezePaneSheetCount += worksheetStructure.FreezePaneSheetCount;
-                        hiddenRowCount += worksheetStructure.HiddenRowCount;
-                        hiddenColumnCount += worksheetStructure.HiddenColumnCount;
-                        customRowHeightCount += worksheetStructure.CustomRowHeightCount;
-                        customColumnWidthCount += worksheetStructure.CustomColumnWidthCount;
-                        outlineRowCount += worksheetStructure.OutlineRowCount;
-                        outlineColumnCount += worksheetStructure.OutlineColumnCount;
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel structure count failed for worksheet index {index}", ex);
+                        try
+                        {
+                            var worksheetPageSetup = CountWorksheetPageSetup(worksheet);
+                            printAreaSheetCount += worksheetPageSetup.PrintAreaSheetCount;
+                            printTitleSheetCount += worksheetPageSetup.PrintTitleSheetCount;
+                            landscapeSheetCount += worksheetPageSetup.LandscapeSheetCount;
+                            scaleToFitSheetCount += worksheetPageSetup.ScaleToFitSheetCount;
+                            printOptionsSheetCount += worksheetPageSetup.PrintOptionsSheetCount;
+                            headerFooterSheetCount += worksheetPageSetup.HeaderFooterSheetCount;
+                            manualPageBreakCount += worksheetPageSetup.ManualPageBreakCount;
+                            allowEditRangeCount += worksheetPageSetup.AllowEditRangeCount;
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel page-setup count failed for worksheet index {index}", ex);
+                        }
                     }
 
-                    try
+                    if (probePlan.Structure)
                     {
-                        var worksheetFormatting = CountWorksheetFormatting(worksheet);
-                        styledCellCount += worksheetFormatting.StyledCellCount;
-                        numberFormatCellCount += worksheetFormatting.NumberFormatCellCount;
-                        boldCellCount += worksheetFormatting.BoldCellCount;
-                        filledCellCount += worksheetFormatting.FilledCellCount;
-                        borderedCellCount += worksheetFormatting.BorderedCellCount;
-                        alignedCellCount += worksheetFormatting.AlignedCellCount;
-                        wrappedCellCount += worksheetFormatting.WrappedCellCount;
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel formatting count failed for worksheet index {index}", ex);
-                    }
-
-                    try
-                    {
-                        sparklineCount += CountWorksheetSparklines(worksheet);
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel sparkline count failed for worksheet index {index}", ex);
+                        try
+                        {
+                            var worksheetStructure = CountWorksheetStructure(workbook, worksheet);
+                            mergedAreaCount += worksheetStructure.MergedAreaCount;
+                            freezePaneSheetCount += worksheetStructure.FreezePaneSheetCount;
+                            hiddenRowCount += worksheetStructure.HiddenRowCount;
+                            hiddenColumnCount += worksheetStructure.HiddenColumnCount;
+                            customRowHeightCount += worksheetStructure.CustomRowHeightCount;
+                            customColumnWidthCount += worksheetStructure.CustomColumnWidthCount;
+                            outlineRowCount += worksheetStructure.OutlineRowCount;
+                            outlineColumnCount += worksheetStructure.OutlineColumnCount;
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel structure count failed for worksheet index {index}", ex);
+                        }
                     }
 
-                    try
+                    if (probePlan.Formatting)
                     {
-                        listObjects = ((dynamic)worksheet).ListObjects;
-                        structuredTableCount += Convert.ToInt32(((dynamic)listObjects).Count, CultureInfo.InvariantCulture);
-                    }
-                    catch (COMException ex)
-                    {
-                        throw new InvalidDataException($"Excel structured-table count failed for worksheet index {index}", ex);
+                        try
+                        {
+                            var worksheetFormatting = CountWorksheetFormatting(worksheet);
+                            styledCellCount += worksheetFormatting.StyledCellCount;
+                            numberFormatCellCount += worksheetFormatting.NumberFormatCellCount;
+                            boldCellCount += worksheetFormatting.BoldCellCount;
+                            filledCellCount += worksheetFormatting.FilledCellCount;
+                            borderedCellCount += worksheetFormatting.BorderedCellCount;
+                            alignedCellCount += worksheetFormatting.AlignedCellCount;
+                            wrappedCellCount += worksheetFormatting.WrappedCellCount;
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel formatting count failed for worksheet index {index}", ex);
+                        }
                     }
 
-                    try
+                    if (probePlan.Sparklines)
                     {
-                        pivotTables = ((dynamic)worksheet).PivotTables();
-                        pivotTableCount += Convert.ToInt32(((dynamic)pivotTables).Count, CultureInfo.InvariantCulture);
+                        try
+                        {
+                            sparklineCount += CountWorksheetSparklines(worksheet);
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel sparkline count failed for worksheet index {index}", ex);
+                        }
                     }
-                    catch (COMException ex)
+
+                    if (probePlan.StructuredTables)
                     {
-                        throw new InvalidDataException($"Excel PivotTable count failed for worksheet index {index}", ex);
+                        try
+                        {
+                            listObjects = ((dynamic)worksheet).ListObjects;
+                            structuredTableCount += Convert.ToInt32(((dynamic)listObjects).Count, CultureInfo.InvariantCulture);
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel structured-table count failed for worksheet index {index}", ex);
+                        }
+                    }
+
+                    if (probePlan.PivotTables)
+                    {
+                        try
+                        {
+                            pivotTables = ((dynamic)worksheet).PivotTables();
+                            pivotTableCount += Convert.ToInt32(((dynamic)pivotTables).Count, CultureInfo.InvariantCulture);
+                        }
+                        catch (COMException ex)
+                        {
+                            throw new InvalidDataException($"Excel PivotTable count failed for worksheet index {index}", ex);
+                        }
                     }
                 }
                 finally
