@@ -217,7 +217,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void FormulaTraceLayoutPlanner_StopsSingleMetricLookupsOnceSortedMetricsPassAddress()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "FormulaTraceLayoutPlanner.cs"));
         var metricLookup = source[
             source.IndexOf("private readonly struct FormulaTraceMetricLookup", StringComparison.Ordinal)..
