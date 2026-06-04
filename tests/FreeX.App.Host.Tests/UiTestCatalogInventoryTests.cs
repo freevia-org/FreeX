@@ -31,7 +31,7 @@ public sealed partial class UiTestCatalogInventoryTests
             snapshot,
             "Command surface in-scope rows",
             inventory.CommandSurfaceTabs.Sum(tab => tab.Implemented + tab.Partial),
-            "From `COMMAND_INVENTORY.json`: Implemented + Partial command-surface rows.");
+            "From `parity/command-inventory.json`: Implemented + Partial command-surface rows.");
         AssertSnapshotRow(
             snapshot,
             "Menu/toolbar in-scope rows",
@@ -76,7 +76,7 @@ public sealed partial class UiTestCatalogInventoryTests
             snapshot,
             "Documented shortcut rows",
             shortcutSummary.TotalInScope,
-            $"From `SHORTCUT_PARITY_MATRIX.md`: {shortcutSummary.Parity} parity, {shortcutSummary.Partial} partial.");
+            $"From `parity/shortcuts.md`: {shortcutSummary.Parity} parity, {shortcutSummary.Partial} partial.");
         AssertSnapshotRow(
             snapshot,
             "Worksheet context menu commands",
@@ -98,8 +98,8 @@ public sealed partial class UiTestCatalogInventoryTests
     public void SourceInventoryModel_MatchesParityDocumentSummaries()
     {
         var inventory = ReadCommandInventory();
-        var commandSurfaceSummary = ReadCommandCoverageSummary("COMMAND_SURFACE_PARITY.md");
-        var menuToolbarSummary = ReadCommandCoverageSummary("MENU_TOOLBAR_PARITY.md");
+        var commandSurfaceSummary = ReadCommandCoverageSummary("parity/command-surface.md");
+        var menuToolbarSummary = ReadCommandCoverageSummary("parity/menu-toolbar.md");
         var shortcutSummary = ReadShortcutSummary();
         var shortcutRows = ReadShortcutRows();
 
@@ -127,10 +127,10 @@ public sealed partial class UiTestCatalogInventoryTests
     [Fact]
     public void NextCatalogTasks_RecordSourceBasedInventoryGuardAsExisting()
     {
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
 
         catalog.Should().NotContain(
-            "Generate a machine-readable row list from `COMMAND_SURFACE_PARITY.md`",
+            "Generate a machine-readable row list from `parity/command-surface.md`",
             "the source-based inventory guard now exists and future work should expand it");
         catalog.Should().Contain("Continue expanding the source-based machine-readable inventory guard");
     }
@@ -138,7 +138,7 @@ public sealed partial class UiTestCatalogInventoryTests
     [Fact]
     public void ScreenshotHarnessCatalogRow_DocumentsInAppRibbonTourPath()
     {
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
         var row = catalog
             .Split(Environment.NewLine)
             .Single(line => line.StartsWith("| UI-CMD-HARNESS-001 |", StringComparison.Ordinal));
@@ -204,7 +204,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyDictionary<string, InventorySnapshotRow> ReadInventorySnapshot()
     {
-        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
         var heading = Array.IndexOf(lines, "## Inventory Snapshot");
         heading.Should().BeGreaterThanOrEqualTo(0);
 
@@ -225,7 +225,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static CommandInventory ReadCommandInventory()
     {
-        var json = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_INVENTORY.json"));
+        var json = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-inventory.json"));
         return JsonSerializer.Deserialize<CommandInventory>(
             json,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
@@ -249,7 +249,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static ShortcutSummary ReadShortcutSummary()
     {
-        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
+        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
 
         return new ShortcutSummary(
             ReadShortcutSummaryCount(lines, "Parity"),
@@ -261,7 +261,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<ShortcutRow> ReadShortcutRows()
     {
-        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
+        var lines = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "parity/shortcuts.md"));
         var tableStart = Array.FindIndex(lines, line => line.StartsWith("| Area | Excel Shortcut |", StringComparison.Ordinal));
         tableStart.Should().BeGreaterThanOrEqualTo(0);
 
@@ -353,7 +353,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> ReadDocumentedScreenshotToolScripts()
     {
-        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "testing/ui-test-catalog.md"));
         var scripts = ScreenshotToolPath()
             .Matches(catalog)
             .Select(match => match.Groups["script"].Value)

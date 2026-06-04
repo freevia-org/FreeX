@@ -22,7 +22,7 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("function Write-ScreenshotEvidenceManifest");
         script.Should().Contain("screenshot_manifest.json");
         script.Should().Contain($"OutputNaming = \"{namingPattern}\"");
-        script.Should().Contain($"CatalogEvidenceTarget = \"docs/UI_TEST_CATALOG.md\"");
+        script.Should().Contain($"CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
         script.Should().Contain("WidthSource = \"RibbonScreenshotTourPlanner.DefaultWidths\"");
         script.Should().Contain("PlannedCaptureCount = $tabNames.Count * $widths.Count");
         script.Should().Contain("WindowBounds = [pscustomobject]");

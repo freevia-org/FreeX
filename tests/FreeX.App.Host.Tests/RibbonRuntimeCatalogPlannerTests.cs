@@ -103,7 +103,7 @@ public sealed class RibbonRuntimeCatalogPlannerTests
 
     private static IReadOnlyDictionary<string, HashSet<string>> LoadInventoryRows()
     {
-        using var document = JsonDocument.Parse(File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_INVENTORY.json")));
+        using var document = JsonDocument.Parse(File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-inventory.json")));
         var rowsBySection = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var section in document.RootElement.GetProperty("menuToolbarRows").EnumerateArray()
                      .Concat(document.RootElement.GetProperty("commandSurfaceRows").EnumerateArray()))

@@ -60,7 +60,7 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("FreeX is not affiliated with, endorsed by, or sponsored by Microsoft.");
         script.Should().Contain("Microsoft Excel is a trademark of Microsoft Corporation.");
         script.Should().Contain("In the app: Help > Legal Notices");
-        script.Should().Contain("docs/PRIVACY.md");
+        script.Should().Contain("docs/legal/privacy.md");
         script.Should().Contain("THIRD_PARTY_NOTICES.md");
     }
 

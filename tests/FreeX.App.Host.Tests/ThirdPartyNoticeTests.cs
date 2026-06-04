@@ -24,7 +24,7 @@ public sealed class ThirdPartyNoticeTests
     {
         var notices = File.ReadAllText(WorkspaceFileLocator.Find("THIRD_PARTY_NOTICES.md"));
         var licenses = File.ReadAllText(WorkspaceFileLocator.Find("THIRD_PARTY_LICENSES.md"));
-        var audit = File.ReadAllText(WorkspaceFileLocator.Find("docs", "THIRD_PARTY_LICENSE_AUDIT_2026-05-30.md"));
+        var audit = File.ReadAllText(WorkspaceFileLocator.Find("docs", "legal/third-party-license-audit-2026-05-30.md"));
 
         notices.Should().Contain("[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)");
         notices.Should().Contain("FluentAssertions 8.9.0 is a test/development dependency only");

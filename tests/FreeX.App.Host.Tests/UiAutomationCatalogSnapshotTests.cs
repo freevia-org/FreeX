@@ -93,7 +93,7 @@ internal static class UiAutomationCatalogSnapshotHarness
             ["Help"] = "MainWindow_Header_Help"
         };
 
-        using var document = JsonDocument.Parse(File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_INVENTORY.json")));
+        using var document = JsonDocument.Parse(File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-inventory.json")));
         return document.RootElement
             .GetProperty("keyTips")
             .GetProperty("topLevelTabs")

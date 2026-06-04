@@ -368,7 +368,7 @@ public partial class MainWindow
         var manifest = new RibbonScreenshotTourManifest(
             Tool: "FREEX_SS_TOUR",
             OutputDirectory: outputDir,
-            CatalogEvidenceTarget: "docs/UI_TEST_CATALOG.md",
+            CatalogEvidenceTarget: "docs/testing/ui-test-catalog.md",
             Context: plan.Context,
             BurstMode: plan.IsBurst,
             CaptureLogicalHeight: ScreenshotTourCaptureHeight,
