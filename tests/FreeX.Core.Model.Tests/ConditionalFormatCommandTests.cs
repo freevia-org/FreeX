@@ -12,7 +12,7 @@ public sealed class ConditionalFormatCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var rule = NewRule(sheet.Id);
 
         var command = new ApplyConditionalFormatCommand(sheet.Id, rule);
@@ -30,7 +30,7 @@ public sealed class ConditionalFormatCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var original = NewRule(sheet.Id);
         sheet.ConditionalFormats.Add(original);
 
@@ -54,7 +54,7 @@ public sealed class ConditionalFormatCommandTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var other = wb.AddSheet("Other");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new ApplyConditionalFormatCommand(sheet.Id, NewRule(other.Id)).Apply(ctx);
 
@@ -69,7 +69,7 @@ public sealed class ConditionalFormatCommandTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var rule = NewRule(sheet.Id);
 
         var outcome = new ApplyConditionalFormatCommand(sheet.Id, rule).Apply(ctx);
@@ -83,7 +83,7 @@ public sealed class ConditionalFormatCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var original = NewRule(sheet.Id);
         sheet.ConditionalFormats.Add(original);
         var invalid = NewRule(sheet.Id);
@@ -102,7 +102,7 @@ public sealed class ConditionalFormatCommandTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var replacement = NewRule(sheet.Id);
 
         var outcome = new ReplaceAllConditionalFormatsCommand(sheet.Id, [replacement]).Apply(ctx);
@@ -116,7 +116,7 @@ public sealed class ConditionalFormatCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var first = NewRule(sheet.Id);
         var second = NewRule(sheet.Id);
         var third = NewRule(sheet.Id);
@@ -156,7 +156,7 @@ public sealed class ConditionalFormatCommandTests
         // Rule applies to A1:Z100; clear B2:Y50 — start (A1) is outside but range overlaps
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var rule = new ConditionalFormat
         {
             AppliesTo = new GridRange(
@@ -184,7 +184,7 @@ public sealed class ConditionalFormatCommandTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.ConditionalFormats.Add(NewRule(sheet.Id));
 
         var outcome = new ClearConditionalFormatsCommand(
@@ -207,9 +207,4 @@ public sealed class ConditionalFormatCommandTests
             FormatIfTrue = new CellStyle { Bold = true }
         };
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
