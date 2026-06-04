@@ -11,7 +11,7 @@ public sealed class SetDrawingObjectRotationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), RotationDegrees = 15 };
         sheet.DrawingShapes.Add(shape);
 
@@ -30,7 +30,7 @@ public sealed class SetDrawingObjectRotationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture = new PictureModel { Anchor = new CellAddress(sheet.Id, 2, 3), RotationDegrees = 30 };
         sheet.Pictures.Add(picture);
 
@@ -49,7 +49,7 @@ public sealed class SetDrawingObjectRotationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 4, 2), Text = "hello", RotationDegrees = 5 };
         sheet.TextBoxes.Add(textBox);
 
@@ -68,7 +68,7 @@ public sealed class SetDrawingObjectRotationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
         sheet.DrawingShapes.Add(shape);
 
@@ -83,7 +83,7 @@ public sealed class SetDrawingObjectRotationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), RotationDegrees = 10 };
         sheet.DrawingShapes.Add(shape);
 
@@ -98,7 +98,7 @@ public sealed class SetDrawingObjectRotationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         new SetDrawingObjectRotationCommand(sheet.Id, SelectionPaneObjectKind.Shape, Guid.NewGuid(), 45)
             .Apply(ctx).Success.Should().BeFalse();
@@ -109,7 +109,7 @@ public sealed class SetDrawingObjectRotationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), RotationDegrees = 10 };
         sheet.DrawingShapes.Add(shape);
         sheet.IsProtected = true;
@@ -120,9 +120,4 @@ public sealed class SetDrawingObjectRotationCommandTests
         shape.RotationDegrees.Should().Be(10);
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
