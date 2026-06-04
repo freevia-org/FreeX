@@ -167,6 +167,18 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void LoadPath_PreSizesSheetCellStorageFromSheetDataLayout()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var cellLayoutSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetCellLayoutReader.cs"));
+        var sheetXmlLayoutSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+
+        cellLayoutSource.Should().Contain("int PopulatedCellCount");
+        sheetXmlLayoutSource.Should().Contain("cellLayout.PopulatedCellCount");
+        adapterSource.Should().Contain("sheet.EnsureCellCapacity(layoutWithCells.PopulatedCellCount);");
+    }
+
+    [Fact]
     public void SaveSourcePackageCapture_ReusesSaveFingerprintForSnapshot()
     {
         var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));

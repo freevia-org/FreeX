@@ -199,6 +199,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         writerSource.Should().Contain("ApplyStyleOnlyCells");
         writerSource.Should().Contain("UpdateDimension");
         writerSource.Should().Contain("new List<StyleOnlyCell>(sheet.StyleOnlyCellCount)");
+        writerSource.Should().Contain("var isRowMajorOrdered = true;");
+        writerSource.Should().Contain("if (!isRowMajorOrdered)");
         writerSource.Should().Contain("string.Create(");
         writerSource.Should().NotContain(
             "CellAddress.NumberToColumnName(col)",

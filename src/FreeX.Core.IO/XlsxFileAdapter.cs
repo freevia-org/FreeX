@@ -171,6 +171,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         {
             var sheet = workbook.AddSheet(xlSheet.Name);
             sheetXmlLayout.TryGetValue(xlSheet.Name, out var xmlLayout);
+            if (xmlLayout is { PopulatedCellCount: > 0 } layoutWithCells)
+                sheet.EnsureCellCapacity(layoutWithCells.PopulatedCellCount);
+
             sheet.IsVeryHidden = xlSheet.Visibility == XLWorksheetVisibility.VeryHidden;
             sheet.IsHidden = xlSheet.Visibility != XLWorksheetVisibility.Visible;
             if (xlSheet.TabColor.HasValue)

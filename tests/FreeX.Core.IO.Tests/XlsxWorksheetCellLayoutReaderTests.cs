@@ -44,6 +44,7 @@ public sealed class XlsxWorksheetCellLayoutReaderTests
 
         layout.HasStyleOnlyCells.Should().BeTrue();
         layout.ExplicitStyleOnlyCells.Should().BeEmpty();
+        layout.PopulatedCellCount.Should().Be(0);
     }
 
     [Fact]
@@ -66,6 +67,25 @@ public sealed class XlsxWorksheetCellLayoutReaderTests
             [(1, 1)] = ErrorValue.DivByZero,
             [(2, 2)] = ErrorValue.Circular
         });
+    }
+
+    [Fact]
+    public void Read_CountsPopulatedFormulaValueAndInlineStringCells()
+    {
+        var worksheet = new XDocument(
+            new XElement(WorksheetNs + "worksheet",
+                new XElement(WorksheetNs + "sheetData",
+                    new XElement(WorksheetNs + "row",
+                        Cell("A1", style: "3"),
+                        Cell("B1", null, null, new XElement(WorksheetNs + "v", "42")),
+                        Cell("C1", null, null, new XElement(WorksheetNs + "f", "A1")),
+                        Cell("D1", null, null, new XElement(WorksheetNs + "is")),
+                        Cell("E1", "4", "e", new XElement(WorksheetNs + "f", "1/0"), new XElement(WorksheetNs + "v", "#DIV/0!"))))));
+
+        var layout = XlsxWorksheetCellLayoutReader.Read(worksheet, WorksheetNs);
+
+        layout.PopulatedCellCount.Should().Be(4);
+        layout.ExplicitStyleOnlyCells.Should().Equal((1u, 1u, 3));
     }
 
     private static XElement Cell(string reference, string? style = null, string? type = null, params object[] content)

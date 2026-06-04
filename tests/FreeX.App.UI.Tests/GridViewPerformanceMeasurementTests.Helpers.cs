@@ -103,6 +103,70 @@ public sealed partial class GridViewPerformanceMeasurementTests
         return grid;
     }
 
+    private static GridView CreateConditionalIconHeavyGrid(double width, double height)
+    {
+        const int rowCount = 80;
+        const int columnCount = 26;
+        const double rowHeight = 20;
+        const double columnWidth = 64;
+
+        var sheetId = SheetId.New();
+        var rows = Enumerable
+            .Range(0, rowCount)
+            .Select(index => new RowMetric((uint)(index + 1), rowHeight, index * rowHeight))
+            .ToArray();
+        var columns = Enumerable
+            .Range(0, columnCount)
+            .Select(index => new ColMetric((uint)(index + 1), columnWidth, index * columnWidth))
+            .ToArray();
+        var iconStyles = new (string Style, int Count)[]
+        {
+            ("3Arrows", 3),
+            ("3Flags", 3),
+            ("4Rating", 4),
+            ("5Quarters", 5),
+            ("3Signs", 3),
+            ("3Symbols", 3)
+        };
+        var cells = new List<DisplayCell>(rowCount * columnCount);
+        foreach (var row in rows)
+        {
+            foreach (var column in columns)
+            {
+                var iconStyle = iconStyles[(int)((row.Row + column.Col) % iconStyles.Length)];
+                var iconIndex = (int)((row.Row * 3 + column.Col) % (uint)iconStyle.Count);
+                cells.Add(new DisplayCell(
+                    row.Row,
+                    column.Col,
+                    BlankValue.Instance,
+                    "",
+                    null,
+                    StyleId.Default,
+                    null,
+                    Style: null,
+                    ConditionalIcon: new ConditionalFormatIcon(
+                        iconStyle.Style,
+                        iconIndex,
+                        iconStyle.Count,
+                        ShowValue: false)));
+            }
+        }
+
+        var grid = new GridView
+        {
+            Width = width,
+            Height = height,
+            Viewport = new ViewportModel(cells, rows, columns),
+            SelectedRange = new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 1, 1))
+        };
+        grid.Measure(new Size(width, height));
+        grid.Arrange(new Rect(0, 0, width, height));
+        grid.UpdateLayout();
+        return grid;
+    }
+
     private static GridView CreateWrappedTextHeavyGrid(double width, double height)
     {
         const int rowCount = 80;

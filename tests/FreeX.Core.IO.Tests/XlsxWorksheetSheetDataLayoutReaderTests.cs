@@ -67,6 +67,7 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         {
             [(5, 2)] = ErrorValue.DivByZero
         });
+        layout.CellLayout.PopulatedCellCount.Should().Be(2);
     }
 
     [Fact]
