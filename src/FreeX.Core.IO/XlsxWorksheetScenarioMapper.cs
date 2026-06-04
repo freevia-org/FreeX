@@ -41,8 +41,8 @@ internal static class XlsxWorksheetScenarioMapper
                     name,
                     changes,
                     NullIfWhiteSpace(scenario.Attribute("comment")?.Value),
-                    IsTruthy(scenario.Attribute("hidden")?.Value),
-                    IsTruthy(scenario.Attribute("locked")?.Value),
+                    XlsxWorksheetXmlValueParser.IsTruthy(scenario.Attribute("hidden")?.Value),
+                    XlsxWorksheetXmlValueParser.IsTruthy(scenario.Attribute("locked")?.Value),
                     NullIfWhiteSpace(scenario.Attribute("user")?.Value)));
         }
 
@@ -177,11 +177,6 @@ internal static class XlsxWorksheetScenarioMapper
 
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
-
-    private static bool IsTruthy(string? value) =>
-        value is not null &&
-        (string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
-         string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
 
     private static string FormatValue(ScalarValue value) => value switch
     {
