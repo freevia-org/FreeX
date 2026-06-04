@@ -156,6 +156,21 @@ public sealed class XlsxWorkbookThemeReaderTests
     }
 
     [Fact]
+    public void Load_ReadsFormatSchemeBevelAndThreeDRotationEffectDefaults()
+    {
+        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithBevelAndThreeDRotationXml));
+
+        var theme = XlsxWorkbookThemeReader.Load(package);
+
+        theme.NativeFormatSchemeXml.Should().Contain("bevelT");
+        theme.NativeFormatSchemeXml.Should().Contain("camera");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasBevel.Should().BeTrue();
+        theme.EffectDefaults.HasThreeDRotation.Should().BeTrue();
+        theme.EffectDefaults.HasAnyEffect.Should().BeTrue();
+    }
+
+    [Fact]
     public void LoadSave_PreservesThemeSupplementElementsBesideThemeElements()
     {
         using var package = CreatePackage(("xl/theme/theme1.xml", """
@@ -644,6 +659,27 @@ public sealed class XlsxWorkbookThemeReaderTests
                       <a:srgbClr val="000000"><a:alpha val="35000"/></a:srgbClr>
                     </a:innerShdw>
                   </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+          </a:themeElements>
+        </a:theme>
+        """;
+
+    private const string NativeThemeWithBevelAndThreeDRotationXml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Bevel Rotation Theme">
+          <a:themeElements>
+            <a:fmtScheme name="Bevel Rotation Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst/>
+                  <a:scene3d>
+                    <a:camera prst="orthographicFront"/>
+                  </a:scene3d>
+                  <a:sp3d>
+                    <a:bevelT w="76200" h="38100"/>
+                  </a:sp3d>
                 </a:effectStyle>
               </a:effectStyleLst>
             </a:fmtScheme>

@@ -176,6 +176,8 @@ public sealed record WorkbookTheme(
             XElement? glowEffect = null;
             (double Opacity, double OffsetX, double OffsetY, double BlurRadius)? innerShadow = null;
             var softEdgeRadius = 0d;
+            var hasBevel = false;
+            var hasThreeDRotation = false;
             foreach (var effectStyle in effectStyleList.Elements(drawingNs + "effectStyle"))
             {
                 var candidateShadow = FindThemeShadow(effectStyle, drawingNs);
@@ -183,20 +185,31 @@ public sealed record WorkbookTheme(
                 var candidateInnerShadow = ReadThemeInnerShadow(effectStyle, drawingNs);
                 var candidateSoftEdgeRadius = ReadPositiveCoordinatePixels(
                     FindThemeSoftEdge(effectStyle, drawingNs)?.Attribute("rad")?.Value);
+                var candidateHasBevel = HasThemeBevel(effectStyle, drawingNs);
+                var candidateHasThreeDRotation = HasThemeThreeDRotation(effectStyle, drawingNs);
                 if (candidateShadow is not null ||
                     candidateGlow is not null ||
                     candidateInnerShadow is not null ||
-                    candidateSoftEdgeRadius > 0)
+                    candidateSoftEdgeRadius > 0 ||
+                    candidateHasBevel ||
+                    candidateHasThreeDRotation)
                 {
                     shadowEffect = candidateShadow;
                     glowEffect = candidateGlow;
                     innerShadow = candidateInnerShadow;
                     softEdgeRadius = candidateSoftEdgeRadius;
+                    hasBevel = candidateHasBevel;
+                    hasThreeDRotation = candidateHasThreeDRotation;
                     break;
                 }
             }
 
-            if (shadowEffect is null && glowEffect is null && innerShadow is null && softEdgeRadius <= 0)
+            if (shadowEffect is null &&
+                glowEffect is null &&
+                innerShadow is null &&
+                softEdgeRadius <= 0 &&
+                !hasBevel &&
+                !hasThreeDRotation)
                 return null;
 
             var shadowOpacity = 0d;
@@ -226,13 +239,25 @@ public sealed record WorkbookTheme(
                 innerShadow?.Opacity ?? 0,
                 innerShadow?.OffsetX ?? 0,
                 innerShadow?.OffsetY ?? 0,
-                innerShadow?.BlurRadius ?? 0);
+                innerShadow?.BlurRadius ?? 0,
+                hasBevel,
+                hasThreeDRotation);
         }
         catch
         {
             return null;
         }
     }
+
+    private static bool HasThemeBevel(XElement effectStyle, XNamespace drawingNs) =>
+        effectStyle
+            .Element(drawingNs + "sp3d")?
+            .Element(drawingNs + "bevelT") is not null;
+
+    private static bool HasThemeThreeDRotation(XElement effectStyle, XNamespace drawingNs) =>
+        effectStyle
+            .Element(drawingNs + "scene3d")?
+            .Element(drawingNs + "camera") is not null;
 
     private static XElement? FindThemeShadow(XElement effectStyle, XNamespace drawingNs) =>
         effectStyle
@@ -450,13 +475,15 @@ public sealed record WorkbookThemeEffectDefaults(
     double InnerShadowOpacity = 0,
     double InnerShadowOffsetX = 0,
     double InnerShadowOffsetY = 0,
-    double InnerShadowBlurRadius = 0)
+    double InnerShadowBlurRadius = 0,
+    bool HasBevel = false,
+    bool HasThreeDRotation = false)
 {
     public bool HasShadow => ShadowOpacity > 0;
     public bool HasGlow => GlowOpacity > 0 && GlowRadius > 0;
     public bool HasSoftEdge => SoftEdgeRadius > 0;
     public bool HasInnerShadow => InnerShadowOpacity > 0;
-    public bool HasAnyEffect => HasShadow || HasGlow || HasSoftEdge || HasInnerShadow;
+    public bool HasAnyEffect => HasShadow || HasGlow || HasSoftEdge || HasInnerShadow || HasBevel || HasThreeDRotation;
 }
 
 public readonly record struct WorkbookThemeColorReference(
