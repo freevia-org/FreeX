@@ -309,15 +309,6 @@ public sealed class StatusBarLayoutTests
 
     private static Rect BoundsRelativeToWindow(FrameworkElement element, Window window) =>
         element.TransformToAncestor(window).TransformBounds(new Rect(new Size(element.ActualWidth, element.ActualHeight)));
-
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
-    }
-
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
