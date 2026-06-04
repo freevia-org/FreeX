@@ -785,6 +785,53 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversPeopleHrAndTeamVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Employe emploee EMPLYEE maneger MANGER departmant departmnt benifits vacaton onbord onbording perfomance performnce trainging recruting. Keep employee, manager, department, benefits, vacation, onboard, onboarding, performance, training, recruiting, preemploye, maneger_id, https://employe.example.com/maneger, hr@departmant.example.com, and \"C:\\benifits folder\\vacaton file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "manger MANGER Manger https://manger.example.com/manger lead@manger.example.com manger_id premanger \"C:\\manger folder\\manger file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "manager");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Employe", "Employee"),
+            ("emploee", "employee"),
+            ("EMPLYEE", "EMPLOYEE"),
+            ("maneger", "manager"),
+            ("MANGER", "MANAGER"),
+            ("departmant", "department"),
+            ("departmnt", "department"),
+            ("benifits", "benefits"),
+            ("vacaton", "vacation"),
+            ("onbord", "onboard"),
+            ("onbording", "onboarding"),
+            ("perfomance", "performance"),
+            ("performnce", "performance"),
+            ("trainging", "training"),
+            ("recruting", "recruiting"));
+        plan.IssueCount.Should().Be(15);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Employee employee EMPLOYEE manager MANAGER department department benefits vacation onboard onboarding performance performance training recruiting. Keep employee, manager, department, benefits, vacation, onboard, onboarding, performance, training, recruiting, preemploye, maneger_id, https://employe.example.com/maneger, hr@departmant.example.com, and \"C:\\benifits folder\\vacaton file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(15);
+        replaceAllCorrected.Should().Be(
+            "manager MANAGER Manager https://manger.example.com/manger lead@manger.example.com manger_id premanger \"C:\\manger folder\\manger file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversRiskActionTrackingVocabularyTypos()
     {
         var wb = new Workbook("test");
