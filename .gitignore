@@ -27,6 +27,10 @@ Thumbs.db
 # XLSX corpus private samples
 test-corpus/local-private/
 
+# On-demand real-world fidelity corpus: only the manifest + downloader are committed; the
+# downloaded/local workbooks are never committed (third-party files, repo size).
+fidelity-corpus/files/
+
 # Generated icon asset exports
 docs/assets/
 src/FreeX.App.Host/Resources/CommandIcons/
