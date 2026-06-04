@@ -17,7 +17,7 @@ public sealed class CommandBusUndoSafetyTests
     {
         workbook = new Workbook("safety-test");
         var wb = workbook;
-        return new CommandBus(_ => new SimpleCtx(wb));
+        return new CommandBus(_ => new TestCommandContext(wb));
     }
 
     // ── helper stubs ──────────────────────────────────────────────────────────
@@ -34,12 +34,6 @@ public sealed class CommandBusUndoSafetyTests
         public string Label => "ThrowingRevert";
         public CommandOutcome Apply(ICommandContext ctx) => new(true);
         public void Revert(ICommandContext ctx) => throw new InvalidOperationException("simulated revert failure");
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 
     // ── happy path ────────────────────────────────────────────────────────────

@@ -16,6 +16,8 @@ public static partial class FlashFillService
     private enum UsAddressComponentKind
     {
         Street,
+        StreetNumber,
+        StreetName,
         City,
         State,
         Zip5,
@@ -88,6 +90,8 @@ public static partial class FlashFillService
     private static readonly UsAddressComponentKind[] UsAddressComponentKinds =
     [
         UsAddressComponentKind.Street,
+        UsAddressComponentKind.StreetNumber,
+        UsAddressComponentKind.StreetName,
         UsAddressComponentKind.City,
         UsAddressComponentKind.State,
         UsAddressComponentKind.Zip5,
