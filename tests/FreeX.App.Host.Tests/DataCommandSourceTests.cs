@@ -1,5 +1,5 @@
-using System.IO;
 using FluentAssertions;
+using static FreeX.App.Host.Tests.LocalizedXamlTestSupport;
 
 namespace FreeX.App.Host.Tests;
 
@@ -17,7 +17,7 @@ public sealed class DataCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
+        var button = ReadMainWindowXaml().ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
 
         button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -27,8 +27,8 @@ public sealed class DataCommandSourceTests
     [Fact]
     public void DataSortAndFilterHandlers_RouteThroughExpectedCommandsAndPlanners()
     {
-        var filterSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
-        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var filterSource = ReadHostSourceFile("MainWindow.DataFilterCommands.cs");
+        var dataSource = ReadHostSourceFile("MainWindow.DataCommands.cs");
 
         filterSource.Should().Contain("new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: true)");
         filterSource.Should().Contain("new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: false)");
@@ -55,12 +55,4 @@ public sealed class DataCommandSourceTests
         xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Queries &amp; Connections\"");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
-    private static string ExtractButtonElementByTitle(string xaml, string title, string? handler = null)
-        => xaml.ExtractElementByInvariantCommandName(
-            "Button",
-            title,
-            handler is null ? null : $"Click=\"{handler}\"");
 }
