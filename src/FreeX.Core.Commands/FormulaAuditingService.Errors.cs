@@ -1368,12 +1368,15 @@ public static partial class FormulaAuditingService
     private static bool TryStripTrailingPercent(string text, out string numberText)
     {
         numberText = string.Empty;
-        if (text.Length <= 1 || text[^1] != '%')
+        if (text.Length <= 1 || !IsSupportedPercentSign(text[^1]))
             return false;
 
         numberText = text[..^1].Trim();
         return numberText.Length > 0;
     }
+
+    private static bool IsSupportedPercentSign(char value) =>
+        value is '%' or '\uFF05' or '\uFE6A';
 
     private static bool TryParseFiniteNumberText(string text)
     {
