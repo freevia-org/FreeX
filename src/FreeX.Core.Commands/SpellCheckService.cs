@@ -663,6 +663,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "rang"))
+                {
+                    suggestion = "range";
+                    return true;
+                }
+
                 break;
             case 5:
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "chrat"))
@@ -674,6 +680,18 @@ public static partial class SpellCheckService
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "colum"))
                 {
                     suggestion = "column";
+                    return true;
+                }
+
+                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "vlaue"))
+                {
+                    suggestion = "value";
+                    return true;
+                }
+
+                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "valus"))
+                {
+                    suggestion = "values";
                     return true;
                 }
 
@@ -715,6 +733,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "cloumn"))
+                {
+                    suggestion = "column";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "colomn"))
+                {
+                    suggestion = "column";
+                    return true;
+                }
+
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "foruma"))
                 {
                     suggestion = "formula";
@@ -736,6 +766,12 @@ public static partial class SpellCheckService
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "revenu"))
                 {
                     suggestion = "revenue";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "raange"))
+                {
+                    suggestion = "range";
                     return true;
                 }
 
@@ -941,6 +977,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "refrence"))
+                {
+                    suggestion = "reference";
+                    return true;
+                }
+
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "relevent"))
                 {
                     suggestion = "relevant";
@@ -986,6 +1028,18 @@ public static partial class SpellCheckService
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "tommorow"))
                 {
                     suggestion = "tomorrow";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "tranpose"))
+                {
+                    suggestion = "transpose";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "transpos"))
+                {
+                    suggestion = "transpose";
                     return true;
                 }
 
@@ -1051,6 +1105,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "referance"))
+                {
+                    suggestion = "reference";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "refernece"))
+                {
+                    suggestion = "reference";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "sucessful"))
                 {
                     suggestion = "successful";
@@ -1060,6 +1126,12 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "succesful"))
                 {
                     suggestion = "successful";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "transopse"))
+                {
+                    suggestion = "transpose";
                     return true;
                 }
 
