@@ -1268,6 +1268,14 @@ public static partial class FormulaAuditingService
 
     private static bool TryStripSupportedCurrencySymbol(string text, out string numberText)
     {
+        if (TryStripLeadingSupportedCurrencySymbol(text, out numberText))
+            return true;
+
+        return TryStripTrailingSupportedCurrencySymbol(text, out numberText);
+    }
+
+    private static bool TryStripLeadingSupportedCurrencySymbol(string text, out string numberText)
+    {
         numberText = string.Empty;
         if (text.Length <= 1)
             return false;
@@ -1294,6 +1302,47 @@ public static partial class FormulaAuditingService
             ? numericText
             : string.Concat(text[0], numericText);
         return numberText.Length > 0;
+    }
+
+    private static bool TryStripTrailingSupportedCurrencySymbol(string text, out string numberText)
+    {
+        numberText = string.Empty;
+        if (text.Length <= 1)
+            return false;
+
+        var symbolIndex = text.Length - 1;
+        while (symbolIndex >= 0 && char.IsWhiteSpace(text[symbolIndex]))
+            symbolIndex--;
+
+        if (symbolIndex <= 0 || !IsSupportedCurrencySymbol(text[symbolIndex]))
+            return false;
+
+        var numericEnd = symbolIndex;
+        while (numericEnd > 0 && char.IsWhiteSpace(text[numericEnd - 1]))
+            numericEnd--;
+
+        if (numericEnd <= 0)
+            return false;
+
+        var numericText = text[..numericEnd].Trim();
+        if (numericText.Length == 0)
+            return false;
+
+        if (numericText[0] is '+' or '-')
+        {
+            var numberStart = 1;
+            while (numberStart < numericText.Length && char.IsWhiteSpace(numericText[numberStart]))
+                numberStart++;
+
+            if (numberStart >= numericText.Length)
+                return false;
+
+            numberText = string.Concat(numericText[0], numericText[numberStart..].Trim());
+            return numberText.Length > 1;
+        }
+
+        numberText = numericText;
+        return true;
     }
 
     private static bool IsSupportedCurrencySymbol(char value) =>
