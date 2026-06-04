@@ -458,6 +458,7 @@ internal static class ExcelOpenSmoke
             workbook = null;
             CollectComReferences();
             AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
+            AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
 
             reopenedWorkbook = OpenExcelWorkbook(workbooks, excelSavedPath, readOnly: true);
             ExcelWorkbookSummary reopened;
@@ -559,6 +560,34 @@ internal static class ExcelOpenSmoke
                 $"Excel saved copy contains repair/recovery log parts: {string.Join(", ", recoveryLogs)}");
         }
     }
+
+    private static void AssertRequiredExcelSavedPackageParts(
+        string xlsxPath,
+        WorkbookSmokeExpectations? expectations,
+        string sourcePath)
+    {
+        var requiredParts = expectations?.RequiredExcelSavedPackageParts;
+        if (requiredParts is null || requiredParts.Count == 0)
+            return;
+
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var entries = archive.Entries
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = requiredParts
+            .Select(NormalizePackagePart)
+            .Where(part => !entries.Contains(part))
+            .ToArray();
+
+        if (missing.Length == 0)
+            return;
+
+        throw new InvalidDataException(
+            $"Excel-saved workbook for '{sourcePath}' is missing required package part(s): {string.Join(", ", missing)}");
+    }
+
+    private static string NormalizePackagePart(string part) =>
+        part.Replace('\\', '/').TrimStart('/');
 
     private static void AssertOpenXmlValid(string xlsxPath, string label)
     {
@@ -2514,6 +2543,40 @@ internal static class ExcelOpenSmoke
                 MinFreeXReopenedAutoFilterSheets = reopen
             };
         }
+        else if (string.Equals(row.Id, "generated-slicers-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                RequiredExcelSavedPackageParts =
+                [
+                    "xl/slicers/slicer1.xml",
+                    "xl/slicerCaches/slicerCache1.xml"
+                ]
+            };
+        }
+        else if (string.Equals(row.Id, "generated-timelines-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                RequiredExcelSavedPackageParts =
+                [
+                    "xl/timelines/timeline1.xml",
+                    "xl/timelineCaches/timelineCache1.xml"
+                ]
+            };
+        }
+        else if (string.Equals(row.Id, "generated-custom-xml-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                RequiredExcelSavedPackageParts =
+                [
+                    "customXml/item1.xml",
+                    "customXml/itemProps1.xml",
+                    "customXml/_rels/item1.xml.rels"
+                ]
+            };
+        }
         else if (string.Equals(row.Id, "generated-table-ref-formulas-package-003", StringComparison.OrdinalIgnoreCase))
         {
             expectations = EnsureExpectations() with
@@ -3788,6 +3851,12 @@ internal static class ExcelOpenSmoke
             Console.WriteLine($"  Staged: {result.StagedPath}");
         if (result.ExcelSavedPath is not null)
             Console.WriteLine($"  Excel saved: {result.ExcelSavedPath}");
+        if (result.ExcelSavedPath is not null &&
+            result.Input.Expectations?.RequiredExcelSavedPackageParts is { Count: > 0 } requiredParts)
+        {
+            Console.WriteLine(
+                $"  Excel-saved package parts asserted: {string.Join(", ", requiredParts)}");
+        }
 
         if (result.FreeXPreSave is { } freeXPreSave)
             WriteFreeXSummary("FreeX source load", freeXPreSave);
