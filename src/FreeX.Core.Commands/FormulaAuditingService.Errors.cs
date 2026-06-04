@@ -1344,6 +1344,9 @@ public static partial class FormulaAuditingService
         var hasMonthNameLeading = Regex.IsMatch(value, @"^[A-Za-z]{3,9}([ \-.])\d{1,2},?\1?\s*\d{2}$", RegexOptions.CultureInvariant);
         var hasDayMonthNameLeading = Regex.IsMatch(value, @"^\d{1,2}([ \-.])[A-Za-z]{3,9},?\1?\s*\d{2}$", RegexOptions.CultureInvariant);
         var hasYearMonthNameLeading = Regex.IsMatch(value, @"^\d{2}([ \-.])[A-Za-z]{3,9}\1\d{1,2}$", RegexOptions.CultureInvariant);
+        var hasSlashMonthNameLeading = Regex.IsMatch(value, @"^[A-Za-z]{3,9}/\d{1,2}/\d{2}$", RegexOptions.CultureInvariant);
+        var hasSlashDayMonthNameLeading = Regex.IsMatch(value, @"^\d{1,2}/[A-Za-z]{3,9}/\d{2}$", RegexOptions.CultureInvariant);
+        var hasSlashYearMonthNameLeading = Regex.IsMatch(value, @"^\d{2}/[A-Za-z]{3,9}/\d{1,2}$", RegexOptions.CultureInvariant);
 
         string[] formats;
         if (hasNumericTrailingYear || hasNumericLeadingYear)
@@ -1356,6 +1359,30 @@ public static partial class FormulaAuditingService
                 "yy/M/d",
                 "yy-M-d",
                 "yy.M.d"
+            ];
+        }
+        else if (hasSlashMonthNameLeading)
+        {
+            formats =
+            [
+                "MMM/d/yy",
+                "MMMM/d/yy"
+            ];
+        }
+        else if (hasSlashYearMonthNameLeading)
+        {
+            formats =
+            [
+                "yy/MMM/d",
+                "yy/MMMM/d"
+            ];
+        }
+        else if (hasSlashDayMonthNameLeading)
+        {
+            formats =
+            [
+                "d/MMM/yy",
+                "d/MMMM/yy"
             ];
         }
         else if (hasMonthNameLeading || hasDayMonthNameLeading || hasYearMonthNameLeading)
