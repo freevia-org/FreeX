@@ -74,6 +74,10 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
     private const string HyperlinkRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+    private const string SharedStringsContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
+    private const string StylesContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
@@ -659,6 +663,16 @@ internal static class ExcelOpenSmoke
             issues.Add("missing workbook relationship to xl/styles.xml for public styles/formatting tag");
         }
 
+        if (tags.Contains("styles") || tags.Contains("formatting"))
+        {
+            var stylesContentTypeIssue = FindPackageContentTypeIssue(
+                archive,
+                "xl/styles.xml",
+                StylesContentType);
+            if (stylesContentTypeIssue is not null)
+                issues.Add(stylesContentTypeIssue);
+        }
+
         if (tags.Contains("shared-strings") &&
             !PackageEntryExists(archive, "xl/sharedStrings.xml"))
         {
@@ -674,6 +688,16 @@ internal static class ExcelOpenSmoke
                     "xl/sharedStrings.xml")))
         {
             issues.Add("missing workbook relationship to xl/sharedStrings.xml for public shared-strings tag");
+        }
+
+        if (tags.Contains("shared-strings"))
+        {
+            var sharedStringsContentTypeIssue = FindPackageContentTypeIssue(
+                archive,
+                "xl/sharedStrings.xml",
+                SharedStringsContentType);
+            if (sharedStringsContentTypeIssue is not null)
+                issues.Add(sharedStringsContentTypeIssue);
         }
 
         if (tags.Contains("hyperlinks") &&
