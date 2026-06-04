@@ -33,7 +33,9 @@ public sealed partial class XlsxFileAdapter
         IReadOnlySet<string>? WorksheetsWithPreservableSourceMetadata,
         bool? HasUnsupportedConditionalFormatting,
         bool AllowsCellPatchSave,
-        XlsxCellPatchBaseline? CellPatchBaseline)
+        string? CellPatchEligibilityBlockReason,
+        XlsxCellPatchBaseline? CellPatchBaseline,
+        string? CellPatchBaselineBlockReason)
     {
         private const int FingerprintCellLimit = 25_000;
         private const int CellPatchBaselineLimit = 250_000;
@@ -112,7 +114,19 @@ public sealed partial class XlsxFileAdapter
 
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var bytes = ReadBytes(stream);
-            var cellPatchBaseline = XlsxCellPatchBaseline.TryCreate(bytes, 0, bytes.Length, workbook, CellPatchBaselineLimit);
+            var allowsCellPatchSave = AllowsCellPatchSaveForPackage(
+                bytes,
+                0,
+                bytes.Length,
+                workbook,
+                out var cellPatchEligibilityBlockReason);
+            var cellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
+                bytes,
+                0,
+                bytes.Length,
+                workbook,
+                CellPatchBaselineLimit,
+                out var cellPatchBaselineBlockReason);
             return new XlsxSourcePackage(
                 bytes,
                 0,
@@ -120,8 +134,10 @@ public sealed partial class XlsxFileAdapter
                 fingerprint,
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting,
-                AllowsCellPatchSaveForPackage(bytes, 0, bytes.Length, workbook),
-                cellPatchBaseline);
+                allowsCellPatchSave,
+                cellPatchEligibilityBlockReason,
+                cellPatchBaseline,
+                cellPatchBaselineBlockReason);
         }
 
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
@@ -191,6 +207,20 @@ public sealed partial class XlsxFileAdapter
                     buffer.Offset >= 0 &&
                     buffer.Offset + (int)stream.Length <= buffer.Array.Length)
                 {
+                    var reusedAllowsCellPatchSave = AllowsCellPatchSaveForPackage(
+                        buffer.Array,
+                        buffer.Offset,
+                        (int)stream.Length,
+                        workbook,
+                        out var reusedCellPatchEligibilityBlockReason);
+                    var reusedCellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
+                        buffer.Array,
+                        buffer.Offset,
+                        (int)stream.Length,
+                        workbook,
+                        CellPatchBaselineLimit,
+                        out var reusedCellPatchBaselineBlockReason,
+                        sheetXmlLayout);
                     return new XlsxSourcePackage(
                         buffer.Array,
                         buffer.Offset,
@@ -198,14 +228,10 @@ public sealed partial class XlsxFileAdapter
                         fingerprint,
                         worksheetsWithPreservableSourceMetadata,
                         hasUnsupportedConditionalFormatting,
-                        AllowsCellPatchSaveForPackage(buffer.Array, buffer.Offset, (int)stream.Length, workbook),
-                        XlsxCellPatchBaseline.TryCreate(
-                            buffer.Array,
-                            buffer.Offset,
-                            (int)stream.Length,
-                            workbook,
-                            CellPatchBaselineLimit,
-                            sheetXmlLayout));
+                        reusedAllowsCellPatchSave,
+                        reusedCellPatchEligibilityBlockReason,
+                        reusedCellPatchBaseline,
+                        reusedCellPatchBaselineBlockReason);
                 }
 
                 var copiedBytes = buffer.Array is not null &&
@@ -214,6 +240,20 @@ public sealed partial class XlsxFileAdapter
                     buffer.Offset + (int)stream.Length <= buffer.Array.Length
                     ? buffer.Array.AsSpan(buffer.Offset, (int)stream.Length).ToArray()
                     : ReadBytes(stream);
+                var copiedAllowsCellPatchSave = AllowsCellPatchSaveForPackage(
+                    copiedBytes,
+                    0,
+                    copiedBytes.Length,
+                    workbook,
+                    out var copiedCellPatchEligibilityBlockReason);
+                var copiedCellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
+                    copiedBytes,
+                    0,
+                    copiedBytes.Length,
+                    workbook,
+                    CellPatchBaselineLimit,
+                    out var copiedCellPatchBaselineBlockReason,
+                    sheetXmlLayout);
                 return new XlsxSourcePackage(
                     copiedBytes,
                     0,
@@ -221,17 +261,27 @@ public sealed partial class XlsxFileAdapter
                     fingerprint,
                     worksheetsWithPreservableSourceMetadata,
                     hasUnsupportedConditionalFormatting,
-                    AllowsCellPatchSaveForPackage(copiedBytes, 0, copiedBytes.Length, workbook),
-                    XlsxCellPatchBaseline.TryCreate(
-                        copiedBytes,
-                        0,
-                        copiedBytes.Length,
-                        workbook,
-                        CellPatchBaselineLimit,
-                        sheetXmlLayout));
+                    copiedAllowsCellPatchSave,
+                    copiedCellPatchEligibilityBlockReason,
+                    copiedCellPatchBaseline,
+                    copiedCellPatchBaselineBlockReason);
             }
 
             var bytes = ReadBytes(stream);
+            var allowsCellPatchSave = AllowsCellPatchSaveForPackage(
+                bytes,
+                0,
+                bytes.Length,
+                workbook,
+                out var cellPatchEligibilityBlockReason);
+            var cellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
+                bytes,
+                0,
+                bytes.Length,
+                workbook,
+                CellPatchBaselineLimit,
+                out var cellPatchBaselineBlockReason,
+                sheetXmlLayout);
             return new XlsxSourcePackage(
                 bytes,
                 0,
@@ -239,14 +289,10 @@ public sealed partial class XlsxFileAdapter
                 fingerprint,
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting,
-                AllowsCellPatchSaveForPackage(bytes, 0, bytes.Length, workbook),
-                XlsxCellPatchBaseline.TryCreate(
-                    bytes,
-                    0,
-                    bytes.Length,
-                    workbook,
-                    CellPatchBaselineLimit,
-                    sheetXmlLayout));
+                allowsCellPatchSave,
+                cellPatchEligibilityBlockReason,
+                cellPatchBaseline,
+                cellPatchBaselineBlockReason);
         }
 
         private static byte[] ReadBytes(Stream stream)
@@ -307,11 +353,22 @@ public sealed partial class XlsxFileAdapter
         public bool TrySavePatchedCellValues(
             Workbook workbook,
             Stream stream,
-            ref string? currentModelFingerprint)
+            ref string? currentModelFingerprint,
+            out XlsxSaveDiagnostics diagnostics)
         {
-            if (!AllowsCellPatchSave ||
-                CellPatchBaseline is null ||
-                !CellPatchBaseline.TryGetPatchableValueChanges(
+            static bool Fail(string reason, out XlsxSaveDiagnostics diagnostics)
+            {
+                diagnostics = XlsxSaveDiagnostics.FullSave(reason);
+                return false;
+            }
+
+            if (!AllowsCellPatchSave)
+                return Fail(CellPatchEligibilityBlockReason ?? "patch_blocked_package_or_workbook_requires_full_save", out diagnostics);
+
+            if (CellPatchBaseline is null)
+                return Fail(CellPatchBaselineBlockReason ?? "patch_blocked_baseline_unavailable", out diagnostics);
+
+            if (!CellPatchBaseline.TryGetPatchableValueChanges(
                     workbook,
                     CellPatchChangeLimit,
                     currentModelFingerprint,
@@ -319,10 +376,9 @@ public sealed partial class XlsxFileAdapter
                     out var dimensionChanges,
                     out var mergeRegionChanges,
                     out var hyperlinkChanges,
-                    out var commentChanges))
-            {
-                return false;
-            }
+                    out var commentChanges,
+                    out var changeBlockReason))
+                return Fail(changeBlockReason ?? "patch_blocked_changes_not_patchable", out diagnostics);
 
             currentModelFingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var patchedModelFingerprint = currentModelFingerprint ?? CreateModelFingerprint(workbook);
@@ -334,6 +390,7 @@ public sealed partial class XlsxFileAdapter
                 commentChanges.Count == 0)
             {
                 CopyTo(stream);
+                diagnostics = XlsxSaveDiagnostics.SourceCopy("model_unchanged_after_patch_baseline");
                 return true;
             }
 
@@ -363,31 +420,31 @@ public sealed partial class XlsxFileAdapter
                 {
                     var worksheetEntry = archive.GetEntry(worksheetPath);
                     if (worksheetEntry is null)
-                        return false;
+                        return Fail("patch_apply_missing_worksheet", out diagnostics);
 
                     var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
                     if (cellChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetCellChanges) &&
                         !XlsxCellPatchBaseline.ApplyChanges(worksheetXml, worksheetCellChanges))
                     {
-                        return false;
+                        return Fail("patch_apply_cell_values", out diagnostics);
                     }
 
                     if (dimensionChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetDimensionPatch) &&
                         !XlsxCellPatchBaseline.ApplyDimensionChanges(worksheetXml, worksheetDimensionPatch))
                     {
-                        return false;
+                        return Fail("patch_apply_dimensions", out diagnostics);
                     }
 
                     if (mergeRegionChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetMergeRegionPatch) &&
                         !XlsxCellPatchBaseline.ApplyMergeRegionChanges(worksheetXml, worksheetMergeRegionPatch))
                     {
-                        return false;
+                        return Fail("patch_apply_merge_regions", out diagnostics);
                     }
 
                     if (hyperlinkChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetHyperlinkPatch) &&
                         !XlsxCellPatchBaseline.ApplyHyperlinkChanges(worksheetXml, worksheetHyperlinkPatch))
                     {
-                        return false;
+                        return Fail("patch_apply_hyperlinks", out diagnostics);
                     }
 
                     XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
@@ -397,11 +454,11 @@ public sealed partial class XlsxFileAdapter
                 {
                     var commentEntry = archive.GetEntry(commentPartPath);
                     if (commentEntry is null)
-                        return false;
+                        return Fail("patch_apply_missing_comment_part", out diagnostics);
 
                     var commentsXml = XlsxPackageXmlEditor.LoadXml(commentEntry);
                     if (!XlsxCellPatchBaseline.ApplyCommentChanges(commentsXml, commentPartChanges))
-                        return false;
+                        return Fail("patch_apply_comments", out diagnostics);
 
                     XlsxPackageXmlEditor.ReplaceXml(archive, commentPartPath, commentsXml);
                 }
@@ -439,13 +496,15 @@ public sealed partial class XlsxFileAdapter
                     WorksheetsWithPreservableSourceMetadata,
                     HasUnsupportedConditionalFormatting,
                     AllowsCellPatchSave,
+                    CellPatchEligibilityBlockReason,
                     CellPatchBaseline.WithAppliedChanges(
                         changes,
                         dimensionChanges,
                         mergeRegionChanges,
                         hyperlinkChanges,
                         commentChanges,
-                        patchedModelFingerprint)));
+                        patchedModelFingerprint),
+                    CellPatchBaselineBlockReason));
             }
             else
             {
@@ -458,6 +517,13 @@ public sealed partial class XlsxFileAdapter
                     HasUnsupportedConditionalFormatting));
             }
 
+            diagnostics = XlsxSaveDiagnostics.SourcePatch(
+                "patch_applied",
+                changes.Count,
+                dimensionChanges.Count,
+                mergeRegionChanges.Count,
+                hyperlinkChanges.Count,
+                commentChanges.Count);
             return true;
         }
 
@@ -466,34 +532,69 @@ public sealed partial class XlsxFileAdapter
             int offset,
             int count,
             Workbook workbook)
+            => AllowsCellPatchSaveForPackage(package, offset, count, workbook, out _);
+
+        private static bool AllowsCellPatchSaveForPackage(
+            byte[] package,
+            int offset,
+            int count,
+            Workbook workbook,
+            out string? blockReason)
         {
-            if (WorkbookRequiresFullSavePostProcessing(workbook))
+            blockReason = null;
+            if (WorkbookRequiresFullSavePostProcessing(workbook, out blockReason))
                 return false;
 
             try
             {
                 using var packageStream = new MemoryStream(package, offset, count, writable: false);
                 using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read);
-                return PackageAllowsCellPatchSave(archive, workbook);
+                return PackageAllowsCellPatchSave(archive, workbook, out blockReason);
             }
             catch
             {
+                blockReason = "package_guard_exception";
                 return false;
             }
         }
 
-        private static bool WorkbookRequiresFullSavePostProcessing(Workbook workbook)
+        private static bool WorkbookRequiresFullSavePostProcessing(Workbook workbook) =>
+            WorkbookRequiresFullSavePostProcessing(workbook, out _);
+
+        private static bool WorkbookRequiresFullSavePostProcessing(Workbook workbook, out string? blockReason)
         {
+            blockReason = null;
             foreach (var sheet in workbook.Sheets)
             {
-                if (sheet.CustomProperties.Count > 0 ||
-                    sheet.Charts.Count > 0 ||
-                    sheet.PivotTables.Count > 0 ||
-                    sheet.Pictures.Count > 0 ||
-                    sheet.TextBoxes.Count > 0 ||
-                    sheet.DrawingShapes.Count > 0 ||
-                    sheet.Sparklines.Count > 0)
+                if (sheet.CustomProperties.Count > 0)
                 {
+                    blockReason = "workbook_postprocessing_custom_properties";
+                    return true;
+                }
+
+                if (sheet.Charts.Count > 0)
+                {
+                    blockReason = "workbook_postprocessing_charts";
+                    return true;
+                }
+
+                if (sheet.PivotTables.Count > 0)
+                {
+                    blockReason = "workbook_postprocessing_pivots";
+                    return true;
+                }
+
+                if (sheet.Pictures.Count > 0 ||
+                    sheet.TextBoxes.Count > 0 ||
+                    sheet.DrawingShapes.Count > 0)
+                {
+                    blockReason = "workbook_postprocessing_drawings";
+                    return true;
+                }
+
+                if (sheet.Sparklines.Count > 0)
+                {
+                    blockReason = "workbook_postprocessing_sparklines";
                     return true;
                 }
             }
@@ -501,30 +602,57 @@ public sealed partial class XlsxFileAdapter
             return false;
         }
 
-        private static bool PackageAllowsCellPatchSave(ZipArchive archive, Workbook workbook)
+        private static bool PackageAllowsCellPatchSave(ZipArchive archive, Workbook workbook) =>
+            PackageAllowsCellPatchSave(archive, workbook, out _);
+
+        private static bool PackageAllowsCellPatchSave(
+            ZipArchive archive,
+            Workbook workbook,
+            out string? blockReason)
         {
+            blockReason = null;
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
             if (workbookEntry is null)
+            {
+                blockReason = "package_guard_missing_workbook";
                 return false;
+            }
 
             var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-            if (workbookXml.Root is null ||
-                workbookXml.Root.Element(workbookNs + "customWorkbookViews") is not null ||
-                HasOfficeRevisionAttributes(workbookXml.Root))
+            if (workbookXml.Root is null)
             {
+                blockReason = "package_guard_workbook_xml";
+                return false;
+            }
+
+            if (workbookXml.Root.Element(workbookNs + "customWorkbookViews") is not null)
+            {
+                blockReason = "package_guard_custom_workbook_views";
+                return false;
+            }
+
+            if (HasOfficeRevisionAttributes(workbookXml.Root))
+            {
+                blockReason = "package_guard_workbook_revisions";
                 return false;
             }
 
             var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
             if (worksheetPathMap is null)
+            {
+                blockReason = "package_guard_worksheet_path_map";
                 return false;
+            }
 
             var sheetsByWorksheetPath = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
             foreach (var sheet in workbook.Sheets)
             {
                 if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+                {
+                    blockReason = "package_guard_sheet_path_missing";
                     return false;
+                }
 
                 sheetsByWorksheetPath[worksheetPath] = sheet;
             }
@@ -534,19 +662,58 @@ public sealed partial class XlsxFileAdapter
             {
                 var worksheetPath = XlsxPackagePath.NormalizeZipPath(worksheetEntry.FullName.Replace('\\', '/'));
                 if (!sheetsByWorksheetPath.TryGetValue(worksheetPath, out var sheet))
+                {
+                    blockReason = "package_guard_unmatched_worksheet_part";
                     return false;
+                }
 
                 var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
                 var root = worksheetXml.Root;
-                if (root is null ||
-                    root.Element(workbookNs + "customSheetViews") is not null ||
-                    root.Element(workbookNs + "customProperties") is not null ||
-                    root.Element(workbookNs + "drawing") is not null ||
-                    root.Element(workbookNs + "legacyDrawingHF") is not null ||
-                    root.Element(workbookNs + "queryTableParts") is not null ||
-                    HasUnsupportedWorksheetTableParts(archive, worksheetPath, root, workbookNs, sheet) ||
-                    HasOfficeRevisionAttributes(root))
+                if (root is null)
                 {
+                    blockReason = "package_guard_worksheet_xml";
+                    return false;
+                }
+
+                if (root.Element(workbookNs + "customSheetViews") is not null)
+                {
+                    blockReason = "package_guard_custom_sheet_views";
+                    return false;
+                }
+
+                if (root.Element(workbookNs + "customProperties") is not null)
+                {
+                    blockReason = "package_guard_worksheet_custom_properties";
+                    return false;
+                }
+
+                if (root.Element(workbookNs + "drawing") is not null)
+                {
+                    blockReason = "package_guard_drawing";
+                    return false;
+                }
+
+                if (root.Element(workbookNs + "legacyDrawingHF") is not null)
+                {
+                    blockReason = "package_guard_header_footer_vml";
+                    return false;
+                }
+
+                if (root.Element(workbookNs + "queryTableParts") is not null)
+                {
+                    blockReason = "package_guard_query_table";
+                    return false;
+                }
+
+                if (HasUnsupportedWorksheetTableParts(archive, worksheetPath, root, workbookNs, sheet))
+                {
+                    blockReason = "package_guard_table_parts";
+                    return false;
+                }
+
+                if (HasOfficeRevisionAttributes(root))
+                {
+                    blockReason = "package_guard_worksheet_revisions";
                     return false;
                 }
 
@@ -557,6 +724,7 @@ public sealed partial class XlsxFileAdapter
                         legacyDrawing,
                         allowedVmlDrawingPaths))
                 {
+                    blockReason = "package_guard_legacy_drawing_vml";
                     return false;
                 }
             }
@@ -564,17 +732,24 @@ public sealed partial class XlsxFileAdapter
             foreach (var entry in archive.Entries)
             {
                 var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-                if (IsPatchUnsafePackagePart(path, allowedVmlDrawingPaths))
+                if (TryGetPatchUnsafePackagePartReason(path, allowedVmlDrawingPaths, out blockReason))
                     return false;
 
                 if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
                     !IsValidRelationshipPart(entry))
                 {
+                    blockReason = "package_guard_relationships";
                     return false;
                 }
             }
 
-            return !HasUnsupportedRichSharedStringFonts(archive, workbookNs);
+            if (HasUnsupportedRichSharedStringFonts(archive, workbookNs))
+            {
+                blockReason = "package_guard_rich_shared_string_fonts";
+                return false;
+            }
+
+            return true;
         }
 
         private static bool IsPatchUnsafePackagePart(
@@ -588,6 +763,48 @@ public sealed partial class XlsxFileAdapter
             path.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/revisionHeaders/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase);
+
+        private static bool TryGetPatchUnsafePackagePartReason(
+            string path,
+            IReadOnlySet<string> allowedVmlDrawingPaths,
+            out string? blockReason)
+        {
+            blockReason = null;
+            if (path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) &&
+                !allowedVmlDrawingPaths.Contains(path))
+            {
+                blockReason = "package_guard_drawing_parts";
+                return true;
+            }
+
+            if (path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase))
+            {
+                blockReason = "package_guard_chart_parts";
+                return true;
+            }
+
+            if (path.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
+            {
+                blockReason = "package_guard_pivot_parts";
+                return true;
+            }
+
+            if (path.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase))
+            {
+                blockReason = "package_guard_query_table_parts";
+                return true;
+            }
+
+            if (path.StartsWith("xl/revisionHeaders/", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase))
+            {
+                blockReason = "package_guard_revision_parts";
+                return true;
+            }
+
+            return false;
+        }
 
         private static bool TryAddPatchSafeLegacyNoteVmlDrawingPath(
             ZipArchive archive,
@@ -975,7 +1192,18 @@ public sealed partial class XlsxFileAdapter
             Workbook workbook,
             int cellLimit,
             IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null)
+            => TryCreate(package, offset, count, workbook, cellLimit, out _, sheetXmlLayout);
+
+        public static XlsxCellPatchBaseline? TryCreate(
+            byte[] package,
+            int offset,
+            int count,
+            Workbook workbook,
+            int cellLimit,
+            out string? blockReason,
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null)
         {
+            blockReason = null;
             try
             {
                 var totalCells = 0;
@@ -983,14 +1211,20 @@ public sealed partial class XlsxFileAdapter
                 {
                     totalCells += sheet.CellCount;
                     if (totalCells > cellLimit)
+                    {
+                        blockReason = "baseline_cell_limit";
                         return null;
+                    }
                 }
 
                 using var packageStream = new MemoryStream(package, offset, count, writable: false);
                 using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read);
                 var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
                 if (worksheetPathMap is null)
+                {
+                    blockReason = "baseline_worksheet_path_map";
                     return null;
+                }
 
                 var worksheets = new List<XlsxWorksheetCellPatchBaseline>(workbook.SheetCount);
                 var sourceStyleIndexesByStyleId = new Dictionary<StyleId, string?>();
@@ -999,7 +1233,10 @@ public sealed partial class XlsxFileAdapter
                 foreach (var sheet in workbook.Sheets)
                 {
                     if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+                    {
+                        blockReason = "baseline_sheet_path_missing";
                         return null;
+                    }
 
                     var sourceCellStyleIndexes =
                         sheetXmlLayout is not null &&
@@ -1017,7 +1254,10 @@ public sealed partial class XlsxFileAdapter
                                 sourceStyleIndexesByStyleId,
                                 ambiguousSourceStyleIds);
                     if (sourceCellStyleIndexes is null)
+                    {
+                        blockReason = "baseline_source_cell_styles";
                         return null;
+                    }
 
                     var sourceHyperlinks = ReadSourceHyperlinks(archive, worksheetPath, sheet.Id);
                     var sourceComments = ReadSourceComments(archive, worksheetPath, sheet);
@@ -1065,6 +1305,7 @@ public sealed partial class XlsxFileAdapter
             }
             catch
             {
+                blockReason = "baseline_exception";
                 return null;
             }
         }
@@ -1077,15 +1318,23 @@ public sealed partial class XlsxFileAdapter
             out List<XlsxWorksheetDimensionPatch> dimensionChanges,
             out List<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
             out List<XlsxWorksheetHyperlinkPatch> hyperlinkChanges,
-            out List<XlsxWorksheetCommentPatch> commentChanges)
+            out List<XlsxWorksheetCommentPatch> commentChanges,
+            out string? blockReason)
         {
+            static bool Fail(string reason, out string? blockReason)
+            {
+                blockReason = reason;
+                return false;
+            }
+
             changes = [];
             dimensionChanges = [];
             mergeRegionChanges = [];
             hyperlinkChanges = [];
             commentChanges = [];
+            blockReason = null;
             if (workbook.SheetCount != _worksheets.Count)
-                return false;
+                return Fail("change_sheet_count", out blockReason);
 
             for (var sheetIndex = 0; sheetIndex < _worksheets.Count; sheetIndex++)
             {
@@ -1095,11 +1344,11 @@ public sealed partial class XlsxFileAdapter
                     !string.Equals(sheet.Name, baseline.SheetName, StringComparison.Ordinal) ||
                     sheet.StyleOnlyCellCount != baseline.StyleOnlyCellCount)
                 {
-                    return false;
+                    return Fail("change_sheet_identity_or_style_only_cells", out blockReason);
                 }
 
                 if (!baseline.Tables.EqualsModel(XlsxWorksheetTablePatchBaseline.Capture(sheet)))
-                    return false;
+                    return Fail("change_table_metadata", out blockReason);
 
                 if (!XlsxWorksheetDimensionPatch.TryCreate(
                         baseline.SheetId,
@@ -1108,16 +1357,16 @@ public sealed partial class XlsxFileAdapter
                         XlsxWorksheetDimensionBaseline.Capture(sheet),
                         out var dimensionPatch))
                 {
-                    return false;
+                    return Fail("change_dimension_metadata", out blockReason);
                 }
 
                 if (dimensionPatch is not null)
                 {
                     if (baseline.Tables.HasTables)
-                        return false;
+                        return Fail("change_table_dimension_metadata", out blockReason);
 
                     if (dimensionPatch.ChangeCount > changeLimit)
-                        return false;
+                        return Fail("change_limit_dimensions", out blockReason);
 
                     dimensionChanges.Add(dimensionPatch);
                 }
@@ -1129,16 +1378,16 @@ public sealed partial class XlsxFileAdapter
                         sheet.MergedRegions,
                         out var mergeRegionPatch))
                 {
-                    return false;
+                    return Fail("change_merge_metadata", out blockReason);
                 }
 
                 if (mergeRegionPatch is not null)
                 {
                     if (baseline.Tables.HasTables)
-                        return false;
+                        return Fail("change_table_merge_metadata", out blockReason);
 
                     if (mergeRegionPatch.ChangeCount > changeLimit)
-                        return false;
+                        return Fail("change_limit_merges", out blockReason);
 
                     mergeRegionChanges.Add(mergeRegionPatch);
                 }
@@ -1151,16 +1400,16 @@ public sealed partial class XlsxFileAdapter
                         XlsxWorksheetHyperlinkBaseline.Capture(sheet),
                         out var hyperlinkPatch))
                 {
-                    return false;
+                    return Fail("change_hyperlink_metadata", out blockReason);
                 }
 
                 if (hyperlinkPatch is not null)
                 {
                     if (baseline.Tables.HasTables)
-                        return false;
+                        return Fail("change_table_hyperlink_metadata", out blockReason);
 
                     if (hyperlinkPatch.ChangeCount > changeLimit)
-                        return false;
+                        return Fail("change_limit_hyperlinks", out blockReason);
 
                     hyperlinkChanges.Add(hyperlinkPatch);
                 }
@@ -1173,16 +1422,16 @@ public sealed partial class XlsxFileAdapter
                         XlsxWorksheetCommentBaseline.Capture(sheet),
                         out var commentPatch))
                 {
-                    return false;
+                    return Fail("change_comment_metadata", out blockReason);
                 }
 
                 if (commentPatch is not null)
                 {
                     if (baseline.Tables.HasTables)
-                        return false;
+                        return Fail("change_table_comment_metadata", out blockReason);
 
                     if (commentPatch.ChangeCount > changeLimit)
-                        return false;
+                        return Fail("change_limit_comments", out blockReason);
 
                     commentChanges.Add(commentPatch);
                 }
@@ -1194,7 +1443,7 @@ public sealed partial class XlsxFileAdapter
                     if (!baseline.Cells.TryGetValue((row, col), out var original))
                     {
                         if (baseline.Tables.HasTables)
-                            return false;
+                            return Fail("change_table_inserted_cell", out blockReason);
 
                         if (cell.HasFormula ||
                             cell.IgnoreFormulaError ||
@@ -1202,7 +1451,7 @@ public sealed partial class XlsxFileAdapter
                             !IsPatchableScalarValue(cell.Value) ||
                             !TryGetSourceStyleIndex(cell.StyleId, out var insertedSourceStyleIndex))
                         {
-                            return false;
+                            return Fail("change_inserted_cell", out blockReason);
                         }
 
                         changes.Add(new XlsxCellValuePatch(
@@ -1221,7 +1470,7 @@ public sealed partial class XlsxFileAdapter
                             NewSourceStyleIndex: insertedSourceStyleIndex,
                             OriginalIgnoreFormulaError: false));
                         if (changes.Count > changeLimit)
-                            return false;
+                            return Fail("change_limit_cells", out blockReason);
 
                         addedCells++;
                         continue;
@@ -1229,13 +1478,13 @@ public sealed partial class XlsxFileAdapter
 
                     if (cell.IgnoreFormulaError != original.IgnoreFormulaError)
                     {
-                        return false;
+                        return Fail("change_formula_error_metadata", out blockReason);
                     }
 
                     var styleChanged = cell.StyleId != original.StyleId;
                     var newSourceStyleIndex = original.SourceStyleIndex;
                     if (styleChanged && !TryGetSourceStyleIndex(cell.StyleId, out newSourceStyleIndex))
-                        return false;
+                        return Fail("change_new_style", out blockReason);
 
                     var formulaChanged = !string.Equals(cell.FormulaText, original.FormulaText, StringComparison.Ordinal);
                     var valueChanged = !Equals(cell.Value, original.Value);
@@ -1250,12 +1499,12 @@ public sealed partial class XlsxFileAdapter
                          cell.HasFormula ||
                          !baseline.Tables.AllowsExistingScalarValueCellPatch(row, col)))
                     {
-                        return false;
+                        return Fail("change_table_cell", out blockReason);
                     }
 
                     if ((formulaChanged || valueChanged) && !IsPatchableScalarValue(cell.Value))
                     {
-                        return false;
+                        return Fail("change_non_scalar_value", out blockReason);
                     }
 
                     XlsxCellValuePatchKind patchKind;
@@ -1268,7 +1517,7 @@ public sealed partial class XlsxFileAdapter
                         if (string.IsNullOrWhiteSpace(original.FormulaText) ||
                             string.IsNullOrWhiteSpace(cell.FormulaText))
                         {
-                            return false;
+                            return Fail("change_formula_text", out blockReason);
                         }
 
                         patchKind = XlsxCellValuePatchKind.FormulaTextAndCachedValue;
@@ -1279,7 +1528,7 @@ public sealed partial class XlsxFileAdapter
                             ? XlsxCellValuePatchKind.FormulaCachedValue
                             : XlsxCellValuePatchKind.LiteralValue;
                         if (patchKind == XlsxCellValuePatchKind.LiteralValue && original.FormulaText is not null)
-                            return false;
+                            return Fail("change_formula_to_literal", out blockReason);
                     }
 
                     changes.Add(new XlsxCellValuePatch(
@@ -1298,7 +1547,7 @@ public sealed partial class XlsxFileAdapter
                         newSourceStyleIndex,
                         original.IgnoreFormulaError));
                     if (changes.Count > changeLimit)
-                        return false;
+                        return Fail("change_limit_cells", out blockReason);
                 }
 
                 var deletedCells = 0;
@@ -1308,7 +1557,7 @@ public sealed partial class XlsxFileAdapter
                         continue;
 
                     if (baseline.Tables.HasTables)
-                        return false;
+                        return Fail("change_table_deleted_cell", out blockReason);
 
                     changes.Add(new XlsxCellValuePatch(
                         XlsxCellValuePatchKind.DeletedCell,
@@ -1326,16 +1575,16 @@ public sealed partial class XlsxFileAdapter
                         NewSourceStyleIndex: null,
                         original.IgnoreFormulaError));
                     if (changes.Count > changeLimit)
-                        return false;
+                        return Fail("change_limit_cells", out blockReason);
 
                     deletedCells++;
                 }
 
                 if (sheet.CellCount != baseline.CellCount + addedCells - deletedCells)
-                    return false;
+                    return Fail("change_cell_count_mismatch", out blockReason);
             }
 
-            return changes.Count == 0 &&
+            var modelMatches = changes.Count == 0 &&
                    dimensionChanges.Count == 0 &&
                    mergeRegionChanges.Count == 0 &&
                    hyperlinkChanges.Count == 0 &&
@@ -1349,6 +1598,7 @@ public sealed partial class XlsxFileAdapter
                     mergeRegionChanges,
                     hyperlinkChanges,
                     commentChanges);
+            return modelMatches || Fail("change_unsupported_model_delta", out blockReason);
         }
 
         public static bool ApplyChanges(XDocument worksheetXml, IEnumerable<XlsxCellValuePatch> changes)

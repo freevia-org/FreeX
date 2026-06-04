@@ -11,6 +11,15 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxFileAdapterPerformanceTests
 {
+    private static string FormatSaveDiagnostics(XlsxFileAdapter adapter)
+    {
+        var diagnostics = adapter.LastSaveDiagnostics;
+        return $"save_path={diagnostics.PathLabel} save_reason={diagnostics.Reason} " +
+               $"patch_changes={diagnostics.TotalPatchChangeCount} cell_changes={diagnostics.CellChangeCount} " +
+               $"dimension_changes={diagnostics.DimensionChangeCount} merge_changes={diagnostics.MergeRegionChangeCount} " +
+               $"hyperlink_changes={diagnostics.HyperlinkChangeCount} comment_changes={diagnostics.CommentChangeCount}";
+    }
+
     [BenchmarkFact]
     public void Benchmark_SaveDenseWorkbook_ReportsTiming()
     {
@@ -316,7 +325,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +
             $"steps={iterations} source_bytes={package.Length:N0} package_bytes={packageSizes.Max():N0} " +
             $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
-            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0} " +
+            FormatSaveDiagnostics(adapter));
 
         timings.Average().Should().BeGreaterThan(0);
         packageSizes.Should().OnlyContain(size => size > 0);
@@ -371,7 +381,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +
             $"steps={iterations} source_bytes={package.Length:N0} package_bytes={packageSizes.Max():N0} " +
             $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
-            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0} " +
+            FormatSaveDiagnostics(adapter));
 
         timings.Average().Should().BeGreaterThan(0);
         packageSizes.Should().OnlyContain(size => size > 0);
@@ -650,7 +661,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +
             $"steps={iterations} source_bytes={package.Length:N0} package_bytes={packageSizes.Max():N0} " +
             $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
-            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0} " +
+            FormatSaveDiagnostics(adapter));
 
         timings.Average().Should().BeGreaterThan(0);
         packageSizes.Should().OnlyContain(size => size > 0);
@@ -930,7 +942,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +
             $"steps={iterations} source_bytes={package.Length:N0} package_bytes={packageSizes.Max():N0} " +
             $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
-            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0} " +
+            FormatSaveDiagnostics(adapter));
 
         timings.Average().Should().BeGreaterThan(0);
         packageSizes.Should().OnlyContain(size => size > 0);

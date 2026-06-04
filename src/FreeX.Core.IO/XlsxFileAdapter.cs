@@ -22,6 +22,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     private static readonly Func<IXLCell, object?>? XlCellStyleValueAccessor = CreateXlCellStyleValueAccessor();
     public string Extension => ".xlsx";
     public string FormatName => "XLSX Workbook";
+    internal XlsxSaveDiagnostics LastSaveDiagnostics { get; private set; } = XlsxSaveDiagnostics.NotRun;
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
         new(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),

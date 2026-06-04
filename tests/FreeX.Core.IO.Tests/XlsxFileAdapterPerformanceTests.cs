@@ -186,7 +186,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                 $"package_bytes={output.Length:N0} sheets={workbook.SheetCount} " +
                 $"cells={workbook.Sheets.Sum(sheet => sheet.CellCount):N0} " +
                 $"style_only_cells={workbook.Sheets.Sum(sheet => sheet.GetStyleOnlyEntries().Count()):N0} " +
-                $"elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes:N0}");
+                $"elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes:N0} " +
+                FormatSaveDiagnostics(adapter));
         }
     }
 
@@ -356,7 +357,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
         saveSource.Should().Contain("string? currentModelFingerprint = null;");
         saveSource.Should().Contain("sourcePackage.Matches(workbook, out currentModelFingerprint)");
-        saveSource.Should().Contain("sourcePackage.TrySavePatchedCellValues(workbook, stream, ref currentModelFingerprint)");
+        saveSource.Should().Contain("sourcePackage.TrySavePatchedCellValues(");
+        saveSource.Should().Contain("ref currentModelFingerprint,");
+        saveSource.Should().Contain("out patchDiagnostics");
         postProcessingSource.Should().Contain("currentModelFingerprint,");
         postProcessingSource.Should().Contain("sourcePackage?.WorksheetsWithPreservableSourceMetadata");
         snapshotSource.Should().Contain("public bool Matches(Workbook workbook, out string? currentModelFingerprint)");
@@ -366,7 +369,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("patchedPackage.TryGetBuffer");
         snapshotSource.Should().Contain("mergeRegionChanges,");
         snapshotSource.Should().Contain("hyperlinkChanges,");
-        snapshotSource.Should().Contain("patchedModelFingerprint)))");
+        snapshotSource.Should().Contain("patchedModelFingerprint),");
+        snapshotSource.Should().Contain("CellPatchBaselineBlockReason));");
     }
 
     [Fact]

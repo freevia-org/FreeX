@@ -8,19 +8,31 @@ public sealed partial class XlsxFileAdapter
 {
     public void Save(Workbook workbook, Stream stream)
     {
+        LastSaveDiagnostics = XlsxSaveDiagnostics.NotRun;
         string? currentModelFingerprint = null;
         if (SourcePackages.TryGetValue(workbook, out var sourcePackage) &&
             sourcePackage.Matches(workbook, out currentModelFingerprint))
         {
             sourcePackage.CopyTo(stream);
+            LastSaveDiagnostics = XlsxSaveDiagnostics.SourceCopy("model_unchanged");
             return;
         }
 
+        var patchDiagnostics = XlsxSaveDiagnostics.FullSave("patch_not_attempted");
         if (sourcePackage is not null &&
-            sourcePackage.TrySavePatchedCellValues(workbook, stream, ref currentModelFingerprint))
+            sourcePackage.TrySavePatchedCellValues(
+                workbook,
+                stream,
+                ref currentModelFingerprint,
+                out patchDiagnostics))
         {
+            LastSaveDiagnostics = patchDiagnostics;
             return;
         }
+
+        LastSaveDiagnostics = sourcePackage is null
+            ? XlsxSaveDiagnostics.FullSave("no_source_package")
+            : patchDiagnostics;
 
         using var xlWorkbook = new XLWorkbook();
         xlWorkbook.CalculateMode = workbook.CalculationMode == WorkbookCalculationMode.Manual
