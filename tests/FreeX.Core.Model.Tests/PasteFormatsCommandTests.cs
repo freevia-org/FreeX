@@ -12,7 +12,7 @@ public sealed class PasteFormatsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
 
         var oldStyle = wb.RegisterStyle(new CellStyle { Bold = true });
@@ -42,7 +42,7 @@ public sealed class PasteFormatsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         var style = wb.RegisterStyle(new CellStyle { Italic = true });
         sheet.IsProtected = true;
@@ -59,7 +59,7 @@ public sealed class PasteFormatsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
         var style = wb.RegisterStyle(new CellStyle { Italic = true });
         sheet.IsProtected = true;
@@ -71,9 +71,4 @@ public sealed class PasteFormatsCommandTests
         sheet.GetCell(addr)!.StyleId.Should().Be(style);
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

@@ -12,7 +12,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PageMargins = new WorksheetPageMargins(1, 1, 1, 1);
         var narrow = new WorksheetPageMargins(0.5, 0.5, 0.5, 0.5);
 

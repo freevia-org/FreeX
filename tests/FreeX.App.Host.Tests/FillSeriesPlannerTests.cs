@@ -1,4 +1,3 @@
-using System.Globalization;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -26,18 +25,10 @@ public sealed class FillSeriesPlannerTests
     [Fact]
     public void TryParseStep_UsesCurrentCultureNumberFormatting()
     {
-        var originalCulture = CultureInfo.CurrentCulture;
-        try
-        {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+        using var cultureScope = TestCultureScope.CurrentCulture("fr-FR");
 
-            FillSeriesPlanner.TryParseStep("1,5", out var step).Should().BeTrue();
-            step.Should().Be(1.5);
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = originalCulture;
-        }
+        FillSeriesPlanner.TryParseStep("1,5", out var step).Should().BeTrue();
+        step.Should().Be(1.5);
     }
 
     [Theory]

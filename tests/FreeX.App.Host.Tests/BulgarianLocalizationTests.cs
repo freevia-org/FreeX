@@ -15,7 +15,7 @@ public sealed class BulgarianLocalizationTests
     [Fact]
     public void BulgarianSatelliteResource_ProvidesTranslatedSmokeTestKeys()
     {
-        using var cultureScope = new CultureScope("bg-BG");
+        using var cultureScope = TestCultureScope.CurrentUICultureAndDefaultThreadUICulture("bg-BG");
 
         UiText.Get("Common_Ok").Should().Be("_ОК");
         UiText.Get("Options_ChooseDisplayLanguage").Should().Be("Изберете език на показване");
@@ -26,7 +26,7 @@ public sealed class BulgarianLocalizationTests
     [Fact]
     public void BulgarianSatelliteResource_ProvidesTranslatedFormerFallbackKey()
     {
-        using var cultureScope = new CultureScope("bg-BG");
+        using var cultureScope = TestCultureScope.CurrentUICultureAndDefaultThreadUICulture("bg-BG");
 
         UiText.Get("Options_DefaultFont").Should().Be("_Шрифт по подразбиране:");
     }
@@ -137,22 +137,4 @@ public sealed class BulgarianLocalizationTests
     private static int AccessKeyCount(string value) =>
         AccessKeyPattern.Matches(value).Count;
 
-    private sealed class CultureScope : IDisposable
-    {
-        private readonly CultureInfo _previousUICulture = CultureInfo.CurrentUICulture;
-        private readonly CultureInfo? _previousDefaultUICulture = CultureInfo.DefaultThreadCurrentUICulture;
-
-        public CultureScope(string currentUICulture)
-        {
-            var culture = CultureInfo.GetCultureInfo(currentUICulture);
-            CultureInfo.CurrentUICulture = culture;
-            CultureInfo.DefaultThreadCurrentUICulture = culture;
-        }
-
-        public void Dispose()
-        {
-            CultureInfo.CurrentUICulture = _previousUICulture;
-            CultureInfo.DefaultThreadCurrentUICulture = _previousDefaultUICulture;
-        }
-    }
 }
