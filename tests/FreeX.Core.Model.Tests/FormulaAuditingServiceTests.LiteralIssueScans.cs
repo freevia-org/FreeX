@@ -175,6 +175,35 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Theory]
+    [InlineData("Jan 2nd, 24")]
+    [InlineData("'Jan 2nd, 24")]
+    [InlineData("January 3rd 26")]
+    [InlineData("Jan 11th, 24")]
+    [InlineData("Jan 21st, 24")]
+    [InlineData("2nd Jan 26")]
+    [InlineData("2nd-January-26")]
+    [InlineData("26 Jan 2nd")]
+    [InlineData("Jan/2nd/24")]
+    [InlineData("2nd/Jan/26")]
+    [InlineData("'2nd/Jan/26")]
+    [InlineData("26/Jan/2nd")]
+    [InlineData("'26/Jan/2nd")]
+    public void FindFormulaErrorIssues_ReturnsOrdinalTextDatesWithTwoDigitYears(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue(value));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.Cell.Should().Be("A2");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.TwoDigitYearTextDateErrorCode);
+        issue.FormulaText.Should().BeNull();
+        issue.Description.Should().Contain("two-digit year");
+    }
+
+    [Theory]
     [InlineData("1/2/2026")]
     [InlineData("Jan/2/2026")]
     [InlineData("2/Jan/2026")]
@@ -189,6 +218,19 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("2/Jax/26")]
     [InlineData("26/Jax/2")]
     [InlineData("26/Jan/32")]
+    [InlineData("Jan 2nd, 2024")]
+    [InlineData("2nd/Jan/2026")]
+    [InlineData("2026/Jan/2nd")]
+    [InlineData("2026 Jan 2nd")]
+    [InlineData("Jan 32nd, 24")]
+    [InlineData("26/Jan/32nd")]
+    [InlineData("Jax 2nd, 24")]
+    [InlineData("2nd/Jax/26")]
+    [InlineData("26/Jax/2nd")]
+    [InlineData("Jan 1nd, 24")]
+    [InlineData("2st Jan 26")]
+    [InlineData("3th/Jan/26")]
+    [InlineData("26/Jan/11st")]
     [InlineData("99 Jan 32")]
     [InlineData("'")]
     [InlineData("12345")]

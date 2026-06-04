@@ -1339,14 +1339,16 @@ public static partial class FormulaAuditingService
         if (value.Length < 6)
             return false;
 
+        const string dayWithOptionalOrdinalSuffixPattern = @"\d{1,2}(?:[sS][tT]|[nN][dD]|[rR][dD]|[tT][hH])?";
+
         var hasNumericTrailingYear = Regex.IsMatch(value, @"^\d{1,2}([/\-.])\d{1,2}\1\d{2}$", RegexOptions.CultureInvariant);
         var hasNumericLeadingYear = Regex.IsMatch(value, @"^\d{2}([/\-.])\d{1,2}\1\d{1,2}$", RegexOptions.CultureInvariant);
-        var hasMonthNameLeading = Regex.IsMatch(value, @"^[A-Za-z]{3,9}([ \-.])\d{1,2},?\1?\s*\d{2}$", RegexOptions.CultureInvariant);
-        var hasDayMonthNameLeading = Regex.IsMatch(value, @"^\d{1,2}([ \-.])[A-Za-z]{3,9},?\1?\s*\d{2}$", RegexOptions.CultureInvariant);
-        var hasYearMonthNameLeading = Regex.IsMatch(value, @"^\d{2}([ \-.])[A-Za-z]{3,9}\1\d{1,2}$", RegexOptions.CultureInvariant);
-        var hasSlashMonthNameLeading = Regex.IsMatch(value, @"^[A-Za-z]{3,9}/\d{1,2}/\d{2}$", RegexOptions.CultureInvariant);
-        var hasSlashDayMonthNameLeading = Regex.IsMatch(value, @"^\d{1,2}/[A-Za-z]{3,9}/\d{2}$", RegexOptions.CultureInvariant);
-        var hasSlashYearMonthNameLeading = Regex.IsMatch(value, @"^\d{2}/[A-Za-z]{3,9}/\d{1,2}$", RegexOptions.CultureInvariant);
+        var hasMonthNameLeading = Regex.IsMatch(value, $@"^[A-Za-z]{{3,9}}([ \-.]){dayWithOptionalOrdinalSuffixPattern},?\1?\s*\d{{2}}$", RegexOptions.CultureInvariant);
+        var hasDayMonthNameLeading = Regex.IsMatch(value, $@"^{dayWithOptionalOrdinalSuffixPattern}([ \-.])[A-Za-z]{{3,9}},?\1?\s*\d{{2}}$", RegexOptions.CultureInvariant);
+        var hasYearMonthNameLeading = Regex.IsMatch(value, $@"^\d{{2}}([ \-.])[A-Za-z]{{3,9}}\1{dayWithOptionalOrdinalSuffixPattern}$", RegexOptions.CultureInvariant);
+        var hasSlashMonthNameLeading = Regex.IsMatch(value, $@"^[A-Za-z]{{3,9}}/{dayWithOptionalOrdinalSuffixPattern}/\d{{2}}$", RegexOptions.CultureInvariant);
+        var hasSlashDayMonthNameLeading = Regex.IsMatch(value, $@"^{dayWithOptionalOrdinalSuffixPattern}/[A-Za-z]{{3,9}}/\d{{2}}$", RegexOptions.CultureInvariant);
+        var hasSlashYearMonthNameLeading = Regex.IsMatch(value, $@"^\d{{2}}/[A-Za-z]{{3,9}}/{dayWithOptionalOrdinalSuffixPattern}$", RegexOptions.CultureInvariant);
 
         string[] formats;
         if (hasNumericTrailingYear || hasNumericLeadingYear)
@@ -1418,12 +1420,67 @@ public static partial class FormulaAuditingService
             return false;
         }
 
+        var hasMonthNameDate =
+            hasMonthNameLeading ||
+            hasDayMonthNameLeading ||
+            hasYearMonthNameLeading ||
+            hasSlashMonthNameLeading ||
+            hasSlashDayMonthNameLeading ||
+            hasSlashYearMonthNameLeading;
+
+        var valueToParse = value;
+        if (hasMonthNameDate &&
+            !TryNormalizeOrdinalDaySuffixes(value, out valueToParse))
+        {
+            return false;
+        }
+
         return DateTime.TryParseExact(
-            value,
+            valueToParse,
             formats,
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out _);
+    }
+
+    private static bool TryNormalizeOrdinalDaySuffixes(string value, out string normalized)
+    {
+        var invalidOrdinalSuffix = false;
+        normalized = Regex.Replace(
+            value,
+            @"(?<!\d)(\d{1,2})([sS][tT]|[nN][dD]|[rR][dD]|[tT][hH])(?=[,\s/\-.]|$)",
+            match =>
+            {
+                var day = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                if (!OrdinalSuffixMatchesDay(day, match.Groups[2].Value))
+                {
+                    invalidOrdinalSuffix = true;
+                    return match.Value;
+                }
+
+                return match.Groups[1].Value;
+            },
+            RegexOptions.CultureInvariant);
+
+        return !invalidOrdinalSuffix;
+    }
+
+    private static bool OrdinalSuffixMatchesDay(int day, string suffix)
+    {
+        if (day is < 1 or > 31)
+            return false;
+
+        var expectedSuffix = day % 100 is >= 11 and <= 13
+            ? "th"
+            : (day % 10) switch
+            {
+                1 => "st",
+                2 => "nd",
+                3 => "rd",
+                _ => "th"
+            };
+
+        return string.Equals(suffix, expectedSuffix, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IEnumerable<FormulaErrorIssue> FindInvalidDataValidationIssues(Workbook workbook, SheetId? sheetId)
