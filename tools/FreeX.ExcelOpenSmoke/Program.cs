@@ -57,6 +57,8 @@ internal static class ExcelOpenSmoke
     private const int MaxStructureProbeColumns = 80;
     private const int MaxOpenXmlValidationErrorsToReport = 20;
     private const double ExcelMeasurementTolerance = 0.01;
+    private static readonly XNamespace PackageContentTypeNs =
+        "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
 
@@ -293,6 +295,7 @@ internal static class ExcelOpenSmoke
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
+                AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 sourceForExcel = freeXSave.SavedPath;
                 freeXSavedPath = freeXSave.SavedPath;
                 freeXPreSave = freeXSave.Summary;
@@ -465,6 +468,7 @@ internal static class ExcelOpenSmoke
             AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
+            AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
 
             reopenedWorkbook = OpenExcelWorkbook(workbooks, excelSavedPath, readOnly: true);
             ExcelWorkbookSummary reopened;
@@ -616,6 +620,130 @@ internal static class ExcelOpenSmoke
             $"{label} for '{sourcePath}' is missing required package part(s): {string.Join(", ", missing)}");
     }
 
+    private static void AssertRequiredExcelSavedPackageContentTypes(
+        string xlsxPath,
+        WorkbookSmokeExpectations? expectations,
+        string sourcePath)
+    {
+        AssertRequiredPackageContentTypes(
+            xlsxPath,
+            expectations?.RequiredExcelSavedPackageContentTypes,
+            "Excel-saved workbook",
+            sourcePath);
+    }
+
+    private static void AssertRequiredFreeXSavedPackageContentTypes(
+        string xlsxPath,
+        WorkbookSmokeExpectations? expectations,
+        string sourcePath)
+    {
+        AssertRequiredPackageContentTypes(
+            xlsxPath,
+            expectations?.RequiredFreeXSavedPackageContentTypes,
+            "FreeX-saved workbook",
+            sourcePath);
+    }
+
+    private static void AssertRequiredPackageContentTypes(
+        string xlsxPath,
+        IReadOnlyList<PackageContentTypeExpectation>? requiredContentTypes,
+        string label,
+        string sourcePath)
+    {
+        if (requiredContentTypes is null || requiredContentTypes.Count == 0)
+            return;
+
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var entryNames = archive.Entries
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+        {
+            throw new InvalidDataException(
+                $"{label} for '{sourcePath}' is missing [Content_Types].xml.");
+        }
+
+        XDocument contentTypesXml;
+        using (var stream = contentTypesEntry.Open())
+            contentTypesXml = XDocument.Load(stream);
+
+        var missing = new List<string>();
+        foreach (var expectation in requiredContentTypes)
+        {
+            var partName = NormalizePackagePart(expectation.PartName);
+            if (!entryNames.Contains(partName))
+            {
+                missing.Add($"{FormatPackageContentTypeExpectation(expectation)} (missing package part)");
+                continue;
+            }
+
+            var actualContentType = GetEffectivePackageContentType(contentTypesXml, partName);
+            if (actualContentType is null)
+            {
+                missing.Add($"{FormatPackageContentTypeExpectation(expectation)} (missing content type)");
+                continue;
+            }
+
+            if (!string.Equals(actualContentType, expectation.ContentType, StringComparison.OrdinalIgnoreCase))
+            {
+                missing.Add(
+                    $"{FormatPackageContentTypeExpectation(expectation)} (observed ContentType={actualContentType})");
+            }
+        }
+
+        if (missing.Count == 0)
+            return;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' is missing required package content type(s): {string.Join("; ", missing)}");
+    }
+
+    private static string? GetEffectivePackageContentType(XDocument contentTypesXml, string normalizedPartName)
+    {
+        var normalizedContentTypePartName = $"/{NormalizePackagePart(normalizedPartName)}";
+        var overrideContentType = contentTypesXml.Root?
+            .Elements(PackageContentTypeNs + "Override")
+            .FirstOrDefault(element => string.Equals(
+                NormalizeContentTypePartName(element.Attribute("PartName")?.Value),
+                normalizedContentTypePartName,
+                StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")
+            ?.Value;
+
+        if (!string.IsNullOrWhiteSpace(overrideContentType))
+            return overrideContentType;
+
+        var extension = GetPackagePartExtension(normalizedPartName);
+        if (string.IsNullOrWhiteSpace(extension))
+            return null;
+
+        return contentTypesXml.Root?
+            .Elements(PackageContentTypeNs + "Default")
+            .FirstOrDefault(element => string.Equals(
+                element.Attribute("Extension")?.Value,
+                extension,
+                StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")
+            ?.Value;
+    }
+
+    private static string NormalizeContentTypePartName(string? partName) =>
+        $"/{NormalizePackagePart(partName ?? string.Empty)}";
+
+    private static string GetPackagePartExtension(string partName)
+    {
+        var fileName = NormalizePackagePart(partName);
+        var slashIndex = fileName.LastIndexOf('/');
+        if (slashIndex >= 0)
+            fileName = fileName[(slashIndex + 1)..];
+
+        var dotIndex = fileName.LastIndexOf('.');
+        return dotIndex >= 0 && dotIndex < fileName.Length - 1
+            ? fileName[(dotIndex + 1)..]
+            : string.Empty;
+    }
+
     private static void AssertRequiredExcelSavedPackageRelationships(
         string xlsxPath,
         WorkbookSmokeExpectations? expectations,
@@ -725,6 +853,9 @@ internal static class ExcelOpenSmoke
         var mode = expectation.TargetMode is null ? string.Empty : $" TargetMode={expectation.TargetMode}";
         return $"{expectation.RelationshipPart} Type={expectation.RelationshipType} Target={expectation.Target}{mode}{id}";
     }
+
+    private static string FormatPackageContentTypeExpectation(PackageContentTypeExpectation expectation) =>
+        $"{expectation.PartName} ContentType={expectation.ContentType}";
 
     private static string ResolvePackageRelationshipTarget(string relationshipPart, string target)
     {
@@ -2750,6 +2881,12 @@ internal static class ExcelOpenSmoke
                     "xl/printerSettings/printerSettings1.bin",
                     "xl/worksheets/_rels/sheet1.xml.rels"
                 ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/printerSettings/printerSettings1.bin",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings")
+                ],
                 RequiredFreeXSavedPackageRelationships =
                 [
                     new(
@@ -2762,6 +2899,12 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/printerSettings/printerSettings1.bin",
                     "xl/worksheets/_rels/sheet1.xml.rels"
+                ],
+                RequiredExcelSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/printerSettings/printerSettings1.bin",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings")
                 ],
                 RequiredExcelSavedPackageRelationships =
                 [
@@ -2780,6 +2923,12 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/calcChain.xml"
                 ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/calcChain.xml",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml")
+                ],
                 RequiredFreeXSavedPackageRelationships =
                 [
                     new(
@@ -2790,6 +2939,12 @@ internal static class ExcelOpenSmoke
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/calcChain.xml"
+                ],
+                RequiredExcelSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/calcChain.xml",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml")
                 ],
                 RequiredExcelSavedPackageRelationships =
                 [
@@ -2809,12 +2964,30 @@ internal static class ExcelOpenSmoke
                     "docProps/core.xml",
                     "docProps/app.xml"
                 ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "docProps/core.xml",
+                        "application/vnd.openxmlformats-package.core-properties+xml"),
+                    new(
+                        "docProps/app.xml",
+                        "application/vnd.openxmlformats-officedocument.extended-properties+xml")
+                ],
                 RequiredFreeXSavedPackageRelationships =
                 [
                     new(
                         "_rels/.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
                         "docProps/app.xml")
+                ],
+                RequiredExcelSavedPackageContentTypes =
+                [
+                    new(
+                        "docProps/core.xml",
+                        "application/vnd.openxmlformats-package.core-properties+xml"),
+                    new(
+                        "docProps/app.xml",
+                        "application/vnd.openxmlformats-officedocument.extended-properties+xml")
                 ],
                 RequiredExcelSavedPackageRelationships =
                 [
@@ -2840,6 +3013,15 @@ internal static class ExcelOpenSmoke
                     "xl/media/headerFooterImage1.png",
                     "xl/worksheets/_rels/sheet1.xml.rels"
                 ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/drawings/vmlDrawing1.vml",
+                        "application/vnd.openxmlformats-officedocument.vmlDrawing"),
+                    new(
+                        "xl/media/headerFooterImage1.png",
+                        "image/png")
+                ],
                 RequiredFreeXSavedPackageRelationships =
                 [
                     new(
@@ -2857,6 +3039,12 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/drawings/vmlDrawing1.vml",
                     "xl/worksheets/_rels/sheet1.xml.rels"
+                ],
+                RequiredExcelSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/drawings/vmlDrawing1.vml",
+                        "application/vnd.openxmlformats-officedocument.vmlDrawing")
                 ],
                 RequiredExcelSavedPackageRelationships =
                 [
@@ -2877,6 +3065,15 @@ internal static class ExcelOpenSmoke
                     "xl/drawings/_rels/vmlDrawing1.vml.rels",
                     "xl/media/vmlImage1.png",
                     "xl/worksheets/_rels/sheet1.xml.rels"
+                ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/drawings/vmlDrawing1.vml",
+                        "application/vnd.openxmlformats-officedocument.vmlDrawing"),
+                    new(
+                        "xl/media/vmlImage1.png",
+                        "image/png")
                 ],
                 RequiredFreeXSavedPackageRelationships =
                 [
@@ -2902,6 +3099,15 @@ internal static class ExcelOpenSmoke
                     "xl/slicers/slicer1.xml",
                     "xl/slicerCaches/slicerCache1.xml"
                 ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/slicers/slicer1.xml",
+                        "application/vnd.ms-excel.slicer+xml"),
+                    new(
+                        "xl/slicerCaches/slicerCache1.xml",
+                        "application/vnd.ms-excel.slicerCache+xml")
+                ],
                 RequiredFreeXSavedPackageRelationships =
                 [
                     new(
@@ -2924,6 +3130,15 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/slicers/slicer1.xml",
                     "xl/slicerCaches/slicerCache1.xml"
+                ],
+                RequiredExcelSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/slicers/slicer1.xml",
+                        "application/vnd.ms-excel.slicer+xml"),
+                    new(
+                        "xl/slicerCaches/slicerCache1.xml",
+                        "application/vnd.ms-excel.slicerCache+xml")
                 ]
             };
         }
@@ -2935,6 +3150,15 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/timelines/timeline1.xml",
                     "xl/timelineCaches/timelineCache1.xml"
+                ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/timelines/timeline1.xml",
+                        "application/vnd.ms-excel.timeline+xml"),
+                    new(
+                        "xl/timelineCaches/timelineCache1.xml",
+                        "application/vnd.ms-excel.timelineCache+xml")
                 ],
                 RequiredFreeXSavedPackageRelationships =
                 [
@@ -2963,6 +3187,15 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/timelines/timeline1.xml",
                     "xl/timelineCaches/timelineCache1.xml"
+                ],
+                RequiredExcelSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/timelines/timeline1.xml",
+                        "application/vnd.ms-excel.timeline+xml"),
+                    new(
+                        "xl/timelineCaches/timelineCache1.xml",
+                        "application/vnd.ms-excel.timelineCache+xml")
                 ]
             };
         }
@@ -2974,6 +3207,12 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/externalLinks/externalLink1.xml",
                     "xl/externalLinks/_rels/externalLink1.xml.rels"
+                ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/externalLinks/externalLink1.xml",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml")
                 ],
                 RequiredFreeXSavedPackageRelationships =
                 [
@@ -2993,6 +3232,12 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/externalLinks/externalLink1.xml",
                     "xl/externalLinks/_rels/externalLink1.xml.rels"
+                ],
+                RequiredExcelSavedPackageContentTypes =
+                [
+                    new(
+                        "xl/externalLinks/externalLink1.xml",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml")
                 ],
                 RequiredExcelSavedPackageRelationships =
                 [
@@ -3018,6 +3263,15 @@ internal static class ExcelOpenSmoke
                     "customXml/itemProps1.xml",
                     "customXml/_rels/item1.xml.rels"
                 ],
+                RequiredFreeXSavedPackageContentTypes =
+                [
+                    new(
+                        "customXml/item1.xml",
+                        "application/xml"),
+                    new(
+                        "customXml/itemProps1.xml",
+                        "application/vnd.openxmlformats-officedocument.customXmlProperties+xml")
+                ],
                 RequiredFreeXSavedPackageRelationships =
                 [
                     new(
@@ -3036,6 +3290,15 @@ internal static class ExcelOpenSmoke
                     "customXml/item1.xml",
                     "customXml/itemProps1.xml",
                     "customXml/_rels/item1.xml.rels"
+                ],
+                RequiredExcelSavedPackageContentTypes =
+                [
+                    new(
+                        "customXml/item1.xml",
+                        "application/xml"),
+                    new(
+                        "customXml/itemProps1.xml",
+                        "application/vnd.openxmlformats-officedocument.customXmlProperties+xml")
                 ],
                 RequiredExcelSavedPackageRelationships =
                 [
@@ -4327,6 +4590,12 @@ internal static class ExcelOpenSmoke
                 $"  FreeX-saved package parts asserted: {string.Join(", ", freeXRequiredParts)}");
         }
         if (result.FreeXSavedPath is not null &&
+            result.Input.Expectations?.RequiredFreeXSavedPackageContentTypes is { Count: > 0 } freeXRequiredContentTypes)
+        {
+            Console.WriteLine(
+                $"  FreeX-saved package content types asserted: {string.Join(", ", freeXRequiredContentTypes.Select(FormatPackageContentTypeExpectation))}");
+        }
+        if (result.FreeXSavedPath is not null &&
             result.Input.Expectations?.RequiredFreeXSavedPackageRelationships is { Count: > 0 } freeXRequiredRelationships)
         {
             Console.WriteLine(
@@ -4341,6 +4610,12 @@ internal static class ExcelOpenSmoke
         {
             Console.WriteLine(
                 $"  Excel-saved package parts asserted: {string.Join(", ", requiredParts)}");
+        }
+        if (result.ExcelSavedPath is not null &&
+            result.Input.Expectations?.RequiredExcelSavedPackageContentTypes is { Count: > 0 } requiredContentTypes)
+        {
+            Console.WriteLine(
+                $"  Excel-saved package content types asserted: {string.Join(", ", requiredContentTypes.Select(FormatPackageContentTypeExpectation))}");
         }
         if (result.ExcelSavedPath is not null &&
             result.Input.Expectations?.RequiredExcelSavedPackageRelationships is { Count: > 0 } requiredRelationships)
