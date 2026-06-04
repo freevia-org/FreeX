@@ -379,7 +379,7 @@ FreeX supports deterministic Flash Fill patterns rather than Excel's full ML-lik
 - Extracting or removing delimiter-based tokens, including final dotted tokens such as file extensions, variable-depth final and penultimate hyphen/slash/backslash/underscore segments, and bracketed qualifiers.
 - Extracting web address pieces, including hosts, query values, and final URL path segments such as `road-bike?ref=nav` to `road-bike`.
 - Reformatting two- and three-part names, including last-name-first forms, middle-token drops, and initial abbreviations such as `A. Lovelace`, `A. L.`, `Lovelace, Ada`, and `Lovelace, A. B.`.
-- Cleaning known title, credential, and organization suffixes such as `Dr. Ada Lovelace Jr.` or `Northwind Traders LLC`.
+- Cleaning known title, credential, and organization suffixes such as `Dr. Ada Lovelace Jr.`, comma-attached `Dr. Ada Lovelace,Jr.,Ph.D.`, or `Northwind Traders,LLC`.
 - Building first/last-name email aliases with learned constant domains and `.`, `_`, or `-` separators, including first-initial/last-name, last-name/first-initial, and first/last-initial forms.
 - Applying digit-mask punctuation copied from examples, such as phone-number formatting.
 - Extracting US address components such as street, street number, street name, street without trailing unit/suite, unit/suite suffix, unit/suite identifier, city, state, ZIP, ZIP+4 base ZIP, and the ZIP+4 extension.
@@ -547,4 +547,4 @@ If a workbook contains features FreeX cannot fully model (VBA, Power Query, embe
 - **Custom Number Formats:** In Format Cells -> Number -> Custom, enter XLSX number-format codes (e.g., `#,##0.00` for two-decimal thousands, `dd/mm/yyyy` for dates).
 - **Freeze Headers:** View -> Freeze Top Row keeps row 1 visible while scrolling.
 - **Multiple Sheets:** Right-click a sheet tab for color, rename, move, copy, hide/unhide, and insert options. Hold Ctrl while clicking tabs to select multiple sheets and edit them together.
-- **Spell Check (F7):** Checks the active sheet's text content, including common office and spreadsheet/business-report misspellings.
+- **Spell Check (F7):** Checks the active sheet's text content, including common office, spreadsheet/business-report, and report-typo misspellings such as `availible`, `statment`, and `comparision`.
