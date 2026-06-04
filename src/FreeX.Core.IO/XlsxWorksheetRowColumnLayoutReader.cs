@@ -20,6 +20,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var rowHeights = new Dictionary<uint, double>();
         var columnWidths = new Dictionary<uint, double>();
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
+        var explicitPopulatedCellStyles = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
         var styleOnlyStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
         var hasDuplicateStyleOnlyCellStyleIndexes = false;
@@ -47,6 +48,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                         valueName,
                         inlineStringName,
                         explicitStyleOnlyCells,
+                        explicitPopulatedCellStyles,
                         cachedFormulaErrors,
                         styleOnlyStyleIndexes,
                         ref hasDuplicateStyleOnlyCellStyleIndexes,
@@ -73,6 +75,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 columnWidths),
             new XlsxWorksheetCellLayout(
                 cachedFormulaErrors,
+                explicitPopulatedCellStyles,
                 explicitStyleOnlyCells,
                 hasStyleOnlyCells,
                 hasDuplicateStyleOnlyCellStyleIndexes,

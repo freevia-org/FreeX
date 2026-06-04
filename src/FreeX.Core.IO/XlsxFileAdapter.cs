@@ -446,7 +446,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             workbook,
             loadPackage.CanReuseBufferForSnapshot,
             worksheetsWithPreservableSourceMetadata,
-            hasUnsupportedConditionalFormatting));
+            hasUnsupportedConditionalFormatting,
+            sheetXmlLayout));
         return workbook;
     }
 
