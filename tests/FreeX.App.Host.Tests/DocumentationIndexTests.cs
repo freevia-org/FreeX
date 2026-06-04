@@ -32,6 +32,7 @@ public sealed partial class DocumentationIndexTests
         readme.Should().Contain("[reviews/code-review-log.md](reviews/code-review-log.md)");
         readme.Should().Contain("[architecture/decisions/008-code-review-hardening-2026-05-28.md](architecture/decisions/008-code-review-hardening-2026-05-28.md)");
         readme.Should().Contain("[performance/baseline.md](performance/baseline.md)");
+        readme.Should().Contain("[performance/backlog-2026-06-04.md](performance/backlog-2026-06-04.md)");
         File.Exists(Path.Combine(docsDirectory, "parity/command-inventory.json")).Should().BeTrue();
         File.Exists(Path.Combine(docsDirectory, "reviews/comprehensive-code-review-2026-05-28.md")).Should().BeTrue();
         File.Exists(Path.Combine(docsDirectory, "reviews/code-review-log.md")).Should().BeTrue();
@@ -262,7 +263,8 @@ public sealed partial class DocumentationIndexTests
             "formats/xlsx-test-corpus-plan.md",
             "release/test-distribution.md",
             "release/tester-release-checklist.md",
-            "performance/baseline.md"
+            "performance/baseline.md",
+            "performance/backlog-2026-06-04.md"
         };
 
         foreach (var doc in currentDocs)
