@@ -210,6 +210,58 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithRowColumnDimensionEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.RowHeights[2] = 32;
+        sheet.HiddenRows.Add(4);
+        sheet.ColumnWidths[2] = 18.5;
+        sheet.HiddenCols.Add(3);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/styles.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
+        ReadRowAttribute(savedBytes, "xl/worksheets/sheet1.xml", 2, "ht")
+            .Should()
+            .Be("24");
+        ReadRowAttribute(savedBytes, "xl/worksheets/sheet1.xml", 2, "customHeight")
+            .Should()
+            .Be("1");
+        ReadRowAttribute(savedBytes, "xl/worksheets/sheet1.xml", 4, "hidden")
+            .Should()
+            .Be("1");
+        ReadColumnAttribute(savedBytes, "xl/worksheets/sheet1.xml", 2, "width")
+            .Should()
+            .Be("18.5");
+        ReadColumnAttribute(savedBytes, "xl/worksheets/sheet1.xml", 2, "customWidth")
+            .Should()
+            .Be("1");
+        ReadColumnAttribute(savedBytes, "xl/worksheets/sheet1.xml", 3, "hidden")
+            .Should()
+            .Be("1");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloaded = adapter.Load(reloadStream).GetSheetAt(0);
+        reloaded.RowHeights[2].Should().BeApproximately(32, 0.0001);
+        reloaded.HiddenRows.Should().Contain(4u);
+        reloaded.ColumnWidths[2].Should().BeApproximately(18.5, 0.0001);
+        reloaded.HiddenCols.Should().Contain(3u);
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithClearedLiteralCell_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
@@ -567,6 +619,47 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
 
     private static string? ReadCellStyleIndex(byte[] packageBytes, string worksheetPath, string reference) =>
         ReadCellElement(packageBytes, worksheetPath, reference).Attribute("s")?.Value;
+
+    private static string? ReadRowAttribute(byte[] packageBytes, string worksheetPath, uint row, string attributeName)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry(worksheetPath);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        var ns = document.Root!.Name.Namespace;
+        return document
+            .Descendants(ns + "row")
+            .SingleOrDefault(element => element.Attribute("r")?.Value == row.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            ?.Attribute(attributeName)
+            ?.Value;
+    }
+
+    private static string? ReadColumnAttribute(byte[] packageBytes, string worksheetPath, uint column, string attributeName)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry(worksheetPath);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        var ns = document.Root!.Name.Namespace;
+        foreach (var element in document.Descendants(ns + "col"))
+        {
+            if (!uint.TryParse(element.Attribute("min")?.Value, out var min) ||
+                !uint.TryParse(element.Attribute("max")?.Value, out var max) ||
+                column < min ||
+                column > max)
+            {
+                continue;
+            }
+
+            return element.Attribute(attributeName)?.Value;
+        }
+
+        return null;
+    }
 
     private static string? ReadCellTextSpaceMode(byte[] packageBytes, string worksheetPath, string reference)
     {
