@@ -4,7 +4,7 @@ namespace FreeX.App.Host.Tests;
 
 internal static class SourceMethodExtractor
 {
-    public static string ExtractMethodSource(string source, string signature)
+    internal static string ExtractMethodSource(string source, string signature)
     {
         var signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
         signatureIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain {signature}");

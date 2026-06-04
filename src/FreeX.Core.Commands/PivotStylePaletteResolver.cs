@@ -4,6 +4,24 @@ namespace FreeX.Core.Commands;
 
 internal static class PivotStylePaletteResolver
 {
+    private static readonly IReadOnlyDictionary<string, WorkbookThemeColorSlot> MediumThemeSlots =
+        new Dictionary<string, WorkbookThemeColorSlot>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PivotStyleMedium2"] = WorkbookThemeColorSlot.Accent1,
+            ["PivotStyleMedium9"] = WorkbookThemeColorSlot.Accent1,
+            ["PivotStyleMedium10"] = WorkbookThemeColorSlot.Accent2,
+            ["PivotStyleMedium3"] = WorkbookThemeColorSlot.Accent3,
+            ["PivotStyleMedium11"] = WorkbookThemeColorSlot.Accent3,
+            ["PivotStyleMedium5"] = WorkbookThemeColorSlot.Accent4,
+            ["PivotStyleMedium12"] = WorkbookThemeColorSlot.Accent4,
+            ["PivotStyleMedium6"] = WorkbookThemeColorSlot.Accent5,
+            ["PivotStyleMedium13"] = WorkbookThemeColorSlot.Accent5,
+            ["PivotStyleMedium17"] = WorkbookThemeColorSlot.Accent5,
+            ["PivotStyleMedium4"] = WorkbookThemeColorSlot.Accent6,
+            ["PivotStyleMedium7"] = WorkbookThemeColorSlot.Accent6,
+            ["PivotStyleMedium14"] = WorkbookThemeColorSlot.Accent6
+        };
+
     public static PivotStylePalette Resolve(string styleName)
         => Resolve(styleName, WorkbookTheme.Office);
 
@@ -39,9 +57,13 @@ internal static class PivotStylePaletteResolver
 
     private static bool TryResolveThemedPalette(string styleName, WorkbookTheme theme, out PivotStylePalette palette)
     {
-        if (string.Equals(styleName, "PivotStyleMedium2", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(styleName, "PivotStyleMedium9", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(styleName, "PivotStyleDark7", StringComparison.OrdinalIgnoreCase))
+        if (TryResolveMediumThemeSlot(styleName, out var mediumSlot))
+        {
+            palette = ThemedMediumPalette(theme, mediumSlot);
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleDark7", StringComparison.OrdinalIgnoreCase))
         {
             palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent1);
             return true;
@@ -50,24 +72,6 @@ internal static class PivotStylePaletteResolver
         if (TryResolveLightThemeSlot(styleName, out var lightSlot))
         {
             palette = ThemedLightPalette(theme, lightSlot);
-            return true;
-        }
-
-        if (string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase))
-        {
-            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent2);
-            return true;
-        }
-
-        if (string.Equals(styleName, "PivotStyleMedium4", StringComparison.OrdinalIgnoreCase))
-        {
-            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent6);
-            return true;
-        }
-
-        if (string.Equals(styleName, "PivotStyleMedium17", StringComparison.OrdinalIgnoreCase))
-        {
-            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent5);
             return true;
         }
 
@@ -80,6 +84,9 @@ internal static class PivotStylePaletteResolver
         palette = LightPalette();
         return false;
     }
+
+    private static bool TryResolveMediumThemeSlot(string styleName, out WorkbookThemeColorSlot slot) =>
+        MediumThemeSlots.TryGetValue(styleName, out slot);
 
     private static bool TryResolveLightThemeSlot(string styleName, out WorkbookThemeColorSlot slot)
     {
