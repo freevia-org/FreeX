@@ -2,13 +2,13 @@ namespace FreeX.Core.IO.Tests;
 
 internal static class TestWorkspaceFiles
 {
-    public static string FindWorkspaceFile(params string[] relativeParts) =>
+    internal static string FindWorkspaceFile(params string[] relativeParts) =>
         FindFileUpward(AppContext.BaseDirectory, relativeParts)
         ?? throw new FileNotFoundException(
             "Could not locate workspace file.",
             Path.Combine(relativeParts));
 
-    public static string FindRepoFile(params string[] relativeParts)
+    internal static string FindRepoFile(params string[] relativeParts)
     {
         var currentDirectory = Directory.GetCurrentDirectory();
         return FindFileUpward(currentDirectory, relativeParts)
