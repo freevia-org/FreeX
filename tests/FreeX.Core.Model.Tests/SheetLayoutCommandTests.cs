@@ -10,7 +10,7 @@ public class SheetLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        return (wb, sheet, new SimpleCtx(wb));
+        return (wb, sheet, new TestCommandContext(wb));
     }
 
     [Fact]
@@ -493,9 +493,4 @@ public class SheetLayoutCommandTests
         sheet.SplitColumn.Should().Be(4);
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
