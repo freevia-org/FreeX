@@ -444,7 +444,7 @@ public sealed class AdvancedFilterCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        return (wb, sheet, new SimpleCtx(wb));
+        return (wb, sheet, new TestCommandContext(wb));
     }
 
     private static void SeedList(Sheet sheet)
@@ -563,9 +563,4 @@ public sealed class AdvancedFilterCommandTests
     private static string FindWorkspaceFile(params string[] parts)
         => WorkspaceFileLocator.Find(parts);
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
