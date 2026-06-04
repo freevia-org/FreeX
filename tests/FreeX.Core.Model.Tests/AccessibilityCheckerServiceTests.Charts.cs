@@ -235,6 +235,188 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastChartSeriesDataLabelOverrideText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            ShowDataLabels = true,
+            DataLabelTextColor = CellColor.Black,
+            DataLabelFillColor = CellColor.White,
+            SeriesDataLabelFormats =
+            [
+                new ChartSeriesDataLabelFormat(
+                    0,
+                    TextColor: new CellColor(230, 230, 230),
+                    FillColor: CellColor.White)
+            ]
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastChartText).Subject;
+
+        issue.Location.Should().Be("A1:B4");
+        issue.Message.Should().Be("Series data label text should have at least 4.5:1 contrast against its background.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastChartPointDataLabelOverrideText()
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(242, 242, 242))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(230, 230, 230))
+        };
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            ShowDataLabels = true,
+            DataLabelTextColor = CellColor.Black,
+            DataLabelFillColor = CellColor.White,
+            PointDataLabelFormats =
+            [
+                new ChartPointDataLabelFormat(
+                    0,
+                    1,
+                    FontSize: 11,
+                    FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+                    TextThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2))
+            ]
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales by quarter font",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            ShowDataLabels = true,
+            DataLabelTextColor = new CellColor(120, 120, 120),
+            DataLabelFillColor = CellColor.White,
+            DataLabelFontSize = 18,
+            PointDataLabelFormats =
+            [
+                new ChartPointDataLabelFormat(
+                    0,
+                    1,
+                    FontSize: 11)
+            ]
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind == AccessibilityIssueKind.LowContrastChartText)
+            .ToList();
+
+        issues.Select(i => i.Location).Should().Equal("A1:B4", "A1:B4");
+        issues.Select(i => i.Message).Should().Equal(
+            "Point data label text should have at least 4.5:1 contrast against its background.",
+            "Point data label text should have at least 4.5:1 contrast against its background.");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresHiddenAndDeletedChartDataLabelOverrides()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Hidden labels",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            ShowDataLabels = false,
+            SeriesDataLabelFormats =
+            [
+                new ChartSeriesDataLabelFormat(
+                    0,
+                    TextColor: new CellColor(230, 230, 230),
+                    FillColor: CellColor.White)
+            ],
+            PointDataLabelFormats =
+            [
+                new ChartPointDataLabelFormat(
+                    0,
+                    1,
+                    TextColor: new CellColor(230, 230, 230),
+                    FillColor: CellColor.White)
+            ]
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Deleted point label",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            ShowDataLabels = true,
+            DataLabelTextColor = CellColor.Black,
+            DataLabelFillColor = CellColor.White,
+            PointDataLabelFormats =
+            [
+                new ChartPointDataLabelFormat(
+                    0,
+                    1,
+                    TextColor: new CellColor(230, 230, 230),
+                    FillColor: CellColor.White,
+                    IsDeleted: true)
+            ]
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Blank series labels",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            ShowDataLabels = true,
+            DataLabelTextColor = CellColor.Black,
+            DataLabelFillColor = CellColor.White,
+            SeriesDataLabelFormats =
+            [
+                new ChartSeriesDataLabelFormat(
+                    0,
+                    TextColor: new CellColor(230, 230, 230),
+                    FillColor: CellColor.White,
+                    ShowValue: false)
+            ],
+            PointDataLabelFormats =
+            [
+                new ChartPointDataLabelFormat(
+                    0,
+                    1,
+                    TextColor: new CellColor(230, 230, 230),
+                    FillColor: CellColor.White,
+                    ShowValue: false)
+            ]
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastChartText);
+    }
+
+    [Fact]
     public void FindIssues_IgnoresChartTextWithSufficientContrast()
     {
         var workbook = new Workbook("Accessibility");
