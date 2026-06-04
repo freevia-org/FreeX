@@ -351,11 +351,53 @@ public sealed class FlashFillCommandTests
     }
 
     [Fact]
+    public void Fill_ExtractFinalDigitRun_ExtractsFinalNumericGroupFromMixedText()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Account 123-456-7890", "7890"),
+                ("Invoice # INV-2026-0042", "0042")
+            ],
+            [
+                "Order SO-17-0007",
+                "Call (425) 555-0188 x42"
+            ]);
+
+        result.Should().BeEquivalentTo(["0007", "42"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_ExtractFinalDigitRun_ReturnsNullWhenRemainingHasNoDigits()
     {
         var result = FlashFillService.Fill(
             [("(555) 867-5309", "5309"), ("800-555-0100", "0100")],
             ["no extension"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_ExtractFinalDigitRun_ReturnsNullWhenRemainingHasNoNumericGroup()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Account 123-456-7890", "7890"),
+                ("Invoice # INV-2026-0042", "0042")
+            ],
+            ["Account pending"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_ExtractFinalDigitRun_ReturnsNullForAmbiguousRepeatedNumericGroups()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("A12 B 12", "12"),
+                ("CD 34 EF34", "34")
+            ],
+            ["Account 123-456"]);
 
         result.Should().BeNull();
     }
