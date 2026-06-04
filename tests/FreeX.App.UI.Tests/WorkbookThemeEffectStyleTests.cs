@@ -10,6 +10,7 @@ public sealed class WorkbookThemeEffectStyleTests
     public void FromTheme_ReturnsNoShadowForOffice()
     {
         WorkbookThemeEffectStyle.FromTheme(WorkbookTheme.Office).HasShadow.Should().BeFalse();
+        WorkbookThemeEffectStyle.FromTheme(WorkbookTheme.Office).HasInnerShadow.Should().BeFalse();
     }
 
     [Fact]
@@ -117,6 +118,34 @@ public sealed class WorkbookThemeEffectStyleTests
     }
 
     [Fact]
+    public void FromTheme_UsesImportedFormatSchemeInnerShadow()
+    {
+        var theme = WorkbookTheme.Office
+            .WithEffects("Office")
+            .WithNativeFormatSchemeXml("""
+                <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+                  <a:effectStyleLst>
+                    <a:effectStyle>
+                      <a:effectLst>
+                        <a:innerShdw blurRad="38100" dist="19050" dir="5400000">
+                          <a:srgbClr val="000000"><a:alpha val="35000"/></a:srgbClr>
+                        </a:innerShdw>
+                      </a:effectLst>
+                    </a:effectStyle>
+                  </a:effectStyleLst>
+                </a:fmtScheme>
+                """);
+
+        var style = WorkbookThemeEffectStyle.FromTheme(theme);
+
+        style.HasInnerShadow.Should().BeTrue();
+        style.InnerShadowOpacity.Should().BeApproximately(0.35, 0.0001);
+        style.InnerShadowOffsetX.Should().Be(0);
+        style.InnerShadowOffsetY.Should().Be(2);
+        style.InnerShadowBlurRadius.Should().BeApproximately(4, 0.0001);
+    }
+
+    [Fact]
     public void FromTheme_UsesImportedFormatSchemeSoftEdgeWithCombinedEffects()
     {
         var theme = WorkbookTheme.Office
@@ -133,6 +162,9 @@ public sealed class WorkbookThemeEffectStyleTests
                           <a:srgbClr val="5B9BD5"><a:alpha val="42000"/></a:srgbClr>
                         </a:glow>
                         <a:softEdge rad="19050"/>
+                        <a:innerShdw blurRad="19050" dist="19050" dir="5400000">
+                          <a:srgbClr val="000000"><a:alpha val="35000"/></a:srgbClr>
+                        </a:innerShdw>
                       </a:effectLst>
                     </a:effectStyle>
                   </a:effectStyleLst>
@@ -144,7 +176,9 @@ public sealed class WorkbookThemeEffectStyleTests
         style.HasShadow.Should().BeTrue();
         style.HasGlow.Should().BeTrue();
         style.HasSoftEdge.Should().BeTrue();
+        style.HasInnerShadow.Should().BeTrue();
         style.SoftEdgeRadius.Should().BeApproximately(2, 0.0001);
+        style.InnerShadowBlurRadius.Should().BeApproximately(2, 0.0001);
     }
 
     [Fact]

@@ -99,6 +99,22 @@ public sealed class WorkbookThemeTests
     }
 
     [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_InterpretsInnerShadowEffectDefaults()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml(NativeFormatSchemeWithInnerShadow);
+
+        theme.NativeFormatSchemeXml.Should().Contain("innerShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeFalse();
+        theme.EffectDefaults.HasInnerShadow.Should().BeTrue();
+        theme.EffectDefaults.InnerShadowOpacity.Should().BeApproximately(0.35, 0.0001);
+        theme.EffectDefaults.InnerShadowOffsetX.Should().Be(0);
+        theme.EffectDefaults.InnerShadowOffsetY.Should().Be(2);
+        theme.EffectDefaults.InnerShadowBlurRadius.Should().BeApproximately(4, 0.0001);
+        theme.EffectDefaults.HasAnyEffect.Should().BeTrue();
+    }
+
+    [Fact]
     public void WorkbookTheme_WithNativeFormatSchemeXml_ReadsFirstSupportedSoftEdgeFromEffectDag()
     {
         var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml("""
@@ -125,6 +141,48 @@ public sealed class WorkbookThemeTests
         theme.EffectDefaults.SoftEdgeRadius.Should().BeApproximately(2, 0.0001);
     }
 
+    [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_ReadsFirstSupportedInnerShadowFromEffectDag()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml("""
+            <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Dag Inner Shadow Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:innerShdw blurRad="38100">
+                      <a:srgbClr val="000000"><a:alpha val="0"/></a:srgbClr>
+                    </a:innerShdw>
+                  </a:effectLst>
+                </a:effectStyle>
+                <a:effectStyle>
+                  <a:effectDag>
+                    <a:cont>
+                      <a:innerShdw dist="38100" dir="0">
+                        <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>
+                      </a:innerShdw>
+                    </a:cont>
+                  </a:effectDag>
+                </a:effectStyle>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:outerShdw blurRad="40000" dist="19050" dir="5400000" rotWithShape="0">
+                      <a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr>
+                    </a:outerShdw>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+            """);
+
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasInnerShadow.Should().BeTrue();
+        theme.EffectDefaults.HasShadow.Should().BeFalse();
+        theme.EffectDefaults.InnerShadowOpacity.Should().BeApproximately(0.5, 0.0001);
+        theme.EffectDefaults.InnerShadowOffsetX.Should().Be(4);
+        theme.EffectDefaults.InnerShadowOffsetY.Should().Be(0);
+        theme.EffectDefaults.InnerShadowBlurRadius.Should().Be(0);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("rad=\"0\"")]
@@ -138,6 +196,28 @@ public sealed class WorkbookThemeTests
                 <a:effectStyle>
                   <a:effectLst>
                     <a:softEdge {softEdgeAttributes}/>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+            """);
+
+        theme.EffectDefaults.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("<a:innerShdw blurRad=\"38100\"/>")]
+    [InlineData("<a:innerShdw blurRad=\"38100\"><a:srgbClr val=\"000000\"><a:alpha val=\"0\"/></a:srgbClr></a:innerShdw>")]
+    [InlineData("<a:innerShdw blurRad=\"38100\"><a:srgbClr val=\"000000\"><a:alpha val=\"-1\"/></a:srgbClr></a:innerShdw>")]
+    [InlineData("<a:innerShdw blurRad=\"38100\"><a:srgbClr val=\"000000\"><a:alpha val=\"not-a-number\"/></a:srgbClr></a:innerShdw>")]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_IgnoresUnsupportedInnerShadowOpacity(string innerShadowXml)
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml($"""
+            <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Invalid Inner Shadow Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst>
+                    {innerShadowXml}
                   </a:effectLst>
                 </a:effectStyle>
               </a:effectStyleLst>
@@ -340,6 +420,23 @@ public sealed class WorkbookThemeTests
             <a:effectStyle>
               <a:effectLst>
                 <a:softEdge rad="38100"/>
+              </a:effectLst>
+            </a:effectStyle>
+          </a:effectStyleLst>
+          <a:bgFillStyleLst/>
+        </a:fmtScheme>
+        """;
+
+    private const string NativeFormatSchemeWithInnerShadow = """
+        <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+          <a:fillStyleLst/>
+          <a:lnStyleLst/>
+          <a:effectStyleLst>
+            <a:effectStyle>
+              <a:effectLst>
+                <a:innerShdw blurRad="38100" dist="19050" dir="5400000">
+                  <a:srgbClr val="000000"><a:alpha val="35000"/></a:srgbClr>
+                </a:innerShdw>
               </a:effectLst>
             </a:effectStyle>
           </a:effectStyleLst>

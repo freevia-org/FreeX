@@ -140,6 +140,22 @@ public sealed class XlsxWorkbookThemeReaderTests
     }
 
     [Fact]
+    public void Load_ReadsFormatSchemeInnerShadowEffectDefaults()
+    {
+        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithInnerShadowXml));
+
+        var theme = XlsxWorkbookThemeReader.Load(package);
+
+        theme.NativeFormatSchemeXml.Should().Contain("innerShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasInnerShadow.Should().BeTrue();
+        theme.EffectDefaults.InnerShadowOpacity.Should().BeApproximately(0.35, 0.0001);
+        theme.EffectDefaults.InnerShadowOffsetX.Should().Be(0);
+        theme.EffectDefaults.InnerShadowOffsetY.Should().Be(2);
+        theme.EffectDefaults.InnerShadowBlurRadius.Should().BeApproximately(4, 0.0001);
+    }
+
+    [Fact]
     public void LoadSave_PreservesThemeSupplementElementsBesideThemeElements()
     {
         using var package = CreatePackage(("xl/theme/theme1.xml", """
@@ -608,6 +624,25 @@ public sealed class XlsxWorkbookThemeReaderTests
                 <a:effectStyle>
                   <a:effectLst>
                     <a:softEdge rad="38100"/>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+          </a:themeElements>
+        </a:theme>
+        """;
+
+    private const string NativeThemeWithInnerShadowXml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Inner Shadow Theme">
+          <a:themeElements>
+            <a:fmtScheme name="Inner Shadow Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:innerShdw blurRad="38100" dist="19050" dir="5400000">
+                      <a:srgbClr val="000000"><a:alpha val="35000"/></a:srgbClr>
+                    </a:innerShdw>
                   </a:effectLst>
                 </a:effectStyle>
               </a:effectStyleLst>

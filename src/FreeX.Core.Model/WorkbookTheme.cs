@@ -174,23 +174,29 @@ public sealed record WorkbookTheme(
 
             XElement? shadowEffect = null;
             XElement? glowEffect = null;
+            (double Opacity, double OffsetX, double OffsetY, double BlurRadius)? innerShadow = null;
             var softEdgeRadius = 0d;
             foreach (var effectStyle in effectStyleList.Elements(drawingNs + "effectStyle"))
             {
                 var candidateShadow = FindThemeShadow(effectStyle, drawingNs);
                 var candidateGlow = FindThemeGlow(effectStyle, drawingNs);
+                var candidateInnerShadow = ReadThemeInnerShadow(effectStyle, drawingNs);
                 var candidateSoftEdgeRadius = ReadPositiveCoordinatePixels(
                     FindThemeSoftEdge(effectStyle, drawingNs)?.Attribute("rad")?.Value);
-                if (candidateShadow is not null || candidateGlow is not null || candidateSoftEdgeRadius > 0)
+                if (candidateShadow is not null ||
+                    candidateGlow is not null ||
+                    candidateInnerShadow is not null ||
+                    candidateSoftEdgeRadius > 0)
                 {
                     shadowEffect = candidateShadow;
                     glowEffect = candidateGlow;
+                    innerShadow = candidateInnerShadow;
                     softEdgeRadius = candidateSoftEdgeRadius;
                     break;
                 }
             }
 
-            if (shadowEffect is null && glowEffect is null && softEdgeRadius <= 0)
+            if (shadowEffect is null && glowEffect is null && innerShadow is null && softEdgeRadius <= 0)
                 return null;
 
             var shadowOpacity = 0d;
@@ -216,7 +222,11 @@ public sealed record WorkbookTheme(
                 glowOpacity,
                 glowRadius,
                 glowColor,
-                softEdgeRadius);
+                softEdgeRadius,
+                innerShadow?.Opacity ?? 0,
+                innerShadow?.OffsetX ?? 0,
+                innerShadow?.OffsetY ?? 0,
+                innerShadow?.BlurRadius ?? 0);
         }
         catch
         {
@@ -258,7 +268,61 @@ public sealed record WorkbookTheme(
             .Descendants()
             .FirstOrDefault(effect => effect.Name == drawingNs + "softEdge");
 
-    private static double ReadEffectOpacity(XElement effect, XNamespace drawingNs)
+    private static (double Opacity, double OffsetX, double OffsetY, double BlurRadius)? ReadThemeInnerShadow(
+        XElement effectStyle,
+        XNamespace drawingNs)
+    {
+        foreach (var effect in FindThemeInnerShadows(effectStyle, drawingNs))
+        {
+            var opacity = ReadPositiveEffectOpacity(effect, drawingNs);
+            if (opacity is null)
+                continue;
+
+            var distancePixels = ReadPositiveCoordinatePixels(effect.Attribute("dist")?.Value);
+            var directionRadians = ReadAngleRadians(effect.Attribute("dir")?.Value);
+            var offsetX = CleanZero(Math.Round(Math.Cos(directionRadians) * distancePixels, 3));
+            var offsetY = CleanZero(Math.Round(Math.Sin(directionRadians) * distancePixels, 3));
+            var blurRadius = ReadPositiveCoordinatePixels(effect.Attribute("blurRad")?.Value);
+
+            return (opacity.Value, offsetX, offsetY, blurRadius);
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<XElement> FindThemeInnerShadows(XElement effectStyle, XNamespace drawingNs)
+    {
+        var effectList = effectStyle.Element(drawingNs + "effectLst");
+        if (effectList is not null)
+        {
+            foreach (var effect in effectList.Elements())
+            {
+                if (effect.Name == drawingNs + "innerShdw")
+                    yield return effect;
+            }
+        }
+
+        var effectDag = effectStyle.Element(drawingNs + "effectDag");
+        if (effectDag is not null)
+        {
+            foreach (var effect in effectDag.Descendants())
+            {
+                if (effect.Name == drawingNs + "innerShdw")
+                    yield return effect;
+            }
+        }
+    }
+
+    private static double? ReadPositiveEffectOpacity(XElement effect, XNamespace drawingNs)
+    {
+        var opacity = ReadEffectOpacityOrNull(effect, drawingNs);
+        return opacity is > 0 ? opacity : null;
+    }
+
+    private static double ReadEffectOpacity(XElement effect, XNamespace drawingNs) =>
+        ReadEffectOpacityOrNull(effect, drawingNs) ?? 1;
+
+    private static double? ReadEffectOpacityOrNull(XElement effect, XNamespace drawingNs)
     {
         var alphaText = effect
             .Elements()
@@ -267,7 +331,7 @@ public sealed record WorkbookTheme(
 
         return int.TryParse(alphaText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var alpha)
             ? Math.Clamp(alpha / 100000d, 0, 1)
-            : 1;
+            : null;
     }
 
     private static CellColor? ReadEffectSrgbColor(XElement effect, XNamespace drawingNs)
@@ -382,12 +446,17 @@ public sealed record WorkbookThemeEffectDefaults(
     double GlowOpacity = 0,
     double GlowRadius = 0,
     CellColor? GlowColor = null,
-    double SoftEdgeRadius = 0)
+    double SoftEdgeRadius = 0,
+    double InnerShadowOpacity = 0,
+    double InnerShadowOffsetX = 0,
+    double InnerShadowOffsetY = 0,
+    double InnerShadowBlurRadius = 0)
 {
     public bool HasShadow => ShadowOpacity > 0;
     public bool HasGlow => GlowOpacity > 0 && GlowRadius > 0;
     public bool HasSoftEdge => SoftEdgeRadius > 0;
-    public bool HasAnyEffect => HasShadow || HasGlow || HasSoftEdge;
+    public bool HasInnerShadow => InnerShadowOpacity > 0;
+    public bool HasAnyEffect => HasShadow || HasGlow || HasSoftEdge || HasInnerShadow;
 }
 
 public readonly record struct WorkbookThemeColorReference(

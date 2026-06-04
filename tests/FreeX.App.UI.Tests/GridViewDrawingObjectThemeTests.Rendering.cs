@@ -173,6 +173,39 @@ public sealed partial class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectRendering_UsesThemeInnerShadowsForTextBoxesAndShapesOnly()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var renderTextBox = drawingObjects[
+            drawingObjects.IndexOf("private void RenderTextBox", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
+        var renderDrawingShape = drawingObjects[
+            drawingObjects.IndexOf("private void RenderDrawingShape", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private bool HasExplicitDrawingObjectZOrder", StringComparison.Ordinal)];
+        var textBoxThemeInnerShadow = drawingObjects[
+            drawingObjects.IndexOf("private void DrawTextBoxThemeInnerShadow", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)];
+        var shapeThemeInnerShadow = drawingObjects[
+            drawingObjects.IndexOf("private void DrawShapeThemeInnerShadow", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private static double GetSoftEdgeThickness", StringComparison.Ordinal)];
+
+        renderTextBox.Should().Contain("DrawTextBoxThemeInnerShadow(dc, rect, themeEffect);");
+        renderDrawingShape.Should().Contain("DrawShapeThemeInnerShadow(dc, shape.Kind, rect, themeEffect);");
+        textBoxThemeInnerShadow.Should().Contain("effect.HasInnerShadow");
+        textBoxThemeInnerShadow.Should().Contain("GetInnerShadowThickness(effect.InnerShadowBlurRadius)");
+        textBoxThemeInnerShadow.Should().Contain("GetInnerShadowRect(rect, thickness, effect.InnerShadowOffsetX, effect.InnerShadowOffsetY)");
+        shapeThemeInnerShadow.Should().Contain("effect.HasInnerShadow");
+        shapeThemeInnerShadow.Should().Contain("dc.DrawRectangle(null, pen, shadowRect);");
+        shapeThemeInnerShadow.Should().Contain("dc.DrawEllipse(null, pen");
+        pictures.Should().NotContain("WorkbookThemeEffectStyle");
+        pictures.Should().NotContain("HasInnerShadow");
+        pictures.Should().NotContain("InnerShadow");
+    }
+
+    [Fact]
     public void DrawingObjectRendering_UsesAuthoredGradientDirectionMetadata()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

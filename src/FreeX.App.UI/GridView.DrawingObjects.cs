@@ -250,6 +250,7 @@ public partial class GridView
         var fillBrush = GetDrawingObjectBrush(242, colors.Fill);
         var borderPen = GetDrawingObjectPen(255, colors.Outline, 1);
         dc.DrawRectangle(fillBrush, borderPen, rect);
+        DrawTextBoxThemeInnerShadow(dc, rect, themeEffect);
 
         var textWidth = Math.Max(1, rect.Width - 8);
         var textHeight = Math.Max(1, rect.Height - 8);
@@ -319,6 +320,7 @@ public partial class GridView
                 dc.DrawLine(pen, rect.TopLeft, rect.BottomRight);
                 break;
         }
+        DrawShapeThemeInnerShadow(dc, shape.Kind, rect, themeEffect);
         if (rotationPushed) dc.Pop();
     }
 
@@ -700,6 +702,20 @@ public partial class GridView
         }
     }
 
+    private void DrawTextBoxThemeInnerShadow(DrawingContext dc, Rect rect, WorkbookThemeEffectStyle effect)
+    {
+        if (!effect.HasInnerShadow)
+            return;
+
+        var alpha = GetInnerShadowAlpha(effect.InnerShadowOpacity);
+        var thickness = GetInnerShadowThickness(effect.InnerShadowBlurRadius);
+        var shadowRect = GetInnerShadowRect(rect, thickness, effect.InnerShadowOffsetX, effect.InnerShadowOffsetY);
+
+        dc.PushClip(GetDrawingObjectClipGeometry(rect));
+        dc.DrawRectangle(null, GetDrawingObjectPen(alpha, 0, 0, 0, thickness), shadowRect);
+        dc.Pop();
+    }
+
     private void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookThemeEffectStyle effect)
     {
         if (!effect.HasShadow && !effect.HasGlow && !effect.HasSoftEdge)
@@ -757,6 +773,56 @@ public partial class GridView
                 thickness: GetSoftEdgeThickness(effect.SoftEdgeRadius),
                 inflate: GetSoftEdgeInflate(effect.SoftEdgeRadius));
         }
+    }
+
+    private void DrawShapeThemeInnerShadow(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        WorkbookThemeEffectStyle effect)
+    {
+        if (!effect.HasInnerShadow)
+            return;
+
+        var alpha = GetInnerShadowAlpha(effect.InnerShadowOpacity);
+        var thickness = GetInnerShadowThickness(effect.InnerShadowBlurRadius);
+        var shadowRect = GetInnerShadowRect(rect, thickness, effect.InnerShadowOffsetX, effect.InnerShadowOffsetY);
+        var pen = GetDrawingObjectPen(alpha, 0, 0, 0, thickness);
+
+        switch (kind)
+        {
+            case DrawingShapeKind.Rectangle:
+                dc.DrawRectangle(null, pen, shadowRect);
+                break;
+            case DrawingShapeKind.Ellipse:
+                dc.DrawEllipse(null, pen, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
+                break;
+            case DrawingShapeKind.Line:
+                dc.DrawLine(pen, shadowRect.TopLeft, shadowRect.BottomRight);
+                break;
+        }
+    }
+
+    private static byte GetInnerShadowAlpha(double opacity) =>
+        (byte)Math.Clamp(Math.Round(255 * opacity * 0.7), 1, 255);
+
+    private static double GetInnerShadowThickness(double blurRadius) =>
+        Math.Clamp(Math.Max(2, blurRadius), 2, 12);
+
+    private static Rect GetInnerShadowRect(Rect rect, double thickness, double offsetX, double offsetY)
+    {
+        var insetX = Math.Min(Math.Max(1, thickness / 2), Math.Max(0, rect.Width / 2 - 0.5));
+        var insetY = Math.Min(Math.Max(1, thickness / 2), Math.Max(0, rect.Height / 2 - 0.5));
+        var shadowRect = new Rect(
+            rect.Left + insetX,
+            rect.Top + insetY,
+            Math.Max(1, rect.Width - insetX * 2),
+            Math.Max(1, rect.Height - insetY * 2));
+
+        shadowRect.Offset(
+            Math.Clamp(offsetX / 2, -insetX, insetX),
+            Math.Clamp(offsetY / 2, -insetY, insetY));
+        return shadowRect;
     }
 
     private static double GetSoftEdgeThickness(double radius) =>
