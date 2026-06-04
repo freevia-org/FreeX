@@ -592,9 +592,9 @@ public static partial class FlashFillService
 
     private static bool IsValidOrdinalDaySuffix(int day, string suffix)
     {
-        var expected = day % 100 is >= 11 and <= 13
+        var expected = (day % 100) is >= 11 and <= 13
             ? "th"
-            : day % 10 switch
+            : (day % 10) switch
             {
                 1 => "st",
                 2 => "nd",
