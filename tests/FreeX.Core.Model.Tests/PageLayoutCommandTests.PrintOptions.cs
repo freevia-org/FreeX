@@ -12,7 +12,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PrintGridlines = false;
         sheet.PrintHeadings = true;
 
@@ -33,7 +33,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.ScaleToFit = new WorksheetScaleToFit(ScalePercent: 100, FitToPagesWide: null, FitToPagesTall: null);
         var next = new WorksheetScaleToFit(ScalePercent: null, FitToPagesWide: 1, FitToPagesTall: 1);
 
@@ -52,7 +52,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PrintTitleRows = new WorksheetRepeatRange(1, 1);
 
         var command = new SetPrintTitlesCommand(
@@ -75,7 +75,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.RowPageBreaks.Add(10);
 
         var command = new SetPageBreaksCommand(sheet.Id, rowBreaks: [20, 30], columnBreaks: [4]);

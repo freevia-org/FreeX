@@ -11,7 +11,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.ColumnWidths[1] = 18;
         sheet.ColumnWidths[2] = 24;
         sheet.ColumnWidths[5] = 9;
@@ -38,7 +38,7 @@ public sealed partial class PasteSpecialCommandTests
         var wb = new Workbook("test");
         var sourceSheet = wb.AddSheet("Source");
         var targetSheet = wb.AddSheet("Target");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sourceSheet.ColumnWidths[1] = 18;
         sourceSheet.ColumnWidths[2] = 24;
         targetSheet.ColumnWidths[5] = 9;
@@ -64,7 +64,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.ColumnWidths[1] = 18;
         sheet.IsProtected = true;
 
@@ -83,7 +83,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.ColumnWidths[1] = 18;
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatColumns);
@@ -102,7 +102,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
         sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = sourceRange, RuleType = CfRuleType.CellValue });
         sheet.IsProtected = true;
@@ -120,7 +120,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
         sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = sourceRange, RuleType = CfRuleType.CellValue });
         sheet.IsProtected = true;

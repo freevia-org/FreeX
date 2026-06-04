@@ -12,7 +12,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PageOrientation = WorksheetPageOrientation.Landscape;
 
         var command = new SetPageOrientationCommand(sheet.Id, WorksheetPageOrientation.Portrait);
@@ -30,7 +30,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PageOrientation = WorksheetPageOrientation.Portrait;
 
         var outcome = new SetPageOrientationCommand(sheet.Id, (WorksheetPageOrientation)99).Apply(ctx);
@@ -44,7 +44,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PaperSize = WorksheetPaperSize.A4;
 
         var command = new SetPaperSizeCommand(sheet.Id, WorksheetPaperSize.Legal);
@@ -62,7 +62,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PaperSize = WorksheetPaperSize.Letter;
 
         var outcome = new SetPaperSizeCommand(sheet.Id, (WorksheetPaperSize)99).Apply(ctx);

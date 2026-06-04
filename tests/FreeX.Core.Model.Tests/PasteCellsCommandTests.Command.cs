@@ -11,7 +11,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var addr = new CellAddress(sheet.Id, 1, 1);
 
         var oldStyle = wb.RegisterStyle(new CellStyle { Bold = true });

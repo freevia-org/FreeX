@@ -12,7 +12,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PageOrientation = WorksheetPageOrientation.Portrait;
         sheet.PaperSize = WorksheetPaperSize.A4;
         sheet.PageMargins = WorksheetPageMargins.Narrow;
@@ -102,7 +102,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.PageOrientation = WorksheetPageOrientation.Portrait;
         sheet.PaperSize = WorksheetPaperSize.Letter;
         sheet.PageOrder = WorksheetPageOrder.DownThenOver;
