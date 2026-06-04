@@ -272,6 +272,27 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBooleanReference()
+    {
+        AssertFormulaBooleanContrastLocations("=$C1", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBooleanLiterals()
+    {
+        AssertFormulaBooleanContrastLocations("=TRUE", "B1", "B2", "B3", "B4");
+        AssertFormulaBooleanContrastLocations("=FALSE");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLogicalBooleanReference()
+    {
+        AssertFormulaBooleanContrastLocations("AND($A1>=100,$C1)", "B2");
+        AssertFormulaBooleanContrastLocations("OR($A1>=100,$C1)", "B1", "B2", "B3");
+        AssertFormulaBooleanContrastLocations("NOT($C1)", "B3", "B4");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAnd()
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -400,6 +421,47 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(amount));
         sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue(status));
+    }
+
+    private static Workbook CreateFormulaBooleanContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        SetFormulaBooleanContrastRow(sheet, 1, 75, flag: true, "Below active");
+        SetFormulaBooleanContrastRow(sheet, 2, 100, flag: true, "Threshold active");
+        SetFormulaBooleanContrastRow(sheet, 3, 125, flag: false, "Escalated inactive");
+        SetFormulaBooleanContrastRow(sheet, 4, 75, flag: false, "Below inactive");
+
+        return workbook;
+    }
+
+    private static void SetFormulaBooleanContrastRow(
+        Sheet sheet,
+        uint row,
+        double amount,
+        bool flag,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(amount));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new BoolValue(flag));
+    }
+
+    private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
     }
 
     private static void AddFormulaContrastRule(

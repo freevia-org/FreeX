@@ -536,7 +536,9 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
-        expression = default!;
+        if (TryCreateFormulaBooleanOperandExpression(ast, out expression))
+            return true;
+
         if (ast is not FunctionCallNode function)
             return false;
 
@@ -570,6 +572,19 @@ public static partial class AccessibilityCheckerService
         }
 
         expression = new ConditionalFormulaLogicalExpression(logicalOperator.Value, operands);
+        return true;
+    }
+
+    private static bool TryCreateFormulaBooleanOperandExpression(FormulaNode ast, out ConditionalFormulaExpression expression)
+    {
+        expression = default!;
+        if (ast is not BooleanNode && ast is not CellRefNode)
+            return false;
+
+        if (!TryCreateFormulaOperand(ast, out var operand))
+            return false;
+
+        expression = new ConditionalFormulaOperandExpression(operand);
         return true;
     }
 
@@ -867,6 +882,9 @@ public static partial class AccessibilityCheckerService
 
     private abstract record ConditionalFormulaExpression;
 
+    private sealed record ConditionalFormulaOperandExpression(
+        ConditionalFormulaOperand Operand) : ConditionalFormulaExpression;
+
     private sealed record ConditionalFormulaComparisonExpression(
         ConditionalFormulaComparison Comparison) : ConditionalFormulaExpression;
 
@@ -950,10 +968,25 @@ public static partial class AccessibilityCheckerService
             int colOffset) =>
             expression switch
             {
+                ConditionalFormulaOperandExpression operand => EvaluateFormulaBooleanOperand(operand.Operand, rowOffset, colOffset),
                 ConditionalFormulaComparisonExpression comparison => EvaluateFormulaComparison(comparison.Comparison, rowOffset, colOffset),
                 ConditionalFormulaLogicalExpression logical => EvaluateFormulaLogical(logical, rowOffset, colOffset),
                 _ => null
             };
+
+        private bool? EvaluateFormulaBooleanOperand(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset)
+        {
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value))
+                return null;
+
+            return FormulaBooleanValue(value);
+        }
+
+        private static bool? FormulaBooleanValue(ScalarValue value) =>
+            value is BoolValue boolean ? boolean.Value : null;
 
         private bool? EvaluateFormulaLogical(
             ConditionalFormulaLogicalExpression logical,
