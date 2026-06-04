@@ -72,6 +72,32 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDisplayName_ConvertsCamelCaseUserNameToProperName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("adaLovelace@example.com", "Ada Lovelace"),
+                ("graceHopper+sales@contoso.com", "Grace Hopper")
+            ],
+            ["alanTuring@research.example", "katherineJohnson+math@contoso.com"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing", "Katherine Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmailDisplayName_ReturnsNullForAllLowerUserNameWithoutSeparators()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("adalovelace@example.com", "Ada Lovelace"),
+                ("gracehopper@contoso.com", "Grace Hopper")
+            ],
+            ["alanturing@research.example"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_EmailDisplayName_ConvertsMultiTokenUserNameToProperName()
     {
         var result = FlashFillService.Fill(

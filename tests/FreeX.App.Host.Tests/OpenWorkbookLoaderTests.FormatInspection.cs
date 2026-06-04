@@ -17,7 +17,7 @@ public sealed partial class OpenWorkbookLoaderTests
         await File.WriteAllTextAsync(tempPath, "payload");
         try
         {
-            var adapter = new FakeAdapter(_ =>
+            var adapter = new TestFileAdapter(_ =>
             {
                 var workbook = new Workbook("Loaded");
                 workbook.AddSheet("Sheet1");
@@ -32,7 +32,7 @@ public sealed partial class OpenWorkbookLoaderTests
                 adapter,
                 extension,
                 new FileFormatDescriptor(extension, formatName, CanOpen: true, CanSave: false, OpensAsTemplate: true),
-                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+                new TestProgress<OpenProgressUpdate>(_ => { }));
 
             result.OpenedAsTemplate.Should().BeTrue();
         }
@@ -60,7 +60,7 @@ public sealed partial class OpenWorkbookLoaderTests
             var expectedReport = new XlsxFeatureReport([
                 new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin")
             ]);
-            var adapter = new FakeAdapter(stream =>
+            var adapter = new TestFileAdapter(stream =>
             {
                 using var reader = new StreamReader(stream);
                 reader.ReadToEnd().Should().Be("payload");
@@ -84,7 +84,7 @@ public sealed partial class OpenWorkbookLoaderTests
                 adapter,
                 extension,
                 new FileFormatDescriptor(extension, "Excel Open XML", CanOpen: true, CanSave: canSave, opensAsTemplate),
-                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+                new TestProgress<OpenProgressUpdate>(_ => { }));
 
             inspected.Should().BeTrue();
             result.FeatureReport.Should().BeSameAs(expectedReport);
@@ -122,7 +122,7 @@ public sealed partial class OpenWorkbookLoaderTests
                 adapter,
                 ".xlsx",
                 new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
-                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+                new TestProgress<OpenProgressUpdate>(_ => { }));
 
             result.FeatureReport.Should().NotBeNull();
             result.FeatureReport!.Features.Should().Contain(feature =>
@@ -149,7 +149,7 @@ public sealed partial class OpenWorkbookLoaderTests
         try
         {
             var inspected = false;
-            var adapter = new FakeAdapter(stream =>
+            var adapter = new TestFileAdapter(stream =>
             {
                 using var reader = new StreamReader(stream);
                 reader.ReadToEnd().Should().Be("payload");
@@ -170,7 +170,7 @@ public sealed partial class OpenWorkbookLoaderTests
                 adapter,
                 extension,
                 new FileFormatDescriptor(extension, "XLSB Binary", CanOpen: true, CanSave: false, opensAsTemplate),
-                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+                new TestProgress<OpenProgressUpdate>(_ => { }));
 
             inspected.Should().BeFalse();
             result.FeatureReport.Should().BeNull();

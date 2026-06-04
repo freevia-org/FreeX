@@ -27,7 +27,7 @@ public sealed class HeavyWorkbookRetestTests
             adapter,
             ".xlsx",
             new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
-            new ImmediateProgress<OpenProgressUpdate>(openProgress.Add));
+            new TestProgress<OpenProgressUpdate>(openProgress.Add));
         openStopwatch.Stop();
 
         openResult.Workbook.SheetCount.Should().BeGreaterThan(0);
@@ -44,7 +44,7 @@ public sealed class HeavyWorkbookRetestTests
                 savePath,
                 adapter,
                 openResult.Workbook,
-                new ImmediateProgress<SaveProgressUpdate>(saveProgress.Add));
+                new TestProgress<SaveProgressUpdate>(saveProgress.Add));
             saveStopwatch.Stop();
 
             File.Exists(savePath).Should().BeTrue();
@@ -68,11 +68,6 @@ public sealed class HeavyWorkbookRetestTests
             throw new FileNotFoundException("FREEX_HEAVY_WORKBOOK_PATH does not point to an existing workbook.", configured);
 
         return File.Exists(DefaultHeavyWorkbookPath) ? DefaultHeavyWorkbookPath : null;
-    }
-
-    private sealed class ImmediateProgress<T>(Action<T> report) : IProgress<T>
-    {
-        public void Report(T value) => report(value);
     }
 
     private sealed class HeavyWorkbookRetestFactAttribute : FactAttribute

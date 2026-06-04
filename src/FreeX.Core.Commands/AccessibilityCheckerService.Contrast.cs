@@ -509,9 +509,9 @@ public static partial class AccessibilityCheckerService
             _ => false
         };
 
-    private static bool TryCreateFormulaComparison(string? formulaText, out ConditionalFormulaComparison comparison)
+    private static bool TryCreateFormulaExpression(string? formulaText, out ConditionalFormulaExpression expression)
     {
-        comparison = default;
+        expression = default!;
         if (string.IsNullOrWhiteSpace(formulaText))
             return false;
 
@@ -520,12 +520,57 @@ public static partial class AccessibilityCheckerService
             var text = formulaText.Trim();
             var formula = text[0] == '=' ? text : "=" + text;
             var ast = new Parser(new Lexer(formula).Tokenize()).Parse();
-            return TryCreateFormulaComparison(ast, out comparison);
+            return TryCreateFormulaExpression(ast, out expression);
         }
         catch
         {
             return false;
         }
+    }
+
+    private static bool TryCreateFormulaExpression(FormulaNode ast, out ConditionalFormulaExpression expression)
+    {
+        if (TryCreateFormulaComparison(ast, out var comparison))
+        {
+            expression = new ConditionalFormulaComparisonExpression(comparison);
+            return true;
+        }
+
+        expression = default!;
+        if (ast is not FunctionCallNode function)
+            return false;
+
+        if (string.Equals(function.FunctionName, "NOT", StringComparison.OrdinalIgnoreCase))
+        {
+            if (function.Arguments.Count != 1 ||
+                !TryCreateFormulaExpression(function.Arguments[0], out var operand))
+            {
+                return false;
+            }
+
+            expression = new ConditionalFormulaLogicalExpression(
+                ConditionalFormulaLogicalOperator.Not,
+                [operand]);
+            return true;
+        }
+
+        var logicalOperator = string.Equals(function.FunctionName, "AND", StringComparison.OrdinalIgnoreCase)
+            ? ConditionalFormulaLogicalOperator.And
+            : string.Equals(function.FunctionName, "OR", StringComparison.OrdinalIgnoreCase)
+                ? ConditionalFormulaLogicalOperator.Or
+                : (ConditionalFormulaLogicalOperator?)null;
+        if (!logicalOperator.HasValue || function.Arguments.Count == 0)
+            return false;
+
+        var operands = new ConditionalFormulaExpression[function.Arguments.Count];
+        for (var i = 0; i < function.Arguments.Count; i++)
+        {
+            if (!TryCreateFormulaExpression(function.Arguments[i], out operands[i]))
+                return false;
+        }
+
+        expression = new ConditionalFormulaLogicalExpression(logicalOperator.Value, operands);
+        return true;
     }
 
     private static bool TryCreateFormulaComparison(FormulaNode ast, out ConditionalFormulaComparison comparison)
@@ -820,6 +865,22 @@ public static partial class AccessibilityCheckerService
 
     private readonly record struct CellContrastCheck(double MinimumContrastRatio, bool HasSufficientContrast);
 
+    private abstract record ConditionalFormulaExpression;
+
+    private sealed record ConditionalFormulaComparisonExpression(
+        ConditionalFormulaComparison Comparison) : ConditionalFormulaExpression;
+
+    private sealed record ConditionalFormulaLogicalExpression(
+        ConditionalFormulaLogicalOperator Operator,
+        IReadOnlyList<ConditionalFormulaExpression> Operands) : ConditionalFormulaExpression;
+
+    private enum ConditionalFormulaLogicalOperator
+    {
+        And,
+        Or,
+        Not
+    }
+
     private readonly record struct ConditionalFormulaComparison(
         ConditionalFormulaOperand Left,
         BinaryOperator Operator,
@@ -848,7 +909,7 @@ public static partial class AccessibilityCheckerService
         private readonly Dictionary<ConditionalFormat, Dictionary<string, int>> _valueCounts = new();
         private readonly Dictionary<ConditionalFormat, RangeAverage> _averages = new();
         private readonly Dictionary<ConditionalFormat, HashSet<CellAddress>?> _topBottomMatches = new();
-        private readonly Dictionary<ConditionalFormat, ConditionalFormulaComparison?> _formulaComparisons = new();
+        private readonly Dictionary<ConditionalFormat, ConditionalFormulaExpression?> _formulaExpressions = new();
 
         public bool HasDuplicateValue(ConditionalFormat rule, ScalarValue value) =>
             TryGetValueCount(rule, value, out var count) && count > 1;
@@ -875,19 +936,93 @@ public static partial class AccessibilityCheckerService
 
         public bool MatchesFormulaRule(ConditionalFormat rule, CellAddress address)
         {
-            if (!TryGetFormulaComparison(rule, out var comparison))
+            if (!TryGetFormulaExpression(rule, out var expression))
                 return false;
 
             var rowOffset = (int)address.Row - (int)rule.AppliesTo.Start.Row;
             var colOffset = (int)address.Col - (int)rule.AppliesTo.Start.Col;
+            return EvaluateFormulaExpression(expression, rowOffset, colOffset) == true;
+        }
+
+        private bool? EvaluateFormulaExpression(
+            ConditionalFormulaExpression expression,
+            int rowOffset,
+            int colOffset) =>
+            expression switch
+            {
+                ConditionalFormulaComparisonExpression comparison => EvaluateFormulaComparison(comparison.Comparison, rowOffset, colOffset),
+                ConditionalFormulaLogicalExpression logical => EvaluateFormulaLogical(logical, rowOffset, colOffset),
+                _ => null
+            };
+
+        private bool? EvaluateFormulaLogical(
+            ConditionalFormulaLogicalExpression logical,
+            int rowOffset,
+            int colOffset)
+        {
+            return logical.Operator switch
+            {
+                ConditionalFormulaLogicalOperator.And => EvaluateFormulaAnd(logical.Operands, rowOffset, colOffset),
+                ConditionalFormulaLogicalOperator.Or => EvaluateFormulaOr(logical.Operands, rowOffset, colOffset),
+                ConditionalFormulaLogicalOperator.Not => logical.Operands.Count == 1
+                    ? Negate(EvaluateFormulaExpression(logical.Operands[0], rowOffset, colOffset))
+                    : null,
+                _ => null
+            };
+        }
+
+        private bool? EvaluateFormulaAnd(
+            IReadOnlyList<ConditionalFormulaExpression> operands,
+            int rowOffset,
+            int colOffset)
+        {
+            var hasUnknown = false;
+            for (var i = 0; i < operands.Count; i++)
+            {
+                var result = EvaluateFormulaExpression(operands[i], rowOffset, colOffset);
+                if (result == false)
+                    return false;
+
+                hasUnknown |= !result.HasValue;
+            }
+
+            return hasUnknown ? null : true;
+        }
+
+        private bool? EvaluateFormulaOr(
+            IReadOnlyList<ConditionalFormulaExpression> operands,
+            int rowOffset,
+            int colOffset)
+        {
+            var hasUnknown = false;
+            for (var i = 0; i < operands.Count; i++)
+            {
+                var result = EvaluateFormulaExpression(operands[i], rowOffset, colOffset);
+                if (result == true)
+                    return true;
+
+                hasUnknown |= !result.HasValue;
+            }
+
+            return hasUnknown ? null : false;
+        }
+
+        private static bool? Negate(bool? value) =>
+            value.HasValue ? !value.Value : null;
+
+        private bool? EvaluateFormulaComparison(
+            ConditionalFormulaComparison comparison,
+            int rowOffset,
+            int colOffset)
+        {
             if (!TryResolveFormulaOperand(comparison.Left, rowOffset, colOffset, out var left) ||
                 !TryResolveFormulaOperand(comparison.Right, rowOffset, colOffset, out var right))
             {
-                return false;
+                return null;
             }
 
             if (left is ErrorValue || right is ErrorValue)
-                return false;
+                return null;
 
             var result = CompareFormulaValues(left, right);
             return comparison.Operator switch
@@ -902,21 +1037,28 @@ public static partial class AccessibilityCheckerService
             };
         }
 
-        private bool TryGetFormulaComparison(ConditionalFormat rule, out ConditionalFormulaComparison comparison)
+        private bool TryGetFormulaExpression(ConditionalFormat rule, out ConditionalFormulaExpression expression)
         {
-            if (_formulaComparisons.TryGetValue(rule, out var cached))
+            if (_formulaExpressions.TryGetValue(rule, out var cached))
             {
-                comparison = cached.GetValueOrDefault();
-                return cached.HasValue;
-            }
+                if (cached is null)
+                {
+                    expression = default!;
+                    return false;
+                }
 
-            if (TryCreateFormulaComparison(rule.FormulaText, out comparison))
-            {
-                _formulaComparisons[rule] = comparison;
+                expression = cached;
                 return true;
             }
 
-            _formulaComparisons[rule] = null;
+            if (TryCreateFormulaExpression(rule.FormulaText, out expression))
+            {
+                _formulaExpressions[rule] = expression;
+                return true;
+            }
+
+            _formulaExpressions[rule] = null;
+            expression = default!;
             return false;
         }
 
