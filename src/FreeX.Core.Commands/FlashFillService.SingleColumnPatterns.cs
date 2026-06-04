@@ -263,6 +263,24 @@ public static partial class FlashFillService
         return null;
     }
 
+    private static Func<string, string?>? TryExtractPenultimateDelimitedToken(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var delimiter in FinalDelimitedTokenDelimiters)
+        {
+            if (!examples.All(e => TryGetPenultimateDelimitedToken(e.Source, delimiter, out var token) && token == e.Expected))
+                continue;
+
+            var d = delimiter;
+            var cache = new ExtractedSegmentCache();
+            return source => TryGetPenultimateDelimitedTokenRange(source, d, out var start, out var endExclusive)
+                ? cache.GetOrAdd(source, start, endExclusive)
+                : null;
+        }
+
+        return null;
+    }
+
     private static Func<string, string?>? TryRemoveFinalDottedToken(IReadOnlyList<(string Source, string Expected)> examples)
     {
         if (!examples.All(e => TryRemoveFinalDottedToken(e.Source, out var stem) && stem == e.Expected))
@@ -478,6 +496,55 @@ public static partial class FlashFillService
 
         tokenStart = start;
         tokenEndExclusive = end + 1;
+        return true;
+    }
+
+    private static bool TryGetPenultimateDelimitedToken(string source, char delimiter, out string token)
+    {
+        token = string.Empty;
+        if (!TryGetPenultimateDelimitedTokenRange(source, delimiter, out var tokenStart, out var tokenEndExclusive))
+            return false;
+
+        token = SliceSegment(source, tokenStart, tokenEndExclusive);
+        return true;
+    }
+
+    private static bool TryGetPenultimateDelimitedTokenRange(
+        string source,
+        char delimiter,
+        out int tokenStart,
+        out int tokenEndExclusive)
+    {
+        tokenStart = 0;
+        tokenEndExclusive = 0;
+
+        var finalEnd = source.Length - 1;
+        TrimTrailingWhitespace(source, ref finalEnd);
+        if (finalEnd < 0)
+            return false;
+
+        var lastDelimiterIndex = source.LastIndexOf(delimiter, finalEnd);
+        if (lastDelimiterIndex < 0)
+            return false;
+
+        var finalStart = lastDelimiterIndex + 1;
+        TrimSegment(source, ref finalStart, ref finalEnd);
+        if (finalStart > finalEnd)
+            return false;
+
+        var penultimateEnd = lastDelimiterIndex - 1;
+        TrimTrailingWhitespace(source, ref penultimateEnd);
+        if (penultimateEnd < 0)
+            return false;
+
+        var previousDelimiterIndex = source.LastIndexOf(delimiter, penultimateEnd);
+        var penultimateStart = previousDelimiterIndex < 0 ? 0 : previousDelimiterIndex + 1;
+        TrimSegment(source, ref penultimateStart, ref penultimateEnd);
+        if (penultimateStart > penultimateEnd)
+            return false;
+
+        tokenStart = penultimateStart;
+        tokenEndExclusive = penultimateEnd + 1;
         return true;
     }
 

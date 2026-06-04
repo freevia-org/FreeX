@@ -99,6 +99,56 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Theory]
+    [InlineData(
+        @"C:\Reports\Q1.xlsx",
+        "Reports",
+        @"D:\Archive\Sales.final.csv",
+        "Archive",
+        @"\\share\dept\Budget.v2.txt",
+        "dept")]
+    [InlineData(
+        "SKU-2024-Retail",
+        "2024",
+        "SKU-2025-Wholesale",
+        "2025",
+        "SKU-NORTH-2026-Online",
+        "2026")]
+    [InlineData(
+        "/reports/q1.xlsx",
+        "reports",
+        "/archive/sales.csv",
+        "archive",
+        "/mnt/ops/budget.txt",
+        "ops")]
+    public void Fill_ExtractPenultimateDelimitedToken_UsesSecondTokenFromRightAcrossVariableCounts(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("SKU")]
+    [InlineData("SKU-")]
+    [InlineData("SKU--Retail")]
+    public void Fill_ExtractPenultimateDelimitedToken_ReturnsNullWhenRemainingTokenIsMissing(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [("SKU-2024-Retail", "2024"), ("SKU-2025-Wholesale", "2025")],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
     [InlineData("SKU-2024-0001", "SKU-2024", "SKU-2025-0042", "SKU-2025", "SKU-NORTH-2026-0007", "SKU-NORTH-2026")]
     [InlineData("Archive/2024/January", "Archive/2024", "Archive/2025/February", "Archive/2025", "Archive/North/America/March", "Archive/North/America")]
     [InlineData("Archive\\2024\\January", "Archive\\2024", "Archive\\2025\\February", "Archive\\2025", "Archive\\North\\America\\March", "Archive\\North\\America")]
