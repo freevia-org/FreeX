@@ -2332,7 +2332,7 @@ internal static partial class XlsxCorpusFixtureFactory
             workbookRelsXml,
             "rIdFreeXCrossSheetLookup",
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
-            "worksheets/sheet2.xml");
+            "/xl/worksheets/sheet2.xml");
         ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
 
         ReplacePackageXml(
