@@ -1275,10 +1275,12 @@ public static partial class FormulaAuditingService
         var symbolIndex = 0;
         if (text[0] is '+' or '-')
         {
-            if (text.Length <= 2)
-                return false;
-
             symbolIndex = 1;
+            while (symbolIndex < text.Length && char.IsWhiteSpace(text[symbolIndex]))
+                symbolIndex++;
+
+            if (symbolIndex >= text.Length)
+                return false;
         }
 
         if (!IsSupportedCurrencySymbol(text[symbolIndex]))
