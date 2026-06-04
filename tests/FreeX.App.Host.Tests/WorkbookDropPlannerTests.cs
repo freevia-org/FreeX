@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.Core.IO;
-using FreeX.Core.Model;
 using System.IO;
 
 namespace FreeX.App.Host.Tests;
@@ -12,8 +11,8 @@ public sealed class WorkbookDropPlannerTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter(".xlsx", "XLSX Workbook"),
-            new FakeAdapter(".csv", "CSV")
+            new FakeAdapter(extension: ".xlsx", formatName: "XLSX Workbook"),
+            new FakeAdapter(extension: ".csv", formatName: "CSV")
         };
 
         var selected = WorkbookDropPlanner.SelectOpenableFile(
@@ -32,7 +31,7 @@ public sealed class WorkbookDropPlannerTests
     {
         var selected = WorkbookDropPlanner.SelectOpenableFile(
             [@"C:\Temp\README", @"C:\Temp\notes.pdf"],
-            [new FakeAdapter(".xlsx", "XLSX Workbook")]);
+            [new FakeAdapter(extension: ".xlsx", formatName: "XLSX Workbook")]);
 
         selected.Should().BeNull();
     }
@@ -45,7 +44,7 @@ public sealed class WorkbookDropPlannerTests
                 @"C:\Temp\README",
                 @"C:\Temp\Book.xlsx"
             ],
-            [new FakeAdapter(".xlsx", "XLSX Workbook")]);
+            [new FakeAdapter(extension: ".xlsx", formatName: "XLSX Workbook")]);
 
         selected.Should().Be(@"C:\Temp\Book.xlsx");
     }
@@ -58,7 +57,7 @@ public sealed class WorkbookDropPlannerTests
                 "bad\0path.xlsx",
                 @"C:\Temp\Book.xlsx"
             ],
-            [new FakeAdapter(".xlsx", "XLSX Workbook")]);
+            [new FakeAdapter(extension: ".xlsx", formatName: "XLSX Workbook")]);
 
         selected.Should().Be(@"C:\Temp\Book.xlsx");
     }
@@ -113,11 +112,4 @@ public sealed class WorkbookDropPlannerTests
         }
     }
 
-    private sealed class FakeAdapter(string extension, string formatName) : IFileAdapter
-    {
-        public string Extension => extension;
-        public string FormatName => formatName;
-        public Workbook Load(Stream stream) => throw new NotSupportedException();
-        public void Save(Workbook workbook, Stream stream) => throw new NotSupportedException();
-    }
 }
