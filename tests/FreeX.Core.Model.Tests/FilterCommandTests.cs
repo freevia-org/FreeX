@@ -17,7 +17,7 @@ public sealed class FilterCommandTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 1));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var first = new FilterCommand(sheet.Id, range, 0, ["Keep"]);
         first.Apply(ctx).Success.Should().BeTrue();
@@ -41,7 +41,7 @@ public sealed class FilterCommandTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 1));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         new FilterCommand(sheet.Id, range, 0, ["Keep"]).Apply(ctx).Success.Should().BeTrue();
         var changed = new FilterCommand(sheet.Id, range, 0, ["Drop"]);
@@ -71,15 +71,10 @@ public sealed class FilterCommandTests
             new CellAddress(sheet.Id, 6, 1));
         var command = new TopBottomFilterCommand(sheet.Id, range, 0, count: 2, top: true);
 
-        var outcome = command.Apply(new SimpleCtx(wb));
+        var outcome = command.Apply(new TestCommandContext(wb));
 
         outcome.Success.Should().BeTrue();
         sheet.FilterHiddenRows.Should().BeEquivalentTo([4u, 5u, 6u, 20u]);
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
-    }
 }

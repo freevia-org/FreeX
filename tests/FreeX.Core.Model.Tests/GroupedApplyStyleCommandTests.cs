@@ -12,7 +12,7 @@ public sealed class GroupedApplyStyleCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sourceRange = new GridRange(
             new CellAddress(sheet1.Id, 1, 1),
             new CellAddress(sheet1.Id, 1, 2));
@@ -69,7 +69,7 @@ public sealed class GroupedApplyStyleCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new GroupedApplyStyleCommand(
             [sheet1.Id, sheet2.Id],
             new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 10, 10)),
@@ -99,7 +99,7 @@ public sealed class GroupedApplyStyleCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var address1 = new CellAddress(sheet1.Id, 1, 1);
         var address2 = new CellAddress(sheet2.Id, 1, 1);
         sheet1.SetCell(address1, Cell.FromValue(new TextValue("old1")));
@@ -127,7 +127,7 @@ public sealed class GroupedApplyStyleCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var address1 = new CellAddress(sheet1.Id, 1, 1);
         var address2 = new CellAddress(sheet2.Id, 1, 1);
         sheet1.SetCell(address1, Cell.FromValue(new TextValue("old1")));
@@ -145,12 +145,6 @@ public sealed class GroupedApplyStyleCommandTests
         outcome.Success.Should().BeFalse();
         sheet1.GetCell(address1)!.StyleId.Should().Be(oldStyle1);
         sheet2.GetCell(address2)!.StyleId.Should().Be(oldStyle2);
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 
     private static string FindWorkspaceFile(params string[] parts)

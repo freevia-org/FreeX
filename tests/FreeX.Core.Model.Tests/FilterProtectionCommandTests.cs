@@ -173,12 +173,7 @@ public sealed class FilterProtectionCommandTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("East"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(10));
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
-        return (workbook, sheet, new SimpleCtx(workbook), range);
+        return (workbook, sheet, new TestCommandContext(workbook), range);
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
-    }
 }
