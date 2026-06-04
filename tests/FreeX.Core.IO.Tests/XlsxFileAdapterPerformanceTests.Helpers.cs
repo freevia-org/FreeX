@@ -356,6 +356,15 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sheet.HiddenCols.Add((uint)(30 + iteration));
     }
 
+    private static void ApplyGeneratedStyleHeavyMergeRegionMutation(Workbook workbook, int iteration)
+    {
+        var sheet = workbook.Sheets[0];
+        var row = (uint)(1 + iteration * 2);
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, row, 1),
+            new CellAddress(sheet.Id, row + 1, 2)));
+    }
+
     private static void ReplaceZipEntryXml(ZipArchive archive, string entryName, XDocument document)
     {
         archive.GetEntry(entryName)?.Delete();

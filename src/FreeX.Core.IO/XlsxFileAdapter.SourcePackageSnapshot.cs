@@ -313,7 +313,8 @@ public sealed partial class XlsxFileAdapter
                     CellPatchChangeLimit,
                     currentModelFingerprint,
                     out var changes,
-                    out var dimensionChanges))
+                    out var dimensionChanges,
+                    out var mergeRegionChanges))
             {
                 return false;
             }
@@ -321,7 +322,7 @@ public sealed partial class XlsxFileAdapter
             currentModelFingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var patchedModelFingerprint = currentModelFingerprint ?? CreateModelFingerprint(workbook);
             currentModelFingerprint = patchedModelFingerprint;
-            if (changes.Count == 0 && dimensionChanges.Count == 0)
+            if (changes.Count == 0 && dimensionChanges.Count == 0 && mergeRegionChanges.Count == 0)
             {
                 CopyTo(stream);
                 return true;
@@ -336,8 +337,11 @@ public sealed partial class XlsxFileAdapter
                     .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
                 var dimensionChangesByWorksheet = dimensionChanges
                     .ToDictionary(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+                var mergeRegionChangesByWorksheet = mergeRegionChanges
+                    .ToDictionary(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase);
                 var worksheetPaths = cellChangesByWorksheet.Keys
                     .Concat(dimensionChangesByWorksheet.Keys)
+                    .Concat(mergeRegionChangesByWorksheet.Keys)
                     .Distinct(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var worksheetPath in worksheetPaths)
@@ -355,6 +359,12 @@ public sealed partial class XlsxFileAdapter
 
                     if (dimensionChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetDimensionPatch) &&
                         !XlsxCellPatchBaseline.ApplyDimensionChanges(worksheetXml, worksheetDimensionPatch))
+                    {
+                        return false;
+                    }
+
+                    if (mergeRegionChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetMergeRegionPatch) &&
+                        !XlsxCellPatchBaseline.ApplyMergeRegionChanges(worksheetXml, worksheetMergeRegionPatch))
                     {
                         return false;
                     }
@@ -395,7 +405,11 @@ public sealed partial class XlsxFileAdapter
                     WorksheetsWithPreservableSourceMetadata,
                     HasUnsupportedConditionalFormatting,
                     AllowsCellPatchSave,
-                    CellPatchBaseline.WithAppliedChanges(changes, dimensionChanges, patchedModelFingerprint)));
+                    CellPatchBaseline.WithAppliedChanges(
+                        changes,
+                        dimensionChanges,
+                        mergeRegionChanges,
+                        patchedModelFingerprint)));
             }
             else
             {
@@ -706,6 +720,7 @@ public sealed partial class XlsxFileAdapter
                         sheet.CellCount,
                         sheet.StyleOnlyCellCount,
                         XlsxWorksheetDimensionBaseline.Capture(sheet),
+                        sheet.MergedRegions.ToArray(),
                         cells));
                 }
 
@@ -725,10 +740,12 @@ public sealed partial class XlsxFileAdapter
             int changeLimit,
             string? currentModelFingerprint,
             out List<XlsxCellValuePatch> changes,
-            out List<XlsxWorksheetDimensionPatch> dimensionChanges)
+            out List<XlsxWorksheetDimensionPatch> dimensionChanges,
+            out List<XlsxWorksheetMergeRegionPatch> mergeRegionChanges)
         {
             changes = [];
             dimensionChanges = [];
+            mergeRegionChanges = [];
             if (workbook.SheetCount != _worksheets.Count)
                 return false;
 
@@ -759,6 +776,24 @@ public sealed partial class XlsxFileAdapter
                         return false;
 
                     dimensionChanges.Add(dimensionPatch);
+                }
+
+                if (!XlsxWorksheetMergeRegionPatch.TryCreate(
+                        baseline.SheetId,
+                        baseline.WorksheetPath,
+                        baseline.MergedRegions,
+                        sheet.MergedRegions,
+                        out var mergeRegionPatch))
+                {
+                    return false;
+                }
+
+                if (mergeRegionPatch is not null)
+                {
+                    if (mergeRegionPatch.ChangeCount > changeLimit)
+                        return false;
+
+                    mergeRegionChanges.Add(mergeRegionPatch);
                 }
 
                 var addedCells = 0;
@@ -892,9 +927,12 @@ public sealed partial class XlsxFileAdapter
                     return false;
             }
 
-            return changes.Count == 0 && dimensionChanges.Count == 0 && currentModelFingerprint is not null
+            return changes.Count == 0 &&
+                   dimensionChanges.Count == 0 &&
+                   mergeRegionChanges.Count == 0 &&
+                   currentModelFingerprint is not null
                 ? string.Equals(_modelFingerprint, currentModelFingerprint, StringComparison.Ordinal)
-                : ModelMatchesWithOriginalValues(workbook, changes, dimensionChanges);
+                : ModelMatchesWithOriginalValues(workbook, changes, dimensionChanges, mergeRegionChanges);
         }
 
         public static bool ApplyChanges(XDocument worksheetXml, IEnumerable<XlsxCellValuePatch> changes)
@@ -989,6 +1027,115 @@ public sealed partial class XlsxFileAdapter
             }
 
             return ApplyColumnDimensions(root, worksheetNs, patch);
+        }
+
+        public static bool ApplyMergeRegionChanges(
+            XDocument worksheetXml,
+            XlsxWorksheetMergeRegionPatch patch)
+        {
+            var root = worksheetXml.Root;
+            if (root is null || !XlsxWorksheetMergeRegionPatch.ArePatchable(patch.SheetId, patch.Current))
+                return false;
+
+            var worksheetNs = root.Name.Namespace;
+            var mergeCells = root.Element(worksheetNs + "mergeCells");
+            if (patch.Current.Count == 0)
+            {
+                mergeCells?.Remove();
+                return true;
+            }
+
+            var existingByReference = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+            if (mergeCells is not null)
+            {
+                foreach (var child in mergeCells.Elements())
+                {
+                    if (child.Name != worksheetNs + "mergeCell")
+                        return false;
+
+                    var reference = child.Attribute("ref")?.Value;
+                    if (string.IsNullOrWhiteSpace(reference) ||
+                        !existingByReference.TryAdd(reference, child))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            mergeCells ??= new XElement(worksheetNs + "mergeCells");
+            mergeCells.RemoveNodes();
+            foreach (var region in patch.Current)
+            {
+                var reference = FormatMergeReference(region);
+                if (existingByReference.TryGetValue(reference, out var existing))
+                {
+                    var preserved = new XElement(existing);
+                    preserved.SetAttributeValue("ref", reference);
+                    mergeCells.Add(preserved);
+                }
+                else
+                {
+                    mergeCells.Add(new XElement(
+                        worksheetNs + "mergeCell",
+                        new XAttribute("ref", reference)));
+                }
+            }
+
+            mergeCells.SetAttributeValue("count", patch.Current.Count.ToString(CultureInfo.InvariantCulture));
+            if (mergeCells.Parent is null)
+                InsertMergeCellsElement(root, worksheetNs, mergeCells);
+
+            return true;
+        }
+
+        private static string FormatMergeReference(GridRange region)
+        {
+            var start = ToReference(region.Start.Row, region.Start.Col);
+            var end = ToReference(region.End.Row, region.End.Col);
+            return $"{start}:{end}";
+        }
+
+        private static void InsertMergeCellsElement(
+            XElement root,
+            XNamespace worksheetNs,
+            XElement mergeCells)
+        {
+            string[] laterWorksheetElements =
+            [
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "drawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ];
+            var insertionPoint = root.Elements()
+                .FirstOrDefault(element =>
+                    element.Name.Namespace == worksheetNs &&
+                    laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+            if (insertionPoint is null)
+                root.Add(mergeCells);
+            else
+                insertionPoint.AddBeforeSelf(mergeCells);
         }
 
         private static bool ApplyRowDimension(
@@ -1235,9 +1382,10 @@ public sealed partial class XlsxFileAdapter
         public XlsxCellPatchBaseline WithAppliedChanges(
             IReadOnlyList<XlsxCellValuePatch> changes,
             IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges,
+            IReadOnlyList<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
             string modelFingerprint)
         {
-            if (changes.Count == 0 && dimensionChanges.Count == 0)
+            if (changes.Count == 0 && dimensionChanges.Count == 0 && mergeRegionChanges.Count == 0)
                 return new XlsxCellPatchBaseline(_worksheets, _sourceStyleIndexesByStyleId, modelFingerprint);
 
             var changesBySheet = changes
@@ -1245,12 +1393,17 @@ public sealed partial class XlsxFileAdapter
                 .ToDictionary(group => group.Key, group => group.ToList());
             var dimensionChangesBySheet = dimensionChanges
                 .ToDictionary(change => change.SheetId);
+            var mergeRegionChangesBySheet = mergeRegionChanges
+                .ToDictionary(change => change.SheetId);
             var worksheets = new List<XlsxWorksheetCellPatchBaseline>(_worksheets.Count);
             foreach (var baseline in _worksheets)
             {
                 changesBySheet.TryGetValue(baseline.SheetId, out var sheetChanges);
                 dimensionChangesBySheet.TryGetValue(baseline.SheetId, out var dimensionPatch);
-                if ((sheetChanges is null || sheetChanges.Count == 0) && dimensionPatch is null)
+                mergeRegionChangesBySheet.TryGetValue(baseline.SheetId, out var mergeRegionPatch);
+                if ((sheetChanges is null || sheetChanges.Count == 0) &&
+                    dimensionPatch is null &&
+                    mergeRegionPatch is null)
                 {
                     worksheets.Add(baseline);
                     continue;
@@ -1301,6 +1454,7 @@ public sealed partial class XlsxFileAdapter
                 {
                     CellCount = baseline.CellCount + inserted - deleted,
                     Dimensions = dimensionPatch?.Current ?? baseline.Dimensions,
+                    MergedRegions = mergeRegionPatch?.Current ?? baseline.MergedRegions,
                     Cells = cells
                 });
             }
@@ -1311,7 +1465,8 @@ public sealed partial class XlsxFileAdapter
         private bool ModelMatchesWithOriginalValues(
             Workbook workbook,
             IReadOnlyList<XlsxCellValuePatch> changes,
-            IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges)
+            IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges,
+            IReadOnlyList<XlsxWorksheetMergeRegionPatch> mergeRegionChanges)
         {
             var restoredCells = new List<(
                 Cell Cell,
@@ -1322,6 +1477,7 @@ public sealed partial class XlsxFileAdapter
             var insertedCells = new List<(Sheet Sheet, uint Row, uint Col, Cell CurrentCell)>();
             var deletedCells = new List<(Sheet Sheet, uint Row, uint Col)>();
             var restoredDimensions = new List<(Sheet Sheet, XlsxWorksheetDimensionBaseline Current)>(dimensionChanges.Count);
+            var restoredMergedRegions = new List<(Sheet Sheet, GridRange[] Current)>(mergeRegionChanges.Count);
             try
             {
                 foreach (var dimensionChange in dimensionChanges)
@@ -1332,6 +1488,16 @@ public sealed partial class XlsxFileAdapter
 
                     restoredDimensions.Add((sheet, XlsxWorksheetDimensionBaseline.Capture(sheet)));
                     ApplyDimensionBaseline(sheet, dimensionChange.Original);
+                }
+
+                foreach (var mergeRegionChange in mergeRegionChanges)
+                {
+                    var sheet = workbook.GetSheet(mergeRegionChange.SheetId);
+                    if (sheet is null)
+                        return false;
+
+                    restoredMergedRegions.Add((sheet, sheet.MergedRegions.ToArray()));
+                    sheet.ReplaceMergedRegions(mergeRegionChange.Original);
                 }
 
                 foreach (var change in changes)
@@ -1407,6 +1573,8 @@ public sealed partial class XlsxFileAdapter
 
                 foreach (var (sheet, current) in restoredDimensions)
                     ApplyDimensionBaseline(sheet, current);
+                foreach (var (sheet, current) in restoredMergedRegions)
+                    sheet.ReplaceMergedRegions(current);
             }
         }
 
@@ -2080,6 +2248,98 @@ public sealed partial class XlsxFileAdapter
             columns.All(IsValidWorksheetColumn);
     }
 
+    private sealed record XlsxWorksheetMergeRegionPatch(
+        SheetId SheetId,
+        string WorksheetPath,
+        IReadOnlyList<GridRange> Original,
+        IReadOnlyList<GridRange> Current,
+        int ChangeCount)
+    {
+        public static bool TryCreate(
+            SheetId sheetId,
+            string worksheetPath,
+            IReadOnlyList<GridRange> original,
+            IReadOnlyList<GridRange> current,
+            out XlsxWorksheetMergeRegionPatch? patch)
+        {
+            patch = null;
+            if (!ArePatchable(sheetId, original) || !ArePatchable(sheetId, current))
+                return false;
+
+            if (SequenceEqual(original, current))
+                return true;
+
+            patch = new XlsxWorksheetMergeRegionPatch(
+                sheetId,
+                worksheetPath,
+                original,
+                current.ToArray(),
+                CountChangedReferences(original, current));
+            return true;
+        }
+
+        public static bool ArePatchable(SheetId sheetId, IReadOnlyList<GridRange> regions)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var region in regions)
+            {
+                if (region.Start.Sheet != sheetId ||
+                    region.End.Sheet != sheetId ||
+                    region.CellCount <= 1 ||
+                    !IsValidWorksheetRow(region.Start.Row) ||
+                    !IsValidWorksheetRow(region.End.Row) ||
+                    !IsValidWorksheetColumn(region.Start.Col) ||
+                    !IsValidWorksheetColumn(region.End.Col) ||
+                    !seen.Add($"{region.Start.Row}:{region.Start.Col}:{region.End.Row}:{region.End.Col}"))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool SequenceEqual(
+            IReadOnlyList<GridRange> left,
+            IReadOnlyList<GridRange> right)
+        {
+            if (left.Count != right.Count)
+                return false;
+
+            for (var i = 0; i < left.Count; i++)
+            {
+                if (left[i] != right[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static int CountChangedReferences(
+            IReadOnlyList<GridRange> original,
+            IReadOnlyList<GridRange> current)
+        {
+            var references = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var region in original)
+                references.Add(ToChangeKey(region));
+
+            var changed = 0;
+            foreach (var region in current)
+            {
+                if (references.Remove(ToChangeKey(region)))
+                    continue;
+
+                changed++;
+            }
+
+            changed += references.Count;
+            return Math.Max(changed, 1);
+        }
+
+        private static string ToChangeKey(GridRange region) =>
+            $"{region.Start.Row}:{region.Start.Col}:{region.End.Row}:{region.End.Col}";
+    }
+
     private sealed record XlsxWorksheetCellPatchBaseline(
         SheetId SheetId,
         string SheetName,
@@ -2087,6 +2347,7 @@ public sealed partial class XlsxFileAdapter
         int CellCount,
         int StyleOnlyCellCount,
         XlsxWorksheetDimensionBaseline Dimensions,
+        IReadOnlyList<GridRange> MergedRegions,
         IReadOnlyDictionary<(uint Row, uint Col), XlsxPatchCell> Cells);
 
     private sealed record XlsxPatchCell(

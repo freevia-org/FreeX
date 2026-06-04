@@ -262,6 +262,56 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithMergedRegionEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateMergedRegionSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.MergedRegions.Should().HaveCount(2);
+        sheet.RemoveMergedRegion(sheet.MergedRegions[0]).Should().BeTrue();
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 4, 2)));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/styles.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
+        ReadMergeCellsAttribute(savedBytes, "xl/worksheets/sheet1.xml", "nativeMergeContainerAttr")
+            .Should()
+            .Be("kept");
+        ReadMergeCellsAttribute(savedBytes, "xl/worksheets/sheet1.xml", "count")
+            .Should()
+            .Be("2");
+        ReadMergeCellReferences(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Equal("C1:D1", "A3:B4");
+        ReadMergeCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "C1:D1", "nativeMergeCellAttr")
+            .Should()
+            .Be("kept-C1-D1");
+        ReadMergeCellAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A3:B4", "nativeMergeCellAttr")
+            .Should()
+            .BeNull();
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloaded = adapter.Load(reloadStream).GetSheetAt(0);
+        reloaded.MergedRegions
+            .Select(region => region.ToString())
+            .Should()
+            .Equal("C1:D1", "A3:B4");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithClearedLiteralCell_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
@@ -471,6 +521,50 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return stream.ToArray();
     }
 
+    private static byte[] CreateMergedRegionSourcePackage()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Data");
+            sheet.Cell("A1").Value = "merged 1";
+            sheet.Cell("C1").Value = "merged 2";
+            sheet.Range("A1:B1").Merge();
+            sheet.Range("C1:D1").Merge();
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+            worksheetEntry.Should().NotBeNull();
+            XDocument worksheetXml;
+            using (var worksheetStream = worksheetEntry!.Open())
+                worksheetXml = XDocument.Load(worksheetStream);
+
+            var worksheetNs = worksheetXml.Root!.Name.Namespace;
+            var mergeCells = worksheetXml.Root.Element(worksheetNs + "mergeCells");
+            mergeCells.Should().NotBeNull();
+            mergeCells!.SetAttributeValue("nativeMergeContainerAttr", "kept");
+            foreach (var mergeCell in mergeCells.Elements(worksheetNs + "mergeCell"))
+            {
+                var reference = mergeCell.Attribute("ref")?.Value;
+                if (reference == "A1:B1")
+                    mergeCell.SetAttributeValue("nativeMergeCellAttr", "kept-A1-B1");
+                else if (reference == "C1:D1")
+                    mergeCell.SetAttributeValue("nativeMergeCellAttr", "kept-C1-D1");
+            }
+
+            worksheetEntry.Delete();
+            var replacement = archive.CreateEntry("xl/worksheets/sheet1.xml");
+            using var replacementStream = replacement.Open();
+            worksheetXml.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+        }
+
+        return stream.ToArray();
+    }
+
     private static byte[] CreateFormulaSourcePackage(string formulaElement = "<f>1+1</f>")
     {
         using var package = XlsxPackageTestFixtures.CreatePackage(
@@ -659,6 +753,55 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         }
 
         return null;
+    }
+
+    private static string? ReadMergeCellsAttribute(byte[] packageBytes, string worksheetPath, string attributeName)
+    {
+        var mergeCells = ReadMergeCellsElement(packageBytes, worksheetPath);
+        return mergeCells?.Attribute(attributeName)?.Value;
+    }
+
+    private static IReadOnlyList<string> ReadMergeCellReferences(byte[] packageBytes, string worksheetPath)
+    {
+        var mergeCells = ReadMergeCellsElement(packageBytes, worksheetPath);
+        if (mergeCells is null)
+            return [];
+
+        var ns = mergeCells.Name.Namespace;
+        return mergeCells
+            .Elements(ns + "mergeCell")
+            .Select(element => element.Attribute("ref")?.Value ?? "")
+            .ToList();
+    }
+
+    private static string? ReadMergeCellAttribute(
+        byte[] packageBytes,
+        string worksheetPath,
+        string reference,
+        string attributeName)
+    {
+        var mergeCells = ReadMergeCellsElement(packageBytes, worksheetPath);
+        if (mergeCells is null)
+            return null;
+
+        var ns = mergeCells.Name.Namespace;
+        return mergeCells
+            .Elements(ns + "mergeCell")
+            .SingleOrDefault(element => string.Equals(element.Attribute("ref")?.Value, reference, StringComparison.OrdinalIgnoreCase))
+            ?.Attribute(attributeName)
+            ?.Value;
+    }
+
+    private static XElement? ReadMergeCellsElement(byte[] packageBytes, string worksheetPath)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry(worksheetPath);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        var ns = document.Root!.Name.Namespace;
+        return document.Root.Element(ns + "mergeCells");
     }
 
     private static string? ReadCellTextSpaceMode(byte[] packageBytes, string worksheetPath, string reference)
