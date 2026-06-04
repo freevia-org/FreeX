@@ -10,13 +10,7 @@ public class FormulaRewriteCommandTests
     {
         var wb    = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        return (wb, sheet, new SimpleCtx(wb));
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
+        return (wb, sheet, new TestCommandContext(wb));
     }
 
     [Fact]
@@ -73,7 +67,7 @@ public class FormulaRewriteCommandTests
     public void InsertRows_CrossSheetFormula_ShiftedOnCorrectSheet()
     {
         var (wb, sheet, _) = Setup();
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var sheet2 = wb.AddSheet("Sheet2");
         sheet2.SetFormula(new CellAddress(sheet2.Id, 1, 2), "Sheet1!A5");
 
@@ -214,7 +208,7 @@ public class FormulaRewriteCommandTests
         var wb = new Workbook("test");
         var data = wb.AddSheet("My Sheet");
         var formulas = wb.AddSheet("Formulas");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         formulas.SetFormula(new CellAddress(formulas.Id, 1, 1), "'My Sheet'!A1");
 
         new RenameSheetCommand(data.Id, "New Sheet").Apply(ctx);
@@ -283,7 +277,7 @@ public class FormulaRewriteCommandTests
         var first = wb.AddSheet("First");
         var removed = wb.AddSheet("Data");
         var third = wb.AddSheet("Third");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var removedId = removed.Id;
         removed.SetCell(new CellAddress(removed.Id, 2, 3), new NumberValue(42));
         removed.SetFormula(new CellAddress(removed.Id, 3, 3), "C2*2");
@@ -306,7 +300,7 @@ public class FormulaRewriteCommandTests
         var wb = new Workbook("test");
         var keep = wb.AddSheet("Keep");
         var removed = wb.AddSheet("Data");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         wb.DefineNamedRange("KeepRange", new GridRange(
             new CellAddress(keep.Id, 1, 1),
             new CellAddress(keep.Id, 2, 1)));
@@ -331,7 +325,7 @@ public class FormulaRewriteCommandTests
     {
         var wb = new Workbook("test");
         var only = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new RemoveSheetCommand(only.Id).Apply(ctx);
 
@@ -347,7 +341,7 @@ public class FormulaRewriteCommandTests
         var first = wb.AddSheet("First");
         var second = wb.AddSheet("Second");
         var third = wb.AddSheet("Third");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var cmd = new MoveSheetCommand(fromIndex: 0, toIndex: 2);
         var outcome = cmd.Apply(ctx);
@@ -368,7 +362,7 @@ public class FormulaRewriteCommandTests
         var wb = new Workbook("test");
         wb.AddSheet("First");
         wb.AddSheet("Second");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new MoveSheetCommand(fromIndex: 0, toIndex: 5).Apply(ctx);
 
