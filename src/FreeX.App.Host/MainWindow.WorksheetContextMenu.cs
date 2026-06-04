@@ -429,6 +429,7 @@ public partial class MainWindow
             SelectionRangeService.GetCurrentRegion(sheet, address) is { } currentRegion &&
             AutoFilterDropdownPlanner.TryPlan(currentRegion, address, out _);
         var hasValidationDropdown =
+            sheet.DataValidations.Count > 0 &&
             DataValidationService.GetApplicable(sheet, address)
                 .Any(rule => rule.Type == DvType.List && rule.ShowDropdown);
         return new WorksheetContextMenuState(

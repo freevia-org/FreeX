@@ -39,6 +39,37 @@ public sealed class ChartRendererPerformanceMeasurementTests
         stopwatch.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void BuildPlotModelWithTinyRangeInLargeViewport_BoundsLookupAllocation()
+    {
+        const int iterations = 32;
+        var (chart, viewport) = CreateTinyChartRangeInLargeViewport();
+        BuildPlotModel(chart, viewport).Series.Should().HaveCount(1);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var pointCount = 0;
+        for (var i = 0; i < iterations; i++)
+            pointCount += ((OxyPlot.Series.LineSeries)BuildPlotModel(chart, viewport).Series[0]).Points.Count;
+
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF CHART_BUILD_TINY_RANGE_LARGE_VIEWPORT " +
+            $"viewport_cells={viewport.Cells.Count:N0} steps={iterations} " +
+            $"total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={stopwatch.Elapsed.TotalMilliseconds / iterations:F4} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        pointCount.Should().Be(12 * iterations);
+        allocatedBytes.Should().BeLessThan(4_000_000);
+    }
+
     private static (ChartModel Chart, ViewportModel Viewport) CreateDenseFormattedLineChart()
     {
         const int seriesCount = 8;
@@ -99,6 +130,56 @@ public sealed class ChartRendererPerformanceMeasurementTests
                     FontSize: 9 + point % 3));
             }
         }
+
+        return (chart, new ViewportModel(cells, [], []));
+    }
+
+    private static (ChartModel Chart, ViewportModel Viewport) CreateTinyChartRangeInLargeViewport()
+    {
+        var sheetId = SheetId.New();
+        var cells = new List<DisplayCell>(60_000);
+        for (uint row = 200; row < 800; row++)
+        {
+            for (uint col = 20; col < 120; col++)
+            {
+                var value = row + col;
+                cells.Add(new DisplayCell(
+                    row,
+                    col,
+                    new NumberValue(value),
+                    value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    null,
+                    StyleId.Default,
+                    null));
+            }
+        }
+
+        cells.Add(Cell(1, 1, "Month"));
+        cells.Add(Cell(1, 2, "Sales"));
+        for (uint row = 2; row <= 13; row++)
+        {
+            cells.Add(Cell(row, 1, $"M{row - 1}"));
+            cells.Add(new DisplayCell(
+                row,
+                2,
+                new NumberValue(row * 10),
+                (row * 10).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                null,
+                StyleId.Default,
+                null));
+        }
+
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 13, 2)),
+            Width = 640,
+            Height = 360
+        };
 
         return (chart, new ViewportModel(cells, [], []));
     }
