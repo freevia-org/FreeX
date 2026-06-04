@@ -80,6 +80,50 @@ public sealed partial class XlsxPackageMetadataMergerTests
     }
 
     [Fact]
+    public void MergeRelationshipParts_PreservesInternalTargetsWhenCopiedPartDiffersOnlyByCase()
+    {
+        using var sourcePackage = new MemoryStream();
+        using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(sourceArchive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="png" ContentType="image/png"/>
+                </Types>
+                """);
+            WritePackageEntry(sourceArchive, "xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/image1.png"/>
+                </Relationships>
+                """);
+            WritePackageEntry(sourceArchive, "xl/media/Image1.png", "image");
+        }
+
+        sourcePackage.Position = 0;
+        using var targetPackage = CreatePackageWithExistingWorksheetRelationships();
+        using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(source, target);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(source, target, generatedEntriesBeforeMerge);
+
+        target.GetEntry("xl/media/Image1.png").Should().NotBeNull();
+
+        var relsXml = LoadXml(target.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        relsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(element =>
+                element.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" &&
+                element.Attribute("Target")?.Value == "../media/image1.png")
+            .Should()
+            .ContainSingle("OPC part existence checks are case-insensitive");
+    }
+
+    [Fact]
     public void MergeRelationshipParts_PreservesExternalTargetsWithoutPackageEntriesAndRemapsIds()
     {
         using var sourcePackage = CreatePackageWithExternalWorksheetRelationship();

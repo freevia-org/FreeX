@@ -323,6 +323,19 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             .Be(GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet);
     }
 
+    private static void ApplyGeneratedStyleHeavyFallbackMutation(Workbook workbook, int iteration)
+    {
+        var styleId = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = new CellColor((byte)(220 - iteration), 235, 247)
+        });
+        var sheet = workbook.Sheets[0];
+        var cell = sheet.GetCell(1, 1);
+        cell.Should().NotBeNull();
+        cell!.StyleId = styleId;
+    }
+
     private static void ReplaceZipEntryXml(ZipArchive archive, string entryName, XDocument document)
     {
         archive.GetEntry(entryName)?.Delete();

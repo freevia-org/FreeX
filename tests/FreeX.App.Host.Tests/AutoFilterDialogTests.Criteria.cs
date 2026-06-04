@@ -178,7 +178,7 @@ public sealed partial class AutoFilterDialogTests
         FilterInputParser.TryParseCriterion(result.CriteriaText, out var criterion, out var error)
             .Should()
             .BeTrue(error);
-        new FilterConditionCommand(sheet.Id, range, 1, criterion!).Apply(new SimpleCtx(workbook))
+        new FilterConditionCommand(sheet.Id, range, 1, criterion!).Apply(new TestCommandContext(workbook))
             .Success
             .Should()
             .BeTrue();

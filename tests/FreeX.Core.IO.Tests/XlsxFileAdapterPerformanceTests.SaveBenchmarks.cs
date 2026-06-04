@@ -378,6 +378,231 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [BenchmarkFact]
+    public void Benchmark_SaveLoadedGeneratedStyleHeavyFormulaTextWorkbook_ReportsTiming()
+    {
+        const int iterations = 5;
+        var package = CreateGeneratedStyleHeavyXlsxPackage(formulaMarker: true);
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var loadStream = new MemoryStream(package, writable: false))
+            workbook = adapter.Load(loadStream);
+
+        AssertGeneratedStyleHeavyWorkbook(workbook);
+        var markerCell = workbook.Sheets[0].GetCell(1, 1);
+        markerCell.Should().NotBeNull();
+        markerCell!.FormulaText.Should().Be("1+1");
+        markerCell.FormulaText = "1+2";
+        markerCell.Value = new NumberValue(3);
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            markerCell.FormulaText = string.Create(CultureInfo.InvariantCulture, $"1+{3 + i}");
+            markerCell.Value = new NumberValue(4 + i);
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_GENERATED_STYLE_HEAVY_FORMULA_TEXT " +
+            $"sheets={GeneratedStyleHeavySheetCount} rows={GeneratedStyleHeavyRowsPerSheet} " +
+            $"value_cols={GeneratedStyleHeavyValueColumnsPerSheet} style_only_cols={GeneratedStyleHeavyStyleOnlyColumnsPerSheet} " +
+            $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +
+            $"steps={iterations} source_bytes={package.Length:N0} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        packageSizes.Should().OnlyContain(size => size > 0);
+    }
+
+    [BenchmarkFact]
+    public void Benchmark_SaveLoadedGeneratedStyleHeavyNewCellWorkbook_ReportsTiming()
+    {
+        const int iterations = 5;
+        var package = CreateGeneratedStyleHeavyXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbooks = new List<Workbook>(iterations + 1);
+        for (var i = 0; i <= iterations; i++)
+        {
+            using var loadStream = new MemoryStream(package, writable: false);
+            var workbook = adapter.Load(loadStream);
+            AssertGeneratedStyleHeavyWorkbook(workbook);
+            var sheet = workbook.Sheets[0];
+            sheet.SetCell(
+                new CellAddress(sheet.Id, (uint)(i + 1), GeneratedStyleHeavyValueColumnsPerSheet + 1),
+                new TextValue(string.Create(CultureInfo.InvariantCulture, $"new-{i}")));
+            workbooks.Add(workbook);
+        }
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbooks[0], warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbooks[i + 1], stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_GENERATED_STYLE_HEAVY_NEW_CELL " +
+            $"sheets={GeneratedStyleHeavySheetCount} rows={GeneratedStyleHeavyRowsPerSheet} " +
+            $"value_cols={GeneratedStyleHeavyValueColumnsPerSheet} style_only_cols={GeneratedStyleHeavyStyleOnlyColumnsPerSheet} " +
+            $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +
+            $"steps={iterations} source_bytes={package.Length:N0} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        packageSizes.Should().OnlyContain(size => size > 0);
+    }
+
+    [BenchmarkFact]
+    public void Benchmark_SaveLoadedGeneratedStyleHeavyClearedCellWorkbook_ReportsTiming()
+    {
+        const int iterations = 5;
+        var package = CreateGeneratedStyleHeavyXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbooks = new List<Workbook>(iterations + 1);
+        for (var i = 0; i <= iterations; i++)
+        {
+            using var loadStream = new MemoryStream(package, writable: false);
+            var workbook = adapter.Load(loadStream);
+            AssertGeneratedStyleHeavyWorkbook(workbook);
+            workbook.Sheets[0].ClearCell((uint)(i + 1), 1);
+            workbooks.Add(workbook);
+        }
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbooks[0], warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbooks[i + 1], stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_GENERATED_STYLE_HEAVY_CLEARED_CELL " +
+            $"sheets={GeneratedStyleHeavySheetCount} rows={GeneratedStyleHeavyRowsPerSheet} " +
+            $"value_cols={GeneratedStyleHeavyValueColumnsPerSheet} style_only_cols={GeneratedStyleHeavyStyleOnlyColumnsPerSheet} " +
+            $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +
+            $"steps={iterations} source_bytes={package.Length:N0} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        packageSizes.Should().OnlyContain(size => size > 0);
+    }
+
+    [BenchmarkFact]
+    public void Benchmark_SaveLoadedGeneratedStyleHeavyFullFallbackWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var package = CreateGeneratedStyleHeavyXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbooks = new List<Workbook>(iterations + 1);
+        for (var i = 0; i <= iterations; i++)
+        {
+            using var loadStream = new MemoryStream(package, writable: false);
+            var workbook = adapter.Load(loadStream);
+            AssertGeneratedStyleHeavyWorkbook(workbook);
+            ApplyGeneratedStyleHeavyFallbackMutation(workbook, i);
+            workbooks.Add(workbook);
+        }
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbooks[0], warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbooks[i + 1], stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_GENERATED_STYLE_HEAVY_FULL_FALLBACK " +
+            $"sheets={GeneratedStyleHeavySheetCount} rows={GeneratedStyleHeavyRowsPerSheet} " +
+            $"value_cols={GeneratedStyleHeavyValueColumnsPerSheet} style_only_cols={GeneratedStyleHeavyStyleOnlyColumnsPerSheet} " +
+            $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +
+            $"steps={iterations} source_bytes={package.Length:N0} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        packageSizes.Should().OnlyContain(size => size > 0);
+    }
+
+    [BenchmarkFact]
     public void Benchmark_SaveLoadedDenseMutatedWorkbook_ReportsTiming()
     {
         const int iterations = 5;

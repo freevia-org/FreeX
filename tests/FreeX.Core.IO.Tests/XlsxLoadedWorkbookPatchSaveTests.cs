@@ -56,6 +56,78 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Be(new TextValue("  patched value  "));
     }
 
+    [Fact]
+    public void Save_LoadedWorkbookWithNewLiteralCellEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("new value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/styles.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
+        ReadWorksheetDimension(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Be("A1:D4");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("new value");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reloadStream)
+            .GetSheetAt(0)
+            .GetCell(4, 4)!
+            .Value
+            .Should()
+            .Be(new TextValue("new value"));
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithClearedLiteralCell_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.ClearCell(2, 2);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/styles.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
+        TryReadCellElement(savedBytes, "xl/worksheets/sheet1.xml", "B2")
+            .Should()
+            .BeNull();
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        adapter.Load(reloadStream)
+            .GetSheetAt(0)
+            .GetCell(2, 2)
+            .Should()
+            .BeNull();
+    }
+
     [Theory]
     [MemberData(nameof(FormulaCachedValueCases))]
     public void Save_LoadedWorkbookWithFormulaCachedValueEdit_PatchesFormulaCache(
@@ -95,7 +167,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
-    public void Save_LoadedWorkbookWithFormulaTextEdit_FallsBackToFullSave()
+    public void Save_LoadedWorkbookWithFormulaTextEdit_PatchesFormulaAndDropsCalcChain()
     {
         var sourceBytes = CreateFormulaSourcePackage();
         var adapter = new XlsxFileAdapter();
@@ -111,6 +183,68 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         adapter.Save(workbook, saved);
         var savedBytes = saved.ToArray();
 
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        PackageHasEntry(savedBytes, "xl/calcChain.xml").Should().BeFalse();
+        ReadContentTypeOverrides(savedBytes).Should().NotContain("/xl/calcChain.xml");
+        ReadWorkbookRelationshipTypes(savedBytes)
+            .Should()
+            .NotContain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain");
+        ReadCellFormula(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("1+2");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("3");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithClearedFormulaCell_PatchesSourcePackageAndDropsCalcChain()
+    {
+        var sourceBytes = CreateFormulaSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.ClearCell(1, 1);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        PackageHasEntry(savedBytes, "xl/calcChain.xml").Should().BeFalse();
+        ReadContentTypeOverrides(savedBytes).Should().NotContain("/xl/calcChain.xml");
+        TryReadCellElement(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithAttributedFormulaTextEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateFormulaSourcePackage("""<f t="shared" si="0">1+1</f>""");
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
+        cell.FormulaText = "1+2";
+        cell.Value = new NumberValue(3);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .NotEqual(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
         ReadCellFormula(savedBytes, "xl/worksheets/sheet1.xml", "A1")
             .Should()
             .Be("1+2");
@@ -153,7 +287,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return stream.ToArray();
     }
 
-    private static byte[] CreateFormulaSourcePackage()
+    private static byte[] CreateFormulaSourcePackage(string formulaElement = "<f>1+1</f>")
     {
         using var package = XlsxPackageTestFixtures.CreatePackage(
             (
@@ -228,10 +362,10 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
                   <dimension ref="A1:A1"/>
                   <sheetData>
-                    <row r="1"><c r="A1"><f>1+1</f><v>2</v></c></row>
+                    <row r="1"><c r="A1">FORMULA_ELEMENT<v>2</v></c></row>
                   </sheetData>
                 </worksheet>
-                """));
+                """.Replace("FORMULA_ELEMENT", formulaElement, StringComparison.Ordinal)));
 
         return package.ToArray();
     }
@@ -246,6 +380,37 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         using var bytes = new MemoryStream();
         entryStream.CopyTo(bytes);
         return bytes.ToArray();
+    }
+
+    private static bool PackageHasEntry(byte[] packageBytes, string path)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        return archive.GetEntry(path) is not null;
+    }
+
+    private static IReadOnlyList<string> ReadContentTypeOverrides(byte[] packageBytes)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = XlsxPackageTestFixtures.LoadPackageXml(archive, "[Content_Types].xml");
+        var ns = document.Root!.Name.Namespace;
+        return document.Root!
+            .Elements(ns + "Override")
+            .Select(element => element.Attribute("PartName")?.Value ?? "")
+            .ToList();
+    }
+
+    private static IReadOnlyList<string> ReadWorkbookRelationshipTypes(byte[] packageBytes)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/_rels/workbook.xml.rels");
+        var ns = document.Root!.Name.Namespace;
+        return document.Root!
+            .Elements(ns + "Relationship")
+            .Select(element => element.Attribute("Type")?.Value ?? "")
+            .ToList();
     }
 
     private static string? ReadCellText(byte[] packageBytes, string worksheetPath, string reference)
@@ -275,7 +440,26 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return cell.Element(ns + "is")?.Element(ns + "t")?.Attribute(XNamespace.Xml + "space")?.Value;
     }
 
+    private static string? ReadWorksheetDimension(byte[] packageBytes, string worksheetPath)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry(worksheetPath);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        var ns = document.Root!.Name.Namespace;
+        return document.Root.Element(ns + "dimension")?.Attribute("ref")?.Value;
+    }
+
     private static XElement ReadCellElement(byte[] packageBytes, string worksheetPath, string reference)
+    {
+        var cell = TryReadCellElement(packageBytes, worksheetPath, reference);
+        cell.Should().NotBeNull();
+        return cell!;
+    }
+
+    private static XElement? TryReadCellElement(byte[] packageBytes, string worksheetPath, string reference)
     {
         using var stream = new MemoryStream(packageBytes, writable: false);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
@@ -286,7 +470,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         var ns = document.Root!.Name.Namespace;
         var cell = document
             .Descendants(ns + "c")
-            .Single(element => string.Equals(element.Attribute("r")?.Value, reference, StringComparison.Ordinal));
+            .SingleOrDefault(element => string.Equals(element.Attribute("r")?.Value, reference, StringComparison.Ordinal));
 
         return cell;
     }

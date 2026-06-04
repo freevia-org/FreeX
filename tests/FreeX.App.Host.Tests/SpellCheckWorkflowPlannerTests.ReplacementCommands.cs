@@ -24,7 +24,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
             ]
         };
         var issues = SpellCheckService.FindIssues(workbook, sheet.Id);
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
 
         var command = SpellCheckWorkflowPlanner.BuildReplaceAllCommand(issues, "teh", "the");
         var outcome = command!.Apply(context);
@@ -56,7 +56,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
             Replies = [new CommentReply("Fix teh reply")]
         };
         var issue = SpellCheckService.FindIssues(workbook, sheet.Id).Single();
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
 
         var command = SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, "the");
         var outcome = command.Apply(context);

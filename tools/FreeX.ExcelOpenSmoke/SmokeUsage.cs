@@ -28,6 +28,7 @@ internal static class SmokeUsage
               --corpus-status <status>      Filter corpus rows by expected_status. Repeatable.
                                             Defaults to supported-pass, supported-metadata-pass,
                                             supported-pivot-metadata-pass, and public-pass.
+              --corpus-id <id>              Filter corpus rows by manifest id. Repeatable.
               --out <directory>             Run output directory. Must be under %USERPROFILE%.
               --pattern <glob>              Directory input glob. Defaults to *.xlsx.
               --help                        Show this help text.
@@ -37,6 +38,7 @@ internal static class SmokeUsage
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-freex-feature-fixtures
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel --generate-freex-feature-fixtures
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel --generate-supported-corpus-fixtures --corpus-manifest test-corpus\manifest.csv
+              dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel --generate-supported-corpus-fixtures --corpus-manifest test-corpus\manifest.csv --corpus-id generated-slicers-001
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-chart-fixtures
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel --corpus-manifest test-corpus\manifest.csv --corpus-source public --corpus-source regression
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel C:\Users\quinn\freex-xlsx-verify\excel-authored.xlsx
