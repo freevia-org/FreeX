@@ -2205,7 +2205,11 @@ internal static class ExcelOpenSmoke
         var minOutlineColumns = HasTag("outline-groups") || HasTag("row-column-groups") ? 1 : 0;
         var minStyledCells = HasTag("formatting") || HasTag("styles") || HasTag("number-formats") ? 1 : 0;
         var minNumberFormatCells = HasTag("formatting") || HasTag("styles") || HasTag("number-formats") ? 1 : 0;
+        var minBoldCells = HasTag("bold-cells") || HasTag("font-bold") ? 1 : 0;
+        var minFilledCells = HasTag("fills") || HasTag("fill-color") ? 1 : 0;
         var minBorderedCells = HasTag("borders") ? 1 : 0;
+        var minAlignedCells = HasTag("alignment") || HasTag("aligned-cells") ? 1 : 0;
+        var minWrappedCells = HasTag("wrapped-text") || HasTag("wrap-text") ? 1 : 0;
         var minProtectedSheets = HasTag("protection") ? 1 : 0;
         var minStructureProtection = HasTag("protection") ? 1 : 0;
         var minPivotTables = HasTag("pivottables") ? 1 : 0;
@@ -2250,7 +2254,11 @@ internal static class ExcelOpenSmoke
             minOutlineColumns == 0 &&
             minStyledCells == 0 &&
             minNumberFormatCells == 0 &&
+            minBoldCells == 0 &&
+            minFilledCells == 0 &&
             minBorderedCells == 0 &&
+            minAlignedCells == 0 &&
+            minWrappedCells == 0 &&
             minProtectedSheets == 0 &&
             minStructureProtection == 0 &&
             minPivotTables == 0 &&
@@ -2285,7 +2293,11 @@ internal static class ExcelOpenSmoke
             MinFreeXPreSaveOutlineColumns: expectFreeXPreSave ? minOutlineColumns : 0,
             MinFreeXPreSaveStyledCells: expectFreeXPreSave ? minStyledCells : 0,
             MinFreeXPreSaveNumberFormatCells: expectFreeXPreSave ? minNumberFormatCells : 0,
+            MinFreeXPreSaveBoldCells: expectFreeXPreSave ? minBoldCells : 0,
+            MinFreeXPreSaveFilledCells: expectFreeXPreSave ? minFilledCells : 0,
             MinFreeXPreSaveBorderedCells: expectFreeXPreSave ? minBorderedCells : 0,
+            MinFreeXPreSaveAlignedCells: expectFreeXPreSave ? minAlignedCells : 0,
+            MinFreeXPreSaveWrappedCells: expectFreeXPreSave ? minWrappedCells : 0,
             MinExcelOpenedFormulaCells: minFormulaCells,
             MinExcelOpenedStructuredTables: minStructuredTables,
             MinExcelOpenedDataValidationCells: minDataValidations > 0 ? 1 : 0,
@@ -2317,7 +2329,11 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedOutlineColumns: minOutlineColumns,
             MinExcelOpenedStyledCells: minStyledCells,
             MinExcelOpenedNumberFormatCells: minNumberFormatCells,
+            MinExcelOpenedBoldCells: minBoldCells,
+            MinExcelOpenedFilledCells: minFilledCells,
             MinExcelOpenedBorderedCells: minBorderedCells,
+            MinExcelOpenedAlignedCells: minAlignedCells,
+            MinExcelOpenedWrappedCells: minWrappedCells,
             MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
             MinExcelReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
             MinExcelReopenedDataValidationCells: saveReopen && minDataValidations > 0 ? 1 : 0,
@@ -2349,7 +2365,11 @@ internal static class ExcelOpenSmoke
             MinExcelReopenedOutlineColumns: saveReopen ? minOutlineColumns : 0,
             MinExcelReopenedStyledCells: saveReopen ? minStyledCells : 0,
             MinExcelReopenedNumberFormatCells: saveReopen ? minNumberFormatCells : 0,
+            MinExcelReopenedBoldCells: saveReopen ? minBoldCells : 0,
+            MinExcelReopenedFilledCells: saveReopen ? minFilledCells : 0,
             MinExcelReopenedBorderedCells: saveReopen ? minBorderedCells : 0,
+            MinExcelReopenedAlignedCells: saveReopen ? minAlignedCells : 0,
+            MinExcelReopenedWrappedCells: saveReopen ? minWrappedCells : 0,
             MinFreeXReopenedFormulaCells: expectFreeXReopened ? minFormulaCells : 0,
             MinFreeXReopenedStructuredTables: expectFreeXReopened ? minStructuredTables : 0,
             MinFreeXReopenedDataValidations: expectFreeXReopened ? minDataValidations : 0,
@@ -2372,7 +2392,11 @@ internal static class ExcelOpenSmoke
             MinFreeXReopenedOutlineColumns: expectFreeXReopened ? minOutlineColumns : 0,
             MinFreeXReopenedStyledCells: expectFreeXReopened ? minStyledCells : 0,
             MinFreeXReopenedNumberFormatCells: expectFreeXReopened ? minNumberFormatCells : 0,
+            MinFreeXReopenedBoldCells: expectFreeXReopened ? minBoldCells : 0,
+            MinFreeXReopenedFilledCells: expectFreeXReopened ? minFilledCells : 0,
             MinFreeXReopenedBorderedCells: expectFreeXReopened ? minBorderedCells : 0,
+            MinFreeXReopenedAlignedCells: expectFreeXReopened ? minAlignedCells : 0,
+            MinFreeXReopenedWrappedCells: expectFreeXReopened ? minWrappedCells : 0,
             MinFreeXPreSavePivotTables: expectFreeXPreSave ? minPivotTables : 0,
             MinFreeXPreSavePivotCaches: expectFreeXPreSave ? minPivotCaches : 0,
             MinExcelOpenedPivotTables: minPivotTables,
