@@ -4357,6 +4357,9 @@ Send poročila o sesutju za ta tester gradijo?</value>
   <data name="MainWindow_Header_Draw" xml:space="preserve">
     <value>Risanje</value>
   </data>
+  <data name="MainWindow_Header_DrawBorder" xml:space="preserve">
+    <value>Draw Border</value>
+  </data>
   <data name="MainWindow_Header_DrawBorderGrid" xml:space="preserve">
     <value>Nariši mrežo</value>
   </data>

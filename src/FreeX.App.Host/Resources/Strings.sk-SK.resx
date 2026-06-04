@@ -4363,6 +4363,9 @@ Pokračovať v ukladaní?</value>
   <data name="MainWindow_Header_Draw" xml:space="preserve">
     <value>Kreslenie</value>
   </data>
+  <data name="MainWindow_Header_DrawBorder" xml:space="preserve">
+    <value>Draw Border</value>
+  </data>
   <data name="MainWindow_Header_DrawBorderGrid" xml:space="preserve">
     <value>Nakreslite hraničnú mriežku</value>
   </data>

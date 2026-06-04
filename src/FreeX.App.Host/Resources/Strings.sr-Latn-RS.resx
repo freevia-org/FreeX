@@ -4347,6 +4347,9 @@
   <data name="MainWindow_Header_Draw" xml:space="preserve">
     <value>Crtanje</value>
   </data>
+  <data name="MainWindow_Header_DrawBorder" xml:space="preserve">
+    <value>Draw Border</value>
+  </data>
   <data name="MainWindow_Header_DrawBorderGrid" xml:space="preserve">
     <value>Nalinijaj graničnu mrežu</value>
   </data>

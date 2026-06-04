@@ -4357,6 +4357,9 @@ Skicka kraschrapporter för den här testaren?</value>
   <data name="MainWindow_Header_Draw" xml:space="preserve">
     <value>Rita</value>
   </data>
+  <data name="MainWindow_Header_DrawBorder" xml:space="preserve">
+    <value>Draw Border</value>
+  </data>
   <data name="MainWindow_Header_DrawBorderGrid" xml:space="preserve">
     <value>Rita kantlinjerutnät</value>
   </data>

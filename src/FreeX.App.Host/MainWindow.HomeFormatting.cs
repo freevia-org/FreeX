@@ -427,6 +427,9 @@ public partial class MainWindow
             (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Double, _borderPickerColor),
             "Top and Double Bottom Border");
 
+    private void BorderDrawMenuItem_Click(object sender, RoutedEventArgs e)
+        => BeginBorderDrawMode(BorderDrawMode.Draw);
+
     private void BorderDrawGridMenuItem_Click(object sender, RoutedEventArgs e)
         => BeginBorderDrawMode(BorderDrawMode.DrawGrid);
 
