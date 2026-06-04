@@ -636,6 +636,17 @@ internal static class ExcelOpenSmoke
             issues.Add("missing xl/sharedStrings.xml for public shared-strings tag");
         }
 
+        if (tags.Contains("shared-strings") &&
+            !PackageRelationshipExists(
+                archive,
+                new PackageRelationshipExpectation(
+                    "xl/_rels/workbook.xml.rels",
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings",
+                    "xl/sharedStrings.xml")))
+        {
+            issues.Add("missing workbook relationship to xl/sharedStrings.xml for public shared-strings tag");
+        }
+
         if (tags.Contains("hyperlinks") &&
             !PublicWorksheetElements(worksheetXmlDocuments, "hyperlink").Any())
         {
@@ -742,6 +753,21 @@ internal static class ExcelOpenSmoke
                 NormalizePackagePart(entry.FullName),
                 NormalizePackagePart(packagePart),
                 StringComparison.OrdinalIgnoreCase));
+
+    private static bool PackageRelationshipExists(
+        ZipArchive archive,
+        PackageRelationshipExpectation expectation)
+    {
+        var relationshipPart = NormalizePackagePart(expectation.RelationshipPart);
+        var entry = archive.Entries.FirstOrDefault(entry =>
+            string.Equals(NormalizePackagePart(entry.FullName), relationshipPart, StringComparison.OrdinalIgnoreCase));
+        if (entry is null)
+            return false;
+
+        var relationshipsXml = LoadPackageXml(entry);
+        return relationshipsXml.Root?.Elements(PackageRelationshipNs + "Relationship")
+            .Any(relationship => PackageRelationshipMatches(relationshipPart, relationship, expectation)) == true;
+    }
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {
