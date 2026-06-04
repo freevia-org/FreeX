@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Reflection;
+using System.Text;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
@@ -30,6 +31,11 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     private const int IgnoredErrorStyleOnlyIgnoredRanges = 800;
     private const int IgnoredErrorSaveRows = 300;
     private const int IgnoredErrorSaveColumns = 40;
+    private const int GeneratedStyleHeavySheetCount = 3;
+    private const int GeneratedStyleHeavyRowsPerSheet = 400;
+    private const int GeneratedStyleHeavyValueColumnsPerSheet = 12;
+    private const int GeneratedStyleHeavyStyleOnlyColumnsPerSheet = 160;
+    private const int GeneratedStyleHeavyStyleOnlyStartColumn = GeneratedStyleHeavyValueColumnsPerSheet + 2;
 
     private static byte[] CreateDenseXlsxPackage()
     {
@@ -105,6 +111,197 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         return stream.ToArray();
     }
 
+    private static byte[] CreateGeneratedStyleHeavyXlsxPackage(bool formulaMarker = false)
+    {
+        using var stream = new MemoryStream(capacity: 8 * 1024 * 1024);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteTextEntry(archive, "[Content_Types].xml", WriteGeneratedStyleHeavyContentTypes);
+            WriteTextEntry(archive, "_rels/.rels", WriteGeneratedStyleHeavyRootRelationships);
+            WriteTextEntry(archive, "xl/workbook.xml", WriteGeneratedStyleHeavyWorkbook);
+            WriteTextEntry(archive, "xl/_rels/workbook.xml.rels", WriteGeneratedStyleHeavyWorkbookRelationships);
+            WriteTextEntry(archive, "xl/styles.xml", WriteGeneratedStyleHeavyStyles);
+
+            for (var sheetIndex = 1; sheetIndex <= GeneratedStyleHeavySheetCount; sheetIndex++)
+            {
+                var path = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"xl/worksheets/sheet{sheetIndex}.xml");
+                WriteTextEntry(
+                    archive,
+                    path,
+                    writer => WriteGeneratedStyleHeavyWorksheet(writer, sheetIndex, formulaMarker));
+            }
+        }
+
+        return stream.ToArray();
+    }
+
+    private static void WriteTextEntry(ZipArchive archive, string path, Action<TextWriter> write)
+    {
+        var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
+        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        write(writer);
+    }
+
+    private static void WriteGeneratedStyleHeavyContentTypes(TextWriter writer)
+    {
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+              <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+            """);
+        for (var sheetIndex = 1; sheetIndex <= GeneratedStyleHeavySheetCount; sheetIndex++)
+        {
+            writer.Write($"""
+              <Override PartName="/xl/worksheets/sheet{sheetIndex}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+            """);
+        }
+
+        writer.Write(
+            """
+            </Types>
+            """);
+    }
+
+    private static void WriteGeneratedStyleHeavyRootRelationships(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+            </Relationships>
+            """);
+
+    private static void WriteGeneratedStyleHeavyWorkbook(TextWriter writer)
+    {
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <bookViews>
+                <workbookView activeTab="0"/>
+              </bookViews>
+              <sheets>
+            """);
+        for (var sheetIndex = 1; sheetIndex <= GeneratedStyleHeavySheetCount; sheetIndex++)
+        {
+            writer.Write($"""
+                <sheet name="Generated {sheetIndex}" sheetId="{sheetIndex}" r:id="rId{sheetIndex}"/>
+            """);
+        }
+
+        writer.Write(
+            """
+              </sheets>
+              <calcPr calcId="191029"/>
+            </workbook>
+            """);
+    }
+
+    private static void WriteGeneratedStyleHeavyWorkbookRelationships(TextWriter writer)
+    {
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            """);
+        for (var sheetIndex = 1; sheetIndex <= GeneratedStyleHeavySheetCount; sheetIndex++)
+        {
+            writer.Write($"""
+              <Relationship Id="rId{sheetIndex}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{sheetIndex}.xml"/>
+            """);
+        }
+
+        writer.Write($"""
+              <Relationship Id="rId{GeneratedStyleHeavySheetCount + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+            </Relationships>
+            """);
+    }
+
+    private static void WriteGeneratedStyleHeavyStyles(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <fonts count="1">
+                <font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font>
+              </fonts>
+              <fills count="3">
+                <fill><patternFill patternType="none"/></fill>
+                <fill><patternFill patternType="gray125"/></fill>
+                <fill><patternFill patternType="solid"><fgColor rgb="FFE2F0D9"/><bgColor indexed="64"/></patternFill></fill>
+              </fills>
+              <borders count="2">
+                <border><left/><right/><top/><bottom/><diagonal/></border>
+                <border><left/><right/><top/><bottom style="thin"><color rgb="FF70AD47"/></bottom><diagonal/></border>
+              </borders>
+              <cellStyleXfs count="1">
+                <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+              </cellStyleXfs>
+              <cellXfs count="2">
+                <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+                <xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>
+              </cellXfs>
+              <cellStyles count="1">
+                <cellStyle name="Normal" xfId="0" builtinId="0"/>
+              </cellStyles>
+              <dxfs count="0"/>
+              <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+            </styleSheet>
+            """);
+
+    private static void WriteGeneratedStyleHeavyWorksheet(TextWriter writer, int sheetIndex, bool formulaMarker)
+    {
+        var lastColumn = GeneratedStyleHeavyStyleOnlyStartColumn + GeneratedStyleHeavyStyleOnlyColumnsPerSheet - 1;
+        var lastReference = $"{CellAddress.NumberToColumnName((uint)lastColumn)}{GeneratedStyleHeavyRowsPerSheet}";
+        writer.Write($"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <dimension ref="A1:{lastReference}"/>
+              <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+              <sheetFormatPr defaultRowHeight="15"/>
+              <sheetData>
+            """);
+
+        for (var row = 1; row <= GeneratedStyleHeavyRowsPerSheet; row++)
+        {
+            writer.Write($"""    <row r="{row}">""");
+            for (var col = 1; col <= GeneratedStyleHeavyValueColumnsPerSheet; col++)
+            {
+                var reference = $"{CellAddress.NumberToColumnName((uint)col)}{row}";
+                if (formulaMarker && sheetIndex == 1 && row == 1 && col == 1)
+                {
+                    writer.Write($"""<c r="{reference}"><f>1+1</f><v>2</v></c>""");
+                }
+                else
+                {
+                    writer.Write($"""<c r="{reference}"><v>{sheetIndex * 1_000_000 + row * 1_000 + col}</v></c>""");
+                }
+            }
+
+            for (var col = GeneratedStyleHeavyStyleOnlyStartColumn;
+                 col < GeneratedStyleHeavyStyleOnlyStartColumn + GeneratedStyleHeavyStyleOnlyColumnsPerSheet;
+                 col++)
+            {
+                writer.Write(
+                    $"""<c r="{CellAddress.NumberToColumnName((uint)col)}{row}" s="1"/>""");
+            }
+
+            writer.WriteLine("</row>");
+        }
+
+        writer.Write(
+            """
+              </sheetData>
+            </worksheet>
+            """);
+    }
+
     private static void AssertIgnoredErrorAndStyleOnlyMetadata(Workbook workbook)
     {
         workbook.SheetCount.Should().Be(1);
@@ -113,6 +310,17 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             .Should().Be(IgnoredErrorStyleOnlyRows * IgnoredErrorStyleOnlyValueColumns);
         sheet.GetStyleOnlyEntries().Count()
             .Should().Be(IgnoredErrorStyleOnlyRows * IgnoredErrorStyleOnlyStyleColumns);
+    }
+
+    private static void AssertGeneratedStyleHeavyWorkbook(Workbook workbook)
+    {
+        workbook.SheetCount.Should().Be(GeneratedStyleHeavySheetCount);
+        workbook.Sheets.Sum(sheet => sheet.CellCount)
+            .Should()
+            .Be(GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyValueColumnsPerSheet);
+        workbook.Sheets.Sum(sheet => sheet.GetStyleOnlyEntries().Count())
+            .Should()
+            .Be(GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet);
     }
 
     private static void ReplaceZipEntryXml(ZipArchive archive, string entryName, XDocument document)

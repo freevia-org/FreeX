@@ -191,6 +191,51 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [BenchmarkFact]
+    public void Benchmark_LoadGeneratedStyleHeavyWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var package = CreateGeneratedStyleHeavyXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream(package, writable: false))
+            AssertGeneratedStyleHeavyWorkbook(adapter.Load(warmup));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream(package, writable: false);
+            var step = Stopwatch.StartNew();
+            var workbook = adapter.Load(stream);
+            step.Stop();
+
+            AssertGeneratedStyleHeavyWorkbook(workbook);
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_LOAD_GENERATED_STYLE_HEAVY " +
+            $"sheets={GeneratedStyleHeavySheetCount} rows={GeneratedStyleHeavyRowsPerSheet} " +
+            $"value_cols={GeneratedStyleHeavyValueColumnsPerSheet} style_only_cols={GeneratedStyleHeavyStyleOnlyColumnsPerSheet} " +
+            $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +
+            $"steps={iterations} package_bytes={package.Length:N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [BenchmarkFact]
     public void Benchmark_LoadDenseWorkbook_ReportsTiming()
     {
         const int iterations = 3;
