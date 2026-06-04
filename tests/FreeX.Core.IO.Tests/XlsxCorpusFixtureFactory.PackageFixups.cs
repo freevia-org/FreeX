@@ -354,62 +354,83 @@ internal static partial class XlsxCorpusFixtureFactory
         if (!string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase))
             return;
 
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
         var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (contentTypesEntry is null || workbookEntry is null || workbookRelsEntry is null)
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        if (contentTypesEntry is null || workbookEntry is null || workbookRelsEntry is null || worksheetEntry is null)
             return;
 
-        XDocument contentTypes;
-        using (var stream = contentTypesEntry.Open())
-            contentTypes = XDocument.Load(stream);
+        var contentTypes = LoadPackageXml(contentTypesEntry);
+        EnsureContentTypeOverride(
+            contentTypes,
+            "/xl/externalLinks/externalLink1.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml");
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
 
-        if (contentTypes.Root?.Elements(contentTypeNs + "Override").Any(element =>
-                string.Equals(element.Attribute("PartName")?.Value, "/xl/externalLinks/externalLink1.xml", StringComparison.OrdinalIgnoreCase)) != true)
-        {
-            contentTypes.Root?.Add(new XElement(
-                contentTypeNs + "Override",
-                new XAttribute("PartName", "/xl/externalLinks/externalLink1.xml"),
-                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml")));
-        }
-
-        contentTypesEntry.Delete();
-        var contentTypesReplacement = archive.CreateEntry("[Content_Types].xml");
-        using (var output = contentTypesReplacement.Open())
-            contentTypes.Save(output);
-
-        XDocument workbookXml;
-        using (var stream = workbookEntry.Open())
-            workbookXml = XDocument.Load(stream);
+        var workbookXml = LoadPackageXml(workbookEntry);
         workbookXml.Root?.Element(workbookNs + "externalReferences")?.Remove();
         workbookXml.Root?.Add(new XElement(
             workbookNs + "externalReferences",
             new XElement(workbookNs + "externalReference", new XAttribute(officeRelNs + "id", "rIdFreeXExternalLink1"))));
-        workbookEntry.Delete();
-        var workbookReplacement = archive.CreateEntry("xl/workbook.xml");
-        using (var output = workbookReplacement.Open())
-            workbookXml.Save(output);
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
 
-        XDocument workbookRelsXml;
-        using (var stream = workbookRelsEntry.Open())
-            workbookRelsXml = XDocument.Load(stream);
-        workbookRelsXml.Root?.Elements(packageRelNs + "Relationship")
-            .Where(element => string.Equals(element.Attribute("Id")?.Value, "rIdFreeXExternalLink1", StringComparison.OrdinalIgnoreCase))
+        var workbookRelsXml = LoadPackageXml(workbookRelsEntry);
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreeXExternalLink1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink",
+            "externalLinks/externalLink1.xml");
+        ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelsXml);
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        EnsureExternalLinkFormulaCell(worksheetXml, worksheetNs);
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void EnsureExternalLinkFormulaCell(XDocument worksheetXml, XNamespace worksheetNs)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var dimension = root.Element(worksheetNs + "dimension");
+        if (dimension is null)
+        {
+            dimension = new XElement(worksheetNs + "dimension");
+            root.AddFirst(dimension);
+        }
+
+        dimension.SetAttributeValue("ref", "A1:C1");
+
+        var sheetData = root.Element(worksheetNs + "sheetData");
+        if (sheetData is null)
+        {
+            sheetData = new XElement(worksheetNs + "sheetData");
+            root.Add(sheetData);
+        }
+
+        var row = sheetData.Elements(worksheetNs + "row")
+            .FirstOrDefault(element => string.Equals(element.Attribute("r")?.Value, "1", StringComparison.OrdinalIgnoreCase));
+        if (row is null)
+        {
+            row = new XElement(worksheetNs + "row", new XAttribute("r", "1"));
+            sheetData.Add(row);
+        }
+
+        row.SetAttributeValue("spans", "1:3");
+        row.Elements(worksheetNs + "c")
+            .Where(cell => string.Equals(cell.Attribute("r")?.Value, "C1", StringComparison.OrdinalIgnoreCase))
             .Remove();
-        workbookRelsXml.Root?.Add(new XElement(
-            packageRelNs + "Relationship",
-            new XAttribute("Id", "rIdFreeXExternalLink1"),
-            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink"),
-            new XAttribute("Target", "externalLinks/externalLink1.xml")));
-        workbookRelsEntry.Delete();
-        var workbookRelsReplacement = archive.CreateEntry("xl/_rels/workbook.xml.rels");
-        using var relOutput = workbookRelsReplacement.Open();
-        workbookRelsXml.Save(relOutput);
+        row.Add(new XElement(
+            worksheetNs + "c",
+            new XAttribute("r", "C1"),
+            new XElement(worksheetNs + "f", "[1]ExternalSheet!$A$1"),
+            new XElement(worksheetNs + "v", "42")));
     }
 
     private static void ApplyFormControlsFixup(ZipArchive archive)

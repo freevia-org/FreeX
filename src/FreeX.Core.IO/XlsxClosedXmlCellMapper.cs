@@ -25,6 +25,18 @@ internal static class XlsxClosedXmlCellMapper
         return MapValue(xlCell.Value);
     }
 
+    public static ScalarValue MapFormulaValue(IXLCell xlCell)
+    {
+        try
+        {
+            return MapValue(xlCell);
+        }
+        catch (NotImplementedException ex) when (ShouldUseCachedExternalFormulaValue(xlCell, ex))
+        {
+            return MapValue(xlCell.CachedValue);
+        }
+    }
+
     public static string NormalizeFormulaText(string formulaText)
     {
         var normalized = formulaText.StartsWith("=", StringComparison.Ordinal)
@@ -35,6 +47,10 @@ internal static class XlsxClosedXmlCellMapper
             .Replace("_xlfn.", "", StringComparison.OrdinalIgnoreCase)
             .Replace("_xlws.", "", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool ShouldUseCachedExternalFormulaValue(IXLCell xlCell, NotImplementedException ex) =>
+        xlCell.FormulaA1.Contains('[', StringComparison.Ordinal) ||
+        ex.Message.Contains("References from other files", StringComparison.OrdinalIgnoreCase);
 
     public static ScalarValue MapValue(XLCellValue xlValue)
     {

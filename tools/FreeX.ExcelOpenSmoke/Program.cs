@@ -2565,6 +2565,17 @@ internal static class ExcelOpenSmoke
                 ]
             };
         }
+        else if (string.Equals(row.Id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                RequiredExcelSavedPackageParts =
+                [
+                    "xl/externalLinks/externalLink1.xml",
+                    "xl/externalLinks/_rels/externalLink1.xml.rels"
+                ]
+            };
+        }
         else if (string.Equals(row.Id, "generated-custom-xml-001", StringComparison.OrdinalIgnoreCase))
         {
             expectations = EnsureExpectations() with

@@ -88,15 +88,26 @@ public static partial class AccessibilityCheckerService
 
         if (chart.ShowDataLabels)
         {
+            var dataLabelTextColor = chart.ResolveDataLabelTextColor(workbook.Theme) ?? defaultText;
+            var dataLabelFillColor = chart.ResolveDataLabelFillColor(workbook.Theme) ?? plotBackground;
+
             AddLowContrastChartTextIssue(
                 issues,
                 sheet,
                 chart,
                 "Data label text",
                 "Data labels",
-                chart.ResolveDataLabelTextColor(workbook.Theme) ?? defaultText,
-                chart.ResolveDataLabelFillColor(workbook.Theme) ?? plotBackground,
+                dataLabelTextColor,
+                dataLabelFillColor,
                 chart.DataLabelFontSize);
+
+            AddLowContrastChartDataLabelOverrideIssues(
+                issues,
+                workbook,
+                sheet,
+                chart,
+                dataLabelTextColor,
+                dataLabelFillColor);
         }
 
         if (chart.DataTable is { } dataTable)
@@ -125,6 +136,100 @@ public static partial class AccessibilityCheckerService
                 chart.TrendlineLabelFontSize ?? chart.ChartDefaultFontSize);
         }
     }
+
+    private static void AddLowContrastChartDataLabelOverrideIssues(
+        List<AccessibilityIssue> issues,
+        Workbook workbook,
+        Sheet sheet,
+        ChartModel chart,
+        CellColor dataLabelTextColor,
+        CellColor dataLabelFillColor)
+    {
+        var seriesFormatsByIndex = chart.SeriesDataLabelFormats
+            .GroupBy(format => format.SeriesIndex)
+            .ToDictionary(group => group.Key, group => group.Last());
+
+        foreach (var seriesFormat in seriesFormatsByIndex.Values.OrderBy(format => format.SeriesIndex))
+        {
+            if (!HasSeriesDataLabelContrastOverride(seriesFormat) ||
+                !IsSeriesDataLabelVisible(chart, seriesFormat))
+            {
+                continue;
+            }
+
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "Series data label text",
+                "Data labels",
+                seriesFormat.ResolveTextColor(workbook.Theme) ?? dataLabelTextColor,
+                seriesFormat.ResolveFillColor(workbook.Theme) ?? dataLabelFillColor,
+                seriesFormat.FontSize ?? chart.DataLabelFontSize);
+        }
+
+        foreach (var pointFormat in chart.PointDataLabelFormats
+            .GroupBy(format => (format.SeriesIndex, format.PointIndex))
+            .Select(group => group.Last())
+            .OrderBy(format => format.SeriesIndex)
+            .ThenBy(format => format.PointIndex))
+        {
+            if (pointFormat.IsDeleted == true ||
+                !HasPointDataLabelContrastOverride(pointFormat) ||
+                !IsPointDataLabelVisible(chart, pointFormat, seriesFormatsByIndex.GetValueOrDefault(pointFormat.SeriesIndex)))
+            {
+                continue;
+            }
+
+            seriesFormatsByIndex.TryGetValue(pointFormat.SeriesIndex, out var seriesFormat);
+            var inheritedTextColor = seriesFormat?.ResolveTextColor(workbook.Theme) ?? dataLabelTextColor;
+            var inheritedFillColor = seriesFormat?.ResolveFillColor(workbook.Theme) ?? dataLabelFillColor;
+            var inheritedFontSize = seriesFormat?.FontSize ?? chart.DataLabelFontSize;
+
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "Point data label text",
+                "Data labels",
+                pointFormat.ResolveTextColor(workbook.Theme) ?? inheritedTextColor,
+                pointFormat.ResolveFillColor(workbook.Theme) ?? inheritedFillColor,
+                pointFormat.FontSize ?? inheritedFontSize);
+        }
+    }
+
+    private static bool HasSeriesDataLabelContrastOverride(ChartSeriesDataLabelFormat format) =>
+        format.TextColor is not null ||
+        format.TextThemeColor is not null ||
+        format.FillColor is not null ||
+        format.FillThemeColor is not null ||
+        format.FontSize is not null;
+
+    private static bool HasPointDataLabelContrastOverride(ChartPointDataLabelFormat format) =>
+        format.TextColor is not null ||
+        format.TextThemeColor is not null ||
+        format.FillColor is not null ||
+        format.FillThemeColor is not null ||
+        format.FontSize is not null;
+
+    private static bool IsSeriesDataLabelVisible(ChartModel chart, ChartSeriesDataLabelFormat format) =>
+        (format.ShowValue ?? chart.ShowDataLabelValue) ||
+        (format.ShowCategoryName ?? chart.ShowDataLabelCategoryName) ||
+        (format.ShowSeriesName ?? chart.ShowDataLabelSeriesName) ||
+        (format.ShowLegendKey ?? chart.ShowDataLabelLegendKey) ||
+        (format.ShowPercentage ?? chart.ShowDataLabelPercentage) ||
+        (format.ShowBubbleSize ?? chart.ShowDataLabelBubbleSize);
+
+    private static bool IsPointDataLabelVisible(
+        ChartModel chart,
+        ChartPointDataLabelFormat format,
+        ChartSeriesDataLabelFormat? seriesFormat) =>
+        (format.ShowValue ?? seriesFormat?.ShowValue ?? chart.ShowDataLabelValue) ||
+        (format.ShowCategoryName ?? seriesFormat?.ShowCategoryName ?? chart.ShowDataLabelCategoryName) ||
+        (format.ShowSeriesName ?? seriesFormat?.ShowSeriesName ?? chart.ShowDataLabelSeriesName) ||
+        (format.ShowLegendKey ?? seriesFormat?.ShowLegendKey ?? chart.ShowDataLabelLegendKey) ||
+        (format.ShowPercentage ?? seriesFormat?.ShowPercentage ?? chart.ShowDataLabelPercentage) ||
+        (format.ShowBubbleSize ?? seriesFormat?.ShowBubbleSize ?? chart.ShowDataLabelBubbleSize);
 
     private static void AddLowContrastChartTextIssue(
         List<AccessibilityIssue> issues,
