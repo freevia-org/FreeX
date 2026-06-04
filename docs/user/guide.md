@@ -157,7 +157,7 @@ Press **Shift+F3** to open the Insert Function dialog with category search.
 
 Formulas tab -> Trace Precedents / Trace Dependents draws arrows showing cell relationships. Evaluate Formula steps through a formula's calculation order.
 
-Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, formulas stored as text including apostrophe-prefixed formulas, text-number/date warnings including apostrophe-prefixed, currency-symbol, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, and month-name text dates with two-digit years, blank references, omitted aggregate cells, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
+Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, formulas stored as text including apostrophe-prefixed formulas, text-number/date warnings including apostrophe-prefixed, currency-symbol, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, month-name, and weekday-prefixed month-name text dates with two-digit years, blank references, omitted aggregate cells, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
 
 ### Calculation
 
@@ -547,4 +547,4 @@ If a workbook contains features FreeX cannot fully model (VBA, Power Query, embe
 - **Custom Number Formats:** In Format Cells -> Number -> Custom, enter XLSX number-format codes (e.g., `#,##0.00` for two-decimal thousands, `dd/mm/yyyy` for dates).
 - **Freeze Headers:** View -> Freeze Top Row keeps row 1 visible while scrolling.
 - **Multiple Sheets:** Right-click a sheet tab for color, rename, move, copy, hide/unhide, and insert options. Hold Ctrl while clicking tabs to select multiple sheets and edit them together.
-- **Spell Check (F7):** Checks the active sheet's text content, including common office, spreadsheet/business-report, and report-typo misspellings such as `availible`, `statment`, and `comparision`.
+- **Spell Check (F7):** Checks the active sheet's text content, including common office, spreadsheet/business-report, and report-typo misspellings such as `availible`, `statment`, `feild`, `flitered`, and `timline`.
