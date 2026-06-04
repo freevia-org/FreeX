@@ -47,6 +47,55 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Theory]
+    [InlineData("$42")]
+    [InlineData("'$42")]
+    [InlineData("$1,234.50")]
+    [InlineData("\u20AC1,234.50")]
+    [InlineData("\u00A31,234.50")]
+    [InlineData("$25%")]
+    [InlineData("\u20AC25%")]
+    [InlineData("\u00A325%")]
+    [InlineData("($1,234.50)")]
+    [InlineData("(\u20AC1,234.50)")]
+    [InlineData("(\u00A31,234.50)")]
+    public void FindFormulaErrorIssues_ReturnsCurrencyNumbersStoredAsText(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(value));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.Cell.Should().Be("A1");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.NumberStoredAsTextErrorCode);
+    }
+
+    [Theory]
+    [InlineData("$")]
+    [InlineData("\u20AC")]
+    [InlineData("\u00A3")]
+    [InlineData("'$")]
+    [InlineData("$%")]
+    [InlineData("$()")]
+    [InlineData("($)")]
+    [InlineData("($%)")]
+    [InlineData("USD 42")]
+    [InlineData("$USD 42")]
+    [InlineData("US$42")]
+    [InlineData("$NaN")]
+    [InlineData("$Infinity")]
+    public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidCurrencyText(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(value));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.NumberStoredAsTextErrorCode);
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("'")]
