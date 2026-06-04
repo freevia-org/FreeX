@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
+using static FreeX.Core.IO.Tests.XlsxPackageTestFixtures;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -126,12 +127,6 @@ public sealed class XlsxDrawingPackageSchemaValidationTests
         return CreatePackage(entries.ToArray());
     }
 
-    private static MemoryStream CreatePackage(params (string Path, string Content)[] entries)
-        => XlsxPackageTestFixtures.CreatePackage(entries);
-
-    private static XDocument LoadPackageXml(ZipArchive archive, string entryName)
-        => XlsxPackageTestFixtures.LoadPackageXml(archive, entryName);
-
     private static bool IsDrawingRelationship(XElement relationship) =>
         string.Equals(
             relationship.Attribute("Type")?.Value,
@@ -207,9 +202,4 @@ public sealed class XlsxDrawingPackageSchemaValidationTests
         </c:chartSpace>
         """;
 
-    private static string RelationshipsXml(params string[] relationships) =>
-        XlsxPackageTestFixtures.RelationshipsXml(relationships);
-
-    private static string Relationship(string id, string type, string target) =>
-        XlsxPackageTestFixtures.Relationship(id, type, target);
 }

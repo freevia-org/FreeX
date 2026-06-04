@@ -78,6 +78,8 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
     private const string HyperlinkRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+    private const string ImageRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
     private const string MacroSheetContentType =
         "application/vnd.ms-excel.macrosheet+xml";
     private const string MacroSheetRelationshipType =
@@ -96,6 +98,12 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
     private const string StylesContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+    private const string StylesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+    private const string TableContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
+    private const string TableRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
     private const string WorkbookRelationshipPart = "xl/_rels/workbook.xml.rels";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
@@ -109,8 +117,12 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace SpreadsheetNs =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace DrawingNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace DrawingChartNs =
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace SpreadsheetDrawingNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
 
     public static int Run(string[] args)
     {
@@ -350,6 +362,9 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetDrawingPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -541,6 +556,9 @@ internal static class ExcelOpenSmoke
             AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetDrawingPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
@@ -686,7 +704,7 @@ internal static class ExcelOpenSmoke
                 archive,
                 new PackageRelationshipExpectation(
                     WorkbookRelationshipPart,
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles",
+                    StylesRelationshipType,
                     "xl/styles.xml")))
         {
             issues.Add("missing workbook relationship to xl/styles.xml for public styles/formatting tag");
@@ -2052,6 +2070,461 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid shared-string package graph: {sample}{suffix}");
+    }
+
+    private static void AssertStylesPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var styleReferences = FindStyleReferences(archive);
+        var stylesEntry = FindPackageEntry(archive, "xl/styles.xml");
+        if (styleReferences.Count == 0 && stylesEntry is null)
+            return;
+
+        var issues = new List<string>();
+        if (stylesEntry is null)
+        {
+            issues.Add("missing xl/styles.xml for style references");
+            ThrowInvalidStylesPackage(label, sourcePath, issues);
+            return;
+        }
+
+        if (!PackageRelationshipExists(
+                archive,
+                new PackageRelationshipExpectation(
+                    WorkbookRelationshipPart,
+                    StylesRelationshipType,
+                    "xl/styles.xml")))
+        {
+            issues.Add("missing workbook relationship to xl/styles.xml");
+        }
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, "xl/styles.xml", StylesContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var stylesXml = LoadPackageXml(stylesEntry);
+        if (stylesXml.Root?.Name != SpreadsheetNs + "styleSheet")
+        {
+            issues.Add("xl/styles.xml has an invalid stylesheet root element");
+            ThrowInvalidStylesPackage(label, sourcePath, issues);
+            return;
+        }
+
+        var cellXfs = stylesXml.Root.Element(SpreadsheetNs + "cellXfs");
+        var cellFormatCount = cellXfs?.Elements(SpreadsheetNs + "xf").Count() ?? 0;
+        if (cellFormatCount == 0)
+            issues.Add("xl/styles.xml has no cellXfs xf entries");
+
+        AddStyleCountAttributeIssues(issues, "cellXfs", cellXfs, cellFormatCount);
+        foreach (var styleReference in styleReferences)
+        {
+            if (string.IsNullOrWhiteSpace(styleReference.ValueText))
+            {
+                issues.Add($"{styleReference.WorksheetPart} {styleReference.Description} has no style index");
+                continue;
+            }
+
+            if (!int.TryParse(styleReference.ValueText, NumberStyles.None, CultureInfo.InvariantCulture, out var styleIndex))
+            {
+                issues.Add($"{styleReference.WorksheetPart} {styleReference.Description} has invalid style index '{styleReference.ValueText}'");
+                continue;
+            }
+
+            if (styleIndex < 0 || styleIndex >= cellFormatCount)
+            {
+                issues.Add(
+                    $"{styleReference.WorksheetPart} {styleReference.Description} references style index {styleIndex}, but xl/styles.xml cellXfs contains {cellFormatCount} entries");
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidStylesPackage(label, sourcePath, issues);
+    }
+
+    private static List<StyleReference> FindStyleReferences(ZipArchive archive)
+    {
+        var styleReferences = new List<StyleReference>();
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            foreach (var cell in worksheetXml.Descendants(SpreadsheetNs + "c"))
+            {
+                var styleIndex = cell.Attribute("s")?.Value;
+                if (styleIndex is not null)
+                {
+                    styleReferences.Add(new StyleReference(
+                        worksheetPart,
+                        $"cell {cell.Attribute("r")?.Value ?? "(unknown ref)"}",
+                        styleIndex));
+                }
+            }
+
+            foreach (var row in worksheetXml.Descendants(SpreadsheetNs + "row"))
+            {
+                var styleIndex = row.Attribute("s")?.Value;
+                if (styleIndex is not null)
+                {
+                    styleReferences.Add(new StyleReference(
+                        worksheetPart,
+                        $"row {row.Attribute("r")?.Value ?? "(unknown row)"}",
+                        styleIndex));
+                }
+            }
+
+            foreach (var column in worksheetXml.Descendants(SpreadsheetNs + "col"))
+            {
+                var styleIndex = column.Attribute("style")?.Value;
+                if (styleIndex is not null)
+                {
+                    var min = column.Attribute("min")?.Value ?? "?";
+                    var max = column.Attribute("max")?.Value ?? "?";
+                    styleReferences.Add(new StyleReference(
+                        worksheetPart,
+                        $"column span {min}:{max}",
+                        styleIndex));
+                }
+            }
+        }
+
+        return styleReferences;
+    }
+
+    private static void AddStyleCountAttributeIssues(
+        List<string> issues,
+        string elementName,
+        XElement? element,
+        int actualCount)
+    {
+        var countText = element?.Attribute("count")?.Value;
+        if (string.IsNullOrWhiteSpace(countText))
+            return;
+
+        if (!int.TryParse(countText, NumberStyles.None, CultureInfo.InvariantCulture, out var declaredCount))
+        {
+            issues.Add($"xl/styles.xml {elementName} has invalid count '{countText}'");
+            return;
+        }
+
+        if (declaredCount != actualCount)
+            issues.Add($"xl/styles.xml {elementName} count is {declaredCount}, but contains {actualCount} child entries");
+    }
+
+    private static void ThrowInvalidStylesPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid styles package graph: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetDrawingPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetRelationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var drawingReferences = LoadPackageXml(worksheetEntry)
+                .Descendants(SpreadsheetNs + "drawing")
+                .Select(drawing => drawing.Attribute(OfficeRelationshipNs + "id")?.Value)
+                .ToArray();
+
+            foreach (var drawingRelationshipId in drawingReferences)
+            {
+                if (string.IsNullOrWhiteSpace(drawingRelationshipId))
+                {
+                    issues.Add($"{worksheetPart} has a drawing element without a relationship id");
+                    continue;
+                }
+
+                if (!TryGetPackageRelationshipTarget(
+                        archive,
+                        worksheetRelationshipPart,
+                        drawingRelationshipId,
+                        DrawingRelationshipType,
+                        out var drawingTarget,
+                        out var drawingRelationshipIssue))
+                {
+                    issues.Add($"{worksheetPart} drawing reference {drawingRelationshipId}: {drawingRelationshipIssue}");
+                    continue;
+                }
+
+                if (!TryResolvePackageRelationshipTarget(
+                        worksheetRelationshipPart,
+                        drawingTarget!,
+                        out var drawingPart,
+                        out var drawingTargetIssue))
+                {
+                    issues.Add($"{worksheetPart} drawing reference {drawingRelationshipId} has invalid Target {drawingTarget}: {drawingTargetIssue}");
+                    continue;
+                }
+
+                var drawingContentTypeIssue = FindPackageContentTypeIssue(archive, drawingPart, DrawingContentType);
+                if (drawingContentTypeIssue is not null)
+                    issues.Add(drawingContentTypeIssue);
+
+                var drawingEntry = FindPackageEntry(archive, drawingPart);
+                if (drawingEntry is null)
+                {
+                    issues.Add($"{worksheetPart} drawing reference {drawingRelationshipId} targets missing package part {drawingPart}");
+                    continue;
+                }
+
+                var drawingXml = LoadPackageXml(drawingEntry);
+                if (drawingXml.Root?.Name != SpreadsheetDrawingNs + "wsDr")
+                {
+                    issues.Add($"{drawingPart} has an invalid worksheet drawing root element");
+                    continue;
+                }
+
+                AddDrawingPartReferenceIssues(archive, drawingPart, drawingXml, issues);
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetDrawingPackage(label, sourcePath, issues);
+    }
+
+    private static void AddDrawingPartReferenceIssues(
+        ZipArchive archive,
+        string drawingPart,
+        XDocument drawingXml,
+        List<string> issues)
+    {
+        var drawingRelationshipPart = GetRelationshipPartForPackagePart(drawingPart);
+        foreach (var chartRelationshipId in drawingXml
+                     .Descendants(DrawingChartNs + "chart")
+                     .Select(chart => chart.Attribute(OfficeRelationshipNs + "id")?.Value)
+                     .Where(id => !string.IsNullOrWhiteSpace(id))
+                     .Select(id => id!))
+        {
+            AddDrawingRelationshipPartIssue(
+                archive,
+                drawingPart,
+                drawingRelationshipPart,
+                chartRelationshipId,
+                "chart",
+                ChartRelationshipType,
+                DrawingMlChartContentType,
+                issues);
+        }
+
+        foreach (var imageRelationshipId in drawingXml
+                     .Descendants(DrawingNs + "blip")
+                     .Select(blip => blip.Attribute(OfficeRelationshipNs + "embed")?.Value)
+                     .Where(id => !string.IsNullOrWhiteSpace(id))
+                     .Select(id => id!))
+        {
+            AddDrawingRelationshipPartIssue(
+                archive,
+                drawingPart,
+                drawingRelationshipPart,
+                imageRelationshipId,
+                "embedded image",
+                ImageRelationshipType,
+                expectedContentType: null,
+                issues);
+        }
+    }
+
+    private static void AddDrawingRelationshipPartIssue(
+        ZipArchive archive,
+        string drawingPart,
+        string drawingRelationshipPart,
+        string relationshipId,
+        string description,
+        string expectedRelationshipType,
+        string? expectedContentType,
+        List<string> issues)
+    {
+        if (!TryGetPackageRelationshipTarget(
+                archive,
+                drawingRelationshipPart,
+                relationshipId,
+                expectedRelationshipType,
+                out var target,
+                out var relationshipIssue))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId}: {relationshipIssue}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                drawingRelationshipPart,
+                target!,
+                out var packagePart,
+                out var targetIssue))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!PackageEntryExists(archive, packagePart))
+        {
+            issues.Add($"{drawingPart} {description} reference {relationshipId} targets missing package part {packagePart}");
+            return;
+        }
+
+        var contentTypeIssue = expectedContentType is null
+            ? FindPackageContentTypePrefixIssue(archive, packagePart, "image/", "an image/* content type")
+            : FindPackageContentTypeIssue(archive, packagePart, expectedContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+    }
+
+    private static string? FindPackageContentTypePrefixIssue(
+        ZipArchive archive,
+        string packagePart,
+        string expectedContentTypePrefix,
+        string expectedDescription)
+    {
+        var contentTypesEntry = FindPackageEntry(archive, "[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return $"missing [Content_Types].xml for package content type assertion on {packagePart}";
+
+        var actualContentType = GetEffectivePackageContentType(LoadPackageXml(contentTypesEntry), packagePart);
+        if (actualContentType is null)
+            return $"{packagePart} has no effective package content type";
+
+        return actualContentType.StartsWith(expectedContentTypePrefix, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : $"{packagePart} has ContentType={actualContentType}; expected {expectedDescription}";
+    }
+
+    private static void ThrowInvalidWorksheetDrawingPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet drawing package graph: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetTablePackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetRelationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+
+            foreach (var tableParts in worksheetXml.Descendants(SpreadsheetNs + "tableParts"))
+            {
+                var tablePartReferences = tableParts
+                    .Elements(SpreadsheetNs + "tablePart")
+                    .Select((tablePart, index) => new TablePartReference(
+                        index + 1,
+                        tablePart.Attribute(OfficeRelationshipNs + "id")?.Value))
+                    .ToArray();
+
+                AddTablePartsCountAttributeIssues(issues, worksheetPart, tableParts, tablePartReferences.Length);
+                if (tablePartReferences.Length == 0)
+                    continue;
+
+                foreach (var tablePartReference in tablePartReferences)
+                {
+                    if (string.IsNullOrWhiteSpace(tablePartReference.RelationshipId))
+                    {
+                        issues.Add($"{worksheetPart} tablePart #{tablePartReference.Ordinal} has no relationship id");
+                        continue;
+                    }
+
+                    if (!TryGetPackageRelationshipTarget(
+                            archive,
+                            worksheetRelationshipPart,
+                            tablePartReference.RelationshipId,
+                            TableRelationshipType,
+                            out var tableTarget,
+                            out var tableRelationshipIssue))
+                    {
+                        issues.Add($"{worksheetPart} tablePart #{tablePartReference.Ordinal} reference {tablePartReference.RelationshipId}: {tableRelationshipIssue}");
+                        continue;
+                    }
+
+                    if (!TryResolvePackageRelationshipTarget(
+                            worksheetRelationshipPart,
+                            tableTarget!,
+                            out var tablePart,
+                            out var tableTargetIssue))
+                    {
+                        issues.Add($"{worksheetPart} tablePart #{tablePartReference.Ordinal} reference {tablePartReference.RelationshipId} has invalid Target {tableTarget}: {tableTargetIssue}");
+                        continue;
+                    }
+
+                    var contentTypeIssue = FindPackageContentTypeIssue(archive, tablePart, TableContentType);
+                    if (contentTypeIssue is not null)
+                        issues.Add(contentTypeIssue);
+
+                    var tableEntry = FindPackageEntry(archive, tablePart);
+                    if (tableEntry is null)
+                    {
+                        issues.Add($"{worksheetPart} tablePart #{tablePartReference.Ordinal} reference {tablePartReference.RelationshipId} targets missing package part {tablePart}");
+                        continue;
+                    }
+
+                    var tableXml = LoadPackageXml(tableEntry);
+                    if (tableXml.Root?.Name != SpreadsheetNs + "table")
+                        issues.Add($"{tablePart} has an invalid table root element");
+                }
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetTablePackage(label, sourcePath, issues);
+    }
+
+    private static void AddTablePartsCountAttributeIssues(
+        List<string> issues,
+        string worksheetPart,
+        XElement tableParts,
+        int actualCount)
+    {
+        var countText = tableParts.Attribute("count")?.Value;
+        if (string.IsNullOrWhiteSpace(countText))
+            return;
+
+        if (!int.TryParse(countText, NumberStyles.None, CultureInfo.InvariantCulture, out var declaredCount))
+        {
+            issues.Add($"{worksheetPart} tableParts has invalid count '{countText}'");
+            return;
+        }
+
+        if (declaredCount != actualCount)
+            issues.Add($"{worksheetPart} tableParts count is {declaredCount}, but contains {actualCount} tablePart entries");
+    }
+
+    private static void ThrowInvalidWorksheetTablePackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet table package graph: {sample}{suffix}");
     }
 
     private static void AssertPackageRelationshipsComplete(string xlsxPath, string label, string sourcePath)
@@ -6306,4 +6779,13 @@ internal static class ExcelOpenSmoke
         string WorksheetPart,
         string CellReference,
         string? ValueText);
+
+    private sealed record StyleReference(
+        string WorksheetPart,
+        string Description,
+        string? ValueText);
+
+    private sealed record TablePartReference(
+        int Ordinal,
+        string? RelationshipId);
 }

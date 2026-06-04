@@ -578,7 +578,7 @@ public static partial class AccessibilityCheckerService
     private static bool TryCreateFormulaBooleanOperandExpression(FormulaNode ast, out ConditionalFormulaExpression expression)
     {
         expression = default!;
-        if (ast is not BooleanNode && ast is not CellRefNode)
+        if (!IsFormulaPredicateOperand(ast))
             return false;
 
         if (!TryCreateFormulaOperand(ast, out var operand))
@@ -587,6 +587,12 @@ public static partial class AccessibilityCheckerService
         expression = new ConditionalFormulaOperandExpression(operand);
         return true;
     }
+
+    private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
+        ast is BooleanNode
+            or CellRefNode
+            or NumberNode
+            or UnaryOpNode { Operator: UnaryOperator.Negate or UnaryOperator.Percent, Operand: NumberNode };
 
     private static bool TryCreateFormulaComparison(FormulaNode ast, out ConditionalFormulaComparison comparison)
     {
@@ -986,7 +992,13 @@ public static partial class AccessibilityCheckerService
         }
 
         private static bool? FormulaBooleanValue(ScalarValue value) =>
-            value is BoolValue boolean ? boolean.Value : null;
+            value switch
+            {
+                BoolValue boolean => boolean.Value,
+                NumberValue number => number.Value != 0,
+                DateTimeValue dateTime => dateTime.Value != 0,
+                _ => null
+            };
 
         private bool? EvaluateFormulaLogical(
             ConditionalFormulaLogicalExpression logical,

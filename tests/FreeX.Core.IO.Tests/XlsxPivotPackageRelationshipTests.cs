@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
+using static FreeX.Core.IO.Tests.XlsxPackageTestFixtures;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -86,15 +87,4 @@ public sealed class XlsxPivotPackageRelationshipTests
             ("xl/worksheets/sheet1.xml", "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData /></worksheet>"),
             ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml()));
 
-    private static MemoryStream CreatePackage(params (string Path, string Content)[] entries)
-        => XlsxPackageTestFixtures.CreatePackage(entries);
-
-    private static XDocument LoadPackageXml(ZipArchive archive, string entryName)
-        => XlsxPackageTestFixtures.LoadPackageXml(archive, entryName);
-
-    private static string RelationshipsXml(params string[] relationships) =>
-        XlsxPackageTestFixtures.RelationshipsXml(relationships);
-
-    private static string Relationship(string id, string type, string target) =>
-        XlsxPackageTestFixtures.Relationship(id, type, target);
 }

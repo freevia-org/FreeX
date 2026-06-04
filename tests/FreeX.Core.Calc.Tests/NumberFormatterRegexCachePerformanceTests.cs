@@ -13,7 +13,7 @@ public sealed class NumberFormatterRegexCachePerformanceTests
     [InlineData("NumberFormatter.Sections.cs")]
     public void HotNumberFormatterParsers_UseCachedRegexInstances(string fileName)
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Calc", fileName));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Calc", fileName));
 
         source.Should().Contain("private static readonly Regex");
         source.Should().NotMatchRegex(StaticRegexCallPattern);
@@ -22,9 +22,9 @@ public sealed class NumberFormatterRegexCachePerformanceTests
     [Fact]
     public void HotNumberFormatterSectionSelection_ParsesSectionsInSinglePass()
     {
-        var numberSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Calc", "NumberFormatter.cs"));
-        var dateTimeSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Calc", "NumberFormatter.DateTime.cs"));
-        var sectionsSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Calc", "NumberFormatter.Sections.cs"));
+        var numberSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Calc", "NumberFormatter.cs"));
+        var dateTimeSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Calc", "NumberFormatter.DateTime.cs"));
+        var sectionsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Calc", "NumberFormatter.Sections.cs"));
 
         numberSource.Should().Contain("ParseSections(sections, indexedColors, theme, out var hasConditions)");
         dateTimeSource.Should().Contain("ParseSections(sections, indexedColors, theme, out var hasConditions)");
@@ -40,7 +40,7 @@ public sealed class NumberFormatterRegexCachePerformanceTests
     [Fact]
     public void HotNumberFormatColorMapping_AvoidsUppercaseNormalizedTokenAllocations()
     {
-        var colorSource = File.ReadAllText(FindWorkspaceFile(
+        var colorSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "NumberFormatColorMapper.cs"));
 
         colorSource.Should().Contain("TryConsumeIgnoringWhitespace(token, \"THEMEACCENT1\"");
@@ -60,7 +60,7 @@ public sealed class NumberFormatterRegexCachePerformanceTests
     [Fact]
     public void HotPlainNumericSingleSections_BypassDirectiveNormalizationPipeline()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Calc", "NumberFormatter.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Calc", "NumberFormatter.cs"));
         var formatNumber = source[
             source.IndexOf("private static FormatResult FormatNumber", StringComparison.Ordinal)..
             source.IndexOf("private static string ApplyNumericFormat", StringComparison.Ordinal)];
@@ -81,6 +81,4 @@ public sealed class NumberFormatterRegexCachePerformanceTests
 
     private const string StaticRegexCallPattern = @"\bRegex\.(?:Match|IsMatch|Replace)\s*\(";
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-        => WorkspaceFileLocator.Find(relativeParts);
 }

@@ -256,6 +256,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.ResizeCanceled += OnResizeCanceled;
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
+        SheetGrid.SelectionMoveRequested += OnSelectionMoveRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
         SheetGrid.HeaderContextMenuRequested += OnGridHeaderContextMenuRequested;
         SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;

@@ -1084,6 +1084,7 @@ public partial class GridView
         if (SelectedRange == null) return;
 
         RenderSelectionRange(dc, SelectedRange.Value, drawHandle: true);
+        RenderSelectionMovePreview(dc, SelectedRange.Value);
     }
 
     private void RenderSelectionRange(DrawingContext dc, GridRange range, bool drawHandle)
@@ -1114,6 +1115,18 @@ public partial class GridView
 
         if (drawHandle)
             DrawSelectionHandle(dc, selectionLayout.HasRightEdge, selectionLayout.HasBottomEdge, drawRight, drawBottom);
+    }
+
+    private void RenderSelectionMovePreview(DrawingContext dc, GridRange selectedRange)
+    {
+        if (!_selectionMoveDragging ||
+            _selectionMovePreviewRange is not { } previewRange ||
+            previewRange == selectedRange)
+        {
+            return;
+        }
+
+        RenderSelectionRange(dc, previewRange, drawHandle: false);
     }
 
     private void RenderSelectionHandle(DrawingContext dc, GridRange range)
