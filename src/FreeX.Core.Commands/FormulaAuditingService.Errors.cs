@@ -1346,7 +1346,7 @@ public static partial class FormulaAuditingService
     }
 
     private static bool IsSupportedCurrencySymbol(char value) =>
-        value is '$' or '\u20AC' or '\u00A3';
+        value is '$' or '\u20AC' or '\u00A3' or '\u00A5' or '\uFFE5';
 
     private static bool TryStripTrailingPercent(string text, out string numberText)
     {
