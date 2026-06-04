@@ -9,6 +9,9 @@ internal static class LocalizedXamlTestSupport
 {
     private const string LocPrefix = "{local:Loc Key=";
 
+    public static string ReadMainWindowXaml() =>
+        System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+
     public static void ShouldContainInvariantCommandName(this string xaml, string commandName) =>
         xaml.Should().Contain($"local:RibbonMetadata.CommandName=\"{EscapeAttribute(WebUtility.HtmlDecode(commandName))}\"");
 

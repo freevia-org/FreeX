@@ -56,7 +56,7 @@ public sealed class DataCommandSourceTests
     }
 
     private static string ReadMainWindowXaml() =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        LocalizedXamlTestSupport.ReadMainWindowXaml();
 
     private static string ExtractButtonElementByTitle(string xaml, string title, string? handler = null)
         => xaml.ExtractElementByInvariantCommandName(
