@@ -103,6 +103,34 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssues_ReturnsFormulaReportingTyposInTextNotesAndThreadedComments()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("FORMUAL fomula"));
+        sheet.Comments[a1] = "foruma note";
+        sheet.ThreadedComments[b1] = new ThreadedComment("calculaton root")
+        {
+            Replies =
+            [
+                new CommentReply("summarry reply"),
+                new CommentReply("summarise subtotaled clean")
+            ]
+        };
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion, issue.Source, issue.ReplyIndex)).Should().Equal(
+            ("FORMUAL", "FORMULA", SpellingIssueSource.CellText, -1),
+            ("fomula", "formula", SpellingIssueSource.CellText, -1),
+            ("foruma", "formula", SpellingIssueSource.Note, -1),
+            ("calculaton", "calculation", SpellingIssueSource.ThreadedComment, -1),
+            ("summarry", "summary", SpellingIssueSource.ThreadedCommentReply, 0));
+    }
+
+    [Fact]
     public void FindIssuesInCell_IgnoresInternetEmailAndFileAddressSpans()
     {
         var address = new CellAddress(SheetId.New(), 1, 1);
@@ -122,6 +150,17 @@ public sealed class SpellCheckServiceTests
         var issues = SpellCheckService.FindIssuesInCell(address, text);
 
         issues.Select(issue => issue.Word).Should().Equal("recieve");
+    }
+
+    [Fact]
+    public void FindIssuesInCell_IgnoresFormulaReportingTyposInsideAddressSpans()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var text = "Fix formual, then open https://formual.example.com/fomula, email calculaton@example.com, \"C:\\summarry folder\\foruma.xlsx\", and /tmp/calcuation/report.csv.";
+
+        var issues = SpellCheckService.FindIssuesInCell(address, text);
+
+        issues.Select(issue => issue.Word).Should().Equal("formual");
     }
 
     [Fact]
@@ -353,6 +392,37 @@ public sealed class SpellCheckServiceTests
         plan.Edits[0].CorrectedText.Should().Be(
             "Forecast revenue expense summary column formula percentage percentage quarter variance analysis analysis.");
         plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
+    public void PlanKnownCorrections_CoversFormulaCalculationAndSummaryTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "FORMUAL fomula foruma formular calculaton calcuation caluclation summarry summarise subtotaled."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("FORMUAL", "FORMULA"),
+            ("fomula", "formula"),
+            ("foruma", "formula"),
+            ("formular", "formula"),
+            ("calculaton", "calculation"),
+            ("calcuation", "calculation"),
+            ("caluclation", "calculation"),
+            ("summarry", "summary"));
+        plan.IssueCount.Should().Be(8);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "FORMULA formula formula formula calculation calculation calculation summary summarise subtotaled.");
+        plan.Edits[0].ReplacementCount.Should().Be(8);
     }
 
     [Fact]
