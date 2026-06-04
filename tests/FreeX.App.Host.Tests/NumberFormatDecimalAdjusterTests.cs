@@ -34,24 +34,9 @@ public sealed class NumberFormatDecimalAdjusterTests
     [Fact]
     public void DecimalAdjustmentRegexes_AreGeneratedAndCached()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.Host", "NumberFormatDecimalAdjuster.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NumberFormatDecimalAdjuster.cs"));
 
         source.Should().Contain("[GeneratedRegex");
         source.Should().NotMatchRegex(@"\bRegex\.Match\s*\(");
-    }
-
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 }
