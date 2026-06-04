@@ -386,6 +386,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 : ToSolidFill(fillThemeColor, fillColor, drawingNs),
             ToLineProperties(outlineThemeColor, outlineColor, drawingNs),
             ToEffectList(effectPreset, drawingNs),
+            ToScene3dProperties(effectPreset, drawingNs),
             ToShape3dProperties(effectPreset, drawingNs));
     }
 
@@ -472,6 +473,15 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XElement(drawingNs + "bevelT",
                     new XAttribute("w", "76200"),
                     new XAttribute("h", "25400")))
+            : null;
+
+    private static XElement? ToScene3dProperties(DrawingShapeEffectPreset effectPreset, XNamespace drawingNs) =>
+        effectPreset == DrawingShapeEffectPreset.ThreeDRotation
+            ? new XElement(drawingNs + "scene3d",
+                new XElement(drawingNs + "camera", new XAttribute("prst", "isometricOffAxis1Left")),
+                new XElement(drawingNs + "lightRig",
+                    new XAttribute("rig", "threePt"),
+                    new XAttribute("dir", "t")))
             : null;
 
     private static XElement ToRgbColorElement(CellColor color, XNamespace drawingNs) =>

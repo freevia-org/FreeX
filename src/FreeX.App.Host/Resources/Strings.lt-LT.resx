@@ -990,6 +990,9 @@
   <data name="ShapeEffects_Bevel" xml:space="preserve">
     <value>Bevel</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotation" xml:space="preserve">
+    <value>3-D Rotation</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Pašalinkite sukurtus formos efektus.</value>
   </data>
@@ -1011,11 +1014,14 @@
   <data name="ShapeEffects_BevelDescription" xml:space="preserve">
     <value>Apply a raised bevel edge effect to the selected shape.</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotationDescription" xml:space="preserve">
+    <value>Apply a bounded 3-D rotation cue to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Formos efektas</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Formos efekto aprašymas</value>
@@ -2978,7 +2984,7 @@ Siųsti šios bandytojo versijos strigčių ataskaitas?</value>
     <value>Skaičiuoklės tinklelis. Naudokite rodyklių klavišus naršyti langelius, F2 redaguoti ir Tab / Enter, kad perkeltumėte židinį.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>Apie FreeX</value>
@@ -6221,7 +6227,7 @@ Siųsti šios bandytojo versijos strigčių ataskaitas?</value>
     <value>Perjunkite dabartinės diagramos krypties liniją tarp palaikomų Excel tipo krypties linijų tipų.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Perjungti dabartinės diagramos automatines arba duomenimis pagrįstas X ašies ribas.</value>

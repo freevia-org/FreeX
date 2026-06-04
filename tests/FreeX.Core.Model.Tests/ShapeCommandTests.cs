@@ -445,6 +445,7 @@ public sealed class ShapeCommandTests
     [InlineData(DrawingShapeEffectPreset.SoftEdges)]
     [InlineData(DrawingShapeEffectPreset.Reflection)]
     [InlineData(DrawingShapeEffectPreset.Bevel)]
+    [InlineData(DrawingShapeEffectPreset.ThreeDRotation)]
     public void SetDrawingShapeEffectCommand_SetsNamedPresetAndUndoRestoresMetadata(DrawingShapeEffectPreset preset)
     {
         var wb = new Workbook("test");

@@ -990,6 +990,9 @@
   <data name="ShapeEffects_Bevel" xml:space="preserve">
     <value>Bevel</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotation" xml:space="preserve">
+    <value>3-D Rotation</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Entfernen Sie erstellte Formeffekte.</value>
   </data>
@@ -1011,11 +1014,14 @@
   <data name="ShapeEffects_BevelDescription" xml:space="preserve">
     <value>Apply a raised bevel edge effect to the selected shape.</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotationDescription" xml:space="preserve">
+    <value>Apply a bounded 3-D rotation cue to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Formeffekt</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Beschreibung des Formeffekts</value>
@@ -2968,7 +2974,7 @@
     <value>Tabellenraster. Verwenden Sie die Pfeiltasten, um in Zellen zu navigieren, F2 zum Bearbeiten und TAB/EINGABETASTE, um den Fokus zu verschieben.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>Info zu FreeX</value>
@@ -6211,7 +6217,7 @@
     <value>Wechseln Sie die aktuelle DiagrammTrendlinie zwischen unterstützten Excel-ähnlichen Trendlinientypen.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Schalten Sie zwischen automatischen und datenbasierten X-Achsengrenzen für das aktuelle Diagramm um.</value>
