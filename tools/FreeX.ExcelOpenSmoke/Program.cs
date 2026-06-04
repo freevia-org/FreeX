@@ -78,6 +78,11 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
     private const string StylesContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+    private const string WorkbookRelationshipPart = "xl/_rels/workbook.xml.rels";
+    private const string WorksheetContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
+    private const string WorksheetRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
@@ -643,8 +648,8 @@ internal static class ExcelOpenSmoke
             return;
 
         using var archive = ZipFile.OpenRead(xlsxPath);
-        var worksheetXmlDocuments = LoadPublicWorksheetXmlDocuments(archive);
         var issues = new List<string>();
+        var worksheetXmlDocuments = LoadPublicWorkbookWorksheetXmlDocuments(archive, tags, issues);
 
         if ((tags.Contains("styles") || tags.Contains("formatting")) &&
             !PackageEntryExists(archive, "xl/styles.xml"))
@@ -656,7 +661,7 @@ internal static class ExcelOpenSmoke
             !PackageRelationshipExists(
                 archive,
                 new PackageRelationshipExpectation(
-                    "xl/_rels/workbook.xml.rels",
+                    WorkbookRelationshipPart,
                     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles",
                     "xl/styles.xml")))
         {
@@ -683,7 +688,7 @@ internal static class ExcelOpenSmoke
             !PackageRelationshipExists(
                 archive,
                 new PackageRelationshipExpectation(
-                    "xl/_rels/workbook.xml.rels",
+                    WorkbookRelationshipPart,
                     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings",
                     "xl/sharedStrings.xml")))
         {
@@ -771,17 +776,122 @@ internal static class ExcelOpenSmoke
         (tags.Contains("sheet-names") && tags.Contains("boundary")) ||
         tags.Contains("unsupported-sheet-types");
 
-    private static IReadOnlyList<XDocument> LoadPublicWorksheetXmlDocuments(ZipArchive archive)
+    private static bool HasExpectedPublicWorksheetPackageTags(IReadOnlySet<string> tags) =>
+        tags.Contains("styles") ||
+        tags.Contains("formatting") ||
+        tags.Contains("shared-strings") ||
+        tags.Contains("hyperlinks") ||
+        tags.Contains("merged-cells") ||
+        tags.Contains("inline-strings") ||
+        tags.Contains("cell-types") ||
+        (tags.Contains("sheet-names") && tags.Contains("boundary"));
+
+    private static IReadOnlyList<XDocument> LoadPublicWorkbookWorksheetXmlDocuments(
+        ZipArchive archive,
+        IReadOnlySet<string> tags,
+        ICollection<string> issues)
     {
+        if (!HasExpectedPublicWorksheetPackageTags(tags))
+            return [];
+
         var documents = new List<XDocument>();
-        foreach (var entry in archive.Entries.Where(entry =>
-                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        foreach (var worksheetPart in FindPublicWorkbookWorksheetParts(archive, issues))
         {
-            documents.Add(LoadPackageXml(entry));
+            var entry = FindPackageEntry(archive, worksheetPart);
+            if (entry is not null)
+                documents.Add(LoadPackageXml(entry));
         }
 
         return documents;
+    }
+
+    private static IReadOnlyList<string> FindPublicWorkbookWorksheetParts(
+        ZipArchive archive,
+        ICollection<string> issues)
+    {
+        var workbookEntry = FindPackageEntry(archive, "xl/workbook.xml");
+        if (workbookEntry is null)
+        {
+            issues.Add("missing xl/workbook.xml for public workbook worksheet graph");
+            return [];
+        }
+
+        var relationshipEntry = FindPackageEntry(archive, WorkbookRelationshipPart);
+        if (relationshipEntry is null)
+        {
+            issues.Add($"missing {WorkbookRelationshipPart} for public workbook worksheet graph");
+            return [];
+        }
+
+        var relationships = LoadPackageXml(relationshipEntry)
+            .Root?
+            .Elements(PackageRelationshipNs + "Relationship")
+            .ToArray() ?? [];
+        var worksheetParts = new List<string>();
+        var seenWorksheetParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheet in LoadPackageXml(workbookEntry).Descendants(SpreadsheetNs + "sheet"))
+        {
+            var sheetName = sheet.Attribute("name")?.Value ?? "(unnamed sheet)";
+            var relationshipId = sheet.Attribute(OfficeRelationshipNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(relationshipId))
+            {
+                issues.Add($"workbook sheet '{sheetName}' has no relationship id for public worksheet package graph");
+                continue;
+            }
+
+            var relationship = relationships.FirstOrDefault(relationship =>
+                string.Equals(
+                    relationship.Attribute("Id")?.Value,
+                    relationshipId,
+                    StringComparison.OrdinalIgnoreCase));
+            if (relationship is null)
+            {
+                issues.Add($"workbook sheet '{sheetName}' targets missing relationship {relationshipId} in {WorkbookRelationshipPart}");
+                continue;
+            }
+
+            var relationshipType = relationship.Attribute("Type")?.Value;
+            if (string.Equals(relationshipType, ChartSheetRelationshipType, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (!string.Equals(relationshipType, WorksheetRelationshipType, StringComparison.OrdinalIgnoreCase))
+            {
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} has Type={relationshipType}; expected worksheet or chartsheet relationship");
+                continue;
+            }
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} has no Target");
+                continue;
+            }
+
+            if (!TryResolvePackageRelationshipTarget(WorkbookRelationshipPart, target, out var worksheetPart, out var targetError))
+            {
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} has invalid Target {target}: {targetError}");
+                continue;
+            }
+
+            if (!PackageEntryExists(archive, worksheetPart))
+            {
+                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} targets missing package part {worksheetPart}");
+                continue;
+            }
+
+            var worksheetContentTypeIssue = FindPackageContentTypeIssue(archive, worksheetPart, WorksheetContentType);
+            if (worksheetContentTypeIssue is not null)
+                issues.Add(worksheetContentTypeIssue);
+
+            if (seenWorksheetParts.Add(worksheetPart))
+                worksheetParts.Add(worksheetPart);
+        }
+
+        if (worksheetParts.Count == 0)
+            issues.Add("missing workbook worksheet relationships for public worksheet package tags");
+
+        return worksheetParts;
     }
 
     private static IEnumerable<XElement> PublicWorksheetElements(
