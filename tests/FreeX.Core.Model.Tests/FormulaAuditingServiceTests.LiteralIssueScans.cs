@@ -26,6 +26,47 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Theory]
+    [InlineData("'42")]
+    [InlineData("'1,234.50")]
+    [InlineData("(1,234.50)")]
+    [InlineData("(42)")]
+    [InlineData("25%")]
+    [InlineData("-12.5%")]
+    [InlineData("'25%")]
+    public void FindFormulaErrorIssues_ReturnsFormattedNumbersStoredAsText(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(value));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.Cell.Should().Be("A1");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.NumberStoredAsTextErrorCode);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("'")]
+    [InlineData("%")]
+    [InlineData("'%")]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("(NaN)")]
+    [InlineData("USD 42")]
+    public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidNumberText(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(value));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.NumberStoredAsTextErrorCode);
+    }
+
+    [Theory]
     [InlineData("1/2/24")]
     [InlineData("01-02-24")]
     [InlineData("Jan 2, 24")]

@@ -1218,7 +1218,40 @@ public static partial class FormulaAuditingService
         return cell is null || (!cell.HasFormula && cell.Value is BlankValue);
     }
 
-    private static bool IsNumberStoredAsText(string text) =>
+    private static bool IsNumberStoredAsText(string text)
+    {
+        var value = text.Trim();
+        if (value.Length == 0)
+            return false;
+
+        if (value[0] == '\'')
+        {
+            value = value[1..].Trim();
+            if (value.Length == 0)
+                return false;
+        }
+
+        if (TryParseFiniteNumberText(value))
+            return true;
+
+        if (value.Length > 2 && value[0] == '(' && value[^1] == ')')
+        {
+            var accountingValue = value[1..^1].Trim();
+            if (accountingValue.Length > 0 && TryParseFiniteNumberText(accountingValue))
+                return true;
+        }
+
+        if (value.Length > 1 && value[^1] == '%')
+        {
+            var percentValue = value[..^1].Trim();
+            if (percentValue.Length > 0 && TryParseFiniteNumberText(percentValue))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseFiniteNumberText(string text) =>
         double.TryParse(
             text,
             NumberStyles.Float | NumberStyles.AllowThousands,
