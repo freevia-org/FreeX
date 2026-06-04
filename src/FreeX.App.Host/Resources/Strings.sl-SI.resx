@@ -990,6 +990,9 @@
   <data name="ShapeEffects_Bevel" xml:space="preserve">
     <value>Bevel</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotation" xml:space="preserve">
+    <value>3-D Rotation</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Odstrani avtorizirane učinke oblike.</value>
   </data>
@@ -1011,11 +1014,14 @@
   <data name="ShapeEffects_BevelDescription" xml:space="preserve">
     <value>Apply a raised bevel edge effect to the selected shape.</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotationDescription" xml:space="preserve">
+    <value>Apply a bounded 3-D rotation cue to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Učinek oblike</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Opis učinka oblike</value>
@@ -2978,7 +2984,7 @@ Send poročila o sesutju za ta tester gradijo?</value>
     <value>Mreža preglednice. Za premikanje po celicah uporabite puščične tipke, za urejanje F2, za premik fokusa pa Tab/Enter.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>O programu FreeX</value>
@@ -6221,7 +6227,7 @@ Send poročila o sesutju za ta tester gradijo?</value>
     <value>Preklopi trenutno trendno črto grafikona med podprtimi trendlin tipi, podobnimi Excel.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Preklopi samodejne ali podatkovno utemeljene osi X za trenutno grafiko.</value>

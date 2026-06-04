@@ -39,5 +39,12 @@
 ## Verification
 
 - Before claiming a branch is ready, run the relevant build and tests from that branch's worktree.
+- The default agent verification path is repository preflight, full-solution restore/build, and the non-UI test lane only:
+  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1`
+  - `dotnet restore FreeX.slnx`
+  - `dotnet build FreeX.slnx --configuration Release --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1`
+  - `dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx" --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1`
+- Do not run `dotnet test FreeX.slnx` or `dotnet test FreeX.UiTests.slnx` as routine/default verification.
+- Run the UI lane (`dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx" --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1`) only when the user explicitly requests UI tests, the task touches WPF app/host behavior or UI test infrastructure, or the branch is preparing a tester-release/public-preview candidate.
 - If a build fails because another process locks output files, identify and clear the stale process before rerunning.
 - Report exact verification commands and outcomes in the final response.

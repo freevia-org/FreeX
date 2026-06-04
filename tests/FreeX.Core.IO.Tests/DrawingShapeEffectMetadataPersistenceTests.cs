@@ -14,6 +14,7 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
     [InlineData(DrawingShapeEffectPreset.Glow)]
     [InlineData(DrawingShapeEffectPreset.SoftEdges)]
     [InlineData(DrawingShapeEffectPreset.Bevel)]
+    [InlineData(DrawingShapeEffectPreset.ThreeDRotation)]
     public void NativeJsonAdapter_RoundTripsDrawingShapeEffectPreset(DrawingShapeEffectPreset effectPreset)
     {
         var workbook = CreateWorkbookWithShape(effectPreset);
@@ -82,6 +83,36 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
         loadedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Bevel);
         loadedShape.HasShadowEffect.Should().BeFalse();
         loadedShape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.Bevel);
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTripsDrawingShapeThreeDRotationPresetAsScene3D()
+    {
+        var workbook = CreateWorkbookWithShape(DrawingShapeEffectPreset.ThreeDRotation);
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var drawingXml = XDocument.Load(archive.GetEntry("xl/drawings/drawing1.xml")!.Open());
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            drawingXml.Descendants(a + "effectLst").Should().BeEmpty("3-D rotation is stored as DrawingML scene 3D");
+            var scene = drawingXml.Descendants(a + "scene3d").Should().ContainSingle().Subject;
+            scene.Element(a + "camera")!.Attribute("prst")!.Value.Should().Be("isometricOffAxis1Left");
+            scene.Element(a + "lightRig").Should().NotBeNull();
+            var lightRig = scene.Element(a + "lightRig")!;
+            lightRig.Attribute("rig")!.Value.Should().Be("threePt");
+            lightRig.Attribute("dir")!.Value.Should().Be("t");
+        }
+
+        stream.Position = 0;
+        var loadedShape = adapter.Load(stream).GetSheetAt(0).DrawingShapes.Should().ContainSingle().Subject;
+        loadedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.ThreeDRotation);
+        loadedShape.HasShadowEffect.Should().BeFalse();
+        loadedShape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.ThreeDRotation);
     }
 
     [Theory]
