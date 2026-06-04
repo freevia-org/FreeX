@@ -12,7 +12,7 @@ public sealed class DataValidationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var rule = NewRule(sheet.Id);
 
         var command = new SetDataValidationCommand(sheet.Id, rule);
@@ -30,7 +30,7 @@ public sealed class DataValidationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var original = NewRule(sheet.Id);
         sheet.DataValidations.Add(original);
 
@@ -56,7 +56,7 @@ public sealed class DataValidationCommandTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var other = wb.AddSheet("Other");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var rule = NewRule(other.Id);
 
         var outcome = new SetDataValidationCommand(sheet.Id, rule).Apply(ctx);
@@ -70,7 +70,7 @@ public sealed class DataValidationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.IsProtected = true;
 
         var outcome = new SetDataValidationCommand(sheet.Id, NewRule(sheet.Id)).Apply(ctx);
@@ -85,7 +85,7 @@ public sealed class DataValidationCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var rule = NewRule(sheet.Id);
         sheet.DataValidations.Add(rule);
         sheet.IsProtected = true;
@@ -110,9 +110,4 @@ public sealed class DataValidationCommandTests
             AlertStyle = DvAlertStyle.Stop
         };
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
