@@ -39,6 +39,20 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Image")]
     [InlineData("Image 2.")]
     [InlineData("IMG_0001.jpg")]
+    [InlineData("Object")]
+    [InlineData("Object 1")]
+    [InlineData("Graphic")]
+    [InlineData("Graphic 2")]
+    [InlineData("Diagram")]
+    [InlineData("Diagram 3")]
+    [InlineData("Screenshot")]
+    [InlineData("Screenshot 4")]
+    [InlineData("Screenshot 2026-06-04")]
+    [InlineData("Photo")]
+    [InlineData("Photo 5")]
+    [InlineData("Photo 2026-06-04")]
+    [InlineData("Icon")]
+    [InlineData("Icon 6")]
     [InlineData("Shape")]
     [InlineData("Text box")]
     public void FindIssues_FlagsObjectsWithGenericAltText(string altText)
@@ -113,6 +127,44 @@ public sealed partial class AccessibilityCheckerServiceTests
             .BeEmpty();
     }
 
+    [Theory]
+    [InlineData("Operations object model")]
+    [InlineData("Customer onboarding graphic")]
+    [InlineData("Fulfillment diagram showing handoffs")]
+    [InlineData("Screenshot 2026-06-04 showing sales dashboard")]
+    [InlineData("Photo of warehouse team")]
+    [InlineData("Status icon legend")]
+    public void FindIssues_AllowsDescriptiveGenericDrawingObjectTitleOrName(string accessibleText)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            AltText = "Image",
+            Title = accessibleText
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            Name = accessibleText
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Text = "Status summary",
+            Name = accessibleText,
+            FillColor = CellColor.White
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind is AccessibilityIssueKind.MissingAltText or AccessibilityIssueKind.GenericAltText)
+            .Should()
+            .BeEmpty();
+    }
+
     [Fact]
     public void FindIssues_FlagsGenericDrawingObjectTitleOrNameWithoutDescriptiveAltText()
     {
@@ -171,6 +223,63 @@ public sealed partial class AccessibilityCheckerServiceTests
             "Picture alternate text should describe the object.",
             "Shape alternate text should describe the object.",
             "Shape alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
+            "Text box alternate text should describe the object.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsCommonGenericDrawingObjectTitleOrNameWithoutDescriptiveAltText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            Title = "Object 1"
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = PictureKind.Image,
+            Title = "Screenshot 2026-06-04"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            Name = "Graphic 2"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            Name = "Diagram 3"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            Name = "Icon 6"
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 6, 1),
+            Text = "Profile photo",
+            Title = "Photo 2026-06-04",
+            FillColor = CellColor.White
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind == AccessibilityIssueKind.GenericAltText)
+            .ToList();
+
+        issues.Select(i => i.Location).Should().Equal("A1", "A2", "A3", "A4", "A5", "A6");
+        issues.Select(i => i.Message).Should().Equal(
+            "Picture alternate text should describe the object.",
+            "Picture alternate text should describe the object.",
             "Shape alternate text should describe the object.",
             "Shape alternate text should describe the object.",
             "Shape alternate text should describe the object.",

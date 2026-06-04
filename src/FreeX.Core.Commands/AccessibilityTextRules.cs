@@ -32,17 +32,41 @@ internal static partial class AccessibilityTextRules
     private static readonly HashSet<string> GenericAltTexts = new(StringComparer.OrdinalIgnoreCase)
     {
         "diagram",
+        "ellipse",
+        "graphic",
+        "icon",
         "image",
+        "line",
+        "object",
+        "oval",
         "picture",
         "photo",
+        "rectangle",
         "screenshot",
         "shape",
         "text",
         "text box",
-        "textbox",
-        "object",
-        "graphic"
+        "textbox"
     };
+
+    private static readonly string[] GenericNumberedAltTextPrefixes =
+    [
+        "diagram",
+        "ellipse",
+        "graphic",
+        "icon",
+        "image",
+        "line",
+        "object",
+        "oval",
+        "picture",
+        "photo",
+        "rectangle",
+        "screenshot",
+        "shape",
+        "text box",
+        "textbox"
+    ];
 
     private static readonly HashSet<string> GenericChartAxisTitles = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -71,17 +95,8 @@ internal static partial class AccessibilityTextRules
     {
         var text = NormalizeComparableText(altText);
         return GenericAltTexts.Contains(text) ||
-            text.StartsWith("picture ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "picture ") ||
-            text.StartsWith("image ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "image ") ||
-            text.StartsWith("shape ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "shape ") ||
-            text.StartsWith("rectangle ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "rectangle ") ||
-            text.StartsWith("ellipse ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "ellipse ") ||
-            text.StartsWith("oval ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "oval ") ||
-            text.StartsWith("line ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "line ") ||
-            text.StartsWith("text box ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "text box ") ||
-            text.StartsWith("textbox ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "textbox ") ||
-            text.StartsWith("object ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "object ") ||
-            text.StartsWith("graphic ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "graphic ") ||
+            HasGenericNumberedAltText(text) ||
+            LooksLikeScreenshotOrPhotoDateDefault(text) ||
             LooksLikeImageFileName(text);
     }
 
@@ -130,6 +145,24 @@ internal static partial class AccessibilityTextRules
     private static bool LooksLikeImageFileName(string text) =>
         ImageFileNameRegex().IsMatch(text);
 
+    private static bool HasGenericNumberedAltText(string text)
+    {
+        foreach (var prefix in GenericNumberedAltTextPrefixes)
+        {
+            var prefixWithSpace = prefix + " ";
+            if (text.StartsWith(prefixWithSpace, StringComparison.OrdinalIgnoreCase) &&
+                IsNumberSuffix(text, prefixWithSpace))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeScreenshotOrPhotoDateDefault(string text) =>
+        ScreenshotOrPhotoDateDefaultRegex().IsMatch(text);
+
     private static bool IsNumberSuffix(string text, string prefix) =>
         int.TryParse(text[prefix.Length..], out _);
 
@@ -150,6 +183,9 @@ internal static partial class AccessibilityTextRules
 
     [GeneratedRegex(@"(?i)^[\w .-]+\.(?:png|jpe?g|gif|bmp|tiff?|webp)$")]
     private static partial Regex ImageFileNameRegex();
+
+    [GeneratedRegex(@"(?i)^(?:Screenshot|Photo)\s+\d{4}-\d{2}-\d{2}$")]
+    private static partial Regex ScreenshotOrPhotoDateDefaultRegex();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();
