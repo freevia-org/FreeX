@@ -1231,25 +1231,47 @@ public static partial class FormulaAuditingService
                 return false;
         }
 
-        if (TryParseFiniteNumberText(value))
+        if (TryParseFiniteNumberOrCurrencyText(value))
             return true;
 
         if (value.Length > 2 && value[0] == '(' && value[^1] == ')')
         {
             var accountingValue = value[1..^1].Trim();
-            if (accountingValue.Length > 0 && TryParseFiniteNumberText(accountingValue))
+            if (accountingValue.Length > 0 && TryParseFiniteNumberOrCurrencyText(accountingValue))
                 return true;
         }
 
         if (value.Length > 1 && value[^1] == '%')
         {
             var percentValue = value[..^1].Trim();
-            if (percentValue.Length > 0 && TryParseFiniteNumberText(percentValue))
+            if (percentValue.Length > 0 && TryParseFiniteNumberOrCurrencyText(percentValue))
                 return true;
         }
 
         return false;
     }
+
+    private static bool TryParseFiniteNumberOrCurrencyText(string text)
+    {
+        if (TryParseFiniteNumberText(text))
+            return true;
+
+        return TryStripSupportedCurrencySymbol(text, out var numberText) &&
+               TryParseFiniteNumberText(numberText);
+    }
+
+    private static bool TryStripSupportedCurrencySymbol(string text, out string numberText)
+    {
+        numberText = string.Empty;
+        if (text.Length <= 1 || !IsSupportedCurrencySymbol(text[0]))
+            return false;
+
+        numberText = text[1..].Trim();
+        return numberText.Length > 0;
+    }
+
+    private static bool IsSupportedCurrencySymbol(char value) =>
+        value is '$' or '\u20AC' or '\u00A3';
 
     private static bool TryParseFiniteNumberText(string text) =>
         double.TryParse(
