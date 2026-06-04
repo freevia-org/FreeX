@@ -254,7 +254,7 @@ public static partial class FormulaAuditingService
         }
 
         var flaggedInconsistentFormulas = checkInconsistentFormulas ? new HashSet<CellAddress>() : null;
-        var flaggedCalculatedColumnFormulas = checkInconsistentCalculatedColumnFormulas ? new HashSet<CellAddress>() : null;
+        HashSet<CellAddress>? flaggedCalculatedColumnFormulas = null;
         foreach (var sheet in workbook.Sheets)
         {
             if (sheetId.HasValue && sheet.Id != sheetId.Value)
@@ -263,6 +263,9 @@ public static partial class FormulaAuditingService
             if (sheet.FormulaCellCount == 0)
                 continue;
 
+            var checkCalculatedColumnFormulasForSheet =
+                checkInconsistentCalculatedColumnFormulas &&
+                sheet.StructuredTables.Count > 0;
             List<FormulaPattern>? formulas = checkInconsistentFormulas
                 ? new List<FormulaPattern>(sheet.FormulaCellCount)
                 : null;
@@ -272,9 +275,10 @@ public static partial class FormulaAuditingService
                 if (cell.IgnoreFormulaError)
                     continue;
 
-                if (checkInconsistentCalculatedColumnFormulas &&
+                if (checkCalculatedColumnFormulasForSheet &&
                     IsInconsistentCalculatedColumnFormula(sheet, address, cell))
                 {
+                    flaggedCalculatedColumnFormulas ??= [];
                     flaggedCalculatedColumnFormulas?.Add(address);
                     yield return new FormulaErrorIssue(
                         sheet.Id,
@@ -299,7 +303,8 @@ public static partial class FormulaAuditingService
                 }
 
                 if (formulas is not null &&
-                    flaggedCalculatedColumnFormulas?.Contains(address) != true &&
+                    (!checkCalculatedColumnFormulasForSheet ||
+                     flaggedCalculatedColumnFormulas?.Contains(address) != true) &&
                     !string.IsNullOrWhiteSpace(cell.FormulaText))
                 {
                     formulas.Add(new FormulaPattern(address, cell.FormulaText!, NormalizeFormulaPattern(address, cell.FormulaText!)));

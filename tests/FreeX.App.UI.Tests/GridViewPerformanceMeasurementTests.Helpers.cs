@@ -10,6 +10,15 @@ using FluentAssertions;
 namespace FreeX.App.UI.Tests;
 public sealed partial class GridViewPerformanceMeasurementTests
 {
+    private static readonly Lazy<Action<GridView, DrawingContext>> RenderQuickAnalysisPreviewOnly = new(() =>
+    {
+        var method = typeof(GridView).GetMethod(
+            "RenderQuickAnalysisPreview",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(nameof(GridView), "RenderQuickAnalysisPreview");
+        return method.CreateDelegate<Action<GridView, DrawingContext>>();
+    });
+
     private static GridView CreateTextHeavyGrid(double width, double height)
         => CreateTextHeavyGrid(width, height, null);
 
@@ -793,6 +802,54 @@ public sealed partial class GridViewPerformanceMeasurementTests
         grid.Arrange(new Rect(0, 0, width, height));
         grid.UpdateLayout();
         return grid;
+    }
+
+    private static void MeasureQuickAnalysisPreviewVariant(
+        GridQuickAnalysisPreviewVisualKind visual,
+        string label)
+    {
+        const int iterations = 96;
+        const int width = 1440;
+        const int height = 900;
+        var grid = CreateQuickAnalysisGrid(width, height, visual, includeDisplayText: false);
+
+        DrawQuickAnalysisPreviewOnly(grid);
+        DrawQuickAnalysisPreviewOnly(grid);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var step = Stopwatch.StartNew();
+            DrawQuickAnalysisPreviewOnly(grid);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            $"PERF GRID_RENDER_QUICK_ANALYSIS_{label} " +
+            $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F4} p95_ms={p95:F4} max_ms={ordered[^1]:F4} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    private static void DrawQuickAnalysisPreviewOnly(GridView grid)
+    {
+        var drawing = new DrawingGroup();
+        using var dc = drawing.Open();
+        RenderQuickAnalysisPreviewOnly.Value(grid, dc);
     }
 
     private static GridView CreateShrinkToFitGrid(double width, double height)
