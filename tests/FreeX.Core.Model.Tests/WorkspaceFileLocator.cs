@@ -2,21 +2,21 @@ namespace FreeX.Core.Model.Tests;
 
 internal static class WorkspaceFileLocator
 {
-    public static string Find(params string[] relativeParts)
+    internal static string Find(params string[] relativeParts)
     {
         var candidate = FindExistingFile(new DirectoryInfo(AppContext.BaseDirectory), relativeParts);
         return candidate ?? throw new FileNotFoundException(
             $"Could not find workspace file: {Path.Combine(relativeParts)}");
     }
 
-    public static string FindFromCurrentDirectoryOrFallback(params string[] relativeParts)
+    internal static string FindFromCurrentDirectoryOrFallback(params string[] relativeParts)
     {
         var currentDirectory = Directory.GetCurrentDirectory();
         var candidate = FindExistingFile(new DirectoryInfo(currentDirectory), relativeParts);
         return candidate ?? Path.Combine([currentDirectory, .. relativeParts]);
     }
 
-    public static string FindFromWorkspaceRoot(params string[] relativeParts)
+    internal static string FindFromWorkspaceRoot(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)

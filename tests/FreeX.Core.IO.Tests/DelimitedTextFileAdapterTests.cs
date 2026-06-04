@@ -8,8 +8,6 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class DelimitedTextFileAdapterTests
 {
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
-
     public static TheoryData<byte[]> Utf32BomDelimitedTextPayloads() => new()
     {
         Encoding.UTF32.GetPreamble()

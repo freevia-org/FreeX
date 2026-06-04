@@ -16,7 +16,7 @@ public class FormulaRewriteCommandTests
     [Fact]
     public void RewriteAllFormulas_UsesTrackedFormulaAddresses()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "RowColumnShiftHelpers.Formulas.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "RowColumnShiftHelpers.Formulas.cs"));
 
         source.Should().Contain("sheet.EnumerateFormulaCells()");
         source.Should().NotContain("foreach (var (addr, cell) in sheet.EnumerateCells())");
@@ -371,6 +371,4 @@ public class FormulaRewriteCommandTests
         wb.Sheets.Select(s => s.Name).Should().Equal("First", "Second");
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 }
