@@ -15,7 +15,7 @@ public sealed partial class OpenWorkbookLoaderTests
         try
         {
             var recalculateCalled = false;
-            var adapter = new FakeAdapter(stream =>
+            var adapter = new TestFileAdapter(stream =>
             {
                 using var reader = new StreamReader(stream);
                 reader.ReadToEnd().Should().Be("payload");
@@ -36,7 +36,7 @@ public sealed partial class OpenWorkbookLoaderTests
                 adapter,
                 ".fxjson",
                 new FileFormatDescriptor(".fxjson", "Fake"),
-                new ImmediateProgress<OpenProgressUpdate>(progressUpdates.Add));
+                new TestProgress<OpenProgressUpdate>(progressUpdates.Add));
 
             result.Workbook.Name.Should().Be("Loaded");
             result.DisplayName.Should().Be(Path.GetFileNameWithoutExtension(tempPath));
@@ -60,7 +60,7 @@ public sealed partial class OpenWorkbookLoaderTests
         await File.WriteAllTextAsync(tempPath, "payload");
         try
         {
-            var adapter = new FakeAdapter(_ =>
+            var adapter = new TestFileAdapter(_ =>
             {
                 var workbook = new Workbook("Loaded");
                 var sheet = workbook.AddSheet("Sheet1");
@@ -75,7 +75,7 @@ public sealed partial class OpenWorkbookLoaderTests
                 adapter,
                 ".fxjson",
                 new FileFormatDescriptor(".fxjson", "Fake"),
-                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+                new TestProgress<OpenProgressUpdate>(_ => { }));
 
             recalculateCalled.Should().BeFalse();
         }

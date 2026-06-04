@@ -4,7 +4,7 @@ using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
-internal sealed class FakeAdapter(
+internal sealed class TestFileAdapter(
     Func<Stream, Workbook>? load = null,
     Action<Workbook, Stream>? save = null,
     string extension = ".fxjson",

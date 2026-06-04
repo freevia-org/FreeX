@@ -21,7 +21,7 @@ public sealed partial class OpenWorkbookLoaderTests
         await File.WriteAllTextAsync(tempPath, "payload");
         try
         {
-            var adapter = new FakeAdapter(_ =>
+            var adapter = new TestFileAdapter(_ =>
             {
                 var workbook = new Workbook("Loaded");
                 workbook.AddSheet("Sheet1");
@@ -34,7 +34,7 @@ public sealed partial class OpenWorkbookLoaderTests
                 adapter,
                 extension,
                 new FileFormatDescriptor(extension, "Text", CanOpen: true, CanSave: false),
-                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+                new TestProgress<OpenProgressUpdate>(_ => { }));
 
             result.Workbook.Sheets.Single().Name.Should().Be("Very Long Sales _Draft_ Import");
         }

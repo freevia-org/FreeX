@@ -15,7 +15,7 @@ public sealed class SaveWorkbookWriterTests
         {
             var workbook = new Workbook("Saved");
             workbook.AddSheet("Sheet1");
-            var adapter = new FakeAdapter(save: (savedWorkbook, stream) =>
+            var adapter = new TestFileAdapter(save: (savedWorkbook, stream) =>
             {
                 savedWorkbook.Should().BeSameAs(workbook);
                 stream.Should().BeOfType<FileStream>();
@@ -31,7 +31,7 @@ public sealed class SaveWorkbookWriterTests
                 tempPath,
                 adapter,
                 workbook,
-                new ImmediateProgress<SaveProgressUpdate>(progressUpdates.Add));
+                new TestProgress<SaveProgressUpdate>(progressUpdates.Add));
 
             (await File.ReadAllTextAsync(tempPath)).Should().Be("saved payload");
             progressUpdates.Should().Contain(update => update.Detail.StartsWith("Saving file (serializing)", StringComparison.Ordinal));
@@ -54,14 +54,14 @@ public sealed class SaveWorkbookWriterTests
         {
             var workbook = new Workbook("Saved");
             workbook.AddSheet("Sheet1");
-            var adapter = new FakeAdapter(save: (_, _) => throw new InvalidOperationException("boom"));
+            var adapter = new TestFileAdapter(save: (_, _) => throw new InvalidOperationException("boom"));
             var saver = new SaveWorkbookWriter();
 
             var act = async () => await saver.SaveAsync(
                 tempPath,
                 adapter,
                 workbook,
-                new ImmediateProgress<SaveProgressUpdate>(_ => { }));
+                new TestProgress<SaveProgressUpdate>(_ => { }));
 
             await act.Should().ThrowAsync<InvalidOperationException>();
             (await File.ReadAllTextAsync(tempPath)).Should().Be("original");
@@ -70,10 +70,5 @@ public sealed class SaveWorkbookWriterTests
         {
             File.Delete(tempPath);
         }
-    }
-
-    private sealed class ImmediateProgress<T>(Action<T> report) : IProgress<T>
-    {
-        public void Report(T value) => report(value);
     }
 }

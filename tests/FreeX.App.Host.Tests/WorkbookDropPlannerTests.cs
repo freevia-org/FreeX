@@ -11,8 +11,8 @@ public sealed class WorkbookDropPlannerTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter(extension: ".xlsx", formatName: "XLSX Workbook"),
-            new FakeAdapter(extension: ".csv", formatName: "CSV")
+            new TestFileAdapter(extension: ".xlsx", formatName: "XLSX Workbook"),
+            new TestFileAdapter(extension: ".csv", formatName: "CSV")
         };
 
         var selected = WorkbookDropPlanner.SelectOpenableFile(
@@ -31,7 +31,7 @@ public sealed class WorkbookDropPlannerTests
     {
         var selected = WorkbookDropPlanner.SelectOpenableFile(
             [@"C:\Temp\README", @"C:\Temp\notes.pdf"],
-            [new FakeAdapter(extension: ".xlsx", formatName: "XLSX Workbook")]);
+            [new TestFileAdapter(extension: ".xlsx", formatName: "XLSX Workbook")]);
 
         selected.Should().BeNull();
     }
@@ -44,7 +44,7 @@ public sealed class WorkbookDropPlannerTests
                 @"C:\Temp\README",
                 @"C:\Temp\Book.xlsx"
             ],
-            [new FakeAdapter(extension: ".xlsx", formatName: "XLSX Workbook")]);
+            [new TestFileAdapter(extension: ".xlsx", formatName: "XLSX Workbook")]);
 
         selected.Should().Be(@"C:\Temp\Book.xlsx");
     }
@@ -57,7 +57,7 @@ public sealed class WorkbookDropPlannerTests
                 "bad\0path.xlsx",
                 @"C:\Temp\Book.xlsx"
             ],
-            [new FakeAdapter(extension: ".xlsx", formatName: "XLSX Workbook")]);
+            [new TestFileAdapter(extension: ".xlsx", formatName: "XLSX Workbook")]);
 
         selected.Should().Be(@"C:\Temp\Book.xlsx");
     }

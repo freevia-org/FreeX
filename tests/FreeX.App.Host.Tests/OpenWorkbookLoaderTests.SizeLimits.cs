@@ -15,7 +15,7 @@ public sealed partial class OpenWorkbookLoaderTests
         try
         {
             var adapterInvoked = false;
-            var adapter = new FakeAdapter(_ =>
+            var adapter = new TestFileAdapter(_ =>
             {
                 adapterInvoked = true;
                 return new Workbook("Loaded");
@@ -27,7 +27,7 @@ public sealed partial class OpenWorkbookLoaderTests
                 adapter,
                 ".fxjson",
                 new FileFormatDescriptor(".fxjson", "Fake"),
-                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+                new TestProgress<OpenProgressUpdate>(_ => { }));
 
             await act.Should().ThrowAsync<WorkbookTooLargeException>();
             adapterInvoked.Should().BeFalse("the loader must reject oversized files before reading them");
