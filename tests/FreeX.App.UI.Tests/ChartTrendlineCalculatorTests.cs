@@ -34,7 +34,7 @@ public sealed class ChartTrendlineCalculatorTests
     [Fact]
     public void Calculate_MovingAverage_UsesRollingWindowWithoutPerPointLinq()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
         var movingAverage = source[
             source.IndexOf("private static IReadOnlyList<DataPoint> CalculateMovingAverageTrendline", StringComparison.Ordinal)..
@@ -50,7 +50,7 @@ public sealed class ChartTrendlineCalculatorTests
     [Fact]
     public void Calculate_RegressionTrendlines_AggregatePointsInSinglePasses()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
         var regressionBlock = source[
             source.IndexOf("private static IReadOnlyList<DataPoint> CalculateLinearTrendline", StringComparison.Ordinal)..
@@ -67,7 +67,7 @@ public sealed class ChartTrendlineCalculatorTests
     [Fact]
     public void Calculate_PolynomialTrendline_AggregatesLeastSquaresInputsWithoutLinqPasses()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
         var polynomialBlock = source[
             source.IndexOf("private static IReadOnlyList<DataPoint> CalculatePolynomialTrendline", StringComparison.Ordinal)..
@@ -84,7 +84,7 @@ public sealed class ChartTrendlineCalculatorTests
     [Fact]
     public void TryCalculateRSquared_AggregatesMatchesWithoutIntermediateListOrLinqPasses()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
         var rSquaredBlock = source[
             source.IndexOf("public static bool TryCalculateRSquared", StringComparison.Ordinal)..
@@ -108,7 +108,4 @@ public sealed class ChartTrendlineCalculatorTests
         ChartTrendlineCalculator.TryCalculateRSquared(source, trend, out var rSquared).Should().BeTrue();
         rSquared.Should().BeApproximately(1.0, 0.000001);
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }

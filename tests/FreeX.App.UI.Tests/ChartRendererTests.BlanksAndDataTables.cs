@@ -191,7 +191,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void ChartDataTableAnnotations_BuildRowsWithoutListJoinPipelines()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartRenderer.Annotations.cs"));
         var dataTableAnnotations = source[
             source.IndexOf("private static void AddChartDataTableAnnotations", StringComparison.Ordinal)..

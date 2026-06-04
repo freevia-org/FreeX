@@ -83,7 +83,8 @@ public sealed class ChartRendererWaterfallTests
     [Fact]
     public void HistogramRenderer_DelegatesBinningToHistogramBinPlanner()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.FindWithFailureMessage(
+            "Unable to locate workspace file",
             "src", "FreeX.App.UI", "ChartRenderer.WaterfallHistogram.cs"));
         var histogram = source[
             source.IndexOf("internal static PlotModel BuildHistogramModel", StringComparison.Ordinal)..];
@@ -138,7 +139,4 @@ public sealed class ChartRendererWaterfallTests
 
     private static DisplayCell Cell(uint row, uint col, string text) =>
         new(row, col, null, text, null, StyleId.Default, null);
-
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.FindWithFailureMessage("Unable to locate workspace file", relativeParts);
 }

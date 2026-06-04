@@ -113,7 +113,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void AdvancedFamilyRenderers_AvoidLinqAggregateAndOutlierScaffolding()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartRenderer.AdvancedFamilies.cs"));
 
         source.Should().NotContain(".Sum(");
@@ -127,7 +127,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void AdvancedFamilyRenderers_AggregateTotalsWhileCollectingValues()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartRenderer.AdvancedFamilies.cs"));
         var pareto = source[
             source.IndexOf("internal static PlotModel BuildParetoModel", StringComparison.Ordinal)..
@@ -149,7 +149,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void StockRenderer_BuildsDateAxisXValuesWithoutLinqScaffolding()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartRenderer.Stock.cs"));
 
         source.Should().NotContain("Enumerable.Range");
@@ -400,7 +400,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void SurfaceRenderer_AvoidsMinMaxLinqScaffolding()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "ChartRenderer.Surface.cs"));
 
         source.Should().NotContain("surfaceValues.Min(");

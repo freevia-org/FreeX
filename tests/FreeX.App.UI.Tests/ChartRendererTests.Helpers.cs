@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using System.Reflection;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -52,9 +51,6 @@ public sealed partial class ChartRendererTests
 
     private static ChartDataCell ChartCell(SheetId sheetId, uint row, uint col, string text, ScalarValue rawValue) =>
         new(sheetId, row, col, text, rawValue);
-
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 
     private static void RunWithCulture(string cultureName, Action action)
     {
