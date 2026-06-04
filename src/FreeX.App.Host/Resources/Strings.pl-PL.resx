@@ -990,6 +990,9 @@
   <data name="ShapeEffects_Bevel" xml:space="preserve">
     <value>Bevel</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotation" xml:space="preserve">
+    <value>3-D Rotation</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Usuń autorskie efekty kształtu.</value>
   </data>
@@ -1011,11 +1014,14 @@
   <data name="ShapeEffects_BevelDescription" xml:space="preserve">
     <value>Apply a raised bevel edge effect to the selected shape.</value>
   </data>
+  <data name="ShapeEffects_ThreeDRotationDescription" xml:space="preserve">
+    <value>Apply a bounded 3-D rotation cue to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Efekt kształtu</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Opis efektu kształtu</value>
@@ -2978,7 +2984,7 @@ Wysłać raporty o awariach dla tej wersji testowej?</value>
     <value>Siatka arkusza kalkulacyjnego. Użyj klawiszy strzałek do poruszania się po komórkach, F2 do edycji i Tab/Enter, aby przenieść fokus.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>Informacje o FreeX</value>
@@ -6221,7 +6227,7 @@ Wysłać raporty o awariach dla tej wersji testowej?</value>
     <value>Przełącz bieżącą linię trendu wykresu pomiędzy obsługiwanymi typami linii trendu podobnymi do programu Excel.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Przełącz automatyczne lub oparte na danych ograniczenia osi X dla bieżącego wykresu.</value>

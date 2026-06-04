@@ -620,7 +620,73 @@ public partial class GridView
             case DrawingShapeEffectPreset.Reflection:
                 DrawShapeReflectionEffect(dc, kind, rect, colors);
                 break;
+            case DrawingShapeEffectPreset.ThreeDRotation:
+                DrawShapeThreeDRotationEffect(dc, kind, rect, colors);
+                break;
         }
+    }
+
+    private void DrawShapeThreeDRotationEffect(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        DrawingObjectColors colors)
+    {
+        var offsetX = Math.Clamp(rect.Width * 0.14, 4, 10);
+        var offsetY = -Math.Clamp(rect.Height * 0.12, 3, 8);
+        var rearRect = rect;
+        rearRect.Offset(offsetX, offsetY);
+        var pen = GetDrawingObjectPen(130, colors.Outline, 1.25);
+        var faceBrush = GetDrawingObjectBrush(26, colors.Fill);
+
+        switch (kind)
+        {
+            case DrawingShapeKind.Rectangle:
+                DrawPerspectiveFace(dc, faceBrush, pen, rect.TopLeft, rect.TopRight, rearRect.TopRight, rearRect.TopLeft);
+                DrawPerspectiveFace(dc, faceBrush, pen, rect.TopRight, rect.BottomRight, rearRect.BottomRight, rearRect.TopRight);
+                dc.DrawRectangle(null, pen, rearRect);
+                dc.DrawLine(pen, rect.TopLeft, rearRect.TopLeft);
+                dc.DrawLine(pen, rect.BottomRight, rearRect.BottomRight);
+                break;
+            case DrawingShapeKind.Ellipse:
+                dc.DrawEllipse(
+                    null,
+                    pen,
+                    new Point(rearRect.Left + rearRect.Width / 2, rearRect.Top + rearRect.Height / 2),
+                    rearRect.Width / 2,
+                    rearRect.Height / 2);
+                dc.DrawLine(pen, new Point(rect.Right, rect.Top + rect.Height * 0.35), new Point(rearRect.Right, rearRect.Top + rearRect.Height * 0.35));
+                dc.DrawLine(pen, new Point(rect.Right, rect.Top + rect.Height * 0.65), new Point(rearRect.Right, rearRect.Top + rearRect.Height * 0.65));
+                dc.DrawLine(pen, new Point(rect.Left + rect.Width * 0.25, rect.Top), new Point(rearRect.Left + rearRect.Width * 0.25, rearRect.Top));
+                break;
+            case DrawingShapeKind.Line:
+                dc.DrawLine(pen, rearRect.TopLeft, rearRect.BottomRight);
+                dc.DrawLine(pen, rect.TopLeft, rearRect.TopLeft);
+                dc.DrawLine(pen, rect.BottomRight, rearRect.BottomRight);
+                break;
+        }
+    }
+
+    private static void DrawPerspectiveFace(
+        DrawingContext dc,
+        Brush brush,
+        Pen pen,
+        Point first,
+        Point second,
+        Point third,
+        Point fourth)
+    {
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(first, isFilled: true, isClosed: true);
+            context.LineTo(second, isStroked: true, isSmoothJoin: false);
+            context.LineTo(third, isStroked: true, isSmoothJoin: false);
+            context.LineTo(fourth, isStroked: true, isSmoothJoin: false);
+        }
+
+        geometry.Freeze();
+        dc.DrawGeometry(brush, pen, geometry);
     }
 
     private void DrawShapeAuthoredBevelEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
