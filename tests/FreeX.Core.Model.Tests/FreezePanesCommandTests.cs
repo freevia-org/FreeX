@@ -10,7 +10,7 @@ public class FreezePanesCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        return (wb, sheet, new SimpleCtx(wb));
+        return (wb, sheet, new TestCommandContext(wb));
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class FreezePanesCommandTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.FrozenRows = 1;
         sheet.FrozenCols = 2;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetSplitPanesCommand(sheet.Id, splitRow: 5, splitColumn: 3);
 
@@ -79,7 +79,7 @@ public class FreezePanesCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new SetSplitPanesCommand(sheet.Id, 0, CellAddress.MaxCol + 1).Apply(ctx);
 
@@ -88,9 +88,4 @@ public class FreezePanesCommandTests
         sheet.SplitColumn.Should().BeNull();
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
