@@ -312,6 +312,64 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithInternalHyperlinkEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateInternalHyperlinkSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.Hyperlinks[address].Should().Be("Data!B2");
+        sheet.HyperlinkMetadata[address].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump original",
+            "Data!B2"));
+        sheet.Hyperlinks[address] = "Data!C3";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump patched",
+            "Data!C3");
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/styles.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
+        ReadHyperlinksAttribute(savedBytes, "xl/worksheets/sheet1.xml", "nativeHyperlinksAttr")
+            .Should()
+            .Be("kept");
+        ReadHyperlinkAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "location")
+            .Should()
+            .Be("Data!C3");
+        ReadHyperlinkAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "tooltip")
+            .Should()
+            .Be("Jump patched");
+        ReadHyperlinkAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "display")
+            .Should()
+            .Be("Jump display");
+        ReadHyperlinkAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "customAttr")
+            .Should()
+            .Be("kept-link");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        var reloadedAddress = new CellAddress(reloadedSheet.Id, 1, 1);
+        reloadedSheet.Hyperlinks[reloadedAddress].Should().Be("Data!C3");
+        reloadedSheet.HyperlinkMetadata[reloadedAddress].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump patched",
+            "Data!C3"));
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithClearedLiteralCell_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
@@ -565,6 +623,83 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         return stream.ToArray();
     }
 
+    private static byte[] CreateInternalHyperlinkSourcePackage()
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(
+            (
+                "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                </Types>
+                """),
+            (
+                "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Data" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                </workbook>
+                """),
+            (
+                "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+                  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+                  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+                  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+                  <dxfs count="0"/>
+                  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+                </styleSheet>
+                """),
+            (
+                "xl/worksheets/sheet1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <dimension ref="A1:C3"/>
+                  <sheetData>
+                    <row r="1"><c r="A1" t="inlineStr"><is><t>Jump</t></is></c></row>
+                    <row r="2"><c r="B2"><v>1</v></c></row>
+                    <row r="3"><c r="C3"><v>2</v></c></row>
+                  </sheetData>
+                  <hyperlinks nativeHyperlinksAttr="kept">
+                    <hyperlink ref="A1" location="Data!B2" tooltip="Jump original" display="Jump display" customAttr="kept-link"/>
+                  </hyperlinks>
+                </worksheet>
+                """));
+
+        return package.ToArray();
+    }
+
     private static byte[] CreateFormulaSourcePackage(string formulaElement = "<f>1+1</f>")
     {
         using var package = XlsxPackageTestFixtures.CreatePackage(
@@ -802,6 +937,42 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         var document = XDocument.Load(entryStream);
         var ns = document.Root!.Name.Namespace;
         return document.Root.Element(ns + "mergeCells");
+    }
+
+    private static string? ReadHyperlinksAttribute(byte[] packageBytes, string worksheetPath, string attributeName)
+    {
+        var hyperlinks = ReadHyperlinksElement(packageBytes, worksheetPath);
+        return hyperlinks?.Attribute(attributeName)?.Value;
+    }
+
+    private static string? ReadHyperlinkAttribute(
+        byte[] packageBytes,
+        string worksheetPath,
+        string reference,
+        string attributeName)
+    {
+        var hyperlinks = ReadHyperlinksElement(packageBytes, worksheetPath);
+        if (hyperlinks is null)
+            return null;
+
+        var ns = hyperlinks.Name.Namespace;
+        return hyperlinks
+            .Elements(ns + "hyperlink")
+            .SingleOrDefault(element => string.Equals(element.Attribute("ref")?.Value, reference, StringComparison.OrdinalIgnoreCase))
+            ?.Attribute(attributeName)
+            ?.Value;
+    }
+
+    private static XElement? ReadHyperlinksElement(byte[] packageBytes, string worksheetPath)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry(worksheetPath);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        var ns = document.Root!.Name.Namespace;
+        return document.Root.Element(ns + "hyperlinks");
     }
 
     private static string? ReadCellTextSpaceMode(byte[] packageBytes, string worksheetPath, string reference)

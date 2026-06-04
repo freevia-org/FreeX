@@ -989,11 +989,22 @@ public static partial class FlashFillService
         if (tokens.Length < 2)
             return false;
 
-        var suffix = NormalizeKnownNameAffixToken(tokens[^1]);
-        if (!KnownOrganizationSuffixes.Contains(suffix))
+        var endExclusive = tokens.Length;
+        var removedSuffix = false;
+        while (endExclusive > 1)
+        {
+            var suffix = NormalizeKnownNameAffixToken(tokens[endExclusive - 1]);
+            if (!KnownOrganizationSuffixes.Contains(suffix))
+                break;
+
+            endExclusive--;
+            removedSuffix = true;
+        }
+
+        if (!removedSuffix)
             return false;
 
-        var nameTokens = tokens[..^1];
+        var nameTokens = tokens[..endExclusive];
         nameTokens[^1] = nameTokens[^1].TrimEnd(',');
         name = string.Join(' ', nameTokens);
         return name.Length > 0;

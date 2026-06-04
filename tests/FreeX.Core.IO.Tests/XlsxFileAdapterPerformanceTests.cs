@@ -365,6 +365,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("GetModelFingerprint(workbook, currentModelFingerprint)");
         snapshotSource.Should().Contain("patchedPackage.TryGetBuffer");
         snapshotSource.Should().Contain("mergeRegionChanges,");
+        snapshotSource.Should().Contain("hyperlinkChanges,");
         snapshotSource.Should().Contain("patchedModelFingerprint)))");
     }
 
