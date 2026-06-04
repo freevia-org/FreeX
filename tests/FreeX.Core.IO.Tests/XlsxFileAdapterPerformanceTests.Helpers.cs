@@ -712,18 +712,5 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             extension.Equals(".xltm", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string FindRepoFile(params string[] relativeParts)
-    {
-        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            dir = dir.Parent;
-        }
-
-        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
-    }
+    private static string FindRepoFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }

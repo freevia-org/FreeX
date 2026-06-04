@@ -165,18 +165,6 @@ public sealed class ChartDataLabelFormatterTests
             .Should().Be($"Share{Environment.NewLine}{{1}}{Environment.NewLine}{{2:0%}}");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var current = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(current))
-        {
-            var candidate = Path.Combine(new[] { current }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            current = Directory.GetParent(current)?.FullName ?? string.Empty;
-        }
-
-        throw new FileNotFoundException("Unable to locate workspace file", Path.Combine(relativeParts));
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.FindWithFailureMessage("Unable to locate workspace file", relativeParts);
 }

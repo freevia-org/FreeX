@@ -38,18 +38,5 @@ public sealed class XlsxWorksheetNativeMetadataWriterPerformanceTests
             "additional worksheet view saving should avoid LINQ projection/filter iterators while serializing views");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var current = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (current is not null)
-        {
-            var candidate = Path.Combine(new[] { current.FullName }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            current = current.Parent;
-        }
-
-        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }

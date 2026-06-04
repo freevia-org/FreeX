@@ -74,22 +74,5 @@ public partial class XlsxFeatureInspectorTests
             .ToString(SaveOptions.DisableFormatting);
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var pathParts = new string[parts.Length + 1];
-            pathParts[0] = directory.FullName;
-            Array.Copy(parts, 0, pathParts, 1, parts.Length);
-
-            var candidate = Path.Combine(pathParts);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, parts));
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }
