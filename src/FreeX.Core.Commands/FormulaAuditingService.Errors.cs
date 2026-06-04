@@ -922,9 +922,56 @@ public static partial class FormulaAuditingService
                 range = NormalizeRange(resolvedRange.Start, resolvedRange.End);
                 return true;
 
+            case StructuredReferenceNode structured:
+                if (StructuredReferenceResolver.ResolveDataBodyColumn(
+                        workbook,
+                        workbook.GetSheet(sheetId),
+                        structured.TableName,
+                        structured.ColumnName) is not { } structuredRange ||
+                    structuredRange.Start.Sheet != sheetId ||
+                    structuredRange.End.Sheet != sheetId)
+                {
+                    return false;
+                }
+
+                range = ExpandStructuredDataBodyRangeToHeader(workbook, sheetId, structuredRange);
+                return true;
+
             default:
                 return false;
         }
+    }
+
+    private static GridRange ExpandStructuredDataBodyRangeToHeader(
+        Workbook workbook,
+        SheetId sheetId,
+        GridRange range)
+    {
+        var normalizedRange = NormalizeRange(range.Start, range.End);
+        var sheet = workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return normalizedRange;
+
+        foreach (var table in sheet.StructuredTables)
+        {
+            var dataBodyStartRow = table.Range.Start.Row + 1;
+            var dataBodyEndRow = table.TotalsRowShown && table.Range.End.Row > dataBodyStartRow
+                ? table.Range.End.Row - 1
+                : table.Range.End.Row;
+            if (normalizedRange.Start.Row != dataBodyStartRow ||
+                normalizedRange.End.Row > dataBodyEndRow ||
+                normalizedRange.Start.Col < table.Range.Start.Col ||
+                normalizedRange.End.Col > table.Range.End.Col)
+            {
+                continue;
+            }
+
+            return new GridRange(
+                new CellAddress(sheetId, table.Range.Start.Row, normalizedRange.Start.Col),
+                normalizedRange.End);
+        }
+
+        return normalizedRange;
     }
 
     private static bool TryResolveCurrentSheetReference(

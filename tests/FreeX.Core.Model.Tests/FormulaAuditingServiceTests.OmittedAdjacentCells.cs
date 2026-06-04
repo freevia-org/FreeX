@@ -136,6 +136,58 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsForSameSheetStructuredAggregateColumn()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        AddSingleColumnStructuredTable(sheet, "Table1", "Sales", 1, 1, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), Cell.FromFormula("SUM(Table1[Sales])"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode).Subject;
+
+        issue.Cell.Should().Be("A5");
+        issue.FormulaText.Should().Be("=SUM(Table1[Sales])");
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_DoesNotFlagStructuredAggregateColumnWhenDataBodyIncludesAdjacentValues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        AddSingleColumnStructuredTable(sheet, "Table1", "Sales", 1, 1, 4);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), Cell.FromFormula("SUM(Table1[Sales])"));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_DoesNotTreatOtherSheetStructuredAggregateColumnAsOmittedAdjacentCurrentSheetRange()
+    {
+        var wb = new Workbook("test");
+        var current = wb.AddSheet("Current");
+        var other = wb.AddSheet("Other");
+        AddSingleColumnStructuredTable(other, "Table1", "Sales", 1, 1, 3);
+        other.SetCell(new CellAddress(other.Id, 1, 1), new TextValue("Sales"));
+        other.SetCell(new CellAddress(other.Id, 2, 1), new NumberValue(10));
+        other.SetCell(new CellAddress(other.Id, 3, 1), new NumberValue(20));
+        other.SetCell(new CellAddress(other.Id, 4, 1), new NumberValue(30));
+        current.SetCell(new CellAddress(current.Id, 5, 1), Cell.FromFormula("SUM(Table1[Sales])"));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, current.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_DoesNotTreatOtherSheetNamedAggregateRangeAsOmittedAdjacentCurrentSheetRange()
     {
         var wb = new Workbook("test");
@@ -274,5 +326,27 @@ public sealed partial class FormulaAuditingServiceTests
 
         FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
             .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+    }
+
+    private static void AddSingleColumnStructuredTable(
+        Sheet sheet,
+        string tableName,
+        string columnName,
+        uint startRow,
+        uint col,
+        uint endRow)
+    {
+        var table = new StructuredTableModel
+        {
+            Id = sheet.StructuredTables.Count + 1,
+            Name = tableName,
+            DisplayName = tableName,
+            Range = new GridRange(
+                new CellAddress(sheet.Id, startRow, col),
+                new CellAddress(sheet.Id, endRow, col)),
+            HeaderRowCount = 1
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, columnName));
+        sheet.StructuredTables.Add(table);
     }
 }
