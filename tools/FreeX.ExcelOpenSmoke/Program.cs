@@ -96,6 +96,8 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
     private const string StylesContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+    private const string StylesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
     private const string WorkbookRelationshipPart = "xl/_rels/workbook.xml.rels";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
@@ -350,6 +352,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -541,6 +544,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
@@ -686,7 +690,7 @@ internal static class ExcelOpenSmoke
                 archive,
                 new PackageRelationshipExpectation(
                     WorkbookRelationshipPart,
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles",
+                    StylesRelationshipType,
                     "xl/styles.xml")))
         {
             issues.Add("missing workbook relationship to xl/styles.xml for public styles/formatting tag");
@@ -2052,6 +2056,159 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid shared-string package graph: {sample}{suffix}");
+    }
+
+    private static void AssertStylesPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var styleReferences = FindStyleReferences(archive);
+        var stylesEntry = FindPackageEntry(archive, "xl/styles.xml");
+        if (styleReferences.Count == 0 && stylesEntry is null)
+            return;
+
+        var issues = new List<string>();
+        if (stylesEntry is null)
+        {
+            issues.Add("missing xl/styles.xml for style references");
+            ThrowInvalidStylesPackage(label, sourcePath, issues);
+            return;
+        }
+
+        if (!PackageRelationshipExists(
+                archive,
+                new PackageRelationshipExpectation(
+                    WorkbookRelationshipPart,
+                    StylesRelationshipType,
+                    "xl/styles.xml")))
+        {
+            issues.Add("missing workbook relationship to xl/styles.xml");
+        }
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, "xl/styles.xml", StylesContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var stylesXml = LoadPackageXml(stylesEntry);
+        if (stylesXml.Root?.Name != SpreadsheetNs + "styleSheet")
+        {
+            issues.Add("xl/styles.xml has an invalid stylesheet root element");
+            ThrowInvalidStylesPackage(label, sourcePath, issues);
+            return;
+        }
+
+        var cellXfs = stylesXml.Root.Element(SpreadsheetNs + "cellXfs");
+        var cellFormatCount = cellXfs?.Elements(SpreadsheetNs + "xf").Count() ?? 0;
+        if (cellFormatCount == 0)
+            issues.Add("xl/styles.xml has no cellXfs xf entries");
+
+        AddStyleCountAttributeIssues(issues, "cellXfs", cellXfs, cellFormatCount);
+        foreach (var styleReference in styleReferences)
+        {
+            if (string.IsNullOrWhiteSpace(styleReference.ValueText))
+            {
+                issues.Add($"{styleReference.WorksheetPart} {styleReference.Description} has no style index");
+                continue;
+            }
+
+            if (!int.TryParse(styleReference.ValueText, NumberStyles.None, CultureInfo.InvariantCulture, out var styleIndex))
+            {
+                issues.Add($"{styleReference.WorksheetPart} {styleReference.Description} has invalid style index '{styleReference.ValueText}'");
+                continue;
+            }
+
+            if (styleIndex < 0 || styleIndex >= cellFormatCount)
+            {
+                issues.Add(
+                    $"{styleReference.WorksheetPart} {styleReference.Description} references style index {styleIndex}, but xl/styles.xml cellXfs contains {cellFormatCount} entries");
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidStylesPackage(label, sourcePath, issues);
+    }
+
+    private static List<StyleReference> FindStyleReferences(ZipArchive archive)
+    {
+        var styleReferences = new List<StyleReference>();
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            foreach (var cell in worksheetXml.Descendants(SpreadsheetNs + "c"))
+            {
+                var styleIndex = cell.Attribute("s")?.Value;
+                if (styleIndex is not null)
+                {
+                    styleReferences.Add(new StyleReference(
+                        worksheetPart,
+                        $"cell {cell.Attribute("r")?.Value ?? "(unknown ref)"}",
+                        styleIndex));
+                }
+            }
+
+            foreach (var row in worksheetXml.Descendants(SpreadsheetNs + "row"))
+            {
+                var styleIndex = row.Attribute("s")?.Value;
+                if (styleIndex is not null)
+                {
+                    styleReferences.Add(new StyleReference(
+                        worksheetPart,
+                        $"row {row.Attribute("r")?.Value ?? "(unknown row)"}",
+                        styleIndex));
+                }
+            }
+
+            foreach (var column in worksheetXml.Descendants(SpreadsheetNs + "col"))
+            {
+                var styleIndex = column.Attribute("style")?.Value;
+                if (styleIndex is not null)
+                {
+                    var min = column.Attribute("min")?.Value ?? "?";
+                    var max = column.Attribute("max")?.Value ?? "?";
+                    styleReferences.Add(new StyleReference(
+                        worksheetPart,
+                        $"column span {min}:{max}",
+                        styleIndex));
+                }
+            }
+        }
+
+        return styleReferences;
+    }
+
+    private static void AddStyleCountAttributeIssues(
+        List<string> issues,
+        string elementName,
+        XElement? element,
+        int actualCount)
+    {
+        var countText = element?.Attribute("count")?.Value;
+        if (string.IsNullOrWhiteSpace(countText))
+            return;
+
+        if (!int.TryParse(countText, NumberStyles.None, CultureInfo.InvariantCulture, out var declaredCount))
+        {
+            issues.Add($"xl/styles.xml {elementName} has invalid count '{countText}'");
+            return;
+        }
+
+        if (declaredCount != actualCount)
+            issues.Add($"xl/styles.xml {elementName} count is {declaredCount}, but contains {actualCount} child entries");
+    }
+
+    private static void ThrowInvalidStylesPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid styles package graph: {sample}{suffix}");
     }
 
     private static void AssertPackageRelationshipsComplete(string xlsxPath, string label, string sourcePath)
@@ -6305,5 +6462,10 @@ internal static class ExcelOpenSmoke
     private sealed record SharedStringCellReference(
         string WorksheetPart,
         string CellReference,
+        string? ValueText);
+
+    private sealed record StyleReference(
+        string WorksheetPart,
+        string Description,
         string? ValueText);
 }
