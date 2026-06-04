@@ -356,6 +356,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversFinanceSpreadsheetMisspellings()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Liabilty recievable payrole quaterly deductable ammortize AMMORTIZATION depreciaton consolodated reconcilliation benifit forcasted."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Liabilty", "Liability"),
+            ("recievable", "receivable"),
+            ("payrole", "payroll"),
+            ("quaterly", "quarterly"),
+            ("deductable", "deductible"),
+            ("ammortize", "amortize"),
+            ("AMMORTIZATION", "AMORTIZATION"),
+            ("depreciaton", "depreciation"),
+            ("consolodated", "consolidated"),
+            ("reconcilliation", "reconciliation"),
+            ("benifit", "benefit"),
+            ("forcasted", "forecasted"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Liability receivable payroll quarterly deductible amortize AMORTIZATION depreciation consolidated reconciliation benefit forecasted.");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");

@@ -3633,6 +3633,21 @@ internal static class ExcelOpenSmoke
                     new(
                         "xl/slicerCaches/slicerCache1.xml",
                         "application/vnd.ms-excel.slicerCache+xml")
+                ],
+                RequiredExcelSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.microsoft.com/office/2007/relationships/slicerCache",
+                        "xl/slicerCaches/slicerCache1.xml"),
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+                        "xl/drawings/drawing1.xml"),
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.microsoft.com/office/2007/relationships/slicer",
+                        "xl/slicers/slicer1.xml")
                 ]
             };
         }
