@@ -64,6 +64,8 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace SpreadsheetNs =
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
     public static int Run(string[] args)
     {
@@ -303,6 +305,12 @@ internal static class ExcelOpenSmoke
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
+                AssertPublicPackageTagExpectations(
+                    freeXSave.SavedPath,
+                    input.CorpusRow,
+                    "FreeX-saved workbook",
+                    input.SourcePath,
+                    allowExcelNormalization: false);
                 sourceForExcel = freeXSave.SavedPath;
                 freeXSavedPath = freeXSave.SavedPath;
                 freeXPreSave = freeXSave.Summary;
@@ -328,7 +336,12 @@ internal static class ExcelOpenSmoke
             }
 
             var excelSavedPath = CreateDerivedOutputPath(excelSavedDirectory, stagedPath, "excel-saved");
-            var saveReopenResult = OpenSaveCloseReopenWorkbook(workbooks, stagedPath, excelSavedPath, input.Expectations);
+            var saveReopenResult = OpenSaveCloseReopenWorkbook(
+                workbooks,
+                stagedPath,
+                excelSavedPath,
+                input.Expectations,
+                input.CorpusRow);
             var freeXReopenedExcelSave = LoadWorkbookSummary(saveReopenResult.ExcelSavedPath);
             AssertFreeXLoadWarnings(input, "FreeX reopened Excel save", freeXReopenedExcelSave.Warnings);
             AssertSmokeExpectations(input, freeXPreSave, saveReopenResult.Opened, saveReopenResult.Reopened, freeXReopenedExcelSave.Summary);
@@ -419,7 +432,8 @@ internal static class ExcelOpenSmoke
         dynamic workbooks,
         string stagedPath,
         string excelSavedPath,
-        WorkbookSmokeExpectations? expectations)
+        WorkbookSmokeExpectations? expectations,
+        CorpusManifestRow? corpusRow)
     {
         object? workbook = null;
         object? reopenedWorkbook = null;
@@ -479,6 +493,12 @@ internal static class ExcelOpenSmoke
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
+            AssertPublicPackageTagExpectations(
+                excelSavedPath,
+                corpusRow,
+                "Excel-saved workbook",
+                stagedPath,
+                allowExcelNormalization: true);
 
             reopenedWorkbook = OpenExcelWorkbook(workbooks, excelSavedPath, readOnly: true);
             ExcelWorkbookSummary reopened;
@@ -579,6 +599,147 @@ internal static class ExcelOpenSmoke
             throw new InvalidDataException(
                 $"{label} for '{sourcePath}' contains repair/recovery log parts: {string.Join(", ", recoveryLogs)}");
         }
+    }
+
+    private static void AssertPublicPackageTagExpectations(
+        string xlsxPath,
+        CorpusManifestRow? row,
+        string label,
+        string sourcePath,
+        bool allowExcelNormalization)
+    {
+        if (row is null ||
+            !string.Equals(row.SourceType, "public", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var tags = row.FeatureTags
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!HasExpectedPublicPackageTags(tags))
+            return;
+
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var worksheetXmlDocuments = LoadPublicWorksheetXmlDocuments(archive);
+        var issues = new List<string>();
+
+        if ((tags.Contains("styles") || tags.Contains("formatting")) &&
+            !PackageEntryExists(archive, "xl/styles.xml"))
+        {
+            issues.Add("missing xl/styles.xml for public styles/formatting tag");
+        }
+
+        if (tags.Contains("hyperlinks") &&
+            !PublicWorksheetElements(worksheetXmlDocuments, "hyperlink").Any())
+        {
+            issues.Add("missing worksheet hyperlink elements for public hyperlinks tag");
+        }
+
+        if (tags.Contains("merged-cells") &&
+            !PublicWorksheetElements(worksheetXmlDocuments, "mergeCell").Any())
+        {
+            issues.Add("missing worksheet mergeCell elements for public merged-cells tag");
+        }
+
+        if (!allowExcelNormalization &&
+            tags.Contains("inline-strings") &&
+            !PublicWorksheetCells(worksheetXmlDocuments).Any(IsInlineStringCell))
+        {
+            issues.Add("missing inline-string cells for public inline-strings tag");
+        }
+
+        if (tags.Contains("cell-types"))
+        {
+            var distinctCellTypes = PublicWorksheetCells(worksheetXmlDocuments)
+                .Select(cell => cell.Attribute("t")?.Value ?? "n")
+                .Distinct(StringComparer.Ordinal)
+                .Count();
+            if (distinctCellTypes < 3)
+                issues.Add($"expected at least 3 worksheet cell types for public cell-types tag, observed {distinctCellTypes}");
+        }
+
+        if (tags.Contains("sheet-names") &&
+            tags.Contains("boundary") &&
+            !PublicWorkbookSheetNames(archive).Any(name => name.Length == 31))
+        {
+            issues.Add("missing 31-character workbook sheet name for public sheet-names boundary tags");
+        }
+
+        if (tags.Contains("unsupported-sheet-types") &&
+            !archive.Entries.Any(entry =>
+                NormalizePackagePart(entry.FullName).StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase)))
+        {
+            issues.Add("missing chartsheet package parts for public unsupported-sheet-types tag");
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' failed public package-tag assertions for corpus row '{row.Id}': {string.Join("; ", issues)}");
+    }
+
+    private static bool HasExpectedPublicPackageTags(IReadOnlySet<string> tags) =>
+        tags.Contains("styles") ||
+        tags.Contains("formatting") ||
+        tags.Contains("hyperlinks") ||
+        tags.Contains("merged-cells") ||
+        tags.Contains("inline-strings") ||
+        tags.Contains("cell-types") ||
+        (tags.Contains("sheet-names") && tags.Contains("boundary")) ||
+        tags.Contains("unsupported-sheet-types");
+
+    private static IReadOnlyList<XDocument> LoadPublicWorksheetXmlDocuments(ZipArchive archive)
+    {
+        var documents = new List<XDocument>();
+        foreach (var entry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            documents.Add(LoadPackageXml(entry));
+        }
+
+        return documents;
+    }
+
+    private static IEnumerable<XElement> PublicWorksheetElements(
+        IReadOnlyList<XDocument> worksheetXmlDocuments,
+        string localName) =>
+        worksheetXmlDocuments.SelectMany(document => document.Descendants(SpreadsheetNs + localName));
+
+    private static IEnumerable<XElement> PublicWorksheetCells(IReadOnlyList<XDocument> worksheetXmlDocuments) =>
+        PublicWorksheetElements(worksheetXmlDocuments, "c");
+
+    private static bool IsInlineStringCell(XElement cell) =>
+        string.Equals(cell.Attribute("t")?.Value, "inlineStr", StringComparison.Ordinal) ||
+        cell.Element(SpreadsheetNs + "is") is not null;
+
+    private static IReadOnlyList<string> PublicWorkbookSheetNames(ZipArchive archive)
+    {
+        var workbookEntry = archive.Entries.FirstOrDefault(entry =>
+            string.Equals(NormalizePackagePart(entry.FullName), "xl/workbook.xml", StringComparison.OrdinalIgnoreCase));
+        if (workbookEntry is null)
+            return [];
+
+        return LoadPackageXml(workbookEntry)
+            .Descendants(SpreadsheetNs + "sheet")
+            .Select(sheet => sheet.Attribute("name")?.Value ?? string.Empty)
+            .Where(name => name.Length > 0)
+            .ToArray();
+    }
+
+    private static bool PackageEntryExists(ZipArchive archive, string packagePart) =>
+        archive.Entries.Any(entry =>
+            string.Equals(
+                NormalizePackagePart(entry.FullName),
+                NormalizePackagePart(packagePart),
+                StringComparison.OrdinalIgnoreCase));
+
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
     }
 
     private static void AssertRequiredExcelSavedPackageParts(
