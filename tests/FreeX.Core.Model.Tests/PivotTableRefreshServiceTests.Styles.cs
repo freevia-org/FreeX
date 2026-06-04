@@ -393,6 +393,48 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Theory]
+    [InlineData("PivotStyleMedium3", WorkbookThemeColorSlot.Accent3)]
+    [InlineData("PivotStyleMedium11", WorkbookThemeColorSlot.Accent3)]
+    [InlineData("PivotStyleMedium5", WorkbookThemeColorSlot.Accent4)]
+    [InlineData("PivotStyleMedium12", WorkbookThemeColorSlot.Accent4)]
+    [InlineData("PivotStyleMedium6", WorkbookThemeColorSlot.Accent5)]
+    [InlineData("PivotStyleMedium13", WorkbookThemeColorSlot.Accent5)]
+    [InlineData("PivotStyleMedium7", WorkbookThemeColorSlot.Accent6)]
+    [InlineData("pivotstylemedium14", WorkbookThemeColorSlot.Accent6)]
+    public void Refresh_ResolvesAdditionalMediumPivotStylesFromWorkbookTheme(
+        string styleName,
+        WorkbookThemeColorSlot expectedSlot)
+    {
+        var theme = CreateDistinctPivotStyleTheme();
+        var workbook = new Workbook("PivotStyleAdditionalMediumThemeRenderTest")
+        {
+            Theme = theme
+        };
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = styleName,
+            ShowRowStripes = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
+            .FillColor.Should().Be(theme.ResolveColor(expectedSlot));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
+            .FillColor.Should().Be(theme.ResolveColor(expectedSlot, 0.9));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
+            .FillColor.Should().Be(theme.ResolveColor(expectedSlot, 0.7));
+    }
+
+    [Theory]
     [InlineData("PivotStyleLight16", WorkbookThemeColorSlot.Accent1)]
     [InlineData("PivotStyleLight17", WorkbookThemeColorSlot.Accent2)]
     [InlineData("PivotStyleLight18", WorkbookThemeColorSlot.Accent3)]
@@ -466,5 +508,14 @@ public sealed partial class PivotTableRefreshServiceTests
         bodyHeaderStyle.Bold.Should().BeTrue();
         bodyHeaderStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
     }
+
+    private static WorkbookTheme CreateDistinctPivotStyleTheme() =>
+        WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 80, 120))
+            .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(120, 40, 20))
+            .WithColor(WorkbookThemeColorSlot.Accent3, new CellColor(25, 130, 60))
+            .WithColor(WorkbookThemeColorSlot.Accent4, new CellColor(40, 90, 180))
+            .WithColor(WorkbookThemeColorSlot.Accent5, new CellColor(150, 45, 140))
+            .WithColor(WorkbookThemeColorSlot.Accent6, new CellColor(80, 145, 35));
 
 }

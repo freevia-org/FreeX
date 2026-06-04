@@ -57,6 +57,39 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedUnchangedWorkbook_ReportsSourceCopyDiagnostics()
+    {
+        var sourceBytes = CreateSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourceCopy);
+        adapter.LastSaveDiagnostics.PathLabel.Should().Be("source_copy");
+        adapter.LastSaveDiagnostics.Reason.Should().Be("model_unchanged");
+    }
+
+    [Fact]
+    public void Save_NewWorkbook_ReportsNoSourcePackageFullSaveDiagnostics()
+    {
+        var adapter = new XlsxFileAdapter();
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("new"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.PathLabel.Should().Be("full_save");
+        adapter.LastSaveDiagnostics.Reason.Should().Be("no_source_package");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithNewLiteralCellEdit_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
@@ -72,6 +105,11 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         adapter.Save(workbook, saved);
         var savedBytes = saved.ToArray();
 
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.PathLabel.Should().Be("source_patch");
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        adapter.LastSaveDiagnostics.TotalPatchChangeCount.Should().Be(1);
         ReadPackageEntry(savedBytes, "xl/workbook.xml")
             .Should()
             .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
@@ -197,6 +235,9 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         adapter.Save(workbook, saved);
         var savedBytes = saved.ToArray();
 
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.PathLabel.Should().Be("full_save");
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_new_style");
         ReadPackageEntry(savedBytes, "xl/styles.xml")
             .Should()
             .NotEqual(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
