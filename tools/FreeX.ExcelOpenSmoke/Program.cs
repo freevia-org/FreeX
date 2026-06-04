@@ -1784,6 +1784,12 @@ internal static class ExcelOpenSmoke
                 continue;
             }
 
+            foreach (var element in relationshipsXml.Root.Elements())
+            {
+                if (element.Name != PackageRelationshipNs + "Relationship")
+                    issues.Add($"{relationshipPart} has unexpected child element '{element.Name}'");
+            }
+
             var relationships = relationshipsXml.Root
                 .Elements(PackageRelationshipNs + "Relationship")
                 .ToArray();
@@ -1828,9 +1834,17 @@ internal static class ExcelOpenSmoke
         List<string> issues)
     {
         var id = relationship.Attribute("Id")?.Value;
+        var relationshipLabel = $"{relationshipPart} Relationship {FormatRelationshipIssueId(id)}";
+        if (relationship.Elements().Any())
+            issues.Add($"{relationshipLabel} must not contain child elements");
+
         if (string.IsNullOrWhiteSpace(id))
         {
             issues.Add($"{relationshipPart} has a Relationship without Id");
+        }
+        else if (!string.Equals(id, id.Trim(), StringComparison.Ordinal))
+        {
+            issues.Add($"{relationshipPart} Relationship Id '{id}' has leading or trailing whitespace");
         }
         else if (!ids.Add(id))
         {
@@ -1842,6 +1856,17 @@ internal static class ExcelOpenSmoke
         {
             issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has no Type");
         }
+        else
+        {
+            if (!string.Equals(type, type.Trim(), StringComparison.Ordinal))
+                issues.Add($"{relationshipLabel} Type has leading or trailing whitespace");
+
+            if (!Uri.TryCreate(type.Trim(), UriKind.Absolute, out var typeUri) ||
+                string.IsNullOrWhiteSpace(typeUri.Scheme))
+            {
+                issues.Add($"{relationshipLabel} Type '{type}' is not an absolute URI");
+            }
+        }
 
         var target = relationship.Attribute("Target")?.Value;
         if (string.IsNullOrWhiteSpace(target))
@@ -1850,7 +1875,18 @@ internal static class ExcelOpenSmoke
             return;
         }
 
+        if (!string.Equals(target, target.Trim(), StringComparison.Ordinal))
+            issues.Add($"{relationshipLabel} Target has leading or trailing whitespace");
+        target = target.Trim();
+
         var targetMode = relationship.Attribute("TargetMode")?.Value;
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, targetMode.Trim(), StringComparison.Ordinal))
+        {
+            issues.Add($"{relationshipLabel} TargetMode has leading or trailing whitespace");
+        }
+
+        targetMode = targetMode?.Trim();
         if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -1860,6 +1896,9 @@ internal static class ExcelOpenSmoke
             issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has invalid TargetMode {targetMode}");
             return;
         }
+
+        if (target.IndexOf('\\') >= 0)
+            issues.Add($"{relationshipLabel} Target uses backslashes instead of package URI separators");
 
         if (IsAbsoluteRelationshipTarget(target))
         {
