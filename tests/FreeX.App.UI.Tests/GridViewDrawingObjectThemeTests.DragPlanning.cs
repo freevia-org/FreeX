@@ -12,7 +12,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void ObjectSelectionHandles_DrawWithoutMaterializingRectArray()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
         var drawHandles = source[
             source.IndexOf("internal void DrawObjectSelectionHandles", StringComparison.Ordinal)..
             source.IndexOf("private ObjectDragKind HitTestObjectHandle", StringComparison.Ordinal)];
@@ -87,7 +87,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
                 GridObjectDragPlanner.MinimumObjectSize,
                 GridObjectDragPlanner.MinimumObjectSize));
 
-        var inputSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Input.cs"));
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Input.cs"));
         var mouseUpStart = inputSource.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
         mouseUpStart.Should().BeGreaterThanOrEqualTo(0);
         var mouseUpObjectCommit = inputSource[
@@ -224,7 +224,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void GridObjectDragPlanner_StopsAnchorHitScansOnceSortedMetricsPassPointer()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridObjectDragPlanner.cs"));
         var anchorHitTest = source[
             source.IndexOf("public static CellAddress? HitTestAnchorCell", StringComparison.Ordinal)..];
@@ -245,8 +245,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void GridViewObjectDrag_DelegatesGeometryToPlanner()
     {
-        var inputSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Input.cs"));
-        var dragSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
+        var inputSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Input.cs"));
+        var dragSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
 
         inputSource.Should().Contain("GridObjectDragPlanner.CalculateDragRect(");
         inputSource.Should().Contain("_objectDragStartAnchor = GetSelectedObjectAnchor() ?? HitTestAnchorCell(pos) ?? default;");

@@ -114,6 +114,12 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("'(42 $)")]
     [InlineData("(-42 \u00A3)")]
     [InlineData("(- 42 \u20AC)")]
+    [InlineData("\u20B142")]
+    [InlineData("- \u20AB1,234.50")]
+    [InlineData("42 \u20A6")]
+    [InlineData("\u20B425%")]
+    [InlineData("(- 42 \u20B8)")]
+    [InlineData("'(42 \u20A1)")]
     public void FindFormulaErrorIssues_ReturnsCurrencyNumbersStoredAsText(string value)
     {
         var wb = new Workbook("test");
@@ -139,6 +145,12 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\u0E3F")]
     [InlineData("\u20BD")]
     [InlineData("\u20BA")]
+    [InlineData("\u20B1")]
+    [InlineData("\u20AB")]
+    [InlineData("\u20A6")]
+    [InlineData("\u20B4")]
+    [InlineData("\u20B8")]
+    [InlineData("\u20A1")]
     [InlineData("'$")]
     [InlineData("'\u00A5")]
     [InlineData("-$")]
@@ -169,6 +181,9 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\u20B9\u20A942")]
     [InlineData("\u20AA42\u0E3F")]
     [InlineData("42 \u20BD \u20BA")]
+    [InlineData("\u20B1\u20AB42")]
+    [InlineData("\u20B842\u20A1")]
+    [InlineData("42 \u20A6 \u20B4")]
     [InlineData("42$\u20AC")]
     [InlineData("42\u00A5\uFFE5")]
     [InlineData("42 $ $")]
@@ -198,6 +213,9 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("-42-$")]
     [InlineData("+$+42")]
     [InlineData("+ $+42")]
+    [InlineData("\u20B1PHP 42")]
+    [InlineData("VND \u20AB42")]
+    [InlineData("42 NGN \u20A6")]
     public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidCurrencyText(string value)
     {
         var wb = new Workbook("test");

@@ -778,6 +778,57 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversInvoiceSupplyChainVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Custmer CUSTMR customr vendro ORDR odrer invoce invioce Recipt PAYMNT payemnt paymetn shipmnt shippment delivry QUANITY quantiy purchse purcahse. Keep customer, vendor, order, invoice, receipt, payment, shipment, delivery, quantity, purchase, precustmer, custmer_id, https://custmer.example.com/invoce, buyer@vendro.example.com, and \"C:\\paymnt folder\\shippment file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "invoce INVOCE Invoce https://invoce.example.com/invoce buyer@invoce.example.com invoce_id preinvoce \"C:\\invoce folder\\invoce file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "invoice");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Custmer", "Customer"),
+            ("CUSTMR", "CUSTOMER"),
+            ("customr", "customer"),
+            ("vendro", "vendor"),
+            ("ORDR", "ORDER"),
+            ("odrer", "order"),
+            ("invoce", "invoice"),
+            ("invioce", "invoice"),
+            ("Recipt", "Receipt"),
+            ("PAYMNT", "PAYMENT"),
+            ("payemnt", "payment"),
+            ("paymetn", "payment"),
+            ("shipmnt", "shipment"),
+            ("shippment", "shipment"),
+            ("delivry", "delivery"),
+            ("QUANITY", "QUANTITY"),
+            ("quantiy", "quantity"),
+            ("purchse", "purchase"),
+            ("purcahse", "purchase"));
+        plan.IssueCount.Should().Be(19);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Customer CUSTOMER customer vendor ORDER order invoice invoice Receipt PAYMENT payment payment shipment shipment delivery QUANTITY quantity purchase purchase. Keep customer, vendor, order, invoice, receipt, payment, shipment, delivery, quantity, purchase, precustmer, custmer_id, https://custmer.example.com/invoce, buyer@vendro.example.com, and \"C:\\paymnt folder\\shippment file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(19);
+        replaceAllCorrected.Should().Be(
+            "invoice INVOICE Invoice https://invoce.example.com/invoce buyer@invoce.example.com invoce_id preinvoce \"C:\\invoce folder\\invoce file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");

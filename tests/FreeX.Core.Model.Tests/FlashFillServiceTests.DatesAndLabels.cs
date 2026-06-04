@@ -27,6 +27,56 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_DateLikeComponents_ExtractsMonthTokenFromMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [("Jan 5, 2024", "Jan"), ("5th February 2023", "February")],
+            ["2022 Mar 7th", "APR 8th, 2021", "9 sept 2020"]);
+
+        result.Should().BeEquivalentTo(["Mar", "APR", "sept"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ExtractsOrdinalDayFromMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [("Jan 5th, 2024", "5"), ("21st February 2023", "21")],
+            ["2022 Mar 7th", "April 22nd, 2021", "11th May 2020"]);
+
+        result.Should().BeEquivalentTo(["7", "22", "11"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ExtractsYearFromMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [("Jan 5, 2024", "2024"), ("5th February 2023", "2023")],
+            ["2022 Mar 7th", "April 22nd, 2021", "11th May 2020"]);
+
+        result.Should().BeEquivalentTo(["2022", "2021", "2020"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ReturnsNullWhenMonthNameRemainingIsInvalidDate()
+    {
+        var result = FlashFillService.Fill(
+            [("Jan 5th, 2024", "5"), ("Feb 9th, 2023", "9")],
+            ["February 30th, 2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ReturnsNullWhenMonthNameExamplesSelectDifferentComponents()
+    {
+        var result = FlashFillService.Fill(
+            [("Jan 5, 2024", "Jan"), ("Feb 9, 2023", "9")],
+            ["Mar 7, 2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_DateNormalization_FormatsMixedSeparatorsWithPadding()
     {
         var result = FlashFillService.Fill(

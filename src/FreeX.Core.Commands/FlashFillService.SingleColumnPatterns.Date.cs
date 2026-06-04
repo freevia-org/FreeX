@@ -6,6 +6,12 @@ public static partial class FlashFillService
 {
     private static Func<string, string?>? TryDateComponentExtraction(IReadOnlyList<(string Source, string Expected)> examples)
     {
+        return TryNumericDateComponentExtraction(examples)
+            ?? TryMonthNameDateComponentExtraction(examples);
+    }
+
+    private static Func<string, string?>? TryNumericDateComponentExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
         int? partIndex = null;
 
         foreach (var (source, expected) in examples)
@@ -35,6 +41,44 @@ public static partial class FlashFillService
         var idx = partIndex.Value;
         return source => TrySplitDateLikeComponents(source, out var components)
             ? components[idx]
+            : null;
+    }
+
+    private static Func<string, string?>? TryMonthNameDateComponentExtraction(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        DatePartKind? partKind = null;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitMonthNameDateComponents(source, out var components))
+                return null;
+
+            var matches = new List<DatePartKind>(1);
+            if (components.Month == expected)
+                matches.Add(DatePartKind.Month);
+
+            if (components.Year == expected)
+                matches.Add(DatePartKind.Year);
+
+            if (components.Day == expected)
+                matches.Add(DatePartKind.Day);
+
+            if (matches.Count != 1)
+                return null;
+
+            if (partKind is null)
+                partKind = matches[0];
+            else if (partKind.Value != matches[0])
+                return null;
+        }
+
+        if (partKind is null)
+            return null;
+
+        var kind = partKind.Value;
+        return source => TrySplitMonthNameDateComponents(source, out var components)
+            ? GetMonthNameDateComponent(components, kind)
             : null;
     }
 
@@ -86,6 +130,54 @@ public static partial class FlashFillService
         }
 
         components = [];
+        return false;
+    }
+
+    private readonly record struct MonthNameDateComponents(string Year, string Month, string Day);
+
+    private static string GetMonthNameDateComponent(MonthNameDateComponents components, DatePartKind kind) =>
+        kind switch
+        {
+            DatePartKind.Year => components.Year,
+            DatePartKind.Month => components.Month,
+            _ => components.Day
+        };
+
+    private static bool TrySplitMonthNameDateComponents(string source, out MonthNameDateComponents components)
+    {
+        components = default;
+
+        var parts = source.Split((char[]?)null, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 3)
+            return false;
+
+        if (TryParseEnglishMonthNamePart(parts[0], out var month) &&
+            TryParseDayComponentToken(parts[1], allowTrailingComma: true, out var dayToken, out var day) &&
+            TryParseYearPart(parts[2], out var year) &&
+            TryCreateDateParts(year, month, day, out _))
+        {
+            components = new MonthNameDateComponents(parts[2], parts[0], dayToken);
+            return true;
+        }
+
+        if (TryParseDayComponentToken(parts[0], allowTrailingComma: false, out dayToken, out day) &&
+            TryParseEnglishMonthNamePart(parts[1], out month) &&
+            TryParseYearPart(parts[2], out year) &&
+            TryCreateDateParts(year, month, day, out _))
+        {
+            components = new MonthNameDateComponents(parts[2], parts[1], dayToken);
+            return true;
+        }
+
+        if (TryParseYearPart(parts[0], out year) &&
+            TryParseEnglishMonthNamePart(parts[1], out month) &&
+            TryParseDayComponentToken(parts[2], allowTrailingComma: false, out dayToken, out day) &&
+            TryCreateDateParts(year, month, day, out _))
+        {
+            components = new MonthNameDateComponents(parts[0], parts[1], dayToken);
+            return true;
+        }
+
         return false;
     }
 
@@ -588,6 +680,37 @@ public static partial class FlashFillService
 
         return part.Length - digitLength == 2 &&
             IsValidOrdinalDaySuffix(day, part[digitLength..]);
+    }
+
+    private static bool TryParseDayComponentToken(
+        string part,
+        bool allowTrailingComma,
+        out string token,
+        out int day)
+    {
+        token = string.Empty;
+        day = 0;
+        if (allowTrailingComma && part.EndsWith(",", StringComparison.Ordinal))
+            part = part[..^1];
+
+        var digitLength = 0;
+        while (digitLength < part.Length && char.IsDigit(part[digitLength]))
+            digitLength++;
+
+        if (digitLength is < 1 or > 2 ||
+            !int.TryParse(part[..digitLength], NumberStyles.None, CultureInfo.InvariantCulture, out day))
+        {
+            return false;
+        }
+
+        if (digitLength != part.Length &&
+            (part.Length - digitLength != 2 || !IsValidOrdinalDaySuffix(day, part[digitLength..])))
+        {
+            return false;
+        }
+
+        token = part[..digitLength];
+        return true;
     }
 
     private static bool IsValidOrdinalDaySuffix(int day, string suffix)
