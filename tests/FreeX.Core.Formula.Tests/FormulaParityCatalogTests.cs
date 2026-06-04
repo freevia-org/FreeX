@@ -1,6 +1,5 @@
 using FreeX.Core.Formula;
 using FluentAssertions;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 namespace FreeX.Core.Formula.Tests;
@@ -199,28 +198,6 @@ public sealed class FormulaParityCatalogTests
         int InScopeTotal);
 
     private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        return FindWorkspaceFileFromSource(relativeParts);
-    }
+        => WorkspaceFileLocator.FindFromCurrentDirectoryOrSourceFile(relativeParts);
 
-    private static string FindWorkspaceFileFromSource(
-        string[] relativeParts,
-        [CallerFilePath] string sourceFilePath = "")
-    {
-        var cwdCandidate = Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
-        if (File.Exists(cwdCandidate))
-            return cwdCandidate;
-
-        var current = new DirectoryInfo(Path.GetDirectoryName(sourceFilePath) ?? AppContext.BaseDirectory);
-        while (current is not null)
-        {
-            var candidate = Path.Combine(new[] { current.FullName }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            current = current.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
 }

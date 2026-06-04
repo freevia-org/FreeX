@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO.Compression;
-using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
@@ -238,24 +237,5 @@ public sealed class ExcelCachedFormulaFixtureTests
     }
 
     private static string FindWorkspacePath(params string[] relativeParts)
-    {
-        return FindWorkspacePathFromSource(relativeParts);
-    }
-
-    private static string FindWorkspacePathFromSource(
-        string[] relativeParts,
-        [CallerFilePath] string sourceFilePath = "")
-    {
-        var current = new DirectoryInfo(Path.GetDirectoryName(sourceFilePath) ?? AppContext.BaseDirectory);
-        while (current is not null)
-        {
-            var candidate = Path.Combine(new[] { current.FullName }.Concat(relativeParts).ToArray());
-            if (Directory.Exists(candidate))
-                return candidate;
-
-            current = current.Parent;
-        }
-
-        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
-    }
+        => WorkspacePathLocator.FindDirectoryFromSourceOrCurrentDirectory(relativeParts);
 }
