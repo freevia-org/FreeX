@@ -6,6 +6,112 @@ namespace FreeX.Core.Model.Tests;
 public sealed partial class FlashFillServiceTests
 {
     [Fact]
+    public void Fill_TimeComponentExtraction_ExtractsDisplayedHourWithoutPadding()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("9:15 AM", "9"),
+                ("08:05 pm", "8")
+            ],
+            ["07:30:09", "14:05", "12:00 AM"]);
+
+        result.Should().BeEquivalentTo(["7", "14", "12"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_TimeComponentExtraction_ExtractsMinute()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("9:15 AM", "15"),
+                ("08:05 pm", "05")
+            ],
+            ["14:07", "07:30:09"]);
+
+        result.Should().BeEquivalentTo(["07", "30"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_TimeComponentExtraction_ExtractsSecond()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("07:30:09", "09"),
+                ("14:05:58", "58")
+            ],
+            ["23:59:01"]);
+
+        result.Should().BeEquivalentTo(["01"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_TimeComponentExtraction_ExtractsMeridiemWithRemainingRowCasing()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("9:15 AM", "AM"),
+                ("10:05 AM", "AM")
+            ],
+            ["08:05 pm", "7:30 Pm"]);
+
+        result.Should().BeEquivalentTo(["pm", "Pm"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("24:05")]
+    [InlineData("9:60 AM")]
+    public void Fill_TimeComponentExtraction_ReturnsNullForInvalidRemainingRows(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("9:15 AM", "9"),
+                ("08:05 pm", "8")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_TimeComponentExtraction_ReturnsNullWhenSecondIsMissingFromRemainingRow()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("07:30:09", "09"),
+                ("14:05:58", "58")
+            ],
+            ["23:59"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_TimeComponentExtraction_ReturnsNullForAmbiguousComponentExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("08:08 pm", "08"),
+                ("09:09 AM", "09")
+            ],
+            ["10:10 AM"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_TimeComponentExtraction_ReturnsNullForMixedComponentExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("9:15 AM", "9"),
+                ("08:05 pm", "05")
+            ],
+            ["10:45 PM"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_EmbeddedTimeExtraction_ExtractsLabeledTwelveHourTime()
     {
         var result = FlashFillService.Fill(
