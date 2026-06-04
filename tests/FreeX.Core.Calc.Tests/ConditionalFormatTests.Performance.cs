@@ -279,7 +279,7 @@ public partial class ConditionalFormatTests
     [Fact]
     public void ConditionalFormatAggregates_DoNotEnumerateEveryCellInLargeAppliesToRanges()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormats.cs"));
 
         source.Should().NotContain(
@@ -358,7 +358,7 @@ public partial class ConditionalFormatTests
     [Fact]
     public void ConditionalFormatEvaluation_DoesNotRunLinqRangeFiltersPerDisplayedCell()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormats.cs"));
 
         source.Should().NotContain(
@@ -372,7 +372,7 @@ public partial class ConditionalFormatTests
     [Fact]
     public void IconSetThresholdResolution_UsesStackAllocatedThresholdBuffers()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatIcons.cs"));
 
         source.Should().Contain("cfContext.IconSetThresholds.TryGetValue");
@@ -387,7 +387,7 @@ public partial class ConditionalFormatTests
     public void IconSetNumberThresholds_DoNotRequireAggregateScans()
     {
         var evaluatorSource = ReadViewportConditionalFormatEvaluatorSources();
-        var iconsSource = File.ReadAllText(FindWorkspaceFile(
+        var iconsSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatIcons.cs"));
         var aggregateThresholds = evaluatorSource[
             evaluatorSource.IndexOf("private static bool RequiresAggregateThreshold", StringComparison.Ordinal)..
@@ -408,7 +408,7 @@ public partial class ConditionalFormatTests
     [Fact]
     public void FormulaConditionalFormatEvaluation_DoesNotSerializeShiftedFormulaPerDisplayedCell()
     {
-        var formulaSource = File.ReadAllText(FindWorkspaceFile(
+        var formulaSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatFormulas.cs"));
         var evaluatorSource = ReadViewportConditionalFormatEvaluatorSources();
 

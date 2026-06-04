@@ -12,7 +12,7 @@ public class DependencyGraphTests
     [Fact]
     public void DependencyGraph_PreSizesRangePrecedentStorageForFormulaRebuilds()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
         var ensureCapacity = source[
             source.IndexOf("internal void EnsureFormulaCapacity", StringComparison.Ordinal)..
@@ -25,7 +25,7 @@ public class DependencyGraphTests
     [Fact]
     public void RecalcEngine_ScansFormulaCellsWithoutCopyingUsedCellDictionaries()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
 
         source.Should().NotContain(
@@ -36,7 +36,7 @@ public class DependencyGraphTests
     [Fact]
     public void RecalcEngine_FiltersSheetReportsWithoutLinqListScaffolding()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
 
         source.Should().NotContain(
@@ -53,7 +53,7 @@ public class DependencyGraphTests
     [Fact]
     public void RecalcEngine_CollectsFormulaCellsWithoutLinqScaffolding()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
 
         source.Should().Contain(
@@ -73,7 +73,7 @@ public class DependencyGraphTests
     [Fact]
     public void RecalcEngine_ReturnsSharedEmptyReportForChangedValueCellsWithoutDependents()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
         var afterPlan = source[
             source.IndexOf("var plan = _graph.GetRecalcOrder(changedForTraversal);", StringComparison.Ordinal)..
@@ -99,7 +99,7 @@ public class DependencyGraphTests
     [Fact]
     public void RecalcEngine_LazilyAllocatesErrorAndCycleReportLists()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
         var recalculate = source[
             source.IndexOf("public RecalcReport Recalculate", StringComparison.Ordinal)..
@@ -116,7 +116,7 @@ public class DependencyGraphTests
     [Fact]
     public void RecalcEngine_CollectsReferencesAndVolatileFunctionsInSingleAstWalk()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
         var registration = source[
             source.IndexOf("public void RegisterFormulaDependencies", StringComparison.Ordinal)..
@@ -147,7 +147,7 @@ public class DependencyGraphTests
     [Fact]
     public void DependencyGraph_ReturnsSharedEmptyPlanWhenChangedCellsHaveNoDependents()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
         var getRecalcOrder = source[
             source.IndexOf("public RecalcPlan GetRecalcOrder", StringComparison.Ordinal)..
@@ -172,7 +172,7 @@ public class DependencyGraphTests
     [Fact]
     public void DependencyGraph_UsesLinearFastPathForSingleRootExactChains()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
         var getRecalcOrder = source[
             source.IndexOf("public RecalcPlan GetRecalcOrder", StringComparison.Ordinal)..
@@ -190,7 +190,7 @@ public class DependencyGraphTests
     [Fact]
     public void DependencyGraph_UsesLeafFastPathForMultiRootExactDependents()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
         var getRecalcOrder = source[
             source.IndexOf("public RecalcPlan GetRecalcOrder", StringComparison.Ordinal)..
@@ -227,7 +227,7 @@ public class DependencyGraphTests
     [Fact]
     public void DependencyGraph_UsesLeafFastPathForSingleRangeDependent()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
         var getRecalcOrder = source[
             source.IndexOf("public RecalcPlan GetRecalcOrder", StringComparison.Ordinal)..
@@ -705,9 +705,6 @@ public class DependencyGraphTests
         report.CyclicCells.Should().Contain(formula);
         sheet.GetValue(formula).Should().Be(ErrorValue.Circular);
     }
-
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
 
 }
 

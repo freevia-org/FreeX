@@ -21,12 +21,9 @@ public partial class ConditionalFormatTests
     private static DisplayCell GetCell(ViewportModel vp, uint row, uint col) =>
         vp.Cells.Single(c => c.Row == row && c.Col == col);
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
-
     private static string ReadViewportConditionalFormatEvaluatorSources()
     {
-        var primaryFile = FindWorkspaceFile("src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs");
+        var primaryFile = WorkspaceFileLocator.Find("src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs");
         var directory = Path.GetDirectoryName(primaryFile)!;
         var files = Directory.GetFiles(directory, "ViewportConditionalFormatEvaluator*.cs")
             .OrderBy(static file => Path.GetFileName(file), StringComparer.Ordinal);
