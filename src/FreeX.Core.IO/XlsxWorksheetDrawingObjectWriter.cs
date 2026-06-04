@@ -203,7 +203,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XAttribute(XNamespace.Xmlns + "a", drawingNs),
                 new XAttribute(XNamespace.Xmlns + "r", relNs),
                 anchors)));
-        XlsxPackageXmlEditor.ReplaceXml(archive, drawingRelsPath, drawingRelsXml);
+        if (drawingRelsXml.Root?.Elements(packageRelNs + "Relationship").Any() == true)
+            XlsxPackageXmlEditor.ReplaceXml(archive, drawingRelsPath, drawingRelsXml);
         XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
 
         var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);

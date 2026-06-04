@@ -391,7 +391,9 @@ public partial class XlsxCorpusRunnerTests
                     var sourceDirectory = Path.GetDirectoryName(sourcePart)?.Replace('\\', '/') ?? string.Empty;
                     var relsXml = LoadPackageXml(relsEntry);
                     XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-                    foreach (var relationship in relsXml.Root?.Elements(relNs + "Relationship") ?? [])
+                    var relationships = relsXml.Root?.Elements(relNs + "Relationship").ToArray() ?? [];
+                    relationships.Should().NotBeEmpty($"{because}: {relsEntry.FullName} should contain at least one relationship");
+                    foreach (var relationship in relationships)
                     {
                         if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
                             continue;
