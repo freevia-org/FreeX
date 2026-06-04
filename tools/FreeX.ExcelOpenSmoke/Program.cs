@@ -66,6 +66,10 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml";
     private const string ChartSheetRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
+    private const string CalcChainContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml";
+    private const string CalcChainRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
     private const string DialogSheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml";
     private const string DialogSheetRelationshipType =
@@ -420,6 +424,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPivotPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertExternalLinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertCalcChainPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSlicerTimelinePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -620,6 +625,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPivotPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertExternalLinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertCalcChainPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSlicerTimelinePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
@@ -3624,6 +3630,178 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid external link package graph: {sample}{suffix}");
+    }
+
+    private static void AssertCalcChainPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var calcChainRelationships = FindPackageRelationshipsByType(
+            archive,
+            WorkbookRelationshipPart,
+            CalcChainRelationshipType);
+        var standardCalcChainEntry = FindPackageEntry(archive, "xl/calcChain.xml");
+        if (calcChainRelationships.Length == 0 && standardCalcChainEntry is null)
+            return;
+
+        var issues = new List<string>();
+        var workbookSheetIds = FindWorkbookSheetIds(archive);
+        var validatedCalcChainParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var calcChainRelationship in calcChainRelationships)
+        {
+            AddWorkbookCalcChainRelationshipIssues(
+                archive,
+                calcChainRelationship,
+                workbookSheetIds,
+                validatedCalcChainParts,
+                issues);
+        }
+
+        if (standardCalcChainEntry is not null &&
+            !validatedCalcChainParts.Contains("xl/calcChain.xml"))
+        {
+            issues.Add("xl/calcChain.xml is present without a workbook calcChain relationship");
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidCalcChainPackage(label, sourcePath, issues);
+    }
+
+    private static HashSet<int> FindWorkbookSheetIds(ZipArchive archive)
+    {
+        var sheetIds = new HashSet<int>();
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is null)
+            return sheetIds;
+
+        foreach (var sheet in LoadPackageXml(workbookEntry).Descendants(SpreadsheetNs + "sheet"))
+        {
+            if (TryParseNonNegativePackageInt(sheet.Attribute("sheetId")?.Value, out var sheetId))
+                sheetIds.Add(sheetId);
+        }
+
+        return sheetIds;
+    }
+
+    private static void AddWorkbookCalcChainRelationshipIssues(
+        ZipArchive archive,
+        XElement relationship,
+        IReadOnlySet<int> workbookSheetIds,
+        HashSet<string> validatedCalcChainParts,
+        List<string> issues)
+    {
+        var relationshipId = relationship.Attribute("Id")?.Value;
+        var relationshipLabel = $"workbook calcChain relationship {FormatRelationshipIssueId(relationshipId)}";
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} is external");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} has invalid TargetMode {targetMode}");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{relationshipLabel} has no Target");
+            return;
+        }
+
+        target = target.Trim();
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add($"{relationshipLabel} targets external URI without TargetMode=External: {target}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                WorkbookRelationshipPart,
+                target,
+                out var calcChainPart,
+                out var targetIssue))
+        {
+            issues.Add($"{relationshipLabel} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, calcChainPart, CalcChainContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var calcChainEntry = FindPackageEntry(archive, calcChainPart);
+        if (calcChainEntry is null)
+        {
+            issues.Add($"{relationshipLabel} targets missing package part {calcChainPart}");
+            return;
+        }
+
+        if (!validatedCalcChainParts.Add(calcChainPart))
+            return;
+
+        var calcChainXml = LoadPackageXml(calcChainEntry);
+        if (calcChainXml.Root?.Name != SpreadsheetNs + "calcChain")
+        {
+            issues.Add($"{calcChainPart} has an invalid calc-chain root element");
+            return;
+        }
+
+        AddCalcChainCellIssues(calcChainPart, calcChainXml, workbookSheetIds, issues);
+    }
+
+    private static void AddCalcChainCellIssues(
+        string calcChainPart,
+        XDocument calcChainXml,
+        IReadOnlySet<int> workbookSheetIds,
+        List<string> issues)
+    {
+        var calcChainCells = calcChainXml.Root?
+            .Elements(SpreadsheetNs + "c")
+            .Select((cell, index) => (Cell: cell, Ordinal: index + 1)) ?? [];
+        foreach (var (cell, ordinal) in calcChainCells)
+        {
+            var cellReference = cell.Attribute("r")?.Value;
+            if (string.IsNullOrWhiteSpace(cellReference))
+                issues.Add($"{calcChainPart} calc-chain cell #{ordinal} has no cell reference");
+
+            var sheetIdText = cell.Attribute("i")?.Value;
+            if (sheetIdText is null)
+                continue;
+
+            if (!TryParseNonNegativePackageInt(sheetIdText, out var sheetId))
+            {
+                issues.Add($"{calcChainPart} calc-chain cell {FormatCalcChainCellReference(cellReference, ordinal)} has invalid sheet id '{sheetIdText}'");
+                continue;
+            }
+
+            if (workbookSheetIds.Count > 0 && !workbookSheetIds.Contains(sheetId))
+            {
+                issues.Add(
+                    $"{calcChainPart} calc-chain cell {FormatCalcChainCellReference(cellReference, ordinal)} references sheet id {sheetId}, but the workbook has no matching sheet");
+            }
+        }
+    }
+
+    private static string FormatCalcChainCellReference(string? cellReference, int ordinal) =>
+        string.IsNullOrWhiteSpace(cellReference)
+            ? $"#{ordinal}"
+            : cellReference;
+
+    private static void ThrowInvalidCalcChainPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid calc-chain package graph: {sample}{suffix}");
     }
 
     private static void AssertSlicerTimelinePackageComplete(string xlsxPath, string label, string sourcePath)
