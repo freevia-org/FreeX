@@ -321,6 +321,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversBusinessSpreadsheetMisspellings()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Forcast revenu expence sumary colum formular percentatge percenatge quater varience analaysis analsys."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Forcast", "Forecast"),
+            ("revenu", "revenue"),
+            ("expence", "expense"),
+            ("sumary", "summary"),
+            ("colum", "column"),
+            ("formular", "formula"),
+            ("percentatge", "percentage"),
+            ("percenatge", "percentage"),
+            ("quater", "quarter"),
+            ("varience", "variance"),
+            ("analaysis", "analysis"),
+            ("analsys", "analysis"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Forecast revenue expense summary column formula percentage percentage quarter variance analysis analysis.");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");
