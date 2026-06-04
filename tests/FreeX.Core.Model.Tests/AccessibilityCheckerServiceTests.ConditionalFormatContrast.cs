@@ -272,6 +272,48 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAnd()
+    {
+        var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,$C1=\"Open\")");
+
+        var issues = FindLowContrastCellTextIssues(workbook);
+
+        issues.Select(issue => issue.Location).Should().Equal("B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOr()
+    {
+        var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "OR($A1>=100,$C1=\"Open\")");
+
+        var issues = FindLowContrastCellTextIssues(workbook);
+
+        issues.Select(issue => issue.Location).Should().Equal("B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNot()
+    {
+        var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "NOT($A1>=100)");
+
+        var issues = FindLowContrastCellTextIssues(workbook);
+
+        issues.Select(issue => issue.Location).Should().Equal("B1", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideLogicalWrapper()
+    {
+        var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,SUM($A1)>0)");
+
+        FindLowContrastCellTextIssues(workbook).Should().BeEmpty();
+    }
+
+    [Fact]
     public void FindIssues_IgnoresConditionalFormatContrastWhenRuleDoesNotMatchCell()
     {
         var workbook = new Workbook("Accessibility");
@@ -329,4 +371,60 @@ public sealed partial class AccessibilityCheckerServiceTests
         lowContrastIssues.Should().ContainSingle()
             .Which.SheetName.Should().Be("Stack");
     }
+
+    private static Workbook CreateFormulaLogicalContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        SetFormulaLogicalContrastRow(sheet, 1, 75, "Closed", "Below closed");
+        SetFormulaLogicalContrastRow(sheet, 2, 100, "Closed", "Threshold closed");
+        SetFormulaLogicalContrastRow(sheet, 3, 75, "Open", "Below open");
+        SetFormulaLogicalContrastRow(sheet, 4, 125, "Open", "Escalated open");
+
+        return workbook;
+    }
+
+    private static void SetFormulaLogicalContrastRow(
+        Sheet sheet,
+        uint row,
+        double amount,
+        string status,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(amount));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue(status));
+    }
+
+    private static void AddFormulaContrastRule(
+        Sheet sheet,
+        CellAddress firstLabel,
+        CellAddress lastLabel,
+        string formulaText)
+    {
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(firstLabel, lastLabel),
+            RuleType = CfRuleType.Formula,
+            FormulaText = formulaText,
+            FormatIfTrue = CreateLowContrastCellStyle()
+        });
+    }
+
+    private static CellStyle CreateLowContrastCellStyle() => new()
+    {
+        FontColor = new CellColor(120, 120, 120),
+        FillColor = new CellColor(130, 130, 130)
+    };
+
+    private static List<AccessibilityIssue> FindLowContrastCellTextIssues(Workbook workbook) =>
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Where(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText)
+            .ToList();
 }
