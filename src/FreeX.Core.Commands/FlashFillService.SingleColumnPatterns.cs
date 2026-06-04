@@ -653,18 +653,35 @@ public static partial class FlashFillService
 
     private static Func<string, string?>? TryExtractFinalDigitRun(IReadOnlyList<(string Source, string Expected)> examples)
     {
+        var sawEarlierDigitRun = false;
         foreach (var (source, expected) in examples)
         {
-            if (!TryGetFinalDigitRun(source, out var digitRun) || digitRun != expected)
+            if (expected.Length == 0 ||
+                !expected.All(char.IsDigit) ||
+                source.All(char.IsDigit) ||
+                !TryGetFinalDigitRunRange(source, out var digitRunStart, out var digitRunEndExclusive) ||
+                !source.AsSpan(digitRunStart, digitRunEndExclusive - digitRunStart).SequenceEqual(expected.AsSpan()) ||
+                HasMatchingDigitRunBefore(source, expected, digitRunStart))
+            {
                 return null;
+            }
+
+            sawEarlierDigitRun |= HasDigitRunBefore(source, digitRunStart);
         }
 
-        return source => TryGetFinalDigitRun(source, out var digitRun) ? digitRun : null;
+        if (!sawEarlierDigitRun)
+            return null;
+
+        var cache = new ExtractedSegmentCache();
+        return source => TryGetFinalDigitRunRange(source, out var digitRunStart, out var digitRunEndExclusive)
+            ? cache.GetOrAdd(source, digitRunStart, digitRunEndExclusive)
+            : null;
     }
 
-    private static bool TryGetFinalDigitRun(string source, out string digitRun)
+    private static bool TryGetFinalDigitRunRange(string source, out int digitRunStart, out int digitRunEndExclusive)
     {
-        digitRun = string.Empty;
+        digitRunStart = 0;
+        digitRunEndExclusive = 0;
         var end = source.Length - 1;
         while (end >= 0 && !char.IsDigit(source[end]))
             end--;
@@ -672,12 +689,53 @@ public static partial class FlashFillService
         if (end < 0)
             return false;
 
-        var start = end;
-        while (start >= 0 && char.IsDigit(source[start]))
-            start--;
+        digitRunStart = end;
+        while (digitRunStart >= 0 && char.IsDigit(source[digitRunStart]))
+            digitRunStart--;
 
-        digitRun = source[(start + 1)..(end + 1)];
-        return digitRun.Length > 0;
+        digitRunStart++;
+        digitRunEndExclusive = end + 1;
+        return digitRunStart < digitRunEndExclusive;
+    }
+
+    private static bool HasDigitRunBefore(string source, int endExclusive)
+    {
+        for (var i = 0; i < endExclusive; i++)
+        {
+            if (char.IsDigit(source[i]))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasMatchingDigitRunBefore(string source, string expected, int endExclusive)
+    {
+        var runStart = -1;
+        for (var i = 0; i < endExclusive; i++)
+        {
+            if (char.IsDigit(source[i]))
+            {
+                if (runStart < 0)
+                    runStart = i;
+
+                continue;
+            }
+
+            if (runStart >= 0 && DigitRunEquals(source, runStart, i, expected))
+                return true;
+
+            runStart = -1;
+        }
+
+        return runStart >= 0 && DigitRunEquals(source, runStart, endExclusive, expected);
+    }
+
+    private static bool DigitRunEquals(string source, int start, int endExclusive, string expected)
+    {
+        var length = endExclusive - start;
+        return length == expected.Length &&
+               source.AsSpan(start, length).SequenceEqual(expected.AsSpan());
     }
 
     private static Func<string, string?>? TryDelimitedPartCaseTransform(
