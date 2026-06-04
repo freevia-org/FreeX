@@ -9,6 +9,7 @@ public sealed class OpenWorkbookLoader
 {
     private readonly Action<Workbook> _recalculateAllFormulas;
     private readonly Func<Stream, XlsxFeatureReport> _inspectXlsx;
+    private readonly bool _hasCustomInspectXlsx;
     private readonly long _maxFileBytes;
 
     public OpenWorkbookLoader(
@@ -18,6 +19,7 @@ public sealed class OpenWorkbookLoader
     {
         _recalculateAllFormulas = recalculateAllFormulas;
         _inspectXlsx = inspectXlsx ?? XlsxFeatureInspector.Inspect;
+        _hasCustomInspectXlsx = inspectXlsx is not null;
         _maxFileBytes = maxFileBytes;
     }
 
@@ -32,7 +34,9 @@ public sealed class OpenWorkbookLoader
         ReportReadingProgress(progress);
 
         XlsxFeatureReport? featureReport = null;
-        if (IsOpenXmlExcelPackageExtension(extension))
+        var isOpenXmlExcelPackage = IsOpenXmlExcelPackageExtension(extension);
+        var inspectFeaturesDuringLoad = isOpenXmlExcelPackage && adapter is XlsxFileAdapter && !_hasCustomInspectXlsx;
+        if (isOpenXmlExcelPackage && !inspectFeaturesDuringLoad)
         {
             featureReport = await RunStageAsync(
                 progress,
@@ -48,10 +52,11 @@ public sealed class OpenWorkbookLoader
         }
 
         IReadOnlyList<string> loadWarnings = [];
+        var parseStartPercent = inspectFeaturesDuringLoad ? 8 : 16;
         var workbook = await RunStageAsync(
             progress,
             "parsing",
-            16,
+            parseStartPercent,
             90,
             TimeSpan.FromSeconds(45),
             () =>
@@ -59,8 +64,9 @@ public sealed class OpenWorkbookLoader
                 using var fileStream = OpenFileStream(path);
                 if (adapter is XlsxFileAdapter xlsxAdapter)
                 {
-                    var result = xlsxAdapter.LoadWithWarnings(fileStream);
+                    var result = xlsxAdapter.LoadWithWarnings(fileStream, inspectFeaturesDuringLoad);
                     loadWarnings = result.Warnings;
+                    featureReport ??= result.FeatureReport;
                     return result.Workbook;
                 }
                 return adapter.Load(fileStream);

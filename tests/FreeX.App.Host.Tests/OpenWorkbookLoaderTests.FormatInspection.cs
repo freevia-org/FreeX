@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using System.IO;
+using System.IO.Compression;
 
 namespace FreeX.App.Host.Tests;
 
@@ -88,6 +89,45 @@ public sealed partial class OpenWorkbookLoaderTests
             inspected.Should().BeTrue();
             result.FeatureReport.Should().BeSameAs(expectedReport);
             result.OpenedAsTemplate.Should().Be(opensAsTemplate);
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_UsesXlsxAdapterFeatureReportFromLoadPass()
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+        try
+        {
+            var sourceWorkbook = new Workbook("Feature report");
+            var sheet = sourceWorkbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("payload"));
+            var adapter = new XlsxFileAdapter();
+            await using (var stream = File.Create(tempPath))
+                adapter.Save(sourceWorkbook, stream);
+
+            using (var archive = ZipFile.Open(tempPath, ZipArchiveMode.Update))
+            {
+                await using var macroStream = archive.CreateEntry("xl/vbaProject.bin").Open();
+                macroStream.WriteByte(1);
+            }
+
+            var loader = new OpenWorkbookLoader(_ => { });
+
+            var result = await loader.LoadAsync(
+                tempPath,
+                adapter,
+                ".xlsx",
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+
+            result.FeatureReport.Should().NotBeNull();
+            result.FeatureReport!.Features.Should().Contain(feature =>
+                feature.Kind == XlsxUnsupportedFeatureKind.Macros &&
+                feature.PackagePart == "xl/vbaProject.bin");
         }
         finally
         {

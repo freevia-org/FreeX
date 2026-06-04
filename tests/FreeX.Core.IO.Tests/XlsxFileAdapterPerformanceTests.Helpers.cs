@@ -216,6 +216,34 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         method!.Invoke(null, [workbook, stream, null]);
     }
 
+    private static void MeasureExternalStage(string path, string stage, Action action)
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            action();
+            stopwatch.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            Console.WriteLine(
+                "PERF XLSX_LOAD_EXTERNAL_STAGE " +
+                $"stage={stage} file=\"{Path.GetFileName(path)}\" bytes={new FileInfo(path).Length:N0} " +
+                $"elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes:N0}");
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            Console.WriteLine(
+                "PERF XLSX_LOAD_EXTERNAL_STAGE_FAILED " +
+                $"stage={stage} file=\"{Path.GetFileName(path)}\" bytes={new FileInfo(path).Length:N0} " +
+                $"elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:F2} error=\"{ex.GetType().Name}: {ex.Message}\"");
+        }
+    }
+
     private static Workbook CreateStyleOnlyModelWorkbook()
     {
         var workbook = new Workbook("Style-only IO");
