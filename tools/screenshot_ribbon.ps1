@@ -273,7 +273,7 @@ function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect,
         EvidenceApp = "FreeX"
         OutputDirectory = $scriptOutDir
         OutputNaming = "ribbon_<WidthLabel>_<RibbonTab>.png"
-        CatalogEvidenceTarget = "docs/UI_TEST_CATALOG.md"
+        CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
         WidthSource = "RibbonScreenshotTourPlanner.DefaultWidths"
         PlannedCaptureCount = $tabNames.Count * $widths.Count
         Pairing = [pscustomobject]@{

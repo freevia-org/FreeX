@@ -119,7 +119,7 @@ public sealed class RibbonTabParityTests
                 command => command.ClickHandler == "SendBackwardBtn_Click" && command.KeyTip == "SB");
         }
 
-        File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"))
+        File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"))
             .Should()
             .Contain("| Bring Forward/Send Backward | Implemented |");
     }

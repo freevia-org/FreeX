@@ -1,8 +1,8 @@
 param(
     [string]$ProgressPath = "release\progress.json",
     [string]$WorkflowPath = ".github\workflows\tester-release.yml",
-    [string]$DistributionPlanPath = "docs\TEST_DISTRIBUTION_PLAN.md",
-    [string]$ChecklistPath = "docs\TESTER_RELEASE_CHECKLIST.md",
+    [string]$DistributionPlanPath = "docs\release\test-distribution.md",
+    [string]$ChecklistPath = "docs\release\tester-release-checklist.md",
     [int]$RunNumber = 0,
     [switch]$PublicPreviewCandidate,
     [switch]$AccessibilityKeyboardOnly,

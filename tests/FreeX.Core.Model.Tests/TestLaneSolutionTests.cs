@@ -34,7 +34,7 @@ public sealed class TestLaneSolutionTests
     {
         var agents = File.ReadAllText(FindWorkspaceFile("AGENTS.md"));
         var readme = File.ReadAllText(FindWorkspaceFile("README.md"));
-        var plan = File.ReadAllText(FindWorkspaceFile("docs", "TEST_DISTRIBUTION_PLAN.md"));
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "release/test-distribution.md"));
 
         agents.Should().Contain("default agent verification path");
         agents.Should().Contain("dotnet test FreeX.DefaultTests.slnx");
@@ -60,18 +60,5 @@ public sealed class TestLaneSolutionTests
     }
 
     private static string FindWorkspaceFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            {
-                return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate {Path.Combine(parts)} from {AppContext.BaseDirectory}.");
-    }
+        => WorkspaceFileLocator.FindFromWorkspaceRoot(parts);
 }

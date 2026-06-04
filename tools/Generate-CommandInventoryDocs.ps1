@@ -1,7 +1,7 @@
 param(
-    [string]$InventoryPath = "docs\COMMAND_INVENTORY.json",
-    [string]$CommandSurfacePath = "docs\COMMAND_SURFACE_PARITY.md",
-    [string]$MenuToolbarPath = "docs\MENU_TOOLBAR_PARITY.md",
+    [string]$InventoryPath = "docs\parity\command-inventory.json",
+    [string]$CommandSurfacePath = "docs\parity\command-surface.md",
+    [string]$MenuToolbarPath = "docs\parity\menu-toolbar.md",
     [switch]$Check
 )
 

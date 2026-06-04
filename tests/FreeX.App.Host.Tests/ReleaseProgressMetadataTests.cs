@@ -26,7 +26,7 @@ public sealed class ReleaseProgressMetadataTests
         var documentedStream = $"v{progress.Major}.{minor}.<run>";
         var completionText = $"At {progress.OverallCompletion}% completion";
 
-        var distributionPlan = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md"));
+        var distributionPlan = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
         distributionPlan.Should().Contain(completionText);
         distributionPlan.Should().Contain(documentedStream);
     }

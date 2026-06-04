@@ -8,7 +8,7 @@ public sealed class CommandParityStatusTests
     [Fact]
     public void NamedCloseoutRows_AreTrackedInCommandSurfaceParityDocument()
     {
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
 
         (string Command, string Status)[] expectedRows =
         [
@@ -38,14 +38,14 @@ public sealed class CommandParityStatusTests
         {
             tableRows.Should().Contain(
                 row => row.FirstCell == expected.Command && row.Status == expected.Status,
-                $"COMMAND_SURFACE_PARITY.md should contain a markdown table row for {expected.Command} with status {expected.Status}");
+                $"parity/command-surface.md should contain a markdown table row for {expected.Command} with status {expected.Status}");
         }
     }
 
     [Fact]
     public void ScenarioManagerRepeatability_DistinguishesShowFromDialogManagementActions()
     {
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
 
         doc.Should().Contain("Scenario Manager Show applies the selected scenario through the repeatable command path");
         doc.Should().Contain("Scenario Manager add/edit/delete/report/list actions");
@@ -56,7 +56,7 @@ public sealed class CommandParityStatusTests
     [Fact]
     public void HelpTabRows_TrackCurrentRibbonSurface()
     {
-        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "parity/command-surface.md"));
         var tableRows = ParseMarkdownTableRows(doc);
 
         (string Command, string Status)[] expectedRows =
@@ -76,7 +76,7 @@ public sealed class CommandParityStatusTests
         {
             tableRows.Should().Contain(
                 row => row.FirstCell == expected.Command && row.Status == expected.Status,
-                $"COMMAND_SURFACE_PARITY.md should track the Help tab row for {expected.Command}");
+                $"parity/command-surface.md should track the Help tab row for {expected.Command}");
         }
     }
 

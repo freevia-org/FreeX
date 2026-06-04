@@ -132,7 +132,7 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("Set-Content -LiteralPath $artifactExeHashPath");
         script.Should().Contain("FreeX is not affiliated with, endorsed by, or sponsored by Microsoft.");
         script.Should().Contain("Microsoft Excel is a trademark of Microsoft Corporation.");
-        script.Should().Contain("docs/PRIVACY.md");
+        script.Should().Contain("docs/legal/privacy.md");
         script.Should().Contain("THIRD_PARTY_NOTICES.md");
     }
 
@@ -224,7 +224,7 @@ public sealed class ReleaseAutomationWorkflowTests
     [Fact]
     public void TestDistributionPlan_LinksToLatestTesterDownload()
     {
-        var planPath = WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md");
+        var planPath = WorkspaceFileLocator.Find("docs", "release/test-distribution.md");
         var plan = File.ReadAllText(planPath);
 
         plan.Should().Contain("Latest tester download");

@@ -9,7 +9,7 @@ public sealed partial class DocumentationEncodingTests
     [Fact]
     public void CurrentUserFacingDocs_DoNotContainMojibake()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "OUTSTANDING_BUILD.md"))!;
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var repoDirectory = Directory.GetParent(docsDirectory)!.FullName;
 
         var invalidLines = CurrentDocumentationFiles
@@ -43,12 +43,12 @@ public sealed partial class DocumentationEncodingTests
     private static readonly string[] CurrentDocumentationFiles =
     [
         "README.md",
-        "OUTSTANDING_BUILD.md",
-        "NEXT_PHASES_PLAN.md",
-        "PROJECT_STATUS_REPORT_2026-05-28.md",
-        "TEST_DISTRIBUTION_PLAN.md",
-        "TROUBLESHOOTING.md",
-        "USER_GUIDE.md",
+        "planning/outstanding-build.md",
+        "planning/next-phases.md",
+        "history/status-2026-05-28.md",
+        "release/test-distribution.md",
+        "user/troubleshooting.md",
+        "user/guide.md",
     ];
 
     [GeneratedRegex("[\\uFFFD]|(?:\\u00C3|\\u00C2|\\u00E2)[\\u0080-\\u00BF\\u201A-\\u201E\\u20AC\\u2122\\u0152\\u0161\\u017D\\u017E\\u02C6\\u2030\\u2039\\u203A\\u2018-\\u201D]+", RegexOptions.CultureInvariant)]
