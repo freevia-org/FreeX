@@ -987,6 +987,9 @@
   <data name="ShapeEffects_SoftEdges" xml:space="preserve">
     <value>Bords adoucis</value>
   </data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve">
+    <value>Bevel</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Supprime les effets de forme créés.</value>
   </data>
@@ -1005,11 +1008,14 @@
   <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve">
     <value>Applique un effet de bord adouci à la forme sélectionnée.</value>
   </data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve">
+    <value>Apply a raised bevel edge effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Effet de forme</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, or soft edges for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Description de l'effet de forme</value>
@@ -2962,7 +2968,7 @@
     <value>Grille de feuille de calcul. Utilisez les touches fléchées pour parcourir les cellules, F2 pour modifier et Tab/Entrée pour déplacer le focus.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Choisissez aucun effet, ombre, lueur ou bords adoucis pour la forme sélectionnée.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>À propos de FreeX</value>
@@ -6205,7 +6211,7 @@
     <value>Basculez la courbe de tendance actuelle du graphique entre les types de courbes de tendance de type Excel pris en charge.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Choisissez aucun effet, ombre, lueur ou bords adoucis pour la forme sélectionnée.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Bascule les limites automatiques ou basées sur les données de l'axe X pour le graphique actuel.</value>

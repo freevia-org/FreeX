@@ -987,6 +987,9 @@
   <data name="ShapeEffects_SoftEdges" xml:space="preserve">
     <value>Mäkké okraje</value>
   </data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve">
+    <value>Bevel</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Odstráňte vytvorené efekty tvaru.</value>
   </data>
@@ -1005,11 +1008,14 @@
   <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve">
     <value>Na vybraný tvar použite efekt zmäkčených okrajov.</value>
   </data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve">
+    <value>Apply a raised bevel edge effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Tvarový efekt</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, or soft edges for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Popis efektu tvaru</value>
@@ -2978,7 +2984,7 @@ Pokračovať v ukladaní?</value>
     <value>Mriežka tabuľky. Použite šípky na navigáciu v bunkách, F2 na úpravu a Tab/Enter na presun zamerania.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Pre vybratý tvar nevyberajte žiadny efekt, tieň, žiaru alebo jemné okraje.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>O FreeX</value>
@@ -6221,7 +6227,7 @@ Pokračovať v ukladaní?</value>
     <value>Prepínajte aktuálnu trendovú čiaru grafu medzi podporovanými typmi trendových čiar podobných programu Excel.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Pre vybratý tvar nevyberajte žiadny efekt, tieň, žiaru alebo jemné okraje.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Prepína automatické alebo na dátach založené hranice osi X pre aktuálny graf.</value>

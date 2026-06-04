@@ -987,6 +987,9 @@
   <data name="ShapeEffects_SoftEdges" xml:space="preserve">
     <value>Pehmed servad</value>
   </data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve">
+    <value>Bevel</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Autoriseeritud kujundiefektide eemaldamine.</value>
   </data>
@@ -1005,11 +1008,14 @@
   <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve">
     <value>Rakenda valitud kujundile pehmendatud servaefekt.</value>
   </data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve">
+    <value>Apply a raised bevel edge effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Kujuefekt</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, or soft edges for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Kujuefekti kirjeldus</value>
@@ -2972,7 +2978,7 @@ Kas saata selle testija järgu krahhiaruanded?</value>
     <value>Arvutustabeli ruudustik. Kasutage lahtrite navigeerimiseks nooleklahve, redigeerimiseks F2 ja fookuse liigutamiseks tabeldusklahvi/sisestusklahvi.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Valige valitud kujundi jaoks efekti, varju, sära või pehmed servad.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>FreeX-i kohta</value>
@@ -6215,7 +6221,7 @@ Kas saata selle testija järgu krahhiaruanded?</value>
     <value>Lülitage diagrammi praegust trendijoont toetatud Exceli-laadsete trendijoone tüüpide vahel.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Valige valitud kujundi jaoks efekti, varju, sära või pehmed servad.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Lülitab praeguse diagrammi automaatsete või andmepõhiste X-telje piiride vahel.</value>

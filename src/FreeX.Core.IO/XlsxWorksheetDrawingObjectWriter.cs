@@ -385,7 +385,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 ? ToGradientFill(gradientStartColor, gradientEndColor, gradientFillDirection, drawingNs)
                 : ToSolidFill(fillThemeColor, fillColor, drawingNs),
             ToLineProperties(outlineThemeColor, outlineColor, drawingNs),
-            ToEffectList(effectPreset, drawingNs));
+            ToEffectList(effectPreset, drawingNs),
+            ToShape3dProperties(effectPreset, drawingNs));
     }
 
     private static XElement ToDrawingTransform(double rotationDegrees, XNamespace drawingNs)
@@ -464,6 +465,14 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XElement(drawingNs + "softEdge", new XAttribute("rad", "30000"))),
             _ => null
         };
+
+    private static XElement? ToShape3dProperties(DrawingShapeEffectPreset effectPreset, XNamespace drawingNs) =>
+        effectPreset == DrawingShapeEffectPreset.Bevel
+            ? new XElement(drawingNs + "sp3d",
+                new XElement(drawingNs + "bevelT",
+                    new XAttribute("w", "76200"),
+                    new XAttribute("h", "25400")))
+            : null;
 
     private static XElement ToRgbColorElement(CellColor color, XNamespace drawingNs) =>
         new(drawingNs + "srgbClr", new XAttribute("val", FormatColor(color)));

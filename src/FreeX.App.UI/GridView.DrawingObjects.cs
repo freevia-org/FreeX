@@ -320,6 +320,7 @@ public partial class GridView
                 dc.DrawLine(pen, rect.TopLeft, rect.BottomRight);
                 break;
         }
+        DrawShapeAuthoredBevelEffect(dc, shape.Kind, rect, shape);
         DrawShapeAuthoredInnerShadow(dc, shape.Kind, rect, shape);
         DrawShapeThemeInnerShadow(dc, shape.Kind, rect, themeEffect);
         if (rotationPushed) dc.Pop();
@@ -618,6 +619,56 @@ public partial class GridView
                 break;
             case DrawingShapeEffectPreset.Reflection:
                 DrawShapeReflectionEffect(dc, kind, rect, colors);
+                break;
+        }
+    }
+
+    private void DrawShapeAuthoredBevelEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
+    {
+        if (shape.GetEffectiveEffectPreset() != DrawingShapeEffectPreset.Bevel)
+            return;
+
+        var thickness = Math.Clamp(Math.Min(rect.Width, rect.Height) / 12, 2, 5);
+        var inset = thickness / 2;
+        var bevelRect = new Rect(
+            rect.Left + inset,
+            rect.Top + inset,
+            Math.Max(1, rect.Width - thickness),
+            Math.Max(1, rect.Height - thickness));
+        var highlightPen = GetDrawingObjectPen(170, 255, 255, 255, thickness);
+        var shadowPen = GetDrawingObjectPen(118, 0, 0, 0, thickness);
+
+        switch (kind)
+        {
+            case DrawingShapeKind.Rectangle:
+                dc.DrawLine(highlightPen, bevelRect.TopLeft, bevelRect.TopRight);
+                dc.DrawLine(highlightPen, bevelRect.TopLeft, bevelRect.BottomLeft);
+                dc.DrawLine(shadowPen, bevelRect.BottomLeft, bevelRect.BottomRight);
+                dc.DrawLine(shadowPen, bevelRect.TopRight, bevelRect.BottomRight);
+                break;
+            case DrawingShapeKind.Ellipse:
+                dc.DrawEllipse(
+                    null,
+                    highlightPen,
+                    new Point(bevelRect.Left + bevelRect.Width / 2 - inset / 3, bevelRect.Top + bevelRect.Height / 2 - inset / 3),
+                    bevelRect.Width / 2,
+                    bevelRect.Height / 2);
+                dc.DrawEllipse(
+                    null,
+                    shadowPen,
+                    new Point(bevelRect.Left + bevelRect.Width / 2 + inset / 3, bevelRect.Top + bevelRect.Height / 2 + inset / 3),
+                    bevelRect.Width / 2,
+                    bevelRect.Height / 2);
+                break;
+            case DrawingShapeKind.Line:
+                dc.DrawLine(
+                    highlightPen,
+                    new Point(rect.Left, rect.Top - inset),
+                    new Point(rect.Right, rect.Bottom - inset));
+                dc.DrawLine(
+                    shadowPen,
+                    new Point(rect.Left, rect.Top + inset),
+                    new Point(rect.Right, rect.Bottom + inset));
                 break;
         }
     }

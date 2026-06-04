@@ -987,6 +987,9 @@
   <data name="ShapeEffects_SoftEdges" xml:space="preserve">
     <value>М'які краї</value>
   </data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve">
+    <value>Bevel</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Видалити авторські ефекти форми.</value>
   </data>
@@ -1005,11 +1008,14 @@
   <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve">
     <value>Застосуйте ефект пом’якшених країв до вибраної форми.</value>
   </data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve">
+    <value>Apply a raised bevel edge effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Ефект форми</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, or soft edges for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Опис ефекту форми</value>
@@ -2962,7 +2968,7 @@
     <value>Сітка електронної таблиці. Використовуйте клавіші зі стрілками для навігації по клітинках, F2 для редагування та Tab/Enter для переміщення фокуса.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Виберіть відсутність ефекту, тінь, світіння або м’які краї для вибраної форми.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>Про FreeX</value>
@@ -6205,7 +6211,7 @@
     <value>Перемикання поточної лінії тренду діаграми між підтримуваними типами лінії тренду, подібними до Excel.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Виберіть відсутність ефекту, тінь, світіння або м’які краї для вибраної форми.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Перемикає автоматичні або на основі даних межі осі X для поточної діаграми.</value>

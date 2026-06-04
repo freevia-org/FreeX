@@ -987,6 +987,9 @@
   <data name="ShapeEffects_SoftEdges" xml:space="preserve">
     <value>Mīkstās malas</value>
   </data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve">
+    <value>Bevel</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Noņemiet autorizētos formas efektus.</value>
   </data>
@@ -1005,11 +1008,14 @@
   <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve">
     <value>Pielietojiet atlasītajai formai mīkstinātas malas efektu.</value>
   </data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve">
+    <value>Apply a raised bevel edge effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Formas efekts</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, or soft edges for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Formas efekta apraksts</value>
@@ -2972,7 +2978,7 @@ Vai nosūtīt avāriju pārskatus šim testētāja būvējumam?</value>
     <value>Izklājlapas režģis. Izmantojiet bulttaustiņus, lai pārvietotos šūnās, F2, lai rediģētu, un tabulēšanas/ievadīšanas taustiņu, lai pārvietotu fokusu.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Izvēlētajai formai izvēlieties nekādu efektu, ēnu, mirdzumu vai mīkstas malas.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>Apmēram FreeX</value>
@@ -6215,7 +6221,7 @@ Vai nosūtīt avāriju pārskatus šim testētāja būvējumam?</value>
     <value>Pārslēdziet pašreizējo diagrammas tendenču līniju starp atbalstītajiem Excel līdzīgajiem tendenču līniju veidiem.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Izvēlētajai formai izvēlieties nekādu efektu, ēnu, mirdzumu vai mīkstas malas.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Pārslēgt pašreizējās diagrammas automātiskās vai uz datiem balstītās X ass robežas.</value>
