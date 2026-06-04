@@ -657,11 +657,35 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "chrt"))
+                {
+                    suggestion = "chart";
+                    return true;
+                }
+
                 break;
             case 5:
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "chrat"))
+                {
+                    suggestion = "chart";
+                    return true;
+                }
+
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "colum"))
                 {
                     suggestion = "column";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pviot"))
+                {
+                    suggestion = "pivot";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pivto"))
+                {
+                    suggestion = "pivot";
                     return true;
                 }
 
@@ -697,6 +721,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "piviot"))
+                {
+                    suggestion = "pivot";
+                    return true;
+                }
+
                 if (first == 'q' && EqualAsciiWordIgnoreCase(word, "quater"))
                 {
                     suggestion = "quarter";
@@ -724,6 +754,18 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "sucess"))
                 {
                     suggestion = "success";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "slicre"))
+                {
+                    suggestion = "slicer";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "slcier"))
+                {
+                    suggestion = "slicer";
                     return true;
                 }
 
@@ -780,6 +822,12 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "forcast"))
                 {
                     suggestion = "forecast";
+                    return true;
+                }
+
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "workbok"))
+                {
+                    suggestion = "workbook";
                     return true;
                 }
 
@@ -854,6 +902,18 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formular"))
                 {
                     suggestion = "formula";
+                    return true;
+                }
+
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "workshet"))
+                {
+                    suggestion = "worksheet";
+                    return true;
+                }
+
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "worsheet"))
+                {
+                    suggestion = "worksheet";
                     return true;
                 }
 
@@ -1000,6 +1060,12 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "succesful"))
                 {
                     suggestion = "successful";
+                    return true;
+                }
+
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "workboook"))
+                {
+                    suggestion = "workbook";
                     return true;
                 }
 
