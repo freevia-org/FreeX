@@ -86,7 +86,7 @@ public sealed class FormulaCommandSourceTests
     }
 
     private static string ReadMainWindowXaml() =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        LocalizedXamlTestSupport.ReadMainWindowXaml();
 
     private static string ReadFormulasTabXaml()
     {

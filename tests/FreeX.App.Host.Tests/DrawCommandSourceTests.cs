@@ -109,7 +109,7 @@ public sealed class DrawCommandSourceTests
     }
 
     private static string ReadMainWindowXaml() =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        LocalizedXamlTestSupport.ReadMainWindowXaml();
 
     private static string ExtractElementByTitle(string xaml, string title, string elementName)
     {
