@@ -352,6 +352,32 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_FinalUrlPathSegmentSlugTitle_SplitsCamelCaseInsideSlugStem()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/roadBike.html", "Road Bike"),
+                ("https://docs.example.com/help/safetyGuide.pdf?download=1#top", "Safety Guide")
+            ],
+            ["https://example.com/releases/electricCargoBike?x=1#details"]);
+
+        result.Should().BeEquivalentTo(["Electric Cargo Bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FinalUrlPathSegmentSlugTitle_SplitsCamelCaseInsideMixedSeparatedSlugStem()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bikePro.html", "Road Bike Pro"),
+                ("https://docs.example.com/help/safety_gearGuide.pdf?download=1#top", "Safety Gear Guide")
+            ],
+            ["https://example.com/releases/electric-cargoBike?x=1#details"]);
+
+        result.Should().BeEquivalentTo(["Electric Cargo Bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_FinalUrlPathSegmentSlugTitle_HandlesSegmentsWithoutExtensions()
     {
         var result = FlashFillService.Fill(

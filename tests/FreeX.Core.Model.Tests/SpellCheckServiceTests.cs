@@ -460,6 +460,39 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversChartLabelingAndSeriesVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "LEGND Legned lable LABLES SEREIS serise axies AXS Sparklne sparklins. Keep legend, label, labels, series, axis, sparkline, sparklines, prelegnd, lable_text, https://legnd.example.com/sereis, editor@lables.example.com, and \"C:\\sparklne folder\\axs file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("LEGND", "LEGEND"),
+            ("Legned", "Legend"),
+            ("lable", "label"),
+            ("LABLES", "LABELS"),
+            ("SEREIS", "SERIES"),
+            ("serise", "series"),
+            ("axies", "axis"),
+            ("AXS", "AXIS"),
+            ("Sparklne", "Sparkline"),
+            ("sparklins", "sparklines"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "LEGEND Legend label LABELS SERIES series axis AXIS Sparkline sparklines. Keep legend, label, labels, series, axis, sparkline, sparklines, prelegnd, lable_text, https://legnd.example.com/sereis, editor@lables.example.com, and \"C:\\sparklne folder\\axs file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversSpreadsheetWorkflowVocabularyTypos()
     {
         var wb = new Workbook("test");

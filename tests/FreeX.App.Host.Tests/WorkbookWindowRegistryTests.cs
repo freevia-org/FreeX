@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FluentAssertions;
 using FreeX.App.Host;
 
@@ -6,26 +5,11 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class WorkbookWindowRegistryTests
 {
-    private sealed class FakeWindow : IWorkbookWindow
-    {
-        public string? Suffix { get; private set; }
-        public int RefreshCount { get; private set; }
-        public int ActivateCount { get; private set; }
-
-        public void ApplyWindowTitleSuffix(string suffix) => Suffix = suffix;
-        public void RefreshFromSharedWorkbook() => RefreshCount++;
-        public void ActivateWindow() => ActivateCount++;
-        public void SetWindowVisible(bool visible) { }
-        public WorkbookScrollOffset GetScrollOffset() => default;
-        public void SetScrollOffset(WorkbookScrollOffset offset) { }
-        public void TileToWorkArea(System.Windows.Rect bounds) { }
-    }
-
     [Fact]
     public void Register_FirstWindow_HasNoTitleSuffixAndReportsHasWindows()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
 
         registry.HasWindows.Should().BeFalse();
         registry.Register(w1);
@@ -39,8 +23,8 @@ public sealed class WorkbookWindowRegistryTests
     public void Register_SecondWindow_NumbersBothWindowsExcelStyle()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
-        var w2 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
 
         registry.Register(w1);
         registry.Register(w2);
@@ -54,7 +38,7 @@ public sealed class WorkbookWindowRegistryTests
     public void Register_SameWindowTwice_IsIgnored()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
 
         registry.Register(w1);
         registry.Register(w1);
@@ -66,9 +50,9 @@ public sealed class WorkbookWindowRegistryTests
     public void Unregister_Closing_RenumbersSurvivorsBackToLoneWindow()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
-        var w2 = new FakeWindow();
-        var w3 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
+        var w3 = new TestWorkbookWindow();
         registry.Register(w1);
         registry.Register(w2);
         registry.Register(w3);
@@ -90,9 +74,9 @@ public sealed class WorkbookWindowRegistryTests
     public void NextWindowTarget_CyclesForwardAndWraps()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
-        var w2 = new FakeWindow();
-        var w3 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
+        var w3 = new TestWorkbookWindow();
         registry.Register(w1);
         registry.Register(w2);
         registry.Register(w3);
@@ -106,7 +90,7 @@ public sealed class WorkbookWindowRegistryTests
     public void NextWindowTarget_SingleWindow_HasNoOtherWindow()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
         registry.Register(w1);
 
         registry.NextWindowTarget(w1).Should().BeNull();
@@ -116,8 +100,8 @@ public sealed class WorkbookWindowRegistryTests
     public void SwitchToNextWindow_ActivatesTheNextWindowOnly()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
-        var w2 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
         registry.Register(w1);
         registry.Register(w2);
 
@@ -131,7 +115,7 @@ public sealed class WorkbookWindowRegistryTests
     public void SwitchToNextWindow_SingleWindow_DoesNothing()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
         registry.Register(w1);
 
         registry.SwitchToNextWindow(w1).Should().BeFalse();
@@ -142,9 +126,9 @@ public sealed class WorkbookWindowRegistryTests
     public void NotifyWorkbookChanged_RefreshesEveryWindowExceptTheOrigin()
     {
         var registry = new WorkbookWindowRegistry();
-        var origin = new FakeWindow();
-        var other1 = new FakeWindow();
-        var other2 = new FakeWindow();
+        var origin = new TestWorkbookWindow();
+        var other1 = new TestWorkbookWindow();
+        var other2 = new TestWorkbookWindow();
         registry.Register(origin);
         registry.Register(other1);
         registry.Register(other2);
@@ -160,7 +144,7 @@ public sealed class WorkbookWindowRegistryTests
     public void NotifyWorkbookChanged_SingleWindow_RefreshesNobody()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
         registry.Register(w1);
 
         registry.NotifyWorkbookChanged(w1);
@@ -172,8 +156,8 @@ public sealed class WorkbookWindowRegistryTests
     public void Windows_ReportsRegistrationOrder()
     {
         var registry = new WorkbookWindowRegistry();
-        var w1 = new FakeWindow();
-        var w2 = new FakeWindow();
+        var w1 = new TestWorkbookWindow();
+        var w2 = new TestWorkbookWindow();
         registry.Register(w1);
         registry.Register(w2);
 

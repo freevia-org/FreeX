@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Windows;
 using FluentAssertions;
 using FreeX.App.Host;
 
@@ -7,35 +5,13 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class WorkbookWindowRegistrySideBySideTests
 {
-    private sealed class FakeWindow : IWorkbookWindow
-    {
-        public WorkbookScrollOffset Offset { get; set; }
-        public int SetScrollOffsetCount { get; private set; }
-        public readonly List<Rect> TiledBounds = [];
-
-        public void ApplyWindowTitleSuffix(string suffix) { }
-        public void RefreshFromSharedWorkbook() { }
-        public void ActivateWindow() { }
-        public void SetWindowVisible(bool visible) { }
-
-        public WorkbookScrollOffset GetScrollOffset() => Offset;
-
-        public void SetScrollOffset(WorkbookScrollOffset offset)
-        {
-            Offset = offset;
-            SetScrollOffsetCount++;
-        }
-
-        public void TileToWorkArea(Rect bounds) => TiledBounds.Add(bounds);
-    }
-
-    private static (WorkbookWindowRegistry Registry, FakeWindow[] Windows) RegisterWindows(int count)
+    private static (WorkbookWindowRegistry Registry, TestWorkbookWindow[] Windows) RegisterWindows(int count)
     {
         var registry = new WorkbookWindowRegistry();
-        var windows = new FakeWindow[count];
+        var windows = new TestWorkbookWindow[count];
         for (var i = 0; i < count; i++)
         {
-            windows[i] = new FakeWindow();
+            windows[i] = new TestWorkbookWindow();
             registry.Register(windows[i]);
         }
 

@@ -1394,9 +1394,24 @@ internal static class ExcelOpenSmoke
                 $"{label} for '{sourcePath}' has an invalid [Content_Types].xml root element.");
         }
 
-        var missing = archive.Entries
+        var packageParts = archive.Entries
             .Where(entry => !string.IsNullOrEmpty(entry.Name))
             .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var declarationIssues = FindPackageContentTypeDeclarationIssues(contentTypesXml, packageParts);
+        if (declarationIssues.Count > 0)
+        {
+            var declarationSample = string.Join("; ", declarationIssues.Take(MaxPackageContentTypeIssuesToReport));
+            var declarationSuffix = declarationIssues.Count > MaxPackageContentTypeIssuesToReport
+                ? $"; ... {declarationIssues.Count - MaxPackageContentTypeIssuesToReport} more"
+                : string.Empty;
+
+            throw new InvalidDataException(
+                $"{label} for '{sourcePath}' has invalid [Content_Types].xml declarations: {declarationSample}{declarationSuffix}");
+        }
+
+        var missing = packageParts
             .Where(part => !string.Equals(part, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase))
             .Where(part => string.IsNullOrWhiteSpace(GetEffectivePackageContentType(contentTypesXml, part)))
             .ToArray();
@@ -1411,6 +1426,136 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has package part(s) without effective content types: {sample}{suffix}");
+    }
+
+    private static List<string> FindPackageContentTypeDeclarationIssues(
+        XDocument contentTypesXml,
+        HashSet<string> packageParts)
+    {
+        var issues = new List<string>();
+        var root = contentTypesXml.Root;
+        if (root is null)
+            return issues;
+
+        foreach (var element in root.Elements())
+        {
+            if (element.Name != PackageContentTypeNs + "Default" &&
+                element.Name != PackageContentTypeNs + "Override")
+            {
+                issues.Add($"unexpected child element '{element.Name}'");
+            }
+        }
+
+        var defaultExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var element in root.Elements(PackageContentTypeNs + "Default"))
+        {
+            var extension = element.Attribute("Extension")?.Value;
+            var declarationLabel = string.IsNullOrWhiteSpace(extension)
+                ? "Default declaration"
+                : $"Default extension '{extension}'";
+
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                issues.Add("Default declaration missing Extension");
+            }
+            else
+            {
+                var trimmedExtension = extension.Trim();
+                declarationLabel = $"Default extension '{trimmedExtension}'";
+
+                if (!string.Equals(extension, trimmedExtension, StringComparison.Ordinal))
+                    issues.Add($"Default extension '{extension}' has leading or trailing whitespace");
+
+                if (trimmedExtension.IndexOf('/') >= 0 ||
+                    trimmedExtension.IndexOf('\\') >= 0 ||
+                    trimmedExtension.IndexOf('.') >= 0 ||
+                    trimmedExtension.Any(char.IsWhiteSpace))
+                {
+                    issues.Add($"Default extension '{trimmedExtension}' is not a bare package extension");
+                }
+
+                if (!defaultExtensions.Add(trimmedExtension))
+                    issues.Add($"duplicate Default extension '{trimmedExtension}'");
+            }
+
+            AddContentTypeAttributeIssues(issues, element, declarationLabel);
+        }
+
+        var overridePartNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var element in root.Elements(PackageContentTypeNs + "Override"))
+        {
+            var partName = element.Attribute("PartName")?.Value;
+            var declarationLabel = string.IsNullOrWhiteSpace(partName)
+                ? "Override declaration"
+                : $"Override PartName '{partName}'";
+
+            if (string.IsNullOrWhiteSpace(partName))
+            {
+                issues.Add("Override declaration missing PartName");
+            }
+            else
+            {
+                var trimmedPartName = partName.Trim();
+
+                if (!string.Equals(partName, trimmedPartName, StringComparison.Ordinal))
+                    issues.Add($"Override PartName '{partName}' has leading or trailing whitespace");
+
+                if (!trimmedPartName.StartsWith("/", StringComparison.Ordinal))
+                    issues.Add($"Override PartName '{partName}' must start with '/'");
+
+                if (trimmedPartName.IndexOf('\\') >= 0)
+                    issues.Add($"Override PartName '{partName}' must use forward slashes");
+
+                if (trimmedPartName.IndexOf('?') >= 0 || trimmedPartName.IndexOf('#') >= 0)
+                    issues.Add($"Override PartName '{partName}' must not include query or fragment text");
+
+                var pathWithoutRootSlash = trimmedPartName.TrimStart('/');
+                if (!TryNormalizePackagePathSegments(pathWithoutRootSlash, out var overridePart))
+                {
+                    issues.Add($"Override PartName '{partName}' escapes the package root");
+                }
+                else if (string.IsNullOrWhiteSpace(overridePart))
+                {
+                    issues.Add($"Override PartName '{partName}' does not reference a package part");
+                }
+                else
+                {
+                    declarationLabel = $"Override PartName '/{overridePart}'";
+                    var rawNormalizedPart = NormalizePackagePart(trimmedPartName);
+                    if (!string.Equals(overridePart, rawNormalizedPart, StringComparison.Ordinal))
+                        issues.Add($"Override PartName '{partName}' is not canonical");
+
+                    if (!overridePartNames.Add(overridePart))
+                        issues.Add($"duplicate Override PartName '/{overridePart}'");
+
+                    if (!packageParts.Contains(overridePart))
+                        issues.Add($"Override PartName '/{overridePart}' references missing package part");
+                }
+            }
+
+            AddContentTypeAttributeIssues(issues, element, declarationLabel);
+        }
+
+        return issues;
+    }
+
+    private static void AddContentTypeAttributeIssues(
+        List<string> issues,
+        XElement element,
+        string declarationLabel)
+    {
+        var contentType = element.Attribute("ContentType")?.Value;
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            issues.Add($"{declarationLabel} missing ContentType");
+            return;
+        }
+
+        if (!string.Equals(contentType, contentType.Trim(), StringComparison.Ordinal))
+            issues.Add($"{declarationLabel} ContentType has leading or trailing whitespace");
+
+        if (!contentType.Contains("/", StringComparison.Ordinal))
+            issues.Add($"{declarationLabel} ContentType '{contentType}' is not a media type");
     }
 
     private static string? GetEffectivePackageContentType(XDocument contentTypesXml, string normalizedPartName)
