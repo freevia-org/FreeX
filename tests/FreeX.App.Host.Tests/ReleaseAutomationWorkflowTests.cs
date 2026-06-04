@@ -37,10 +37,11 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("dotnet restore FreeX.slnx");
         workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
-        workflow.Should().Contain("dotnet test FreeX.slnx --configuration Release --no-build --logger \"trx;LogFileName=tests.trx\" --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
+        workflow.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger \"trx;LogFileName=default-tests.trx\" --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
+        workflow.Should().Contain("dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger \"trx;LogFileName=ui-tests.trx\" --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
         workflow.Should().Contain("if: always()");
         workflow.Should().Contain("name: freex-${{ github.run_id }}-${{ github.run_attempt }}-test-results");
-        workflow.Should().Contain("path: \"**/TestResults/tests.trx\"");
+        workflow.Should().Contain("path: \"**/TestResults/*.trx\"");
         workflow.Should().Contain("if-no-files-found: warn");
         workflow.Should().Contain("tools/Publish-UserTestBuild.ps1");
         workflow.Should().Contain("-RuntimeIdentifier win-x64");

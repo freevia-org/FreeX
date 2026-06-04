@@ -26,9 +26,15 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("actions/setup-dotnet@v5");
         workflow.Should().Contain("dotnet-version: 10.0.x");
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
-        workflow.Should().Contain("dotnet restore FreeX.slnx");
-        workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
-        workflow.Should().Contain("dotnet test FreeX.slnx --configuration Release --no-build --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
+        workflow.Should().Contain("name: Default test lane");
+        workflow.Should().Contain("dotnet restore FreeX.DefaultTests.slnx");
+        workflow.Should().Contain("dotnet build FreeX.DefaultTests.slnx --configuration Release --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
+        workflow.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
+        workflow.Should().Contain("name: UI test lane");
+        workflow.Should().Contain("dotnet restore FreeX.UiTests.slnx");
+        workflow.Should().Contain("dotnet build FreeX.UiTests.slnx --configuration Release --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
+        workflow.Should().Contain("dotnet test FreeX.UiTests.slnx --configuration Release --no-build --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
+        workflow.Should().NotContain("dotnet test FreeX.slnx --configuration Release --no-build");
     }
 
     [Fact]
