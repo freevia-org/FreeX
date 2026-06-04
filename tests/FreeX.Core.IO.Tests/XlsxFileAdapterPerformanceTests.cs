@@ -68,6 +68,129 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [BenchmarkFact]
+    [Trait("Category", "ExternalWorkbook")]
+    public void Benchmark_LoadExternalWorkbookStages_ReportsTiming()
+    {
+        var paths = ResolveExternalWorkbookPaths();
+        if (paths.Length == 0)
+        {
+            Console.WriteLine("PERF XLSX_LOAD_EXTERNAL_STAGES skipped=true reason=FREEX_IO_BENCHMARK_PATHS_NOT_SET");
+            return;
+        }
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var path in paths)
+        {
+            byte[] package = [];
+            MeasureExternalStage(path, "READ_BYTES", () =>
+            {
+                package = File.ReadAllBytes(path);
+                package.Length.Should().BeGreaterThan(0);
+            });
+
+            MeasureExternalStage(path, "RAW_CLOSEDXML_LOAD", () =>
+            {
+                using var packageStream = new MemoryStream(package, writable: false);
+                using var workbook = new XLWorkbook(packageStream);
+                workbook.Worksheets.Count.Should().BeGreaterThan(0);
+            });
+
+            MeasureExternalStage(path, "SANITIZED_CLOSEDXML_LOAD", () =>
+            {
+                using var sourcePackage = new MemoryStream(package, writable: false);
+                var sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(sourcePackage);
+                try
+                {
+                    using var workbook = new XLWorkbook(sanitizedPackage);
+                    workbook.Worksheets.Count.Should().BeGreaterThan(0);
+                }
+                finally
+                {
+                    if (!ReferenceEquals(sanitizedPackage, sourcePackage))
+                        sanitizedPackage.Dispose();
+                }
+            });
+
+            MeasureExternalStage(path, "STYLE_STRIPPED_SANITIZED_CLOSEDXML_LOAD", () =>
+            {
+                using var sourcePackage = new MemoryStream(package, writable: false);
+                var strippedPackage = XlsxClosedXmlStyleOnlyCellStripper.Create(sourcePackage);
+                MemoryStream? sanitizedPackage = null;
+                try
+                {
+                    sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(strippedPackage);
+                    using var workbook = new XLWorkbook(sanitizedPackage);
+                    workbook.Worksheets.Count.Should().BeGreaterThan(0);
+                }
+                finally
+                {
+                    if (sanitizedPackage is not null &&
+                        !ReferenceEquals(sanitizedPackage, strippedPackage) &&
+                        !ReferenceEquals(sanitizedPackage, sourcePackage))
+                    {
+                        sanitizedPackage.Dispose();
+                    }
+
+                    if (!ReferenceEquals(strippedPackage, sourcePackage))
+                        strippedPackage.Dispose();
+                }
+            });
+
+            MeasureExternalStage(path, "FREEX_FULL_LOAD", () =>
+            {
+                using var packageStream = new MemoryStream(package, writable: false);
+                var workbook = adapter.Load(packageStream);
+                workbook.SheetCount.Should().BeGreaterThan(0);
+                workbook.Sheets.Sum(sheet => sheet.CellCount).Should().BeGreaterThanOrEqualTo(0);
+            });
+        }
+    }
+
+    [BenchmarkFact]
+    [Trait("Category", "ExternalWorkbook")]
+    public void Benchmark_SaveExternalLoadedWorkbook_ReportsTiming()
+    {
+        var paths = ResolveExternalWorkbookPaths();
+        if (paths.Length == 0)
+        {
+            Console.WriteLine("PERF XLSX_SAVE_EXTERNAL_LOADED skipped=true reason=FREEX_IO_BENCHMARK_PATHS_NOT_SET");
+            return;
+        }
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var path in paths)
+        {
+            Workbook workbook;
+            using (var stream = File.OpenRead(path))
+                workbook = adapter.Load(stream);
+
+            workbook.SheetCount.Should().BeGreaterThan(0);
+            var firstSheet = workbook.GetSheetAt(0);
+            firstSheet.SetCell(new CellAddress(firstSheet.Id, 1, 1), new TextValue("freex-io-benchmark"));
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            using var output = new MemoryStream();
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var stopwatch = Stopwatch.StartNew();
+            adapter.Save(workbook, output);
+            stopwatch.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+            output.Length.Should().BeGreaterThan(0);
+            Console.WriteLine(
+                "PERF XLSX_SAVE_EXTERNAL_LOADED " +
+                $"file=\"{Path.GetFileName(path)}\" source_bytes={new FileInfo(path).Length:N0} " +
+                $"package_bytes={output.Length:N0} sheets={workbook.SheetCount} " +
+                $"cells={workbook.Sheets.Sum(sheet => sheet.CellCount):N0} " +
+                $"style_only_cells={workbook.Sheets.Sum(sheet => sheet.GetStyleOnlyEntries().Count()):N0} " +
+                $"elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes:N0}");
+        }
+    }
+
+    [BenchmarkFact]
     public void Benchmark_LoadDenseWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -221,6 +344,19 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         normalizerSource.Should().Contain("plan.RequiresWorksheetScan");
         normalizerSource.Should().Contain("plan.ScanWorksheetFormulaText");
         normalizerSource.Should().Contain("plan.ScanWorksheetDrawingTargets");
+    }
+
+    [Fact]
+    public void WorkbookSchemaNormalizer_PreflightsWorksheetOrderBeforeLoadingXml()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookSchemaNormalizer.cs"));
+
+        source.Should().Contain("InspectWorksheetNormalization(worksheetEntry, workbookNs, relNs)");
+        source.Should().Contain("!preflight.NeedsChildOrderNormalization && !preflight.HasLegacyDrawingHeaderFooter");
+        source.Should().Contain("XmlReader.Create(stream");
+        source.Should().Contain("reader.Depth != worksheetDepth + 1");
+        source.Should().Contain("preflight.NeedsChildOrderNormalization &&");
+        source.Should().Contain("NormalizeWorksheet(worksheetXml, workbookNs)");
     }
 
     [Fact]
