@@ -46,7 +46,7 @@ public class WorkbookGetStyleTests
         // Arrange: register a base style with red font color.
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var baseStyle = new CellStyle { FontColor = new CellColor(255, 0, 0) };
         var cell = Cell.FromValue(new NumberValue(42));
@@ -70,11 +70,5 @@ public class WorkbookGetStyleTests
         var newStyle = wb.GetStyle(cellStyleId);
         newStyle.Bold.Should().BeTrue();
         newStyle.FontColor.Should().Be(new CellColor(255, 0, 0), "font color must be preserved from the base style");
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }
