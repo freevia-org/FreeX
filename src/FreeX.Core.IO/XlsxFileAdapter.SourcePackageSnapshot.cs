@@ -314,7 +314,8 @@ public sealed partial class XlsxFileAdapter
                     currentModelFingerprint,
                     out var changes,
                     out var dimensionChanges,
-                    out var mergeRegionChanges))
+                    out var mergeRegionChanges,
+                    out var hyperlinkChanges))
             {
                 return false;
             }
@@ -322,7 +323,10 @@ public sealed partial class XlsxFileAdapter
             currentModelFingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var patchedModelFingerprint = currentModelFingerprint ?? CreateModelFingerprint(workbook);
             currentModelFingerprint = patchedModelFingerprint;
-            if (changes.Count == 0 && dimensionChanges.Count == 0 && mergeRegionChanges.Count == 0)
+            if (changes.Count == 0 &&
+                dimensionChanges.Count == 0 &&
+                mergeRegionChanges.Count == 0 &&
+                hyperlinkChanges.Count == 0)
             {
                 CopyTo(stream);
                 return true;
@@ -339,9 +343,12 @@ public sealed partial class XlsxFileAdapter
                     .ToDictionary(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase);
                 var mergeRegionChangesByWorksheet = mergeRegionChanges
                     .ToDictionary(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+                var hyperlinkChangesByWorksheet = hyperlinkChanges
+                    .ToDictionary(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase);
                 var worksheetPaths = cellChangesByWorksheet.Keys
                     .Concat(dimensionChangesByWorksheet.Keys)
                     .Concat(mergeRegionChangesByWorksheet.Keys)
+                    .Concat(hyperlinkChangesByWorksheet.Keys)
                     .Distinct(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var worksheetPath in worksheetPaths)
@@ -365,6 +372,12 @@ public sealed partial class XlsxFileAdapter
 
                     if (mergeRegionChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetMergeRegionPatch) &&
                         !XlsxCellPatchBaseline.ApplyMergeRegionChanges(worksheetXml, worksheetMergeRegionPatch))
+                    {
+                        return false;
+                    }
+
+                    if (hyperlinkChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetHyperlinkPatch) &&
+                        !XlsxCellPatchBaseline.ApplyHyperlinkChanges(worksheetXml, worksheetHyperlinkPatch))
                     {
                         return false;
                     }
@@ -409,6 +422,7 @@ public sealed partial class XlsxFileAdapter
                         changes,
                         dimensionChanges,
                         mergeRegionChanges,
+                        hyperlinkChanges,
                         patchedModelFingerprint)));
             }
             else
@@ -692,6 +706,7 @@ public sealed partial class XlsxFileAdapter
                     if (sourceCellStyleIndexes is null)
                         return null;
 
+                    var sourceHyperlinks = ReadSourceHyperlinks(archive, worksheetPath, sheet.Id);
                     var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(sheet.CellCount);
                     foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
                     {
@@ -721,6 +736,8 @@ public sealed partial class XlsxFileAdapter
                         sheet.StyleOnlyCellCount,
                         XlsxWorksheetDimensionBaseline.Capture(sheet),
                         sheet.MergedRegions.ToArray(),
+                        XlsxWorksheetHyperlinkBaseline.Capture(sheet),
+                        sourceHyperlinks,
                         cells));
                 }
 
@@ -741,11 +758,13 @@ public sealed partial class XlsxFileAdapter
             string? currentModelFingerprint,
             out List<XlsxCellValuePatch> changes,
             out List<XlsxWorksheetDimensionPatch> dimensionChanges,
-            out List<XlsxWorksheetMergeRegionPatch> mergeRegionChanges)
+            out List<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
+            out List<XlsxWorksheetHyperlinkPatch> hyperlinkChanges)
         {
             changes = [];
             dimensionChanges = [];
             mergeRegionChanges = [];
+            hyperlinkChanges = [];
             if (workbook.SheetCount != _worksheets.Count)
                 return false;
 
@@ -794,6 +813,25 @@ public sealed partial class XlsxFileAdapter
                         return false;
 
                     mergeRegionChanges.Add(mergeRegionPatch);
+                }
+
+                if (!XlsxWorksheetHyperlinkPatch.TryCreate(
+                        baseline.SheetId,
+                        baseline.WorksheetPath,
+                        baseline.Hyperlinks,
+                        baseline.SourceHyperlinks,
+                        XlsxWorksheetHyperlinkBaseline.Capture(sheet),
+                        out var hyperlinkPatch))
+                {
+                    return false;
+                }
+
+                if (hyperlinkPatch is not null)
+                {
+                    if (hyperlinkPatch.ChangeCount > changeLimit)
+                        return false;
+
+                    hyperlinkChanges.Add(hyperlinkPatch);
                 }
 
                 var addedCells = 0;
@@ -930,9 +968,10 @@ public sealed partial class XlsxFileAdapter
             return changes.Count == 0 &&
                    dimensionChanges.Count == 0 &&
                    mergeRegionChanges.Count == 0 &&
+                   hyperlinkChanges.Count == 0 &&
                    currentModelFingerprint is not null
                 ? string.Equals(_modelFingerprint, currentModelFingerprint, StringComparison.Ordinal)
-                : ModelMatchesWithOriginalValues(workbook, changes, dimensionChanges, mergeRegionChanges);
+                : ModelMatchesWithOriginalValues(workbook, changes, dimensionChanges, mergeRegionChanges, hyperlinkChanges);
         }
 
         public static bool ApplyChanges(XDocument worksheetXml, IEnumerable<XlsxCellValuePatch> changes)
@@ -1084,6 +1123,47 @@ public sealed partial class XlsxFileAdapter
             mergeCells.SetAttributeValue("count", patch.Current.Count.ToString(CultureInfo.InvariantCulture));
             if (mergeCells.Parent is null)
                 InsertMergeCellsElement(root, worksheetNs, mergeCells);
+
+            return true;
+        }
+
+        public static bool ApplyHyperlinkChanges(
+            XDocument worksheetXml,
+            XlsxWorksheetHyperlinkPatch patch)
+        {
+            var root = worksheetXml.Root;
+            if (root is null)
+                return false;
+
+            var worksheetNs = root.Name.Namespace;
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            var hyperlinks = root.Element(worksheetNs + "hyperlinks");
+            if (hyperlinks is null)
+                return false;
+
+            var hyperlinksByReference = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+            foreach (var hyperlink in hyperlinks.Elements(worksheetNs + "hyperlink"))
+            {
+                var reference = hyperlink.Attribute("ref")?.Value;
+                if (string.IsNullOrWhiteSpace(reference) ||
+                    hyperlink.Attribute(relNs + "id") is not null ||
+                    !hyperlinksByReference.TryAdd(reference, hyperlink))
+                {
+                    return false;
+                }
+            }
+
+            foreach (var change in patch.Changes)
+            {
+                if (!hyperlinksByReference.TryGetValue(change.Reference, out var hyperlink))
+                    return false;
+
+                hyperlink.SetAttributeValue("location", change.NewLocation);
+                if (string.IsNullOrWhiteSpace(change.NewTooltip))
+                    hyperlink.SetAttributeValue("tooltip", null);
+                else
+                    hyperlink.SetAttributeValue("tooltip", change.NewTooltip);
+            }
 
             return true;
         }
@@ -1383,10 +1463,16 @@ public sealed partial class XlsxFileAdapter
             IReadOnlyList<XlsxCellValuePatch> changes,
             IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges,
             IReadOnlyList<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
+            IReadOnlyList<XlsxWorksheetHyperlinkPatch> hyperlinkChanges,
             string modelFingerprint)
         {
-            if (changes.Count == 0 && dimensionChanges.Count == 0 && mergeRegionChanges.Count == 0)
+            if (changes.Count == 0 &&
+                dimensionChanges.Count == 0 &&
+                mergeRegionChanges.Count == 0 &&
+                hyperlinkChanges.Count == 0)
+            {
                 return new XlsxCellPatchBaseline(_worksheets, _sourceStyleIndexesByStyleId, modelFingerprint);
+            }
 
             var changesBySheet = changes
                 .GroupBy(change => change.SheetId)
@@ -1395,15 +1481,19 @@ public sealed partial class XlsxFileAdapter
                 .ToDictionary(change => change.SheetId);
             var mergeRegionChangesBySheet = mergeRegionChanges
                 .ToDictionary(change => change.SheetId);
+            var hyperlinkChangesBySheet = hyperlinkChanges
+                .ToDictionary(change => change.SheetId);
             var worksheets = new List<XlsxWorksheetCellPatchBaseline>(_worksheets.Count);
             foreach (var baseline in _worksheets)
             {
                 changesBySheet.TryGetValue(baseline.SheetId, out var sheetChanges);
                 dimensionChangesBySheet.TryGetValue(baseline.SheetId, out var dimensionPatch);
                 mergeRegionChangesBySheet.TryGetValue(baseline.SheetId, out var mergeRegionPatch);
+                hyperlinkChangesBySheet.TryGetValue(baseline.SheetId, out var hyperlinkPatch);
                 if ((sheetChanges is null || sheetChanges.Count == 0) &&
                     dimensionPatch is null &&
-                    mergeRegionPatch is null)
+                    mergeRegionPatch is null &&
+                    hyperlinkPatch is null)
                 {
                     worksheets.Add(baseline);
                     continue;
@@ -1455,6 +1545,8 @@ public sealed partial class XlsxFileAdapter
                     CellCount = baseline.CellCount + inserted - deleted,
                     Dimensions = dimensionPatch?.Current ?? baseline.Dimensions,
                     MergedRegions = mergeRegionPatch?.Current ?? baseline.MergedRegions,
+                    Hyperlinks = hyperlinkPatch?.Current ?? baseline.Hyperlinks,
+                    SourceHyperlinks = hyperlinkPatch?.CurrentSource ?? baseline.SourceHyperlinks,
                     Cells = cells
                 });
             }
@@ -1466,7 +1558,8 @@ public sealed partial class XlsxFileAdapter
             Workbook workbook,
             IReadOnlyList<XlsxCellValuePatch> changes,
             IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges,
-            IReadOnlyList<XlsxWorksheetMergeRegionPatch> mergeRegionChanges)
+            IReadOnlyList<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
+            IReadOnlyList<XlsxWorksheetHyperlinkPatch> hyperlinkChanges)
         {
             var restoredCells = new List<(
                 Cell Cell,
@@ -1478,6 +1571,7 @@ public sealed partial class XlsxFileAdapter
             var deletedCells = new List<(Sheet Sheet, uint Row, uint Col)>();
             var restoredDimensions = new List<(Sheet Sheet, XlsxWorksheetDimensionBaseline Current)>(dimensionChanges.Count);
             var restoredMergedRegions = new List<(Sheet Sheet, GridRange[] Current)>(mergeRegionChanges.Count);
+            var restoredHyperlinks = new List<(Sheet Sheet, XlsxWorksheetHyperlinkBaseline Current)>(hyperlinkChanges.Count);
             try
             {
                 foreach (var dimensionChange in dimensionChanges)
@@ -1498,6 +1592,16 @@ public sealed partial class XlsxFileAdapter
 
                     restoredMergedRegions.Add((sheet, sheet.MergedRegions.ToArray()));
                     sheet.ReplaceMergedRegions(mergeRegionChange.Original);
+                }
+
+                foreach (var hyperlinkChange in hyperlinkChanges)
+                {
+                    var sheet = workbook.GetSheet(hyperlinkChange.SheetId);
+                    if (sheet is null)
+                        return false;
+
+                    restoredHyperlinks.Add((sheet, XlsxWorksheetHyperlinkBaseline.Capture(sheet)));
+                    ApplyHyperlinkBaseline(sheet, hyperlinkChange.Original);
                 }
 
                 foreach (var change in changes)
@@ -1575,6 +1679,8 @@ public sealed partial class XlsxFileAdapter
                     ApplyDimensionBaseline(sheet, current);
                 foreach (var (sheet, current) in restoredMergedRegions)
                     sheet.ReplaceMergedRegions(current);
+                foreach (var (sheet, current) in restoredHyperlinks)
+                    ApplyHyperlinkBaseline(sheet, current);
             }
         }
 
@@ -1595,6 +1701,20 @@ public sealed partial class XlsxFileAdapter
             sheet.OutlineSummaryRight = baseline.OutlineSummaryRight;
             sheet.ShowOutlineSymbols = baseline.ShowOutlineSymbols;
             sheet.ApplyOutlineStyles = baseline.ApplyOutlineStyles;
+        }
+
+        private static void ApplyHyperlinkBaseline(Sheet sheet, XlsxWorksheetHyperlinkBaseline baseline)
+        {
+            sheet.Hyperlinks.Clear();
+            sheet.HyperlinkMetadata.Clear();
+            foreach (var (address, hyperlink) in baseline.Hyperlinks)
+            {
+                sheet.Hyperlinks[address] = hyperlink.Target;
+                sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+                    hyperlink.LinkType,
+                    hyperlink.ScreenTip,
+                    hyperlink.Bookmark);
+            }
         }
 
         private static void ReplaceDictionary<TValue>(
@@ -1746,6 +1866,60 @@ public sealed partial class XlsxFileAdapter
             }
 
             return result;
+        }
+
+        private static IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> ReadSourceHyperlinks(
+            ZipArchive archive,
+            string worksheetPath,
+            SheetId sheetId)
+        {
+            var entry = archive.GetEntry(worksheetPath);
+            if (entry is null)
+                return new Dictionary<CellAddress, XlsxSourceHyperlink>();
+
+            try
+            {
+                var result = new Dictionary<CellAddress, XlsxSourceHyperlink>();
+                var ambiguous = new HashSet<CellAddress>();
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    return result;
+
+                var worksheetNs = root.Name.Namespace;
+                XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+                var hyperlinks = root.Element(worksheetNs + "hyperlinks");
+                if (hyperlinks is null)
+                    return result;
+
+                foreach (var hyperlink in hyperlinks.Elements(worksheetNs + "hyperlink"))
+                {
+                    var reference = hyperlink.Attribute("ref")?.Value;
+                    if (!TryParseSingleCellReference(reference, sheetId, out var address) ||
+                        ambiguous.Contains(address))
+                    {
+                        continue;
+                    }
+
+                    var source = new XlsxSourceHyperlink(
+                        address,
+                        reference!,
+                        hyperlink.Attribute(relNs + "id") is not null,
+                        hyperlink.Attribute("location")?.Value,
+                        hyperlink.Attribute("tooltip")?.Value);
+                    if (result.TryAdd(address, source))
+                        continue;
+
+                    result.Remove(address);
+                    ambiguous.Add(address);
+                }
+
+                return result;
+            }
+            catch
+            {
+                return new Dictionary<CellAddress, XlsxSourceHyperlink>();
+            }
         }
 
         private static string? NormalizeSourceStyleIndex(int sourceStyleIndex) =>
@@ -2014,6 +2188,25 @@ public sealed partial class XlsxFileAdapter
 
             var rowSpan = reference.AsSpan(index);
             return uint.TryParse(rowSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out row) && row > 0;
+        }
+
+        private static bool TryParseSingleCellReference(
+            string? reference,
+            SheetId sheetId,
+            out CellAddress address)
+        {
+            address = default;
+            if (string.IsNullOrWhiteSpace(reference) ||
+                reference.Contains(':', StringComparison.Ordinal) ||
+                !TryParseCellReference(reference, out var row, out var col) ||
+                !IsValidWorksheetRow(row) ||
+                !IsValidWorksheetColumn(col))
+            {
+                return false;
+            }
+
+            address = new CellAddress(sheetId, row, col);
+            return true;
         }
 
         private static bool TryGetCellColumn(string? reference, out uint col)
@@ -2340,6 +2533,142 @@ public sealed partial class XlsxFileAdapter
             $"{region.Start.Row}:{region.Start.Col}:{region.End.Row}:{region.End.Col}";
     }
 
+    private sealed record XlsxWorksheetHyperlinkBaseline(
+        IReadOnlyDictionary<CellAddress, XlsxPatchHyperlink> Hyperlinks)
+    {
+        public static XlsxWorksheetHyperlinkBaseline Capture(Sheet sheet)
+        {
+            var hyperlinks = new Dictionary<CellAddress, XlsxPatchHyperlink>(sheet.Hyperlinks.Count);
+            foreach (var (address, target) in sheet.Hyperlinks)
+            {
+                sheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
+                metadata ??= new HyperlinkMetadata();
+                hyperlinks[address] = new XlsxPatchHyperlink(
+                    target,
+                    metadata.LinkType,
+                    metadata.ScreenTip,
+                    metadata.Bookmark);
+            }
+
+            return new XlsxWorksheetHyperlinkBaseline(hyperlinks);
+        }
+
+        public bool EqualsModel(XlsxWorksheetHyperlinkBaseline current)
+        {
+            if (Hyperlinks.Count != current.Hyperlinks.Count)
+                return false;
+
+            foreach (var (address, hyperlink) in Hyperlinks)
+            {
+                if (!current.Hyperlinks.TryGetValue(address, out var currentHyperlink) ||
+                    hyperlink != currentHyperlink)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    private sealed record XlsxWorksheetHyperlinkPatch(
+        SheetId SheetId,
+        string WorksheetPath,
+        XlsxWorksheetHyperlinkBaseline Original,
+        XlsxWorksheetHyperlinkBaseline Current,
+        IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> CurrentSource,
+        IReadOnlyList<XlsxHyperlinkPatchChange> Changes)
+    {
+        public int ChangeCount => Changes.Count;
+
+        public static bool TryCreate(
+            SheetId sheetId,
+            string worksheetPath,
+            XlsxWorksheetHyperlinkBaseline original,
+            IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> originalSource,
+            XlsxWorksheetHyperlinkBaseline current,
+            out XlsxWorksheetHyperlinkPatch? patch)
+        {
+            patch = null;
+            if (original.EqualsModel(current))
+                return true;
+
+            if (original.Hyperlinks.Count != current.Hyperlinks.Count)
+                return false;
+
+            var changes = new List<XlsxHyperlinkPatchChange>();
+            var currentSource = new Dictionary<CellAddress, XlsxSourceHyperlink>(originalSource);
+            foreach (var (address, currentHyperlink) in current.Hyperlinks)
+            {
+                if (!original.Hyperlinks.TryGetValue(address, out var originalHyperlink))
+                    return false;
+
+                if (originalHyperlink == currentHyperlink)
+                    continue;
+
+                if (!originalSource.TryGetValue(address, out var source) ||
+                    source.HasRelationshipId ||
+                    originalHyperlink.LinkType != HyperlinkTargetKind.PlaceInThisDocument ||
+                    !TryGetInternalLocation(currentHyperlink, out var newLocation))
+                {
+                    return false;
+                }
+
+                var newTooltip = string.IsNullOrWhiteSpace(currentHyperlink.ScreenTip)
+                    ? null
+                    : currentHyperlink.ScreenTip;
+                changes.Add(new XlsxHyperlinkPatchChange(source.Reference, newLocation, newTooltip));
+                currentSource[address] = source with
+                {
+                    Location = newLocation,
+                    Tooltip = newTooltip
+                };
+            }
+
+            if (changes.Count == 0)
+                return true;
+
+            patch = new XlsxWorksheetHyperlinkPatch(
+                sheetId,
+                worksheetPath,
+                original,
+                current,
+                currentSource,
+                changes);
+            return true;
+        }
+
+        private static bool TryGetInternalLocation(XlsxPatchHyperlink hyperlink, out string location)
+        {
+            location = "";
+            if (hyperlink.LinkType != HyperlinkTargetKind.PlaceInThisDocument)
+                return false;
+
+            location = string.IsNullOrWhiteSpace(hyperlink.Bookmark)
+                ? hyperlink.Target
+                : hyperlink.Bookmark;
+            return !string.IsNullOrWhiteSpace(location);
+        }
+    }
+
+    private sealed record XlsxPatchHyperlink(
+        string Target,
+        HyperlinkTargetKind LinkType,
+        string ScreenTip,
+        string Bookmark);
+
+    private sealed record XlsxSourceHyperlink(
+        CellAddress Address,
+        string Reference,
+        bool HasRelationshipId,
+        string? Location,
+        string? Tooltip);
+
+    private sealed record XlsxHyperlinkPatchChange(
+        string Reference,
+        string NewLocation,
+        string? NewTooltip);
+
     private sealed record XlsxWorksheetCellPatchBaseline(
         SheetId SheetId,
         string SheetName,
@@ -2348,6 +2677,8 @@ public sealed partial class XlsxFileAdapter
         int StyleOnlyCellCount,
         XlsxWorksheetDimensionBaseline Dimensions,
         IReadOnlyList<GridRange> MergedRegions,
+        XlsxWorksheetHyperlinkBaseline Hyperlinks,
+        IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> SourceHyperlinks,
         IReadOnlyDictionary<(uint Row, uint Col), XlsxPatchCell> Cells);
 
     private sealed record XlsxPatchCell(

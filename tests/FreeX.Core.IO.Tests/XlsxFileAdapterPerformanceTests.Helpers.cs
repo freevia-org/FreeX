@@ -111,7 +111,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         return stream.ToArray();
     }
 
-    private static byte[] CreateGeneratedStyleHeavyXlsxPackage(bool formulaMarker = false)
+    private static byte[] CreateGeneratedStyleHeavyXlsxPackage(
+        bool formulaMarker = false,
+        bool internalHyperlinkMarker = false)
     {
         using var stream = new MemoryStream(capacity: 8 * 1024 * 1024);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
@@ -130,7 +132,11 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                 WriteTextEntry(
                     archive,
                     path,
-                    writer => WriteGeneratedStyleHeavyWorksheet(writer, sheetIndex, formulaMarker));
+                    writer => WriteGeneratedStyleHeavyWorksheet(
+                        writer,
+                        sheetIndex,
+                        formulaMarker,
+                        internalHyperlinkMarker));
             }
         }
 
@@ -255,7 +261,11 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             </styleSheet>
             """);
 
-    private static void WriteGeneratedStyleHeavyWorksheet(TextWriter writer, int sheetIndex, bool formulaMarker)
+    private static void WriteGeneratedStyleHeavyWorksheet(
+        TextWriter writer,
+        int sheetIndex,
+        bool formulaMarker,
+        bool internalHyperlinkMarker)
     {
         var lastColumn = GeneratedStyleHeavyStyleOnlyStartColumn + GeneratedStyleHeavyStyleOnlyColumnsPerSheet - 1;
         var lastReference = $"{CellAddress.NumberToColumnName((uint)lastColumn)}{GeneratedStyleHeavyRowsPerSheet}";
@@ -298,6 +308,19 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         writer.Write(
             """
               </sheetData>
+            """);
+        if (internalHyperlinkMarker && sheetIndex == 1)
+        {
+            writer.Write(
+                """
+                  <hyperlinks>
+                    <hyperlink ref="A1" location="B2" tooltip="Jump source"/>
+                  </hyperlinks>
+                """);
+        }
+
+        writer.Write(
+            """
             </worksheet>
             """);
     }
@@ -363,6 +386,18 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sheet.AddMergedRegion(new GridRange(
             new CellAddress(sheet.Id, row, 1),
             new CellAddress(sheet.Id, row + 1, 2)));
+    }
+
+    private static void ApplyGeneratedStyleHeavyInternalHyperlinkMutation(Workbook workbook, int iteration)
+    {
+        var sheet = workbook.Sheets[0];
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var target = $"C{2 + iteration}";
+        sheet.Hyperlinks[address] = target;
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            $"Jump {iteration}",
+            target);
     }
 
     private static void ReplaceZipEntryXml(ZipArchive archive, string entryName, XDocument document)
