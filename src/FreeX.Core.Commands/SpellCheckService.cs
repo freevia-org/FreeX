@@ -685,6 +685,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fomula"))
+                {
+                    suggestion = "formula";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "foruma"))
+                {
+                    suggestion = "formula";
+                    return true;
+                }
+
                 if (first == 'q' && EqualAsciiWordIgnoreCase(word, "quater"))
                 {
                     suggestion = "quarter";
@@ -756,6 +768,12 @@ public static partial class SpellCheckService
                 if (first == 'e' && EqualAsciiWordIgnoreCase(word, "expence"))
                 {
                     suggestion = "expense";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formual"))
+                {
+                    suggestion = "formula";
                     return true;
                 }
 
@@ -878,6 +896,12 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "statment"))
                 {
                     suggestion = "statement";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "summarry"))
+                {
+                    suggestion = "summary";
                     return true;
                 }
 
@@ -1006,6 +1030,12 @@ public static partial class SpellCheckService
                 }
 
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "calcuation"))
+                {
+                    suggestion = "calculation";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "calculaton"))
                 {
                     suggestion = "calculation";
                     return true;
