@@ -356,6 +356,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Availible forcasting statment includes balence, ammount, comparision, and expences; relevent notes were listed seperately, refered, transfered, and occuring."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Availible", "Available"),
+            ("forcasting", "forecasting"),
+            ("statment", "statement"),
+            ("balence", "balance"),
+            ("ammount", "amount"),
+            ("comparision", "comparison"),
+            ("expences", "expenses"),
+            ("relevent", "relevant"),
+            ("seperately", "separately"),
+            ("refered", "referred"),
+            ("transfered", "transferred"),
+            ("occuring", "occurring"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Available forecasting statement includes balance, amount, comparison, and expenses; relevant notes were listed separately, referred, transferred, and occurring.");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");

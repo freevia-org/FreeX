@@ -723,9 +723,21 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "ammount"))
+                {
+                    suggestion = "amount";
+                    return true;
+                }
+
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "analsys"))
                 {
                     suggestion = "analysis";
+                    return true;
+                }
+
+                if (first == 'b' && EqualAsciiWordIgnoreCase(word, "balence"))
+                {
+                    suggestion = "balance";
                     return true;
                 }
 
@@ -756,6 +768,12 @@ public static partial class SpellCheckService
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "reciept"))
                 {
                     suggestion = "receipt";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "refered"))
+                {
+                    suggestion = "referred";
                     return true;
                 }
 
@@ -797,6 +815,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "expences"))
+                {
+                    suggestion = "expenses";
+                    return true;
+                }
+
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formular"))
                 {
                     suggestion = "formula";
@@ -815,9 +839,21 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "relevent"))
+                {
+                    suggestion = "relevant";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "seperate"))
                 {
                     suggestion = "separate";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "statment"))
+                {
+                    suggestion = "statement";
                     return true;
                 }
 
@@ -845,11 +881,23 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'o' && EqualAsciiWordIgnoreCase(word, "occuring"))
+                {
+                    suggestion = "occurring";
+                    return true;
+                }
+
                 break;
             case 9:
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "analaysis"))
                 {
                     suggestion = "analysis";
+                    return true;
+                }
+
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "availible"))
+                {
+                    suggestion = "available";
                     return true;
                 }
 
@@ -927,6 +975,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "forcasting"))
+                {
+                    suggestion = "forecasting";
+                    return true;
+                }
+
                 if (first == 'n' && EqualAsciiWordIgnoreCase(word, "neccessary"))
                 {
                     suggestion = "necessary";
@@ -951,11 +1005,29 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "seperately"))
+                {
+                    suggestion = "separately";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "transfered"))
+                {
+                    suggestion = "transferred";
+                    return true;
+                }
+
                 break;
             case 11:
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "caluclation"))
                 {
                     suggestion = "calculation";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "comparision"))
+                {
+                    suggestion = "comparison";
                     return true;
                 }
 
