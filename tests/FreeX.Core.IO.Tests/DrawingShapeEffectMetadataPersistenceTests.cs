@@ -9,6 +9,7 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
 {
     [Theory]
     [InlineData(DrawingShapeEffectPreset.Shadow)]
+    [InlineData(DrawingShapeEffectPreset.InnerShadow)]
     [InlineData(DrawingShapeEffectPreset.Glow)]
     [InlineData(DrawingShapeEffectPreset.SoftEdges)]
     public void NativeJsonAdapter_RoundTripsDrawingShapeEffectPreset(DrawingShapeEffectPreset effectPreset)
@@ -26,20 +27,30 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
         loadedShape.GetEffectiveEffectPreset().Should().Be(effectPreset);
     }
 
-    [Fact]
-    public void XlsxAdapter_RoundTripsDrawingShapeGlowEffectPreset()
+    [Theory]
+    [InlineData(DrawingShapeEffectPreset.InnerShadow, "innerShdw")]
+    [InlineData(DrawingShapeEffectPreset.Glow, "glow")]
+    public void XlsxAdapter_RoundTripsDrawingShapeEffectPreset(DrawingShapeEffectPreset effectPreset, string effectElementName)
     {
-        var workbook = CreateWorkbookWithShape(DrawingShapeEffectPreset.Glow);
+        var workbook = CreateWorkbookWithShape(effectPreset);
         using var stream = new MemoryStream();
         var adapter = new XlsxFileAdapter();
 
         adapter.Save(workbook, stream);
         stream.Position = 0;
 
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var drawingXml = XDocument.Load(archive.GetEntry("xl/drawings/drawing1.xml")!.Open());
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            drawingXml.Descendants(a + effectElementName).Should().ContainSingle();
+        }
+
+        stream.Position = 0;
         var loadedShape = adapter.Load(stream).GetSheetAt(0).DrawingShapes.Should().ContainSingle().Subject;
-        loadedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Glow);
+        loadedShape.EffectPreset.Should().Be(effectPreset);
         loadedShape.HasShadowEffect.Should().BeFalse();
-        loadedShape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.Glow);
+        loadedShape.GetEffectiveEffectPreset().Should().Be(effectPreset);
     }
 
     [Theory]

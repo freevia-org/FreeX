@@ -975,6 +975,9 @@
   <data name="ShapeEffects_Shadow" xml:space="preserve">
     <value>Skygge</value>
   </data>
+  <data name="ShapeEffects_InnerShadow" xml:space="preserve">
+    <value>Inner Shadow</value>
+  </data>
   <data name="ShapeEffects_Glow" xml:space="preserve">
     <value>Glød</value>
   </data>
@@ -987,6 +990,9 @@
   <data name="ShapeEffects_ShadowDescription" xml:space="preserve">
     <value>Anvend en udvendig skyggeeffekt på den valgte form.</value>
   </data>
+  <data name="ShapeEffects_InnerShadowDescription" xml:space="preserve">
+    <value>Apply a bounded inside shadow effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_GlowDescription" xml:space="preserve">
     <value>Anvend en glødende kontureffekt på den valgte form.</value>
   </data>
@@ -997,7 +1003,7 @@
     <value>Form effekt</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Vælg ingen effekt, skygge, glød eller bløde kanter for den valgte form.</value>
+    <value>Choose no effect, shadow, inner shadow, glow, or soft edges for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Beskrivelse af formeffekt</value>

@@ -975,6 +975,9 @@
   <data name="ShapeEffects_Shadow" xml:space="preserve">
     <value>Umbra</value>
   </data>
+  <data name="ShapeEffects_InnerShadow" xml:space="preserve">
+    <value>Inner Shadow</value>
+  </data>
   <data name="ShapeEffects_Glow" xml:space="preserve">
     <value>Strălucire</value>
   </data>
@@ -987,6 +990,9 @@
   <data name="ShapeEffects_ShadowDescription" xml:space="preserve">
     <value>Aplicați un efect de umbră exterioară formei selectate.</value>
   </data>
+  <data name="ShapeEffects_InnerShadowDescription" xml:space="preserve">
+    <value>Apply a bounded inside shadow effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_GlowDescription" xml:space="preserve">
     <value>Aplicați un efect de contur strălucitor formei selectate.</value>
   </data>
@@ -997,7 +1003,7 @@
     <value>Efect de formă</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Nu alegeți niciun efect, umbră, strălucire sau margini moi pentru forma selectată.</value>
+    <value>Choose no effect, shadow, inner shadow, glow, or soft edges for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Descrierea efectului de formă</value>

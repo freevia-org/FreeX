@@ -975,6 +975,9 @@
   <data name="ShapeEffects_Shadow" xml:space="preserve">
     <value>Instantáneas</value>
   </data>
+  <data name="ShapeEffects_InnerShadow" xml:space="preserve">
+    <value>Inner Shadow</value>
+  </data>
   <data name="ShapeEffects_Glow" xml:space="preserve">
     <value>Iluminado exterior</value>
   </data>
@@ -987,6 +990,9 @@
   <data name="ShapeEffects_ShadowDescription" xml:space="preserve">
     <value>Aplica un efecto de sombra exterior a la forma seleccionada.</value>
   </data>
+  <data name="ShapeEffects_InnerShadowDescription" xml:space="preserve">
+    <value>Apply a bounded inside shadow effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_GlowDescription" xml:space="preserve">
     <value>Aplica un efecto de contorno luminoso a la forma seleccionada.</value>
   </data>
@@ -997,7 +1003,7 @@
     <value>Efecto de forma</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Elija ningún efecto, sombra, brillo o bordes suaves para la forma seleccionada.</value>
+    <value>Choose no effect, shadow, inner shadow, glow, or soft edges for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Descripción del efecto de forma</value>

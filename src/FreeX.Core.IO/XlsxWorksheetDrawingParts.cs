@@ -497,6 +497,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
     {
         if (effectList?.Element(drawingNs + "outerShdw") is not null)
             return DrawingShapeEffectPreset.Shadow;
+        if (effectList?.Element(drawingNs + "innerShdw") is not null)
+            return DrawingShapeEffectPreset.InnerShadow;
         if (effectList?.Element(drawingNs + "glow") is not null)
             return DrawingShapeEffectPreset.Glow;
         if (effectList?.Element(drawingNs + "softEdge") is not null)

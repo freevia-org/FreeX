@@ -975,6 +975,9 @@
   <data name="ShapeEffects_Shadow" xml:space="preserve">
     <value>Senca</value>
   </data>
+  <data name="ShapeEffects_InnerShadow" xml:space="preserve">
+    <value>Inner Shadow</value>
+  </data>
   <data name="ShapeEffects_Glow" xml:space="preserve">
     <value>Sijaj</value>
   </data>
@@ -987,6 +990,9 @@
   <data name="ShapeEffects_ShadowDescription" xml:space="preserve">
     <value>Nanesite zunanji senčni učinek na izbrano obliko.</value>
   </data>
+  <data name="ShapeEffects_InnerShadowDescription" xml:space="preserve">
+    <value>Apply a bounded inside shadow effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_GlowDescription" xml:space="preserve">
     <value>Uveljavi učinek žarka v izbrani obliki.</value>
   </data>
@@ -997,7 +1003,7 @@
     <value>Učinek oblike</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Za izbrano obliko ne izberite učinka, sence, sijaja ali mehkih robov.</value>
+    <value>Choose no effect, shadow, inner shadow, glow, or soft edges for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Opis učinka oblike</value>

@@ -111,11 +111,13 @@ public sealed partial class ObjectDialogTests
         plan.Options.Select(option => option.Preset).Should().Equal(
             DrawingShapeEffectPreset.None,
             DrawingShapeEffectPreset.Shadow,
+            DrawingShapeEffectPreset.InnerShadow,
             DrawingShapeEffectPreset.Glow,
             DrawingShapeEffectPreset.SoftEdges);
         plan.Options.Select(option => option.Label).Should().Equal(
             "No Effect",
             "Shadow",
+            "Inner Shadow",
             "Glow",
             "Soft Edges");
     }
@@ -157,7 +159,7 @@ public sealed partial class ObjectDialogTests
                 var effectBox = GetField<ComboBox>(dialog, "_effectBox");
                 AutomationProperties.GetName(effectBox).Should().Be("Shape effect");
                 AutomationProperties.GetAutomationId(effectBox).Should().Be("ShapeEffectsPresetBox");
-                AutomationProperties.GetHelpText(effectBox).Should().Be("Choose no effect, shadow, glow, or soft edges for the selected shape.");
+                AutomationProperties.GetHelpText(effectBox).Should().Be("Choose no effect, shadow, inner shadow, glow, or soft edges for the selected shape.");
                 effectBox.SelectedItem.Should()
                     .BeOfType<ShapeEffectsDialogOption>()
                     .Which.Preset.Should()

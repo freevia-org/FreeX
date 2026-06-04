@@ -975,6 +975,9 @@
   <data name="ShapeEffects_Shadow" xml:space="preserve">
     <value>Tieň</value>
   </data>
+  <data name="ShapeEffects_InnerShadow" xml:space="preserve">
+    <value>Inner Shadow</value>
+  </data>
   <data name="ShapeEffects_Glow" xml:space="preserve">
     <value>Žiara</value>
   </data>
@@ -987,6 +990,9 @@
   <data name="ShapeEffects_ShadowDescription" xml:space="preserve">
     <value>Použiť vonkajší tieňový efekt na vybratý tvar.</value>
   </data>
+  <data name="ShapeEffects_InnerShadowDescription" xml:space="preserve">
+    <value>Apply a bounded inside shadow effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_GlowDescription" xml:space="preserve">
     <value>Na vybraný tvar použite efekt žiariaceho obrysu.</value>
   </data>
@@ -997,7 +1003,7 @@
     <value>Tvarový efekt</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Pre vybratý tvar nevyberajte žiadny efekt, tieň, žiaru alebo jemné okraje.</value>
+    <value>Choose no effect, shadow, inner shadow, glow, or soft edges for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Popis efektu tvaru</value>

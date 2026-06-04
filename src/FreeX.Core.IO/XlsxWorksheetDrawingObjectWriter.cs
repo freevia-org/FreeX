@@ -429,10 +429,21 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XAttribute("dir", "5400000"),
                 ToRgbColorElement(new CellColor(128, 128, 128), drawingNs)));
 
+    private static XElement ToInnerShadowEffect(XNamespace drawingNs) =>
+        new(drawingNs + "effectLst",
+            new XElement(drawingNs + "innerShdw",
+                new XAttribute("blurRad", "38100"),
+                new XAttribute("dist", "19050"),
+                new XAttribute("dir", "5400000"),
+                new XElement(drawingNs + "srgbClr",
+                    new XAttribute("val", "000000"),
+                    new XElement(drawingNs + "alpha", new XAttribute("val", "50000")))));
+
     private static XElement? ToEffectList(DrawingShapeEffectPreset effectPreset, XNamespace drawingNs) =>
         effectPreset switch
         {
             DrawingShapeEffectPreset.Shadow => ToOuterShadowEffect(drawingNs),
+            DrawingShapeEffectPreset.InnerShadow => ToInnerShadowEffect(drawingNs),
             DrawingShapeEffectPreset.Glow => new XElement(drawingNs + "effectLst",
                 new XElement(drawingNs + "glow",
                     new XAttribute("rad", "50000"),

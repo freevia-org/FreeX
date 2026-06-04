@@ -453,12 +453,12 @@ public sealed class ShapeCommandTests
         };
         sheet.DrawingShapes.Add(shape);
 
-        var command = new SetDrawingShapeEffectCommand(sheet.Id, shape.Id, DrawingShapeEffectPreset.Glow);
+        var command = new SetDrawingShapeEffectCommand(sheet.Id, shape.Id, DrawingShapeEffectPreset.InnerShadow);
 
         command.Apply(ctx).Success.Should().BeTrue();
-        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Glow);
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.InnerShadow);
         shape.HasShadowEffect.Should().BeFalse();
-        shape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.Glow);
+        shape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.InnerShadow);
 
         command.Revert(ctx);
 

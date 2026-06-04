@@ -9,10 +9,11 @@ public enum DrawingShapeKind
 
 public enum DrawingShapeEffectPreset
 {
-    None,
-    Shadow,
-    Glow,
-    SoftEdges
+    None = 0,
+    Shadow = 1,
+    Glow = 2,
+    SoftEdges = 3,
+    InnerShadow = 4
 }
 
 public enum DrawingShapeGradientDirection

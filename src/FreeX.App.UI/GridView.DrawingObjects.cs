@@ -320,6 +320,7 @@ public partial class GridView
                 dc.DrawLine(pen, rect.TopLeft, rect.BottomRight);
                 break;
         }
+        DrawShapeAuthoredInnerShadow(dc, shape.Kind, rect, shape);
         DrawShapeThemeInnerShadow(dc, shape.Kind, rect, themeEffect);
         if (rotationPushed) dc.Pop();
     }
@@ -609,6 +610,29 @@ public partial class GridView
                 break;
             case DrawingShapeEffectPreset.SoftEdges:
                 DrawShapeOutlineEffect(dc, kind, rect, alpha: 54, r: 128, g: 128, b: 128, thickness: 8, inflate: 2);
+                break;
+        }
+    }
+
+    private void DrawShapeAuthoredInnerShadow(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
+    {
+        if (shape.GetEffectiveEffectPreset() != DrawingShapeEffectPreset.InnerShadow)
+            return;
+
+        var thickness = GetInnerShadowThickness(4);
+        var shadowRect = GetInnerShadowRect(rect, thickness, offsetX: 1.5, offsetY: 1.5);
+        var pen = GetDrawingObjectPen(alpha: 112, r: 0, g: 0, b: 0, thickness);
+
+        switch (kind)
+        {
+            case DrawingShapeKind.Rectangle:
+                dc.DrawRectangle(null, pen, shadowRect);
+                break;
+            case DrawingShapeKind.Ellipse:
+                dc.DrawEllipse(null, pen, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
+                break;
+            case DrawingShapeKind.Line:
+                dc.DrawLine(pen, shadowRect.TopLeft, shadowRect.BottomRight);
                 break;
         }
     }

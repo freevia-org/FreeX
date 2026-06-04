@@ -40,6 +40,10 @@ internal static class ShapeEffectsDialogPlanner
             UiText.Get("ShapeEffects_Shadow"),
             UiText.Get("ShapeEffects_ShadowDescription")),
         new(
+            DrawingShapeEffectPreset.InnerShadow,
+            UiText.Get("ShapeEffects_InnerShadow"),
+            UiText.Get("ShapeEffects_InnerShadowDescription")),
+        new(
             DrawingShapeEffectPreset.Glow,
             UiText.Get("ShapeEffects_Glow"),
             UiText.Get("ShapeEffects_GlowDescription")),

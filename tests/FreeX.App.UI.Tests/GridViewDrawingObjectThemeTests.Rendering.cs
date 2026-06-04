@@ -117,10 +117,13 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         authoredEffect.Should().Contain("shape.GetEffectiveEffectPreset()");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.Shadow");
+        authoredEffect.Should().Contain("DrawingShapeEffectPreset.InnerShadow");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.Glow");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.SoftEdges");
         authoredEffect.Should().Contain("DrawShapeShadowEffect");
+        authoredEffect.Should().Contain("DrawShapeAuthoredInnerShadow");
         authoredEffect.Should().Contain("DrawShapeOutlineEffect");
+        authoredEffect.Should().Contain("GetInnerShadowRect(rect, thickness, offsetX: 1.5, offsetY: 1.5)");
     }
 
     [Fact]
