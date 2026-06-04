@@ -987,6 +987,9 @@
   <data name="ShapeEffects_SoftEdges" xml:space="preserve">
     <value>Xfar artab</value>
   </data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve">
+    <value>Bevel</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Neħħi l-effetti tal-forma tal-awtur.</value>
   </data>
@@ -1005,11 +1008,14 @@
   <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve">
     <value>Applika effett tarf imrattab għall-forma magħżula.</value>
   </data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve">
+    <value>Apply a raised bevel edge effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Effett tal-forma</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, or soft edges for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Deskrizzjoni tal-effett tal-forma</value>
@@ -2972,7 +2978,7 @@ Ibgħat rapporti tal-ħabta għal din il-bini tat-tester?</value>
     <value>Grilja tal-ispreadsheet. Uża l-vleġeġ biex tinnaviga ċ-ċelloli, F2 biex teditja, u Tab/Daħħal biex tmexxi l-fokus.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Agħżel l-ebda effett, dell, tiddix, jew truf rotob għall-forma magħżula.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>Dwar FreeX</value>
@@ -6215,7 +6221,7 @@ Ibgħat rapporti tal-ħabta għal din il-bini tat-tester?</value>
     <value>Aqleb il-linja tat-tendenza taċ-ċart kurrenti bejn it-tipi ta' linji ta' tendenza li jixbhu lil Excel appoġġjati.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Agħżel l-ebda effett, dell, tiddix, jew truf rotob għall-forma magħżula.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Aqleb il-limiti tal-assi X awtomatiċi jew ibbażati fuq id-dejta għat-tabella attwali.</value>

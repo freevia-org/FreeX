@@ -987,6 +987,9 @@
   <data name="ShapeEffects_SoftEdges" xml:space="preserve">
     <value>Puha élek</value>
   </data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve">
+    <value>Bevel</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>A szerzői alakeffektusok eltávolítása.</value>
   </data>
@@ -1005,11 +1008,14 @@
   <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve">
     <value>Lágyított éleffektus alkalmazása a kiválasztott alakzatra.</value>
   </data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve">
+    <value>Apply a raised bevel edge effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Alakhatás</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, or soft edges for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Alakhatás leírása</value>
@@ -2972,7 +2978,7 @@ Elküldi az összeomlási jelentéseket ehhez a tesztelő buildhez?</value>
     <value>Táblázatrács. Használja a nyílbillentyűket a cellák közötti navigáláshoz, a F2 billentyűket a szerkesztéshez, a Tab/Enter billentyűket pedig a fókusz mozgatásához.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>A kiválasztott alakzathoz ne válasszon hatást, árnyékot, ragyogást vagy lágy éleket.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>A FreeX névjegye</value>
@@ -6215,7 +6221,7 @@ Elküldi az összeomlási jelentéseket ehhez a tesztelő buildhez?</value>
     <value>Az aktuális diagram trendvonalának váltása a támogatott Excel-szerű trendvonaltípusok között.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>A kiválasztott alakzathoz ne válasszon hatást, árnyékot, ragyogást vagy lágy éleket.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Az aktuális diagram automatikus vagy adatalapú X tengely határainak átváltása.</value>

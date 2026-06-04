@@ -14,7 +14,8 @@ public enum DrawingShapeEffectPreset
     Glow = 2,
     SoftEdges = 3,
     InnerShadow = 4,
-    Reflection = 5
+    Reflection = 5,
+    Bevel = 6
 }
 
 public enum DrawingShapeGradientDirection

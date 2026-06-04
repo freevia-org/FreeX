@@ -987,6 +987,9 @@
   <data name="ShapeEffects_SoftEdges" xml:space="preserve">
     <value>Μαλακές άκρες</value>
   </data>
+  <data name="ShapeEffects_Bevel" xml:space="preserve">
+    <value>Bevel</value>
+  </data>
   <data name="ShapeEffects_NoneDescription" xml:space="preserve">
     <value>Καταργήστε τα συγγραφικά εφέ σχήματος.</value>
   </data>
@@ -1005,11 +1008,14 @@
   <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve">
     <value>Εφαρμόστε ένα εφέ απαλής ακμής στο επιλεγμένο σχήμα.</value>
   </data>
+  <data name="ShapeEffects_BevelDescription" xml:space="preserve">
+    <value>Apply a raised bevel edge effect to the selected shape.</value>
+  </data>
   <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
     <value>Εφέ σχήματος</value>
   </data>
   <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
-    <value>Choose no effect, shadow, inner shadow, reflection, glow, or soft edges for the selected shape.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
     <value>Περιγραφή εφέ σχήματος</value>
@@ -2972,7 +2978,7 @@ ZX
     <value>Πλέγμα υπολογιστικών φύλλων. Χρησιμοποιήστε τα πλήκτρα βέλους για πλοήγηση στα κελιά, F2 για επεξεργασία και Tab/Enter για να μετακινήσετε την εστίαση.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Επιλέξτε κανένα εφέ, σκιά, λάμψη ή απαλές άκρες για το επιλεγμένο σχήμα.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>Σχετικά με το FreeX</value>
@@ -6215,7 +6221,7 @@ ZX
     <value>Αλλάξτε την τρέχουσα γραμμή τάσης του γραφήματος μεταξύ των υποστηριζόμενων τύπων γραμμής τάσης που μοιάζουν με Excel.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Επιλέξτε κανένα εφέ, σκιά, λάμψη ή απαλές άκρες για το επιλεγμένο σχήμα.</value>
+    <value>Choose no effect, shadow, inner shadow, reflection, glow, soft edges, or bevel for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Εναλλαγή των αυτόματων ορίων του άξονα X ή των ορίων του άξονα Χ βάσει δεδομένων για το τρέχον γράφημα.</value>
