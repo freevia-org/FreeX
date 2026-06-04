@@ -12,7 +12,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -60,7 +60,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -83,7 +83,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -111,7 +111,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -153,7 +153,7 @@ public sealed partial class ChartCommandTests
             DataTable = null
         };
         sheet.Charts.Add(chart);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new ConfigurePivotChartOptionsCommand(
             sheet.Id,
@@ -207,7 +207,7 @@ public sealed partial class ChartCommandTests
             DataTable = existingDataTable
         };
         sheet.Charts.Add(chart);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new ConfigurePivotChartOptionsCommand(
             sheet.Id,
@@ -261,7 +261,7 @@ public sealed partial class ChartCommandTests
             }
         };
         sheet.Charts.Add(chart);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new ConfigurePivotChartOptionsCommand(
             sheet.Id,
@@ -305,7 +305,7 @@ public sealed partial class ChartCommandTests
             BlankDisplayMode = ChartBlankDisplayMode.Gap
         };
         sheet.Charts.Add(chart);
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
 
         var command = new ConfigurePivotChartOptionsCommand(
             sheet.Id,
