@@ -387,14 +387,17 @@ single-column transforms including dotted-token extraction with variable dot cou
 dotted/underscored/hyphenated email display-name cleanup, plus-address email local-part tag removal,
 spaced or compact pipe/arrow label-value splitting, digit-mask formatting
 such as phone-number punctuation copied from examples, calendar-valid embedded-date extraction/normalization from
-labeled text with ambiguous multi-date sources rejected, and two-part full-name reordering such as `Ada Lovelace` to
+labeled text with ambiguous multi-date sources rejected, English month-name date component extraction that preserves
+raw month tokens while normalizing ordinal day tokens, and two-part full-name reordering such as `Ada Lovelace` to
 `Lovelace, Ada`, plus a small multi-column pattern set. First/last-name,
 first-initial/last-name, and last-name/first-initial email generation learn constant
 domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/last-initial aliases. It returns no result when the examples are ambiguous.
 
 Spell Check remains a deterministic known-corrections service in `Core.Commands`, not dictionary-backed proofing. It
 scans literal text cells, notes, threaded comment roots, and threaded comment replies in deterministic sheet/address order
-and plans undoable replacement edits while leaving formula cells alone.
+and plans undoable replacement edits while leaving formula cells alone. The known-corrections catalog covers bounded
+office, spreadsheet, planning, risk/action, and invoice/supply-chain vocabulary while preserving ignored URL, email,
+file path, identifier, and prefixed-word spans.
 The host workflow keeps Ignore All case-insensitive for the current pass and persists Add to Dictionary custom words
 through `FreeXOptions` so matching scanner results stay suppressed across sessions/workbooks without introducing a full
 proofing dictionary engine.
