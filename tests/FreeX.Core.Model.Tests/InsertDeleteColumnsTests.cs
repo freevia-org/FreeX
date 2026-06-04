@@ -54,19 +54,7 @@ public partial class InsertDeleteColumnsTests
     }
 
     private static string FindWorkspaceFile(params string[] parts)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(new[] { dir.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            dir = dir.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not find workspace file {Path.Combine(parts)}");
-    }
+        => WorkspaceFileLocator.Find(parts);
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
