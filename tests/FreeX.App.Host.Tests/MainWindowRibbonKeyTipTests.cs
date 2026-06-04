@@ -5,6 +5,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -132,6 +133,20 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 ?? throw new InvalidOperationException($"{name} was not found.");
             return element.TransformToAncestor(root)
                 .TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+        }
+
+        public Rect RibbonButtonBoundsByTitle(string title)
+        {
+            var root = (_window.FindName("RootGrid") as FrameworkElement)
+                ?? throw new InvalidOperationException("RootGrid was not found.");
+            var matches = SelectedRibbonCommandButtons()
+                .Where(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal))
+                .ToList();
+            matches.Should().ContainSingle($"the selected ribbon tab should expose one visible {title} button");
+
+            var button = matches[0];
+            return button.TransformToAncestor(root)
+                .TransformBounds(new Rect(0, 0, button.ActualWidth, button.ActualHeight));
         }
 
         public bool ActiveMenuIsOpen => ActiveMenu?.IsOpen == true;
@@ -456,6 +471,19 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         private ContextMenu? ActiveMenu => _activeMenuField.GetValue(_window) as ContextMenu;
 
+        private IEnumerable<ButtonBase> SelectedRibbonCommandButtons()
+        {
+            if (_window.FindName("RibbonTabs") is not TabControl { SelectedItem: TabItem selectedTab })
+                return [];
+
+            var root = selectedTab.Content as DependencyObject ?? selectedTab;
+            return EnumerateSelfAndVisualDescendants(root)
+                .Concat(EnumerateLogicalDescendants(root))
+                .OfType<ButtonBase>()
+                .Distinct()
+                .Where(button => button.IsVisible);
+        }
+
         private MenuItem? FindActiveMenuItem(string header) =>
             ActiveMenu is { } menu
                 ? EnumerateMenuItems(menu).FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal))
@@ -754,6 +782,41 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
                 foreach (var child in EnumerateMenuItems(menuItem))
                     yield return child;
+            }
+        }
+
+        private static IEnumerable<DependencyObject> EnumerateSelfAndVisualDescendants(DependencyObject root)
+        {
+            yield return root;
+
+            var childCount = 0;
+            try
+            {
+                childCount = VisualTreeHelper.GetChildrenCount(root);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            for (var index = 0; index < childCount; index++)
+            {
+                var child = VisualTreeHelper.GetChild(root, index);
+                foreach (var descendant in EnumerateSelfAndVisualDescendants(child))
+                    yield return descendant;
+            }
+        }
+
+        private static IEnumerable<DependencyObject> EnumerateLogicalDescendants(DependencyObject root)
+        {
+            foreach (var child in LogicalTreeHelper.GetChildren(root))
+            {
+                if (child is not DependencyObject dependencyObject)
+                    continue;
+
+                yield return dependencyObject;
+
+                foreach (var descendant in EnumerateLogicalDescendants(dependencyObject))
+                    yield return descendant;
             }
         }
     }

@@ -11,11 +11,13 @@ public static partial class PrintRenderer
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
         ICollection<PdfLinkOverlay> linkOverlays,
+        ICollection<PdfCellDestinationOverlay> cellDestinationOverlays,
         PrintGridMeasurement measurement,
         IReadOnlyList<uint> pageRows,
         IReadOnlyList<uint> pageColumns,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
         IReadOnlyDictionary<(uint Row, uint Col), PdfLinkTarget> hyperlinkLookup,
+        IReadOnlyDictionary<(uint Row, uint Col), CellAddress> cellDestinationLookup,
         bool printGridlines,
         WorksheetPrintErrorValue printErrorValue,
         double gridLeft,
@@ -44,6 +46,18 @@ public static partial class PrintRenderer
                     linkOverlays.Add(new PdfLinkOverlay(
                         link.Target,
                         link.TargetKind,
+                        x,
+                        y,
+                        colWidth,
+                        rowHeight,
+                        link.SourceAddress,
+                        link.TargetAddress));
+                }
+
+                if (cellDestinationLookup.TryGetValue((row, col), out var destinationAddress))
+                {
+                    cellDestinationOverlays.Add(new PdfCellDestinationOverlay(
+                        destinationAddress,
                         x,
                         y,
                         colWidth,

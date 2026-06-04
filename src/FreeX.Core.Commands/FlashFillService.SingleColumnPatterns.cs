@@ -371,6 +371,9 @@ public static partial class FlashFillService
     {
         stemStart = 0;
         stemEndExclusive = 0;
+        if (IsHttpOrHttpsUrlCandidate(source))
+            return false;
+
         var lastSeparatorIndex = Math.Max(source.LastIndexOf('/'), source.LastIndexOf('\\'));
         if (lastSeparatorIndex < 0 || lastSeparatorIndex == source.Length - 1)
             return false;

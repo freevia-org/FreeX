@@ -241,6 +241,58 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_FinalUrlPathSegmentStem_StripsQueryFragmentAndExtension()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike.html", "road-bike"),
+                ("https://docs.example.com/help/safety-guide.pdf?download=v1.2#top", "safety-guide")
+            ],
+            ["https://example.com/releases/FreeX-Setup.exe?channel=stable#download"]);
+
+        result.Should().BeEquivalentTo(["FreeX-Setup"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FinalUrlPathSegmentStem_ReturnsNullForHostOnlyRemainingUrl()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike.html", "road-bike"),
+                ("https://docs.example.com/help/safety-guide.pdf?download=1#top", "safety-guide")
+            ],
+            ["https://example.com"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_FinalUrlPathSegmentStem_ReturnsNullForEmptyRemainingUrlPathSegment()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike.html", "road-bike"),
+                ("https://docs.example.com/help/safety-guide.pdf?download=1#top", "safety-guide")
+            ],
+            ["https://example.com/releases/?download=1#top"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_FinalUrlPathSegmentStem_ReturnsNullForHostOnlyExample()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike.html", "road-bike"),
+                ("https://example.com", "example")
+            ],
+            ["https://example.com/releases/FreeX-Setup.exe"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_WebAddressCleanup_HandlesBareWebAddresses()
     {
         var result = FlashFillService.Fill(

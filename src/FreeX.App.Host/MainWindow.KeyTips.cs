@@ -183,8 +183,13 @@ public partial class MainWindow
             TabItem => RibbonKeyTipBadgeKind.Tab,
             _ when RibbonMetadata.IsCollapsedGroupButton(element) => RibbonKeyTipBadgeKind.CollapsedGroup,
             ComboBox => RibbonKeyTipBadgeKind.ComboBox,
+            _ when IsDropdownCommandKeyTipElement(element) => RibbonKeyTipBadgeKind.DropdownCommand,
             _ => RibbonKeyTipBadgeKind.Command
         };
+
+    private static bool IsDropdownCommandKeyTipElement(FrameworkElement element) =>
+        element is ButtonBase button &&
+        (button.ContextMenu is not null || RibbonMetadata.IsDropdownMenuButton(button));
 
     private bool ShouldShowKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope)
     {
