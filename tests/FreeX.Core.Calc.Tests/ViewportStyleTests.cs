@@ -176,7 +176,7 @@ public class ViewportStyleTests
     [Fact]
     public void FrozenViewportMetrics_AvoidLinqListMaterialization()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "ViewportService.Metrics.cs"));
         var frozenMetricHelpers = source[
             source.IndexOf("private static IReadOnlyList<RowMetric> BuildFrozenAwareRowMetrics", StringComparison.Ordinal)..
@@ -199,9 +199,9 @@ public class ViewportStyleTests
     [Fact]
     public void DefaultViewportMetrics_UseLazyListsBeforeAllocatingMetricObjects()
     {
-        var metricsSource = File.ReadAllText(FindWorkspaceFile(
+        var metricsSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "ViewportService.Metrics.cs"));
-        var viewportSource = File.ReadAllText(FindWorkspaceFile(
+        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "ViewportService.cs"));
         var rowMetrics = metricsSource[
             metricsSource.IndexOf("private static IReadOnlyList<RowMetric> BuildRowMetrics", StringComparison.Ordinal)..
@@ -233,7 +233,7 @@ public class ViewportStyleTests
     [Fact]
     public void TerminalViewportMetrics_SkipDefaultSheetBackwardProbeBeforeAllocatingLists()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.Core.Calc", "ViewportService.Metrics.cs"));
         var terminalRowMetrics = source[
             source.IndexOf("private static List<RowMetric>? BuildTerminalRowMetrics", StringComparison.Ordinal)..
@@ -286,6 +286,4 @@ public class ViewportStyleTests
             .Should().BeFalse("value 20 equals the average, not strictly above");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-        => WorkspaceFileLocator.Find(relativeParts);
 }
