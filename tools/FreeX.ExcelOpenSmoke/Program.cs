@@ -288,6 +288,7 @@ internal static class ExcelOpenSmoke
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
+                AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 sourceForExcel = freeXSave.SavedPath;
                 freeXSavedPath = freeXSave.SavedPath;
                 freeXPreSave = freeXSave.Summary;
@@ -566,7 +567,31 @@ internal static class ExcelOpenSmoke
         WorkbookSmokeExpectations? expectations,
         string sourcePath)
     {
-        var requiredParts = expectations?.RequiredExcelSavedPackageParts;
+        AssertRequiredPackageParts(
+            xlsxPath,
+            expectations?.RequiredExcelSavedPackageParts,
+            "Excel-saved workbook",
+            sourcePath);
+    }
+
+    private static void AssertRequiredFreeXSavedPackageParts(
+        string xlsxPath,
+        WorkbookSmokeExpectations? expectations,
+        string sourcePath)
+    {
+        AssertRequiredPackageParts(
+            xlsxPath,
+            expectations?.RequiredFreeXSavedPackageParts,
+            "FreeX-saved workbook",
+            sourcePath);
+    }
+
+    private static void AssertRequiredPackageParts(
+        string xlsxPath,
+        IReadOnlyList<string>? requiredParts,
+        string label,
+        string sourcePath)
+    {
         if (requiredParts is null || requiredParts.Count == 0)
             return;
 
@@ -583,7 +608,7 @@ internal static class ExcelOpenSmoke
             return;
 
         throw new InvalidDataException(
-            $"Excel-saved workbook for '{sourcePath}' is missing required package part(s): {string.Join(", ", missing)}");
+            $"{label} for '{sourcePath}' is missing required package part(s): {string.Join(", ", missing)}");
     }
 
     private static string NormalizePackagePart(string part) =>
@@ -2547,6 +2572,11 @@ internal static class ExcelOpenSmoke
         {
             expectations = EnsureExpectations() with
             {
+                RequiredFreeXSavedPackageParts =
+                [
+                    "xl/printerSettings/printerSettings1.bin",
+                    "xl/worksheets/_rels/sheet1.xml.rels"
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/printerSettings/printerSettings1.bin",
@@ -2558,9 +2588,24 @@ internal static class ExcelOpenSmoke
         {
             expectations = EnsureExpectations() with
             {
+                RequiredFreeXSavedPackageParts =
+                [
+                    "xl/calcChain.xml"
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/calcChain.xml"
+                ]
+            };
+        }
+        else if (string.Equals(row.Id, "generated-document-properties-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                RequiredFreeXSavedPackageParts =
+                [
+                    "docProps/core.xml",
+                    "docProps/app.xml"
                 ]
             };
         }
@@ -2568,9 +2613,29 @@ internal static class ExcelOpenSmoke
         {
             expectations = EnsureExpectations() with
             {
+                RequiredFreeXSavedPackageParts =
+                [
+                    "xl/drawings/vmlDrawing1.vml",
+                    "xl/drawings/_rels/vmlDrawing1.vml.rels",
+                    "xl/media/headerFooterImage1.png",
+                    "xl/worksheets/_rels/sheet1.xml.rels"
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/drawings/vmlDrawing1.vml",
+                    "xl/worksheets/_rels/sheet1.xml.rels"
+                ]
+            };
+        }
+        else if (string.Equals(row.Id, "generated-worksheet-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                RequiredFreeXSavedPackageParts =
+                [
+                    "xl/drawings/vmlDrawing1.vml",
+                    "xl/drawings/_rels/vmlDrawing1.vml.rels",
+                    "xl/media/vmlImage1.png",
                     "xl/worksheets/_rels/sheet1.xml.rels"
                 ]
             };
@@ -2579,6 +2644,11 @@ internal static class ExcelOpenSmoke
         {
             expectations = EnsureExpectations() with
             {
+                RequiredFreeXSavedPackageParts =
+                [
+                    "xl/slicers/slicer1.xml",
+                    "xl/slicerCaches/slicerCache1.xml"
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/slicers/slicer1.xml",
@@ -2590,6 +2660,11 @@ internal static class ExcelOpenSmoke
         {
             expectations = EnsureExpectations() with
             {
+                RequiredFreeXSavedPackageParts =
+                [
+                    "xl/timelines/timeline1.xml",
+                    "xl/timelineCaches/timelineCache1.xml"
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/timelines/timeline1.xml",
@@ -2601,6 +2676,11 @@ internal static class ExcelOpenSmoke
         {
             expectations = EnsureExpectations() with
             {
+                RequiredFreeXSavedPackageParts =
+                [
+                    "xl/externalLinks/externalLink1.xml",
+                    "xl/externalLinks/_rels/externalLink1.xml.rels"
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/externalLinks/externalLink1.xml",
@@ -2612,6 +2692,12 @@ internal static class ExcelOpenSmoke
         {
             expectations = EnsureExpectations() with
             {
+                RequiredFreeXSavedPackageParts =
+                [
+                    "customXml/item1.xml",
+                    "customXml/itemProps1.xml",
+                    "customXml/_rels/item1.xml.rels"
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "customXml/item1.xml",
@@ -3890,6 +3976,12 @@ internal static class ExcelOpenSmoke
         }
         if (result.FreeXSavedPath is not null)
             Console.WriteLine($"  FreeX saved: {result.FreeXSavedPath}");
+        if (result.FreeXSavedPath is not null &&
+            result.Input.Expectations?.RequiredFreeXSavedPackageParts is { Count: > 0 } freeXRequiredParts)
+        {
+            Console.WriteLine(
+                $"  FreeX-saved package parts asserted: {string.Join(", ", freeXRequiredParts)}");
+        }
         if (result.StagedPath is not null)
             Console.WriteLine($"  Staged: {result.StagedPath}");
         if (result.ExcelSavedPath is not null)

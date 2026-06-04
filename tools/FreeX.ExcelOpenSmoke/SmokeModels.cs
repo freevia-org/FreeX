@@ -158,6 +158,7 @@ internal sealed record WorkbookSmokeExpectations(
     int MinFreeXReopenedPivotTables = 0,
     int MinFreeXReopenedPivotCaches = 0,
     bool RequireNoFreeXLoadWarnings = false,
+    IReadOnlyList<string>? RequiredFreeXSavedPackageParts = null,
     IReadOnlyList<string>? RequiredExcelSavedPackageParts = null);
 
 internal sealed record WorkbookSmokeResult(
