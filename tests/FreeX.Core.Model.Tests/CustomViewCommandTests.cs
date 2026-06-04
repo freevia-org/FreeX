@@ -258,17 +258,5 @@ public sealed class CustomViewCommandTests
     }
 
     private static string FindWorkspaceFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. parts]);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate {Path.Combine(parts)} from {AppContext.BaseDirectory}.");
-    }
+        => WorkspaceFileLocator.Find(parts);
 }
