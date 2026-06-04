@@ -9,7 +9,6 @@
   <ItemGroup>
     <Compile Include="..\..\tests\FreeX.Core.IO.Tests\TestWorkspaceFiles.cs" Link="CorpusFixtures\%(Filename)%(Extension)" />
     <Compile Include="..\..\tests\FreeX.Core.IO.Tests\XlsxCorpusFixtureFactory*.cs" Link="CorpusFixtures\%(Filename)%(Extension)" />
-    <Compile Include="..\..\tests\FreeX.Core.IO.Tests\TestWorkspaceFiles.cs" Link="CorpusFixtures\TestWorkspaceFiles.cs" />
   </ItemGroup>
 
   <PropertyGroup>
