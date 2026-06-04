@@ -742,6 +742,42 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversRiskActionTrackingVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "RISCK riks isssue isue ACTOIN acion ownre owenr mitgation mitgiate escallate esclation followup. Keep risk, issue, action, owner, mitigation, mitigate, escalate, escalation, follow-up, prerisck, risck_id, https://risck.example.com/actoin, reviewer@isue.example.com, and \"C:\\mitgation folder\\escallate file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("RISCK", "RISK"),
+            ("riks", "risk"),
+            ("isssue", "issue"),
+            ("isue", "issue"),
+            ("ACTOIN", "ACTION"),
+            ("acion", "action"),
+            ("ownre", "owner"),
+            ("owenr", "owner"),
+            ("mitgation", "mitigation"),
+            ("mitgiate", "mitigate"),
+            ("escallate", "escalate"),
+            ("esclation", "escalation"),
+            ("followup", "follow-up"));
+        plan.IssueCount.Should().Be(13);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "RISK risk issue issue ACTION action owner owner mitigation mitigate escalate escalation follow-up. Keep risk, issue, action, owner, mitigation, mitigate, escalate, escalation, follow-up, prerisck, risck_id, https://risck.example.com/actoin, reviewer@isue.example.com, and \"C:\\mitgation folder\\escallate file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(13);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");
