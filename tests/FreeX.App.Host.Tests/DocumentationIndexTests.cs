@@ -280,7 +280,8 @@ public sealed partial class DocumentationIndexTests
             "XLSX_TEST_CORPUS_PLAN.md",
             "TEST_DISTRIBUTION_PLAN.md",
             "TESTER_RELEASE_CHECKLIST.md",
-            "PERF_BASELINE.md"
+            "PERF_BASELINE.md",
+            "PERFORMANCE_BACKLOG_2026-06-04.md"
         };
 
         foreach (var doc in currentDocs)

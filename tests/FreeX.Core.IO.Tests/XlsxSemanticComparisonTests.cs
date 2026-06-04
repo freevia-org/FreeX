@@ -82,7 +82,7 @@ public sealed class XlsxSemanticComparisonTests
         var loaded = adapter.Load(package);
         loaded.ExternalLinks.Should().ContainSingle(link =>
             link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
-            link.TargetUri == "file:///C:/FreeX/ExternalWorkbook.xlsx" &&
+            link.TargetUri == "ExternalWorkbook.xlsx" &&
             link.TargetMode == "External");
 
         var sheet = loaded.GetSheetAt(0);
