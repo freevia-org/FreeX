@@ -14,7 +14,7 @@ public sealed partial class StructuredTableCommandTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
 
         var outcome = new CreateStructuredTableCommand(sheet.Id, range, "TableStyleMedium2").Apply(ctx);
@@ -45,7 +45,7 @@ public sealed partial class StructuredTableCommandTests
             DisplayName = "Table1",
             Range = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 6, 2))
         });
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new CreateStructuredTableCommand(
             sheet.Id,
             new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3)),
@@ -70,7 +70,7 @@ public sealed partial class StructuredTableCommandTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("North"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(120));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
 
         var outcome = new CreateStructuredTableCommand(
@@ -91,7 +91,7 @@ public sealed partial class StructuredTableCommandTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var other = wb.AddSheet("Other");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var existing = new StructuredTableModel
         {
             Id = 1,
@@ -123,7 +123,7 @@ public sealed partial class StructuredTableCommandTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2));
 
         var outcome = new CreateStructuredTableCommand(sheet.Id, range, "TableStyleMedium2").Apply(ctx);

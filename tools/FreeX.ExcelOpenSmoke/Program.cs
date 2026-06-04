@@ -56,6 +56,7 @@ internal static class ExcelOpenSmoke
     private const int MaxStructureProbeRows = 200;
     private const int MaxStructureProbeColumns = 80;
     private const int MaxOpenXmlValidationErrorsToReport = 20;
+    private const int MaxPackageEntryIssuesToReport = 20;
     private const int MaxPackageContentTypeIssuesToReport = 20;
     private const int MaxPackageRelationshipIssuesToReport = 20;
     private const double ExcelMeasurementTolerance = 0.01;
@@ -294,6 +295,7 @@ internal static class ExcelOpenSmoke
             {
                 var freeXSave = SaveThroughFreeX(input.SourcePath, freeXSavedDirectory);
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
+                AssertPackageEntriesCanonical(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
                 AssertPackageContentTypesComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPackageRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -469,6 +471,7 @@ internal static class ExcelOpenSmoke
             ReleaseComObject(workbook);
             workbook = null;
             CollectComReferences();
+            AssertPackageEntriesCanonical(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
             AssertPackageContentTypesComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPackageRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -703,6 +706,57 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' is missing required package content type(s): {string.Join("; ", missing)}");
+    }
+
+    private static void AssertPackageEntriesCanonical(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+        var exactNames = new HashSet<string>(StringComparer.Ordinal);
+        var packagePartNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in archive.Entries.Where(entry => !string.IsNullOrEmpty(entry.Name)))
+        {
+            var rawName = entry.FullName;
+            var normalizedName = rawName.Replace('\\', '/');
+
+            if (rawName.Contains('\\', StringComparison.Ordinal))
+                issues.Add($"{rawName} uses a backslash in the package part name");
+            if (normalizedName.StartsWith("/", StringComparison.Ordinal))
+                issues.Add($"{rawName} starts with '/'");
+            if (normalizedName.Contains("//", StringComparison.Ordinal))
+                issues.Add($"{rawName} has an empty path segment");
+
+            var segments = normalizedName.Split('/', StringSplitOptions.None);
+            if (segments.Any(segment => segment is "." or ".."))
+                issues.Add($"{rawName} has a relative path segment");
+
+            if (!exactNames.Add(normalizedName))
+            {
+                issues.Add($"{rawName} duplicates package part {normalizedName}");
+                continue;
+            }
+
+            if (packagePartNames.TryGetValue(normalizedName, out var existingName))
+            {
+                issues.Add($"{rawName} collides with package part {existingName} when compared case-insensitively");
+            }
+            else
+            {
+                packagePartNames.Add(normalizedName, normalizedName);
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        var sample = string.Join("; ", issues.Take(MaxPackageEntryIssuesToReport));
+        var suffix = issues.Count > MaxPackageEntryIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageEntryIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid package ZIP entries: {sample}{suffix}");
     }
 
     private static void AssertPackageContentTypesComplete(string xlsxPath, string label, string sourcePath)
