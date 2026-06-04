@@ -77,6 +77,8 @@ internal static class ExcelOpenSmoke
     private const string OfficeDocumentRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string PackageRootRelationshipPart = "_rels/.rels";
+    private const string RelationshipPartContentType =
+        "application/vnd.openxmlformats-package.relationships+xml";
     private const string WorkbookContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
     private const string WorkbookPart = "xl/workbook.xml";
@@ -1417,7 +1419,19 @@ internal static class ExcelOpenSmoke
             .ToArray();
 
         if (missing.Length == 0)
-            return;
+        {
+            var consistencyIssues = FindPackageContentTypeConsistencyIssues(contentTypesXml, packageParts);
+            if (consistencyIssues.Count == 0)
+                return;
+
+            var consistencySample = string.Join("; ", consistencyIssues.Take(MaxPackageContentTypeIssuesToReport));
+            var consistencySuffix = consistencyIssues.Count > MaxPackageContentTypeIssuesToReport
+                ? $"; ... {consistencyIssues.Count - MaxPackageContentTypeIssuesToReport} more"
+                : string.Empty;
+
+            throw new InvalidDataException(
+                $"{label} for '{sourcePath}' has inconsistent package content types: {consistencySample}{consistencySuffix}");
+        }
 
         var sample = string.Join(", ", missing.Take(MaxPackageContentTypeIssuesToReport));
         var suffix = missing.Length > MaxPackageContentTypeIssuesToReport
@@ -1426,6 +1440,42 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has package part(s) without effective content types: {sample}{suffix}");
+    }
+
+    private static List<string> FindPackageContentTypeConsistencyIssues(
+        XDocument contentTypesXml,
+        IReadOnlySet<string> packageParts)
+    {
+        var issues = new List<string>();
+        foreach (var part in packageParts
+                     .Where(part => !string.Equals(part, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(part => part, StringComparer.OrdinalIgnoreCase))
+        {
+            var contentType = GetEffectivePackageContentType(contentTypesXml, part);
+            if (string.IsNullOrWhiteSpace(contentType))
+                continue;
+
+            var isRelationshipPart = IsPackageRelationshipPart(part);
+            var hasRelationshipExtension = part.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+            var hasRelationshipContentType = string.Equals(
+                contentType,
+                RelationshipPartContentType,
+                StringComparison.OrdinalIgnoreCase);
+
+            if (isRelationshipPart && !hasRelationshipContentType)
+            {
+                issues.Add($"{part} must use relationship content type {RelationshipPartContentType}; actual {contentType}");
+            }
+            else if (!isRelationshipPart && hasRelationshipContentType)
+            {
+                issues.Add($"{part} uses relationship content type but is not a valid relationship part");
+            }
+
+            if (hasRelationshipExtension && !isRelationshipPart)
+                issues.Add($"{part} has .rels extension outside a valid relationship part location");
+        }
+
+        return issues;
     }
 
     private static List<string> FindPackageContentTypeDeclarationIssues(
