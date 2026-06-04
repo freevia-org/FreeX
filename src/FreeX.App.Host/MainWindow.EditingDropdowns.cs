@@ -69,11 +69,9 @@ public partial class MainWindow
 
     private static DataValidation? FindValidationDropdownRule(Sheet sheet, CellAddress address)
     {
-        foreach (var rule in sheet.DataValidations)
+        foreach (var rule in DataValidationService.GetApplicable(sheet, address))
         {
-            if (rule.Type == DvType.List &&
-                rule.ShowDropdown &&
-                DataValidationService.AppliesTo(rule, address))
+            if (rule.Type == DvType.List && rule.ShowDropdown)
             {
                 return rule;
             }

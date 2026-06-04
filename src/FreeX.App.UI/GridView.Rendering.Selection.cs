@@ -8,6 +8,7 @@ namespace FreeX.App.UI;
 public partial class GridView
 {
     private QuickAnalysisDataBarPreviewGeometryCache? _quickAnalysisDataBarPreviewGeometryCache;
+    private QuickAnalysisPreviewGeometryCache? _quickAnalysisPreviewGeometryCache;
 
     // Returns pixel coords for a range, clamped to viewport boundaries.
     private (double? top, double? left, double? bottom, double? right) GetRangePixels(
@@ -110,43 +111,59 @@ public partial class GridView
                 DrawQuickAnalysisDataBarPreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
             case GridQuickAnalysisPreviewVisualKind.ColorScale:
-                var colorScaleConsumer = new ColorScaleRectConsumer(dc);
-                QuickAnalysisPreviewLayoutPlanner.VisitCellPreviewRects(
-                    Viewport,
-                    range,
-                    rowHeaderWidth,
-                    columnHeaderHeight,
-                    ref colorScaleConsumer);
+                DrawQuickAnalysisColorScalePreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
             case GridQuickAnalysisPreviewVisualKind.IconSet:
-                var iconSetConsumer = new IconSetRectConsumer(dc);
-                QuickAnalysisPreviewLayoutPlanner.VisitCellPreviewRects(
-                    Viewport,
+                DrawQuickAnalysisIconSetPreview(dc, range, rowHeaderWidth, columnHeaderHeight);
+                break;
+            case GridQuickAnalysisPreviewVisualKind.Highlight:
+                DrawQuickAnalysisCellOverlays(
+                    dc,
                     range,
                     rowHeaderWidth,
                     columnHeaderHeight,
-                    ref iconSetConsumer);
-                break;
-            case GridQuickAnalysisPreviewVisualKind.Highlight:
-                DrawQuickAnalysisCellOverlays(dc, QuickAnalysisHighlightPreviewBrush, QuickAnalysisHighlightPreviewPen);
+                    GridQuickAnalysisPreviewVisualKind.Highlight,
+                    QuickAnalysisHighlightPreviewBrush,
+                    QuickAnalysisHighlightPreviewPen);
                 break;
             case GridQuickAnalysisPreviewVisualKind.ClearFormat:
-                DrawQuickAnalysisCellOverlays(dc, QuickAnalysisClearFormatPreviewBrush, QuickAnalysisClearFormatPreviewPen);
+                DrawQuickAnalysisCellOverlays(
+                    dc,
+                    range,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    GridQuickAnalysisPreviewVisualKind.ClearFormat,
+                    QuickAnalysisClearFormatPreviewBrush,
+                    QuickAnalysisClearFormatPreviewPen);
                 break;
             case GridQuickAnalysisPreviewVisualKind.TotalFormula:
-                DrawQuickAnalysisCellOverlays(dc, QuickAnalysisTotalPreviewBrush, QuickAnalysisTotalPreviewPen);
+                DrawQuickAnalysisCellOverlays(
+                    dc,
+                    range,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    GridQuickAnalysisPreviewVisualKind.TotalFormula,
+                    QuickAnalysisTotalPreviewBrush,
+                    QuickAnalysisTotalPreviewPen);
                 break;
             case GridQuickAnalysisPreviewVisualKind.Table:
-                DrawQuickAnalysisCellOverlays(dc, QuickAnalysisTablePreviewBrush, QuickAnalysisTablePreviewPen);
+                DrawQuickAnalysisCellOverlays(
+                    dc,
+                    range,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    GridQuickAnalysisPreviewVisualKind.Table,
+                    QuickAnalysisTablePreviewBrush,
+                    QuickAnalysisTablePreviewPen);
                 break;
             case GridQuickAnalysisPreviewVisualKind.LineSparkline:
-                DrawQuickAnalysisLineSparklinePreview(dc);
+                DrawQuickAnalysisLineSparklinePreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
             case GridQuickAnalysisPreviewVisualKind.ColumnSparkline:
-                DrawQuickAnalysisColumnSparklinePreview(dc);
+                DrawQuickAnalysisColumnSparklinePreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
             case GridQuickAnalysisPreviewVisualKind.WinLossSparkline:
-                DrawQuickAnalysisWinLossSparklinePreview(dc);
+                DrawQuickAnalysisWinLossSparklinePreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
             case GridQuickAnalysisPreviewVisualKind.ColumnChart:
                 DrawQuickAnalysisColumnChartPreview(dc, rect.Value);
@@ -241,65 +258,493 @@ public partial class GridView
         dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, geometry);
     }
 
-    private void DrawQuickAnalysisCellOverlays(DrawingContext dc, Brush brush, Pen pen)
+    private void DrawQuickAnalysisColorScalePreview(
+        DrawingContext dc,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
     {
-        if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
+        var viewport = Viewport!;
+        var cache = GetQuickAnalysisPreviewGeometryCache(
+                GridQuickAnalysisPreviewVisualKind.ColorScale,
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight)
+            ?? BuildQuickAnalysisColorScalePreviewGeometryCache(viewport, range, rowHeaderWidth, columnHeaderHeight);
+        if (cache.BrushGeometries is not { } geometries)
             return;
 
-        var consumer = new FillStrokeRectConsumer(dc, brush, pen);
-        QuickAnalysisPreviewLayoutPlanner.VisitCellPreviewRects(
-            Viewport,
-            range,
-            ActualRowHeaderWidth,
-            EffectiveColHeaderHeight,
-            ref consumer);
+        for (var i = 0; i < geometries.Length && i < QuickAnalysisColorScalePreviewBrushes.Length; i++)
+        {
+            if (geometries[i] is { } geometry)
+                dc.DrawGeometry(QuickAnalysisColorScalePreviewBrushes[i], null, geometry);
+        }
     }
 
-    private void DrawQuickAnalysisLineSparklinePreview(DrawingContext dc)
+    private QuickAnalysisPreviewGeometryCache BuildQuickAnalysisColorScalePreviewGeometryCache(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
     {
-        if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
+        var streamGeometries = new StreamGeometry[QuickAnalysisColorScalePreviewBrushes.Length];
+        var contexts = new StreamGeometryContext[streamGeometries.Length];
+        var counts = new int[streamGeometries.Length];
+        for (var i = 0; i < streamGeometries.Length; i++)
+        {
+            streamGeometries[i] = new StreamGeometry();
+            contexts[i] = streamGeometries[i].Open();
+        }
+
+        try
+        {
+            var consumer = new ColorScaleGeometryConsumer(contexts, counts);
+            QuickAnalysisPreviewLayoutPlanner.VisitCellPreviewRects(
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                ref consumer);
+        }
+        finally
+        {
+            foreach (var context in contexts)
+                ((IDisposable)context).Dispose();
+        }
+
+        var geometries = new Geometry?[streamGeometries.Length];
+        for (var i = 0; i < streamGeometries.Length; i++)
+        {
+            if (counts[i] == 0)
+                continue;
+
+            streamGeometries[i].Freeze();
+            geometries[i] = streamGeometries[i];
+        }
+
+        return CacheQuickAnalysisPreviewGeometry(
+            GridQuickAnalysisPreviewVisualKind.ColorScale,
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            geometry: null,
+            secondaryGeometry: null,
+            brushGeometries: geometries);
+    }
+
+    private void DrawQuickAnalysisIconSetPreview(
+        DrawingContext dc,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var viewport = Viewport!;
+        var cache = GetQuickAnalysisPreviewGeometryCache(
+                GridQuickAnalysisPreviewVisualKind.IconSet,
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight)
+            ?? BuildQuickAnalysisIconSetPreviewGeometryCache(viewport, range, rowHeaderWidth, columnHeaderHeight);
+        if (cache.BrushGeometries is not { } geometries)
             return;
 
-        var consumer = new LineSparklineRectConsumer(dc);
-        QuickAnalysisPreviewLayoutPlanner.VisitSparklinePreviewRects(
-            Viewport,
-            range,
-            ActualRowHeaderWidth,
-            EffectiveColHeaderHeight,
-            ref consumer);
+        for (var i = 0; i < geometries.Length && i < QuickAnalysisIconSetPreviewBrushes.Length; i++)
+        {
+            if (geometries[i] is { } geometry)
+                dc.DrawGeometry(QuickAnalysisIconSetPreviewBrushes[i], null, geometry);
+        }
     }
 
-    private void DrawQuickAnalysisColumnSparklinePreview(DrawingContext dc)
+    private QuickAnalysisPreviewGeometryCache BuildQuickAnalysisIconSetPreviewGeometryCache(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
     {
-        if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
-            return;
+        var streamGeometries = new StreamGeometry[QuickAnalysisIconSetPreviewBrushes.Length];
+        var contexts = new StreamGeometryContext[streamGeometries.Length];
+        var counts = new int[streamGeometries.Length];
+        for (var i = 0; i < streamGeometries.Length; i++)
+        {
+            streamGeometries[i] = new StreamGeometry();
+            contexts[i] = streamGeometries[i].Open();
+        }
 
-        var consumer = new ColumnSparklineRectConsumer(dc);
-        QuickAnalysisPreviewLayoutPlanner.VisitSparklinePreviewRects(
-            Viewport,
+        try
+        {
+            var consumer = new IconSetGeometryConsumer(contexts, counts);
+            QuickAnalysisPreviewLayoutPlanner.VisitCellPreviewRects(
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                ref consumer);
+        }
+        finally
+        {
+            foreach (var context in contexts)
+                ((IDisposable)context).Dispose();
+        }
+
+        var geometries = new Geometry?[streamGeometries.Length];
+        for (var i = 0; i < streamGeometries.Length; i++)
+        {
+            if (counts[i] == 0)
+                continue;
+
+            streamGeometries[i].Freeze();
+            geometries[i] = streamGeometries[i];
+        }
+
+        return CacheQuickAnalysisPreviewGeometry(
+            GridQuickAnalysisPreviewVisualKind.IconSet,
+            viewport,
             range,
-            ActualRowHeaderWidth,
-            EffectiveColHeaderHeight,
-            ref consumer);
+            rowHeaderWidth,
+            columnHeaderHeight,
+            geometry: null,
+            secondaryGeometry: null,
+            brushGeometries: geometries);
     }
 
-    private void DrawQuickAnalysisWinLossSparklinePreview(DrawingContext dc)
+    private void DrawQuickAnalysisCellOverlays(
+        DrawingContext dc,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        GridQuickAnalysisPreviewVisualKind visual,
+        Brush brush,
+        Pen pen)
     {
-        if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
-            return;
+        var viewport = Viewport!;
+        var cache = GetQuickAnalysisPreviewGeometryCache(visual, viewport, range, rowHeaderWidth, columnHeaderHeight)
+            ?? BuildQuickAnalysisCellOverlayGeometryCache(visual, viewport, range, rowHeaderWidth, columnHeaderHeight);
 
-        var consumer = new WinLossSparklineRectConsumer(dc);
-        QuickAnalysisPreviewLayoutPlanner.VisitSparklinePreviewRects(
-            Viewport,
-            range,
-            ActualRowHeaderWidth,
-            EffectiveColHeaderHeight,
-            ref consumer);
+        if (cache.Geometry is { } geometry)
+            dc.DrawGeometry(brush, pen, geometry);
     }
 
-    private readonly struct FillStrokeRectConsumer(DrawingContext dc, Brush brush, Pen pen) : IQuickAnalysisPreviewRectConsumer
+    private QuickAnalysisPreviewGeometryCache BuildQuickAnalysisCellOverlayGeometryCache(
+        GridQuickAnalysisPreviewVisualKind visual,
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
     {
-        public void Accept(Rect rect) => dc.DrawRectangle(brush, pen, rect);
+        var geometry = new StreamGeometry();
+        var consumer = default(QuickAnalysisRectGeometryConsumer);
+        using (var context = geometry.Open())
+        {
+            consumer = new QuickAnalysisRectGeometryConsumer(context);
+            QuickAnalysisPreviewLayoutPlanner.VisitCellPreviewRects(
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                ref consumer);
+        }
+
+        Geometry? frozenGeometry = null;
+        if (consumer.Count > 0)
+        {
+            geometry.Freeze();
+            frozenGeometry = geometry;
+        }
+
+        return CacheQuickAnalysisPreviewGeometry(
+            visual,
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            frozenGeometry);
+    }
+
+    private void DrawQuickAnalysisLineSparklinePreview(
+        DrawingContext dc,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var viewport = Viewport!;
+        var cache = GetQuickAnalysisPreviewGeometryCache(
+                GridQuickAnalysisPreviewVisualKind.LineSparkline,
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight)
+            ?? BuildQuickAnalysisLineSparklineGeometryCache(viewport, range, rowHeaderWidth, columnHeaderHeight);
+
+        if (cache.Geometry is { } geometry)
+            dc.DrawGeometry(null, QuickAnalysisSparklinePreviewPen, geometry);
+    }
+
+    private QuickAnalysisPreviewGeometryCache BuildQuickAnalysisLineSparklineGeometryCache(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var geometry = new StreamGeometry();
+        var consumer = default(LineSparklineGeometryConsumer);
+        using (var context = geometry.Open())
+        {
+            consumer = new LineSparklineGeometryConsumer(context);
+            QuickAnalysisPreviewLayoutPlanner.VisitSparklinePreviewRects(
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                ref consumer);
+        }
+
+        Geometry? frozenGeometry = null;
+        if (consumer.Count > 0)
+        {
+            geometry.Freeze();
+            frozenGeometry = geometry;
+        }
+
+        return CacheQuickAnalysisPreviewGeometry(
+            GridQuickAnalysisPreviewVisualKind.LineSparkline,
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            frozenGeometry);
+    }
+
+    private void DrawQuickAnalysisColumnSparklinePreview(
+        DrawingContext dc,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var viewport = Viewport!;
+        var cache = GetQuickAnalysisPreviewGeometryCache(
+                GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight)
+            ?? BuildQuickAnalysisColumnSparklineGeometryCache(viewport, range, rowHeaderWidth, columnHeaderHeight);
+
+        if (cache.Geometry is { } geometry)
+            dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, geometry);
+    }
+
+    private QuickAnalysisPreviewGeometryCache BuildQuickAnalysisColumnSparklineGeometryCache(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var geometry = new StreamGeometry();
+        var consumer = default(ColumnSparklineGeometryConsumer);
+        using (var context = geometry.Open())
+        {
+            consumer = new ColumnSparklineGeometryConsumer(context);
+            QuickAnalysisPreviewLayoutPlanner.VisitSparklinePreviewRects(
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                ref consumer);
+        }
+
+        Geometry? frozenGeometry = null;
+        if (consumer.Count > 0)
+        {
+            geometry.Freeze();
+            frozenGeometry = geometry;
+        }
+
+        return CacheQuickAnalysisPreviewGeometry(
+            GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            frozenGeometry);
+    }
+
+    private void DrawQuickAnalysisWinLossSparklinePreview(
+        DrawingContext dc,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var viewport = Viewport!;
+        var cache = GetQuickAnalysisPreviewGeometryCache(
+                GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight)
+            ?? BuildQuickAnalysisWinLossSparklineGeometryCache(viewport, range, rowHeaderWidth, columnHeaderHeight);
+
+        if (cache.Geometry is { } positiveGeometry)
+            dc.DrawGeometry(QuickAnalysisWinLossPositiveBrush, null, positiveGeometry);
+        if (cache.SecondaryGeometry is { } negativeGeometry)
+            dc.DrawGeometry(QuickAnalysisWinLossNegativeBrush, null, negativeGeometry);
+    }
+
+    private QuickAnalysisPreviewGeometryCache BuildQuickAnalysisWinLossSparklineGeometryCache(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var positiveGeometry = new StreamGeometry();
+        var negativeGeometry = new StreamGeometry();
+        var consumer = default(WinLossSparklineGeometryConsumer);
+        using (var positiveContext = positiveGeometry.Open())
+        using (var negativeContext = negativeGeometry.Open())
+        {
+            consumer = new WinLossSparklineGeometryConsumer(positiveContext, negativeContext);
+            QuickAnalysisPreviewLayoutPlanner.VisitSparklinePreviewRects(
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                ref consumer);
+        }
+
+        Geometry? frozenPositiveGeometry = null;
+        if (consumer.PositiveCount > 0)
+        {
+            positiveGeometry.Freeze();
+            frozenPositiveGeometry = positiveGeometry;
+        }
+
+        Geometry? frozenNegativeGeometry = null;
+        if (consumer.NegativeCount > 0)
+        {
+            negativeGeometry.Freeze();
+            frozenNegativeGeometry = negativeGeometry;
+        }
+
+        return CacheQuickAnalysisPreviewGeometry(
+            GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            frozenPositiveGeometry,
+            frozenNegativeGeometry);
+    }
+
+    private QuickAnalysisPreviewGeometryCache? GetQuickAnalysisPreviewGeometryCache(
+        GridQuickAnalysisPreviewVisualKind visual,
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        if (_quickAnalysisPreviewGeometryCache is not { } cached ||
+            !ReferenceEquals(cached.Viewport, viewport) ||
+            cached.Range != range ||
+            !cached.RowHeaderWidth.Equals(rowHeaderWidth) ||
+            !cached.ColumnHeaderHeight.Equals(columnHeaderHeight) ||
+            cached.Visual != visual)
+        {
+            return null;
+        }
+
+        return cached;
+    }
+
+    private QuickAnalysisPreviewGeometryCache CacheQuickAnalysisPreviewGeometry(
+        GridQuickAnalysisPreviewVisualKind visual,
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        Geometry? geometry,
+        Geometry? secondaryGeometry = null,
+        Geometry?[]? brushGeometries = null)
+    {
+        var cache = new QuickAnalysisPreviewGeometryCache(
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            visual,
+            geometry,
+            secondaryGeometry,
+            brushGeometries);
+        _quickAnalysisPreviewGeometryCache = cache;
+        return cache;
+    }
+
+    private static bool AppendRectangleFigure(StreamGeometryContext context, Rect rect)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return false;
+
+        context.BeginFigure(rect.TopLeft, isFilled: true, isClosed: true);
+        context.LineTo(new Point(rect.Right, rect.Top), isStroked: true, isSmoothJoin: false);
+        context.LineTo(rect.BottomRight, isStroked: true, isSmoothJoin: false);
+        context.LineTo(new Point(rect.Left, rect.Bottom), isStroked: true, isSmoothJoin: false);
+        return true;
+    }
+
+    private static bool AppendEllipseFigure(StreamGeometryContext context, Point center, double radius)
+    {
+        if (radius <= 0)
+            return false;
+
+        var size = new Size(radius, radius);
+        context.BeginFigure(new Point(center.X + radius, center.Y), isFilled: true, isClosed: true);
+        context.ArcTo(
+            new Point(center.X, center.Y + radius),
+            size,
+            rotationAngle: 0,
+            isLargeArc: false,
+            SweepDirection.Clockwise,
+            isStroked: true,
+            isSmoothJoin: false);
+        context.ArcTo(
+            new Point(center.X - radius, center.Y),
+            size,
+            rotationAngle: 0,
+            isLargeArc: false,
+            SweepDirection.Clockwise,
+            isStroked: true,
+            isSmoothJoin: false);
+        context.ArcTo(
+            new Point(center.X, center.Y - radius),
+            size,
+            rotationAngle: 0,
+            isLargeArc: false,
+            SweepDirection.Clockwise,
+            isStroked: true,
+            isSmoothJoin: false);
+        context.ArcTo(
+            new Point(center.X + radius, center.Y),
+            size,
+            rotationAngle: 0,
+            isLargeArc: false,
+            SweepDirection.Clockwise,
+            isStroked: true,
+            isSmoothJoin: false);
+        return true;
+    }
+
+    private struct QuickAnalysisRectGeometryConsumer(StreamGeometryContext context) : IQuickAnalysisPreviewRectConsumer
+    {
+        private readonly StreamGeometryContext _context = context;
+
+        public int Count { get; private set; }
+
+        public void Accept(Rect rect)
+        {
+            if (AppendRectangleFigure(_context, rect))
+                Count++;
+        }
     }
 
     private struct QuickAnalysisDataBarGeometryConsumer(StreamGeometryContext context) : IQuickAnalysisPreviewRectConsumer
@@ -310,14 +755,8 @@ public partial class GridView
 
         public void Accept(Rect rect)
         {
-            if (rect.Width <= 0 || rect.Height <= 0)
-                return;
-
-            _context.BeginFigure(rect.TopLeft, isFilled: true, isClosed: true);
-            _context.LineTo(new Point(rect.Right, rect.Top), isStroked: true, isSmoothJoin: false);
-            _context.LineTo(rect.BottomRight, isStroked: true, isSmoothJoin: false);
-            _context.LineTo(new Point(rect.Left, rect.Bottom), isStroked: true, isSmoothJoin: false);
-            Count++;
+            if (AppendRectangleFigure(_context, rect))
+                Count++;
         }
     }
 
@@ -328,19 +767,38 @@ public partial class GridView
         double ColumnHeaderHeight,
         StreamGeometry? Geometry);
 
-    private struct ColorScaleRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    private sealed record QuickAnalysisPreviewGeometryCache(
+        ViewportModel Viewport,
+        GridRange Range,
+        double RowHeaderWidth,
+        double ColumnHeaderHeight,
+        GridQuickAnalysisPreviewVisualKind Visual,
+        Geometry? Geometry,
+        Geometry? SecondaryGeometry,
+        Geometry?[]? BrushGeometries);
+
+    private struct ColorScaleGeometryConsumer(
+        StreamGeometryContext[] contexts,
+        int[] counts) : IQuickAnalysisPreviewRectConsumer
     {
+        private readonly StreamGeometryContext[] _contexts = contexts;
+        private readonly int[] _counts = counts;
         private int _index;
 
-        public void Accept(Rect rect) =>
-            dc.DrawRectangle(
-                QuickAnalysisColorScalePreviewBrushes[_index++ % QuickAnalysisColorScalePreviewBrushes.Length],
-                null,
-                rect);
+        public void Accept(Rect rect)
+        {
+            var index = _index++ % _contexts.Length;
+            if (AppendRectangleFigure(_contexts[index], rect))
+                _counts[index]++;
+        }
     }
 
-    private struct IconSetRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    private struct IconSetGeometryConsumer(
+        StreamGeometryContext[] contexts,
+        int[] counts) : IQuickAnalysisPreviewRectConsumer
     {
+        private readonly StreamGeometryContext[] _contexts = contexts;
+        private readonly int[] _counts = counts;
         private int _index;
 
         public void Accept(Rect rect)
@@ -349,52 +807,76 @@ public partial class GridView
             if (radius <= 0)
                 return;
 
+            var index = _index++ % _contexts.Length;
             var center = new Point(rect.Left + radius + 2, rect.Top + rect.Height / 2);
-            dc.DrawEllipse(
-                QuickAnalysisIconSetPreviewBrushes[_index++ % QuickAnalysisIconSetPreviewBrushes.Length],
-                null,
-                center,
-                radius,
-                radius);
+            if (AppendEllipseFigure(_contexts[index], center, radius))
+                _counts[index]++;
         }
     }
 
-    private readonly struct LineSparklineRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    private struct LineSparklineGeometryConsumer(StreamGeometryContext context) : IQuickAnalysisPreviewRectConsumer
     {
+        private readonly StreamGeometryContext _context = context;
+
+        public int Count { get; private set; }
+
         public void Accept(Rect rect)
         {
+            if (rect.Width <= 0 || rect.Height <= 0)
+                return;
+
             var y1 = rect.Bottom;
             var y2 = rect.Top;
             var y3 = rect.Top + rect.Height * 0.65;
-            dc.DrawLine(QuickAnalysisSparklinePreviewPen, new Point(rect.Left, y1), new Point(rect.Left + rect.Width * 0.45, y2));
-            dc.DrawLine(QuickAnalysisSparklinePreviewPen, new Point(rect.Left + rect.Width * 0.45, y2), new Point(rect.Right, y3));
+            _context.BeginFigure(new Point(rect.Left, y1), isFilled: false, isClosed: false);
+            _context.LineTo(new Point(rect.Left + rect.Width * 0.45, y2), isStroked: true, isSmoothJoin: false);
+            _context.LineTo(new Point(rect.Right, y3), isStroked: true, isSmoothJoin: false);
+            Count++;
         }
     }
 
-    private readonly struct ColumnSparklineRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    private struct ColumnSparklineGeometryConsumer(StreamGeometryContext context) : IQuickAnalysisPreviewRectConsumer
     {
+        private readonly StreamGeometryContext _context = context;
+
+        public int Count { get; private set; }
+
         public void Accept(Rect rect)
         {
             var gap = Math.Min(2.0, rect.Width / 8);
             var barWidth = Math.Max(1, (rect.Width - (2 * gap)) / 3);
             var x = rect.Left;
-            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x, rect.Top + rect.Height * 0.35, barWidth, rect.Height * 0.65));
-            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x + barWidth + gap, rect.Top, barWidth, rect.Height));
-            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x + 2 * (barWidth + gap), rect.Top + rect.Height * 0.55, barWidth, rect.Height * 0.45));
+            if (AppendRectangleFigure(_context, new Rect(x, rect.Top + rect.Height * 0.35, barWidth, rect.Height * 0.65)))
+                Count++;
+            if (AppendRectangleFigure(_context, new Rect(x + barWidth + gap, rect.Top, barWidth, rect.Height)))
+                Count++;
+            if (AppendRectangleFigure(_context, new Rect(x + 2 * (barWidth + gap), rect.Top + rect.Height * 0.55, barWidth, rect.Height * 0.45)))
+                Count++;
         }
     }
 
-    private readonly struct WinLossSparklineRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    private struct WinLossSparklineGeometryConsumer(
+        StreamGeometryContext positiveContext,
+        StreamGeometryContext negativeContext) : IQuickAnalysisPreviewRectConsumer
     {
+        private readonly StreamGeometryContext _positiveContext = positiveContext;
+        private readonly StreamGeometryContext _negativeContext = negativeContext;
+
+        public int PositiveCount { get; private set; }
+        public int NegativeCount { get; private set; }
+
         public void Accept(Rect rect)
         {
             var gap = Math.Min(2.0, rect.Width / 8);
             var barWidth = Math.Max(1, (rect.Width - (2 * gap)) / 3);
             var halfHeight = Math.Max(2, rect.Height / 2);
             var mid = rect.Top + rect.Height / 2;
-            dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(rect.Left, rect.Top, barWidth, halfHeight));
-            dc.DrawRectangle(QuickAnalysisWinLossNegativeBrush, null, new Rect(rect.Left + barWidth + gap, mid, barWidth, halfHeight));
-            dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(rect.Left + (2 * (barWidth + gap)), rect.Top, barWidth, halfHeight));
+            if (AppendRectangleFigure(_positiveContext, new Rect(rect.Left, rect.Top, barWidth, halfHeight)))
+                PositiveCount++;
+            if (AppendRectangleFigure(_negativeContext, new Rect(rect.Left + barWidth + gap, mid, barWidth, halfHeight)))
+                NegativeCount++;
+            if (AppendRectangleFigure(_positiveContext, new Rect(rect.Left + (2 * (barWidth + gap)), rect.Top, barWidth, halfHeight)))
+                PositiveCount++;
         }
     }
 
