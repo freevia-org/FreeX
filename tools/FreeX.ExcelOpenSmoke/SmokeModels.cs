@@ -159,7 +159,16 @@ internal sealed record WorkbookSmokeExpectations(
     int MinFreeXReopenedPivotCaches = 0,
     bool RequireNoFreeXLoadWarnings = false,
     IReadOnlyList<string>? RequiredFreeXSavedPackageParts = null,
-    IReadOnlyList<string>? RequiredExcelSavedPackageParts = null);
+    IReadOnlyList<string>? RequiredExcelSavedPackageParts = null,
+    IReadOnlyList<PackageRelationshipExpectation>? RequiredFreeXSavedPackageRelationships = null,
+    IReadOnlyList<PackageRelationshipExpectation>? RequiredExcelSavedPackageRelationships = null);
+
+internal sealed record PackageRelationshipExpectation(
+    string RelationshipPart,
+    string RelationshipType,
+    string Target,
+    string? Id = null,
+    string? TargetMode = null);
 
 internal sealed record WorkbookSmokeResult(
     bool Success,
