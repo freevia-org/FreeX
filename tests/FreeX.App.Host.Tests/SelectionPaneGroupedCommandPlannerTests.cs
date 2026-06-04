@@ -13,7 +13,7 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
         var wb = new Workbook("test");
         var activeSheet = wb.AddSheet("Sheet1");
         var groupedSheet = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var activeBack = AddPicture(activeSheet, 2, 2, "Active Back");
         var activeFront = AddPicture(activeSheet, 3, 2, "Active Front");
         var groupedBack = AddPicture(groupedSheet, 2, 2, "Grouped Back");
@@ -61,7 +61,7 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
         var wb = new Workbook("test");
         var activeSheet = wb.AddSheet("Sheet1");
         var groupedSheet = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var activeShape = new DrawingShapeModel
         {
             Anchor = new CellAddress(activeSheet.Id, 4, 2),
@@ -95,7 +95,7 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
         var wb = new Workbook("test");
         var activeSheet = wb.AddSheet("Sheet1");
         var groupedSheet = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var activeShape = AddShape(activeSheet, 2, 2, "Active Shape");
         var activePicture = AddPicture(activeSheet, 3, 2, "Active Picture");
         var groupedShape = AddShape(groupedSheet, 2, 2, "Grouped Shape");
@@ -170,9 +170,4 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
     private static string SourceMethod(string source, string start, string end) =>
         source[source.IndexOf(start, StringComparison.Ordinal)..source.IndexOf(end, StringComparison.Ordinal)];
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

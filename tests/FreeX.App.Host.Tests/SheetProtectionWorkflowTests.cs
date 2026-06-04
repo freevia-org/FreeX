@@ -34,7 +34,7 @@ public sealed class SheetProtectionWorkflowTests
 
         action.Title.Should().Be(UiText.Get("MainWindowMessage_ProtectSheetTitle"));
         action.SelectedSheetPermissions.Should().Equal(["Select unlocked cells", "Sort"]);
-        action.Command.Apply(new SimpleCtx(workbook)).Success.Should().BeTrue();
+        action.Command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
         sheet.ProtectionPermissions.Should().Equal(
             SheetProtectionPermission.SelectUnlockedCells,
             SheetProtectionPermission.Sort);
@@ -94,9 +94,4 @@ public sealed class SheetProtectionWorkflowTests
         source.Should().Contain("UiText.Get(\"MainWindowMessage_OptionalPasswordLabel\"))");
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

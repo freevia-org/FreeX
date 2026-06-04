@@ -12,7 +12,7 @@ public sealed partial class TextToColumnsPlannerTests
         var workbook = new Workbook("test");
         var sheet1 = workbook.AddSheet("Sheet1");
         var sheet2 = workbook.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var range = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1));
         sheet1.SetCell(new CellAddress(sheet1.Id, 1, 1), new TextValue("East,42"));
         sheet2.SetCell(new CellAddress(sheet2.Id, 1, 1), new TextValue("West,7"));
@@ -66,9 +66,4 @@ public sealed partial class TextToColumnsPlannerTests
             .Equal(new CellAddress(sheet2.Id, 1, 2));
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

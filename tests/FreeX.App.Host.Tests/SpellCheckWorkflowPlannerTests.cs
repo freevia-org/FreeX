@@ -22,9 +22,4 @@ public sealed partial class SpellCheckWorkflowPlannerTests
             source,
             replyIndex);
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

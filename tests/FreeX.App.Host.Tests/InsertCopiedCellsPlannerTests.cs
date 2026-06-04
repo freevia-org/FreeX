@@ -11,7 +11,7 @@ public sealed class InsertCopiedCellsPlannerTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 2, 2);
         sheet.SetCell(source, Cell.FromValue(new TextValue("copied")));
@@ -38,7 +38,7 @@ public sealed class InsertCopiedCellsPlannerTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 2, 2);
         sheet.SetCell(source, Cell.FromValue(new TextValue("copied")));
@@ -60,10 +60,4 @@ public sealed class InsertCopiedCellsPlannerTests
         sheet.GetValue(new CellAddress(sheet.Id, 2, 4)).Should().Be(new TextValue("right"));
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook => workbook;
-
-        public Sheet GetSheet(SheetId id) => workbook.GetSheet(id) ?? throw new InvalidOperationException();
-    }
 }

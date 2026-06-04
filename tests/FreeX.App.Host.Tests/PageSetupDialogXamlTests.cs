@@ -468,7 +468,7 @@ public sealed class PageSetupDialogXamlTests
                 SelectComboItemByTag((ComboBox)dialog.FindName("PageOrderBox"), "OverThenDown");
 
                 InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
-                var outcome = PageSetupCommandBuilder.Build(sheet.Id, dialog).Apply(new SimpleCtx(workbook));
+                var outcome = PageSetupCommandBuilder.Build(sheet.Id, dialog).Apply(new TestCommandContext(workbook));
 
                 outcome.Success.Should().BeTrue(outcome.ErrorMessage);
                 sheet.CenterHorizontallyOnPage.Should().BeTrue();
@@ -524,9 +524,4 @@ public sealed class PageSetupDialogXamlTests
         }
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
-    }
 }
