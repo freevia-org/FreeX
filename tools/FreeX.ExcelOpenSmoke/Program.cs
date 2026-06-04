@@ -92,6 +92,8 @@ internal static class ExcelOpenSmoke
     private const string WorkbookPart = "xl/workbook.xml";
     private const string SharedStringsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
+    private const string SharedStringsRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
     private const string StylesContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
     private const string WorkbookRelationshipPart = "xl/_rels/workbook.xml.rels";
@@ -347,6 +349,7 @@ internal static class ExcelOpenSmoke
                 AssertPackageRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -537,6 +540,7 @@ internal static class ExcelOpenSmoke
             AssertPackageRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
@@ -709,7 +713,7 @@ internal static class ExcelOpenSmoke
                 archive,
                 new PackageRelationshipExpectation(
                     WorkbookRelationshipPart,
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings",
+                    SharedStringsRelationshipType,
                     "xl/sharedStrings.xml")))
         {
             issues.Add("missing workbook relationship to xl/sharedStrings.xml for public shared-strings tag");
@@ -1948,6 +1952,106 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid workbook sheet package graph: {sample}{suffix}");
+    }
+
+    private static void AssertSharedStringTableComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var sharedStringCells = FindSharedStringCells(archive);
+        var sharedStringsEntry = FindPackageEntry(archive, "xl/sharedStrings.xml");
+        if (sharedStringCells.Count == 0 && sharedStringsEntry is null)
+            return;
+
+        var issues = new List<string>();
+        if (sharedStringsEntry is null)
+        {
+            issues.Add("missing xl/sharedStrings.xml for shared-string cells");
+            ThrowInvalidSharedStringTable(label, sourcePath, issues);
+            return;
+        }
+
+        if (!PackageRelationshipExists(
+                archive,
+                new PackageRelationshipExpectation(
+                    WorkbookRelationshipPart,
+                    SharedStringsRelationshipType,
+                    "xl/sharedStrings.xml")))
+        {
+            issues.Add("missing workbook relationship to xl/sharedStrings.xml");
+        }
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, "xl/sharedStrings.xml", SharedStringsContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var sharedStringsXml = LoadPackageXml(sharedStringsEntry);
+        if (sharedStringsXml.Root?.Name != SpreadsheetNs + "sst")
+        {
+            issues.Add("xl/sharedStrings.xml has an invalid shared-string table root element");
+            ThrowInvalidSharedStringTable(label, sourcePath, issues);
+            return;
+        }
+
+        var sharedStringCount = sharedStringsXml.Root.Elements(SpreadsheetNs + "si").Count();
+        foreach (var sharedStringCell in sharedStringCells)
+        {
+            if (string.IsNullOrWhiteSpace(sharedStringCell.ValueText))
+            {
+                issues.Add($"{sharedStringCell.WorksheetPart} cell {sharedStringCell.CellReference} has no shared-string index");
+                continue;
+            }
+
+            if (!int.TryParse(sharedStringCell.ValueText, NumberStyles.None, CultureInfo.InvariantCulture, out var sharedStringIndex))
+            {
+                issues.Add($"{sharedStringCell.WorksheetPart} cell {sharedStringCell.CellReference} has invalid shared-string index '{sharedStringCell.ValueText}'");
+                continue;
+            }
+
+            if (sharedStringIndex < 0 || sharedStringIndex >= sharedStringCount)
+            {
+                issues.Add(
+                    $"{sharedStringCell.WorksheetPart} cell {sharedStringCell.CellReference} references shared-string index {sharedStringIndex}, but xl/sharedStrings.xml contains {sharedStringCount} entries");
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidSharedStringTable(label, sourcePath, issues);
+    }
+
+    private static List<SharedStringCellReference> FindSharedStringCells(ZipArchive archive)
+    {
+        var cells = new List<SharedStringCellReference>();
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            foreach (var cell in LoadPackageXml(worksheetEntry).Descendants(SpreadsheetNs + "c"))
+            {
+                if (!string.Equals(cell.Attribute("t")?.Value, "s", StringComparison.Ordinal))
+                    continue;
+
+                cells.Add(new SharedStringCellReference(
+                    worksheetPart,
+                    cell.Attribute("r")?.Value ?? "(unknown ref)",
+                    cell.Element(SpreadsheetNs + "v")?.Value));
+            }
+        }
+
+        return cells;
+    }
+
+    private static void ThrowInvalidSharedStringTable(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid shared-string package graph: {sample}{suffix}");
     }
 
     private static void AssertPackageRelationshipsComplete(string xlsxPath, string label, string sourcePath)
@@ -6198,4 +6302,8 @@ internal static class ExcelOpenSmoke
         }
     }
 
+    private sealed record SharedStringCellReference(
+        string WorksheetPart,
+        string CellReference,
+        string? ValueText);
 }
