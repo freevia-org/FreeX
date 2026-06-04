@@ -69,7 +69,7 @@ public sealed class FlashFillCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        return (wb, sheet, new SimpleCtx(wb));
+        return (wb, sheet, new TestCommandContext(wb));
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class FlashFillCommandTests
     {
         var wb    = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx   = new SimpleCtx(wb);
+        var ctx   = new TestCommandContext(wb);
 
         // Source data in col 2: "ALICE", "BOB", "CAROL"
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("ALICE"));
@@ -360,9 +360,4 @@ public sealed class FlashFillCommandTests
         result.Should().BeNull();
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

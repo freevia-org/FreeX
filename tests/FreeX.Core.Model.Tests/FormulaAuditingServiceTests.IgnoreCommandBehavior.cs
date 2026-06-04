@@ -16,7 +16,7 @@ public sealed partial class FormulaAuditingServiceTests
         var cell = Cell.FromFormula("1/0");
         cell.Value = ErrorValue.DivByZero;
         sheet.SetCell(address, cell);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -35,7 +35,7 @@ public sealed partial class FormulaAuditingServiceTests
         var sheet = wb.AddSheet("Sheet1");
         var address = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(address, new TextValue("42"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -56,7 +56,7 @@ public sealed partial class FormulaAuditingServiceTests
         var sheet = wb.AddSheet("Sheet1");
         var address = new CellAddress(sheet.Id, 1, 2);
         sheet.SetCell(address, Cell.FromFormula("A1+1"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -77,7 +77,7 @@ public sealed partial class FormulaAuditingServiceTests
         var sheet = wb.AddSheet("Sheet1");
         var address = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(address, new TextValue("=SUM(A1:A2)"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -112,7 +112,7 @@ public sealed partial class FormulaAuditingServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromFormula("[@Sales]*2"));
         var address = new CellAddress(sheet.Id, 3, 2);
         sheet.SetCell(address, Cell.FromFormula("[@Sales]*3"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -137,7 +137,7 @@ public sealed partial class FormulaAuditingServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromFormula("A2*2"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 2), Cell.FromFormula("B2*2"));
         sheet.SetCell(address, Cell.FromFormula("A2*2"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -161,7 +161,7 @@ public sealed partial class FormulaAuditingServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
         sheet.SetCell(address, Cell.FromFormula("SUM(A1:A2)"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -185,7 +185,7 @@ public sealed partial class FormulaAuditingServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
         sheet.SetCell(address, Cell.FromFormula("AVERAGE(A1:A2)"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -210,7 +210,7 @@ public sealed partial class FormulaAuditingServiceTests
         var cell = Cell.FromFormula("A1+1");
         cell.StyleId = unlockedStyleId;
         sheet.SetCell(address, cell);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -237,7 +237,7 @@ public sealed partial class FormulaAuditingServiceTests
             Formula1 = "Red,Green"
         });
         sheet.SetCell(address, new TextValue("Blue"));
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -261,7 +261,7 @@ public sealed partial class FormulaAuditingServiceTests
         cell.Value = ErrorValue.DivByZero;
         sheet.SetCell(address, cell);
         wb.DisabledFormulaErrorCodes.Add(ErrorValue.DivByZero.Code);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
@@ -280,7 +280,7 @@ public sealed partial class FormulaAuditingServiceTests
         var address = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(address, new TextValue("42"));
         wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.NumberStoredAsTextErrorCode);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
 
