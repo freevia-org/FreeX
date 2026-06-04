@@ -50,16 +50,10 @@ public sealed class CommandBusUndoByteBudgetTests
         public void Revert(ICommandContext ctx) { }
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
-
     private static CommandBus MakeBus()
     {
         var wb = new Workbook("budget-test");
-        return new CommandBus(_ => new SimpleCtx(wb));
+        return new CommandBus(_ => new TestCommandContext(wb));
     }
 
     // ── byte-budget eviction ──────────────────────────────────────────────────

@@ -12,7 +12,7 @@ public sealed class CompositeWorkbookCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new CompositeWorkbookCommand(
             "Grouped Edit",
             [
@@ -42,7 +42,7 @@ public sealed class CompositeWorkbookCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet2.IsProtected = true;
         var command = new CompositeWorkbookCommand(
             "Grouped Edit",
@@ -65,7 +65,7 @@ public sealed class CompositeWorkbookCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new CompositeWorkbookCommand(
             "Insert Picture",
             [
@@ -90,7 +90,7 @@ public sealed class CompositeWorkbookCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var picture1 = new PictureModel { Anchor = new CellAddress(sheet1.Id, 2, 3), Width = 100, Height = 80 };
         var picture2 = new PictureModel { Anchor = new CellAddress(sheet2.Id, 2, 3), Width = 100, Height = 80 };
         sheet1.Pictures.Add(picture1);
@@ -129,7 +129,7 @@ public sealed class CompositeWorkbookCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var command = new CompositeWorkbookCommand(
             "Insert Objects",
             [
@@ -154,9 +154,4 @@ public sealed class CompositeWorkbookCommandTests
         sheet2.DrawingShapes.Should().BeEmpty();
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

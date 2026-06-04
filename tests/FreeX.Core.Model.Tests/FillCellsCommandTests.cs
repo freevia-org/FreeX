@@ -19,7 +19,7 @@ public sealed class FillCellsCommandTests
             new GridRange(source, new CellAddress(sheet.Id, 3, 1)),
             FillCellsDirection.Down);
 
-        command.Apply(new SimpleCommandContext(workbook)).Success.Should().BeTrue();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
 
         sheet.GetCell(new CellAddress(sheet.Id, 2, 1))!.FormulaText.Should().Be("B2+$C$1");
         sheet.GetCell(new CellAddress(sheet.Id, 3, 1))!.FormulaText.Should().Be("B3+$C$1");
@@ -34,7 +34,7 @@ public sealed class FillCellsCommandTests
         var target = new CellAddress(sheet.Id, 1, 2);
         sheet.SetCell(source, Cell.FromValue(new TextValue("copied")));
         sheet.SetCell(target, Cell.FromValue(new TextValue("old")));
-        var context = new SimpleCommandContext(workbook);
+        var context = new TestCommandContext(workbook);
 
         var command = new FillCellsCommand(
             sheet.Id,
@@ -68,7 +68,7 @@ public sealed class FillCellsCommandTests
             HyperlinkTargetKind.EmailAddress,
             "Email old",
             "old@example.com");
-        var context = new SimpleCommandContext(workbook);
+        var context = new TestCommandContext(workbook);
 
         var command = new FillCellsCommand(
             sheet.Id,
@@ -111,7 +111,7 @@ public sealed class FillCellsCommandTests
             new GridRange(source, target),
             FillCellsDirection.Right);
 
-        command.Apply(new SimpleCommandContext(workbook)).Success.Should().BeTrue();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
 
         sheet.GetCell(target)!.Value.Should().Be(new TextValue("plain"));
         sheet.Hyperlinks.Should().NotContainKey(target);
@@ -129,7 +129,7 @@ public sealed class FillCellsCommandTests
         var targetStyle = workbook.RegisterStyle(new CellStyle { Italic = true });
         sheet.SetStyleOnly(source.Row, source.Col, sourceStyle);
         sheet.SetStyleOnly(target.Row, target.Col, targetStyle);
-        var context = new SimpleCommandContext(workbook);
+        var context = new TestCommandContext(workbook);
 
         var command = new FillCellsCommand(
             sheet.Id,
@@ -162,7 +162,7 @@ public sealed class FillCellsCommandTests
             new GridRange(source, target),
             FillCellsDirection.Right);
 
-        command.Apply(new SimpleCommandContext(workbook)).Success.Should().BeTrue();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
 
         sheet.GetCell(target).Should().BeNull();
         sheet.GetStyleOnly(target.Row, target.Col).Should().BeNull();
@@ -182,7 +182,7 @@ public sealed class FillCellsCommandTests
         var outcome = new FillCellsCommand(
             sheet.Id,
             new GridRange(source, target),
-            FillCellsDirection.Down).Apply(new SimpleCommandContext(workbook));
+            FillCellsDirection.Down).Apply(new TestCommandContext(workbook));
 
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("protected");
@@ -206,15 +206,10 @@ public sealed class FillCellsCommandTests
         var outcome = new FillCellsCommand(
             sheet.Id,
             new GridRange(source, target),
-            FillCellsDirection.Down).Apply(new SimpleCommandContext(workbook));
+            FillCellsDirection.Down).Apply(new TestCommandContext(workbook));
 
         outcome.Success.Should().BeTrue();
         sheet.GetCell(target)!.Value.Should().Be(new TextValue("source"));
     }
 
-    private sealed class SimpleCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook => workbook;
-        public Sheet GetSheet(SheetId sheetId) => workbook.GetSheet(sheetId)!;
-    }
 }
