@@ -11,7 +11,7 @@ public sealed class CreateNamedRangesFromSelectionCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         Set(sheet, 1, 1, "Region");
         Set(sheet, 1, 2, "Net Sales");
         Set(sheet, 2, 1, "East");
@@ -39,7 +39,7 @@ public sealed class CreateNamedRangesFromSelectionCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         Set(sheet, 1, 1, "North");
         Set(sheet, 2, 1, "South");
         Set(sheet, 1, 2, 10);
@@ -65,7 +65,7 @@ public sealed class CreateNamedRangesFromSelectionCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         Set(sheet, 1, 1, "2026 Sales");
         Set(sheet, 1, 2, "2026 Sales");
         Set(sheet, 1, 3, "A1");
@@ -90,7 +90,7 @@ public sealed class CreateNamedRangesFromSelectionCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var original = new GridRange(Addr(sheet, 10, 1), Addr(sheet, 10, 1));
         wb.DefineNamedRange("Sales", original, new NamedRangeMetadata("Sheet1", "Manual override"));
         Set(sheet, 1, 1, "Sales");
@@ -118,7 +118,7 @@ public sealed class CreateNamedRangesFromSelectionCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new CreateNamedRangesFromSelectionCommand(
             new GridRange(Addr(sheet, 1, 1), Addr(sheet, 2, 2)),
@@ -134,9 +134,4 @@ public sealed class CreateNamedRangesFromSelectionCommandTests
     private static void Set(Sheet sheet, uint row, uint col, string text) => sheet.SetCell(Addr(sheet, row, col), new TextValue(text));
     private static void Set(Sheet sheet, uint row, uint col, double number) => sheet.SetCell(Addr(sheet, row, col), new NumberValue(number));
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
