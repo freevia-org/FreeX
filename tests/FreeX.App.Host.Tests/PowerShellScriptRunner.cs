@@ -5,13 +5,23 @@ namespace FreeX.App.Host.Tests;
 
 internal static class PowerShellScriptRunner
 {
+    public static PowerShellResult Run(string scriptPath, string workingDirectory)
+    {
+        return RunWithPowerShellArguments(workingDirectory, $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"");
+    }
+
     public static PowerShellResult Run(string scriptPath, string workingDirectory, string arguments)
+    {
+        return RunWithPowerShellArguments(workingDirectory, $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}");
+    }
+
+    private static PowerShellResult RunWithPowerShellArguments(string workingDirectory, string powerShellArguments)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
+            Arguments = powerShellArguments,
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

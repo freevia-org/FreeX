@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using FluentAssertions;
 
@@ -75,27 +74,11 @@ public sealed class TesterReleaseReadinessPreflightTests
         result.Output.Should().Contain("Promotion status: public-preview eligible");
     }
 
-    private static (int ExitCode, string Output, string Error) RunReadinessPreflight(string arguments)
+    private static PowerShellResult RunReadinessPreflight(string arguments)
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
         var repoRoot = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(scriptPath)!, ".."));
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
-            WorkingDirectory = repoRoot,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
 
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        return (process.ExitCode, output, error);
+        return PowerShellScriptRunner.Run(scriptPath, repoRoot, arguments);
     }
 }

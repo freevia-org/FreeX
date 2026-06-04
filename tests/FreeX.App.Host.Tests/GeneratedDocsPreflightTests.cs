@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using FluentAssertions;
 
@@ -21,25 +20,10 @@ public sealed class GeneratedDocsPreflightTests
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GeneratedDocs.ps1");
 
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"",
-            WorkingDirectory = Path.GetTempPath(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath());
 
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        process.ExitCode.Should().Be(0, error);
-        output.Should().Contain("Checking command inventory generated docs...");
-        output.Should().Contain("Generated documentation checks passed.");
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("Checking command inventory generated docs...");
+        result.Output.Should().Contain("Generated documentation checks passed.");
     }
 }

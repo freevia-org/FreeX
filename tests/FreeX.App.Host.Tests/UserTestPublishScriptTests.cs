@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using FluentAssertions;
 
@@ -237,25 +236,6 @@ public sealed class UserTestPublishScriptTests
 
     private static PowerShellResult RunPowerShellScript(string scriptPath, string arguments)
     {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
-            WorkingDirectory = Path.GetTempPath(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        return new PowerShellResult(process.ExitCode, output, error);
+        return PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), arguments);
     }
-
-    private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }

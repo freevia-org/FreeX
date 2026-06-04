@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using FluentAssertions;
@@ -80,25 +79,10 @@ public sealed class RepositoryPreflightTests
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-RepositoryPreflight.ps1");
         var missingScriptPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.ps1");
 
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" -XmlFilesScriptPath \"{missingScriptPath}\"",
-            WorkingDirectory = Path.GetTempPath(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-XmlFilesScriptPath \"{missingScriptPath}\"");
 
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        process.ExitCode.Should().NotBe(0);
-        (output + error).Should().Contain("XML files preflight script was not found");
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("XML files preflight script was not found");
     }
 
     [Fact]
