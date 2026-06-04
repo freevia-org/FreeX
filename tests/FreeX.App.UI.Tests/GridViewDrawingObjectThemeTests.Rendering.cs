@@ -1,6 +1,12 @@
 using System;
 using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FluentAssertions;
+using FreeX.App.UI;
+using FreeX.Core.Model;
 
 namespace FreeX.App.UI.Tests;
 
@@ -118,12 +124,65 @@ public sealed partial class GridViewDrawingObjectThemeTests
         authoredEffect.Should().Contain("shape.GetEffectiveEffectPreset()");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.Shadow");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.InnerShadow");
+        authoredEffect.Should().Contain("DrawingShapeEffectPreset.Reflection");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.Glow");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.SoftEdges");
         authoredEffect.Should().Contain("DrawShapeShadowEffect");
         authoredEffect.Should().Contain("DrawShapeAuthoredInnerShadow");
+        authoredEffect.Should().Contain("DrawShapeReflectionEffect");
         authoredEffect.Should().Contain("DrawShapeOutlineEffect");
         authoredEffect.Should().Contain("GetInnerShadowRect(rect, thickness, offsetX: 1.5, offsetY: 1.5)");
+        authoredEffect.Should().Contain("GetReflectionRect(rect)");
+    }
+
+    [Fact]
+    public void DrawingObjectRendering_DrawsAuthoredReflectionBelowShape()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var grid = new GridView();
+            var visual = new DrawingVisual();
+            using (var drawingContext = visual.RenderOpen())
+            {
+                var drawReflection = typeof(GridView).GetMethod(
+                    "DrawShapeReflectionEffect",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                drawReflection.Should().NotBeNull();
+                drawReflection!.Invoke(
+                    grid,
+                    [
+                        drawingContext,
+                        DrawingShapeKind.Rectangle,
+                        new Rect(20, 12, 48, 24),
+                        new DrawingObjectColors(new CellColor(31, 119, 180), new CellColor(20, 60, 100))
+                    ]);
+            }
+
+            var bitmap = new RenderTargetBitmap(
+                100,
+                70,
+                96,
+                96,
+                PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+
+            var pixels = new byte[100 * 70 * 4];
+            bitmap.CopyPixels(pixels, stride: 100 * 4, offset: 0);
+
+            var reflectedPixels = 0;
+            for (var y = 40; y <= 52; y++)
+            {
+                for (var x = 24; x <= 64; x++)
+                {
+                    var offset = (y * 100 + x) * 4;
+                    var alpha = pixels[offset + 3];
+                    if (alpha > 0)
+                        reflectedPixels++;
+                }
+            }
+
+            reflectedPixels.Should().BeGreaterThan(20, "the authored reflection should render below the source shape");
+        });
     }
 
     [Fact]

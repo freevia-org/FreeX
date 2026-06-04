@@ -63,17 +63,35 @@ internal static class XlsxStyleOnlyCellWriter
             return cells;
 
         var occupiedCells = sheet.GetOccupiedCellMap();
+        var isRowMajorOrdered = true;
+        uint previousRow = 0;
+        uint previousCol = 0;
         foreach (var ((row, col), styleId) in sheet.GetStyleOnlyEntries())
         {
             if (IsValidWorksheetCell(row, col) && !occupiedCells.ContainsKey((row, col)))
+            {
+                if (isRowMajorOrdered &&
+                    cells.Count > 0 &&
+                    (row < previousRow || row == previousRow && col < previousCol))
+                {
+                    isRowMajorOrdered = false;
+                }
+
                 cells.Add(new StyleOnlyCell(row, col, styleId));
+                previousRow = row;
+                previousCol = col;
+            }
         }
 
-        cells.Sort(static (left, right) =>
+        if (!isRowMajorOrdered)
         {
-            var rowCompare = left.Row.CompareTo(right.Row);
-            return rowCompare != 0 ? rowCompare : left.Col.CompareTo(right.Col);
-        });
+            cells.Sort(static (left, right) =>
+            {
+                var rowCompare = left.Row.CompareTo(right.Row);
+                return rowCompare != 0 ? rowCompare : left.Col.CompareTo(right.Col);
+            });
+        }
+
         return cells;
     }
 

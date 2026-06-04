@@ -14,14 +14,16 @@ internal static class XlsxWorksheetCellLayoutReader
     {
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
+        var populatedCellCount = 0;
 
         var hasStyleOnlyCells = ReadSheetDataCells(
             worksheetXml.Root?.Element(worksheetNs + "sheetData"),
             worksheetNs,
             explicitStyleOnlyCells,
-            cachedFormulaErrors);
+            cachedFormulaErrors,
+            ref populatedCellCount);
 
-        return new XlsxWorksheetCellLayout(cachedFormulaErrors, explicitStyleOnlyCells, hasStyleOnlyCells);
+        return new XlsxWorksheetCellLayout(cachedFormulaErrors, explicitStyleOnlyCells, hasStyleOnlyCells, populatedCellCount);
     }
 
     public static IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ReadExplicitStyleOnlyCells(
@@ -38,7 +40,8 @@ internal static class XlsxWorksheetCellLayoutReader
         XElement? sheetData,
         XNamespace worksheetNs,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
-        Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors)
+        Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
+        ref int populatedCellCount)
     {
         if (sheetData is null)
             return false;
@@ -60,7 +63,8 @@ internal static class XlsxWorksheetCellLayoutReader
                     valueName,
                     inlineStringName,
                     explicitStyleOnlyCells,
-                    cachedFormulaErrors);
+                    cachedFormulaErrors,
+                    ref populatedCellCount);
             }
         }
 
@@ -71,14 +75,16 @@ internal static class XlsxWorksheetCellLayoutReader
         XElement cell,
         XNamespace worksheetNs,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
-        Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors)
+        Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
+        ref int populatedCellCount)
         => ReadCell(
             cell,
             worksheetNs + "f",
             worksheetNs + "v",
             worksheetNs + "is",
             explicitStyleOnlyCells,
-            cachedFormulaErrors);
+            cachedFormulaErrors,
+            ref populatedCellCount);
 
     internal static bool ReadCell(
         XElement cell,
@@ -86,8 +92,15 @@ internal static class XlsxWorksheetCellLayoutReader
         XName valueName,
         XName inlineStringName,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
-        Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors)
+        Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors,
+        ref int populatedCellCount)
     {
+        var formula = cell.Element(formulaName);
+        var value = cell.Element(valueName);
+        var hasInlineString = cell.Element(inlineStringName) is not null;
+        if (formula is not null || value is not null || hasInlineString)
+            populatedCellCount++;
+
         var hasStyle = int.TryParse(
             cell.Attribute("s")?.Value,
             NumberStyles.Integer,
@@ -97,10 +110,6 @@ internal static class XlsxWorksheetCellLayoutReader
 
         if (!hasStyle && !isErrorType)
             return false;
-
-        var formula = cell.Element(formulaName);
-        var value = cell.Element(valueName);
-        var hasInlineString = hasStyle && cell.Element(inlineStringName) is not null;
 
         var isStyleOnly = hasStyle && formula is null && value is null && !hasInlineString;
         var rawValue = value?.Value;
@@ -140,4 +149,5 @@ internal static class XlsxWorksheetCellLayoutReader
 internal sealed record XlsxWorksheetCellLayout(
     Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
     IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
-    bool HasStyleOnlyCells);
+    bool HasStyleOnlyCells,
+    int PopulatedCellCount);

@@ -439,11 +439,23 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XAttribute("val", "000000"),
                     new XElement(drawingNs + "alpha", new XAttribute("val", "50000")))));
 
+    private static XElement ToReflectionEffect(XNamespace drawingNs) =>
+        new(drawingNs + "effectLst",
+            new XElement(drawingNs + "reflection",
+                new XAttribute("blurRad", "20000"),
+                new XAttribute("stA", "45000"),
+                new XAttribute("endA", "0"),
+                new XAttribute("stPos", "0"),
+                new XAttribute("endPos", "65000"),
+                new XAttribute("dist", "12000"),
+                new XAttribute("dir", "5400000")));
+
     private static XElement? ToEffectList(DrawingShapeEffectPreset effectPreset, XNamespace drawingNs) =>
         effectPreset switch
         {
             DrawingShapeEffectPreset.Shadow => ToOuterShadowEffect(drawingNs),
             DrawingShapeEffectPreset.InnerShadow => ToInnerShadowEffect(drawingNs),
+            DrawingShapeEffectPreset.Reflection => ToReflectionEffect(drawingNs),
             DrawingShapeEffectPreset.Glow => new XElement(drawingNs + "effectLst",
                 new XElement(drawingNs + "glow",
                     new XAttribute("rad", "50000"),
