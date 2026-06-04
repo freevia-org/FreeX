@@ -389,6 +389,7 @@ internal static class ExcelOpenSmoke
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetHyperlinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDrawingPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetBackgroundImagePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertLegacyCommentPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPivotPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -586,6 +587,7 @@ internal static class ExcelOpenSmoke
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetHyperlinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDrawingPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetBackgroundImagePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertLegacyCommentPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPivotPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -2500,6 +2502,61 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet drawing package graph: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetBackgroundImagePackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetRelationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var backgroundPictureReferences = LoadPackageXml(worksheetEntry)
+                .Descendants(SpreadsheetNs + "picture")
+                .Select((picture, index) => new WorksheetPictureReference(
+                    index + 1,
+                    picture.Attribute(OfficeRelationshipNs + "id")?.Value))
+                .ToArray();
+
+            foreach (var backgroundPictureReference in backgroundPictureReferences)
+            {
+                if (string.IsNullOrWhiteSpace(backgroundPictureReference.RelationshipId))
+                {
+                    issues.Add($"{worksheetPart} background picture #{backgroundPictureReference.Ordinal} has no relationship id");
+                    continue;
+                }
+
+                AddDrawingRelationshipPartIssue(
+                    archive,
+                    worksheetPart,
+                    worksheetRelationshipPart,
+                    backgroundPictureReference.RelationshipId,
+                    $"background picture #{backgroundPictureReference.Ordinal}",
+                    ImageRelationshipType,
+                    expectedContentType: null,
+                    issues);
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetBackgroundImagePackage(label, sourcePath, issues);
+    }
+
+    private static void ThrowInvalidWorksheetBackgroundImagePackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet background image package graph: {sample}{suffix}");
     }
 
     private static void AssertLegacyCommentPackageComplete(string xlsxPath, string label, string sourcePath)
@@ -7591,6 +7648,10 @@ internal static class ExcelOpenSmoke
         string? Reference,
         string? RelationshipId,
         string? Location);
+
+    private sealed record WorksheetPictureReference(
+        int Ordinal,
+        string? RelationshipId);
 
     private sealed record TablePartReference(
         int Ordinal,

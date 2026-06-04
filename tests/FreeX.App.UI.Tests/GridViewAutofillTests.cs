@@ -336,7 +336,7 @@ public sealed class GridViewAutofillTests
     [Fact]
     public void CalculateDragTarget_FindsSourceBoundsWithSingleMetricPasses()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridAutofillPlanner.cs"));
         var dragTarget = source[
             source.IndexOf("public static CellAddress? CalculateDragTarget", StringComparison.Ordinal)..
@@ -491,7 +491,7 @@ public sealed class GridViewAutofillTests
     [Fact]
     public void GridViewMouseMove_UsesCrossCursorOverAutofillHandle()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var cursorAssignment = source[
             source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
@@ -518,6 +518,4 @@ public sealed class GridViewAutofillTests
                 new ColMetric(5, 40, 160)
             ]);
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }

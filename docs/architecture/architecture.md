@@ -441,8 +441,8 @@ through Save As, and hands Windows Share the normalized local path.
 Error Checking remains a deterministic model-backed audit in `Core.Commands`, not a full Excel heuristic inference
 engine. It reports cached formula error values, text cells that parse as finite invariant-culture numbers, formulas
 stored as text, formulas whose direct parser-extracted precedents include missing or blank cells, table calculated
-column formulas that differ from the column formula, and common aggregate formulas (`SUM`, `AVERAGE`, `COUNT`,
-`COUNTA`, `MEDIAN`, `MIN`, `MAX`, `PRODUCT`, `STDEV`, `STDEVP`, `STDEV.S`, `STDEV.P`, `VAR`, `VARP`,
+column formulas that differ from the column formula, and common aggregate formulas (`SUM`, `AVERAGE`, `AVERAGEA`,
+`COUNT`, `COUNTA`, `MEDIAN`, `MIN`, `MINA`, `MAX`, `MAXA`, `PRODUCT`, `STDEV`, `STDEVP`, `STDEV.S`, `STDEV.P`, `VAR`, `VARP`,
 `VAR.S`, `VAR.P`, `SUBTOTAL`, `AGGREGATE`) that omit valued adjacent cells, including through same-sheet named-range
 arguments or valued gaps between separate arguments. It also reports literal cells whose values fail applied
 data-validation rules. Rule toggles use

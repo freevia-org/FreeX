@@ -80,7 +80,7 @@ public sealed class GridViewEditingCellTests
     [Fact]
     public void BuildOccupiedCellSet_AvoidsLinqPipelines()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.ConditionalIcons.cs"));
         var buildOccupied = source[
             source.IndexOf("public static HashSet<(uint Row, uint Col)> BuildOccupiedCellSet", StringComparison.Ordinal)..
@@ -92,6 +92,4 @@ public sealed class GridViewEditingCellTests
         buildOccupied.Should().NotContain(".Select(");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }
