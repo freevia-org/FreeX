@@ -22,7 +22,7 @@ public sealed class ClearContentsCommandTests
 
         var command = new ClearContentsCommand(sheet.Id, new GridRange(address, address));
 
-        command.Apply(new SimpleCommandContext(workbook)).Success.Should().BeTrue();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
 
         var cleared = sheet.GetCell(address);
         cleared.Should().NotBeNull();
@@ -39,7 +39,7 @@ public sealed class ClearContentsCommandTests
         var sheet = workbook.AddSheet("Sheet1");
         var address = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(address, Cell.FromValue(new TextValue("old")));
-        var context = new SimpleCommandContext(workbook);
+        var context = new TestCommandContext(workbook);
         var command = new ClearContentsCommand(sheet.Id, new GridRange(address, address));
 
         command.Apply(context).Success.Should().BeTrue();
@@ -67,7 +67,7 @@ public sealed class ClearContentsCommandTests
             HyperlinkTargetKind.ExistingFileOrWebPage,
             "Example site",
             "https://example.com");
-        var context = new SimpleCommandContext(workbook);
+        var context = new TestCommandContext(workbook);
         var command = new ClearContentsCommand(sheet.Id, new GridRange(address, address));
 
         command.Apply(context).Success.Should().BeTrue();
@@ -95,7 +95,7 @@ public sealed class ClearContentsCommandTests
         var address = new CellAddress(sheet.Id, 1, 1);
         var style = workbook.RegisterStyle(new CellStyle { Bold = true });
         sheet.SetStyleOnly(address.Row, address.Col, style);
-        var context = new SimpleCommandContext(workbook);
+        var context = new TestCommandContext(workbook);
         var command = new ClearContentsCommand(sheet.Id, new GridRange(address, address));
 
         command.Apply(context).Success.Should().BeTrue();
@@ -118,7 +118,7 @@ public sealed class ClearContentsCommandTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 50, 50));
-        var context = new SimpleCommandContext(workbook);
+        var context = new TestCommandContext(workbook);
         var command = new ClearContentsCommand(sheet.Id, range);
 
         var outcome = command.Apply(context);
@@ -152,7 +152,7 @@ public sealed class ClearContentsCommandTests
         sheet.IsProtected = true;
 
         var outcome = new ClearContentsCommand(sheet.Id, new GridRange(address, address))
-            .Apply(new SimpleCommandContext(workbook));
+            .Apply(new TestCommandContext(workbook));
 
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("protected");
@@ -172,17 +172,11 @@ public sealed class ClearContentsCommandTests
         sheet.IsProtected = true;
 
         var outcome = new ClearContentsCommand(sheet.Id, new GridRange(address, address))
-            .Apply(new SimpleCommandContext(workbook));
+            .Apply(new TestCommandContext(workbook));
 
         outcome.Success.Should().BeTrue();
         sheet.GetCell(address)!.Value.Should().Be(BlankValue.Instance);
         sheet.GetCell(address)!.StyleId.Should().Be(unlockedStyle);
-    }
-
-    private sealed class SimpleCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook => workbook;
-        public Sheet GetSheet(SheetId sheetId) => workbook.GetSheet(sheetId)!;
     }
 
     private static string FindWorkspaceFile(params string[] parts)

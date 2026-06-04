@@ -13,7 +13,7 @@ public sealed class GroupedEditCellsCommandTests
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
         var sheet3 = wb.AddSheet("Sheet3");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var a1 = new CellAddress(sheet1.Id, 1, 1);
         sheet1.SetCell(a1, Cell.FromValue(new TextValue("old1")));
@@ -49,7 +49,7 @@ public sealed class GroupedEditCellsCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var bold = wb.RegisterStyle(new CellStyle { Bold = true });
         var italic = wb.RegisterStyle(new CellStyle { Italic = true });
         var source = new CellAddress(sheet1.Id, 2, 3);
@@ -84,7 +84,7 @@ public sealed class GroupedEditCellsCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var styleId = wb.RegisterStyle(new CellStyle { Italic = true });
         var source = new CellAddress(sheet1.Id, 2, 3);
         var groupedTarget = new CellAddress(sheet2.Id, 2, 3);
@@ -112,7 +112,7 @@ public sealed class GroupedEditCellsCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new CellAddress(sheet1.Id, 1, 1);
         var target = new CellAddress(sheet2.Id, 1, 1);
         sheet1.SetCell(source, Cell.FromValue(new TextValue("old1")));
@@ -132,9 +132,4 @@ public sealed class GroupedEditCellsCommandTests
         sheet2.GetValue(target).Should().Be(new TextValue("old2"));
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

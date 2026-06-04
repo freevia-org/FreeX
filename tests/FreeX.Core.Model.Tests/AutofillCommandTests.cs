@@ -10,7 +10,7 @@ public class AutofillCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        return (wb, sheet, new SimpleCtx(wb));
+        return (wb, sheet, new TestCommandContext(wb));
     }
 
     [Fact]
@@ -315,12 +315,6 @@ public class AutofillCommandTests
         apply.Should().Contain("new List<(CellAddress Addr, Cell? OldCell)>(GetFillCellCapacity())");
         apply.Should().Contain("for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)");
         apply.Should().Contain("for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)");
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 
     private static string FindWorkspaceFile(params string[] parts)
