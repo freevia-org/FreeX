@@ -394,7 +394,7 @@ public partial class XlsxCorpusRunnerTests
             .Where(relationship =>
                 relationship.Attribute("Id")?.Value == "rIdExternalBook1" &&
                 relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath" &&
-                relationship.Attribute("Target")?.Value == "ExternalWorkbook.xlsx" &&
+                relationship.Attribute("Target")?.Value == "file:///C:/FreeX/ExternalWorkbook.xlsx" &&
                 relationship.Attribute("TargetMode")?.Value == "External")
             .Should().ContainSingle();
     }
