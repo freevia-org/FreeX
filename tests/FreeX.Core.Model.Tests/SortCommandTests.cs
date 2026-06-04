@@ -11,7 +11,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("West"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(5));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
@@ -48,7 +48,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("apple"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Banana"));
@@ -66,7 +66,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(3));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("C"));
@@ -99,7 +99,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3));
         var a1 = new CellAddress(sheet.Id, 1, 1);
         var b1 = new CellAddress(sheet.Id, 1, 2);
@@ -146,7 +146,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var redStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 0, 0) });
         var blueStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(0, 0, 255) });
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
@@ -168,7 +168,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var red = new CellColor(255, 0, 0);
         var blueStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(0, 0, 255) });
         var redStyle = workbook.RegisterStyle(new CellStyle { FillColor = red });
@@ -193,7 +193,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var redStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(255, 0, 0) });
         var blueStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(0, 0, 255) });
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
@@ -215,7 +215,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var blue = new CellColor(0, 0, 255);
         var redStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(255, 0, 0) });
         var blueStyle = workbook.RegisterStyle(new CellStyle { FontColor = blue });
@@ -240,7 +240,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
@@ -260,7 +260,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
@@ -280,7 +280,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         // Rows out of calendar order; alphabetical would give Apr, Feb, Jan, Mar.
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Mar"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(3));
@@ -318,7 +318,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Feb"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Mar"));
@@ -342,7 +342,7 @@ public sealed class SortCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Zebra"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Feb"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Jan"));
@@ -369,9 +369,4 @@ public sealed class SortCommandTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
-    }
 }

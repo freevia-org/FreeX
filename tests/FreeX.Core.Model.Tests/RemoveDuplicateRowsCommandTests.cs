@@ -12,7 +12,7 @@ public sealed class RemoveDuplicateRowsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(1));
@@ -48,7 +48,7 @@ public sealed class RemoveDuplicateRowsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("North"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Ada"));
@@ -87,7 +87,7 @@ public sealed class RemoveDuplicateRowsCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         SeedDuplicateRows(sheet1, "A", "B", "A", "C");
         SeedDuplicateRows(sheet2, "North", "South", "North", "West");
         var range1 = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 4, 1));
@@ -121,7 +121,7 @@ public sealed class RemoveDuplicateRowsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
         sheet.IsProtected = true;
@@ -141,9 +141,4 @@ public sealed class RemoveDuplicateRowsCommandTests
             sheet.SetCell(new CellAddress(sheet.Id, (uint)index + 1, 1), new TextValue(values[index]));
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
