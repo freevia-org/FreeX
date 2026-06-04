@@ -1,4 +1,3 @@
-using System.Globalization;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -11,7 +10,7 @@ public sealed class CellEntryParserTests
     [Fact]
     public void CreateCell_ParsesFiniteCurrentCultureAndInvariantNumbers()
     {
-        using var cultureScope = new CultureScope("fr-FR");
+        using var cultureScope = TestCultureScope.CurrentCulture("fr-FR");
 
         AssertNumber("12,5", 12.5);
         AssertNumber("12.5", 12.5);
@@ -36,7 +35,7 @@ public sealed class CellEntryParserTests
     [InlineData("plain text")]
     public void CreateCell_TreatsNonFiniteAndNonInvariantNumbersAsText(string text)
     {
-        using var cultureScope = new CultureScope("en-US");
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         var cell = CellEntryParser.CreateCell(text, Anchor, useR1C1ReferenceStyle: false);
 
         cell.Value.Should().BeOfType<TextValue>()
@@ -67,18 +66,4 @@ public sealed class CellEntryParserTests
             .Which.Value.Should().Be(expected);
     }
 
-    private sealed class CultureScope : IDisposable
-    {
-        private readonly CultureInfo previousCulture = CultureInfo.CurrentCulture;
-
-        public CultureScope(string currentCulture)
-        {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(currentCulture);
-        }
-
-        public void Dispose()
-        {
-            CultureInfo.CurrentCulture = previousCulture;
-        }
-    }
 }
