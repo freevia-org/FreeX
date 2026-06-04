@@ -108,7 +108,7 @@ internal static class XlsxClosedXmlCellMapper
             BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor, theme),
             BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor, theme),
             BorderLeft = MapBorder(xlStyle.Border.LeftBorder, xlStyle.Border.LeftBorderColor, theme),
-            NumberFormat = string.IsNullOrEmpty(xlStyle.NumberFormat.Format) ? "General" : xlStyle.NumberFormat.Format,
+            NumberFormat = MapNumberFormat(xlStyle.NumberFormat),
             HorizontalAlignment = xlStyle.Alignment.Horizontal switch
             {
                 XLAlignmentHorizontalValues.General => HorizontalAlignment.General,
@@ -263,6 +263,17 @@ internal static class XlsxClosedXmlCellMapper
         }
 
         return false;
+    }
+
+    private static string MapNumberFormat(IXLNumberFormat numberFormat)
+    {
+        if (!string.IsNullOrEmpty(numberFormat.Format))
+            return numberFormat.Format;
+
+        return BuiltInNumberFormatCatalog.TryResolveFormatCode(numberFormat.NumberFormatId, out var builtInFormat) &&
+               !string.IsNullOrEmpty(builtInFormat)
+            ? builtInFormat
+            : CellStyle.Default.NumberFormat;
     }
 
     private static ErrorValue MapErrorValue(XLError error) => error switch

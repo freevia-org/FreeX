@@ -1,4 +1,5 @@
 using System.Reflection;
+using ClosedXML.Excel;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -7,6 +8,34 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed class XlsxFileAdapterFormatTests
 {
+    [Fact]
+    public void Load_MapsBuiltInNumberFormatIdsToModelFormatCodes()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Formats");
+            sheet.Cell("A1").Value = 1234.56;
+            sheet.Cell("A1").Style.NumberFormat.NumberFormatId = 4;
+            sheet.Cell("A2").Value = 0.875;
+            sheet.Cell("A2").Style.NumberFormat.NumberFormatId = 10;
+            sheet.Cell("A3").Value = 1.5;
+            sheet.Cell("A3").Style.NumberFormat.NumberFormatId = 13;
+            sheet.Cell("A4").Value = "Text value";
+            sheet.Cell("A4").Style.NumberFormat.NumberFormatId = 49;
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(stream);
+        var sheetModel = loaded.GetSheetAt(0);
+
+        loaded.GetStyle(sheetModel.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("#,##0.00");
+        loaded.GetStyle(sheetModel.GetCell(2, 1)!.StyleId).NumberFormat.Should().Be("0.00%");
+        loaded.GetStyle(sheetModel.GetCell(3, 1)!.StyleId).NumberFormat.Should().Be("# ??/??");
+        loaded.GetStyle(sheetModel.GetCell(4, 1)!.StyleId).NumberFormat.Should().Be("@");
+    }
+
     [Fact]
     public void Save_RoundTripsStyleOnlyCellsWithoutMaterializingBlanks()
     {

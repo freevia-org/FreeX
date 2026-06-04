@@ -34,8 +34,12 @@ internal static class ExcelOpenSmoke
     private const int MsoShapeTypeLinkedGraphic = 29;
     private const int XlLandscape = 2;
     private const int XlPageBreakManual = -4135;
+    private const int XlColorIndexNone = -4142;
+    private const int XlHAlignGeneral = 1;
+    private const int XlVAlignBottom = -4107;
     private const int MaxDataValidationProbeCells = 20000;
     private const int MaxMergedAreaProbeCells = 20000;
+    private const int MaxFormattingProbeCells = 20000;
     private const int MaxStructureProbeRows = 200;
     private const int MaxStructureProbeColumns = 80;
     private const int MaxOpenXmlValidationErrorsToReport = 20;
@@ -581,6 +585,22 @@ internal static class ExcelOpenSmoke
         int OutlineRowCount,
         int OutlineColumnCount);
 
+    private readonly record struct ExcelFormattingSummary(
+        int StyledCellCount,
+        int NumberFormatCellCount,
+        int BoldCellCount,
+        int FilledCellCount,
+        int AlignedCellCount,
+        int WrappedCellCount);
+
+    private readonly record struct FreeXFormattingSummary(
+        int StyledCellCount,
+        int NumberFormatCellCount,
+        int BoldCellCount,
+        int FilledCellCount,
+        int AlignedCellCount,
+        int WrappedCellCount);
+
     private static ExcelWorkbookSummary CountWorkbookContents(object workbook)
     {
         object? worksheets = null;
@@ -617,6 +637,12 @@ internal static class ExcelOpenSmoke
             var customColumnWidthCount = 0;
             var outlineRowCount = 0;
             var outlineColumnCount = 0;
+            var styledCellCount = 0;
+            var numberFormatCellCount = 0;
+            var boldCellCount = 0;
+            var filledCellCount = 0;
+            var alignedCellCount = 0;
+            var wrappedCellCount = 0;
             var formulaCellCount = 0;
             var structuredTableCount = 0;
             var pivotTableCount = 0;
@@ -727,6 +753,21 @@ internal static class ExcelOpenSmoke
 
                     try
                     {
+                        var worksheetFormatting = CountWorksheetFormatting(worksheet);
+                        styledCellCount += worksheetFormatting.StyledCellCount;
+                        numberFormatCellCount += worksheetFormatting.NumberFormatCellCount;
+                        boldCellCount += worksheetFormatting.BoldCellCount;
+                        filledCellCount += worksheetFormatting.FilledCellCount;
+                        alignedCellCount += worksheetFormatting.AlignedCellCount;
+                        wrappedCellCount += worksheetFormatting.WrappedCellCount;
+                    }
+                    catch (COMException ex)
+                    {
+                        throw new InvalidDataException($"Excel formatting count failed for worksheet index {index}", ex);
+                    }
+
+                    try
+                    {
                         sparklineCount += CountWorksheetSparklines(worksheet);
                     }
                     catch (COMException ex)
@@ -793,6 +834,12 @@ internal static class ExcelOpenSmoke
                 customColumnWidthCount,
                 outlineRowCount,
                 outlineColumnCount,
+                styledCellCount,
+                numberFormatCellCount,
+                boldCellCount,
+                filledCellCount,
+                alignedCellCount,
+                wrappedCellCount,
                 formulaCellCount,
                 structuredTableCount,
                 pivotTableCount);
@@ -1257,6 +1304,132 @@ internal static class ExcelOpenSmoke
         }
     }
 
+    private static ExcelFormattingSummary CountWorksheetFormatting(object worksheet)
+    {
+        object? usedRange = null;
+        object? rows = null;
+        object? columns = null;
+        object? cells = null;
+        try
+        {
+            usedRange = ((dynamic)worksheet).UsedRange;
+            rows = ((dynamic)usedRange).Rows;
+            columns = ((dynamic)usedRange).Columns;
+            cells = ((dynamic)worksheet).Cells;
+
+            var firstRow = Convert.ToInt32(((dynamic)usedRange).Row, CultureInfo.InvariantCulture);
+            var firstColumn = Convert.ToInt32(((dynamic)usedRange).Column, CultureInfo.InvariantCulture);
+            var rowCount = Convert.ToInt32(((dynamic)rows).Count, CultureInfo.InvariantCulture);
+            var columnCount = Convert.ToInt32(((dynamic)columns).Count, CultureInfo.InvariantCulture);
+
+            var styledCells = 0;
+            var numberFormatCells = 0;
+            var boldCells = 0;
+            var filledCells = 0;
+            var alignedCells = 0;
+            var wrappedCells = 0;
+            var probed = 0;
+
+            for (var rowOffset = 0; rowOffset < rowCount && probed < MaxFormattingProbeCells; rowOffset++)
+            {
+                for (var columnOffset = 0; columnOffset < columnCount && probed < MaxFormattingProbeCells; columnOffset++)
+                {
+                    object? cell = null;
+                    object? font = null;
+                    object? interior = null;
+                    try
+                    {
+                        cell = ((dynamic)cells)[firstRow + rowOffset, firstColumn + columnOffset];
+                        probed++;
+
+                        var hasNumberFormat = HasNonGeneralNumberFormat(((dynamic)cell).NumberFormat);
+                        font = ((dynamic)cell).Font;
+                        var isBold = Convert.ToBoolean(((dynamic)font).Bold, CultureInfo.InvariantCulture);
+                        interior = ((dynamic)cell).Interior;
+                        var hasFill = HasVisibleFill(interior);
+                        var hasAlignment = HasExplicitAlignment(cell);
+                        var isWrapped = Convert.ToBoolean(((dynamic)cell).WrapText, CultureInfo.InvariantCulture);
+
+                        if (hasNumberFormat)
+                            numberFormatCells++;
+                        if (isBold)
+                            boldCells++;
+                        if (hasFill)
+                            filledCells++;
+                        if (hasAlignment)
+                            alignedCells++;
+                        if (isWrapped)
+                            wrappedCells++;
+                        if (hasNumberFormat || isBold || hasFill || hasAlignment || isWrapped)
+                            styledCells++;
+                    }
+                    finally
+                    {
+                        ReleaseComObject(interior);
+                        ReleaseComObject(font);
+                        ReleaseComObject(cell);
+                    }
+                }
+            }
+
+            return new ExcelFormattingSummary(
+                styledCells,
+                numberFormatCells,
+                boldCells,
+                filledCells,
+                alignedCells,
+                wrappedCells);
+        }
+        catch (COMException)
+        {
+            return default;
+        }
+        finally
+        {
+            ReleaseComObject(cells);
+            ReleaseComObject(columns);
+            ReleaseComObject(rows);
+            ReleaseComObject(usedRange);
+        }
+    }
+
+    private static bool HasNonGeneralNumberFormat(object? numberFormat)
+    {
+        var text = Convert.ToString(numberFormat, CultureInfo.InvariantCulture);
+        return !string.IsNullOrWhiteSpace(text) &&
+               !string.Equals(text, "General", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasVisibleFill(object interior)
+    {
+        try
+        {
+            var colorIndex = Convert.ToInt32(((dynamic)interior).ColorIndex, CultureInfo.InvariantCulture);
+            if (colorIndex == XlColorIndexNone)
+                return false;
+
+            return colorIndex != 0;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+    }
+
+    private static bool HasExplicitAlignment(object cell)
+    {
+        try
+        {
+            var horizontalAlignment = Convert.ToInt32(((dynamic)cell).HorizontalAlignment, CultureInfo.InvariantCulture);
+            var verticalAlignment = Convert.ToInt32(((dynamic)cell).VerticalAlignment, CultureInfo.InvariantCulture);
+            return horizontalAlignment != XlHAlignGeneral || verticalAlignment != XlVAlignBottom;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+    }
+
     private static int CountWorksheetSparklines(object worksheet)
     {
         object? cells = null;
@@ -1612,8 +1785,10 @@ internal static class ExcelOpenSmoke
         return new FreeXLoadSummaryResult(SummarizeWorkbook(result.Workbook), result.Warnings);
     }
 
-    private static FreeXWorkbookSummary SummarizeWorkbook(Workbook workbook) =>
-        new(
+    private static FreeXWorkbookSummary SummarizeWorkbook(Workbook workbook)
+    {
+        var formatting = CountFreeXWorkbookFormatting(workbook);
+        return new FreeXWorkbookSummary(
             workbook.SheetCount,
             workbook.Sheets.Sum(sheet => sheet.CellCount),
             workbook.Sheets.Sum(sheet => sheet.FormulaCellCount),
@@ -1638,8 +1813,80 @@ internal static class ExcelOpenSmoke
             workbook.Sheets.Sum(sheet => sheet.ColumnWidths.Count),
             workbook.Sheets.Sum(sheet => sheet.RowOutlineLevels.Count),
             workbook.Sheets.Sum(sheet => sheet.ColOutlineLevels.Count),
+            formatting.StyledCellCount,
+            formatting.NumberFormatCellCount,
+            formatting.BoldCellCount,
+            formatting.FilledCellCount,
+            formatting.AlignedCellCount,
+            formatting.WrappedCellCount,
             workbook.Sheets.Sum(sheet => sheet.PivotTables.Count),
             workbook.PivotCaches.Count);
+    }
+
+    private static FreeXFormattingSummary CountFreeXWorkbookFormatting(Workbook workbook)
+    {
+        var styledCells = 0;
+        var numberFormatCells = 0;
+        var boldCells = 0;
+        var filledCells = 0;
+        var alignedCells = 0;
+        var wrappedCells = 0;
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var (_, cell) in sheet.EnumerateCells())
+            {
+                CountFreeXCellStyle(workbook, cell.StyleId);
+            }
+
+            foreach (var (_, styleId) in sheet.GetStyleOnlyEntries())
+            {
+                CountFreeXCellStyle(workbook, styleId);
+            }
+        }
+
+        return new FreeXFormattingSummary(
+            styledCells,
+            numberFormatCells,
+            boldCells,
+            filledCells,
+            alignedCells,
+            wrappedCells);
+
+        void CountFreeXCellStyle(Workbook workbook, StyleId styleId)
+        {
+            if (styleId == StyleId.Default)
+                return;
+
+            styledCells++;
+            var style = workbook.GetStyle(styleId);
+            if (IsNonGeneralNumberFormat(style.NumberFormat))
+                numberFormatCells++;
+            if (style.Bold)
+                boldCells++;
+            if (HasVisibleFill(style))
+                filledCells++;
+            if (HasExplicitAlignment(style))
+                alignedCells++;
+            if (style.WrapText)
+                wrappedCells++;
+        }
+    }
+
+    private static bool IsNonGeneralNumberFormat(string? numberFormat) =>
+        !string.IsNullOrWhiteSpace(numberFormat) &&
+        !string.Equals(numberFormat, "General", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasVisibleFill(CellStyle style) =>
+        style.FillColor is not null ||
+        style.FillThemeColor is not null ||
+        style.FillPatternStyle != CellFillPatternStyle.None ||
+        style.FillPatternColor is not null ||
+        style.FillPatternThemeColor is not null;
+
+    private static bool HasExplicitAlignment(CellStyle style) =>
+        style.HorizontalAlignment != HorizontalAlignment.General ||
+        style.VerticalAlignment != VerticalAlignment.Bottom;
 
     private static void AddFreeXSaveMarker(Workbook workbook)
     {
@@ -1890,6 +2137,8 @@ internal static class ExcelOpenSmoke
         var minCustomColumnWidths = HasTag("custom-dimensions") || HasTag("custom-column-widths") ? 1 : 0;
         var minOutlineRows = HasTag("outline-groups") || HasTag("row-column-groups") ? 1 : 0;
         var minOutlineColumns = HasTag("outline-groups") || HasTag("row-column-groups") ? 1 : 0;
+        var minStyledCells = HasTag("formatting") || HasTag("styles") || HasTag("number-formats") ? 1 : 0;
+        var minNumberFormatCells = HasTag("formatting") || HasTag("styles") || HasTag("number-formats") ? 1 : 0;
         var minProtectedSheets = HasTag("protection") ? 1 : 0;
         var minStructureProtection = HasTag("protection") ? 1 : 0;
         var minPivotTables = HasTag("pivottables") ? 1 : 0;
@@ -1932,6 +2181,8 @@ internal static class ExcelOpenSmoke
             minCustomColumnWidths == 0 &&
             minOutlineRows == 0 &&
             minOutlineColumns == 0 &&
+            minStyledCells == 0 &&
+            minNumberFormatCells == 0 &&
             minProtectedSheets == 0 &&
             minStructureProtection == 0 &&
             minPivotTables == 0 &&
@@ -1964,6 +2215,8 @@ internal static class ExcelOpenSmoke
             MinFreeXPreSaveCustomColumnWidths: expectFreeXPreSave ? minCustomColumnWidths : 0,
             MinFreeXPreSaveOutlineRows: expectFreeXPreSave ? minOutlineRows : 0,
             MinFreeXPreSaveOutlineColumns: expectFreeXPreSave ? minOutlineColumns : 0,
+            MinFreeXPreSaveStyledCells: expectFreeXPreSave ? minStyledCells : 0,
+            MinFreeXPreSaveNumberFormatCells: expectFreeXPreSave ? minNumberFormatCells : 0,
             MinExcelOpenedFormulaCells: minFormulaCells,
             MinExcelOpenedStructuredTables: minStructuredTables,
             MinExcelOpenedDataValidationCells: minDataValidations > 0 ? 1 : 0,
@@ -1993,6 +2246,8 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedCustomColumnWidths: minCustomColumnWidths,
             MinExcelOpenedOutlineRows: minOutlineRows,
             MinExcelOpenedOutlineColumns: minOutlineColumns,
+            MinExcelOpenedStyledCells: minStyledCells,
+            MinExcelOpenedNumberFormatCells: minNumberFormatCells,
             MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
             MinExcelReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
             MinExcelReopenedDataValidationCells: saveReopen && minDataValidations > 0 ? 1 : 0,
@@ -2022,6 +2277,8 @@ internal static class ExcelOpenSmoke
             MinExcelReopenedCustomColumnWidths: saveReopen ? minCustomColumnWidths : 0,
             MinExcelReopenedOutlineRows: saveReopen ? minOutlineRows : 0,
             MinExcelReopenedOutlineColumns: saveReopen ? minOutlineColumns : 0,
+            MinExcelReopenedStyledCells: saveReopen ? minStyledCells : 0,
+            MinExcelReopenedNumberFormatCells: saveReopen ? minNumberFormatCells : 0,
             MinFreeXReopenedFormulaCells: expectFreeXReopened ? minFormulaCells : 0,
             MinFreeXReopenedStructuredTables: expectFreeXReopened ? minStructuredTables : 0,
             MinFreeXReopenedDataValidations: expectFreeXReopened ? minDataValidations : 0,
@@ -2042,6 +2299,8 @@ internal static class ExcelOpenSmoke
             MinFreeXReopenedCustomColumnWidths: expectFreeXReopened ? minCustomColumnWidths : 0,
             MinFreeXReopenedOutlineRows: expectFreeXReopened ? minOutlineRows : 0,
             MinFreeXReopenedOutlineColumns: expectFreeXReopened ? minOutlineColumns : 0,
+            MinFreeXReopenedStyledCells: expectFreeXReopened ? minStyledCells : 0,
+            MinFreeXReopenedNumberFormatCells: expectFreeXReopened ? minNumberFormatCells : 0,
             MinFreeXPreSavePivotTables: expectFreeXPreSave ? minPivotTables : 0,
             MinFreeXPreSavePivotCaches: expectFreeXPreSave ? minPivotCaches : 0,
             MinExcelOpenedPivotTables: minPivotTables,
@@ -2493,6 +2752,36 @@ internal static class ExcelOpenSmoke
             expectations.MinExcelOpenedOutlineColumns,
             input);
         AssertMin(
+            "Excel open styled cells",
+            opened.StyledCellCount,
+            expectations.MinExcelOpenedStyledCells,
+            input);
+        AssertMin(
+            "Excel open number-format cells",
+            opened.NumberFormatCellCount,
+            expectations.MinExcelOpenedNumberFormatCells,
+            input);
+        AssertMin(
+            "Excel open bold cells",
+            opened.BoldCellCount,
+            expectations.MinExcelOpenedBoldCells,
+            input);
+        AssertMin(
+            "Excel open filled cells",
+            opened.FilledCellCount,
+            expectations.MinExcelOpenedFilledCells,
+            input);
+        AssertMin(
+            "Excel open aligned cells",
+            opened.AlignedCellCount,
+            expectations.MinExcelOpenedAlignedCells,
+            input);
+        AssertMin(
+            "Excel open wrapped cells",
+            opened.WrappedCellCount,
+            expectations.MinExcelOpenedWrappedCells,
+            input);
+        AssertMin(
             "Excel reopen formula cells",
             reopened?.FormulaCellCount,
             expectations.MinExcelReopenedFormulaCells,
@@ -2646,6 +2935,36 @@ internal static class ExcelOpenSmoke
             "Excel reopen outline columns",
             reopened?.OutlineColumnCount,
             expectations.MinExcelReopenedOutlineColumns,
+            input);
+        AssertMin(
+            "Excel reopen styled cells",
+            reopened?.StyledCellCount,
+            expectations.MinExcelReopenedStyledCells,
+            input);
+        AssertMin(
+            "Excel reopen number-format cells",
+            reopened?.NumberFormatCellCount,
+            expectations.MinExcelReopenedNumberFormatCells,
+            input);
+        AssertMin(
+            "Excel reopen bold cells",
+            reopened?.BoldCellCount,
+            expectations.MinExcelReopenedBoldCells,
+            input);
+        AssertMin(
+            "Excel reopen filled cells",
+            reopened?.FilledCellCount,
+            expectations.MinExcelReopenedFilledCells,
+            input);
+        AssertMin(
+            "Excel reopen aligned cells",
+            reopened?.AlignedCellCount,
+            expectations.MinExcelReopenedAlignedCells,
+            input);
+        AssertMin(
+            "Excel reopen wrapped cells",
+            reopened?.WrappedCellCount,
+            expectations.MinExcelReopenedWrappedCells,
             input);
         AssertMin(
             "FreeX reopened Excel save formula cells",
@@ -2819,6 +3138,36 @@ internal static class ExcelOpenSmoke
             summary?.OutlineColumnCount,
             preSave ? expectations.MinFreeXPreSaveOutlineColumns : expectations.MinFreeXReopenedOutlineColumns,
             input);
+        AssertMin(
+            $"{label} styled cells",
+            summary?.StyledCellCount,
+            preSave ? expectations.MinFreeXPreSaveStyledCells : expectations.MinFreeXReopenedStyledCells,
+            input);
+        AssertMin(
+            $"{label} number-format cells",
+            summary?.NumberFormatCellCount,
+            preSave ? expectations.MinFreeXPreSaveNumberFormatCells : expectations.MinFreeXReopenedNumberFormatCells,
+            input);
+        AssertMin(
+            $"{label} bold cells",
+            summary?.BoldCellCount,
+            preSave ? expectations.MinFreeXPreSaveBoldCells : expectations.MinFreeXReopenedBoldCells,
+            input);
+        AssertMin(
+            $"{label} filled cells",
+            summary?.FilledCellCount,
+            preSave ? expectations.MinFreeXPreSaveFilledCells : expectations.MinFreeXReopenedFilledCells,
+            input);
+        AssertMin(
+            $"{label} aligned cells",
+            summary?.AlignedCellCount,
+            preSave ? expectations.MinFreeXPreSaveAlignedCells : expectations.MinFreeXReopenedAlignedCells,
+            input);
+        AssertMin(
+            $"{label} wrapped cells",
+            summary?.WrappedCellCount,
+            preSave ? expectations.MinFreeXPreSaveWrappedCells : expectations.MinFreeXReopenedWrappedCells,
+            input);
     }
 
     private static void AssertMin(string label, int? actual, int minimum, WorkbookSmokeInput input)
@@ -2866,12 +3215,12 @@ internal static class ExcelOpenSmoke
         if (result.Opened is { } opened)
         {
             Console.WriteLine(
-                $"  Excel open: worksheets {opened.WorksheetCount}; named ranges {opened.NamedRangeCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; charts {opened.ChartCount}; validation cells {opened.DataValidationCellCount}; conditional formats {opened.ConditionalFormatCount}; hyperlinks {opened.HyperlinkCount}; comments {opened.CommentCount}; protected sheets {opened.ProtectedSheetCount}; structure protection {opened.StructureProtectionCount}; pictures {opened.PictureCount}; sparklines {opened.SparklineCount}; text boxes {opened.TextBoxCount}; drawing shapes {opened.DrawingShapeCount}; worksheet shapes {opened.ShapeCount}; print areas {opened.PrintAreaSheetCount}; print titles {opened.PrintTitleSheetCount}; landscape sheets {opened.LandscapeSheetCount}; scale-to-fit sheets {opened.ScaleToFitSheetCount}; print grid/headings sheets {opened.PrintOptionsSheetCount}; header/footer sheets {opened.HeaderFooterSheetCount}; manual page breaks {opened.ManualPageBreakCount}; allow-edit ranges {opened.AllowEditRangeCount}; merged areas {opened.MergedAreaCount}; freeze-pane sheets {opened.FreezePaneSheetCount}; hidden rows {opened.HiddenRowCount}; hidden columns {opened.HiddenColumnCount}; custom row heights {opened.CustomRowHeightCount}; custom column widths {opened.CustomColumnWidthCount}; outline rows {opened.OutlineRowCount}; outline columns {opened.OutlineColumnCount}; pivots {opened.PivotTableCount}");
+                $"  Excel open: worksheets {opened.WorksheetCount}; named ranges {opened.NamedRangeCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; charts {opened.ChartCount}; validation cells {opened.DataValidationCellCount}; conditional formats {opened.ConditionalFormatCount}; hyperlinks {opened.HyperlinkCount}; comments {opened.CommentCount}; protected sheets {opened.ProtectedSheetCount}; structure protection {opened.StructureProtectionCount}; pictures {opened.PictureCount}; sparklines {opened.SparklineCount}; text boxes {opened.TextBoxCount}; drawing shapes {opened.DrawingShapeCount}; worksheet shapes {opened.ShapeCount}; print areas {opened.PrintAreaSheetCount}; print titles {opened.PrintTitleSheetCount}; landscape sheets {opened.LandscapeSheetCount}; scale-to-fit sheets {opened.ScaleToFitSheetCount}; print grid/headings sheets {opened.PrintOptionsSheetCount}; header/footer sheets {opened.HeaderFooterSheetCount}; manual page breaks {opened.ManualPageBreakCount}; allow-edit ranges {opened.AllowEditRangeCount}; merged areas {opened.MergedAreaCount}; freeze-pane sheets {opened.FreezePaneSheetCount}; hidden rows {opened.HiddenRowCount}; hidden columns {opened.HiddenColumnCount}; custom row heights {opened.CustomRowHeightCount}; custom column widths {opened.CustomColumnWidthCount}; outline rows {opened.OutlineRowCount}; outline columns {opened.OutlineColumnCount}; styled cells {opened.StyledCellCount}; number-format cells {opened.NumberFormatCellCount}; bold cells {opened.BoldCellCount}; filled cells {opened.FilledCellCount}; aligned cells {opened.AlignedCellCount}; wrapped cells {opened.WrappedCellCount}; pivots {opened.PivotTableCount}");
         }
         if (result.Reopened is { } reopened)
         {
             Console.WriteLine(
-                $"  Excel reopen: worksheets {reopened.WorksheetCount}; named ranges {reopened.NamedRangeCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; charts {reopened.ChartCount}; validation cells {reopened.DataValidationCellCount}; conditional formats {reopened.ConditionalFormatCount}; hyperlinks {reopened.HyperlinkCount}; comments {reopened.CommentCount}; protected sheets {reopened.ProtectedSheetCount}; structure protection {reopened.StructureProtectionCount}; pictures {reopened.PictureCount}; sparklines {reopened.SparklineCount}; text boxes {reopened.TextBoxCount}; drawing shapes {reopened.DrawingShapeCount}; worksheet shapes {reopened.ShapeCount}; print areas {reopened.PrintAreaSheetCount}; print titles {reopened.PrintTitleSheetCount}; landscape sheets {reopened.LandscapeSheetCount}; scale-to-fit sheets {reopened.ScaleToFitSheetCount}; print grid/headings sheets {reopened.PrintOptionsSheetCount}; header/footer sheets {reopened.HeaderFooterSheetCount}; manual page breaks {reopened.ManualPageBreakCount}; allow-edit ranges {reopened.AllowEditRangeCount}; merged areas {reopened.MergedAreaCount}; freeze-pane sheets {reopened.FreezePaneSheetCount}; hidden rows {reopened.HiddenRowCount}; hidden columns {reopened.HiddenColumnCount}; custom row heights {reopened.CustomRowHeightCount}; custom column widths {reopened.CustomColumnWidthCount}; outline rows {reopened.OutlineRowCount}; outline columns {reopened.OutlineColumnCount}; pivots {reopened.PivotTableCount}");
+                $"  Excel reopen: worksheets {reopened.WorksheetCount}; named ranges {reopened.NamedRangeCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; charts {reopened.ChartCount}; validation cells {reopened.DataValidationCellCount}; conditional formats {reopened.ConditionalFormatCount}; hyperlinks {reopened.HyperlinkCount}; comments {reopened.CommentCount}; protected sheets {reopened.ProtectedSheetCount}; structure protection {reopened.StructureProtectionCount}; pictures {reopened.PictureCount}; sparklines {reopened.SparklineCount}; text boxes {reopened.TextBoxCount}; drawing shapes {reopened.DrawingShapeCount}; worksheet shapes {reopened.ShapeCount}; print areas {reopened.PrintAreaSheetCount}; print titles {reopened.PrintTitleSheetCount}; landscape sheets {reopened.LandscapeSheetCount}; scale-to-fit sheets {reopened.ScaleToFitSheetCount}; print grid/headings sheets {reopened.PrintOptionsSheetCount}; header/footer sheets {reopened.HeaderFooterSheetCount}; manual page breaks {reopened.ManualPageBreakCount}; allow-edit ranges {reopened.AllowEditRangeCount}; merged areas {reopened.MergedAreaCount}; freeze-pane sheets {reopened.FreezePaneSheetCount}; hidden rows {reopened.HiddenRowCount}; hidden columns {reopened.HiddenColumnCount}; custom row heights {reopened.CustomRowHeightCount}; custom column widths {reopened.CustomColumnWidthCount}; outline rows {reopened.OutlineRowCount}; outline columns {reopened.OutlineColumnCount}; styled cells {reopened.StyledCellCount}; number-format cells {reopened.NumberFormatCellCount}; bold cells {reopened.BoldCellCount}; filled cells {reopened.FilledCellCount}; aligned cells {reopened.AlignedCellCount}; wrapped cells {reopened.WrappedCellCount}; pivots {reopened.PivotTableCount}");
         }
         if (result.FreeXReopenedExcelSave is { } freeXReopened)
             WriteFreeXSummary("FreeX reopened Excel save", freeXReopened);
@@ -2887,6 +3236,8 @@ internal static class ExcelOpenSmoke
             $"  {label}: sheets {summary.SheetCount}; cells {summary.CellCount}; named ranges {summary.NamedRangeCount}; formulas {summary.FormulaCellCount}; tables {summary.StructuredTableCount}; charts {summary.ChartCount}; pivots {summary.PivotTableCount}; pivot caches {summary.PivotCacheCount}");
         Console.WriteLine(
             $"  {label} metadata: validations {summary.DataValidationCount}; conditional formats {summary.ConditionalFormatCount}; hyperlinks {summary.HyperlinkCount}; comments {summary.CommentCount}; pictures {summary.PictureCount}; sparklines {summary.SparklineCount}; text boxes {summary.TextBoxCount}; drawing shapes {summary.DrawingShapeCount}; protected sheets {summary.ProtectedSheetCount}; structure protection {summary.StructureProtectionCount}; merged regions {summary.MergedRegionCount}; frozen sheets {summary.FrozenSheetCount}; hidden rows {summary.HiddenRowCount}; hidden columns {summary.HiddenColumnCount}; custom row heights {summary.CustomRowHeightCount}; custom column widths {summary.CustomColumnWidthCount}; outline rows {summary.OutlineRowCount}; outline columns {summary.OutlineColumnCount}");
+        Console.WriteLine(
+            $"  {label} formatting: styled cells {summary.StyledCellCount}; number-format cells {summary.NumberFormatCellCount}; bold cells {summary.BoldCellCount}; filled cells {summary.FilledCellCount}; aligned cells {summary.AlignedCellCount}; wrapped cells {summary.WrappedCellCount}");
     }
 
     private static void WriteFreeXWarnings(string label, IReadOnlyList<string> warnings)
