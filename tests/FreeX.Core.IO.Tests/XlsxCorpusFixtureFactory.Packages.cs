@@ -690,6 +690,15 @@ internal static partial class XlsxCorpusFixtureFactory
                     <sheetNames>
                       <sheetName val="ExternalSheet"/>
                     </sheetNames>
+                    <sheetDataSet>
+                      <sheetData sheetId="0">
+                        <row r="1">
+                          <cell r="A1">
+                            <v>42</v>
+                          </cell>
+                        </row>
+                      </sheetData>
+                    </sheetDataSet>
                   </externalBook>
                 </externalLink>
                 """),
@@ -697,7 +706,7 @@ internal static partial class XlsxCorpusFixtureFactory
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
                   <Relationship Id="rIdExternalBook1"
                                 Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath"
-                                Target="file:///C:/FreeX/ExternalWorkbook.xlsx"
+                                Target="ExternalWorkbook.xlsx"
                                 TargetMode="External"/>
                 </Relationships>
                 """)),

@@ -317,6 +317,89 @@ public partial class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedExternalLinksRetentionPackage_AnchorsExternalReferenceWithFormula()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-external-links-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        var externalLinkEntry = archive.GetEntry("xl/externalLinks/externalLink1.xml");
+        var externalLinkRelsEntry = archive.GetEntry("xl/externalLinks/_rels/externalLink1.xml.rels");
+        workbookEntry.Should().NotBeNull();
+        workbookRelsEntry.Should().NotBeNull();
+        worksheetEntry.Should().NotBeNull();
+        externalLinkEntry.Should().NotBeNull();
+        externalLinkRelsEntry.Should().NotBeNull();
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        XDocument workbookXml;
+        using (var stream = workbookEntry!.Open())
+            workbookXml = XDocument.Load(stream);
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry!.Open())
+            workbookRelsXml = XDocument.Load(stream);
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry!.Open())
+            worksheetXml = XDocument.Load(stream);
+        XDocument externalLinkXml;
+        using (var stream = externalLinkEntry!.Open())
+            externalLinkXml = XDocument.Load(stream);
+        XDocument externalLinkRelsXml;
+        using (var stream = externalLinkRelsEntry!.Open())
+            externalLinkRelsXml = XDocument.Load(stream);
+
+        var externalReferenceId = workbookXml.Root!
+            .Element(sheetNs + "externalReferences")!
+            .Elements(sheetNs + "externalReference")
+            .Single()
+            .Attribute(relNs + "id")!
+            .Value;
+        externalReferenceId.Should().Be("rIdFreeXExternalLink1");
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == externalReferenceId &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink" &&
+                relationship.Attribute("Target")?.Value == "externalLinks/externalLink1.xml")
+            .Should().ContainSingle();
+
+        var formulaCell = worksheetXml.Descendants(sheetNs + "c")
+            .Single(cell => string.Equals(cell.Attribute("r")?.Value, "C1", StringComparison.OrdinalIgnoreCase));
+        formulaCell.Element(sheetNs + "f")!.Value.Should().Be("[1]ExternalSheet!$A$1");
+        formulaCell.Element(sheetNs + "v")!.Value.Should().Be("42");
+
+        var externalBook = externalLinkXml.Root!.Element(sheetNs + "externalBook")!;
+        externalBook.Attribute(relNs + "id")!.Value.Should().Be("rIdExternalBook1");
+        externalBook.Element(sheetNs + "sheetNames")!
+            .Elements(sheetNs + "sheetName")
+            .Single()
+            .Attribute("val")!
+            .Value
+            .Should().Be("ExternalSheet");
+        externalBook.Element(sheetNs + "sheetDataSet")!
+            .Element(sheetNs + "sheetData")!
+            .Element(sheetNs + "row")!
+            .Element(sheetNs + "cell")!
+            .Element(sheetNs + "v")!
+            .Value
+            .Should().Be("42");
+
+        externalLinkRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Id")?.Value == "rIdExternalBook1" &&
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath" &&
+                relationship.Attribute("Target")?.Value == "ExternalWorkbook.xlsx" &&
+                relationship.Attribute("TargetMode")?.Value == "External")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedSmartArtDiagramsRetentionPackage_LinksWorksheetDrawingAndDiagramParts()
     {
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-smartart-diagrams-001");
