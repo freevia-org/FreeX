@@ -3705,6 +3705,25 @@ internal static class ExcelOpenSmoke
                     new(
                         "xl/timelineCaches/timelineCache1.xml",
                         "application/vnd.ms-excel.timelineCache+xml")
+                ],
+                RequiredExcelSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.microsoft.com/office/2010/relationships/TimelineCache",
+                        "xl/timelineCaches/timelineCache1.xml"),
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+                        "xl/drawings/drawing1.xml"),
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.microsoft.com/office/2010/relationships/Timeline",
+                        "xl/timelines/timeline1.xml"),
+                    new(
+                        "xl/drawings/_rels/drawing1.xml.rels",
+                        "http://schemas.microsoft.com/office/2010/relationships/Timeline",
+                        "xl/timelines/timeline1.xml")
                 ]
             };
         }
