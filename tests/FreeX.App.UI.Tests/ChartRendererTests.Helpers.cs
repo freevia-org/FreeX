@@ -53,20 +53,8 @@ public sealed partial class ChartRendererTests
     private static ChartDataCell ChartCell(SheetId sheetId, uint row, uint col, string text, ScalarValue rawValue) =>
         new(sheetId, row, col, text, rawValue);
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.Find(relativeParts);
 
     private static void RunWithCulture(string cultureName, Action action)
     {

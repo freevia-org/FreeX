@@ -203,17 +203,6 @@ public sealed partial class GridViewSplitPaneLayoutTests
                 [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
                 [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)]));
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
-            if (File.Exists(candidate))
-                return candidate;
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.Find(relativeParts);
 }

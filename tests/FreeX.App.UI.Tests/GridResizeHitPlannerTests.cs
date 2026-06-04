@@ -156,18 +156,6 @@ public sealed class GridResizeHitPlannerTests
             [new RowMetric(1, 20, 0), new RowMetric(2, 24, 20)],
             [new ColMetric(1, 40, 0), new ColMetric(2, 60, 40)]);
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.Find(relativeParts);
 }

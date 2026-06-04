@@ -73,17 +73,5 @@ public sealed class WorkbookStatisticsServiceTests
     }
 
     private static string FindWorkspaceFile(params string[] parts)
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null)
-        {
-            var candidate = Path.Combine([dir, .. parts]);
-            if (File.Exists(candidate))
-                return candidate;
-
-            dir = Directory.GetParent(dir)?.FullName;
-        }
-
-        throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
-    }
+        => WorkspaceFileLocator.Find(parts);
 }
