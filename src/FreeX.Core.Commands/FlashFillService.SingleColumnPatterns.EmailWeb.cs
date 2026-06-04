@@ -161,6 +161,42 @@ public static partial class FlashFillService
         return source => TryGetFinalUrlPathSegmentStem(source, out var stem) ? stem : null;
     }
 
+    private static Func<string, string?>? TryUrlQueryParameterValue(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        List<string>? candidateNames = null;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (expected.Length == 0 ||
+                !TryGetMatchingQueryParameterNames(source, expected, out var currentNames) ||
+                currentNames.Count == 0)
+            {
+                return null;
+            }
+
+            if (candidateNames is null)
+            {
+                candidateNames = currentNames;
+                continue;
+            }
+
+            for (var i = candidateNames.Count - 1; i >= 0; i--)
+            {
+                if (!currentNames.Contains(candidateNames[i], StringComparer.Ordinal))
+                    candidateNames.RemoveAt(i);
+            }
+
+            if (candidateNames.Count == 0)
+                return null;
+        }
+
+        if (candidateNames is null || candidateNames.Count != 1)
+            return null;
+
+        var parameterName = candidateNames[0];
+        return source => TryGetFirstNonEmptyQueryParameterValue(source, parameterName, out var value) ? value : null;
+    }
+
     private static bool TryGetFinalUrlPathSegmentStem(string source, out string stem)
     {
         stem = string.Empty;
@@ -223,6 +259,150 @@ public static partial class FlashFillService
 
         stemEndExclusive = stemEnd + 1;
         return true;
+    }
+
+    private static bool TryGetMatchingQueryParameterNames(
+        string source,
+        string expected,
+        out List<string> parameterNames)
+    {
+        parameterNames = [];
+        if (!TryGetDecodedQueryParameters(source, out var parameters))
+            return false;
+
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (name, _) in parameters)
+        {
+            if (!seenNames.Add(name))
+                continue;
+
+            if (TryGetFirstNonEmptyQueryParameterValue(parameters, name, out var value) &&
+                value == expected)
+            {
+                parameterNames.Add(name);
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryGetFirstNonEmptyQueryParameterValue(
+        string source,
+        string parameterName,
+        out string value)
+    {
+        value = string.Empty;
+        return TryGetDecodedQueryParameters(source, out var parameters) &&
+               TryGetFirstNonEmptyQueryParameterValue(parameters, parameterName, out value);
+    }
+
+    private static bool TryGetFirstNonEmptyQueryParameterValue(
+        IReadOnlyList<(string Name, string Value)> parameters,
+        string parameterName,
+        out string value)
+    {
+        foreach (var (name, currentValue) in parameters)
+        {
+            if (name == parameterName && currentValue.Length > 0)
+            {
+                value = currentValue;
+                return true;
+            }
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
+    private static bool TryGetDecodedQueryParameters(
+        string source,
+        out List<(string Name, string Value)> parameters)
+    {
+        parameters = [];
+
+        if (!TryCreateHttpWebUri(source, out var uri) || uri.Query.Length <= 1)
+            return false;
+
+        var query = uri.Query[1..];
+        foreach (var segment in query.Split('&', StringSplitOptions.None))
+        {
+            if (segment.Length == 0)
+                continue;
+
+            var equalsIndex = segment.IndexOf('=');
+            if (equalsIndex <= 0)
+                continue;
+
+            var rawName = segment[..equalsIndex];
+            var rawValue = segment[(equalsIndex + 1)..];
+            if (rawValue.Length == 0)
+                continue;
+
+            if (!TryDecodeQueryComponent(rawName, out var name) ||
+                !TryDecodeQueryComponent(rawValue, out var value))
+            {
+                return false;
+            }
+
+            if (name.Length == 0 || value.Length == 0)
+                continue;
+
+            parameters.Add((name, value));
+        }
+
+        return parameters.Count > 0;
+    }
+
+    private static bool TryCreateHttpWebUri(string source, out Uri uri)
+    {
+        uri = null!;
+
+        var candidate = source.Trim();
+        if (candidate.Length == 0 || candidate.Any(char.IsWhiteSpace))
+            return false;
+
+        var hasHttpScheme =
+            candidate.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            candidate.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        if (!hasHttpScheme && candidate.Contains("://", StringComparison.Ordinal))
+            return false;
+
+        var isBareWebAddress =
+            candidate.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ||
+            LooksLikeBareWebHost(candidate) ||
+            candidate.Contains('/', StringComparison.Ordinal) ||
+            candidate.Contains('?', StringComparison.Ordinal) ||
+            candidate.Contains('#', StringComparison.Ordinal);
+        if (!hasHttpScheme && !isBareWebAddress)
+            return false;
+
+        var uriText = hasHttpScheme
+            ? candidate
+            : "https://" + candidate;
+        if (!Uri.TryCreate(uriText, UriKind.Absolute, out var parsedUri) ||
+            parsedUri is null ||
+            (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps) ||
+            parsedUri.UserInfo.Length > 0)
+        {
+            return false;
+        }
+
+        uri = parsedUri;
+        return TryNormalizeWebHost(uri.Host, out _);
+    }
+
+    private static bool TryDecodeQueryComponent(string source, out string decoded)
+    {
+        try
+        {
+            decoded = Uri.UnescapeDataString(source.Replace('+', ' '));
+            return true;
+        }
+        catch (UriFormatException)
+        {
+            decoded = string.Empty;
+            return false;
+        }
     }
 
     private static bool IsHttpOrHttpsUrlCandidate(string source)
