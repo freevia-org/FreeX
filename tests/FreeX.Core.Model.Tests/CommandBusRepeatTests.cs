@@ -11,7 +11,7 @@ public sealed class CommandBusRepeatTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var bus = new CommandBus(_ => new SimpleCommandContext(workbook));
+        var bus = new CommandBus(_ => new TestCommandContext(workbook));
         var target = new CellAddress(sheet.Id, 1, 1);
 
         bus.ExecuteRepeatable(workbook.Id, () => new ApplyStyleCommand(
@@ -40,7 +40,7 @@ public sealed class CommandBusRepeatTests
     public void RepeatLast_ReturnsFailureWhenThereIsNoRepeatableCommand()
     {
         var workbook = new Workbook("test");
-        var bus = new CommandBus(_ => new SimpleCommandContext(workbook));
+        var bus = new CommandBus(_ => new TestCommandContext(workbook));
 
         bus.CanRepeat(workbook.Id).Should().BeFalse();
         bus.RepeatLast(workbook.Id).Should().Be(new CommandOutcome(false, "Nothing to repeat"));
@@ -51,7 +51,7 @@ public sealed class CommandBusRepeatTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var bus = new CommandBus(_ => new SimpleCommandContext(workbook));
+        var bus = new CommandBus(_ => new TestCommandContext(workbook));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("top")));
 
         bus.ExecuteRepeatable(workbook.Id, () => new InsertRowsCommand(sheet.Id, 1)).Success.Should().BeTrue();
@@ -65,9 +65,4 @@ public sealed class CommandBusRepeatTests
         sheet.GetCell(new CellAddress(sheet.Id, 3, 1)).Should().BeNull();
     }
 
-    private sealed class SimpleCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook => workbook;
-        public Sheet GetSheet(SheetId sheetId) => workbook.GetSheet(sheetId)!;
-    }
 }
