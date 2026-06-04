@@ -13,7 +13,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
@@ -49,7 +49,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 2));
 
         var outcome = new SubtotalCommand(sheet.Id, range, 0, 1).Apply(context);
@@ -63,7 +63,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
@@ -83,7 +83,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.RowPageBreaks.Add(20);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
@@ -119,7 +119,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
         // Three groups: East (rows 2-4), West (rows 5-7), North (rows 8-10)
@@ -167,7 +167,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
@@ -208,7 +208,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.RowPageBreaks.Add(30);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
@@ -253,7 +253,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Cost"));
@@ -293,7 +293,7 @@ public sealed class SubtotalCommandTests
         var workbook = new Workbook("test");
         var sheet1 = workbook.AddSheet("Sheet1");
         var sheet2 = workbook.AddSheet("Sheet2");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         SeedSubtotalRows(sheet1);
         SeedSubtotalRows(sheet2);
         var range1 = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 5, 2));
@@ -325,7 +325,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
@@ -359,7 +359,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East Total"));
         sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "SUBTOTAL(9,B1:B1)");
@@ -378,7 +378,7 @@ public sealed class SubtotalCommandTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        var context = new SimpleCtx(workbook);
+        var context = new TestCommandContext(workbook);
         sheet.SetCell(new CellAddress(sheet.Id, 5_000, 1), new TextValue("East Total"));
         sheet.SetFormula(new CellAddress(sheet.Id, 5_000, 2), "SUBTOTAL(9,B1:B4999)");
         sheet.SetFormula(new CellAddress(sheet.Id, 5_000, 3), "SUBTOTAL(9,C1:C4999)");
@@ -532,9 +532,4 @@ public sealed class SubtotalCommandTests
             $"allocated_bytes={allocatedBytes:N0}");
     }
 
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
