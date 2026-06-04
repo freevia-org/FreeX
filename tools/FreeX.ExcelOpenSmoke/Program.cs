@@ -35,7 +35,11 @@ internal static class ExcelOpenSmoke
     private const int XlLandscape = 2;
     private const int XlPageBreakManual = -4135;
     private const int MaxDataValidationProbeCells = 20000;
+    private const int MaxMergedAreaProbeCells = 20000;
+    private const int MaxStructureProbeRows = 200;
+    private const int MaxStructureProbeColumns = 80;
     private const int MaxOpenXmlValidationErrorsToReport = 20;
+    private const double ExcelMeasurementTolerance = 0.01;
 
     public static int Run(string[] args)
     {
@@ -567,6 +571,16 @@ internal static class ExcelOpenSmoke
         int ManualPageBreakCount,
         int AllowEditRangeCount);
 
+    private readonly record struct ExcelStructureSummary(
+        int MergedAreaCount,
+        int FreezePaneSheetCount,
+        int HiddenRowCount,
+        int HiddenColumnCount,
+        int CustomRowHeightCount,
+        int CustomColumnWidthCount,
+        int OutlineRowCount,
+        int OutlineColumnCount);
+
     private static ExcelWorkbookSummary CountWorkbookContents(object workbook)
     {
         object? worksheets = null;
@@ -595,6 +609,14 @@ internal static class ExcelOpenSmoke
             var headerFooterSheetCount = 0;
             var manualPageBreakCount = 0;
             var allowEditRangeCount = 0;
+            var mergedAreaCount = 0;
+            var freezePaneSheetCount = 0;
+            var hiddenRowCount = 0;
+            var hiddenColumnCount = 0;
+            var customRowHeightCount = 0;
+            var customColumnWidthCount = 0;
+            var outlineRowCount = 0;
+            var outlineColumnCount = 0;
             var formulaCellCount = 0;
             var structuredTableCount = 0;
             var pivotTableCount = 0;
@@ -688,6 +710,23 @@ internal static class ExcelOpenSmoke
 
                     try
                     {
+                        var worksheetStructure = CountWorksheetStructure(workbook, worksheet);
+                        mergedAreaCount += worksheetStructure.MergedAreaCount;
+                        freezePaneSheetCount += worksheetStructure.FreezePaneSheetCount;
+                        hiddenRowCount += worksheetStructure.HiddenRowCount;
+                        hiddenColumnCount += worksheetStructure.HiddenColumnCount;
+                        customRowHeightCount += worksheetStructure.CustomRowHeightCount;
+                        customColumnWidthCount += worksheetStructure.CustomColumnWidthCount;
+                        outlineRowCount += worksheetStructure.OutlineRowCount;
+                        outlineColumnCount += worksheetStructure.OutlineColumnCount;
+                    }
+                    catch (COMException ex)
+                    {
+                        throw new InvalidDataException($"Excel structure count failed for worksheet index {index}", ex);
+                    }
+
+                    try
+                    {
                         sparklineCount += CountWorksheetSparklines(worksheet);
                     }
                     catch (COMException ex)
@@ -746,6 +785,14 @@ internal static class ExcelOpenSmoke
                 headerFooterSheetCount,
                 manualPageBreakCount,
                 allowEditRangeCount,
+                mergedAreaCount,
+                freezePaneSheetCount,
+                hiddenRowCount,
+                hiddenColumnCount,
+                customRowHeightCount,
+                customColumnWidthCount,
+                outlineRowCount,
+                outlineColumnCount,
                 formulaCellCount,
                 structuredTableCount,
                 pivotTableCount);
@@ -1016,6 +1063,199 @@ internal static class ExcelOpenSmoke
 
     private static bool HasComText(object? value) =>
         !string.IsNullOrWhiteSpace(Convert.ToString(value, CultureInfo.InvariantCulture));
+
+    private static ExcelStructureSummary CountWorksheetStructure(object workbook, object worksheet)
+    {
+        var mergedAreaCount = CountWorksheetMergedAreas(worksheet);
+        var freezePaneSheetCount = HasWorksheetFreezePanes(workbook, worksheet) ? 1 : 0;
+        var rowColumnSummary = CountWorksheetRowColumnStructure(worksheet);
+
+        return new ExcelStructureSummary(
+            mergedAreaCount,
+            freezePaneSheetCount,
+            rowColumnSummary.HiddenRowCount,
+            rowColumnSummary.HiddenColumnCount,
+            rowColumnSummary.CustomRowHeightCount,
+            rowColumnSummary.CustomColumnWidthCount,
+            rowColumnSummary.OutlineRowCount,
+            rowColumnSummary.OutlineColumnCount);
+    }
+
+    private static int CountWorksheetMergedAreas(object worksheet)
+    {
+        object? usedRange = null;
+        object? rows = null;
+        object? columns = null;
+        object? cells = null;
+        try
+        {
+            usedRange = ((dynamic)worksheet).UsedRange;
+            rows = ((dynamic)usedRange).Rows;
+            columns = ((dynamic)usedRange).Columns;
+            cells = ((dynamic)worksheet).Cells;
+
+            var firstRow = Convert.ToInt32(((dynamic)usedRange).Row, CultureInfo.InvariantCulture);
+            var firstColumn = Convert.ToInt32(((dynamic)usedRange).Column, CultureInfo.InvariantCulture);
+            var rowCount = Convert.ToInt32(((dynamic)rows).Count, CultureInfo.InvariantCulture);
+            var columnCount = Convert.ToInt32(((dynamic)columns).Count, CultureInfo.InvariantCulture);
+            var mergedAreas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var probed = 0;
+
+            for (var rowOffset = 0; rowOffset < rowCount && probed < MaxMergedAreaProbeCells; rowOffset++)
+            {
+                for (var columnOffset = 0; columnOffset < columnCount && probed < MaxMergedAreaProbeCells; columnOffset++)
+                {
+                    object? cell = null;
+                    object? mergeArea = null;
+                    try
+                    {
+                        cell = ((dynamic)cells)[firstRow + rowOffset, firstColumn + columnOffset];
+                        probed++;
+                        if (!Convert.ToBoolean(((dynamic)cell).MergeCells, CultureInfo.InvariantCulture))
+                            continue;
+
+                        mergeArea = ((dynamic)cell).MergeArea;
+                        var address = Convert.ToString(((dynamic)mergeArea).Address(false, false), CultureInfo.InvariantCulture);
+                        if (!string.IsNullOrWhiteSpace(address))
+                            mergedAreas.Add(address);
+                    }
+                    finally
+                    {
+                        ReleaseComObject(mergeArea);
+                        ReleaseComObject(cell);
+                    }
+                }
+            }
+
+            return mergedAreas.Count;
+        }
+        catch (COMException)
+        {
+            return 0;
+        }
+        finally
+        {
+            ReleaseComObject(cells);
+            ReleaseComObject(columns);
+            ReleaseComObject(rows);
+            ReleaseComObject(usedRange);
+        }
+    }
+
+    private static bool HasWorksheetFreezePanes(object workbook, object worksheet)
+    {
+        object? windows = null;
+        object? window = null;
+        try
+        {
+            ((dynamic)worksheet).Activate();
+            windows = ((dynamic)workbook).Windows;
+            window = ((dynamic)windows).Item(1);
+            return Convert.ToBoolean(((dynamic)window).FreezePanes, CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex) when (IsOptionalComMemberUnavailable(ex))
+        {
+            return false;
+        }
+        finally
+        {
+            ReleaseComObject(window);
+            ReleaseComObject(windows);
+        }
+    }
+
+    private static ExcelStructureSummary CountWorksheetRowColumnStructure(object worksheet)
+    {
+        object? rows = null;
+        object? columns = null;
+        try
+        {
+            rows = ((dynamic)worksheet).Rows;
+            columns = ((dynamic)worksheet).Columns;
+            var standardHeight = Convert.ToDouble(((dynamic)worksheet).StandardHeight, CultureInfo.InvariantCulture);
+            var standardWidth = Convert.ToDouble(((dynamic)worksheet).StandardWidth, CultureInfo.InvariantCulture);
+
+            var hiddenRows = 0;
+            var hiddenColumns = 0;
+            var customRowHeights = 0;
+            var customColumnWidths = 0;
+            var outlineRows = 0;
+            var outlineColumns = 0;
+
+            for (var rowIndex = 1; rowIndex <= MaxStructureProbeRows; rowIndex++)
+            {
+                object? row = null;
+                try
+                {
+                    row = ((dynamic)rows)[rowIndex];
+                    var hidden = Convert.ToBoolean(((dynamic)row).Hidden, CultureInfo.InvariantCulture);
+                    if (hidden)
+                    {
+                        hiddenRows++;
+                    }
+                    else
+                    {
+                        var rowHeight = Convert.ToDouble(((dynamic)row).RowHeight, CultureInfo.InvariantCulture);
+                        if (Math.Abs(rowHeight - standardHeight) > ExcelMeasurementTolerance)
+                            customRowHeights++;
+                    }
+
+                    if (Convert.ToInt32(((dynamic)row).OutlineLevel, CultureInfo.InvariantCulture) > 1)
+                        outlineRows++;
+                }
+                finally
+                {
+                    ReleaseComObject(row);
+                }
+            }
+
+            for (var columnIndex = 1; columnIndex <= MaxStructureProbeColumns; columnIndex++)
+            {
+                object? column = null;
+                try
+                {
+                    column = ((dynamic)columns)[columnIndex];
+                    var hidden = Convert.ToBoolean(((dynamic)column).Hidden, CultureInfo.InvariantCulture);
+                    if (hidden)
+                    {
+                        hiddenColumns++;
+                    }
+                    else
+                    {
+                        var columnWidth = Convert.ToDouble(((dynamic)column).ColumnWidth, CultureInfo.InvariantCulture);
+                        if (Math.Abs(columnWidth - standardWidth) > ExcelMeasurementTolerance)
+                            customColumnWidths++;
+                    }
+
+                    if (Convert.ToInt32(((dynamic)column).OutlineLevel, CultureInfo.InvariantCulture) > 1)
+                        outlineColumns++;
+                }
+                finally
+                {
+                    ReleaseComObject(column);
+                }
+            }
+
+            return new ExcelStructureSummary(
+                MergedAreaCount: 0,
+                FreezePaneSheetCount: 0,
+                hiddenRows,
+                hiddenColumns,
+                customRowHeights,
+                customColumnWidths,
+                outlineRows,
+                outlineColumns);
+        }
+        catch (COMException)
+        {
+            return default;
+        }
+        finally
+        {
+            ReleaseComObject(columns);
+            ReleaseComObject(rows);
+        }
+    }
 
     private static int CountWorksheetSparklines(object worksheet)
     {
@@ -1390,6 +1630,14 @@ internal static class ExcelOpenSmoke
             workbook.Sheets.Sum(sheet => sheet.DrawingShapes.Count),
             workbook.Sheets.Count(sheet => sheet.IsProtected),
             workbook.IsStructureProtected ? 1 : 0,
+            workbook.Sheets.Sum(sheet => sheet.MergedRegions.Count),
+            workbook.Sheets.Count(sheet => sheet.FrozenRows > 0 || sheet.FrozenCols > 0),
+            workbook.Sheets.Sum(sheet => sheet.HiddenRows.Concat(sheet.FilterHiddenRows).Concat(sheet.GroupHiddenRows).Distinct().Count()),
+            workbook.Sheets.Sum(sheet => sheet.HiddenCols.Concat(sheet.GroupHiddenCols).Distinct().Count()),
+            workbook.Sheets.Sum(sheet => sheet.RowHeights.Count),
+            workbook.Sheets.Sum(sheet => sheet.ColumnWidths.Count),
+            workbook.Sheets.Sum(sheet => sheet.RowOutlineLevels.Count),
+            workbook.Sheets.Sum(sheet => sheet.ColOutlineLevels.Count),
             workbook.Sheets.Sum(sheet => sheet.PivotTables.Count),
             workbook.PivotCaches.Count);
 
@@ -1634,6 +1882,14 @@ internal static class ExcelOpenSmoke
         var minHeaderFooterSheets = HasTag("page-setup") || HasTag("headers-footers") ? 1 : 0;
         var minManualPageBreaks = HasTag("page-breaks") ? 1 : 0;
         var minAllowEditRanges = HasTag("allow-edit-ranges") || HasTag("protected-ranges") ? 1 : 0;
+        var minMergedAreas = HasTag("merged-cells") ? 1 : 0;
+        var minFreezePaneSheets = HasTag("freeze-panes") ? 1 : 0;
+        var minHiddenRows = HasTag("hidden-rows") ? 1 : 0;
+        var minHiddenColumns = HasTag("hidden-columns") || HasTag("hidden-cols") ? 1 : 0;
+        var minCustomRowHeights = HasTag("custom-dimensions") || HasTag("custom-row-heights") ? 1 : 0;
+        var minCustomColumnWidths = HasTag("custom-dimensions") || HasTag("custom-column-widths") ? 1 : 0;
+        var minOutlineRows = HasTag("outline-groups") || HasTag("row-column-groups") ? 1 : 0;
+        var minOutlineColumns = HasTag("outline-groups") || HasTag("row-column-groups") ? 1 : 0;
         var minProtectedSheets = HasTag("protection") ? 1 : 0;
         var minStructureProtection = HasTag("protection") ? 1 : 0;
         var minPivotTables = HasTag("pivottables") ? 1 : 0;
@@ -1668,6 +1924,14 @@ internal static class ExcelOpenSmoke
             minHeaderFooterSheets == 0 &&
             minManualPageBreaks == 0 &&
             minAllowEditRanges == 0 &&
+            minMergedAreas == 0 &&
+            minFreezePaneSheets == 0 &&
+            minHiddenRows == 0 &&
+            minHiddenColumns == 0 &&
+            minCustomRowHeights == 0 &&
+            minCustomColumnWidths == 0 &&
+            minOutlineRows == 0 &&
+            minOutlineColumns == 0 &&
             minProtectedSheets == 0 &&
             minStructureProtection == 0 &&
             minPivotTables == 0 &&
@@ -1692,6 +1956,14 @@ internal static class ExcelOpenSmoke
             MinFreeXPreSaveDrawingShapes: expectFreeXPreSave ? minDrawingShapes : 0,
             MinFreeXPreSaveProtectedSheets: expectFreeXPreSave ? minProtectedSheets : 0,
             MinFreeXPreSaveStructureProtection: expectFreeXPreSave ? minStructureProtection : 0,
+            MinFreeXPreSaveMergedRegions: expectFreeXPreSave ? minMergedAreas : 0,
+            MinFreeXPreSaveFrozenSheets: expectFreeXPreSave ? minFreezePaneSheets : 0,
+            MinFreeXPreSaveHiddenRows: expectFreeXPreSave ? minHiddenRows : 0,
+            MinFreeXPreSaveHiddenColumns: expectFreeXPreSave ? minHiddenColumns : 0,
+            MinFreeXPreSaveCustomRowHeights: expectFreeXPreSave ? minCustomRowHeights : 0,
+            MinFreeXPreSaveCustomColumnWidths: expectFreeXPreSave ? minCustomColumnWidths : 0,
+            MinFreeXPreSaveOutlineRows: expectFreeXPreSave ? minOutlineRows : 0,
+            MinFreeXPreSaveOutlineColumns: expectFreeXPreSave ? minOutlineColumns : 0,
             MinExcelOpenedFormulaCells: minFormulaCells,
             MinExcelOpenedStructuredTables: minStructuredTables,
             MinExcelOpenedDataValidationCells: minDataValidations > 0 ? 1 : 0,
@@ -1713,6 +1985,14 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedHeaderFooterSheets: minHeaderFooterSheets,
             MinExcelOpenedManualPageBreaks: minManualPageBreaks,
             MinExcelOpenedAllowEditRanges: minAllowEditRanges,
+            MinExcelOpenedMergedAreas: minMergedAreas,
+            MinExcelOpenedFreezePaneSheets: minFreezePaneSheets,
+            MinExcelOpenedHiddenRows: minHiddenRows,
+            MinExcelOpenedHiddenColumns: minHiddenColumns,
+            MinExcelOpenedCustomRowHeights: minCustomRowHeights,
+            MinExcelOpenedCustomColumnWidths: minCustomColumnWidths,
+            MinExcelOpenedOutlineRows: minOutlineRows,
+            MinExcelOpenedOutlineColumns: minOutlineColumns,
             MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
             MinExcelReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
             MinExcelReopenedDataValidationCells: saveReopen && minDataValidations > 0 ? 1 : 0,
@@ -1734,6 +2014,14 @@ internal static class ExcelOpenSmoke
             MinExcelReopenedHeaderFooterSheets: saveReopen ? minHeaderFooterSheets : 0,
             MinExcelReopenedManualPageBreaks: saveReopen ? minManualPageBreaks : 0,
             MinExcelReopenedAllowEditRanges: saveReopen ? minAllowEditRanges : 0,
+            MinExcelReopenedMergedAreas: saveReopen ? minMergedAreas : 0,
+            MinExcelReopenedFreezePaneSheets: saveReopen ? minFreezePaneSheets : 0,
+            MinExcelReopenedHiddenRows: saveReopen ? minHiddenRows : 0,
+            MinExcelReopenedHiddenColumns: saveReopen ? minHiddenColumns : 0,
+            MinExcelReopenedCustomRowHeights: saveReopen ? minCustomRowHeights : 0,
+            MinExcelReopenedCustomColumnWidths: saveReopen ? minCustomColumnWidths : 0,
+            MinExcelReopenedOutlineRows: saveReopen ? minOutlineRows : 0,
+            MinExcelReopenedOutlineColumns: saveReopen ? minOutlineColumns : 0,
             MinFreeXReopenedFormulaCells: expectFreeXReopened ? minFormulaCells : 0,
             MinFreeXReopenedStructuredTables: expectFreeXReopened ? minStructuredTables : 0,
             MinFreeXReopenedDataValidations: expectFreeXReopened ? minDataValidations : 0,
@@ -1746,6 +2034,14 @@ internal static class ExcelOpenSmoke
             MinFreeXReopenedDrawingShapes: expectFreeXReopened ? minDrawingShapes : 0,
             MinFreeXReopenedProtectedSheets: expectFreeXReopened ? minProtectedSheets : 0,
             MinFreeXReopenedStructureProtection: expectFreeXReopened ? minStructureProtection : 0,
+            MinFreeXReopenedMergedRegions: expectFreeXReopened ? minMergedAreas : 0,
+            MinFreeXReopenedFrozenSheets: expectFreeXReopened ? minFreezePaneSheets : 0,
+            MinFreeXReopenedHiddenRows: expectFreeXReopened ? minHiddenRows : 0,
+            MinFreeXReopenedHiddenColumns: expectFreeXReopened ? minHiddenColumns : 0,
+            MinFreeXReopenedCustomRowHeights: expectFreeXReopened ? minCustomRowHeights : 0,
+            MinFreeXReopenedCustomColumnWidths: expectFreeXReopened ? minCustomColumnWidths : 0,
+            MinFreeXReopenedOutlineRows: expectFreeXReopened ? minOutlineRows : 0,
+            MinFreeXReopenedOutlineColumns: expectFreeXReopened ? minOutlineColumns : 0,
             MinFreeXPreSavePivotTables: expectFreeXPreSave ? minPivotTables : 0,
             MinFreeXPreSavePivotCaches: expectFreeXPreSave ? minPivotCaches : 0,
             MinExcelOpenedPivotTables: minPivotTables,
@@ -2157,6 +2453,46 @@ internal static class ExcelOpenSmoke
             expectations.MinExcelOpenedAllowEditRanges,
             input);
         AssertMin(
+            "Excel open merged areas",
+            opened.MergedAreaCount,
+            expectations.MinExcelOpenedMergedAreas,
+            input);
+        AssertMin(
+            "Excel open freeze-pane sheets",
+            opened.FreezePaneSheetCount,
+            expectations.MinExcelOpenedFreezePaneSheets,
+            input);
+        AssertMin(
+            "Excel open hidden rows",
+            opened.HiddenRowCount,
+            expectations.MinExcelOpenedHiddenRows,
+            input);
+        AssertMin(
+            "Excel open hidden columns",
+            opened.HiddenColumnCount,
+            expectations.MinExcelOpenedHiddenColumns,
+            input);
+        AssertMin(
+            "Excel open custom row heights",
+            opened.CustomRowHeightCount,
+            expectations.MinExcelOpenedCustomRowHeights,
+            input);
+        AssertMin(
+            "Excel open custom column widths",
+            opened.CustomColumnWidthCount,
+            expectations.MinExcelOpenedCustomColumnWidths,
+            input);
+        AssertMin(
+            "Excel open outline rows",
+            opened.OutlineRowCount,
+            expectations.MinExcelOpenedOutlineRows,
+            input);
+        AssertMin(
+            "Excel open outline columns",
+            opened.OutlineColumnCount,
+            expectations.MinExcelOpenedOutlineColumns,
+            input);
+        AssertMin(
             "Excel reopen formula cells",
             reopened?.FormulaCellCount,
             expectations.MinExcelReopenedFormulaCells,
@@ -2270,6 +2606,46 @@ internal static class ExcelOpenSmoke
             "Excel reopen allow-edit ranges",
             reopened?.AllowEditRangeCount,
             expectations.MinExcelReopenedAllowEditRanges,
+            input);
+        AssertMin(
+            "Excel reopen merged areas",
+            reopened?.MergedAreaCount,
+            expectations.MinExcelReopenedMergedAreas,
+            input);
+        AssertMin(
+            "Excel reopen freeze-pane sheets",
+            reopened?.FreezePaneSheetCount,
+            expectations.MinExcelReopenedFreezePaneSheets,
+            input);
+        AssertMin(
+            "Excel reopen hidden rows",
+            reopened?.HiddenRowCount,
+            expectations.MinExcelReopenedHiddenRows,
+            input);
+        AssertMin(
+            "Excel reopen hidden columns",
+            reopened?.HiddenColumnCount,
+            expectations.MinExcelReopenedHiddenColumns,
+            input);
+        AssertMin(
+            "Excel reopen custom row heights",
+            reopened?.CustomRowHeightCount,
+            expectations.MinExcelReopenedCustomRowHeights,
+            input);
+        AssertMin(
+            "Excel reopen custom column widths",
+            reopened?.CustomColumnWidthCount,
+            expectations.MinExcelReopenedCustomColumnWidths,
+            input);
+        AssertMin(
+            "Excel reopen outline rows",
+            reopened?.OutlineRowCount,
+            expectations.MinExcelReopenedOutlineRows,
+            input);
+        AssertMin(
+            "Excel reopen outline columns",
+            reopened?.OutlineColumnCount,
+            expectations.MinExcelReopenedOutlineColumns,
             input);
         AssertMin(
             "FreeX reopened Excel save formula cells",
@@ -2403,6 +2779,46 @@ internal static class ExcelOpenSmoke
             summary?.StructureProtectionCount,
             preSave ? expectations.MinFreeXPreSaveStructureProtection : expectations.MinFreeXReopenedStructureProtection,
             input);
+        AssertMin(
+            $"{label} merged regions",
+            summary?.MergedRegionCount,
+            preSave ? expectations.MinFreeXPreSaveMergedRegions : expectations.MinFreeXReopenedMergedRegions,
+            input);
+        AssertMin(
+            $"{label} frozen sheets",
+            summary?.FrozenSheetCount,
+            preSave ? expectations.MinFreeXPreSaveFrozenSheets : expectations.MinFreeXReopenedFrozenSheets,
+            input);
+        AssertMin(
+            $"{label} hidden rows",
+            summary?.HiddenRowCount,
+            preSave ? expectations.MinFreeXPreSaveHiddenRows : expectations.MinFreeXReopenedHiddenRows,
+            input);
+        AssertMin(
+            $"{label} hidden columns",
+            summary?.HiddenColumnCount,
+            preSave ? expectations.MinFreeXPreSaveHiddenColumns : expectations.MinFreeXReopenedHiddenColumns,
+            input);
+        AssertMin(
+            $"{label} custom row heights",
+            summary?.CustomRowHeightCount,
+            preSave ? expectations.MinFreeXPreSaveCustomRowHeights : expectations.MinFreeXReopenedCustomRowHeights,
+            input);
+        AssertMin(
+            $"{label} custom column widths",
+            summary?.CustomColumnWidthCount,
+            preSave ? expectations.MinFreeXPreSaveCustomColumnWidths : expectations.MinFreeXReopenedCustomColumnWidths,
+            input);
+        AssertMin(
+            $"{label} outline rows",
+            summary?.OutlineRowCount,
+            preSave ? expectations.MinFreeXPreSaveOutlineRows : expectations.MinFreeXReopenedOutlineRows,
+            input);
+        AssertMin(
+            $"{label} outline columns",
+            summary?.OutlineColumnCount,
+            preSave ? expectations.MinFreeXPreSaveOutlineColumns : expectations.MinFreeXReopenedOutlineColumns,
+            input);
     }
 
     private static void AssertMin(string label, int? actual, int minimum, WorkbookSmokeInput input)
@@ -2450,12 +2866,12 @@ internal static class ExcelOpenSmoke
         if (result.Opened is { } opened)
         {
             Console.WriteLine(
-                $"  Excel open: worksheets {opened.WorksheetCount}; named ranges {opened.NamedRangeCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; charts {opened.ChartCount}; validation cells {opened.DataValidationCellCount}; conditional formats {opened.ConditionalFormatCount}; hyperlinks {opened.HyperlinkCount}; comments {opened.CommentCount}; protected sheets {opened.ProtectedSheetCount}; structure protection {opened.StructureProtectionCount}; pictures {opened.PictureCount}; sparklines {opened.SparklineCount}; text boxes {opened.TextBoxCount}; drawing shapes {opened.DrawingShapeCount}; worksheet shapes {opened.ShapeCount}; print areas {opened.PrintAreaSheetCount}; print titles {opened.PrintTitleSheetCount}; landscape sheets {opened.LandscapeSheetCount}; scale-to-fit sheets {opened.ScaleToFitSheetCount}; print grid/headings sheets {opened.PrintOptionsSheetCount}; header/footer sheets {opened.HeaderFooterSheetCount}; manual page breaks {opened.ManualPageBreakCount}; allow-edit ranges {opened.AllowEditRangeCount}; pivots {opened.PivotTableCount}");
+                $"  Excel open: worksheets {opened.WorksheetCount}; named ranges {opened.NamedRangeCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; charts {opened.ChartCount}; validation cells {opened.DataValidationCellCount}; conditional formats {opened.ConditionalFormatCount}; hyperlinks {opened.HyperlinkCount}; comments {opened.CommentCount}; protected sheets {opened.ProtectedSheetCount}; structure protection {opened.StructureProtectionCount}; pictures {opened.PictureCount}; sparklines {opened.SparklineCount}; text boxes {opened.TextBoxCount}; drawing shapes {opened.DrawingShapeCount}; worksheet shapes {opened.ShapeCount}; print areas {opened.PrintAreaSheetCount}; print titles {opened.PrintTitleSheetCount}; landscape sheets {opened.LandscapeSheetCount}; scale-to-fit sheets {opened.ScaleToFitSheetCount}; print grid/headings sheets {opened.PrintOptionsSheetCount}; header/footer sheets {opened.HeaderFooterSheetCount}; manual page breaks {opened.ManualPageBreakCount}; allow-edit ranges {opened.AllowEditRangeCount}; merged areas {opened.MergedAreaCount}; freeze-pane sheets {opened.FreezePaneSheetCount}; hidden rows {opened.HiddenRowCount}; hidden columns {opened.HiddenColumnCount}; custom row heights {opened.CustomRowHeightCount}; custom column widths {opened.CustomColumnWidthCount}; outline rows {opened.OutlineRowCount}; outline columns {opened.OutlineColumnCount}; pivots {opened.PivotTableCount}");
         }
         if (result.Reopened is { } reopened)
         {
             Console.WriteLine(
-                $"  Excel reopen: worksheets {reopened.WorksheetCount}; named ranges {reopened.NamedRangeCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; charts {reopened.ChartCount}; validation cells {reopened.DataValidationCellCount}; conditional formats {reopened.ConditionalFormatCount}; hyperlinks {reopened.HyperlinkCount}; comments {reopened.CommentCount}; protected sheets {reopened.ProtectedSheetCount}; structure protection {reopened.StructureProtectionCount}; pictures {reopened.PictureCount}; sparklines {reopened.SparklineCount}; text boxes {reopened.TextBoxCount}; drawing shapes {reopened.DrawingShapeCount}; worksheet shapes {reopened.ShapeCount}; print areas {reopened.PrintAreaSheetCount}; print titles {reopened.PrintTitleSheetCount}; landscape sheets {reopened.LandscapeSheetCount}; scale-to-fit sheets {reopened.ScaleToFitSheetCount}; print grid/headings sheets {reopened.PrintOptionsSheetCount}; header/footer sheets {reopened.HeaderFooterSheetCount}; manual page breaks {reopened.ManualPageBreakCount}; allow-edit ranges {reopened.AllowEditRangeCount}; pivots {reopened.PivotTableCount}");
+                $"  Excel reopen: worksheets {reopened.WorksheetCount}; named ranges {reopened.NamedRangeCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; charts {reopened.ChartCount}; validation cells {reopened.DataValidationCellCount}; conditional formats {reopened.ConditionalFormatCount}; hyperlinks {reopened.HyperlinkCount}; comments {reopened.CommentCount}; protected sheets {reopened.ProtectedSheetCount}; structure protection {reopened.StructureProtectionCount}; pictures {reopened.PictureCount}; sparklines {reopened.SparklineCount}; text boxes {reopened.TextBoxCount}; drawing shapes {reopened.DrawingShapeCount}; worksheet shapes {reopened.ShapeCount}; print areas {reopened.PrintAreaSheetCount}; print titles {reopened.PrintTitleSheetCount}; landscape sheets {reopened.LandscapeSheetCount}; scale-to-fit sheets {reopened.ScaleToFitSheetCount}; print grid/headings sheets {reopened.PrintOptionsSheetCount}; header/footer sheets {reopened.HeaderFooterSheetCount}; manual page breaks {reopened.ManualPageBreakCount}; allow-edit ranges {reopened.AllowEditRangeCount}; merged areas {reopened.MergedAreaCount}; freeze-pane sheets {reopened.FreezePaneSheetCount}; hidden rows {reopened.HiddenRowCount}; hidden columns {reopened.HiddenColumnCount}; custom row heights {reopened.CustomRowHeightCount}; custom column widths {reopened.CustomColumnWidthCount}; outline rows {reopened.OutlineRowCount}; outline columns {reopened.OutlineColumnCount}; pivots {reopened.PivotTableCount}");
         }
         if (result.FreeXReopenedExcelSave is { } freeXReopened)
             WriteFreeXSummary("FreeX reopened Excel save", freeXReopened);
@@ -2470,7 +2886,7 @@ internal static class ExcelOpenSmoke
         Console.WriteLine(
             $"  {label}: sheets {summary.SheetCount}; cells {summary.CellCount}; named ranges {summary.NamedRangeCount}; formulas {summary.FormulaCellCount}; tables {summary.StructuredTableCount}; charts {summary.ChartCount}; pivots {summary.PivotTableCount}; pivot caches {summary.PivotCacheCount}");
         Console.WriteLine(
-            $"  {label} metadata: validations {summary.DataValidationCount}; conditional formats {summary.ConditionalFormatCount}; hyperlinks {summary.HyperlinkCount}; comments {summary.CommentCount}; pictures {summary.PictureCount}; sparklines {summary.SparklineCount}; text boxes {summary.TextBoxCount}; drawing shapes {summary.DrawingShapeCount}; protected sheets {summary.ProtectedSheetCount}; structure protection {summary.StructureProtectionCount}");
+            $"  {label} metadata: validations {summary.DataValidationCount}; conditional formats {summary.ConditionalFormatCount}; hyperlinks {summary.HyperlinkCount}; comments {summary.CommentCount}; pictures {summary.PictureCount}; sparklines {summary.SparklineCount}; text boxes {summary.TextBoxCount}; drawing shapes {summary.DrawingShapeCount}; protected sheets {summary.ProtectedSheetCount}; structure protection {summary.StructureProtectionCount}; merged regions {summary.MergedRegionCount}; frozen sheets {summary.FrozenSheetCount}; hidden rows {summary.HiddenRowCount}; hidden columns {summary.HiddenColumnCount}; custom row heights {summary.CustomRowHeightCount}; custom column widths {summary.CustomColumnWidthCount}; outline rows {summary.OutlineRowCount}; outline columns {summary.OutlineColumnCount}");
     }
 
     private static void WriteFreeXWarnings(string label, IReadOnlyList<string> warnings)
