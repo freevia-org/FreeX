@@ -28,6 +28,7 @@ public sealed class AppInfoTests
         AppInfo.AboutText.Should().Contain(AppInfo.ThirdPartyRuntimeNotice);
         AppInfo.AboutText.Should().Contain(AppInfo.SourceNotice);
         AppInfo.AboutText.Should().Contain("Help > Legal Notices");
+        AppInfo.SourceNotice.Should().Contain("Full project license, legal notice, privacy notice, third-party notices, and bundled third-party license texts");
         AppInfo.AboutText.Should().Contain("ClosedXML");
         AppInfo.AboutText.Should().Contain("SharpVectors.Wpf");
         AppInfo.AboutText.Should().Contain("%LOCALAPPDATA%\\FreeX\\Diagnostics");
