@@ -2406,6 +2406,40 @@ internal static class ExcelOpenSmoke
                 MinExcelReopenedSparklines = reopen
             };
         }
+        else if (string.Equals(row.Id, "generated-table-ref-formulas-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinFreeXPreSaveFormulaCells = 2,
+                MinFreeXPreSaveStructuredTables = 1,
+                MinExcelOpenedFormulaCells = 2,
+                MinExcelOpenedStructuredTables = 1,
+                MinExcelReopenedFormulaCells = saveReopen ? 2 : 0,
+                MinExcelReopenedStructuredTables = reopen,
+                MinFreeXReopenedFormulaCells = saveReopen ? 2 : 0,
+                MinFreeXReopenedStructuredTables = reopen
+            };
+        }
+        else if (string.Equals(row.Id, "generated-cross-sheet-range-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinFreeXPreSaveFormulaCells = 2,
+                MinExcelOpenedFormulaCells = 2,
+                MinExcelReopenedFormulaCells = saveReopen ? 2 : 0,
+                MinFreeXReopenedFormulaCells = saveReopen ? 2 : 0
+            };
+        }
+        else if (string.Equals(row.Id, "generated-named-range-count-package-003", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                MinFreeXPreSaveNamedRanges = 12,
+                MinExcelOpenedNamedRanges = 12,
+                MinExcelReopenedNamedRanges = saveReopen ? 12 : 0,
+                MinFreeXReopenedNamedRanges = saveReopen ? 12 : 0
+            };
+        }
 
         return expectations;
     }

@@ -2201,30 +2201,280 @@ internal static partial class XlsxCorpusFixtureFactory
 
     private static void ApplyWorksheetTableRefFormulasFixup(ZipArchive archive)
     {
-        // Table-ref formulas fixture: worksheet XML already in place via merge-through fixup; no additional fixup needed
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/tables/table1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is not null)
+        {
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            var worksheetRoot = worksheetXml.Root;
+            if (worksheetRoot is not null)
+            {
+                worksheetRoot.SetAttributeValue(XNamespace.Xmlns + "r", officeRelNs.NamespaceName);
+                var sheetData = CreateTableRefFormulaSheetData(worksheetNs);
+                var existingSheetData = worksheetRoot.Element(worksheetNs + "sheetData");
+                if (existingSheetData is null)
+                    worksheetRoot.Add(sheetData);
+                else
+                    existingSheetData.ReplaceWith(sheetData);
+
+                worksheetRoot.Elements(worksheetNs + "tableParts").Remove();
+                InsertWorksheetTerminalElementInOrder(
+                    worksheetRoot,
+                    worksheetNs,
+                    new XElement(
+                        worksheetNs + "tableParts",
+                        new XAttribute("count", "1"),
+                        new XElement(
+                            worksheetNs + "tablePart",
+                            new XAttribute(officeRelNs + "id", "rIdFreeXSalesTable1"))));
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+            }
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdFreeXSalesTable1",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table",
+            "../tables/table1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        ReplacePackageXml(
+            archive,
+            "xl/tables/table1.xml",
+            new XDocument(
+                new XElement(
+                    worksheetNs + "table",
+                    new XAttribute("id", "1"),
+                    new XAttribute("name", "SalesTable"),
+                    new XAttribute("displayName", "SalesTable"),
+                    new XAttribute("ref", "A1:D3"),
+                    new XAttribute("totalsRowShown", "0"),
+                    new XElement(worksheetNs + "autoFilter", new XAttribute("ref", "A1:D3")),
+                    new XElement(
+                        worksheetNs + "tableColumns",
+                        new XAttribute("count", "4"),
+                        new XElement(worksheetNs + "tableColumn", new XAttribute("id", "1"), new XAttribute("name", "Item")),
+                        new XElement(worksheetNs + "tableColumn", new XAttribute("id", "2"), new XAttribute("name", "Price")),
+                        new XElement(worksheetNs + "tableColumn", new XAttribute("id", "3"), new XAttribute("name", "Qty")),
+                        new XElement(worksheetNs + "tableColumn", new XAttribute("id", "4"), new XAttribute("name", "Total"))),
+                    new XElement(
+                        worksheetNs + "tableStyleInfo",
+                        new XAttribute("name", "TableStyleMedium2"),
+                        new XAttribute("showFirstColumn", "0"),
+                        new XAttribute("showLastColumn", "0"),
+                        new XAttribute("showRowStripes", "1"),
+                        new XAttribute("showColumnStripes", "0")))));
     }
 
     private static void ApplyWorksheetCrossSheetRangeFixup(ZipArchive archive)
     {
-        // Cross-sheet range fixture: worksheet XML already in place via merge-through fixup; no additional fixup needed
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is not null)
+        {
+            var contentTypes = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(
+                contentTypes,
+                "/xl/worksheets/sheet2.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is not null)
+        {
+            var workbookXml = LoadPackageXml(workbookEntry);
+            var workbookRoot = workbookXml.Root;
+            var sheets = workbookRoot?.Element(workbookNs + "sheets");
+            if (workbookRoot is not null && sheets is not null)
+            {
+                workbookRoot.SetAttributeValue(XNamespace.Xmlns + "r", officeRelNs.NamespaceName);
+                sheets.Elements(workbookNs + "sheet")
+                    .Where(sheet => string.Equals(sheet.Attribute("name")?.Value, "Lookup", StringComparison.OrdinalIgnoreCase))
+                    .Remove();
+                sheets.Add(new XElement(
+                    workbookNs + "sheet",
+                    new XAttribute("name", "Lookup"),
+                    new XAttribute("sheetId", "2"),
+                    new XAttribute(officeRelNs + "id", "rIdFreeXCrossSheetLookup")));
+                ReplacePackageXml(archive, workbookPath, workbookXml);
+            }
+        }
+
+        var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+        var workbookRelsXml = archive.GetEntry(workbookRelsPath) is { } workbookRelsEntry
+            ? LoadPackageXml(workbookRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            workbookRelsXml,
+            "rIdFreeXCrossSheetLookup",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+            "worksheets/sheet2.xml");
+        ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+
+        ReplacePackageXml(
+            archive,
+            "xl/worksheets/sheet1.xml",
+            new XDocument(
+                new XElement(
+                    workbookNs + "worksheet",
+                    CreateCrossSheetSummarySheetData(workbookNs))));
+        ReplacePackageXml(
+            archive,
+            "xl/worksheets/sheet2.xml",
+            new XDocument(
+                new XElement(
+                    workbookNs + "worksheet",
+                    CreateCrossSheetLookupSheetData(workbookNs))));
     }
 
     private static void ApplyNamedRangeCountFixup(ZipArchive archive)
     {
-        // Named range count fixture: workbook XML already in place via merge-through fixup; apply workbook fixup
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
         if (workbookEntry is null) return;
         var workbookXml = LoadPackageXml(workbookEntry);
+        var workbookRoot = workbookXml.Root;
+        if (workbookRoot is null)
+            return;
 
-        // Keep the sheets element from the FreeX-saved workbook but add defined names
-        var definedNamesElement = workbookXml.Root?.Element(workbookNs + "definedNames");
-        if (definedNamesElement is null) return;
+        workbookRoot.Elements(workbookNs + "definedNames").Remove();
+        var definedNamesElement = new XElement(
+            workbookNs + "definedNames",
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range01"), "'Sheet1'!$A$1:$A$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range02"), "'Sheet1'!$B$1:$B$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range03"), "'Sheet1'!$C$1:$C$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range04"), "'Sheet1'!$D$1:$D$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range05"), "'Sheet1'!$E$1:$E$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range06"), "'Sheet1'!$F$1:$F$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range07"), "'Sheet1'!$G$1:$G$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range08"), "'Sheet1'!$H$1:$H$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range09"), "'Sheet1'!$I$1:$I$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range10"), "'Sheet1'!$J$1:$J$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range11"), "'Sheet1'!$K$1:$K$3"),
+            new XElement(workbookNs + "definedName", new XAttribute("name", "Range12"), "'Sheet1'!$L$1:$L$3"));
 
-        // Defined names are already in the XML via merge-through
+        var sheets = workbookRoot.Element(workbookNs + "sheets");
+        if (sheets is null)
+            workbookRoot.AddFirst(definedNamesElement);
+        else
+            sheets.AddAfterSelf(definedNamesElement);
         ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static XElement CreateTableRefFormulaSheetData(XNamespace worksheetNs) =>
+        new(
+            worksheetNs + "sheetData",
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "1"),
+                new XElement(worksheetNs + "c", new XAttribute("r", "A1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Item")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "B1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Price")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "C1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Qty")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "D1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Total"))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "2"),
+                new XElement(worksheetNs + "c", new XAttribute("r", "A2"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Alpha")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "B2"), new XElement(worksheetNs + "v", "10")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "C2"), new XElement(worksheetNs + "v", "5")),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "D2"),
+                    new XElement(worksheetNs + "f", "[@Price]*[@Qty]"),
+                    new XElement(worksheetNs + "v", "50"))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "3"),
+                new XElement(worksheetNs + "c", new XAttribute("r", "A3"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Beta")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "B3"), new XElement(worksheetNs + "v", "20")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "C3"), new XElement(worksheetNs + "v", "3")),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "D3"),
+                    new XElement(worksheetNs + "f", "[@Price]*[@Qty]"),
+                    new XElement(worksheetNs + "v", "60"))));
+
+    private static XElement CreateCrossSheetSummarySheetData(XNamespace worksheetNs) =>
+        new(
+            worksheetNs + "sheetData",
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "1"),
+                new XElement(worksheetNs + "c", new XAttribute("r", "A1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Region")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "B1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Total"))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "2"),
+                new XElement(worksheetNs + "c", new XAttribute("r", "A2"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "North")),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "B2"),
+                    new XElement(worksheetNs + "f", "SUMIF(Lookup!A2:A3,\"North\",Lookup!B2:B3)"),
+                    new XElement(worksheetNs + "v", "100"))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "3"),
+                new XElement(worksheetNs + "c", new XAttribute("r", "A3"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "South")),
+                new XElement(
+                    worksheetNs + "c",
+                    new XAttribute("r", "B3"),
+                    new XElement(worksheetNs + "f", "SUMIF(Lookup!A2:A3,\"South\",Lookup!B2:B3)"),
+                    new XElement(worksheetNs + "v", "125"))));
+
+    private static XElement CreateCrossSheetLookupSheetData(XNamespace worksheetNs) =>
+        new(
+            worksheetNs + "sheetData",
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "1"),
+                new XElement(worksheetNs + "c", new XAttribute("r", "A1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Region")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "B1"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "Sales"))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "2"),
+                new XElement(worksheetNs + "c", new XAttribute("r", "A2"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "North")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "B2"), new XElement(worksheetNs + "v", "100"))),
+            new XElement(
+                worksheetNs + "row",
+                new XAttribute("r", "3"),
+                new XElement(worksheetNs + "c", new XAttribute("r", "A3"), new XAttribute("t", "str"), new XElement(worksheetNs + "v", "South")),
+                new XElement(worksheetNs + "c", new XAttribute("r", "B3"), new XElement(worksheetNs + "v", "125"))));
+
+    private static void InsertWorksheetTerminalElementInOrder(
+        XElement worksheetRoot,
+        XNamespace worksheetNs,
+        XElement element)
+    {
+        var extLst = worksheetRoot.Elements(worksheetNs + "extLst").FirstOrDefault();
+        if (extLst is null)
+            worksheetRoot.Add(element);
+        else
+            extLst.AddBeforeSelf(element);
     }
 
     private static void ApplyChartSeriesCountFixup(ZipArchive archive)
