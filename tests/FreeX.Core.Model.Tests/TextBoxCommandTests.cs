@@ -11,7 +11,7 @@ public sealed class TextBoxCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 2, 3);
 
         var command = new AddTextBoxCommand(sheet.Id, anchor, "Notes", 180, 80);
@@ -35,7 +35,7 @@ public sealed class TextBoxCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new AddTextBoxCommand(sheet1.Id, new CellAddress(sheet2.Id, 1, 1), "Notes");
 
@@ -48,7 +48,7 @@ public sealed class TextBoxCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 2, 3);
 
         new AddTextBoxCommand(sheet.Id, anchor, "Notes", double.NegativeInfinity, 80)
@@ -67,7 +67,7 @@ public sealed class TextBoxCommandTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 2, 3);
 
         var outcome = new AddTextBoxCommand(sheet.Id, anchor, "Notes").Apply(ctx);
@@ -84,7 +84,7 @@ public sealed class TextBoxCommandTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var anchor = new CellAddress(sheet.Id, 2, 3);
 
         var outcome = new AddTextBoxCommand(sheet.Id, anchor, "Notes").Apply(ctx);
@@ -98,7 +98,7 @@ public sealed class TextBoxCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1), Text = "Note", Width = 180, Height = 80 };
         sheet.TextBoxes.Add(textBox);
 
@@ -119,7 +119,7 @@ public sealed class TextBoxCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1), Text = "Note", RotationDegrees = 15 };
         sheet.TextBoxes.Add(textBox);
 
@@ -138,7 +138,7 @@ public sealed class TextBoxCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1), Text = "Note", Width = 180, Height = 80 };
         sheet.TextBoxes.Add(textBox);
 
@@ -157,7 +157,7 @@ public sealed class TextBoxCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1), Text = "Note", Width = 180, Height = 80 };
         sheet.TextBoxes.Add(textBox);
         sheet.IsProtected = true;
@@ -174,7 +174,7 @@ public sealed class TextBoxCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -211,7 +211,7 @@ public sealed class TextBoxCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var textBox = new TextBoxModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
@@ -231,9 +231,4 @@ public sealed class TextBoxCommandTests
         textBox.FillColor.Should().Be(new CellColor(10, 20, 30));
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }

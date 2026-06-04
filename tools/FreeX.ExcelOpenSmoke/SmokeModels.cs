@@ -160,8 +160,14 @@ internal sealed record WorkbookSmokeExpectations(
     bool RequireNoFreeXLoadWarnings = false,
     IReadOnlyList<string>? RequiredFreeXSavedPackageParts = null,
     IReadOnlyList<string>? RequiredExcelSavedPackageParts = null,
+    IReadOnlyList<PackageContentTypeExpectation>? RequiredFreeXSavedPackageContentTypes = null,
+    IReadOnlyList<PackageContentTypeExpectation>? RequiredExcelSavedPackageContentTypes = null,
     IReadOnlyList<PackageRelationshipExpectation>? RequiredFreeXSavedPackageRelationships = null,
     IReadOnlyList<PackageRelationshipExpectation>? RequiredExcelSavedPackageRelationships = null);
+
+internal sealed record PackageContentTypeExpectation(
+    string PartName,
+    string ContentType);
 
 internal sealed record PackageRelationshipExpectation(
     string RelationshipPart,
