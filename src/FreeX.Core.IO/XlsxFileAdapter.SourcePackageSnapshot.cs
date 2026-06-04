@@ -30,6 +30,7 @@ public sealed partial class XlsxFileAdapter
         string? ModelFingerprint,
         IReadOnlySet<string>? WorksheetsWithPreservableSourceMetadata,
         bool? HasUnsupportedConditionalFormatting,
+        bool AllowsCellPatchSave,
         XlsxCellPatchBaseline? CellPatchBaseline)
     {
         private const int FingerprintCellLimit = 25_000;
@@ -115,6 +116,7 @@ public sealed partial class XlsxFileAdapter
                 fingerprint,
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting,
+                AllowsCellPatchSaveForPackage(bytes, 0, bytes.Length, workbook),
                 cellPatchBaseline);
         }
 
@@ -175,6 +177,7 @@ public sealed partial class XlsxFileAdapter
                         fingerprint,
                         worksheetsWithPreservableSourceMetadata,
                         hasUnsupportedConditionalFormatting,
+                        AllowsCellPatchSaveForPackage(buffer.Array, buffer.Offset, (int)stream.Length, workbook),
                         XlsxCellPatchBaseline.TryCreate(
                             buffer.Array,
                             buffer.Offset,
@@ -196,6 +199,7 @@ public sealed partial class XlsxFileAdapter
                     fingerprint,
                     worksheetsWithPreservableSourceMetadata,
                     hasUnsupportedConditionalFormatting,
+                    AllowsCellPatchSaveForPackage(copiedBytes, 0, copiedBytes.Length, workbook),
                     XlsxCellPatchBaseline.TryCreate(copiedBytes, 0, copiedBytes.Length, workbook, CellPatchBaselineLimit));
             }
 
@@ -207,6 +211,7 @@ public sealed partial class XlsxFileAdapter
                 fingerprint,
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting,
+                AllowsCellPatchSaveForPackage(bytes, 0, bytes.Length, workbook),
                 XlsxCellPatchBaseline.TryCreate(bytes, 0, bytes.Length, workbook, CellPatchBaselineLimit));
         }
 
@@ -268,16 +273,22 @@ public sealed partial class XlsxFileAdapter
         public bool TrySavePatchedCellValues(
             Workbook workbook,
             Stream stream,
-            out string? currentModelFingerprint)
+            ref string? currentModelFingerprint)
         {
-            currentModelFingerprint = null;
-            if (CellPatchBaseline is null ||
-                !CellPatchBaseline.TryGetPatchableValueChanges(workbook, CellPatchChangeLimit, out var changes))
+            if (!AllowsCellPatchSave ||
+                CellPatchBaseline is null ||
+                !CellPatchBaseline.TryGetPatchableValueChanges(
+                    workbook,
+                    CellPatchChangeLimit,
+                    currentModelFingerprint,
+                    out var changes))
             {
                 return false;
             }
 
             currentModelFingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
+            var patchedModelFingerprint = currentModelFingerprint ?? CreateModelFingerprint(workbook);
+            currentModelFingerprint = patchedModelFingerprint;
             if (changes.Count == 0)
             {
                 CopyTo(stream);
@@ -300,6 +311,13 @@ public sealed partial class XlsxFileAdapter
 
                     XlsxPackageXmlEditor.ReplaceXml(archive, group.Key, worksheetXml);
                 }
+
+                if (changes.Any(change =>
+                        change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue ||
+                        (change.Kind == XlsxCellValuePatchKind.DeletedCell && change.OriginalFormulaText is not null)))
+                {
+                    XlsxExcelCompatibilityNormalizer.RemoveCalcChain(archive);
+                }
             }
 
             patchedPackage.Position = 0;
@@ -314,15 +332,201 @@ public sealed partial class XlsxFileAdapter
             if (stream.CanSeek)
                 stream.Position = patchedPackage.Length;
 
-            patchedPackage.Position = 0;
             SourcePackages.Remove(workbook);
-            SourcePackages.Add(workbook, Capture(
-                patchedPackage,
-                workbook,
-                currentModelFingerprint,
-                WorksheetsWithPreservableSourceMetadata,
-                HasUnsupportedConditionalFormatting));
+            if (patchedPackage.TryGetBuffer(out var patchedBuffer) &&
+                patchedBuffer.Array is not null &&
+                patchedPackage.Length <= int.MaxValue)
+            {
+                SourcePackages.Add(workbook, new XlsxSourcePackage(
+                    patchedBuffer.Array,
+                    patchedBuffer.Offset,
+                    (int)patchedPackage.Length,
+                    patchedModelFingerprint,
+                    WorksheetsWithPreservableSourceMetadata,
+                    HasUnsupportedConditionalFormatting,
+                    AllowsCellPatchSave,
+                    CellPatchBaseline.WithAppliedChanges(changes, patchedModelFingerprint)));
+            }
+            else
+            {
+                patchedPackage.Position = 0;
+                SourcePackages.Add(workbook, Capture(
+                    patchedPackage,
+                    workbook,
+                    currentModelFingerprint,
+                    WorksheetsWithPreservableSourceMetadata,
+                    HasUnsupportedConditionalFormatting));
+            }
+
             return true;
+        }
+
+        private static bool AllowsCellPatchSaveForPackage(
+            byte[] package,
+            int offset,
+            int count,
+            Workbook workbook)
+        {
+            if (WorkbookRequiresFullSavePostProcessing(workbook))
+                return false;
+
+            try
+            {
+                using var packageStream = new MemoryStream(package, offset, count, writable: false);
+                using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read);
+                return PackageAllowsCellPatchSave(archive);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool WorkbookRequiresFullSavePostProcessing(Workbook workbook)
+        {
+            foreach (var sheet in workbook.Sheets)
+            {
+                if (sheet.CustomProperties.Count > 0 ||
+                    sheet.Charts.Count > 0 ||
+                    sheet.PivotTables.Count > 0 ||
+                    sheet.Pictures.Count > 0 ||
+                    sheet.TextBoxes.Count > 0 ||
+                    sheet.DrawingShapes.Count > 0 ||
+                    sheet.Sparklines.Count > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool PackageAllowsCellPatchSave(ZipArchive archive)
+        {
+            foreach (var entry in archive.Entries)
+            {
+                var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+                if (IsPatchUnsafePackagePart(path))
+                    return false;
+
+                if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
+                    !IsValidRelationshipPart(entry))
+                {
+                    return false;
+                }
+            }
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return false;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            if (workbookXml.Root is null ||
+                workbookXml.Root.Element(workbookNs + "customWorkbookViews") is not null ||
+                HasOfficeRevisionAttributes(workbookXml.Root))
+            {
+                return false;
+            }
+
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry))
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null ||
+                    root.Element(workbookNs + "customSheetViews") is not null ||
+                    root.Element(workbookNs + "customProperties") is not null ||
+                    root.Element(workbookNs + "drawing") is not null ||
+                    HasWorksheetTableParts(root, workbookNs) ||
+                    HasOfficeRevisionAttributes(root))
+                {
+                    return false;
+                }
+            }
+
+            return !HasUnsupportedRichSharedStringFonts(archive, workbookNs);
+        }
+
+        private static bool IsPatchUnsafePackagePart(string path) =>
+            path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("xl/revisionHeaders/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsValidRelationshipPart(ZipArchiveEntry entry)
+        {
+            try
+            {
+                XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+                var relationshipsXml = XlsxPackageXmlEditor.LoadXml(entry);
+                if (relationshipsXml.Root?.Name != packageRelNs + "Relationships")
+                    return false;
+
+                foreach (var relationship in relationshipsXml.Root.Elements(packageRelNs + "Relationship"))
+                {
+                    if (string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value) ||
+                        string.IsNullOrWhiteSpace(relationship.Attribute("Type")?.Value) ||
+                        string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
+        {
+            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                   path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                   !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasOfficeRevisionAttributes(XElement root) =>
+            root.DescendantsAndSelf()
+                .SelectMany(element => element.Attributes())
+                .Any(attribute =>
+                    string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
+                    attribute.Name.NamespaceName.Contains("/revision", StringComparison.Ordinal));
+
+        private static bool HasWorksheetTableParts(XElement worksheetRoot, XNamespace workbookNs)
+        {
+            var tableParts = worksheetRoot.Element(workbookNs + "tableParts");
+            if (tableParts is null)
+                return false;
+
+            return tableParts.Elements(workbookNs + "tablePart").Any() ||
+                   !string.Equals(tableParts.Attribute("count")?.Value, "0", StringComparison.Ordinal);
+        }
+
+        private static bool HasUnsupportedRichSharedStringFonts(ZipArchive archive, XNamespace workbookNs)
+        {
+            var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
+            if (sharedStringsEntry is null)
+                return false;
+
+            try
+            {
+                var sharedStringsXml = XlsxPackageXmlEditor.LoadXml(sharedStringsEntry);
+                return sharedStringsXml.Root?
+                    .Descendants(workbookNs + "rFont")
+                    .Select(font => font.Attribute("val")?.Value)
+                    .Any(value => value is not null &&
+                                  (value.Contains(',', StringComparison.Ordinal) ||
+                                   value.Contains('"', StringComparison.Ordinal))) == true;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         private static bool ShouldCaptureModelFingerprint(Workbook workbook)
@@ -429,6 +633,7 @@ public sealed partial class XlsxFileAdapter
         public bool TryGetPatchableValueChanges(
             Workbook workbook,
             int changeLimit,
+            string? currentModelFingerprint,
             out List<XlsxCellValuePatch> changes)
         {
             changes = [];
@@ -441,32 +646,79 @@ public sealed partial class XlsxFileAdapter
                 var sheet = workbook.Sheets[sheetIndex];
                 if (sheet.Id != baseline.SheetId ||
                     !string.Equals(sheet.Name, baseline.SheetName, StringComparison.Ordinal) ||
-                    sheet.CellCount != baseline.CellCount ||
                     sheet.StyleOnlyCellCount != baseline.StyleOnlyCellCount)
                 {
                     return false;
                 }
 
-                foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+                var addedCells = 0;
+                var currentCells = sheet.GetOccupiedCellMap();
+                foreach (var ((row, col), cell) in currentCells)
                 {
-                    if (!baseline.Cells.TryGetValue((row, col), out var original) ||
-                        cell.StyleId != original.StyleId ||
-                        cell.IgnoreFormulaError != original.IgnoreFormulaError ||
-                        !string.Equals(cell.FormulaText, original.FormulaText, StringComparison.Ordinal))
+                    if (!baseline.Cells.TryGetValue((row, col), out var original))
+                    {
+                        if (cell.HasFormula ||
+                            cell.StyleId != StyleId.Default ||
+                            cell.IgnoreFormulaError ||
+                            cell.Value is BlankValue ||
+                            !IsPatchableScalarValue(cell.Value))
+                        {
+                            return false;
+                        }
+
+                        changes.Add(new XlsxCellValuePatch(
+                            XlsxCellValuePatchKind.InsertedLiteralValue,
+                            baseline.SheetId,
+                            baseline.WorksheetPath,
+                            row,
+                            col,
+                            BlankValue.Instance,
+                            cell.Value,
+                            OriginalFormulaText: null,
+                            NewFormulaText: null,
+                            OriginalStyleId: StyleId.Default,
+                            OriginalIgnoreFormulaError: false));
+                        if (changes.Count > changeLimit)
+                            return false;
+
+                        addedCells++;
+                        continue;
+                    }
+
+                    if (cell.StyleId != original.StyleId ||
+                        cell.IgnoreFormulaError != original.IgnoreFormulaError)
                     {
                         return false;
                     }
 
-                    if (Equals(cell.Value, original.Value))
+                    var formulaChanged = !string.Equals(cell.FormulaText, original.FormulaText, StringComparison.Ordinal);
+                    var valueChanged = !Equals(cell.Value, original.Value);
+                    if (!formulaChanged && !valueChanged)
                         continue;
 
-                    var patchKind = cell.HasFormula
-                        ? XlsxCellValuePatchKind.FormulaCachedValue
-                        : XlsxCellValuePatchKind.LiteralValue;
-                    if (!IsPatchableScalarValue(cell.Value) ||
-                        (patchKind == XlsxCellValuePatchKind.LiteralValue && original.FormulaText is not null))
+                    if (!IsPatchableScalarValue(cell.Value))
                     {
                         return false;
+                    }
+
+                    XlsxCellValuePatchKind patchKind;
+                    if (formulaChanged)
+                    {
+                        if (string.IsNullOrWhiteSpace(original.FormulaText) ||
+                            string.IsNullOrWhiteSpace(cell.FormulaText))
+                        {
+                            return false;
+                        }
+
+                        patchKind = XlsxCellValuePatchKind.FormulaTextAndCachedValue;
+                    }
+                    else
+                    {
+                        patchKind = cell.HasFormula
+                            ? XlsxCellValuePatchKind.FormulaCachedValue
+                            : XlsxCellValuePatchKind.LiteralValue;
+                        if (patchKind == XlsxCellValuePatchKind.LiteralValue && original.FormulaText is not null)
+                            return false;
                     }
 
                     changes.Add(new XlsxCellValuePatch(
@@ -476,13 +728,46 @@ public sealed partial class XlsxFileAdapter
                         row,
                         col,
                         original.Value,
-                        cell.Value));
+                        cell.Value,
+                        original.FormulaText,
+                        cell.FormulaText,
+                        original.StyleId,
+                        original.IgnoreFormulaError));
                     if (changes.Count > changeLimit)
                         return false;
                 }
+
+                var deletedCells = 0;
+                foreach (var ((row, col), original) in baseline.Cells)
+                {
+                    if (currentCells.ContainsKey((row, col)))
+                        continue;
+
+                    changes.Add(new XlsxCellValuePatch(
+                        XlsxCellValuePatchKind.DeletedCell,
+                        baseline.SheetId,
+                        baseline.WorksheetPath,
+                        row,
+                        col,
+                        original.Value,
+                        BlankValue.Instance,
+                        original.FormulaText,
+                        NewFormulaText: null,
+                        original.StyleId,
+                        original.IgnoreFormulaError));
+                    if (changes.Count > changeLimit)
+                        return false;
+
+                    deletedCells++;
+                }
+
+                if (sheet.CellCount != baseline.CellCount + addedCells - deletedCells)
+                    return false;
             }
 
-            return ModelMatchesWithOriginalValues(workbook, changes);
+            return changes.Count == 0 && currentModelFingerprint is not null
+                ? string.Equals(_modelFingerprint, currentModelFingerprint, StringComparison.Ordinal)
+                : ModelMatchesWithOriginalValues(workbook, changes);
         }
 
         public static bool ApplyChanges(XDocument worksheetXml, IEnumerable<XlsxCellValuePatch> changes)
@@ -499,10 +784,36 @@ public sealed partial class XlsxFileAdapter
             foreach (var change in changes)
             {
                 var cell = FindCell(sheetData, worksheetNs, change.Row, change.Col);
+                if (change.Kind == XlsxCellValuePatchKind.InsertedLiteralValue)
+                {
+                    if (cell is not null ||
+                        !InsertLiteralCell(sheetData, worksheetNs, change.Row, change.Col, change.NewValue))
+                    {
+                        return false;
+                    }
+
+                    continue;
+                }
+
                 if (cell is null)
                     return false;
 
-                if (change.Kind == XlsxCellValuePatchKind.FormulaCachedValue)
+                if (change.Kind == XlsxCellValuePatchKind.DeletedCell)
+                {
+                    cell.Remove();
+                }
+                else if (change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue)
+                {
+                    if (!RewriteFormulaTextAndCachedCellValue(
+                            cell,
+                            worksheetNs,
+                            change.NewFormulaText,
+                            change.NewValue))
+                    {
+                        return false;
+                    }
+                }
+                else if (change.Kind == XlsxCellValuePatchKind.FormulaCachedValue)
                 {
                     if (!RewriteFormulaCachedCellValue(cell, worksheetNs, change.NewValue))
                         return false;
@@ -513,23 +824,124 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
+            UpdateDimension(sheetData, root, worksheetNs);
+
             return true;
+        }
+
+        public XlsxCellPatchBaseline WithAppliedChanges(
+            IReadOnlyList<XlsxCellValuePatch> changes,
+            string modelFingerprint)
+        {
+            if (changes.Count == 0)
+                return new XlsxCellPatchBaseline(_worksheets, modelFingerprint);
+
+            var changesBySheet = changes
+                .GroupBy(change => change.SheetId)
+                .ToDictionary(group => group.Key, group => group.ToList());
+            var worksheets = new List<XlsxWorksheetCellPatchBaseline>(_worksheets.Count);
+            foreach (var baseline in _worksheets)
+            {
+                if (!changesBySheet.TryGetValue(baseline.SheetId, out var sheetChanges))
+                {
+                    worksheets.Add(baseline);
+                    continue;
+                }
+
+                var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(baseline.Cells);
+                var inserted = 0;
+                var deleted = 0;
+                foreach (var change in sheetChanges)
+                {
+                    var key = (change.Row, change.Col);
+                    if (change.Kind == XlsxCellValuePatchKind.InsertedLiteralValue)
+                    {
+                        cells[key] = new XlsxPatchCell(
+                            change.NewValue,
+                            null,
+                            StyleId.Default,
+                            false);
+                        inserted++;
+                        continue;
+                    }
+
+                    if (change.Kind == XlsxCellValuePatchKind.DeletedCell)
+                    {
+                        if (cells.Remove(key))
+                            deleted++;
+                        continue;
+                    }
+
+                    if (!cells.TryGetValue(key, out var original))
+                        continue;
+
+                    cells[key] = original with
+                    {
+                        Value = change.NewValue,
+                        FormulaText = change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue
+                            ? change.NewFormulaText
+                            : original.FormulaText
+                    };
+                }
+
+                worksheets.Add(baseline with
+                {
+                    CellCount = baseline.CellCount + inserted - deleted,
+                    Cells = cells
+                });
+            }
+
+            return new XlsxCellPatchBaseline(worksheets, modelFingerprint);
         }
 
         private bool ModelMatchesWithOriginalValues(Workbook workbook, IReadOnlyList<XlsxCellValuePatch> changes)
         {
-            var restoredCells = new List<(Cell Cell, ScalarValue CurrentValue)>(changes.Count);
+            var restoredCells = new List<(Cell Cell, ScalarValue CurrentValue, string? CurrentFormulaText)>(changes.Count);
+            var insertedCells = new List<(Sheet Sheet, uint Row, uint Col, Cell CurrentCell)>();
+            var deletedCells = new List<(Sheet Sheet, uint Row, uint Col)>();
             try
             {
                 foreach (var change in changes)
                 {
                     var sheet = workbook.GetSheet(change.SheetId);
-                    var cell = sheet?.GetCell(change.Row, change.Col);
-                    if (cell is null)
+                    if (sheet is null)
                         return false;
 
-                    restoredCells.Add((cell, cell.Value));
-                    cell.Value = change.OriginalValue;
+                    if (change.Kind == XlsxCellValuePatchKind.InsertedLiteralValue)
+                    {
+                        var insertedCell = sheet.GetCell(change.Row, change.Col);
+                        if (insertedCell is null)
+                            return false;
+
+                        insertedCells.Add((sheet, change.Row, change.Col, insertedCell));
+                        sheet.ClearCell(change.Row, change.Col);
+                        continue;
+                    }
+
+                    if (change.Kind == XlsxCellValuePatchKind.DeletedCell)
+                    {
+                        if (sheet.GetCell(change.Row, change.Col) is not null)
+                            return false;
+
+                        var originalCell = new Cell
+                        {
+                            Value = change.OriginalValue,
+                            FormulaText = change.OriginalFormulaText,
+                            StyleId = change.OriginalStyleId,
+                            IgnoreFormulaError = change.OriginalIgnoreFormulaError
+                        };
+                        sheet.SetCell(new CellAddress(sheet.Id, change.Row, change.Col), originalCell);
+                        deletedCells.Add((sheet, change.Row, change.Col));
+                        continue;
+                    }
+
+                    var changedCell = sheet.GetCell(change.Row, change.Col);
+                    if (changedCell is null)
+                        return false;
+
+                    restoredCells.Add((changedCell, changedCell.Value, changedCell.FormulaText));
+                    changedCell.Value = change.OriginalValue;
+                    changedCell.FormulaText = change.OriginalFormulaText;
                 }
 
                 return string.Equals(
@@ -539,8 +951,17 @@ public sealed partial class XlsxFileAdapter
             }
             finally
             {
-                foreach (var (cell, currentValue) in restoredCells)
+                foreach (var (cell, currentValue, currentFormulaText) in restoredCells)
+                {
                     cell.Value = currentValue;
+                    cell.FormulaText = currentFormulaText;
+                }
+
+                foreach (var (sheet, row, col, currentCell) in insertedCells)
+                    sheet.SetCell(new CellAddress(sheet.Id, row, col), currentCell);
+
+                foreach (var (sheet, row, col) in deletedCells)
+                    sheet.ClearCell(row, col);
             }
         }
 
@@ -609,6 +1030,31 @@ public sealed partial class XlsxFileAdapter
             if (cell.Element(worksheetNs + "f") is null)
                 return false;
 
+            RewriteFormulaCachedValue(cell, worksheetNs, value);
+            return true;
+        }
+
+        private static bool RewriteFormulaTextAndCachedCellValue(
+            XElement cell,
+            XNamespace worksheetNs,
+            string? formulaText,
+            ScalarValue value)
+        {
+            var formula = cell.Element(worksheetNs + "f");
+            if (formula is null ||
+                formula.HasAttributes ||
+                string.IsNullOrWhiteSpace(formulaText))
+            {
+                return false;
+            }
+
+            formula.Value = XlsxClosedXmlCellMapper.NormalizeFormulaText(formulaText);
+            RewriteFormulaCachedValue(cell, worksheetNs, value);
+            return true;
+        }
+
+        private static void RewriteFormulaCachedValue(XElement cell, XNamespace worksheetNs, ScalarValue value)
+        {
             cell.Element(worksheetNs + "v")?.Remove();
             cell.Element(worksheetNs + "is")?.Remove();
 
@@ -638,6 +1084,131 @@ public sealed partial class XlsxFileAdapter
                     cell.Add(new XElement(worksheetNs + "v", FormatNumber(number.Value)));
                     break;
             }
+        }
+
+        private static bool InsertLiteralCell(
+            XElement sheetData,
+            XNamespace worksheetNs,
+            uint row,
+            uint col,
+            ScalarValue value)
+        {
+            var rowElement = FindOrCreateRow(sheetData, worksheetNs, row);
+            if (rowElement is null)
+                return false;
+
+            var cellElement = new XElement(worksheetNs + "c", new XAttribute("r", ToReference(row, col)));
+            RewriteLiteralCellValue(cellElement, worksheetNs, value);
+            InsertCellInColumnOrder(rowElement, worksheetNs, cellElement, col);
+            return true;
+        }
+
+        private static XElement? FindOrCreateRow(XElement sheetData, XNamespace worksheetNs, uint row)
+        {
+            var rowName = worksheetNs + "row";
+            XElement? insertBefore = null;
+            foreach (var rowElement in sheetData.Elements(rowName))
+            {
+                if (!uint.TryParse(rowElement.Attribute("r")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNumber))
+                    continue;
+
+                if (rowNumber == row)
+                    return rowElement;
+
+                if (rowNumber > row)
+                {
+                    insertBefore = rowElement;
+                    break;
+                }
+            }
+
+            var created = new XElement(rowName, new XAttribute("r", row.ToString(CultureInfo.InvariantCulture)));
+            if (insertBefore is null)
+                sheetData.Add(created);
+            else
+                insertBefore.AddBeforeSelf(created);
+
+            return created;
+        }
+
+        private static void InsertCellInColumnOrder(
+            XElement rowElement,
+            XNamespace worksheetNs,
+            XElement cellElement,
+            uint col)
+        {
+            var cellName = worksheetNs + "c";
+            foreach (var existingCell in rowElement.Elements(cellName))
+            {
+                if (TryGetCellColumn(existingCell.Attribute("r")?.Value, out var existingCol) &&
+                    existingCol > col)
+                {
+                    existingCell.AddBeforeSelf(cellElement);
+                    return;
+                }
+            }
+
+            rowElement.Add(cellElement);
+        }
+
+        private static void UpdateDimension(
+            XElement sheetData,
+            XElement worksheetRoot,
+            XNamespace worksheetNs)
+        {
+            var dimension = worksheetRoot.Element(worksheetNs + "dimension");
+            if (dimension is null)
+                return;
+
+            uint minRow = uint.MaxValue;
+            uint minCol = uint.MaxValue;
+            uint maxRow = 0;
+            uint maxCol = 0;
+            foreach (var cell in sheetData.Descendants(worksheetNs + "c"))
+            {
+                if (!TryParseCellReference(cell.Attribute("r")?.Value, out var row, out var col))
+                    continue;
+
+                minRow = Math.Min(minRow, row);
+                minCol = Math.Min(minCol, col);
+                maxRow = Math.Max(maxRow, row);
+                maxCol = Math.Max(maxCol, col);
+            }
+
+            if (maxRow == 0 || maxCol == 0)
+                return;
+
+            var start = ToReference(minRow, minCol);
+            var end = ToReference(maxRow, maxCol);
+            dimension.SetAttributeValue("ref", start == end ? start : $"{start}:{end}");
+        }
+
+        private static bool TryParseCellReference(string? reference, out uint row, out uint col)
+        {
+            row = 0;
+            col = 0;
+            if (string.IsNullOrWhiteSpace(reference))
+                return false;
+
+            var index = 0;
+            while (index < reference.Length && char.IsAsciiLetter(reference[index]))
+            {
+                col = checked((col * 26) + (uint)(char.ToUpperInvariant(reference[index]) - 'A' + 1));
+                index++;
+            }
+
+            if (col == 0 || index == reference.Length)
+                return false;
+
+            var rowSpan = reference.AsSpan(index);
+            return uint.TryParse(rowSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out row) && row > 0;
+        }
+
+        private static bool TryGetCellColumn(string? reference, out uint col)
+        {
+            col = 0;
+            if (!TryParseCellReference(reference, out _, out col))
+                return false;
 
             return true;
         }
@@ -700,11 +1271,18 @@ public sealed partial class XlsxFileAdapter
         uint Row,
         uint Col,
         ScalarValue OriginalValue,
-        ScalarValue NewValue);
+        ScalarValue NewValue,
+        string? OriginalFormulaText,
+        string? NewFormulaText,
+        StyleId OriginalStyleId,
+        bool OriginalIgnoreFormulaError);
 
     private enum XlsxCellValuePatchKind
     {
         LiteralValue,
-        FormulaCachedValue
+        FormulaCachedValue,
+        FormulaTextAndCachedValue,
+        InsertedLiteralValue,
+        DeletedCell
     }
 }

@@ -17,7 +17,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         if (sourcePackage is not null &&
-            sourcePackage.TrySavePatchedCellValues(workbook, stream, out currentModelFingerprint))
+            sourcePackage.TrySavePatchedCellValues(workbook, stream, ref currentModelFingerprint))
         {
             return;
         }
