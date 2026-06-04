@@ -74,6 +74,12 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
     private const string HyperlinkRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+    private const string OfficeDocumentRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
+    private const string PackageRootRelationshipPart = "_rels/.rels";
+    private const string WorkbookContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+    private const string WorkbookPart = "xl/workbook.xml";
     private const string SharedStringsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
     private const string StylesContentType =
@@ -329,6 +335,7 @@ internal static class ExcelOpenSmoke
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
                 AssertPackageContentTypesComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPackageRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -517,6 +524,7 @@ internal static class ExcelOpenSmoke
             AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
             AssertPackageContentTypesComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPackageRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
@@ -1562,6 +1570,35 @@ internal static class ExcelOpenSmoke
 
     private static string FormatPackageContentTypeExpectation(PackageContentTypeExpectation expectation) =>
         $"{expectation.PartName} ContentType={expectation.ContentType}";
+
+    private static void AssertWorkbookPackageRoot(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        if (!PackageEntryExists(archive, WorkbookPart))
+            issues.Add($"missing {WorkbookPart}");
+
+        if (!PackageRelationshipExists(
+                archive,
+                new PackageRelationshipExpectation(
+                    PackageRootRelationshipPart,
+                    OfficeDocumentRelationshipType,
+                    WorkbookPart)))
+        {
+            issues.Add($"missing package root officeDocument relationship to {WorkbookPart}");
+        }
+
+        var workbookContentTypeIssue = FindPackageContentTypeIssue(archive, WorkbookPart, WorkbookContentType);
+        if (workbookContentTypeIssue is not null)
+            issues.Add(workbookContentTypeIssue);
+
+        if (issues.Count == 0)
+            return;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid XLSX workbook package root: {string.Join("; ", issues)}");
+    }
 
     private static void AssertPackageRelationshipsComplete(string xlsxPath, string label, string sourcePath)
     {
