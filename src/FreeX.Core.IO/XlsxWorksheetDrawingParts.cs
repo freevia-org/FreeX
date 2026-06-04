@@ -508,6 +508,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return DrawingShapeEffectPreset.SoftEdges;
         if (shapeProperties?.Element(drawingNs + "sp3d")?.Element(drawingNs + "bevelT") is not null)
             return DrawingShapeEffectPreset.Bevel;
+        if (shapeProperties?.Element(drawingNs + "scene3d")?.Element(drawingNs + "camera") is not null)
+            return DrawingShapeEffectPreset.ThreeDRotation;
 
         return DrawingShapeEffectPreset.None;
     }
