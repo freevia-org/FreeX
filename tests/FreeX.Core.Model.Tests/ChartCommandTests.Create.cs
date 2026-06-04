@@ -26,7 +26,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 4));
@@ -51,7 +51,7 @@ public sealed partial class ChartCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet2.Id, 1, 1),
             new CellAddress(sheet2.Id, 3, 2));
@@ -68,7 +68,7 @@ public sealed partial class ChartCommandTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         sheet.IsProtected = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = CreateChartRange(sheet);
 
         var outcome = new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
@@ -85,7 +85,7 @@ public sealed partial class ChartCommandTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = CreateChartRange(sheet);
 
         var outcome = new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
@@ -99,7 +99,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 2));
@@ -117,7 +117,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 3));
@@ -134,7 +134,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 3));
@@ -158,7 +158,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 3));
@@ -174,7 +174,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 2));
@@ -194,7 +194,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var headerOnlyRange = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 1, 2));
@@ -210,7 +210,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var incompleteBubbleRange = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 2));
@@ -228,7 +228,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 3));
@@ -247,7 +247,7 @@ public sealed partial class ChartCommandTests
         var wb = new Workbook("test");
         var source = wb.AddSheet("Sheet1");
         wb.AddSheet("Chart1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(source.Id, 1, 1),
             new CellAddress(source.Id, 4, 3));
@@ -275,7 +275,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -300,7 +300,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -319,7 +319,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -342,7 +342,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var originalRange = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 3));
@@ -378,7 +378,7 @@ public sealed partial class ChartCommandTests
         var wb = new Workbook("test");
         var sheet1 = wb.AddSheet("Sheet1");
         var sheet2 = wb.AddSheet("Sheet2");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var originalRange = new GridRange(
             new CellAddress(sheet1.Id, 1, 1),
             new CellAddress(sheet1.Id, 4, 3));
@@ -399,7 +399,7 @@ public sealed partial class ChartCommandTests
         var wb = new Workbook("test");
         var source = wb.AddSheet("Source");
         var target = wb.AddSheet("Dashboard");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(source.Id, 1, 1),
             new CellAddress(source.Id, 4, 3));
@@ -425,7 +425,7 @@ public sealed partial class ChartCommandTests
         var wb = new Workbook("test");
         var source = wb.AddSheet("Source");
         var target = wb.AddSheet("Dashboard");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = CreateChartRange(source);
         new AddChartCommand(source.Id, range, ChartType.Column, "Sales").Apply(ctx);
         var chart = source.Charts[0];
@@ -443,7 +443,7 @@ public sealed partial class ChartCommandTests
     {
         var wb = new Workbook("test");
         var source = wb.AddSheet("Source");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var range = new GridRange(
             new CellAddress(source.Id, 1, 1),
             new CellAddress(source.Id, 4, 3));
