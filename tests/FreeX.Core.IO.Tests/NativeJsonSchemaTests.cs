@@ -11,7 +11,7 @@ public sealed partial class NativeJsonSchemaTests
     [Fact]
     public void Save_ScansCellsWithoutCopyingUsedCellDictionary()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.Save.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.Save.cs"));
 
         source.Should().NotContain(
             "GetUsedCells()",

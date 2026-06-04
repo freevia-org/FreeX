@@ -36,8 +36,6 @@ public sealed partial class CsvFileAdapterTests
             .ToArray()
     };
 
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
-
     private static Workbook CreateDenseWorkbook(int rowCount, int colCount)
     {
         var workbook = new Workbook("Book1");
