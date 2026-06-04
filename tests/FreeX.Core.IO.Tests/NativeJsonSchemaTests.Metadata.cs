@@ -11,10 +11,10 @@ public sealed partial class NativeJsonSchemaTests
     [Fact]
     public void MetadataMapping_StaysInDedicatedPartial()
     {
-        var loadSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.cs"));
-        var saveSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.Save.cs"));
-        var mapperSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.MetadataMapping.cs"));
-        var workbookFileMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.WorkbookFileMetadata.cs"));
+        var loadSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.cs"));
+        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.Save.cs"));
+        var mapperSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.MetadataMapping.cs"));
+        var workbookFileMetadataSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.WorkbookFileMetadata.cs"));
 
         loadSource.Should().NotContain("private static WorkbookFileSharingModel? ToWorkbookFileSharing");
         saveSource.Should().NotContain("private static WorkbookFileSharingDto? FromWorkbookFileSharing");
@@ -26,11 +26,11 @@ public sealed partial class NativeJsonSchemaTests
         mapperSource.Should().NotContain("private static WorkbookSmartTagMetadataModel? ToWorkbookSmartTags");
         mapperSource.Should().NotContain("private static WorkbookFunctionGroupsModel? ToWorkbookFunctionGroups");
 
-        var workbookViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.WorkbookViewMetadata.cs"));
+        var workbookViewSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.WorkbookViewMetadata.cs"));
         workbookViewSource.Should().Contain("private static WorkbookFunctionGroupsModel? ToWorkbookFunctionGroups");
         workbookViewSource.Should().Contain("private static WorkbookAdditionalViewsDto? FromWorkbookAdditionalViews");
 
-        var smartTagSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.WorkbookSmartTags.cs"));
+        var smartTagSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "NativeJsonAdapter.WorkbookSmartTags.cs"));
         smartTagSource.Should().Contain("private static WorkbookSmartTagMetadataModel? ToWorkbookSmartTags");
         smartTagSource.Should().Contain("private static WorkbookSmartTagMetadataDto? FromWorkbookSmartTags");
     }

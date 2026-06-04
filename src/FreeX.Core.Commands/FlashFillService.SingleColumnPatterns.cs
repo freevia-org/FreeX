@@ -26,6 +26,12 @@ public static partial class FlashFillService
         Title
     }
 
+    private enum UsPhoneComponentKind
+    {
+        AreaCode,
+        LocalNumber
+    }
+
     private enum UsAddressComponentKind
     {
         Street,
@@ -1125,6 +1131,10 @@ public static partial class FlashFillService
         if (extensionPattern is not null)
             return extensionPattern;
 
+        var componentPattern = TryUsPhoneComponentExtraction(examples);
+        if (componentPattern is not null)
+            return componentPattern;
+
         string? mask = null;
         int? digitCount = null;
         var sawFormattedSource = false;
@@ -1168,6 +1178,95 @@ public static partial class FlashFillService
 
             return ApplyDigitMask(digits[^digitCount.Value..], mask);
         };
+    }
+
+    private static Func<string, string?>? TryUsPhoneComponentExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        UsPhoneComponentKind? kind = null;
+        string? mask = null;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (!TryNormalizeUsPhoneDigits(source, out var phoneDigits))
+                return null;
+
+            var expectedDigits = ExtractDigits(expected);
+            if (!TryGetUsPhoneComponentKind(phoneDigits, expectedDigits, out var currentKind))
+                return null;
+
+            var currentMask = CreateDigitMask(expected);
+            if (currentMask == expected || string.IsNullOrWhiteSpace(currentMask))
+                return null;
+
+            if (kind is null)
+            {
+                kind = currentKind;
+                mask = currentMask;
+            }
+            else if (kind.Value != currentKind || mask != currentMask)
+            {
+                return null;
+            }
+        }
+
+        if (kind is null || mask is null)
+            return null;
+
+        var componentKind = kind.Value;
+        var outputMask = mask;
+        return source =>
+        {
+            if (!TryNormalizeUsPhoneDigits(source, out var phoneDigits))
+                return null;
+
+            var componentDigits = componentKind == UsPhoneComponentKind.AreaCode
+                ? phoneDigits[..3]
+                : phoneDigits[3..];
+
+            return ApplyDigitMask(componentDigits, outputMask);
+        };
+    }
+
+    private static bool TryGetUsPhoneComponentKind(
+        string phoneDigits,
+        string expectedDigits,
+        out UsPhoneComponentKind kind)
+    {
+        if (expectedDigits.Length == 3 &&
+            expectedDigits.AsSpan().SequenceEqual(phoneDigits.AsSpan(0, 3)))
+        {
+            kind = UsPhoneComponentKind.AreaCode;
+            return true;
+        }
+
+        if (expectedDigits.Length == 7 &&
+            expectedDigits.AsSpan().SequenceEqual(phoneDigits.AsSpan(3, 7)))
+        {
+            kind = UsPhoneComponentKind.LocalNumber;
+            return true;
+        }
+
+        kind = default;
+        return false;
+    }
+
+    private static bool TryNormalizeUsPhoneDigits(string source, out string phoneDigits)
+    {
+        var digits = ExtractDigits(source);
+        if (digits.Length == 10)
+        {
+            phoneDigits = digits;
+            return true;
+        }
+
+        if (digits.Length == 11 && digits[0] == '1')
+        {
+            phoneDigits = digits[1..];
+            return true;
+        }
+
+        phoneDigits = string.Empty;
+        return false;
     }
 
     private static Func<string, string?>? TryPhoneExtensionExtraction(IReadOnlyList<(string Source, string Expected)> examples)

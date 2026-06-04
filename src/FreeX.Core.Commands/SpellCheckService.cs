@@ -993,6 +993,36 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "scedule"))
+                {
+                    suggestion = "schedule";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "shedule"))
+                {
+                    suggestion = "schedule";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "resouce"))
+                {
+                    suggestion = "resource";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "capcity"))
+                {
+                    suggestion = "capacity";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "thruput"))
+                {
+                    suggestion = "throughput";
+                    return true;
+                }
+
                 if (first == 'w' && EqualAsciiWordIgnoreCase(word, "workbok"))
                 {
                     suggestion = "workbook";
@@ -1124,6 +1154,18 @@ public static partial class SpellCheckService
                 if (first == 'w' && EqualAsciiWordIgnoreCase(word, "worsheet"))
                 {
                     suggestion = "worksheet";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "milstone"))
+                {
+                    suggestion = "milestone";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "resouces"))
+                {
+                    suggestion = "resources";
                     return true;
                 }
 
@@ -1365,6 +1407,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "deliverble"))
+                {
+                    suggestion = "deliverable";
+                    return true;
+                }
+
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "dependancy"))
+                {
+                    suggestion = "dependency";
+                    return true;
+                }
+
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "accomodate"))
                 {
                     suggestion = "accommodate";
@@ -1449,8 +1503,20 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'u' && EqualAsciiWordIgnoreCase(word, "utilzation"))
+                {
+                    suggestion = "utilization";
+                    return true;
+                }
+
                 break;
             case 11:
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "delivarable"))
+                {
+                    suggestion = "deliverable";
+                    return true;
+                }
+
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "caluclation"))
                 {
                     suggestion = "calculation";
@@ -1495,6 +1561,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "dependancies"))
+                {
+                    suggestion = "dependencies";
+                    return true;
+                }
+
                 if (first == 'm' && EqualAsciiWordIgnoreCase(word, "maintainance"))
                 {
                     suggestion = "maintenance";
@@ -1506,6 +1578,12 @@ public static partial class SpellCheckService
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "ammortization"))
                 {
                     suggestion = "amortization";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "prioritzation"))
+                {
+                    suggestion = "prioritization";
                     return true;
                 }
 

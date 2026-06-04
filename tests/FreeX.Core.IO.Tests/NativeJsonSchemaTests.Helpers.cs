@@ -17,5 +17,4 @@ public sealed partial class NativeJsonSchemaTests
         return stream;
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }

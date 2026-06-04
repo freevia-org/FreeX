@@ -40,6 +40,13 @@ public sealed partial class XlsxFileAdapter
         private const int FingerprintCellLimit = 25_000;
         private const int CellPatchBaselineLimit = 250_000;
         private const int CellPatchChangeLimit = 256;
+        private const string DrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+        private const string ChartRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+        private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
+        private const string ImageRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+        private const string PivotTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+        private const string PivotCacheDefinitionRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
+        private const string PivotCacheRecordsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
         private const string CommentsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
         private const string VmlDrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 
@@ -398,6 +405,9 @@ public sealed partial class XlsxFileAdapter
             patchedPackage.Write(Buffer, Offset, Count);
             using (var archive = new ZipArchive(patchedPackage, ZipArchiveMode.Update, leaveOpen: true))
             {
+                NormalizePatchCustomViews(archive, workbook);
+                NormalizePatchSharedStrings(archive);
+
                 var cellChangesByWorksheet = changes
                     .GroupBy(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
@@ -527,6 +537,85 @@ public sealed partial class XlsxFileAdapter
             return true;
         }
 
+        private static void NormalizePatchCustomViews(ZipArchive archive, Workbook workbook)
+        {
+            if (workbook.CustomViews.Count > 0)
+                return;
+
+            var changed = RemovePatchWorkbookCustomViews(archive);
+            changed |= RemovePatchWorksheetCustomViews(archive);
+            if (changed)
+                XlsxExcelCompatibilityNormalizer.RemoveCalcChain(archive);
+        }
+
+        private static bool RemovePatchWorkbookCustomViews(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return false;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var root = workbookXml.Root;
+            if (root is null)
+                return false;
+
+            var customWorkbookViews = root.Elements(workbookNs + "customWorkbookViews").ToList();
+            if (customWorkbookViews.Count == 0)
+                return false;
+
+            foreach (var customWorkbookView in customWorkbookViews)
+                customWorkbookView.Remove();
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return true;
+        }
+
+        private static bool RemovePatchWorksheetCustomViews(ZipArchive archive)
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var changed = false;
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                var customSheetViews = root.Elements(worksheetNs + "customSheetViews").ToList();
+                if (customSheetViews.Count == 0)
+                    continue;
+
+                foreach (var customSheetView in customSheetViews)
+                    customSheetView.Remove();
+
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static void NormalizePatchSharedStrings(ZipArchive archive)
+        {
+            var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
+            if (sharedStringsEntry is null)
+                return;
+
+            var sharedStringsXml = XlsxPackageXmlEditor.LoadXml(sharedStringsEntry);
+            var root = sharedStringsXml.Root;
+            if (root is null)
+                return;
+
+            var changed = false;
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var richTextFont in root.Descendants(workbookNs + "rFont"))
+                changed |= XlsxFontNameSanitizer.SanitizeValAttribute(richTextFont);
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
+        }
+
         private static bool AllowsCellPatchSaveForPackage(
             byte[] package,
             int offset,
@@ -564,6 +653,18 @@ public sealed partial class XlsxFileAdapter
         private static bool WorkbookRequiresFullSavePostProcessing(Workbook workbook, out string? blockReason)
         {
             blockReason = null;
+            if (WorkbookHasPatchUnsafePivotFeatures(workbook))
+            {
+                blockReason = "workbook_postprocessing_pivots";
+                return true;
+            }
+
+            if (WorkbookHasPatchUnsafeCustomViews(workbook))
+            {
+                blockReason = "workbook_postprocessing_custom_views";
+                return true;
+            }
+
             foreach (var sheet in workbook.Sheets)
             {
                 if (sheet.CustomProperties.Count > 0)
@@ -572,21 +673,13 @@ public sealed partial class XlsxFileAdapter
                     return true;
                 }
 
-                if (sheet.Charts.Count > 0)
+                if (sheet.Charts.Any(ChartRequiresFullSavePostProcessing))
                 {
                     blockReason = "workbook_postprocessing_charts";
                     return true;
                 }
 
-                if (sheet.PivotTables.Count > 0)
-                {
-                    blockReason = "workbook_postprocessing_pivots";
-                    return true;
-                }
-
-                if (sheet.Pictures.Count > 0 ||
-                    sheet.TextBoxes.Count > 0 ||
-                    sheet.DrawingShapes.Count > 0)
+                if (SheetHasPatchUnsafeDrawingObjects(sheet))
                 {
                     blockReason = "workbook_postprocessing_drawings";
                     return true;
@@ -595,6 +688,70 @@ public sealed partial class XlsxFileAdapter
                 if (sheet.Sparklines.Count > 0)
                 {
                     blockReason = "workbook_postprocessing_sparklines";
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool WorkbookHasPatchUnsafeCustomViews(Workbook workbook)
+        {
+            foreach (var customView in workbook.CustomViews)
+            {
+                if (customView is null)
+                    return true;
+
+                var normalizedId = XlsxCustomViewMapper.NormalizeId(customView.Id);
+                if (!string.IsNullOrWhiteSpace(customView.Id) &&
+                    !string.Equals(customView.Id, normalizedId, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool WorkbookHasPatchUnsafePivotFeatures(Workbook workbook)
+        {
+            if (workbook.Slicers.Count > 0 || workbook.Timelines.Count > 0)
+                return true;
+
+            foreach (var cache in workbook.PivotCaches)
+            {
+                if (cache.SourceType != PivotCacheSourceType.WorksheetRange ||
+                    string.IsNullOrWhiteSpace(cache.SourceSheetName) ||
+                    string.IsNullOrWhiteSpace(cache.SourceReference) ||
+                    !string.IsNullOrWhiteSpace(cache.SourceTableName) ||
+                    cache.ConnectionId is not null ||
+                    cache.IsOlap)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ChartRequiresFullSavePostProcessing(ChartModel chart) =>
+            chart.IsPivotChart ||
+            chart.ExternalData is not null ||
+            chart.UserShapes is not null ||
+            ChartTypeSupport.IsChartExFamily(chart.Type);
+
+        private static bool SheetHasPatchUnsafeDrawingObjects(Sheet sheet)
+        {
+            if (sheet.TextBoxes.Count > 0 || sheet.DrawingShapes.Count > 0)
+                return true;
+
+            foreach (var picture in sheet.Pictures)
+            {
+                if (!picture.IsSourceLoaded ||
+                    picture.Kind != PictureKind.Image ||
+                    picture.IsLinkedToSourceRange ||
+                    picture.LinkedSourceRange is not null)
+                {
                     return true;
                 }
             }
@@ -612,6 +769,8 @@ public sealed partial class XlsxFileAdapter
         {
             blockReason = null;
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
             if (workbookEntry is null)
             {
@@ -623,12 +782,6 @@ public sealed partial class XlsxFileAdapter
             if (workbookXml.Root is null)
             {
                 blockReason = "package_guard_workbook_xml";
-                return false;
-            }
-
-            if (workbookXml.Root.Element(workbookNs + "customWorkbookViews") is not null)
-            {
-                blockReason = "package_guard_custom_workbook_views";
                 return false;
             }
 
@@ -658,6 +811,9 @@ public sealed partial class XlsxFileAdapter
             }
 
             var allowedVmlDrawingPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var allowedDrawingPackagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var allowedChartPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var allowedPivotPackagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry))
             {
                 var worksheetPath = XlsxPackagePath.NormalizeZipPath(worksheetEntry.FullName.Replace('\\', '/'));
@@ -675,19 +831,24 @@ public sealed partial class XlsxFileAdapter
                     return false;
                 }
 
-                if (root.Element(workbookNs + "customSheetViews") is not null)
-                {
-                    blockReason = "package_guard_custom_sheet_views";
-                    return false;
-                }
-
                 if (root.Element(workbookNs + "customProperties") is not null)
                 {
                     blockReason = "package_guard_worksheet_custom_properties";
                     return false;
                 }
 
-                if (root.Element(workbookNs + "drawing") is not null)
+                var drawingElements = root.Elements(workbookNs + "drawing").ToList();
+                if (drawingElements.Count > 1 ||
+                    (drawingElements.Count == 1 &&
+                     !TryAddPatchSafeDrawingPackagePaths(
+                         archive,
+                         worksheetPath,
+                         drawingElements[0],
+                         sheet,
+                         allowedDrawingPackagePaths,
+                         allowedChartPaths,
+                         relNs,
+                         packageRelNs)))
                 {
                     blockReason = "package_guard_drawing";
                     return false;
@@ -708,6 +869,25 @@ public sealed partial class XlsxFileAdapter
                 if (HasUnsupportedWorksheetTableParts(archive, worksheetPath, root, workbookNs, sheet))
                 {
                     blockReason = "package_guard_table_parts";
+                    return false;
+                }
+
+                if (sheet.PivotTables.Count > 0 &&
+                    !HasCanonicalWorksheetPartPath(workbook, sheet, worksheetPath))
+                {
+                    blockReason = "package_guard_pivot_worksheet_path";
+                    return false;
+                }
+
+                if (!TryAddPatchSafePivotPackagePaths(
+                        archive,
+                        worksheetPath,
+                        sheet,
+                        workbook,
+                        allowedPivotPackagePaths,
+                        packageRelNs))
+                {
+                    blockReason = "package_guard_pivot_parts";
                     return false;
                 }
 
@@ -732,10 +912,19 @@ public sealed partial class XlsxFileAdapter
             foreach (var entry in archive.Entries)
             {
                 var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
-                if (TryGetPatchUnsafePackagePartReason(path, allowedVmlDrawingPaths, out blockReason))
+                if (TryGetPatchUnsafePackagePartReason(
+                        path,
+                        allowedVmlDrawingPaths,
+                        allowedDrawingPackagePaths,
+                        allowedChartPaths,
+                        allowedPivotPackagePaths,
+                        out blockReason))
+                {
                     return false;
+                }
 
                 if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
+                    !allowedPivotPackagePaths.Contains(path) &&
                     !IsValidRelationshipPart(entry))
                 {
                     blockReason = "package_guard_relationships";
@@ -743,23 +932,39 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
-            if (HasUnsupportedRichSharedStringFonts(archive, workbookNs))
+            return true;
+        }
+
+        private static bool HasCanonicalWorksheetPartPath(Workbook workbook, Sheet sheet, string worksheetPath)
+        {
+            for (var index = 0; index < workbook.Sheets.Count; index++)
             {
-                blockReason = "package_guard_rich_shared_string_fonts";
-                return false;
+                if (workbook.Sheets[index].Id != sheet.Id)
+                    continue;
+
+                return string.Equals(
+                    worksheetPath,
+                    $"xl/worksheets/sheet{(index + 1).ToString(CultureInfo.InvariantCulture)}.xml",
+                    StringComparison.OrdinalIgnoreCase);
             }
 
-            return true;
+            return false;
         }
 
         private static bool IsPatchUnsafePackagePart(
             string path,
-            IReadOnlySet<string> allowedVmlDrawingPaths) =>
+            IReadOnlySet<string> allowedVmlDrawingPaths,
+            IReadOnlySet<string> allowedDrawingPackagePaths,
+            IReadOnlySet<string> allowedChartPaths,
+            IReadOnlySet<string> allowedPivotPackagePaths) =>
             (path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) &&
-             !allowedVmlDrawingPaths.Contains(path)) ||
-            path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
+             !allowedVmlDrawingPaths.Contains(path) &&
+             !allowedDrawingPackagePaths.Contains(path)) ||
+            (path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) &&
+             !allowedChartPaths.Contains(path)) ||
+            ((path.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) ||
+              path.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase)) &&
+             !allowedPivotPackagePaths.Contains(path)) ||
             path.StartsWith("xl/queryTables/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/revisionHeaders/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase);
@@ -767,24 +972,30 @@ public sealed partial class XlsxFileAdapter
         private static bool TryGetPatchUnsafePackagePartReason(
             string path,
             IReadOnlySet<string> allowedVmlDrawingPaths,
+            IReadOnlySet<string> allowedDrawingPackagePaths,
+            IReadOnlySet<string> allowedChartPaths,
+            IReadOnlySet<string> allowedPivotPackagePaths,
             out string? blockReason)
         {
             blockReason = null;
             if (path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) &&
-                !allowedVmlDrawingPaths.Contains(path))
+                !allowedVmlDrawingPaths.Contains(path) &&
+                !allowedDrawingPackagePaths.Contains(path))
             {
                 blockReason = "package_guard_drawing_parts";
                 return true;
             }
 
-            if (path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase))
+            if (path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) &&
+                !allowedChartPaths.Contains(path))
             {
                 blockReason = "package_guard_chart_parts";
                 return true;
             }
 
-            if (path.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) ||
-                path.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
+            if ((path.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) ||
+                 path.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase)) &&
+                !allowedPivotPackagePaths.Contains(path))
             {
                 blockReason = "package_guard_pivot_parts";
                 return true;
@@ -804,6 +1015,420 @@ public sealed partial class XlsxFileAdapter
             }
 
             return false;
+        }
+
+        private static bool TryAddPatchSafeDrawingPackagePaths(
+            ZipArchive archive,
+            string worksheetPath,
+            XElement drawing,
+            Sheet sheet,
+            HashSet<string> allowedDrawingPackagePaths,
+            HashSet<string> allowedChartPaths,
+            XNamespace relNs,
+            XNamespace packageRelNs)
+        {
+            var relationshipId = drawing.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(relationshipId))
+                return false;
+
+            var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (relationshipsEntry is null)
+                return false;
+
+            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            var relationshipsRoot = relationshipsXml.Root;
+            if (relationshipsRoot is null)
+                return false;
+
+            var drawingRelationship = relationshipsRoot
+                .Elements(packageRelNs + "Relationship")
+                .SingleOrDefault(candidate =>
+                    string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                    string.Equals(candidate.Attribute("Type")?.Value, DrawingRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                    candidate.Attribute("TargetMode") is null);
+            var drawingTarget = drawingRelationship?.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(drawingTarget))
+                return false;
+
+            var drawingPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, drawingTarget);
+            if (!drawingPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+                drawingPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                !drawingPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var drawingEntry = archive.GetEntry(drawingPath);
+            if (drawingEntry is null)
+                return false;
+
+            var drawingXml = XlsxPackageXmlEditor.LoadXml(drawingEntry);
+            var drawingRoot = drawingXml.Root;
+            if (drawingRoot is null)
+                return false;
+
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+            if (drawingRoot.Name != spreadsheetDrawingNs + "wsDr" ||
+                drawingXml.Descendants(spreadsheetDrawingNs + "sp").Any() ||
+                drawingXml.Descendants(spreadsheetDrawingNs + "cxnSp").Any() ||
+                drawingXml.Descendants(spreadsheetDrawingNs + "grpSp").Any() ||
+                drawingXml.Descendants(chartExNs + "chart").Any())
+            {
+                return false;
+            }
+
+            var chartElements = drawingXml.Descendants(chartNs + "chart").ToList();
+            var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
+            if (chartElements.Count != sheet.Charts.Count ||
+                pictureElements.Count != sheet.Pictures.Count ||
+                sheet.Pictures.Any(picture => !IsPatchSafeSourcePicture(picture)))
+            {
+                return false;
+            }
+
+            var anchorElements = drawingRoot
+                .Elements()
+                .Where(element => element.Name == spreadsheetDrawingNs + "oneCellAnchor" ||
+                                  element.Name == spreadsheetDrawingNs + "twoCellAnchor" ||
+                                  element.Name == spreadsheetDrawingNs + "absoluteAnchor")
+                .ToList();
+            if (drawingRoot.Elements().Any(element =>
+                    element.Name.Namespace == spreadsheetDrawingNs &&
+                    element.Name.LocalName.EndsWith("Anchor", StringComparison.Ordinal) &&
+                    !anchorElements.Contains(element)))
+            {
+                return false;
+            }
+
+            foreach (var anchor in anchorElements)
+            {
+                var chartCount = anchor.Descendants(chartNs + "chart").Count();
+                var pictureCount = anchor.Descendants(spreadsheetDrawingNs + "pic").Count();
+                if (chartCount + pictureCount == 0 ||
+                    anchor.Descendants(spreadsheetDrawingNs + "graphicFrame").Count() != chartCount)
+                {
+                    return false;
+                }
+            }
+
+            var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
+            var drawingRelsEntry = archive.GetEntry(drawingRelsPath);
+            if ((chartElements.Count > 0 || pictureElements.Count > 0) && drawingRelsEntry is null)
+                return false;
+
+            var referencedRelationshipIds = new HashSet<string>(StringComparer.Ordinal);
+            var relationshipElements = Array.Empty<XElement>();
+            if (drawingRelsEntry is not null)
+            {
+                var drawingRelsXml = XlsxPackageXmlEditor.LoadXml(drawingRelsEntry);
+                if (drawingRelsXml.Root is null)
+                    return false;
+
+                relationshipElements = drawingRelsXml.Root
+                    .Elements(packageRelNs + "Relationship")
+                    .ToArray();
+            }
+
+            foreach (var chartElement in chartElements)
+            {
+                var chartRelId = chartElement.Attribute(relNs + "id")?.Value;
+                if (string.IsNullOrWhiteSpace(chartRelId) ||
+                    !referencedRelationshipIds.Add(chartRelId) ||
+                    !TryGetRelationship(
+                        relationshipElements,
+                        chartRelId,
+                        ChartRelationshipType,
+                        out var chartTarget))
+                {
+                    return false;
+                }
+
+                var chartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, chartTarget);
+                if (!chartPath.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
+                    chartPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                    !chartPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                    archive.GetEntry(chartPath) is null ||
+                    archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(chartPath)) is not null)
+                {
+                    return false;
+                }
+
+                allowedChartPaths.Add(chartPath);
+            }
+
+            foreach (var pictureElement in pictureElements)
+            {
+                var imageRelId = pictureElement
+                    .Descendants(drawingNs + "blip")
+                    .Select(blip => blip.Attribute(relNs + "embed")?.Value)
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+                if (string.IsNullOrWhiteSpace(imageRelId) ||
+                    pictureElement.Descendants(drawingNs + "blip").Any(blip => blip.Attribute(relNs + "link") is not null) ||
+                    !referencedRelationshipIds.Add(imageRelId) ||
+                    !TryGetRelationship(
+                        relationshipElements,
+                        imageRelId,
+                        ImageRelationshipType,
+                        out var imageTarget))
+                {
+                    return false;
+                }
+
+                var imagePath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, imageTarget);
+                if (!imagePath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase) ||
+                    archive.GetEntry(imagePath) is null)
+                {
+                    return false;
+                }
+            }
+
+            if (relationshipElements.Any(element =>
+                    element.Attribute("Id")?.Value is not { } id ||
+                    !referencedRelationshipIds.Contains(id) ||
+                    element.Attribute("TargetMode") is not null))
+            {
+                return false;
+            }
+
+            allowedDrawingPackagePaths.Add(drawingPath);
+            allowedDrawingPackagePaths.Add(drawingRelsPath);
+            return true;
+        }
+
+        private static bool TryAddPatchSafePivotPackagePaths(
+            ZipArchive archive,
+            string worksheetPath,
+            Sheet sheet,
+            Workbook workbook,
+            HashSet<string> allowedPivotPackagePaths,
+            XNamespace packageRelNs)
+        {
+            var pivotTablePaths = ReadWorksheetPivotTableTargets(archive, worksheetPath, packageRelNs);
+            if (pivotTablePaths.Count == 0)
+                return sheet.PivotTables.Count == 0;
+
+            if (pivotTablePaths.Count != sheet.PivotTables.Count)
+                return false;
+
+            var pivotModelsByPath = sheet.PivotTables
+                .Where(pivot => !string.IsNullOrWhiteSpace(pivot.PackagePart))
+                .ToDictionary(
+                    pivot => NormalizePivotPackagePart(pivot.PackagePart),
+                    pivot => pivot,
+                    StringComparer.OrdinalIgnoreCase);
+            if (pivotModelsByPath.Count != sheet.PivotTables.Count)
+                return false;
+
+            var cacheModelsByPath = workbook.PivotCaches
+                .Where(cache => !string.IsNullOrWhiteSpace(cache.PackagePart))
+                .ToDictionary(
+                    cache => NormalizePivotPackagePart(cache.PackagePart),
+                    cache => cache,
+                    StringComparer.OrdinalIgnoreCase);
+            if (cacheModelsByPath.Count != workbook.PivotCaches.Count)
+                return false;
+
+            foreach (var pivotTablePath in pivotTablePaths)
+            {
+                if (!pivotTablePath.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) ||
+                    pivotTablePath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                    !pivotTablePath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                    !pivotModelsByPath.ContainsKey(pivotTablePath) ||
+                    archive.GetEntry(pivotTablePath) is null)
+                {
+                    return false;
+                }
+
+                var pivotRelsPath = XlsxPackagePath.GetRelationshipPartPath(pivotTablePath);
+                var pivotRelsEntry = archive.GetEntry(pivotRelsPath);
+                if (pivotRelsEntry is null)
+                    return false;
+
+                var pivotRelsXml = XlsxPackageXmlEditor.LoadXml(pivotRelsEntry);
+                var relationships = pivotRelsXml.Root?
+                    .Elements(packageRelNs + "Relationship")
+                    .ToArray() ?? [];
+                var cacheRelationships = relationships
+                    .Where(relationship =>
+                        string.Equals(
+                            relationship.Attribute("Type")?.Value,
+                            PivotCacheDefinitionRelationshipType,
+                            StringComparison.OrdinalIgnoreCase) &&
+                        relationship.Attribute("TargetMode") is null)
+                    .ToArray();
+                if (cacheRelationships.Length != 1 || relationships.Length != 1)
+                    return false;
+
+                var cacheTarget = cacheRelationships[0].Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(cacheTarget))
+                    return false;
+
+                var cachePath = XlsxPackagePath.ResolveRelationshipTarget(pivotTablePath, cacheTarget);
+                if (!cachePath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
+                    cachePath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                    !cachePath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                    !cacheModelsByPath.TryGetValue(cachePath, out var cacheModel) ||
+                    !TryValidatePatchSafePivotCacheDefinition(
+                        archive,
+                        cachePath,
+                        cacheModel,
+                        allowedPivotPackagePaths,
+                        packageRelNs))
+                {
+                    return false;
+                }
+
+                allowedPivotPackagePaths.Add(pivotTablePath);
+                allowedPivotPackagePaths.Add(pivotRelsPath);
+                allowedPivotPackagePaths.Add(cachePath);
+                var cacheRelsPath = XlsxPackagePath.GetRelationshipPartPath(cachePath);
+                if (archive.GetEntry(cacheRelsPath) is not null)
+                    allowedPivotPackagePaths.Add(cacheRelsPath);
+            }
+
+            return true;
+        }
+
+        private static IReadOnlyList<string> ReadWorksheetPivotTableTargets(
+            ZipArchive archive,
+            string worksheetPath,
+            XNamespace packageRelNs)
+        {
+            var relsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (relsEntry is null)
+                return [];
+
+            var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+            var targets = new List<string>();
+            foreach (var relationship in relsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+            {
+                if (!string.Equals(
+                        relationship.Attribute("Type")?.Value,
+                        PivotTableRelationshipType,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    relationship.Attribute("TargetMode") is not null)
+                {
+                    continue;
+                }
+
+                var target = relationship.Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(target))
+                    return [];
+
+                targets.Add(XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target));
+            }
+
+            return targets;
+        }
+
+        private static bool TryValidatePatchSafePivotCacheDefinition(
+            ZipArchive archive,
+            string cachePath,
+            PivotCacheModel cacheModel,
+            HashSet<string> allowedPivotPackagePaths,
+            XNamespace packageRelNs)
+        {
+            if (cacheModel.SourceType != PivotCacheSourceType.WorksheetRange ||
+                string.IsNullOrWhiteSpace(cacheModel.SourceSheetName) ||
+                string.IsNullOrWhiteSpace(cacheModel.SourceReference) ||
+                !string.IsNullOrWhiteSpace(cacheModel.SourceTableName) ||
+                cacheModel.ConnectionId is not null ||
+                cacheModel.IsOlap)
+            {
+                return false;
+            }
+
+            var cacheEntry = archive.GetEntry(cachePath);
+            if (cacheEntry is null)
+                return false;
+
+            var cacheXml = XlsxPackageXmlEditor.LoadXml(cacheEntry);
+            var root = cacheXml.Root;
+            if (root is null)
+                return false;
+
+            var workbookNs = root.Name.Namespace;
+            if (root.Name != workbookNs + "pivotCacheDefinition")
+                return false;
+
+            var cacheSource = root.Element(workbookNs + "cacheSource");
+            var worksheetSource = cacheSource?.Element(workbookNs + "worksheetSource");
+            if (cacheSource is null ||
+                worksheetSource is null ||
+                !string.Equals(cacheSource.Attribute("type")?.Value, "worksheet", StringComparison.OrdinalIgnoreCase) ||
+                cacheSource.Attribute("connectionId") is not null ||
+                worksheetSource.Attribute("name") is not null ||
+                !string.Equals(worksheetSource.Attribute("sheet")?.Value, cacheModel.SourceSheetName, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(worksheetSource.Attribute("ref")?.Value, cacheModel.SourceReference, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var cacheRelsPath = XlsxPackagePath.GetRelationshipPartPath(cachePath);
+            var cacheRelsEntry = archive.GetEntry(cacheRelsPath);
+            if (cacheRelsEntry is null)
+                return true;
+
+            var cacheRelsXml = XlsxPackageXmlEditor.LoadXml(cacheRelsEntry);
+            foreach (var relationship in cacheRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+            {
+                var relationshipType = relationship.Attribute("Type")?.Value;
+                if (string.Equals(relationshipType, PivotCacheRecordsRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                    relationship.Attribute("TargetMode") is null)
+                {
+                    var target = relationship.Attribute("Target")?.Value;
+                    if (string.IsNullOrWhiteSpace(target))
+                        return false;
+
+                    var recordsPath = XlsxPackagePath.ResolveRelationshipTarget(cachePath, target);
+                    if (!recordsPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
+                        recordsPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                        !recordsPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                        archive.GetEntry(recordsPath) is null)
+                    {
+                        return false;
+                    }
+
+                    allowedPivotPackagePaths.Add(recordsPath);
+                    continue;
+                }
+
+                if (string.Equals(relationshipType, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private static string NormalizePivotPackagePart(string packagePart) =>
+            XlsxPackagePath.NormalizeZipPath(packagePart.TrimStart('/').Replace('\\', '/'));
+
+        private static bool IsPatchSafeSourcePicture(PictureModel picture) =>
+            picture.IsSourceLoaded &&
+            picture.Kind == PictureKind.Image &&
+            !picture.IsLinkedToSourceRange &&
+            picture.LinkedSourceRange is null;
+
+        private static bool TryGetRelationship(
+            IReadOnlyList<XElement> relationships,
+            string relationshipId,
+            string relationshipType,
+            out string target)
+        {
+            var relationship = relationships.SingleOrDefault(candidate =>
+                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
+                candidate.Attribute("TargetMode") is null);
+            target = relationship?.Attribute("Target")?.Value ?? "";
+            return !string.IsNullOrWhiteSpace(target);
         }
 
         private static bool TryAddPatchSafeLegacyNoteVmlDrawingPath(
@@ -1173,15 +1798,21 @@ public sealed partial class XlsxFileAdapter
     {
         private readonly IReadOnlyList<XlsxWorksheetCellPatchBaseline> _worksheets;
         private readonly IReadOnlyDictionary<StyleId, string?> _sourceStyleIndexesByStyleId;
+        private readonly XlsxChartSourceRangeIndex _chartSourceRanges;
+        private readonly XlsxPivotSourceRangeIndex _pivotSourceRanges;
         private readonly string _modelFingerprint;
 
         private XlsxCellPatchBaseline(
             IReadOnlyList<XlsxWorksheetCellPatchBaseline> worksheets,
             IReadOnlyDictionary<StyleId, string?> sourceStyleIndexesByStyleId,
+            XlsxChartSourceRangeIndex chartSourceRanges,
+            XlsxPivotSourceRangeIndex pivotSourceRanges,
             string modelFingerprint)
         {
             _worksheets = worksheets;
             _sourceStyleIndexesByStyleId = sourceStyleIndexesByStyleId;
+            _chartSourceRanges = chartSourceRanges;
+            _pivotSourceRanges = pivotSourceRanges;
             _modelFingerprint = modelFingerprint;
         }
 
@@ -1223,6 +1854,26 @@ public sealed partial class XlsxFileAdapter
                 if (worksheetPathMap is null)
                 {
                     blockReason = "baseline_worksheet_path_map";
+                    return null;
+                }
+
+                var chartSourceRanges = XlsxChartSourceRangeIndex.TryCreate(
+                    archive,
+                    workbook,
+                    worksheetPathMap,
+                    out var chartSourceRangeBlockReason);
+                if (chartSourceRanges is null)
+                {
+                    blockReason = chartSourceRangeBlockReason ?? "baseline_chart_source_ranges";
+                    return null;
+                }
+
+                var pivotSourceRanges = XlsxPivotSourceRangeIndex.TryCreate(
+                    workbook,
+                    out var pivotSourceRangeBlockReason);
+                if (pivotSourceRanges is null)
+                {
+                    blockReason = pivotSourceRangeBlockReason ?? "baseline_pivot_source_ranges";
                     return null;
                 }
 
@@ -1301,6 +1952,8 @@ public sealed partial class XlsxFileAdapter
                 return new XlsxCellPatchBaseline(
                     worksheets,
                     sourceStyleIndexesByStyleId,
+                    chartSourceRanges,
+                    pivotSourceRanges,
                     CreateSourceModelFingerprint(workbook));
             }
             catch
@@ -1335,6 +1988,12 @@ public sealed partial class XlsxFileAdapter
             blockReason = null;
             if (workbook.SheetCount != _worksheets.Count)
                 return Fail("change_sheet_count", out blockReason);
+
+            if (!_chartSourceRanges.Matches(workbook))
+                return Fail("change_chart_source_metadata", out blockReason);
+
+            if (!_pivotSourceRanges.Matches(workbook))
+                return Fail("change_pivot_source_metadata", out blockReason);
 
             for (var sheetIndex = 0; sheetIndex < _worksheets.Count; sheetIndex++)
             {
@@ -1442,6 +2101,12 @@ public sealed partial class XlsxFileAdapter
                 {
                     if (!baseline.Cells.TryGetValue((row, col), out var original))
                     {
+                        if (_chartSourceRanges.Contains(baseline.SheetId, row, col))
+                            return Fail("change_chart_source_cell", out blockReason);
+
+                        if (_pivotSourceRanges.Contains(baseline.SheetId, row, col))
+                            return Fail("change_pivot_source_cell", out blockReason);
+
                         if (baseline.Tables.HasTables)
                             return Fail("change_table_inserted_cell", out blockReason);
 
@@ -1490,6 +2155,12 @@ public sealed partial class XlsxFileAdapter
                     var valueChanged = !Equals(cell.Value, original.Value);
                     if (!formulaChanged && !valueChanged && !styleChanged)
                         continue;
+
+                    if (_chartSourceRanges.Contains(baseline.SheetId, row, col))
+                        return Fail("change_chart_source_cell", out blockReason);
+
+                    if (_pivotSourceRanges.Contains(baseline.SheetId, row, col))
+                        return Fail("change_pivot_source_cell", out blockReason);
 
                     if (baseline.Tables.HasTables &&
                         (!valueChanged ||
@@ -1558,6 +2229,12 @@ public sealed partial class XlsxFileAdapter
 
                     if (baseline.Tables.HasTables)
                         return Fail("change_table_deleted_cell", out blockReason);
+
+                    if (_chartSourceRanges.Contains(baseline.SheetId, row, col))
+                        return Fail("change_chart_source_cell", out blockReason);
+
+                    if (_pivotSourceRanges.Contains(baseline.SheetId, row, col))
+                        return Fail("change_pivot_source_cell", out blockReason);
 
                     changes.Add(new XlsxCellValuePatch(
                         XlsxCellValuePatchKind.DeletedCell,
@@ -2186,7 +2863,12 @@ public sealed partial class XlsxFileAdapter
                 hyperlinkChanges.Count == 0 &&
                 commentChanges.Count == 0)
             {
-                return new XlsxCellPatchBaseline(_worksheets, _sourceStyleIndexesByStyleId, modelFingerprint);
+                return new XlsxCellPatchBaseline(
+                    _worksheets,
+                    _sourceStyleIndexesByStyleId,
+                    _chartSourceRanges,
+                    _pivotSourceRanges,
+                    modelFingerprint);
             }
 
             var changesBySheet = changes
@@ -2272,7 +2954,12 @@ public sealed partial class XlsxFileAdapter
                 });
             }
 
-            return new XlsxCellPatchBaseline(worksheets, _sourceStyleIndexesByStyleId, modelFingerprint);
+            return new XlsxCellPatchBaseline(
+                worksheets,
+                _sourceStyleIndexesByStyleId,
+                _chartSourceRanges,
+                _pivotSourceRanges,
+                modelFingerprint);
         }
 
         private bool ModelMatchesWithOriginalValues(
@@ -3790,6 +4477,476 @@ public sealed partial class XlsxFileAdapter
             }
         }
     }
+
+    private sealed class XlsxChartSourceRangeIndex
+    {
+        private const string DrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+        private const string ChartRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+
+        private readonly IReadOnlyList<XlsxChartSourceSheetBaseline> _sheets;
+        private readonly IReadOnlyDictionary<SheetId, IReadOnlyList<GridRange>> _rangesBySheet;
+
+        private XlsxChartSourceRangeIndex(
+            IReadOnlyList<XlsxChartSourceSheetBaseline> sheets,
+            IReadOnlyDictionary<SheetId, IReadOnlyList<GridRange>> rangesBySheet)
+        {
+            _sheets = sheets;
+            _rangesBySheet = rangesBySheet;
+        }
+
+        public static XlsxChartSourceRangeIndex? TryCreate(
+            ZipArchive archive,
+            Workbook workbook,
+            XlsxWorkbookWorksheetPathMap worksheetPathMap,
+            out string? blockReason)
+        {
+            blockReason = null;
+            try
+            {
+                var sheetIdsByName = workbook.Sheets.ToDictionary(
+                    sheet => sheet.Name,
+                    sheet => sheet.Id,
+                    StringComparer.OrdinalIgnoreCase);
+                var rangesBySheet = new Dictionary<SheetId, List<GridRange>>();
+                var sheetBaselines = new List<XlsxChartSourceSheetBaseline>(workbook.SheetCount);
+                foreach (var sheet in workbook.Sheets)
+                {
+                    if (sheet.Charts.Any(IsPatchUnsafeChartModel))
+                    {
+                        blockReason = "baseline_chart_source_model";
+                        return null;
+                    }
+
+                    if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath) ||
+                        !TryReadWorksheetChartPaths(archive, worksheetPath, out var chartPaths))
+                    {
+                        blockReason = "baseline_chart_source_graph";
+                        return null;
+                    }
+
+                    if (chartPaths.Count != sheet.Charts.Count)
+                    {
+                        blockReason = "baseline_chart_source_count";
+                        return null;
+                    }
+
+                    sheetBaselines.Add(new XlsxChartSourceSheetBaseline(sheet.Id, sheet.Name, sheet.Charts.Count));
+                    foreach (var chartPath in chartPaths)
+                    {
+                        if (!TryReadChartSourceRanges(
+                                archive,
+                                chartPath,
+                                sheetIdsByName,
+                                out var chartRanges))
+                        {
+                            blockReason = "baseline_chart_source_formula";
+                            return null;
+                        }
+
+                        foreach (var range in chartRanges)
+                        {
+                            if (!rangesBySheet.TryGetValue(range.Start.Sheet, out var ranges))
+                            {
+                                ranges = [];
+                                rangesBySheet[range.Start.Sheet] = ranges;
+                            }
+
+                            ranges.Add(range);
+                        }
+                    }
+                }
+
+                return new XlsxChartSourceRangeIndex(
+                    sheetBaselines,
+                    rangesBySheet.ToDictionary(
+                        pair => pair.Key,
+                        pair => (IReadOnlyList<GridRange>)pair.Value.ToArray()));
+            }
+            catch
+            {
+                blockReason = "baseline_chart_source_exception";
+                return null;
+            }
+        }
+
+        public bool Matches(Workbook workbook)
+        {
+            if (workbook.SheetCount != _sheets.Count)
+                return false;
+
+            for (var i = 0; i < _sheets.Count; i++)
+            {
+                var baseline = _sheets[i];
+                var sheet = workbook.Sheets[i];
+                if (sheet.Id != baseline.SheetId ||
+                    !string.Equals(sheet.Name, baseline.SheetName, StringComparison.Ordinal) ||
+                    sheet.Charts.Count != baseline.ChartCount ||
+                    sheet.Charts.Any(IsPatchUnsafeChartModel))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public bool Contains(SheetId sheetId, uint row, uint col)
+        {
+            if (!_rangesBySheet.TryGetValue(sheetId, out var ranges))
+                return false;
+
+            var address = new CellAddress(sheetId, row, col);
+            foreach (var range in ranges)
+            {
+                if (range.Contains(address))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsPatchUnsafeChartModel(ChartModel chart) =>
+            chart.IsPivotChart ||
+            chart.ExternalData is not null ||
+            chart.UserShapes is not null ||
+            ChartTypeSupport.IsChartExFamily(chart.Type);
+
+        private static bool TryReadWorksheetChartPaths(
+            ZipArchive archive,
+            string worksheetPath,
+            out IReadOnlyList<string> chartPaths)
+        {
+            chartPaths = [];
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                return false;
+
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var drawingElements = worksheetXml.Root?.Elements(worksheetNs + "drawing").ToList() ?? [];
+            if (drawingElements.Count == 0)
+                return true;
+            if (drawingElements.Count > 1)
+                return false;
+
+            var drawingRelId = drawingElements[0].Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(drawingRelId))
+                return false;
+
+            var worksheetRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (worksheetRelsEntry is null)
+                return false;
+
+            var worksheetRelsXml = XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry);
+            if (!TryGetRelationshipTarget(
+                    worksheetRelsXml.Root?.Elements(packageRelNs + "Relationship").ToArray() ?? [],
+                    drawingRelId,
+                    DrawingRelationshipType,
+                    out var drawingTarget))
+            {
+                return false;
+            }
+
+            var drawingPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, drawingTarget);
+            var drawingEntry = archive.GetEntry(drawingPath);
+            if (drawingEntry is null)
+                return false;
+
+            var drawingXml = XlsxPackageXmlEditor.LoadXml(drawingEntry);
+            if (drawingXml.Descendants(chartExNs + "chart").Any())
+                return false;
+
+            var chartElements = drawingXml.Descendants(chartNs + "chart").ToArray();
+            if (chartElements.Length == 0)
+                return true;
+
+            var drawingRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(drawingPath));
+            if (drawingRelsEntry is null)
+                return false;
+
+            var drawingRelsXml = XlsxPackageXmlEditor.LoadXml(drawingRelsEntry);
+            var relationships = drawingRelsXml.Root?.Elements(packageRelNs + "Relationship").ToArray() ?? [];
+            var paths = new List<string>(chartElements.Length);
+            foreach (var chartElement in chartElements)
+            {
+                var chartRelId = chartElement.Attribute(relNs + "id")?.Value;
+                if (string.IsNullOrWhiteSpace(chartRelId) ||
+                    !TryGetRelationshipTarget(relationships, chartRelId, ChartRelationshipType, out var chartTarget))
+                {
+                    return false;
+                }
+
+                paths.Add(XlsxPackagePath.ResolveRelationshipTarget(drawingPath, chartTarget));
+            }
+
+            chartPaths = paths;
+            return true;
+        }
+
+        private static bool TryReadChartSourceRanges(
+            ZipArchive archive,
+            string chartPath,
+            IReadOnlyDictionary<string, SheetId> sheetIdsByName,
+            out IReadOnlyList<GridRange> ranges)
+        {
+            ranges = [];
+            var chartEntry = archive.GetEntry(chartPath);
+            if (chartEntry is null)
+                return false;
+
+            var chartXml = XlsxPackageXmlEditor.LoadXml(chartEntry);
+            var formulas = chartXml
+                .Descendants()
+                .Where(element => string.Equals(element.Name.LocalName, "f", StringComparison.Ordinal))
+                .Select(element => element.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .ToArray();
+            if (formulas.Length == 0)
+                return false;
+
+            var parsedRanges = new List<GridRange>(formulas.Length);
+            foreach (var formula in formulas)
+            {
+                if (!TryParseSimpleChartFormulaRange(formula, sheetIdsByName, out var range))
+                    return false;
+
+                parsedRanges.Add(range);
+            }
+
+            ranges = parsedRanges;
+            return true;
+        }
+
+        private static bool TryParseSimpleChartFormulaRange(
+            string formula,
+            IReadOnlyDictionary<string, SheetId> sheetIdsByName,
+            out GridRange range)
+        {
+            range = default;
+            var text = formula.Trim();
+            if (text.StartsWith("=", StringComparison.Ordinal))
+                text = text[1..].Trim();
+
+            if (text.Length == 0 ||
+                text.Contains('[', StringComparison.Ordinal) ||
+                text.Contains(']', StringComparison.Ordinal) ||
+                text.Contains(',', StringComparison.Ordinal) ||
+                text.Contains(';', StringComparison.Ordinal) ||
+                text.Contains('(', StringComparison.Ordinal) ||
+                text.Contains(')', StringComparison.Ordinal) ||
+                text.Contains('#', StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var bang = text.LastIndexOf('!');
+            if (bang <= 0 || bang == text.Length - 1)
+                return false;
+
+            var sheetNameToken = text[..bang].Trim();
+            if (!TryUnquoteSheetName(sheetNameToken, out var sheetName) ||
+                !sheetIdsByName.TryGetValue(sheetName, out var sheetId))
+            {
+                return false;
+            }
+
+            var referenceText = text[(bang + 1)..].Replace("$", "", StringComparison.Ordinal).Trim();
+            if (referenceText.Length == 0 || referenceText.Any(char.IsWhiteSpace))
+                return false;
+
+            var parts = referenceText.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length == 1)
+            {
+                if (!CellAddress.TryParse(parts[0], sheetId, out var address))
+                    return false;
+
+                range = new GridRange(address, address);
+                return true;
+            }
+
+            if (parts.Length != 2 ||
+                !CellAddress.TryParse(parts[0], sheetId, out var start) ||
+                !CellAddress.TryParse(parts[1], sheetId, out var end))
+            {
+                return false;
+            }
+
+            range = new GridRange(start, end);
+            return true;
+        }
+
+        private static bool TryUnquoteSheetName(string token, out string sheetName)
+        {
+            sheetName = "";
+            if (string.IsNullOrWhiteSpace(token) || token.Contains(':', StringComparison.Ordinal))
+                return false;
+
+            if (token.StartsWith("'", StringComparison.Ordinal))
+            {
+                if (!token.EndsWith("'", StringComparison.Ordinal) || token.Length < 2)
+                    return false;
+
+                sheetName = token[1..^1].Replace("''", "'", StringComparison.Ordinal);
+                return sheetName.Length > 0;
+            }
+
+            if (token.Contains('\'', StringComparison.Ordinal))
+                return false;
+
+            sheetName = token;
+            return true;
+        }
+
+        private static bool TryGetRelationshipTarget(
+            IReadOnlyList<XElement> relationships,
+            string relationshipId,
+            string relationshipType,
+            out string target)
+        {
+            var relationship = relationships.SingleOrDefault(candidate =>
+                string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                string.Equals(candidate.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase) &&
+                candidate.Attribute("TargetMode") is null);
+            target = relationship?.Attribute("Target")?.Value ?? "";
+            return !string.IsNullOrWhiteSpace(target);
+        }
+    }
+
+    private sealed record XlsxChartSourceSheetBaseline(
+        SheetId SheetId,
+        string SheetName,
+        int ChartCount);
+
+    private sealed class XlsxPivotSourceRangeIndex
+    {
+        private readonly int _pivotCacheCount;
+        private readonly IReadOnlyList<XlsxPivotSourceSheetBaseline> _sheets;
+        private readonly IReadOnlyDictionary<SheetId, IReadOnlyList<GridRange>> _rangesBySheet;
+
+        private XlsxPivotSourceRangeIndex(
+            int pivotCacheCount,
+            IReadOnlyList<XlsxPivotSourceSheetBaseline> sheets,
+            IReadOnlyDictionary<SheetId, IReadOnlyList<GridRange>> rangesBySheet)
+        {
+            _pivotCacheCount = pivotCacheCount;
+            _sheets = sheets;
+            _rangesBySheet = rangesBySheet;
+        }
+
+        public static XlsxPivotSourceRangeIndex? TryCreate(
+            Workbook workbook,
+            out string? blockReason)
+        {
+            blockReason = null;
+            if (workbook.Slicers.Count > 0 || workbook.Timelines.Count > 0)
+            {
+                blockReason = "baseline_pivot_source_slicer_timeline";
+                return null;
+            }
+
+            var sheetIdsByName = workbook.Sheets.ToDictionary(
+                sheet => sheet.Name,
+                sheet => sheet.Id,
+                StringComparer.OrdinalIgnoreCase);
+            var rangesBySheet = new Dictionary<SheetId, List<GridRange>>();
+            foreach (var cache in workbook.PivotCaches)
+            {
+                if (IsPatchUnsafePivotCache(cache) ||
+                    !sheetIdsByName.TryGetValue(cache.SourceSheetName!, out var sourceSheetId))
+                {
+                    blockReason = "baseline_pivot_source_model";
+                    return null;
+                }
+
+                GridRange range;
+                try
+                {
+                    range = GridRange.Parse(cache.SourceReference!, sourceSheetId);
+                }
+                catch
+                {
+                    blockReason = "baseline_pivot_source_range";
+                    return null;
+                }
+
+                if (!rangesBySheet.TryGetValue(sourceSheetId, out var ranges))
+                {
+                    ranges = [];
+                    rangesBySheet[sourceSheetId] = ranges;
+                }
+
+                ranges.Add(range);
+            }
+
+            return new XlsxPivotSourceRangeIndex(
+                workbook.PivotCaches.Count,
+                workbook.Sheets
+                    .Select(sheet => new XlsxPivotSourceSheetBaseline(sheet.Id, sheet.Name, sheet.PivotTables.Count))
+                    .ToArray(),
+                rangesBySheet.ToDictionary(
+                    pair => pair.Key,
+                    pair => (IReadOnlyList<GridRange>)pair.Value.ToArray()));
+        }
+
+        public bool Matches(Workbook workbook)
+        {
+            if (workbook.PivotCaches.Count != _pivotCacheCount ||
+                workbook.Slicers.Count > 0 ||
+                workbook.Timelines.Count > 0 ||
+                workbook.SheetCount != _sheets.Count ||
+                workbook.PivotCaches.Any(IsPatchUnsafePivotCache))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < _sheets.Count; i++)
+            {
+                var baseline = _sheets[i];
+                var sheet = workbook.Sheets[i];
+                if (sheet.Id != baseline.SheetId ||
+                    !string.Equals(sheet.Name, baseline.SheetName, StringComparison.Ordinal) ||
+                    sheet.PivotTables.Count != baseline.PivotTableCount)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public bool Contains(SheetId sheetId, uint row, uint col)
+        {
+            if (!_rangesBySheet.TryGetValue(sheetId, out var ranges))
+                return false;
+
+            var address = new CellAddress(sheetId, row, col);
+            foreach (var range in ranges)
+            {
+                if (range.Contains(address))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsPatchUnsafePivotCache(PivotCacheModel cache) =>
+            cache.SourceType != PivotCacheSourceType.WorksheetRange ||
+            string.IsNullOrWhiteSpace(cache.SourceSheetName) ||
+            string.IsNullOrWhiteSpace(cache.SourceReference) ||
+            !string.IsNullOrWhiteSpace(cache.SourceTableName) ||
+            cache.ConnectionId is not null ||
+            cache.IsOlap;
+    }
+
+    private sealed record XlsxPivotSourceSheetBaseline(
+        SheetId SheetId,
+        string SheetName,
+        int PivotTableCount);
 
     private sealed record XlsxWorksheetCellPatchBaseline(
         SheetId SheetId,
