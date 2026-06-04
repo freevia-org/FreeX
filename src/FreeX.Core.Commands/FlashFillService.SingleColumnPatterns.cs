@@ -46,7 +46,8 @@ public static partial class FlashFillService
     {
         Host,
         HostWithoutWww,
-        DomainStem
+        DomainStem,
+        RootDomainStem
     }
 
     private readonly record struct DateParts(int Year, int Month, int Day);
@@ -55,7 +56,11 @@ public static partial class FlashFillService
 
     private readonly record struct UsAddressParts(string Street, string City, string State, string Zip);
 
-    private readonly record struct WebAddressParts(string Host, string HostWithoutWww, string DomainStem);
+    private readonly record struct WebAddressParts(
+        string Host,
+        string HostWithoutWww,
+        string DomainStem,
+        string RootDomainStem);
 
     private readonly record struct DateOutputPattern(
         DatePartKind First,

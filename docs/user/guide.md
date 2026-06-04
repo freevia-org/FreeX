@@ -157,7 +157,7 @@ Press **Shift+F3** to open the Insert Function dialog with category search.
 
 Formulas tab -> Trace Precedents / Trace Dependents draws arrows showing cell relationships. Evaluate Formula steps through a formula's calculation order.
 
-Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, formulas stored as text including apostrophe-prefixed formulas, text-number/date warnings including apostrophe-prefixed, currency-symbol, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, month-name, and weekday-prefixed numeric or month-name text dates with two-digit years, blank references, omitted aggregate cells, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
+Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, formulas stored as text including apostrophe-prefixed formulas, text-number/date warnings including apostrophe-prefixed, currency-symbol including yen/fullwidth yen, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, month-name, and weekday-prefixed numeric or month-name text dates with two-digit years, blank references, omitted aggregate cells, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
 
 ### Calculation
 
@@ -377,7 +377,7 @@ Data tab -> Flash Fill (or Ctrl+E) infers a pattern from your manual examples an
 
 FreeX supports deterministic Flash Fill patterns rather than Excel's full ML-like inference. Examples include:
 - Extracting or removing delimiter-based tokens, including final dotted tokens such as file extensions, variable-depth final and penultimate hyphen/slash/backslash/underscore segments, and bracketed qualifiers.
-- Extracting web address pieces, including hosts, query values, and final URL path segments such as `road-bike?ref=nav` to `road-bike`.
+- Extracting web and email domain pieces, including hosts, root-domain stems from variable-depth subdomains, query values, and final URL path segments such as `road-bike?ref=nav` to `road-bike`.
 - Reformatting two- and three-part names, including last-name-first forms, middle-token drops, and initial abbreviations such as `A. Lovelace`, `A. L.`, `Lovelace, Ada`, and `Lovelace, A. B.`.
 - Cleaning known title, credential, and organization suffixes such as `Dr. Ada Lovelace Jr.`, comma-attached `Dr. Ada Lovelace,Jr.,Ph.D.`, or `Northwind Traders,LLC`.
 - Building first/last-name email aliases with learned constant domains and `.`, `_`, or `-` separators, including first-initial/last-name, last-name/first-initial, and first/last-initial forms.

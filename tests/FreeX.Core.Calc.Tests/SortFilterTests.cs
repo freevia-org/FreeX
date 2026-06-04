@@ -8,13 +8,8 @@ public partial class SortFilterTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static (Workbook wb, Sheet sheet, ICommandContext ctx) MakeContext()
-    {
-        var wb = new Workbook("Test");
-        var sheet = wb.AddSheet("Sheet1");
-        var ctx = new TestCommandContext(wb);
-        return (wb, sheet, ctx);
-    }
+    private static (Workbook wb, Sheet sheet, ICommandContext ctx) MakeContext() =>
+        TestWorkbookFixture.CreateContext("Test");
 
     // ── Sort tests ────────────────────────────────────────────────────────────
 }
