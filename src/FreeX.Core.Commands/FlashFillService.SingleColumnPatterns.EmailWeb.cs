@@ -161,6 +161,15 @@ public static partial class FlashFillService
         return source => TryGetFinalUrlPathSegmentStem(source, out var stem) ? stem : null;
     }
 
+    private static Func<string, string?>? TryExtractFinalUrlPathSegmentRawSlugStem(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFinalUrlPathSegmentRawSlugStem(e.Source, out var stem) && stem == e.Expected))
+            return null;
+
+        return source => TryGetFinalUrlPathSegmentRawSlugStem(source, out var stem) ? stem : null;
+    }
+
     private static Func<string, string?>? TryExtractFinalUrlPathSegmentSlugTitle(
         IReadOnlyList<(string Source, string Expected)> examples)
     {
@@ -270,6 +279,11 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static bool TryGetFinalUrlPathSegmentRawSlugStem(string source, out string stem)
+    {
+        return TryGetFinalUrlPathSegmentSlugStem(source, out stem, requireExtensionlessSegment: true);
+    }
+
     private static bool TryGetFinalUrlPathSegmentSlugTitle(string source, out string title)
     {
         title = string.Empty;
@@ -282,7 +296,10 @@ public static partial class FlashFillService
         return true;
     }
 
-    private static bool TryGetFinalUrlPathSegmentSlugStem(string source, out string stem)
+    private static bool TryGetFinalUrlPathSegmentSlugStem(
+        string source,
+        out string stem,
+        bool requireExtensionlessSegment = false)
     {
         stem = string.Empty;
 
@@ -321,6 +338,9 @@ public static partial class FlashFillService
 
         var segmentLength = segmentEnd - segmentStart + 1;
         var dotIndex = candidate.LastIndexOf('.', segmentEnd, segmentLength);
+        if (requireExtensionlessSegment && dotIndex >= segmentStart)
+            return false;
+
         var stemStart = segmentStart;
         var stemEnd = segmentEnd;
         if (dotIndex >= segmentStart)

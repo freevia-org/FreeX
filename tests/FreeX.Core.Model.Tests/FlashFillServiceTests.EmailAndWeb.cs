@@ -293,6 +293,52 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_FinalUrlPathSegmentRawSlugStem_ExtractsExtensionlessDecodedFinalSegment()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike?ref=nav#top", "road-bike"),
+                ("https://docs.example/help/safety%20guide?download=1#read", "safety guide")
+            ],
+            ["https://example.com/releases/electric_cargo-bike?x=1#details"]);
+
+        result.Should().BeEquivalentTo(["electric_cargo-bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FinalUrlPathSegmentRawSlugStem_PreservesPlusInPathSegments()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road+bike?ref=nav#top", "road+bike"),
+                ("https://docs.example/help/safety+guide?download=1#read", "safety+guide")
+            ],
+            ["https://example.com/releases/electric+cargo-bike?x=1#details"]);
+
+        result.Should().BeEquivalentTo(["electric+cargo-bike"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("ftp://example.com/releases/electric-cargo-bike")]
+    [InlineData("https://user@example.com/releases/electric-cargo-bike")]
+    [InlineData("https://example.com")]
+    [InlineData("https://example.com?x=1#details")]
+    [InlineData("https://example.com/releases/")]
+    [InlineData("https://example.com/releases/%ZZ")]
+    [InlineData("https://example.com/releases/electric-cargo-bike.html")]
+    public void Fill_FinalUrlPathSegmentRawSlugStem_ReturnsNullForUnsupportedRemainingUrl(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/products/road-bike?ref=nav#top", "road-bike"),
+                ("https://docs.example/help/safety%20guide?download=1#read", "safety guide")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_FinalUrlPathSegmentSlugTitle_ConvertsUrlSlugStemToTitle()
     {
         var result = FlashFillService.Fill(

@@ -17,18 +17,5 @@ public sealed class XlsxWorksheetPageBreaksMetadataReaderPerformanceTests
             "page-break metadata reading should avoid allocating a LINQ filter iterator for worksheet break elements");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var current = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (current is not null)
-        {
-            var candidate = Path.Combine(new[] { current.FullName }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            current = current.Parent;
-        }
-
-        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
-    }
+    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }
