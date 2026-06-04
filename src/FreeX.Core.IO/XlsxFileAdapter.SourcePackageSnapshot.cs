@@ -272,7 +272,7 @@ public sealed partial class XlsxFileAdapter
         {
             currentModelFingerprint = null;
             if (CellPatchBaseline is null ||
-                !CellPatchBaseline.TryGetLiteralValueChanges(workbook, CellPatchChangeLimit, out var changes))
+                !CellPatchBaseline.TryGetPatchableValueChanges(workbook, CellPatchChangeLimit, out var changes))
             {
                 return false;
             }
@@ -426,7 +426,7 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
-        public bool TryGetLiteralValueChanges(
+        public bool TryGetPatchableValueChanges(
             Workbook workbook,
             int changeLimit,
             out List<XlsxCellValuePatch> changes)
@@ -460,10 +460,17 @@ public sealed partial class XlsxFileAdapter
                     if (Equals(cell.Value, original.Value))
                         continue;
 
-                    if (cell.HasFormula || original.FormulaText is not null || !IsPatchableLiteralValue(cell.Value))
+                    var patchKind = cell.HasFormula
+                        ? XlsxCellValuePatchKind.FormulaCachedValue
+                        : XlsxCellValuePatchKind.LiteralValue;
+                    if (!IsPatchableScalarValue(cell.Value) ||
+                        (patchKind == XlsxCellValuePatchKind.LiteralValue && original.FormulaText is not null))
+                    {
                         return false;
+                    }
 
                     changes.Add(new XlsxCellValuePatch(
+                        patchKind,
                         baseline.SheetId,
                         baseline.WorksheetPath,
                         row,
@@ -495,7 +502,15 @@ public sealed partial class XlsxFileAdapter
                 if (cell is null)
                     return false;
 
-                RewriteLiteralCellValue(cell, worksheetNs, change.NewValue);
+                if (change.Kind == XlsxCellValuePatchKind.FormulaCachedValue)
+                {
+                    if (!RewriteFormulaCachedCellValue(cell, worksheetNs, change.NewValue))
+                        return false;
+                }
+                else
+                {
+                    RewriteLiteralCellValue(cell, worksheetNs, change.NewValue);
+                }
             }
 
             return true;
@@ -529,7 +544,7 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
-        private static bool IsPatchableLiteralValue(ScalarValue value) =>
+        private static bool IsPatchableScalarValue(ScalarValue value) =>
             value is BlankValue or NumberValue or BoolValue or TextValue or DateTimeValue or ErrorValue;
 
         private static XElement? FindCell(XElement sheetData, XNamespace worksheetNs, uint row, uint col)
@@ -589,6 +604,44 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
+        private static bool RewriteFormulaCachedCellValue(XElement cell, XNamespace worksheetNs, ScalarValue value)
+        {
+            if (cell.Element(worksheetNs + "f") is null)
+                return false;
+
+            cell.Element(worksheetNs + "v")?.Remove();
+            cell.Element(worksheetNs + "is")?.Remove();
+
+            switch (value)
+            {
+                case BlankValue:
+                    cell.Attribute("t")?.Remove();
+                    break;
+                case TextValue text:
+                    cell.SetAttributeValue("t", "str");
+                    cell.Add(new XElement(worksheetNs + "v", text.Value));
+                    break;
+                case BoolValue boolean:
+                    cell.SetAttributeValue("t", "b");
+                    cell.Add(new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
+                    break;
+                case ErrorValue error:
+                    cell.SetAttributeValue("t", "e");
+                    cell.Add(new XElement(worksheetNs + "v", error.Code));
+                    break;
+                case DateTimeValue dateTime:
+                    cell.Attribute("t")?.Remove();
+                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(dateTime.Value)));
+                    break;
+                case NumberValue number:
+                    cell.Attribute("t")?.Remove();
+                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(number.Value)));
+                    break;
+            }
+
+            return true;
+        }
+
         private static string FormatNumber(double value) =>
             value.ToString("G17", CultureInfo.InvariantCulture);
 
@@ -641,10 +694,17 @@ public sealed partial class XlsxFileAdapter
         bool IgnoreFormulaError);
 
     private sealed record XlsxCellValuePatch(
+        XlsxCellValuePatchKind Kind,
         SheetId SheetId,
         string WorksheetPath,
         uint Row,
         uint Col,
         ScalarValue OriginalValue,
         ScalarValue NewValue);
+
+    private enum XlsxCellValuePatchKind
+    {
+        LiteralValue,
+        FormulaCachedValue
+    }
 }
