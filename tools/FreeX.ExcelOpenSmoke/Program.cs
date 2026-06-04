@@ -23,6 +23,15 @@ internal static class ExcelOpenSmoke
     private const uint ExcelOpenRejectedHResult = 0x800A03ECu;
     private const int ExcelCellTypeFormulas = -4123;
     private const int ExcelCellTypeAllValidation = -4174;
+    private const int MsoShapeTypeAutoShape = 1;
+    private const int MsoShapeTypeFreeform = 5;
+    private const int MsoShapeTypeGroup = 6;
+    private const int MsoShapeTypeLine = 9;
+    private const int MsoShapeTypeLinkedPicture = 11;
+    private const int MsoShapeTypePicture = 13;
+    private const int MsoShapeTypeTextBox = 17;
+    private const int MsoShapeTypeGraphic = 28;
+    private const int MsoShapeTypeLinkedGraphic = 29;
     private const int MaxDataValidationProbeCells = 20000;
     private const int MaxOpenXmlValidationErrorsToReport = 20;
 
@@ -540,6 +549,12 @@ internal static class ExcelOpenSmoke
                description.Contains("MinInclusive", StringComparison.OrdinalIgnoreCase);
     }
 
+    private readonly record struct ExcelShapeSummary(
+        int TotalCount,
+        int PictureCount,
+        int TextBoxCount,
+        int DrawingShapeCount);
+
     private static ExcelWorkbookSummary CountWorkbookContents(object workbook)
     {
         object? worksheets = null;
@@ -555,6 +570,10 @@ internal static class ExcelOpenSmoke
             var commentCount = 0;
             var protectedSheetCount = 0;
             var structureProtectionCount = CountWorkbookStructureProtection(workbook);
+            var pictureCount = 0;
+            var sparklineCount = 0;
+            var textBoxCount = 0;
+            var drawingShapeCount = 0;
             var shapeCount = 0;
             var formulaCellCount = 0;
             var structuredTableCount = 0;
@@ -563,7 +582,6 @@ internal static class ExcelOpenSmoke
             for (var index = 1; index <= worksheetCount; index++)
             {
                 object? worksheet = null;
-                object? shapes = null;
                 object? listObjects = null;
                 object? pivotTables = null;
                 try
@@ -572,8 +590,11 @@ internal static class ExcelOpenSmoke
                     try
                     {
                         chartCount += CountWorksheetChartObjects(worksheet);
-                        shapes = ((dynamic)worksheet).Shapes;
-                        shapeCount += Convert.ToInt32(((dynamic)shapes).Count, CultureInfo.InvariantCulture);
+                        var worksheetShapes = CountWorksheetShapes(worksheet);
+                        shapeCount += worksheetShapes.TotalCount;
+                        pictureCount += worksheetShapes.PictureCount;
+                        textBoxCount += worksheetShapes.TextBoxCount;
+                        drawingShapeCount += worksheetShapes.DrawingShapeCount;
                     }
                     catch (COMException ex)
                     {
@@ -630,6 +651,15 @@ internal static class ExcelOpenSmoke
 
                     try
                     {
+                        sparklineCount += CountWorksheetSparklines(worksheet);
+                    }
+                    catch (COMException ex)
+                    {
+                        throw new InvalidDataException($"Excel sparkline count failed for worksheet index {index}", ex);
+                    }
+
+                    try
+                    {
                         listObjects = ((dynamic)worksheet).ListObjects;
                         structuredTableCount += Convert.ToInt32(((dynamic)listObjects).Count, CultureInfo.InvariantCulture);
                     }
@@ -652,7 +682,6 @@ internal static class ExcelOpenSmoke
                 {
                     ReleaseComObject(pivotTables);
                     ReleaseComObject(listObjects);
-                    ReleaseComObject(shapes);
                     ReleaseComObject(worksheet);
                 }
             }
@@ -667,6 +696,10 @@ internal static class ExcelOpenSmoke
                 commentCount,
                 protectedSheetCount,
                 structureProtectionCount,
+                pictureCount,
+                sparklineCount,
+                textBoxCount,
+                drawingShapeCount,
                 shapeCount,
                 formulaCellCount,
                 structuredTableCount,
@@ -762,6 +795,89 @@ internal static class ExcelOpenSmoke
         finally
         {
             ReleaseComObject(chartObjects);
+        }
+    }
+
+    private static ExcelShapeSummary CountWorksheetShapes(object worksheet)
+    {
+        object? shapes = null;
+        try
+        {
+            shapes = ((dynamic)worksheet).Shapes;
+            var totalCount = Convert.ToInt32(((dynamic)shapes).Count, CultureInfo.InvariantCulture);
+            var pictureCount = 0;
+            var textBoxCount = 0;
+            var drawingShapeCount = 0;
+
+            for (var index = 1; index <= totalCount; index++)
+            {
+                object? shape = null;
+                try
+                {
+                    shape = ((dynamic)shapes).Item(index);
+                    var type = Convert.ToInt32(((dynamic)shape).Type, CultureInfo.InvariantCulture);
+                    if (IsExcelPictureShape(type))
+                        pictureCount++;
+                    else if (type == MsoShapeTypeTextBox)
+                        textBoxCount++;
+                    else if (IsExcelDrawingShape(type))
+                        drawingShapeCount++;
+                }
+                finally
+                {
+                    ReleaseComObject(shape);
+                }
+            }
+
+            return new ExcelShapeSummary(totalCount, pictureCount, textBoxCount, drawingShapeCount);
+        }
+        finally
+        {
+            ReleaseComObject(shapes);
+        }
+    }
+
+    private static bool IsExcelPictureShape(int type) =>
+        type is MsoShapeTypePicture or MsoShapeTypeLinkedPicture or MsoShapeTypeGraphic or MsoShapeTypeLinkedGraphic;
+
+    private static bool IsExcelDrawingShape(int type) =>
+        type is MsoShapeTypeAutoShape or MsoShapeTypeFreeform or MsoShapeTypeGroup or MsoShapeTypeLine;
+
+    private static int CountWorksheetSparklines(object worksheet)
+    {
+        object? cells = null;
+        object? sparklineGroups = null;
+        try
+        {
+            cells = ((dynamic)worksheet).Cells;
+            sparklineGroups = ((dynamic)cells).SparklineGroups;
+            var groupCount = Convert.ToInt32(((dynamic)sparklineGroups).Count, CultureInfo.InvariantCulture);
+            var sparklineCount = 0;
+
+            for (var index = 1; index <= groupCount; index++)
+            {
+                object? group = null;
+                try
+                {
+                    group = ((dynamic)sparklineGroups).Item(index);
+                    sparklineCount += Convert.ToInt32(((dynamic)group).Count, CultureInfo.InvariantCulture);
+                }
+                finally
+                {
+                    ReleaseComObject(group);
+                }
+            }
+
+            return sparklineCount;
+        }
+        catch (Exception ex) when (IsOptionalComMemberUnavailable(ex))
+        {
+            return 0;
+        }
+        finally
+        {
+            ReleaseComObject(sparklineGroups);
+            ReleaseComObject(cells);
         }
     }
 
@@ -1369,6 +1485,10 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedComments: minComments,
             MinExcelOpenedProtectedSheets: minProtectedSheets,
             MinExcelOpenedStructureProtection: minStructureProtection,
+            MinExcelOpenedPictures: minPictures,
+            MinExcelOpenedSparklines: minSparklines,
+            MinExcelOpenedTextBoxes: minTextBoxes,
+            MinExcelOpenedDrawingShapes: minDrawingShapes,
             MinExcelOpenedShapes: minExcelShapes,
             MinExcelReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
             MinExcelReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
@@ -1378,6 +1498,10 @@ internal static class ExcelOpenSmoke
             MinExcelReopenedComments: saveReopen ? minComments : 0,
             MinExcelReopenedProtectedSheets: saveReopen ? minProtectedSheets : 0,
             MinExcelReopenedStructureProtection: saveReopen ? minStructureProtection : 0,
+            MinExcelReopenedPictures: saveReopen ? minPictures : 0,
+            MinExcelReopenedSparklines: saveReopen ? minSparklines : 0,
+            MinExcelReopenedTextBoxes: saveReopen ? minTextBoxes : 0,
+            MinExcelReopenedDrawingShapes: saveReopen ? minDrawingShapes : 0,
             MinExcelReopenedShapes: saveReopen ? minExcelShapes : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? minFormulaCells : 0,
             MinFreeXReopenedStructuredTables: saveReopen ? minStructuredTables : 0,
@@ -1420,11 +1544,13 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedStructuredTables: 1,
             MinExcelOpenedHyperlinks: 47,
             MinExcelOpenedComments: 117,
+            MinExcelOpenedPictures: 1,
             MinExcelOpenedShapes: 120,
             MinExcelReopenedFormulaCells: saveReopen ? 16000 : 0,
             MinExcelReopenedStructuredTables: saveReopen ? 1 : 0,
             MinExcelReopenedHyperlinks: saveReopen ? 47 : 0,
             MinExcelReopenedComments: saveReopen ? 117 : 0,
+            MinExcelReopenedPictures: saveReopen ? 1 : 0,
             MinExcelReopenedShapes: saveReopen ? 120 : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? 16000 : 0,
             MinFreeXReopenedStructuredTables: saveReopen ? 1 : 0,
@@ -1495,6 +1621,7 @@ internal static class ExcelOpenSmoke
             MinExcelOpenedComments: 1,
             MinExcelOpenedProtectedSheets: 1,
             MinExcelOpenedStructureProtection: 1,
+            MinExcelOpenedTextBoxes: 1,
             MinExcelOpenedShapes: 2,
             MinExcelReopenedFormulaCells: saveReopen ? 1 : 0,
             MinExcelReopenedNamedRanges: saveReopen ? 1 : 0,
@@ -1505,6 +1632,7 @@ internal static class ExcelOpenSmoke
             MinExcelReopenedComments: saveReopen ? 1 : 0,
             MinExcelReopenedProtectedSheets: saveReopen ? 1 : 0,
             MinExcelReopenedStructureProtection: saveReopen ? 1 : 0,
+            MinExcelReopenedTextBoxes: saveReopen ? 1 : 0,
             MinExcelReopenedShapes: saveReopen ? 2 : 0,
             MinFreeXReopenedFormulaCells: saveReopen ? 1 : 0,
             MinFreeXReopenedNamedRanges: saveReopen ? 1 : 0,
@@ -1592,7 +1720,11 @@ internal static class ExcelOpenSmoke
         new(
             MinFreeXPreSavePictures: expectFreeXPreSave ? 1 : 0,
             MinFreeXPreSaveSparklines: expectFreeXPreSave ? 2 : 0,
+            MinExcelOpenedPictures: 1,
+            MinExcelOpenedSparklines: 2,
             MinExcelOpenedShapes: 1,
+            MinExcelReopenedPictures: saveReopen ? 1 : 0,
+            MinExcelReopenedSparklines: saveReopen ? 2 : 0,
             MinExcelReopenedShapes: saveReopen ? 1 : 0,
             MinFreeXReopenedPictures: saveReopen ? 1 : 0,
             MinFreeXReopenedSparklines: saveReopen ? 2 : 0);
@@ -1601,7 +1733,11 @@ internal static class ExcelOpenSmoke
         new(
             MinFreeXPreSaveTextBoxes: expectFreeXPreSave ? 1 : 0,
             MinFreeXPreSaveDrawingShapes: expectFreeXPreSave ? 1 : 0,
+            MinExcelOpenedTextBoxes: 1,
+            MinExcelOpenedDrawingShapes: 1,
             MinExcelOpenedShapes: 2,
+            MinExcelReopenedTextBoxes: saveReopen ? 1 : 0,
+            MinExcelReopenedDrawingShapes: saveReopen ? 1 : 0,
             MinExcelReopenedShapes: saveReopen ? 2 : 0,
             MinFreeXReopenedTextBoxes: saveReopen ? 1 : 0,
             MinFreeXReopenedDrawingShapes: saveReopen ? 1 : 0);
@@ -1709,6 +1845,26 @@ internal static class ExcelOpenSmoke
             expectations.MinExcelOpenedStructureProtection,
             input);
         AssertMin(
+            "Excel open pictures",
+            opened.PictureCount,
+            expectations.MinExcelOpenedPictures,
+            input);
+        AssertMin(
+            "Excel open sparklines",
+            opened.SparklineCount,
+            expectations.MinExcelOpenedSparklines,
+            input);
+        AssertMin(
+            "Excel open text boxes",
+            opened.TextBoxCount,
+            expectations.MinExcelOpenedTextBoxes,
+            input);
+        AssertMin(
+            "Excel open drawing shapes",
+            opened.DrawingShapeCount,
+            expectations.MinExcelOpenedDrawingShapes,
+            input);
+        AssertMin(
             "Excel open worksheet shapes",
             opened.ShapeCount,
             expectations.MinExcelOpenedShapes,
@@ -1762,6 +1918,26 @@ internal static class ExcelOpenSmoke
             "Excel reopen structure protection",
             reopened?.StructureProtectionCount,
             expectations.MinExcelReopenedStructureProtection,
+            input);
+        AssertMin(
+            "Excel reopen pictures",
+            reopened?.PictureCount,
+            expectations.MinExcelReopenedPictures,
+            input);
+        AssertMin(
+            "Excel reopen sparklines",
+            reopened?.SparklineCount,
+            expectations.MinExcelReopenedSparklines,
+            input);
+        AssertMin(
+            "Excel reopen text boxes",
+            reopened?.TextBoxCount,
+            expectations.MinExcelReopenedTextBoxes,
+            input);
+        AssertMin(
+            "Excel reopen drawing shapes",
+            reopened?.DrawingShapeCount,
+            expectations.MinExcelReopenedDrawingShapes,
             input);
         AssertMin(
             "Excel reopen worksheet shapes",
@@ -1947,12 +2123,12 @@ internal static class ExcelOpenSmoke
         if (result.Opened is { } opened)
         {
             Console.WriteLine(
-                $"  Excel open: worksheets {opened.WorksheetCount}; named ranges {opened.NamedRangeCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; charts {opened.ChartCount}; validation cells {opened.DataValidationCellCount}; conditional formats {opened.ConditionalFormatCount}; hyperlinks {opened.HyperlinkCount}; comments {opened.CommentCount}; protected sheets {opened.ProtectedSheetCount}; structure protection {opened.StructureProtectionCount}; worksheet shapes {opened.ShapeCount}; pivots {opened.PivotTableCount}");
+                $"  Excel open: worksheets {opened.WorksheetCount}; named ranges {opened.NamedRangeCount}; formulas {opened.FormulaCellCount}; tables {opened.StructuredTableCount}; charts {opened.ChartCount}; validation cells {opened.DataValidationCellCount}; conditional formats {opened.ConditionalFormatCount}; hyperlinks {opened.HyperlinkCount}; comments {opened.CommentCount}; protected sheets {opened.ProtectedSheetCount}; structure protection {opened.StructureProtectionCount}; pictures {opened.PictureCount}; sparklines {opened.SparklineCount}; text boxes {opened.TextBoxCount}; drawing shapes {opened.DrawingShapeCount}; worksheet shapes {opened.ShapeCount}; pivots {opened.PivotTableCount}");
         }
         if (result.Reopened is { } reopened)
         {
             Console.WriteLine(
-                $"  Excel reopen: worksheets {reopened.WorksheetCount}; named ranges {reopened.NamedRangeCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; charts {reopened.ChartCount}; validation cells {reopened.DataValidationCellCount}; conditional formats {reopened.ConditionalFormatCount}; hyperlinks {reopened.HyperlinkCount}; comments {reopened.CommentCount}; protected sheets {reopened.ProtectedSheetCount}; structure protection {reopened.StructureProtectionCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
+                $"  Excel reopen: worksheets {reopened.WorksheetCount}; named ranges {reopened.NamedRangeCount}; formulas {reopened.FormulaCellCount}; tables {reopened.StructuredTableCount}; charts {reopened.ChartCount}; validation cells {reopened.DataValidationCellCount}; conditional formats {reopened.ConditionalFormatCount}; hyperlinks {reopened.HyperlinkCount}; comments {reopened.CommentCount}; protected sheets {reopened.ProtectedSheetCount}; structure protection {reopened.StructureProtectionCount}; pictures {reopened.PictureCount}; sparklines {reopened.SparklineCount}; text boxes {reopened.TextBoxCount}; drawing shapes {reopened.DrawingShapeCount}; worksheet shapes {reopened.ShapeCount}; pivots {reopened.PivotTableCount}");
         }
         if (result.FreeXReopenedExcelSave is { } freeXReopened)
             WriteFreeXSummary("FreeX reopened Excel save", freeXReopened);
