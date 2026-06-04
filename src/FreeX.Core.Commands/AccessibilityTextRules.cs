@@ -31,9 +31,13 @@ internal static partial class AccessibilityTextRules
 
     private static readonly HashSet<string> GenericAltTexts = new(StringComparer.OrdinalIgnoreCase)
     {
+        "autoshape",
         "diagram",
+        "drawing",
         "ellipse",
+        "freeform",
         "graphic",
+        "group",
         "icon",
         "image",
         "line",
@@ -51,9 +55,13 @@ internal static partial class AccessibilityTextRules
 
     private static readonly string[] GenericNumberedAltTextPrefixes =
     [
+        "autoshape",
         "diagram",
+        "drawing",
         "ellipse",
+        "freeform",
         "graphic",
+        "group",
         "icon",
         "image",
         "line",

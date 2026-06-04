@@ -36,6 +36,14 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     [Theory]
     [InlineData("Picture 1")]
+    [InlineData("Drawing")]
+    [InlineData("Drawing 1")]
+    [InlineData("AutoShape")]
+    [InlineData("AutoShape 3")]
+    [InlineData("Freeform")]
+    [InlineData("Freeform 2")]
+    [InlineData("Group")]
+    [InlineData("Group 1")]
     [InlineData("Image")]
     [InlineData("Image 2.")]
     [InlineData("IMG_0001.jpg")]
@@ -134,6 +142,8 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Screenshot 2026-06-04 showing sales dashboard")]
     [InlineData("Photo of warehouse team")]
     [InlineData("Status icon legend")]
+    [InlineData("Drawing of approval workflow")]
+    [InlineData("Group status legend")]
     public void FindIssues_AllowsDescriptiveGenericDrawingObjectTitleOrName(string accessibleText)
     {
         var workbook = new Workbook("Accessibility");
@@ -163,6 +173,50 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Where(i => i.Kind is AccessibilityIssueKind.MissingAltText or AccessibilityIssueKind.GenericAltText)
             .Should()
             .BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Drawing")]
+    [InlineData("Drawing 1")]
+    [InlineData("AutoShape")]
+    [InlineData("AutoShape 3")]
+    [InlineData("Freeform")]
+    [InlineData("Freeform 2")]
+    [InlineData("Group")]
+    [InlineData("Group 1")]
+    public void FindIssues_FlagsAdditionalDefaultDrawingObjectTitleOrNameWithoutDescriptiveAltText(string accessibleText)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            Title = accessibleText
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            Name = accessibleText
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Text = "Status summary",
+            Name = accessibleText,
+            FillColor = CellColor.White
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind == AccessibilityIssueKind.GenericAltText)
+            .ToList();
+
+        issues.Select(i => i.Location).Should().Equal("A1", "A2", "A3");
+        issues.Select(i => i.Message).Should().Equal(
+            "Picture alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
+            "Text box alternate text should describe the object.");
     }
 
     [Fact]
