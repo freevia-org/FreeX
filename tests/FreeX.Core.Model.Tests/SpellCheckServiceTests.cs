@@ -529,6 +529,42 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversTablePivotReportVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Feild fild feilds flitered fitlered flitering totl grnad caluclated refesh sorce timline tiemline. Keep feild_name, preflitered, https://flitered.example.com/timline, analyst@sorce.example.com, and \"C:\\caluclated folder\\refesh file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Feild", "Field"),
+            ("fild", "field"),
+            ("feilds", "fields"),
+            ("flitered", "filtered"),
+            ("fitlered", "filtered"),
+            ("flitering", "filtering"),
+            ("totl", "total"),
+            ("grnad", "grand"),
+            ("caluclated", "calculated"),
+            ("refesh", "refresh"),
+            ("sorce", "source"),
+            ("timline", "timeline"),
+            ("tiemline", "timeline"));
+        plan.IssueCount.Should().Be(13);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Field field fields filtered filtered filtering total grand calculated refresh source timeline timeline. Keep feild_name, preflitered, https://flitered.example.com/timline, analyst@sorce.example.com, and \"C:\\caluclated folder\\refesh file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(13);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversReferenceRangeValueVocabularyTypos()
     {
         var wb = new Workbook("test");
