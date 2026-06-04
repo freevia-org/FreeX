@@ -513,7 +513,7 @@ public static partial class FlashFillService
 
     private static bool TryParseEnglishMonthNamePart(string part, out int month)
     {
-        var normalized = part.EndsWith('.', StringComparison.Ordinal)
+        var normalized = part.EndsWith(".", StringComparison.Ordinal)
             ? part[..^1].ToLowerInvariant()
             : part.ToLowerInvariant();
 
@@ -540,7 +540,7 @@ public static partial class FlashFillService
     private static bool TryParseDayPart(string part, bool allowTrailingComma, out int day)
     {
         day = 0;
-        if (allowTrailingComma && part.EndsWith(',', StringComparison.Ordinal))
+        if (allowTrailingComma && part.EndsWith(",", StringComparison.Ordinal))
             part = part[..^1];
 
         return part.Length is >= 1 and <= 2 &&
