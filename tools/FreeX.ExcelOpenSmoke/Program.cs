@@ -2543,6 +2543,38 @@ internal static class ExcelOpenSmoke
                 MinFreeXReopenedAutoFilterSheets = reopen
             };
         }
+        else if (string.Equals(row.Id, "generated-printer-settings-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                RequiredExcelSavedPackageParts =
+                [
+                    "xl/printerSettings/printerSettings1.bin",
+                    "xl/worksheets/_rels/sheet1.xml.rels"
+                ]
+            };
+        }
+        else if (string.Equals(row.Id, "generated-calc-chain-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                RequiredExcelSavedPackageParts =
+                [
+                    "xl/calcChain.xml"
+                ]
+            };
+        }
+        else if (string.Equals(row.Id, "generated-header-footer-legacy-drawing-001", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations = EnsureExpectations() with
+            {
+                RequiredExcelSavedPackageParts =
+                [
+                    "xl/drawings/vmlDrawing1.vml",
+                    "xl/worksheets/_rels/sheet1.xml.rels"
+                ]
+            };
+        }
         else if (string.Equals(row.Id, "generated-slicers-001", StringComparison.OrdinalIgnoreCase))
         {
             expectations = EnsureExpectations() with
