@@ -57,6 +57,7 @@ internal static class ExcelOpenSmoke
     private const int MaxStructureProbeColumns = 80;
     private const int MaxOpenXmlValidationErrorsToReport = 20;
     private const int MaxPackageContentTypeIssuesToReport = 20;
+    private const int MaxPackageRelationshipIssuesToReport = 20;
     private const double ExcelMeasurementTolerance = 0.01;
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -295,6 +296,7 @@ internal static class ExcelOpenSmoke
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
                 AssertPackageContentTypesComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertPackageRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -469,6 +471,7 @@ internal static class ExcelOpenSmoke
             CollectComReferences();
             AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
             AssertPackageContentTypesComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertPackageRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
@@ -898,6 +901,239 @@ internal static class ExcelOpenSmoke
 
     private static string FormatPackageContentTypeExpectation(PackageContentTypeExpectation expectation) =>
         $"{expectation.PartName} ContentType={expectation.ContentType}";
+
+    private static void AssertPackageRelationshipsComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var entryNames = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var issues = new List<string>();
+
+        foreach (var entry in archive.Entries.Where(entry => IsPackageRelationshipPart(entry.FullName)))
+        {
+            var relationshipPart = NormalizePackagePart(entry.FullName);
+            if (!string.Equals(relationshipPart, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
+            {
+                var ownerPart = GetRelationshipOwnerPart(relationshipPart);
+                if (string.IsNullOrWhiteSpace(ownerPart) || !entryNames.Contains(ownerPart))
+                {
+                    issues.Add($"{relationshipPart} has no owning package part {ownerPart}");
+                }
+            }
+
+            XDocument relationshipsXml;
+            try
+            {
+                using var stream = entry.Open();
+                relationshipsXml = XDocument.Load(stream);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.Xml.XmlException)
+            {
+                issues.Add($"{relationshipPart} is not parseable relationship XML: {ex.Message}");
+                continue;
+            }
+
+            if (relationshipsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+            {
+                issues.Add($"{relationshipPart} has an invalid Relationships root element");
+                continue;
+            }
+
+            var relationships = relationshipsXml.Root
+                .Elements(PackageRelationshipNs + "Relationship")
+                .ToArray();
+            if (relationships.Length == 0)
+            {
+                issues.Add($"{relationshipPart} has no Relationship elements");
+                continue;
+            }
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var relationship in relationships)
+            {
+                ValidatePackageRelationship(relationshipPart, relationship, entryNames, ids, issues);
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid package relationship(s): {sample}{suffix}");
+    }
+
+    private static bool IsPackageRelationshipPart(string part)
+    {
+        var normalizedPart = NormalizePackagePart(part);
+        return normalizedPart.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
+            (string.Equals(normalizedPart, "_rels/.rels", StringComparison.OrdinalIgnoreCase) ||
+                normalizedPart.Contains("/_rels/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void ValidatePackageRelationship(
+        string relationshipPart,
+        XElement relationship,
+        IReadOnlySet<string> entryNames,
+        HashSet<string> ids,
+        List<string> issues)
+    {
+        var id = relationship.Attribute("Id")?.Value;
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            issues.Add($"{relationshipPart} has a Relationship without Id");
+        }
+        else if (!ids.Add(id))
+        {
+            issues.Add($"{relationshipPart} has duplicate Relationship Id {id}");
+        }
+
+        var type = relationship.Attribute("Type")?.Value;
+        if (string.IsNullOrWhiteSpace(type))
+        {
+            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has no Type");
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has no Target");
+            return;
+        }
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value;
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has invalid TargetMode {targetMode}");
+            return;
+        }
+
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add(
+                $"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} targets external URI without TargetMode=External: {target}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(relationshipPart, target, out var resolvedTarget, out var error))
+        {
+            issues.Add(
+                $"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has invalid Target {target}: {error}");
+            return;
+        }
+
+        if (!entryNames.Contains(resolvedTarget))
+        {
+            issues.Add(
+                $"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} targets missing package part {resolvedTarget}");
+        }
+    }
+
+    private static string FormatRelationshipIssueId(string? id) =>
+        string.IsNullOrWhiteSpace(id) ? "(no Id)" : id;
+
+    private static bool IsAbsoluteRelationshipTarget(string target) =>
+        Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
+        !string.IsNullOrWhiteSpace(uri.Scheme);
+
+    private static bool TryResolvePackageRelationshipTarget(
+        string relationshipPart,
+        string target,
+        out string resolvedTarget,
+        out string error)
+    {
+        resolvedTarget = string.Empty;
+        error = string.Empty;
+
+        target = StripRelationshipTargetFragment(target.Replace('\\', '/'));
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            error = "empty internal target";
+            return false;
+        }
+
+        try
+        {
+            target = Uri.UnescapeDataString(target);
+        }
+        catch (UriFormatException ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+
+        string combined;
+        if (target.StartsWith("/", StringComparison.Ordinal))
+        {
+            combined = target.TrimStart('/');
+        }
+        else
+        {
+            var ownerPart = GetRelationshipOwnerPart(relationshipPart);
+            var ownerDirectory = ownerPart.Contains('/', StringComparison.Ordinal)
+                ? ownerPart[..ownerPart.LastIndexOf('/')]
+                : string.Empty;
+            combined = string.IsNullOrWhiteSpace(ownerDirectory)
+                ? target
+                : $"{ownerDirectory}/{target}";
+        }
+
+        if (!TryNormalizePackagePathSegments(combined, out resolvedTarget))
+        {
+            error = "target escapes the package root";
+            return false;
+        }
+
+        return !string.IsNullOrWhiteSpace(resolvedTarget);
+    }
+
+    private static string StripRelationshipTargetFragment(string target)
+    {
+        var fragmentIndex = target.IndexOf('#', StringComparison.Ordinal);
+        var queryIndex = target.IndexOf('?', StringComparison.Ordinal);
+        var endIndex = fragmentIndex < 0
+            ? queryIndex
+            : queryIndex < 0
+                ? fragmentIndex
+                : Math.Min(fragmentIndex, queryIndex);
+        return endIndex < 0 ? target : target[..endIndex];
+    }
+
+    private static bool TryNormalizePackagePathSegments(string path, out string normalizedPath)
+    {
+        var segments = new List<string>();
+        foreach (var segment in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".")
+                continue;
+            if (segment == "..")
+            {
+                if (segments.Count == 0)
+                {
+                    normalizedPath = string.Empty;
+                    return false;
+                }
+
+                segments.RemoveAt(segments.Count - 1);
+                continue;
+            }
+
+            segments.Add(segment);
+        }
+
+        normalizedPath = NormalizePackagePart(string.Join("/", segments));
+        return true;
+    }
 
     private static string ResolvePackageRelationshipTarget(string relationshipPart, string target)
     {

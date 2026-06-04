@@ -382,7 +382,7 @@ FreeX supports deterministic Flash Fill patterns rather than Excel's full ML-lik
 - Cleaning known title, credential, and organization suffixes such as `Dr. Ada Lovelace Jr.` or `Northwind Traders LLC`.
 - Building first/last-name email aliases with learned constant domains and `.`, `_`, or `-` separators, including first-initial/last-name, last-name/first-initial, and first/last-initial forms.
 - Applying digit-mask punctuation copied from examples, such as phone-number formatting.
-- Extracting US address components such as street, city, state, ZIP, ZIP+4 base ZIP, and the ZIP+4 extension.
+- Extracting US address components such as street, street number, street name, city, state, ZIP, ZIP+4 base ZIP, and the ZIP+4 extension.
 
 If the examples are ambiguous, inconsistent, or outside the supported pattern set, Flash Fill leaves the remaining cells unchanged.
 

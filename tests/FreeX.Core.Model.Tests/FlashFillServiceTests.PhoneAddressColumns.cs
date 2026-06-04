@@ -67,6 +67,58 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeEquivalentTo([remainingExpected], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData("123", "55", "1600")]
+    [InlineData("Pine St", "Burnside Ave", "Amphitheatre Pkwy")]
+    public void Fill_AddressStreetParts_ExtractsStreetNumberAndNameFromLeadingNumber(
+        string firstExpected,
+        string secondExpected,
+        string remainingExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave, Portland, OR 97209", secondExpected)
+            ],
+            ["1600 Amphitheatre Pkwy, Mountain View, CA 94043"]);
+
+        result.Should().BeEquivalentTo([remainingExpected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("123", "55")]
+    [InlineData("Pine St", "Burnside Ave")]
+    public void Fill_AddressStreetParts_ReturnsNullWhenRemainingStreetHasNoLeadingNumber(
+        string firstExpected,
+        string secondExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave, Portland, OR 97209", secondExpected)
+            ],
+            ["Amphitheatre Pkwy, Mountain View, CA 94043"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("123", "55")]
+    [InlineData("Pine St", "Burnside Ave")]
+    public void Fill_AddressStreetParts_ReturnsNullWhenRemainingAddressIsMalformed(
+        string firstExpected,
+        string secondExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave, Portland, OR 97209", secondExpected)
+            ],
+            ["1600 Amphitheatre Pkwy Mountain View CA 94043"]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_AddressState_UsesStateBeforeZipWhenStreetAndCityTokenCountsVary()
     {

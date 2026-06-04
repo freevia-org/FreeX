@@ -2194,6 +2194,9 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
         {
             var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+            archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels")
+                .Should()
+                .BeNull("text boxes and drawing shapes do not need an empty relationship sidecar");
             XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
             drawingXml.Descendants(xdr + "sp").Should().HaveCount(2);
