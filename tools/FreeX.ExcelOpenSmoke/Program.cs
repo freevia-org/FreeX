@@ -60,10 +60,14 @@ internal static class ExcelOpenSmoke
     private const int MaxPackageContentTypeIssuesToReport = 20;
     private const int MaxPackageRelationshipIssuesToReport = 20;
     private const double ExcelMeasurementTolerance = 0.01;
+    private const string HyperlinkRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
     private static readonly XNamespace PackageContentTypeNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace OfficeRelationshipNs =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace SpreadsheetNs =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
@@ -653,6 +657,12 @@ internal static class ExcelOpenSmoke
             issues.Add("missing worksheet hyperlink elements for public hyperlinks tag");
         }
 
+        if (tags.Contains("hyperlinks") &&
+            !tags.Contains("malformed-links"))
+        {
+            issues.AddRange(FindPublicHyperlinkRelationshipIssues(archive));
+        }
+
         if (tags.Contains("merged-cells") &&
             !PublicWorksheetElements(worksheetXmlDocuments, "mergeCell").Any())
         {
@@ -729,6 +739,62 @@ internal static class ExcelOpenSmoke
     private static IEnumerable<XElement> PublicWorksheetCells(IReadOnlyList<XDocument> worksheetXmlDocuments) =>
         PublicWorksheetElements(worksheetXmlDocuments, "c");
 
+    private static IEnumerable<string> FindPublicHyperlinkRelationshipIssues(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var linkedHyperlinks = LoadPackageXml(worksheetEntry)
+                .Descendants(SpreadsheetNs + "hyperlink")
+                .Select(hyperlink => new
+                {
+                    Ref = hyperlink.Attribute("ref")?.Value ?? "(missing ref)",
+                    RelationshipId = hyperlink.Attribute(OfficeRelationshipNs + "id")?.Value
+                })
+                .Where(hyperlink => !string.IsNullOrWhiteSpace(hyperlink.RelationshipId))
+                .ToArray();
+            if (linkedHyperlinks.Length == 0)
+                continue;
+
+            var relationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var relationshipEntry = FindPackageEntry(archive, relationshipPart);
+            if (relationshipEntry is null)
+            {
+                yield return $"missing {relationshipPart} for public hyperlink relationships in {worksheetPart}";
+                continue;
+            }
+
+            var relationshipsXml = LoadPackageXml(relationshipEntry);
+            var relationships = relationshipsXml.Root?.Elements(PackageRelationshipNs + "Relationship").ToArray() ?? [];
+            foreach (var linkedHyperlink in linkedHyperlinks)
+            {
+                var relationship = relationships.FirstOrDefault(relationship =>
+                    string.Equals(
+                        relationship.Attribute("Id")?.Value,
+                        linkedHyperlink.RelationshipId,
+                        StringComparison.OrdinalIgnoreCase));
+                if (relationship is null)
+                {
+                    yield return $"{worksheetPart} hyperlink {linkedHyperlink.Ref} targets missing relationship {linkedHyperlink.RelationshipId}";
+                    continue;
+                }
+
+                if (!string.Equals(relationship.Attribute("Type")?.Value, HyperlinkRelationshipType, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return $"{worksheetPart} hyperlink {linkedHyperlink.Ref} relationship {linkedHyperlink.RelationshipId} is not a hyperlink relationship";
+                    continue;
+                }
+
+                if (!string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return $"{worksheetPart} hyperlink {linkedHyperlink.Ref} relationship {linkedHyperlink.RelationshipId} is not external";
+                }
+            }
+        }
+    }
+
     private static bool IsInlineStringCell(XElement cell) =>
         string.Equals(cell.Attribute("t")?.Value, "inlineStr", StringComparison.Ordinal) ||
         cell.Element(SpreadsheetNs + "is") is not null;
@@ -748,7 +814,10 @@ internal static class ExcelOpenSmoke
     }
 
     private static bool PackageEntryExists(ZipArchive archive, string packagePart) =>
-        archive.Entries.Any(entry =>
+        FindPackageEntry(archive, packagePart) is not null;
+
+    private static ZipArchiveEntry? FindPackageEntry(ZipArchive archive, string packagePart) =>
+        archive.Entries.FirstOrDefault(entry =>
             string.Equals(
                 NormalizePackagePart(entry.FullName),
                 NormalizePackagePart(packagePart),
@@ -1420,6 +1489,15 @@ internal static class ExcelOpenSmoke
         return string.IsNullOrWhiteSpace(directory)
             ? fileName
             : $"{directory}/{fileName}";
+    }
+
+    private static string GetRelationshipPartForPackagePart(string packagePart)
+    {
+        packagePart = NormalizePackagePart(packagePart);
+        var directorySeparator = packagePart.LastIndexOf('/');
+        return directorySeparator < 0
+            ? $"_rels/{packagePart}.rels"
+            : $"{packagePart[..directorySeparator]}/_rels/{packagePart[(directorySeparator + 1)..]}.rels";
     }
 
     private static string NormalizePackagePathSegments(string path)
