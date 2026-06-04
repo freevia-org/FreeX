@@ -16,7 +16,7 @@ public class PerformanceBenchmarkTests
     /// Benchmark: Recalculate 10,000 cells (10% formula density).
     /// Target: <100ms
     /// </summary>
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_10kCellRecalc()
     {
         // Arrange: Create workbook with 10k populated cells, 10% formulas
@@ -73,7 +73,7 @@ public class PerformanceBenchmarkTests
     /// Benchmark: Recalculate 100,000 cells (1% formula density).
     /// Target: <500ms
     /// </summary>
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_100kCellRecalc()
     {
         // Arrange: Create workbook with 100k populated cells, 1% formulas
@@ -120,7 +120,7 @@ public class PerformanceBenchmarkTests
             $"100k recalc took {recalcSw.ElapsedMilliseconds}ms (expected <2000ms)");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RepeatedSmallChangeRecalc_ReportsAllocationDiagnostics()
     {
         var workbook = new Workbook();
@@ -166,7 +166,7 @@ public class PerformanceBenchmarkTests
             "multi-root exact edits that invalidate one leaf formula should skip BFS and topological scaffolding");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ExactFormulaChainRecalcOrder_AvoidsPrecedentDedupeAllocation()
     {
         var graph = new DependencyGraph();
@@ -206,7 +206,7 @@ public class PerformanceBenchmarkTests
             "single-root exact-only formula chains should use the linear recalc-order fast path");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_IdleRecalcWithoutChangedOrVolatileCells_IsAllocationFree()
     {
         var workbook = new Workbook();
@@ -240,7 +240,7 @@ public class PerformanceBenchmarkTests
             "idle recalculation should bypass dependency traversal collection allocation");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_LeafFormulaRootRecalc_SkipsEvaluationOrderScaffolding()
     {
         var workbook = new Workbook();
@@ -308,7 +308,7 @@ public class PerformanceBenchmarkTests
         fastPath.Should().Contain("dependencyPlan.CyclicCells.Count == 0");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_LargeRangeDependencyRebuild_UsesCompactRangeTracking()
     {
         var workbook = new Workbook("Benchmark");
@@ -362,7 +362,7 @@ public class PerformanceBenchmarkTests
             "dependency-only range registration should not initialize the full formula evaluator registry");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ManyCompactRangeDependents_ReportsIndexedLookupTiming()
     {
         var graph = new DependencyGraph();
@@ -425,7 +425,7 @@ public class PerformanceBenchmarkTests
             "single-cell compact range invalidations that hit one leaf formula should skip BFS/topological scaffolding");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_DependencyRebuildWithFormulaFreeSheet_ReportsTiming()
     {
         var workbook = new Workbook("Benchmark");
@@ -473,7 +473,7 @@ public class PerformanceBenchmarkTests
             "exact-reference formula dependency rebuilds should not allocate empty compact-range lists per formula");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RepeatedIdenticalFormulaDependencyRebuild_ReportsParserCacheTail()
     {
         var workbook = new Workbook("Benchmark");
@@ -529,7 +529,7 @@ public class PerformanceBenchmarkTests
         rebuild.Should().NotContain("foreach (var (addr, cell) in sheet.EnumerateCells())");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SingleSectionNumberFormat_AvoidsSplitScaffoldingAllocation()
     {
         const int iterations = 10_000;
@@ -560,7 +560,7 @@ public class PerformanceBenchmarkTests
             "single-section number formats should skip no-op normalization allocations");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_MultiSectionNumberFormat_StillHonorsQuotedSemicolons()
     {
         var positive = NumberFormatter.Format(new NumberValue(1), "0;[Red]-0;0;\"a;b\"@");
@@ -574,7 +574,7 @@ public class PerformanceBenchmarkTests
         text.Should().Be("a;bx");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RepeatedCustomNumberFormat_ReusesSplitSectionCache()
     {
         const int iterations = 10_000;
@@ -627,7 +627,7 @@ public class PerformanceBenchmarkTests
             "repeated custom display formats should reuse cached split-section and parsed-section arrays");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SingleSectionDateTimeFormat_AvoidsSectionParsingAllocation()
     {
         const int iterations = 10_000;
@@ -655,7 +655,7 @@ public class PerformanceBenchmarkTests
             "single-section date/time formats should reuse the parsed Excel-to-.NET date/time format");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_DynamicArraySort_AvoidsLinqIndexListScaffolding()
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Formula", "BuiltInFunctions.DynamicArrays.FilterSort.cs"));
@@ -674,7 +674,7 @@ public class PerformanceBenchmarkTests
             "dynamic-array column sorting should sort the compact index array in place");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SplitPaneViewportCells_LazilyAllocatesDedupeSet()
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Calc", "ViewportService.cs"));
@@ -690,7 +690,7 @@ public class PerformanceBenchmarkTests
             "the split-pane hot path should allocate the dedupe set only when pane regions can overlap");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SparseOccupiedViewportCells_ReportsMetricLookupTiming()
     {
         var workbook = new Workbook("Benchmark");
@@ -761,7 +761,7 @@ public class PerformanceBenchmarkTests
     /// Benchmark: Memory usage for 1,000,000 cells (values only, no formulas).
     /// Target: <200MB
     /// </summary>
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_1mCellMemory()
     {
         Console.WriteLine($"Building 1M-cell workbook...");

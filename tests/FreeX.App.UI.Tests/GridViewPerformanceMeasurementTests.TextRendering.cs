@@ -10,7 +10,7 @@ using FluentAssertions;
 namespace FreeX.App.UI.Tests;
 public sealed partial class GridViewPerformanceMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderTextHeavyViewport_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -53,7 +53,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderSelectionOnlyRepaints_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -97,7 +97,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderDefaultStyledTextHeavyViewport_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -140,7 +140,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderWrappedTextHeavyViewport_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -183,7 +183,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderSparseStyledSurfaceViewport_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -226,7 +226,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderShrinkToFitViewport_ReportsTiming()
     {
         StaTestRunner.Run(() =>

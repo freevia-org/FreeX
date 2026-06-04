@@ -45,7 +45,7 @@ public sealed class OpenProgressTests
             .Should().Be("Loading file (loading styles)");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_FormatLoadingFileDetail_RepeatedTimerTicksReportsAllocation()
     {
         const int iterations = 200_000;

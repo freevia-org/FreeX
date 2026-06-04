@@ -12,7 +12,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class PerformanceReviewMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ColumnResizePreview_ReportsTiming()
     {
         StaTestRunner.Run(() =>

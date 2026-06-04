@@ -11,7 +11,7 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxFileAdapterPerformanceTests
 {
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "ExternalWorkbook")]
     public void Benchmark_LoadExternalWorkbook_ReportsTiming()
     {
@@ -67,7 +67,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         successfulLoads.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_LoadDenseWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -233,7 +233,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapter.Load(saved).SheetCount.Should().Be(DenseSheetCount);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_LoadIgnoredErrorAndStyleOnlyMetadataWorkbook_ReportsTiming()
     {
         const int iterations = 3;

@@ -83,7 +83,7 @@ public sealed class QuickAnalysisMenuPlacementPlannerTests
         source.Should().Contain("while (low <= high)");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_BuildAnchor_WithLargeViewportMetricLists()
     {
         var sheetId = SheetId.New();

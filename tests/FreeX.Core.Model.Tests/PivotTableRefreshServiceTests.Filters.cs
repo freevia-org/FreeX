@@ -298,7 +298,7 @@ public sealed partial class PivotTableRefreshServiceTests
         Number(sheet, "G5").Should().Be(30);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ColumnValueFilterAndSort_ReportsTimingAndAllocatedBytes()
     {
         const int rowCount = 12_000;

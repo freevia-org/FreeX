@@ -6,7 +6,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class CommentNavigationPlannerTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_FormatCellCommentPreview_NoCommentCells_ReportsTiming()
     {
         var sheetId = SheetId.New();

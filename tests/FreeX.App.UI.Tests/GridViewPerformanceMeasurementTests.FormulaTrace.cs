@@ -10,7 +10,7 @@ using FluentAssertions;
 namespace FreeX.App.UI.Tests;
 public sealed partial class GridViewPerformanceMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_FormulaTraceLayoutVisitor_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 160;
@@ -90,7 +90,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         visitedAllocatedBytes.Should().BeLessThan(2_000);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RenderFormulaTraceLayerCache_ReportsTimingAndAllocatedBytes()
     {
         StaTestRunner.Run(() =>
@@ -128,7 +128,7 @@ public sealed partial class GridViewPerformanceMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_DrawFormulaTraceVisibleArrows_ReportsTimingAndAllocatedBytes()
     {
         StaTestRunner.Run(() =>

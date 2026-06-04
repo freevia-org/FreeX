@@ -46,7 +46,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
         public void AcceptLayout(SplitPaneCellLayout layout) => Count++;
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SplitPaneCellLayoutMaterialization_ReportsAllocations()
     {
         const int iterations = 400;
@@ -106,7 +106,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
         visitedAllocatedBytes.Should().BeLessThan(8_000_000);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SplitPaneScrollbarChrome_ReportsAllocations()
     {
         const int iterations = 50_000;

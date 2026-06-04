@@ -458,7 +458,7 @@ public sealed class ScenarioManagerCommandTests
         sheet.GetValue(price).Should().Be(new NumberValue(10));
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_ScenarioSummaryManySharedChangingCells_ReportsTimingAndAllocatedBytes()
     {

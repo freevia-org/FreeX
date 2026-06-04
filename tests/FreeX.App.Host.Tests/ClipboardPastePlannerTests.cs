@@ -112,7 +112,7 @@ public sealed class ClipboardPastePlannerTests
             .Be(expected);
     }
 
-    [Fact]
+    [WindowsClipboardFact]
     public void ExternalPaste_UsesRealWindowsClipboardTextAndRejectsStaleInternalCopy()
     {
         StaTestRunner.Run(() =>

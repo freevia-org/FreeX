@@ -14,7 +14,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class PerformanceReviewMeasurementTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RibbonResizeSequence_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -75,7 +75,7 @@ public sealed partial class PerformanceReviewMeasurementTests
         });
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RibbonForcedCompactSkipPath_ReportsTimingAndAllocatedBytes()
     {
         StaTestRunner.Run(() =>
@@ -124,7 +124,7 @@ public sealed partial class PerformanceReviewMeasurementTests
         source.Should().NotContain("var expandedStates = plannedStates.ToArray();");
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RibbonCollapsedButtonFootprint_ReportsTimingAndAllocatedBytes()
     {
         StaTestRunner.Run(() =>

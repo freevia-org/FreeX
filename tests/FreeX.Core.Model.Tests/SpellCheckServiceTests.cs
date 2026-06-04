@@ -422,7 +422,7 @@ public sealed class SpellCheckServiceTests
         corrected.Should().Be(expected);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_FindIssuesPlainTextSheet_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 20_000;

@@ -7,7 +7,7 @@ namespace FreeX.Core.Model.Tests;
 
 public sealed partial class FlashFillServiceTests
 {
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_FillManyFileExtensions_ReportsTimingAndAllocatedBytes()
     {
@@ -42,7 +42,7 @@ public sealed partial class FlashFillServiceTests
             $"p95_ms={p95Ms:F2} max_ms={maxMs:F2} allocated_bytes={allocatedBytes:N0}");
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_FillManyFirstTokens_ReportsTimingAndAllocatedBytes()
     {
@@ -77,7 +77,7 @@ public sealed partial class FlashFillServiceTests
             $"p95_ms={p95Ms:F2} max_ms={maxMs:F2} allocated_bytes={allocatedBytes:N0}");
     }
 
-    [Fact]
+    [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_FillFromColumnsEmail_ReportsTimingAndAllocatedBytes()
     {

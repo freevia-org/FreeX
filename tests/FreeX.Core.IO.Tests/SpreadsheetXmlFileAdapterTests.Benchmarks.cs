@@ -5,7 +5,7 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class SpreadsheetXmlFileAdapterTests
 {
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveDenseWorkbook_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;
@@ -53,7 +53,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
         packageSizes.Should().OnlyContain(size => size > 0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_SaveRichDenseWorkbook_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;

@@ -46,6 +46,30 @@ function Test-IsIgnoredProjectPath {
         $segments -contains ".claude"
 }
 
+function Test-IsIgnoredDirectoryName {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    return $Name -in @("bin", "obj", ".git", ".worktrees", ".claude")
+}
+
+function Get-ProjectFiles {
+    param([Parameter(Mandatory = $true)][System.IO.DirectoryInfo]$Directory)
+
+    foreach ($projectFile in $Directory.EnumerateFiles("*.csproj")) {
+        if (-not (Test-IsIgnoredProjectPath $projectFile)) {
+            $projectFile
+        }
+    }
+
+    foreach ($childDirectory in $Directory.EnumerateDirectories()) {
+        if (Test-IsIgnoredDirectoryName $childDirectory.Name) {
+            continue
+        }
+
+        Get-ProjectFiles -Directory $childDirectory
+    }
+}
+
 $resolvedProjectRoot = Resolve-RepoPath $ProjectRoot
 if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
     throw "Project root was not found: $resolvedProjectRoot"
@@ -101,8 +125,7 @@ if ($matchingSdkVersions.Count -eq 0) {
 }
 
 $projectFiles = @(
-    Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter "*.csproj" -File -Recurse |
-        Where-Object { -not (Test-IsIgnoredProjectPath $_) } |
+    Get-ProjectFiles -Directory (Get-Item -LiteralPath $resolvedProjectRoot) |
         Sort-Object FullName
 )
 

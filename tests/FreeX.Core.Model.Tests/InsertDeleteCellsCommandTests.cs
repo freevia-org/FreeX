@@ -177,7 +177,7 @@ public sealed class InsertDeleteCellsCommandTests
         sheet.GetValue(1, 2).Should().Be(new TextValue("B1"));
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_InsertCellsShiftRightWithDenseMovedCells_ReportsTiming()
     {
         const int iterations = 3;
@@ -227,7 +227,7 @@ public sealed class InsertDeleteCellsCommandTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_InsertCellsShiftRightSingleRow_ReportsTiming()
     {
         const int iterations = 5;

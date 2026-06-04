@@ -45,7 +45,7 @@ public sealed partial class StructuredTableCommandTests
         sheet.GetValue(5, 3).Should().Be(BlankValue.Instance);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_RefreshStructuredTableTotalsWideTable_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 5_000;

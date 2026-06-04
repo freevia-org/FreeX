@@ -106,7 +106,7 @@ public sealed partial class StructuredTableCommandTests
         sheet.FilterHiddenRows.Should().BeEquivalentTo([2u, 20u]);
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void Benchmark_ApplyStructuredTableFiltersDenseRows_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 30_000;
