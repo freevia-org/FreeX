@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using FluentAssertions;
@@ -53,7 +52,7 @@ public sealed class SolutionProjectsPreflightTests
                 """);
             File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{solutionPath}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{solutionPath}\"");
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("Validated 1 solution project entry(s).");
@@ -87,7 +86,7 @@ public sealed class SolutionProjectsPreflightTests
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("Validated 1 solution project entry(s).");
@@ -125,7 +124,7 @@ public sealed class SolutionProjectsPreflightTests
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("Validated 1 solution project entry(s).");
@@ -158,7 +157,7 @@ public sealed class SolutionProjectsPreflightTests
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
             var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
@@ -194,7 +193,7 @@ public sealed class SolutionProjectsPreflightTests
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{solutionRoot}\" -SolutionPath \"{Path.Combine(solutionRoot, "FreeX.slnx")}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{solutionRoot}\" -SolutionPath \"{Path.Combine(solutionRoot, "FreeX.slnx")}\"");
 
             var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
@@ -230,7 +229,7 @@ public sealed class SolutionProjectsPreflightTests
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
             var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
@@ -266,7 +265,7 @@ public sealed class SolutionProjectsPreflightTests
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
             var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
@@ -301,7 +300,7 @@ public sealed class SolutionProjectsPreflightTests
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
             var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
@@ -314,29 +313,6 @@ public sealed class SolutionProjectsPreflightTests
         }
     }
 
-    private static PowerShellResult RunPowerShellScript(string scriptPath, string workingDirectory, string arguments)
-    {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        return new PowerShellResult(process.ExitCode, output, error);
-    }
-
     private static string NormalizeWhitespace(string text) => Regex.Replace(text, "\\s+", " ");
 
-    private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }

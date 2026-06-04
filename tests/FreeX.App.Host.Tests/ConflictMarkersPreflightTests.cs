@@ -28,7 +28,7 @@ public sealed class ConflictMarkersPreflightTests
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
-        var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), "");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), "");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
@@ -49,7 +49,7 @@ public sealed class ConflictMarkersPreflightTests
             RunProcess("git", "add tracked.cs", tempDirectory).ExitCode.Should().Be(0);
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("Validated 1 text file(s) for Git conflict markers.");
@@ -73,7 +73,7 @@ public sealed class ConflictMarkersPreflightTests
             RunProcess("git", "add broken.cs", tempDirectory).ExitCode.Should().Be(0);
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
@@ -99,7 +99,7 @@ public sealed class ConflictMarkersPreflightTests
             File.WriteAllText(Path.Combine(tempDirectory, "broken.cs"), $"namespace Scratch;{Environment.NewLine}{marker}{Environment.NewLine}");
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-SearchRoots \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-SearchRoots \"{tempDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
@@ -122,7 +122,7 @@ public sealed class ConflictMarkersPreflightTests
             File.WriteAllText(Path.Combine(tempDirectory, "broken.slnx"), $"<Solution>{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}</Solution>");
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-SearchRoots \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-SearchRoots \"{tempDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
@@ -132,28 +132,6 @@ public sealed class ConflictMarkersPreflightTests
         {
             DeleteDirectory(tempDirectory);
         }
-    }
-
-    private static PowerShellResult RunPowerShellScript(string scriptPath, string workingDirectory, string arguments)
-    {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        return new PowerShellResult(process.ExitCode, output, error);
     }
 
     private static PowerShellResult RunProcess(string fileName, string arguments, string workingDirectory)
@@ -189,5 +167,4 @@ public sealed class ConflictMarkersPreflightTests
         Directory.Delete(directory, recursive: true);
     }
 
-    private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }
