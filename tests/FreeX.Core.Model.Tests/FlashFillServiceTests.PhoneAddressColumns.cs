@@ -97,6 +97,58 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_AddressZip4_ExtractsExtensionFromZipPlusFour()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("500 Market St, San Francisco, CA 94105-1205", "1205"),
+                ("1 Kendall Sq, Cambridge, MA 02139-4307", "4307")
+            ],
+            ["88 Townsend St, San Francisco, CA 94107-1234"]);
+
+        result.Should().BeEquivalentTo(["1234"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_AddressZip4_DoesNotInferFromPlainFiveDigitZipExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St, Seattle, WA 98101", "8101"),
+                ("55 Burnside Ave, Portland, OR 97209", "7209")
+            ],
+            ["1600 Amphitheatre Pkwy, Mountain View, CA 94043"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_AddressZip4_ReturnsNullWhenRemainingAddressIsMalformed()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("500 Market St, San Francisco, CA 94105-1205", "1205"),
+                ("1 Kendall Sq, Cambridge, MA 02139-4307", "4307")
+            ],
+            ["88 Townsend St San Francisco CA 94107-1234"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_AddressZip4_ReturnsNullWhenRemainingAddressHasPlainFiveDigitZip()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("500 Market St, San Francisco, CA 94105-1205", "1205"),
+                ("1 Kendall Sq, Cambridge, MA 02139-4307", "4307")
+            ],
+            ["1600 Amphitheatre Pkwy, Mountain View, CA 94043"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_AddressComponents_ReturnsNullWhenRemainingAddressIsMalformed()
     {
         var result = FlashFillService.Fill(
