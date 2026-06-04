@@ -11,7 +11,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = PasteCommandFactory.CreateExternalTextPasteCommand(
             sheet.Id,
@@ -31,7 +31,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var edge = new CellAddress(sheet.Id, 1, CellAddress.MaxCol);
         sheet.SetCell(edge, Cell.FromValue(new TextValue("keep")));
 
@@ -52,7 +52,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = PasteCommandFactory.CreateExternalTextPasteCommand(
             sheet.Id,
@@ -76,7 +76,7 @@ public sealed partial class PasteCellsCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var address = new CellAddress(sheet.Id, 3, 2);
 
         var command = PasteCommandFactory.CreateExternalTextPasteCommand(sheet.Id, address, [[text]]);

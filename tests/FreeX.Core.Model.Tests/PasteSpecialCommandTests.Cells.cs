@@ -11,7 +11,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new[]
         {
             (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("A"))),
@@ -45,7 +45,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dest = new CellAddress(sheet.Id, 3, 3);
         sheet.SetCell(dest, new NumberValue(10));
         var source = new[]
@@ -70,7 +70,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dest = new CellAddress(sheet.Id, 3, 3);
         var destinationStyle = wb.RegisterStyle(new CellStyle { Italic = true });
         sheet.SetStyleOnly(dest.Row, dest.Col, destinationStyle);
@@ -98,7 +98,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dest = new CellAddress(sheet.Id, 3, 3);
         var destinationStyle = wb.RegisterStyle(new CellStyle { Italic = true });
         sheet.SetStyleOnly(dest.Row, dest.Col, destinationStyle);
@@ -127,7 +127,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dest = new CellAddress(sheet.Id, 3, 3);
         sheet.SetCell(dest, new NumberValue(10));
         var source = new[]
@@ -152,7 +152,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dest = new CellAddress(sheet.Id, 3, 3);
         var startDate = DateTimeValue.FromDateTime(new DateTime(2026, 5, 29));
         sheet.SetCell(dest, startDate);
@@ -178,7 +178,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dest = new CellAddress(sheet.Id, 3, 3);
         sheet.SetCell(dest, new NumberValue(10));
         var source = new[]
@@ -203,7 +203,7 @@ public sealed partial class PasteSpecialCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var dest = new CellAddress(sheet.Id, 3, 3);
         sheet.SetCell(dest, new NumberValue(10));
         var source = new[]

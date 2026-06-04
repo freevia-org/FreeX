@@ -12,7 +12,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.BackgroundImage = new WorksheetBackgroundImage([1, 2, 3], "image/png", "old.png");
         var next = new WorksheetBackgroundImage([9, 8, 7], "image/jpeg", "new.jpg");
 
@@ -34,7 +34,7 @@ public sealed partial class PageLayoutCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.BackgroundImage = new WorksheetBackgroundImage([1, 2, 3], "image/png", "background.png");
 
         var command = new ClearWorksheetBackgroundCommand(sheet.Id);
