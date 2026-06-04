@@ -43,6 +43,10 @@ public partial class GridView
     private bool _autofillDragging;
     private GridRange? _autofillSourceRange;
     private CellAddress? _autofillTarget;
+    private bool _selectionMoveDragging;
+    private GridRange? _selectionMoveSourceRange;
+    private CellAddress _selectionMoveStartCell;
+    private GridRange? _selectionMovePreviewRange;
     private WorksheetPageMarginEdge? _marginDragEdge;
     private SplitDividerHandle _splitDividerDragHandle = SplitDividerHandle.None;
     private bool _splitPaneScrollbarDragging;

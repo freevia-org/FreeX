@@ -680,4 +680,43 @@ public partial class MainWindow
         UpdateViewport();
         RefreshStatusBar();
     }
+
+    private void OnSelectionMoveRequested(GridRange sourceRange, GridRange targetRange)
+    {
+        if (sourceRange.Start.Sheet != _currentSheetId ||
+            targetRange.Start.Sheet != _currentSheetId)
+        {
+            return;
+        }
+
+        var command = new MoveRangeCommand(_currentSheetId, sourceRange, targetRange.Start);
+        if (!TryExecuteCommand(command, "Move Cells", out var outcome))
+            return;
+
+        ClearClipboardVisualState();
+        SetSelectedRangesIfChanged(null);
+        _selectionAnchor = targetRange.Start;
+        _selectionCursor = targetRange.End;
+        SheetGrid.SelectedRange = targetRange;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is not null)
+        {
+            sheet.ActiveRow = targetRange.Start.Row;
+            sheet.ActiveCol = targetRange.Start.Col;
+        }
+
+        SetCellAddressBoxSelectionText(targetRange.Start == targetRange.End
+            ? FormatCellReference(targetRange.Start)
+            : FormatRangeReference(targetRange.Start, targetRange.End));
+        SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(targetRange.Start), targetRange.Start));
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+        RefreshToolbarAfterSelectionChange();
+        RefreshStatusBar();
+        RefreshValidationDropdown();
+        UpdateCommentPreview(targetRange.Start);
+        FocusSheetGridIfNeeded();
+    }
 }

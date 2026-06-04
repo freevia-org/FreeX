@@ -133,6 +133,14 @@ public partial class GridView
             return;
         }
 
+        if (_selectionMoveDragging)
+        {
+            UpdateSelectionMovePreview(pos);
+            Cursor = Cursors.SizeAll;
+            e.Handled = true;
+            return;
+        }
+
         if (_resizeTarget == ResizeTarget.Column)
         {
             if (Viewport is null)
@@ -253,6 +261,7 @@ public partial class GridView
             Cursor = marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
                    : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
                    : IsOnAutofillHandle(pos) ? Cursors.Cross
+                   : IsOnSelectionMoveBorder(pos) ? Cursors.SizeAll
                    : null;
         }
     }
@@ -288,6 +297,7 @@ public partial class GridView
         _splitDividerDragHandle != SplitDividerHandle.None ||
         _splitPaneScrollbarDragging ||
         _autofillDragging ||
+        _selectionMoveDragging ||
         _resizeTarget != ResizeTarget.None;
 
     private void CancelActiveCapturedGridDrag()
@@ -340,6 +350,16 @@ public partial class GridView
             _autofillDragging = false;
             _autofillSourceRange = null;
             _autofillTarget = null;
+            Cursor = null;
+            InvalidateVisual();
+        }
+
+        if (_selectionMoveDragging)
+        {
+            _selectionMoveDragging = false;
+            _selectionMoveSourceRange = null;
+            _selectionMovePreviewRange = null;
+            _selectionMoveStartCell = default;
             Cursor = null;
             InvalidateVisual();
         }
@@ -506,6 +526,12 @@ public partial class GridView
             _autofillTarget      = SelectedRange.Value.End;
             CaptureMouse();
             Cursor = Cursors.Cross;
+            e.Handled = true;
+            return;
+        }
+
+        if (TryBeginSelectionMoveDrag(pos))
+        {
             e.Handled = true;
             return;
         }
@@ -767,6 +793,28 @@ public partial class GridView
             return;
         }
 
+        if (_selectionMoveDragging)
+        {
+            var pos = e.GetPosition(this);
+            UpdateSelectionMovePreview(pos);
+            var source = _selectionMoveSourceRange;
+            var target = _selectionMovePreviewRange;
+
+            _selectionMoveDragging = false;
+            _selectionMoveSourceRange = null;
+            _selectionMovePreviewRange = null;
+            _selectionMoveStartCell = default;
+            Cursor = null;
+            ReleaseMouseCapture();
+
+            if (source.HasValue && target.HasValue && source.Value != target.Value)
+                SelectionMoveRequested?.Invoke(source.Value, target.Value);
+
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
         if (_resizeTarget != ResizeTarget.None)
         {
             var pos = e.GetPosition(this);
@@ -814,5 +862,68 @@ public partial class GridView
         Math.Abs(previous.Top - current.Top) > 0.0001 ||
         Math.Abs(previous.Right - current.Right) > 0.0001 ||
         Math.Abs(previous.Bottom - current.Bottom) > 0.0001;
+
+    private bool IsOnSelectionMoveBorder(Point pos) =>
+        Keyboard.Modifiers == ModifierKeys.None &&
+        GridSelectionMovePlanner.IsOnMoveBorder(
+            Viewport,
+            SelectedRange,
+            SelectedRanges,
+            pos,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight);
+
+    private bool TryBeginSelectionMoveDrag(Point pos)
+    {
+        if (!IsOnSelectionMoveBorder(pos) ||
+            Viewport is null ||
+            SelectedRange is not { } sourceRange)
+        {
+            return false;
+        }
+
+        var hitCell = HitTestViewportCell(Viewport, sourceRange.Start.Sheet, pos) ?? sourceRange.Start;
+        _selectionMoveDragging = true;
+        _selectionMoveSourceRange = sourceRange;
+        _selectionMoveStartCell = GridSelectionMovePlanner.ClampDragStartCell(sourceRange, hitCell);
+        _selectionMovePreviewRange = sourceRange;
+        Cursor = Cursors.SizeAll;
+        InvalidateVisual();
+        CaptureMouse();
+        return true;
+    }
+
+    private void UpdateSelectionMovePreview(Point pos)
+    {
+        var scrollRequest = CalculateAutofillEdgeScrollIntent(
+            pos.X,
+            pos.Y,
+            ActualWidth,
+            ActualHeight,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight);
+        if (scrollRequest.HasAnyDirection)
+            AutofillEdgeScrollRequested?.Invoke(scrollRequest);
+
+        if (Viewport is null || _selectionMoveSourceRange is not { } source)
+            return;
+
+        if (HitTestViewportCell(Viewport, source.Start.Sheet, pos) is not { } currentCell)
+            return;
+
+        if (GridSelectionMovePlanner.CalculateTargetRange(
+                source,
+                _selectionMoveStartCell,
+                currentCell) is not { } targetRange)
+        {
+            return;
+        }
+
+        if (_selectionMovePreviewRange == targetRange)
+            return;
+
+        _selectionMovePreviewRange = targetRange;
+        InvalidateVisual();
+    }
 
 }
