@@ -10,13 +10,7 @@ public class GroupCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        return (wb, sheet, new SimpleCtx(wb));
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook => wb;
-        public Sheet GetSheet(SheetId id) => wb.GetSheet(id)!;
+        return (wb, sheet, new TestCommandContext(wb));
     }
 
     [Fact]

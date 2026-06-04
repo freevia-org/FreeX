@@ -12,12 +12,6 @@ public partial class CommentCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        return (wb, sheet, new SimpleCtx(wb));
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
+        return (wb, sheet, new TestCommandContext(wb));
     }
 }
