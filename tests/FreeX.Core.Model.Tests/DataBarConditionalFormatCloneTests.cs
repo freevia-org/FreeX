@@ -15,7 +15,7 @@ public sealed class DataBarConditionalFormatCloneTests
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1));
 
         new PasteConditionalFormatsCommand(sheet.Id, sourceRange, new CellAddress(sheet.Id, 10, 3), transpose: false)
-            .Apply(new SimpleContext(workbook));
+            .Apply(new TestCommandContext(workbook));
 
         var pasted = sheet.ConditionalFormats.Should().HaveCount(2).And.Subject.Last();
         AssertAdvancedDataBar(pasted);
@@ -45,7 +45,7 @@ public sealed class DataBarConditionalFormatCloneTests
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1));
 
         new PasteConditionalFormatsCommand(sheet.Id, sourceRange, new CellAddress(sheet.Id, 10, 3), transpose: false)
-            .Apply(new SimpleContext(workbook));
+            .Apply(new TestCommandContext(workbook));
 
         var pasted = sheet.ConditionalFormats.Should().HaveCount(2).And.Subject.Last();
         pasted.MinThresholdGreaterThanOrEqual.Should().BeFalse();
@@ -73,7 +73,7 @@ public sealed class DataBarConditionalFormatCloneTests
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1));
 
         new PasteConditionalFormatsCommand(sheet.Id, sourceRange, new CellAddress(sheet.Id, 10, 3), transpose: false)
-            .Apply(new SimpleContext(workbook));
+            .Apply(new TestCommandContext(workbook));
 
         var pasted = sheet.ConditionalFormats.Should().HaveCount(2).And.Subject.Last();
         pasted.IconSetThresholds.Should().Equal(
@@ -97,7 +97,7 @@ public sealed class DataBarConditionalFormatCloneTests
         var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1));
 
         new PasteConditionalFormatsCommand(sheet.Id, sourceRange, new CellAddress(sheet.Id, 10, 3), transpose: false)
-            .Apply(new SimpleContext(workbook));
+            .Apply(new TestCommandContext(workbook));
 
         var pasted = sheet.ConditionalFormats.Should().HaveCount(2).And.Subject.Last();
         pasted.NativeChildXmls.Should().HaveCount(2);
@@ -133,9 +133,4 @@ public sealed class DataBarConditionalFormatCloneTests
         rule.DataBarNegativeBorderColor.Should().Be(new RgbColor(7, 8, 9));
     }
 
-    private sealed class SimpleContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
