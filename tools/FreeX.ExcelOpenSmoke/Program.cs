@@ -634,6 +634,17 @@ internal static class ExcelOpenSmoke
             issues.Add("missing xl/styles.xml for public styles/formatting tag");
         }
 
+        if ((tags.Contains("styles") || tags.Contains("formatting")) &&
+            !PackageRelationshipExists(
+                archive,
+                new PackageRelationshipExpectation(
+                    "xl/_rels/workbook.xml.rels",
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles",
+                    "xl/styles.xml")))
+        {
+            issues.Add("missing workbook relationship to xl/styles.xml for public styles/formatting tag");
+        }
+
         if (tags.Contains("shared-strings") &&
             !PackageEntryExists(archive, "xl/sharedStrings.xml"))
         {
