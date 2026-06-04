@@ -142,6 +142,14 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("Jan 2, 24")]
     [InlineData("Jan 2 26")]
     [InlineData("2 Jan 26")]
+    [InlineData("24/1/2")]
+    [InlineData("'24/1/2")]
+    [InlineData("26-01-02")]
+    [InlineData("'26-01-02")]
+    [InlineData("26.1.2")]
+    [InlineData("26 Jan 2")]
+    [InlineData("'26 Jan 2")]
+    [InlineData("26-Jan-02")]
     public void FindFormulaErrorIssues_ReturnsTextDatesWithTwoDigitYears(string value)
     {
         var wb = new Workbook("test");
@@ -160,7 +168,11 @@ public sealed partial class FormulaAuditingServiceTests
     [Theory]
     [InlineData("1/2/2026")]
     [InlineData("2026-01-02")]
+    [InlineData("2026 Jan 2")]
     [InlineData("Q1 26")]
+    [InlineData("26/13/2")]
+    [InlineData("26-02-30")]
+    [InlineData("99 Jan 32")]
     [InlineData("'")]
     [InlineData("12345")]
     public void FindFormulaErrorIssues_DoesNotReturnTextDatesWithTwoDigitYearsForNonMatchingText(string value)
