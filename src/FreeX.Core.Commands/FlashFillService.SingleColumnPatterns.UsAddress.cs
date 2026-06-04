@@ -90,6 +90,8 @@ public static partial class FlashFillService
         component = kind switch
         {
             UsAddressComponentKind.Street => parts.Street,
+            UsAddressComponentKind.StreetNumber when TrySplitUsStreetNumber(parts.Street, out var number, out _) => number,
+            UsAddressComponentKind.StreetName when TrySplitUsStreetNumber(parts.Street, out _, out var name) => name,
             UsAddressComponentKind.City => parts.City,
             UsAddressComponentKind.State => parts.State,
             UsAddressComponentKind.Zip5 => parts.Zip[..5],
@@ -100,6 +102,34 @@ public static partial class FlashFillService
         };
 
         return component.Length > 0;
+    }
+
+    private static bool TrySplitUsStreetNumber(string street, out string number, out string name)
+    {
+        number = string.Empty;
+        name = string.Empty;
+
+        var digitEnd = 0;
+        while (digitEnd < street.Length && char.IsDigit(street[digitEnd]))
+            digitEnd++;
+
+        if (digitEnd == 0 ||
+            digitEnd >= street.Length ||
+            !char.IsWhiteSpace(street[digitEnd]))
+        {
+            return false;
+        }
+
+        var nameStart = digitEnd + 1;
+        while (nameStart < street.Length && char.IsWhiteSpace(street[nameStart]))
+            nameStart++;
+
+        if (nameStart >= street.Length)
+            return false;
+
+        number = street[..digitEnd];
+        name = street[nameStart..];
+        return true;
     }
 
     private static bool IsUsStateAbbreviation(string value) =>
