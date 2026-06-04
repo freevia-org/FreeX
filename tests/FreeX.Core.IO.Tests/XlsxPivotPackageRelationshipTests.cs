@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Text;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -88,37 +87,14 @@ public sealed class XlsxPivotPackageRelationshipTests
             ("xl/worksheets/_rels/sheet1.xml.rels", RelationshipsXml()));
 
     private static MemoryStream CreatePackage(params (string Path, string Content)[] entries)
-    {
-        var stream = new MemoryStream();
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            foreach (var (path, content) in entries)
-            {
-                var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
-                using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
-                writer.Write(content);
-            }
-        }
-
-        stream.Position = 0;
-        return stream;
-    }
+        => XlsxPackageTestFixtures.CreatePackage(entries);
 
     private static XDocument LoadPackageXml(ZipArchive archive, string entryName)
-    {
-        var entry = archive.GetEntry(entryName);
-        entry.Should().NotBeNull();
-        using var stream = entry!.Open();
-        return XDocument.Load(stream);
-    }
+        => XlsxPackageTestFixtures.LoadPackageXml(archive, entryName);
 
     private static string RelationshipsXml(params string[] relationships) =>
-        $$"""
-        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-          {{string.Join(Environment.NewLine, relationships)}}
-        </Relationships>
-        """;
+        XlsxPackageTestFixtures.RelationshipsXml(relationships);
 
     private static string Relationship(string id, string type, string target) =>
-        $"""<Relationship Id="{id}" Type="{type}" Target="{target}" />""";
+        XlsxPackageTestFixtures.Relationship(id, type, target);
 }

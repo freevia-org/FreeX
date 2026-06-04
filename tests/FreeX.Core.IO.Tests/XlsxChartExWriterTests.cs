@@ -215,10 +215,7 @@ public sealed partial class XlsxChartExWriterTests
     }
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
-    {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
-    }
+        => XlsxPackageTestFixtures.LoadPackageXml(entry);
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument xml)
     {

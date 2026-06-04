@@ -180,12 +180,10 @@ public sealed class XlsxClassicChartDefaultTests
     }
 
     private static XDocument LoadPackageXml(ZipArchive archive, string entryName)
-    {
-        var entry = archive.GetEntry(entryName);
-        entry.Should().NotBeNull($"the XLSX package should contain {entryName}");
-        using var stream = entry!.Open();
-        return XDocument.Load(stream);
-    }
+        => XlsxPackageTestFixtures.LoadPackageXml(
+            archive,
+            entryName,
+            $"the XLSX package should contain {entryName}");
 
     private static void AssertDefault3DView(
         XDocument chartXml,

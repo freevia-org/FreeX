@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
+using System.Xml.Linq;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;
@@ -56,6 +57,8 @@ internal static class ExcelOpenSmoke
     private const int MaxStructureProbeColumns = 80;
     private const int MaxOpenXmlValidationErrorsToReport = 20;
     private const double ExcelMeasurementTolerance = 0.01;
+    private static readonly XNamespace PackageRelationshipNs =
+        "http://schemas.openxmlformats.org/package/2006/relationships";
 
     public static int Run(string[] args)
     {
@@ -289,6 +292,7 @@ internal static class ExcelOpenSmoke
                 AssertFreeXLoadWarnings(input, "FreeX source load", freeXSave.LoadWarnings);
                 AssertOpenXmlValid(freeXSave.SavedPath, "FreeX-saved workbook");
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
+                AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 sourceForExcel = freeXSave.SavedPath;
                 freeXSavedPath = freeXSave.SavedPath;
                 freeXPreSave = freeXSave.Summary;
@@ -460,6 +464,7 @@ internal static class ExcelOpenSmoke
             CollectComReferences();
             AssertOpenXmlValid(excelSavedPath, "Excel-saved workbook");
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
+            AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
 
             reopenedWorkbook = OpenExcelWorkbook(workbooks, excelSavedPath, readOnly: true);
             ExcelWorkbookSummary reopened;
@@ -609,6 +614,174 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' is missing required package part(s): {string.Join(", ", missing)}");
+    }
+
+    private static void AssertRequiredExcelSavedPackageRelationships(
+        string xlsxPath,
+        WorkbookSmokeExpectations? expectations,
+        string sourcePath)
+    {
+        AssertRequiredPackageRelationships(
+            xlsxPath,
+            expectations?.RequiredExcelSavedPackageRelationships,
+            "Excel-saved workbook",
+            sourcePath);
+    }
+
+    private static void AssertRequiredFreeXSavedPackageRelationships(
+        string xlsxPath,
+        WorkbookSmokeExpectations? expectations,
+        string sourcePath)
+    {
+        AssertRequiredPackageRelationships(
+            xlsxPath,
+            expectations?.RequiredFreeXSavedPackageRelationships,
+            "FreeX-saved workbook",
+            sourcePath);
+    }
+
+    private static void AssertRequiredPackageRelationships(
+        string xlsxPath,
+        IReadOnlyList<PackageRelationshipExpectation>? requiredRelationships,
+        string label,
+        string sourcePath)
+    {
+        if (requiredRelationships is null || requiredRelationships.Count == 0)
+            return;
+
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var missing = new List<string>();
+        foreach (var expectation in requiredRelationships)
+        {
+            var relationshipPart = NormalizePackagePart(expectation.RelationshipPart);
+            var entry = archive.GetEntry(relationshipPart);
+            if (entry is null)
+            {
+                missing.Add($"{FormatPackageRelationshipExpectation(expectation)} (missing relationship part)");
+                continue;
+            }
+
+            XDocument relationshipsXml;
+            using (var stream = entry.Open())
+                relationshipsXml = XDocument.Load(stream);
+
+            if (relationshipsXml.Root?.Elements(PackageRelationshipNs + "Relationship")
+                    .Any(relationship => PackageRelationshipMatches(relationshipPart, relationship, expectation)) != true)
+            {
+                missing.Add(FormatPackageRelationshipExpectation(expectation));
+            }
+        }
+
+        if (missing.Count == 0)
+            return;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' is missing required package relationship(s): {string.Join("; ", missing)}");
+    }
+
+    private static bool PackageRelationshipMatches(
+        string relationshipPart,
+        XElement relationship,
+        PackageRelationshipExpectation expectation)
+    {
+        if (!string.Equals(
+                relationship.Attribute("Type")?.Value,
+                expectation.RelationshipType,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (expectation.Id is not null &&
+            !string.Equals(relationship.Attribute("Id")?.Value, expectation.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (expectation.TargetMode is not null &&
+            !string.Equals(relationship.Attribute("TargetMode")?.Value, expectation.TargetMode, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var actualTarget = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(actualTarget))
+            return false;
+
+        if (string.Equals(actualTarget, expectation.Target, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var actualPackageTarget = ResolvePackageRelationshipTarget(relationshipPart, actualTarget);
+        var expectedPackageTarget = NormalizePackagePart(expectation.Target);
+        return string.Equals(actualPackageTarget, expectedPackageTarget, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatPackageRelationshipExpectation(PackageRelationshipExpectation expectation)
+    {
+        var id = expectation.Id is null ? string.Empty : $" Id={expectation.Id}";
+        var mode = expectation.TargetMode is null ? string.Empty : $" TargetMode={expectation.TargetMode}";
+        return $"{expectation.RelationshipPart} Type={expectation.RelationshipType} Target={expectation.Target}{mode}{id}";
+    }
+
+    private static string ResolvePackageRelationshipTarget(string relationshipPart, string target)
+    {
+        target = target.Replace('\\', '/');
+        if (target.StartsWith("/", StringComparison.Ordinal))
+            return NormalizePackagePart(target);
+
+        var ownerPart = GetRelationshipOwnerPart(relationshipPart);
+        var ownerDirectory = ownerPart.Contains('/', StringComparison.Ordinal)
+            ? ownerPart[..ownerPart.LastIndexOf('/')]
+            : string.Empty;
+        var combined = string.IsNullOrWhiteSpace(ownerDirectory)
+            ? target
+            : $"{ownerDirectory}/{target}";
+        return NormalizePackagePart(NormalizePackagePathSegments(combined));
+    }
+
+    private static string GetRelationshipOwnerPart(string relationshipPart)
+    {
+        relationshipPart = NormalizePackagePart(relationshipPart);
+        if (string.Equals(relationshipPart, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        const string relationshipMarker = "/_rels/";
+        var markerIndex = relationshipPart.LastIndexOf(relationshipMarker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0)
+            return relationshipPart.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)
+                ? relationshipPart[..^".rels".Length]
+                : relationshipPart;
+
+        var directory = relationshipPart[..markerIndex];
+        var fileName = relationshipPart[(markerIndex + relationshipMarker.Length)..];
+        if (fileName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+            fileName = fileName[..^".rels".Length];
+        return string.IsNullOrWhiteSpace(directory)
+            ? fileName
+            : $"{directory}/{fileName}";
+    }
+
+    private static string NormalizePackagePathSegments(string path)
+    {
+        var segments = new List<string>();
+        foreach (var segment in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".")
+                continue;
+            if (segment == "..")
+            {
+                if (segments.Count > 0)
+                    segments.RemoveAt(segments.Count - 1);
+                continue;
+            }
+
+            segments.Add(segment);
+        }
+
+        return string.Join("/", segments);
     }
 
     private static string NormalizePackagePart(string part) =>
@@ -2577,10 +2750,25 @@ internal static class ExcelOpenSmoke
                     "xl/printerSettings/printerSettings1.bin",
                     "xl/worksheets/_rels/sheet1.xml.rels"
                 ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings",
+                        "xl/printerSettings/printerSettings1.bin",
+                        Id: "rIdPrinterSettings1")
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/printerSettings/printerSettings1.bin",
                     "xl/worksheets/_rels/sheet1.xml.rels"
+                ],
+                RequiredExcelSavedPackageRelationships =
+                [
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings",
+                        "xl/printerSettings/printerSettings1.bin")
                 ]
             };
         }
@@ -2592,9 +2780,23 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/calcChain.xml"
                 ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
+                        "xl/calcChain.xml")
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/calcChain.xml"
+                ],
+                RequiredExcelSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain",
+                        "xl/calcChain.xml")
                 ]
             };
         }
@@ -2606,6 +2808,24 @@ internal static class ExcelOpenSmoke
                 [
                     "docProps/core.xml",
                     "docProps/app.xml"
+                ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "_rels/.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
+                        "docProps/app.xml")
+                ],
+                RequiredExcelSavedPackageRelationships =
+                [
+                    new(
+                        "_rels/.rels",
+                        "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
+                        "docProps/core.xml"),
+                    new(
+                        "_rels/.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
+                        "docProps/app.xml")
                 ]
             };
         }
@@ -2620,10 +2840,30 @@ internal static class ExcelOpenSmoke
                     "xl/media/headerFooterImage1.png",
                     "xl/worksheets/_rels/sheet1.xml.rels"
                 ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
+                        "xl/drawings/vmlDrawing1.vml",
+                        Id: "rIdHeaderFooterDrawing1"),
+                    new(
+                        "xl/drawings/_rels/vmlDrawing1.vml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                        "xl/media/headerFooterImage1.png",
+                        Id: "rIdImage1")
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/drawings/vmlDrawing1.vml",
                     "xl/worksheets/_rels/sheet1.xml.rels"
+                ],
+                RequiredExcelSavedPackageRelationships =
+                [
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
+                        "xl/drawings/vmlDrawing1.vml")
                 ]
             };
         }
@@ -2637,6 +2877,19 @@ internal static class ExcelOpenSmoke
                     "xl/drawings/_rels/vmlDrawing1.vml.rels",
                     "xl/media/vmlImage1.png",
                     "xl/worksheets/_rels/sheet1.xml.rels"
+                ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
+                        "xl/drawings/vmlDrawing1.vml",
+                        Id: "rIdFreeXLegacyDrawing"),
+                    new(
+                        "xl/drawings/_rels/vmlDrawing1.vml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                        "xl/media/vmlImage1.png",
+                        Id: "rIdFreeXVmlImage")
                 ]
             };
         }
@@ -2648,6 +2901,24 @@ internal static class ExcelOpenSmoke
                 [
                     "xl/slicers/slicer1.xml",
                     "xl/slicerCaches/slicerCache1.xml"
+                ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.microsoft.com/office/2007/relationships/slicerCache",
+                        "xl/slicerCaches/slicerCache1.xml",
+                        Id: "rIdFreeXSlicerCache1"),
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+                        "xl/drawings/drawing1.xml",
+                        Id: "rIdFreeXFloatingDrawing1"),
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.microsoft.com/office/2007/relationships/slicer",
+                        "xl/slicers/slicer1.xml",
+                        Id: "rIdFreeXSlicerView1")
                 ],
                 RequiredExcelSavedPackageParts =
                 [
@@ -2665,6 +2936,29 @@ internal static class ExcelOpenSmoke
                     "xl/timelines/timeline1.xml",
                     "xl/timelineCaches/timelineCache1.xml"
                 ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.microsoft.com/office/2010/relationships/TimelineCache",
+                        "xl/timelineCaches/timelineCache1.xml",
+                        Id: "rIdFreeXTimelineCache1"),
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+                        "xl/drawings/drawing1.xml",
+                        Id: "rIdFreeXFloatingDrawing1"),
+                    new(
+                        "xl/worksheets/_rels/sheet1.xml.rels",
+                        "http://schemas.microsoft.com/office/2010/relationships/Timeline",
+                        "xl/timelines/timeline1.xml",
+                        Id: "rIdFreeXTimelineView1"),
+                    new(
+                        "xl/drawings/_rels/drawing1.xml.rels",
+                        "http://schemas.microsoft.com/office/2010/relationships/Timeline",
+                        "xl/timelines/timeline1.xml",
+                        Id: "rIdFreeXNativeControl1")
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/timelines/timeline1.xml",
@@ -2681,10 +2975,36 @@ internal static class ExcelOpenSmoke
                     "xl/externalLinks/externalLink1.xml",
                     "xl/externalLinks/_rels/externalLink1.xml.rels"
                 ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink",
+                        "xl/externalLinks/externalLink1.xml",
+                        Id: "rIdFreeXExternalLink1"),
+                    new(
+                        "xl/externalLinks/_rels/externalLink1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath",
+                        "ExternalWorkbook.xlsx",
+                        Id: "rIdExternalBook1",
+                        TargetMode: "External")
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "xl/externalLinks/externalLink1.xml",
                     "xl/externalLinks/_rels/externalLink1.xml.rels"
+                ],
+                RequiredExcelSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink",
+                        "xl/externalLinks/externalLink1.xml"),
+                    new(
+                        "xl/externalLinks/_rels/externalLink1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath",
+                        "ExternalWorkbook.xlsx",
+                        TargetMode: "External")
                 ]
             };
         }
@@ -2698,11 +3018,35 @@ internal static class ExcelOpenSmoke
                     "customXml/itemProps1.xml",
                     "customXml/_rels/item1.xml.rels"
                 ],
+                RequiredFreeXSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+                        "customXml/item1.xml",
+                        Id: "rIdFreeXCustomXml1"),
+                    new(
+                        "customXml/_rels/item1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps",
+                        "customXml/itemProps1.xml",
+                        Id: "rIdCustomXmlProps1")
+                ],
                 RequiredExcelSavedPackageParts =
                 [
                     "customXml/item1.xml",
                     "customXml/itemProps1.xml",
                     "customXml/_rels/item1.xml.rels"
+                ],
+                RequiredExcelSavedPackageRelationships =
+                [
+                    new(
+                        "xl/_rels/workbook.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+                        "customXml/item1.xml"),
+                    new(
+                        "customXml/_rels/item1.xml.rels",
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps",
+                        "customXml/itemProps1.xml")
                 ]
             };
         }
@@ -3982,6 +4326,12 @@ internal static class ExcelOpenSmoke
             Console.WriteLine(
                 $"  FreeX-saved package parts asserted: {string.Join(", ", freeXRequiredParts)}");
         }
+        if (result.FreeXSavedPath is not null &&
+            result.Input.Expectations?.RequiredFreeXSavedPackageRelationships is { Count: > 0 } freeXRequiredRelationships)
+        {
+            Console.WriteLine(
+                $"  FreeX-saved package relationships asserted: {string.Join(", ", freeXRequiredRelationships.Select(FormatPackageRelationshipExpectation))}");
+        }
         if (result.StagedPath is not null)
             Console.WriteLine($"  Staged: {result.StagedPath}");
         if (result.ExcelSavedPath is not null)
@@ -3991,6 +4341,12 @@ internal static class ExcelOpenSmoke
         {
             Console.WriteLine(
                 $"  Excel-saved package parts asserted: {string.Join(", ", requiredParts)}");
+        }
+        if (result.ExcelSavedPath is not null &&
+            result.Input.Expectations?.RequiredExcelSavedPackageRelationships is { Count: > 0 } requiredRelationships)
+        {
+            Console.WriteLine(
+                $"  Excel-saved package relationships asserted: {string.Join(", ", requiredRelationships.Select(FormatPackageRelationshipExpectation))}");
         }
 
         if (result.FreeXPreSave is { } freeXPreSave)
