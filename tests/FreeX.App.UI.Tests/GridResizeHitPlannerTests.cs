@@ -135,7 +135,7 @@ public sealed class GridResizeHitPlannerTests
     [Fact]
     public void HitTest_StopsHeaderScansOnceSortedEdgesPassPointer()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridResizeHitPlanner.cs"));
 
         source.Should().Contain("public readonly record struct GridResizeHit");
@@ -156,6 +156,4 @@ public sealed class GridResizeHitPlannerTests
             [new RowMetric(1, 20, 0), new RowMetric(2, 24, 20)],
             [new ColMetric(1, 40, 0), new ColMetric(2, 60, 40)]);
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }
