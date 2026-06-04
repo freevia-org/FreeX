@@ -157,7 +157,7 @@ Press **Shift+F3** to open the Insert Function dialog with category search.
 
 Formulas tab -> Trace Precedents / Trace Dependents draws arrows showing cell relationships. Evaluate Formula steps through a formula's calculation order.
 
-Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, formulas stored as text including apostrophe-prefixed formulas, text-number/date warnings including apostrophe-prefixed, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, and month-name text dates with two-digit years, blank references, omitted aggregate cells, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
+Error Checking lists deterministic workbook issues such as cached formula errors, inconsistent formulas, formulas stored as text including apostrophe-prefixed formulas, text-number/date warnings including apostrophe-prefixed, currency-symbol, percent, and accounting-parentheses number text plus apostrophe-prefixed, separator, and month-name text dates with two-digit years, blank references, omitted aggregate cells, unlocked formula cells, and invalid data-validation entries. Use Ignore Error for a selected issue or File -> Options -> Formulas to change the supported rule set.
 
 ### Calculation
 
@@ -381,7 +381,7 @@ FreeX supports deterministic Flash Fill patterns rather than Excel's full ML-lik
 - Reformatting two- and three-part names, including last-name-first forms, middle-token drops, and initial abbreviations such as `A. Lovelace`, `A. L.`, `Lovelace, Ada`, and `Lovelace, A. B.`.
 - Cleaning known title, credential, and organization suffixes such as `Dr. Ada Lovelace Jr.`, comma-attached `Dr. Ada Lovelace,Jr.,Ph.D.`, or `Northwind Traders,LLC`.
 - Building first/last-name email aliases with learned constant domains and `.`, `_`, or `-` separators, including first-initial/last-name, last-name/first-initial, and first/last-initial forms.
-- Applying digit-mask punctuation copied from examples, such as phone-number formatting.
+- Applying digit-mask punctuation copied from examples, such as phone-number formatting, and extracting phone extensions from `x`, `ext`, `ext.`, or `extension` markers.
 - Extracting US address components such as street, street number, street name, street without trailing unit/suite, unit/suite suffix, unit/suite identifier, city, state, ZIP, ZIP+4 base ZIP, and the ZIP+4 extension.
 
 If the examples are ambiguous, inconsistent, or outside the supported pattern set, Flash Fill leaves the remaining cells unchanged.
