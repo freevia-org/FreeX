@@ -630,6 +630,12 @@ internal static class ExcelOpenSmoke
             issues.Add("missing xl/styles.xml for public styles/formatting tag");
         }
 
+        if (tags.Contains("shared-strings") &&
+            !PackageEntryExists(archive, "xl/sharedStrings.xml"))
+        {
+            issues.Add("missing xl/sharedStrings.xml for public shared-strings tag");
+        }
+
         if (tags.Contains("hyperlinks") &&
             !PublicWorksheetElements(worksheetXmlDocuments, "hyperlink").Any())
         {
@@ -683,6 +689,7 @@ internal static class ExcelOpenSmoke
     private static bool HasExpectedPublicPackageTags(IReadOnlySet<string> tags) =>
         tags.Contains("styles") ||
         tags.Contains("formatting") ||
+        tags.Contains("shared-strings") ||
         tags.Contains("hyperlinks") ||
         tags.Contains("merged-cells") ||
         tags.Contains("inline-strings") ||
