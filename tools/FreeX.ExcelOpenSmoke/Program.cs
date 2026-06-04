@@ -100,6 +100,10 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
     private const string StylesRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+    private const string TableContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
+    private const string TableRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
     private const string WorkbookRelationshipPart = "xl/_rels/workbook.xml.rels";
     private const string WorksheetContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
@@ -360,6 +364,7 @@ internal static class ExcelOpenSmoke
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDrawingPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageContentTypes(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -553,6 +558,7 @@ internal static class ExcelOpenSmoke
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDrawingPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageContentTypes(excelSavedPath, expectations, stagedPath);
@@ -2408,6 +2414,117 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet drawing package graph: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetTablePackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetRelationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+
+            foreach (var tableParts in worksheetXml.Descendants(SpreadsheetNs + "tableParts"))
+            {
+                var tablePartReferences = tableParts
+                    .Elements(SpreadsheetNs + "tablePart")
+                    .Select((tablePart, index) => new TablePartReference(
+                        index + 1,
+                        tablePart.Attribute(OfficeRelationshipNs + "id")?.Value))
+                    .ToArray();
+
+                AddTablePartsCountAttributeIssues(issues, worksheetPart, tableParts, tablePartReferences.Length);
+                if (tablePartReferences.Length == 0)
+                    continue;
+
+                foreach (var tablePartReference in tablePartReferences)
+                {
+                    if (string.IsNullOrWhiteSpace(tablePartReference.RelationshipId))
+                    {
+                        issues.Add($"{worksheetPart} tablePart #{tablePartReference.Ordinal} has no relationship id");
+                        continue;
+                    }
+
+                    if (!TryGetPackageRelationshipTarget(
+                            archive,
+                            worksheetRelationshipPart,
+                            tablePartReference.RelationshipId,
+                            TableRelationshipType,
+                            out var tableTarget,
+                            out var tableRelationshipIssue))
+                    {
+                        issues.Add($"{worksheetPart} tablePart #{tablePartReference.Ordinal} reference {tablePartReference.RelationshipId}: {tableRelationshipIssue}");
+                        continue;
+                    }
+
+                    if (!TryResolvePackageRelationshipTarget(
+                            worksheetRelationshipPart,
+                            tableTarget!,
+                            out var tablePart,
+                            out var tableTargetIssue))
+                    {
+                        issues.Add($"{worksheetPart} tablePart #{tablePartReference.Ordinal} reference {tablePartReference.RelationshipId} has invalid Target {tableTarget}: {tableTargetIssue}");
+                        continue;
+                    }
+
+                    var contentTypeIssue = FindPackageContentTypeIssue(archive, tablePart, TableContentType);
+                    if (contentTypeIssue is not null)
+                        issues.Add(contentTypeIssue);
+
+                    var tableEntry = FindPackageEntry(archive, tablePart);
+                    if (tableEntry is null)
+                    {
+                        issues.Add($"{worksheetPart} tablePart #{tablePartReference.Ordinal} reference {tablePartReference.RelationshipId} targets missing package part {tablePart}");
+                        continue;
+                    }
+
+                    var tableXml = LoadPackageXml(tableEntry);
+                    if (tableXml.Root?.Name != SpreadsheetNs + "table")
+                        issues.Add($"{tablePart} has an invalid table root element");
+                }
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetTablePackage(label, sourcePath, issues);
+    }
+
+    private static void AddTablePartsCountAttributeIssues(
+        List<string> issues,
+        string worksheetPart,
+        XElement tableParts,
+        int actualCount)
+    {
+        var countText = tableParts.Attribute("count")?.Value;
+        if (string.IsNullOrWhiteSpace(countText))
+            return;
+
+        if (!int.TryParse(countText, NumberStyles.None, CultureInfo.InvariantCulture, out var declaredCount))
+        {
+            issues.Add($"{worksheetPart} tableParts has invalid count '{countText}'");
+            return;
+        }
+
+        if (declaredCount != actualCount)
+            issues.Add($"{worksheetPart} tableParts count is {declaredCount}, but contains {actualCount} tablePart entries");
+    }
+
+    private static void ThrowInvalidWorksheetTablePackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet table package graph: {sample}{suffix}");
     }
 
     private static void AssertPackageRelationshipsComplete(string xlsxPath, string label, string sourcePath)
@@ -6667,4 +6784,8 @@ internal static class ExcelOpenSmoke
         string WorksheetPart,
         string Description,
         string? ValueText);
+
+    private sealed record TablePartReference(
+        int Ordinal,
+        string? RelationshipId);
 }
