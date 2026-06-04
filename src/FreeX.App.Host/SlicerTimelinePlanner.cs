@@ -93,8 +93,11 @@ public static class SlicerTimelinePlanner
 
     public static NativeVisualFilters GetNativeVisualFilters(Workbook workbook, Sheet activeSheet)
     {
-        if (activeSheet.PivotTables.Count == 0)
+        if ((workbook.Slicers.Count == 0 && workbook.Timelines.Count == 0) ||
+            activeSheet.PivotTables.Count == 0)
+        {
             return EmptyNativeVisualFilters;
+        }
 
         var activePivotNames = BuildActivePivotNameSet(activeSheet);
         var cache = NativeVisualFilterCaches.GetValue(activeSheet, static _ => new NativeVisualFilterCache());

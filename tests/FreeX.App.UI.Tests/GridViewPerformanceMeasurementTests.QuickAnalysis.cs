@@ -12,6 +12,23 @@ namespace FreeX.App.UI.Tests;
 public sealed partial class GridViewPerformanceMeasurementTests
 {
     [BenchmarkFact]
+    public void Benchmark_RenderQuickAnalysisPreviewVariants_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.ColorScale, "COLOR_SCALE");
+            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.IconSet, "ICON_SET");
+            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.Highlight, "HIGHLIGHT");
+            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.ClearFormat, "CLEAR_FORMAT");
+            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.TotalFormula, "TOTAL_FORMULA");
+            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.Table, "TABLE");
+            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.LineSparkline, "LINE_SPARKLINE");
+            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.ColumnSparkline, "COLUMN_SPARKLINE");
+            MeasureQuickAnalysisPreviewVariant(GridQuickAnalysisPreviewVisualKind.WinLossSparkline, "WIN_LOSS_SPARKLINE");
+        });
+    }
+
+    [BenchmarkFact]
     public void Benchmark_RenderQuickAnalysisDataBarPreview_ReportsTiming()
     {
         StaTestRunner.Run(() =>
