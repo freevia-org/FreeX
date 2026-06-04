@@ -33,6 +33,5 @@ internal static class ChartDialogInputParser
         TryReadFiniteDouble(textBox.Text, out value) && value >= min && value <= max;
 
     private static bool TryReadFiniteDouble(string text, out double value) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
-        double.IsFinite(value);
+        NumericInputParser.TryParseFiniteDouble(text, CultureInfo.InvariantCulture, out value);
 }

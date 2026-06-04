@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace FreeX.App.Host;
 
 public static class WorksheetSizeInputParser
@@ -7,8 +9,11 @@ public static class WorksheetSizeInputParser
 
     public static bool TryParseSizeInRange(string input, double minInclusive, double maxInclusive, out double size)
     {
-        if (double.TryParse(input.Trim(), out var parsed) &&
-            double.IsFinite(parsed) &&
+        if (NumericInputParser.TryParseFiniteDouble(
+                input,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.CurrentCulture,
+                out var parsed) &&
             parsed >= minInclusive &&
             parsed <= maxInclusive)
         {

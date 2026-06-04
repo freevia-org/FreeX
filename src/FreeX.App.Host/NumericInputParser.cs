@@ -5,8 +5,11 @@ namespace FreeX.App.Host;
 internal static class NumericInputParser
 {
     public static bool TryParseFiniteDouble(string input, CultureInfo culture, out double value)
+        => TryParseFiniteDouble(input, NumberStyles.Float, culture, out value);
+
+    public static bool TryParseFiniteDouble(string input, NumberStyles styles, CultureInfo culture, out double value)
     {
-        if (double.TryParse(input.Trim(), NumberStyles.Float, culture, out value) && double.IsFinite(value))
+        if (double.TryParse(input.Trim(), styles, culture, out value) && double.IsFinite(value))
             return true;
 
         value = 0;
