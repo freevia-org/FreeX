@@ -11,7 +11,7 @@ public sealed class ConsolidateCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2));
         var source2 = new GridRange(new CellAddress(sheet.Id, 1, 4), new CellAddress(sheet.Id, 2, 5));
         var destination = new CellAddress(sheet.Id, 4, 1);
@@ -53,7 +53,7 @@ public sealed class ConsolidateCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
         var source2 = new GridRange(new CellAddress(sheet.Id, 1, 2), new CellAddress(sheet.Id, 1, 2));
         var source3 = new GridRange(new CellAddress(sheet.Id, 1, 3), new CellAddress(sheet.Id, 1, 3));
@@ -74,7 +74,7 @@ public sealed class ConsolidateCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
         var source2 = new GridRange(new CellAddress(sheet.Id, 1, 4), new CellAddress(sheet.Id, 1, 4));
         var destination = new CellAddress(sheet.Id, 3, 1);
@@ -100,7 +100,7 @@ public sealed class ConsolidateCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2));
         var source2 = new GridRange(new CellAddress(sheet.Id, 1, 4), new CellAddress(sheet.Id, 3, 5));
 
@@ -117,7 +117,7 @@ public sealed class ConsolidateCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var staleSheetId = SheetId.New();
         var source = new GridRange(new CellAddress(staleSheetId, 1, 1), new CellAddress(staleSheetId, 1, 1));
         var destination = new CellAddress(sheet.Id, 3, 1);
@@ -136,7 +136,7 @@ public sealed class ConsolidateCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
         var destination = new CellAddress(SheetId.New(), 3, 1);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
@@ -155,7 +155,7 @@ public sealed class ConsolidateCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
         var source2 = new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 3, 7));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Q1"));
@@ -200,7 +200,7 @@ public sealed class ConsolidateCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         var source1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2));
         var source2 = new GridRange(new CellAddress(sheet.Id, 1, 4), new CellAddress(sheet.Id, 2, 5));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Q1"));
@@ -226,9 +226,4 @@ public sealed class ConsolidateCommandTests
         cell.FormulaText.Should().Be("SUM(B2,E2)");
     }
 
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
-    }
 }
