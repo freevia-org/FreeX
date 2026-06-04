@@ -114,7 +114,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     private static byte[] CreateGeneratedStyleHeavyXlsxPackage(
         bool formulaMarker = false,
         bool internalHyperlinkMarker = false,
-        bool legacyCommentMarker = false)
+        bool legacyCommentMarker = false,
+        bool structuredTableMarker = false)
     {
         using var stream = new MemoryStream(capacity: 8 * 1024 * 1024);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
@@ -122,7 +123,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             WriteTextEntry(
                 archive,
                 "[Content_Types].xml",
-                writer => WriteGeneratedStyleHeavyContentTypes(writer, legacyCommentMarker));
+                writer => WriteGeneratedStyleHeavyContentTypes(writer, legacyCommentMarker, structuredTableMarker));
             WriteTextEntry(archive, "_rels/.rels", WriteGeneratedStyleHeavyRootRelationships);
             WriteTextEntry(archive, "xl/workbook.xml", WriteGeneratedStyleHeavyWorkbook);
             WriteTextEntry(archive, "xl/_rels/workbook.xml.rels", WriteGeneratedStyleHeavyWorkbookRelationships);
@@ -141,14 +142,27 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                         sheetIndex,
                         formulaMarker,
                         internalHyperlinkMarker,
-                        legacyCommentMarker));
+                        legacyCommentMarker,
+                        structuredTableMarker));
             }
 
-            if (legacyCommentMarker)
+            if (legacyCommentMarker || structuredTableMarker)
             {
-                WriteTextEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", WriteGeneratedStyleHeavyWorksheetRelationships);
-                WriteTextEntry(archive, "xl/comments1.xml", WriteGeneratedStyleHeavyComments);
-                WriteTextEntry(archive, "xl/drawings/vmlDrawing1.vml", WriteGeneratedStyleHeavyVmlDrawing);
+                WriteTextEntry(
+                    archive,
+                    "xl/worksheets/_rels/sheet1.xml.rels",
+                    writer => WriteGeneratedStyleHeavyWorksheetRelationships(
+                        writer,
+                        legacyCommentMarker,
+                        structuredTableMarker));
+                if (legacyCommentMarker)
+                {
+                    WriteTextEntry(archive, "xl/comments1.xml", WriteGeneratedStyleHeavyComments);
+                    WriteTextEntry(archive, "xl/drawings/vmlDrawing1.vml", WriteGeneratedStyleHeavyVmlDrawing);
+                }
+
+                if (structuredTableMarker)
+                    WriteTextEntry(archive, "xl/tables/table1.xml", WriteGeneratedStyleHeavyStructuredTable);
             }
         }
 
@@ -162,7 +176,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         write(writer);
     }
 
-    private static void WriteGeneratedStyleHeavyContentTypes(TextWriter writer, bool legacyCommentMarker)
+    private static void WriteGeneratedStyleHeavyContentTypes(
+        TextWriter writer,
+        bool legacyCommentMarker,
+        bool structuredTableMarker)
     {
         writer.Write(
             """
@@ -189,6 +206,14 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             writer.Write(
                 """
                   <Override PartName="/xl/comments1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>
+                """);
+        }
+
+        if (structuredTableMarker)
+        {
+            writer.Write(
+                """
+                  <Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>
                 """);
         }
 
@@ -297,7 +322,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         int sheetIndex,
         bool formulaMarker,
         bool internalHyperlinkMarker,
-        bool legacyCommentMarker)
+        bool legacyCommentMarker,
+        bool structuredTableMarker)
     {
         var lastColumn = GeneratedStyleHeavyStyleOnlyStartColumn + GeneratedStyleHeavyStyleOnlyColumnsPerSheet - 1;
         var lastReference = $"{CellAddress.NumberToColumnName((uint)lastColumn)}{GeneratedStyleHeavyRowsPerSheet}";
@@ -359,21 +385,52 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                 """);
         }
 
+        if (structuredTableMarker && sheetIndex == 1)
+        {
+            var tableRelId = legacyCommentMarker ? "rId3" : "rId1";
+            writer.Write($"""
+                  <tableParts count="1"><tablePart r:id="{tableRelId}"/></tableParts>
+                """);
+        }
+
         writer.Write(
             """
             </worksheet>
             """);
     }
 
-    private static void WriteGeneratedStyleHeavyWorksheetRelationships(TextWriter writer) =>
+    private static void WriteGeneratedStyleHeavyWorksheetRelationships(
+        TextWriter writer,
+        bool legacyCommentMarker,
+        bool structuredTableMarker)
+    {
         writer.Write(
             """
             <?xml version="1.0" encoding="UTF-8"?>
             <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="../comments1.xml"/>
-              <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" Target="../drawings/vmlDrawing1.vml"/>
+            """);
+        if (legacyCommentMarker)
+        {
+            writer.Write(
+                """
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="../comments1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" Target="../drawings/vmlDrawing1.vml"/>
+                """);
+        }
+
+        if (structuredTableMarker)
+        {
+            var tableRelId = legacyCommentMarker ? "rId3" : "rId1";
+            writer.Write($"""
+                  <Relationship Id="{tableRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/>
+                """);
+        }
+
+        writer.Write(
+            """
             </Relationships>
             """);
+    }
 
     private static void WriteGeneratedStyleHeavyComments(TextWriter writer) =>
         writer.Write(
@@ -408,6 +465,30 @@ public sealed partial class XlsxFileAdapterPerformanceTests
               </v:shape>
             </xml>
             """);
+
+    private static void WriteGeneratedStyleHeavyStructuredTable(TextWriter writer)
+    {
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="GeneratedTable1" displayName="GeneratedTable1" ref="A1:L400" totalsRowShown="0">
+              <autoFilter ref="A1:L400"/>
+              <tableColumns count="12">
+            """);
+        for (var col = 1; col <= GeneratedStyleHeavyValueColumnsPerSheet; col++)
+        {
+            writer.Write($"""
+                <tableColumn id="{col}" name="Field{col}"/>
+            """);
+        }
+
+        writer.Write(
+            """
+              </tableColumns>
+              <tableStyleInfo name="TableStyleMedium2" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>
+            </table>
+            """);
+    }
 
     private static void AssertIgnoredErrorAndStyleOnlyMetadata(Workbook workbook)
     {
@@ -489,6 +570,14 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         var sheet = workbook.Sheets[0];
         sheet.Comments[new CellAddress(sheet.Id, 1, 1)] =
             string.Create(CultureInfo.InvariantCulture, $"Comment {iteration + 1}");
+    }
+
+    private static void ApplyGeneratedStyleHeavyStructuredTableMutation(Workbook workbook, int iteration)
+    {
+        var sheet = workbook.Sheets[0];
+        sheet.SetCell(
+            new CellAddress(sheet.Id, 2, 2),
+            new NumberValue(1_000_000 + iteration));
     }
 
     private static void ReplaceZipEntryXml(ZipArchive archive, string entryName, XDocument document)

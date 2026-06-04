@@ -1392,14 +1392,18 @@ public static partial class FormulaAuditingService
 
         const string dayWithOptionalOrdinalSuffixPattern = @"\d{1,2}(?:[sS][tT]|[nN][dD]|[rR][dD]|[tT][hH])?";
 
+        var monthNameDateValue = TryStripWeekdayPrefix(value, out var valueWithoutWeekdayPrefix)
+            ? valueWithoutWeekdayPrefix
+            : value;
+
         var hasNumericTrailingYear = Regex.IsMatch(value, @"^\d{1,2}([/\-.])\d{1,2}\1\d{2}$", RegexOptions.CultureInvariant);
         var hasNumericLeadingYear = Regex.IsMatch(value, @"^\d{2}([/\-.])\d{1,2}\1\d{1,2}$", RegexOptions.CultureInvariant);
-        var hasMonthNameLeading = Regex.IsMatch(value, $@"^[A-Za-z]{{3,9}}([ \-.]){dayWithOptionalOrdinalSuffixPattern},?\1?\s*\d{{2}}$", RegexOptions.CultureInvariant);
-        var hasDayMonthNameLeading = Regex.IsMatch(value, $@"^{dayWithOptionalOrdinalSuffixPattern}([ \-.])[A-Za-z]{{3,9}},?\1?\s*\d{{2}}$", RegexOptions.CultureInvariant);
-        var hasYearMonthNameLeading = Regex.IsMatch(value, $@"^\d{{2}}([ \-.])[A-Za-z]{{3,9}}\1{dayWithOptionalOrdinalSuffixPattern}$", RegexOptions.CultureInvariant);
-        var hasSlashMonthNameLeading = Regex.IsMatch(value, $@"^[A-Za-z]{{3,9}}/{dayWithOptionalOrdinalSuffixPattern}/\d{{2}}$", RegexOptions.CultureInvariant);
-        var hasSlashDayMonthNameLeading = Regex.IsMatch(value, $@"^{dayWithOptionalOrdinalSuffixPattern}/[A-Za-z]{{3,9}}/\d{{2}}$", RegexOptions.CultureInvariant);
-        var hasSlashYearMonthNameLeading = Regex.IsMatch(value, $@"^\d{{2}}/[A-Za-z]{{3,9}}/{dayWithOptionalOrdinalSuffixPattern}$", RegexOptions.CultureInvariant);
+        var hasMonthNameLeading = Regex.IsMatch(monthNameDateValue, $@"^[A-Za-z]{{3,9}}([ \-.]){dayWithOptionalOrdinalSuffixPattern},?\1?\s*\d{{2}}$", RegexOptions.CultureInvariant);
+        var hasDayMonthNameLeading = Regex.IsMatch(monthNameDateValue, $@"^{dayWithOptionalOrdinalSuffixPattern}([ \-.])[A-Za-z]{{3,9}},?\1?\s*\d{{2}}$", RegexOptions.CultureInvariant);
+        var hasYearMonthNameLeading = Regex.IsMatch(monthNameDateValue, $@"^\d{{2}}([ \-.])[A-Za-z]{{3,9}}\1{dayWithOptionalOrdinalSuffixPattern}$", RegexOptions.CultureInvariant);
+        var hasSlashMonthNameLeading = Regex.IsMatch(monthNameDateValue, $@"^[A-Za-z]{{3,9}}/{dayWithOptionalOrdinalSuffixPattern}/\d{{2}}$", RegexOptions.CultureInvariant);
+        var hasSlashDayMonthNameLeading = Regex.IsMatch(monthNameDateValue, $@"^{dayWithOptionalOrdinalSuffixPattern}/[A-Za-z]{{3,9}}/\d{{2}}$", RegexOptions.CultureInvariant);
+        var hasSlashYearMonthNameLeading = Regex.IsMatch(monthNameDateValue, $@"^\d{{2}}/[A-Za-z]{{3,9}}/{dayWithOptionalOrdinalSuffixPattern}$", RegexOptions.CultureInvariant);
 
         string[] formats;
         if (hasNumericTrailingYear || hasNumericLeadingYear)
@@ -1481,7 +1485,7 @@ public static partial class FormulaAuditingService
 
         var valueToParse = value;
         if (hasMonthNameDate &&
-            !TryNormalizeOrdinalDaySuffixes(value, out valueToParse))
+            !TryNormalizeOrdinalDaySuffixes(monthNameDateValue, out valueToParse))
         {
             return false;
         }
@@ -1492,6 +1496,23 @@ public static partial class FormulaAuditingService
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out _);
+    }
+
+    private static bool TryStripWeekdayPrefix(string value, out string dateText)
+    {
+        var match = Regex.Match(
+            value,
+            @"^(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)(?:,\s*|\s+)(.+)$",
+            RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+        if (!match.Success)
+        {
+            dateText = value;
+            return false;
+        }
+
+        dateText = match.Groups[1].Value.TrimStart();
+        return dateText.Length > 0;
     }
 
     private static bool TryNormalizeOrdinalDaySuffixes(string value, out string normalized)
