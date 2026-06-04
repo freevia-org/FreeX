@@ -659,6 +659,12 @@ public static partial class SpellCheckService
 
                 break;
             case 5:
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "colum"))
+                {
+                    suggestion = "column";
+                    return true;
+                }
+
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "thier"))
                 {
                     suggestion = "their";
@@ -676,6 +682,24 @@ public static partial class SpellCheckService
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "adress"))
                 {
                     suggestion = "address";
+                    return true;
+                }
+
+                if (first == 'q' && EqualAsciiWordIgnoreCase(word, "quater"))
+                {
+                    suggestion = "quarter";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "revenu"))
+                {
+                    suggestion = "revenue";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sumary"))
+                {
+                    suggestion = "summary";
                     return true;
                 }
 
@@ -699,9 +723,27 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "analsys"))
+                {
+                    suggestion = "analysis";
+                    return true;
+                }
+
                 if (first == 'b' && EqualAsciiWordIgnoreCase(word, "beleive"))
                 {
                     suggestion = "believe";
+                    return true;
+                }
+
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "expence"))
+                {
+                    suggestion = "expense";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "forcast"))
+                {
+                    suggestion = "forecast";
                     return true;
                 }
 
@@ -755,6 +797,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formular"))
+                {
+                    suggestion = "formula";
+                    return true;
+                }
+
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "commited"))
                 {
                     suggestion = "committed";
@@ -785,6 +833,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "varience"))
+                {
+                    suggestion = "variance";
+                    return true;
+                }
+
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "tommorow"))
                 {
                     suggestion = "tomorrow";
@@ -793,6 +847,12 @@ public static partial class SpellCheckService
 
                 break;
             case 9:
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "analaysis"))
+                {
+                    suggestion = "analysis";
+                    return true;
+                }
+
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "arguement"))
                 {
                     suggestion = "argument";
@@ -885,11 +945,23 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "percenatge"))
+                {
+                    suggestion = "percentage";
+                    return true;
+                }
+
                 break;
             case 11:
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "caluclation"))
                 {
                     suggestion = "calculation";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "percentatge"))
+                {
+                    suggestion = "percentage";
                     return true;
                 }
 
