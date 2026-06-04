@@ -376,7 +376,7 @@ Data tab -> Subtotal inserts automatic subtotals at group changes. Group and Out
 Data tab -> Flash Fill (or Ctrl+E) infers a pattern from your manual examples and fills the rest of the column.
 
 FreeX supports deterministic Flash Fill patterns rather than Excel's full ML-like inference. Examples include:
-- Extracting or removing delimiter-based tokens, including final dotted tokens such as file extensions, variable-depth final hyphen/slash/backslash/underscore segments, and bracketed qualifiers.
+- Extracting or removing delimiter-based tokens, including final dotted tokens such as file extensions, variable-depth final and penultimate hyphen/slash/backslash/underscore segments, and bracketed qualifiers.
 - Extracting web address pieces, including hosts, query values, and final URL path segments such as `road-bike?ref=nav` to `road-bike`.
 - Reformatting two- and three-part names, including last-name-first forms, middle-token drops, and initial abbreviations such as `A. Lovelace`, `A. L.`, `Lovelace, Ada`, and `Lovelace, A. B.`.
 - Cleaning known title, credential, and organization suffixes such as `Dr. Ada Lovelace Jr.` or `Northwind Traders LLC`.
