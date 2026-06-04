@@ -671,6 +671,42 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversOperationsPlanningVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Milstone Deliverble delivarable scedule SHEDULE dependancy dependancies resouce RESOUCES capcity Utilzation thruput prioritzation. Keep milestone, deliverable, schedule, dependency, dependencies, resource, resources, capacity, utilization, throughput, prioritization, premilstone, deliverble_id, https://scedule.example.com/resouce, planner@capcity.example.com, and \"C:\\utilzation folder\\dependancy file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Milstone", "Milestone"),
+            ("Deliverble", "Deliverable"),
+            ("delivarable", "deliverable"),
+            ("scedule", "schedule"),
+            ("SHEDULE", "SCHEDULE"),
+            ("dependancy", "dependency"),
+            ("dependancies", "dependencies"),
+            ("resouce", "resource"),
+            ("RESOUCES", "RESOURCES"),
+            ("capcity", "capacity"),
+            ("Utilzation", "Utilization"),
+            ("thruput", "throughput"),
+            ("prioritzation", "prioritization"));
+        plan.IssueCount.Should().Be(13);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Milestone Deliverable deliverable schedule SCHEDULE dependency dependencies resource RESOURCES capacity Utilization throughput prioritization. Keep milestone, deliverable, schedule, dependency, dependencies, resource, resources, capacity, utilization, throughput, prioritization, premilstone, deliverble_id, https://scedule.example.com/resouce, planner@capcity.example.com, and \"C:\\utilzation folder\\dependancy file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(13);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");
