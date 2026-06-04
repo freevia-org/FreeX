@@ -47,6 +47,54 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_PhoneComponents_ExtractsAreaCodeAcrossPunctuationAndCountryCode()
+    {
+        var result = FlashFillService.Fill(
+            [("425-555-0101", "425"), ("(206) 555-0199", "206")],
+            ["360.555.0142", "+1 (212) 555-0198", "1-503-555-0112"]);
+
+        result.Should().BeEquivalentTo(["360", "212", "503"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PhoneComponents_ExtractsLocalNumberAcrossPunctuationAndCountryCode()
+    {
+        var result = FlashFillService.Fill(
+            [("425-555-0101", "555-0101"), ("(206) 555-0199", "555-0199")],
+            ["360.555.0142", "+1 (212) 555-0198", "1-503-555-0112"]);
+
+        result.Should().BeEquivalentTo(["555-0142", "555-0198", "555-0112"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("425", "206")]
+    [InlineData("555-0101", "555-0199")]
+    public void Fill_PhoneComponents_ReturnsNullWhenRemainingLacksUsableTenDigitPhone(
+        string firstExpected,
+        string secondExpected)
+    {
+        var result = FlashFillService.Fill(
+            [("425-555-0101", firstExpected), ("(206) 555-0199", secondExpected)],
+            ["555-0142"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("425", "206")]
+    [InlineData("555-0101", "555-0199")]
+    public void Fill_PhoneComponents_ReturnsNullWhenRemainingHasNonUsLeadingCountryCode(
+        string firstExpected,
+        string secondExpected)
+    {
+        var result = FlashFillService.Fill(
+            [("425-555-0101", firstExpected), ("(206) 555-0199", secondExpected)],
+            ["2 360 555 0142"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_PhoneExtensionExtraction_ExtractsDigitsFromMarkerVariants()
     {
         var result = FlashFillService.Fill(
