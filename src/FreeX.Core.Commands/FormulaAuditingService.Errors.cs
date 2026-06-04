@@ -7,16 +7,19 @@ namespace FreeX.Core.Commands;
 
 public static partial class FormulaAuditingService
 {
-    private const string OmittedAdjacentCellsAggregateFunctionPattern = "SUM|AVERAGE|COUNTA|COUNT|MEDIAN|MIN|MAX|PRODUCT|STDEV\\.S|STDEV\\.P|STDEVP|STDEV|VAR\\.S|VAR\\.P|VARP|VAR|SUBTOTAL|AGGREGATE";
+    private const string OmittedAdjacentCellsAggregateFunctionPattern = "SUM|AVERAGEA|AVERAGE|COUNTA|COUNT|MEDIAN|MINA|MIN|MAXA|MAX|PRODUCT|STDEV\\.S|STDEV\\.P|STDEVP|STDEV|VAR\\.S|VAR\\.P|VARP|VAR|SUBTOTAL|AGGREGATE";
 
     private static readonly string[] OmittedAdjacentCellsAggregateFunctions =
     [
         "SUM",
+        "AVERAGEA",
         "AVERAGE",
         "COUNT",
         "COUNTA",
         "MEDIAN",
+        "MINA",
         "MIN",
+        "MAXA",
         "MAX",
         "PRODUCT",
         "STDEV.S",
