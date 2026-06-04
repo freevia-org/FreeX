@@ -8512,7 +8512,74 @@ Bu test cihazı yapısı için kilitlenme raporları gönderilsin mi?</value>
   <data name="Options_AutoCorrectOptions2" xml:space="preserve">
     <value>_Otomatik Düzeltme Seçenekleri...</value>
   </data>
-  <data name="Options_WorkbookViewOptions" xml:space="preserve">
+  <data name="Options_CustomDictionary" xml:space="preserve">
+    <value>Custom dictionary</value>
+  </data>
+
+<data name="Options_CustomDictionaryDescription" xml:space="preserve">
+    <value>FreeX spell check treats words in this list as correct.</value>
+  </data>
+
+<data name="Options_CustomDictionaryWords" xml:space="preserve">
+    <value>Custom dictionary _words:</value>
+  </data>
+
+<data name="Options_CustomDictionaryWordsAutomationName" xml:space="preserve">
+    <value>Custom dictionary words</value>
+  </data>
+
+<data name="Options_CustomDictionaryWordsHelpText" xml:space="preserve">
+    <value>Lists words that FreeX spell check treats as correct.</value>
+  </data>
+
+<data name="Options_CustomDictionaryAddWord" xml:space="preserve">
+    <value>Add _word:</value>
+  </data>
+
+<data name="Options_CustomDictionaryWordAutomationName" xml:space="preserve">
+    <value>Custom dictionary word</value>
+  </data>
+
+<data name="Options_CustomDictionaryWordHelpText" xml:space="preserve">
+    <value>Enter a word to add to the custom dictionary.</value>
+  </data>
+
+<data name="Options_CustomDictionaryAddWordButton" xml:space="preserve">
+    <value>_Add</value>
+  </data>
+
+<data name="Options_CustomDictionaryAddWordButtonAutomationName" xml:space="preserve">
+    <value>Add custom dictionary word</value>
+  </data>
+
+<data name="Options_CustomDictionaryAddWordHelpText" xml:space="preserve">
+    <value>Add the typed word to the custom dictionary.</value>
+  </data>
+
+<data name="Options_CustomDictionaryRemoveWordButton" xml:space="preserve">
+    <value>_Remove</value>
+  </data>
+
+<data name="Options_CustomDictionaryRemoveWordButtonAutomationName" xml:space="preserve">
+    <value>Remove custom dictionary word</value>
+  </data>
+
+<data name="Options_CustomDictionaryRemoveWordHelpText" xml:space="preserve">
+    <value>Remove the selected custom dictionary word.</value>
+  </data>
+
+<data name="Options_CustomDictionaryClearAllButton" xml:space="preserve">
+    <value>Clear _All</value>
+  </data>
+
+<data name="Options_CustomDictionaryClearAllButtonAutomationName" xml:space="preserve">
+    <value>Clear custom dictionary words</value>
+  </data>
+
+<data name="Options_CustomDictionaryClearAllHelpText" xml:space="preserve">
+    <value>Clear all custom dictionary words.</value>
+  </data>
+<data name="Options_WorkbookViewOptions" xml:space="preserve">
     <value>Çalışma kitabı görüntüleme seçenekleri</value>
   </data>
   <data name="Options_ShowFormulaBar" xml:space="preserve">
