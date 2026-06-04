@@ -10,7 +10,7 @@ public sealed class WorkbookThemeCommandTests
     public void SetWorkbookThemeCommand_UpdatesThemeAndUndoRestores()
     {
         var workbook = new Workbook("test");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var theme = WorkbookTheme.Office
             .WithName("FreeX Custom")
             .WithFonts("Aptos Display", "Aptos")
@@ -30,7 +30,7 @@ public sealed class WorkbookThemeCommandTests
     public void SetWorkbookThemeCommand_RejectsNullTheme()
     {
         var workbook = new Workbook("test");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         var command = new SetWorkbookThemeCommand(null);
 
         var outcome = command.Apply(ctx);
@@ -38,13 +38,5 @@ public sealed class WorkbookThemeCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Be("Theme is required.");
         workbook.Theme.Should().Be(WorkbookTheme.Office);
-    }
-
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.Sheets.First(sheet => sheet.Id == sheetId);
     }
 }
