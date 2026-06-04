@@ -43,7 +43,7 @@ public sealed class RepositoryPreflightTests
             var generatedDocsScript = CreatePassingPreflightScript(tempDirectory, "Test-GeneratedDocs.ps1");
             var conflictMarkersScript = CreatePassingPreflightScript(tempDirectory, "Test-ConflictMarkers.ps1");
 
-            var result = RunPowerShellScript(
+            var result = PowerShellScriptRunner.Run(
                 scriptPath,
                 Path.GetTempPath(),
                 $"-JsonFilesScriptPath \"{jsonScript}\" " +
@@ -113,7 +113,7 @@ public sealed class RepositoryPreflightTests
             File.WriteAllText(workflowPath, "name: Tester Release");
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("missing a dotnet-version SDK band");
@@ -166,7 +166,7 @@ public sealed class RepositoryPreflightTests
                 """);
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("across 1 project file(s).");
@@ -209,7 +209,7 @@ public sealed class RepositoryPreflightTests
                 """);
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
             var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
@@ -220,28 +220,6 @@ public sealed class RepositoryPreflightTests
         {
             Directory.Delete(tempDirectory, recursive: true);
         }
-    }
-
-    private static PowerShellResult RunPowerShellScript(string scriptPath, string workingDirectory, string arguments)
-    {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        return new PowerShellResult(process.ExitCode, output, error);
     }
 
     private static string CreatePassingPreflightScript(string directory, string fileName)
@@ -258,5 +236,4 @@ public sealed class RepositoryPreflightTests
 
     private static string NormalizeWhitespace(string text) => Regex.Replace(text, "\\s+", " ");
 
-    private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }

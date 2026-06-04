@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using FluentAssertions;
@@ -45,7 +44,7 @@ public sealed class DotNetProjectReferencesPreflightTests
                 """);
             File.WriteAllText(Path.Combine(tempDirectory, "src", "B", "B.csproj"), "<Project />");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("Validated ProjectReference targets for 2 .NET project file(s).");
@@ -72,7 +71,7 @@ public sealed class DotNetProjectReferencesPreflightTests
             File.WriteAllText(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("Validated ProjectReference targets for 1 .NET project file(s).");
@@ -105,7 +104,7 @@ public sealed class DotNetProjectReferencesPreflightTests
             File.WriteAllText(Path.Combine(tempDirectory, "src", "B", "B.csproj"), "<Project />");
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
 
             var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
@@ -140,7 +139,7 @@ public sealed class DotNetProjectReferencesPreflightTests
             File.WriteAllText(Path.Combine(tempDirectory, "external", "Outside.csproj"), "<Project />");
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{projectRoot}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{projectRoot}\"");
 
             var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
@@ -172,7 +171,7 @@ public sealed class DotNetProjectReferencesPreflightTests
                 """);
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("Project reference validation failed");
@@ -184,29 +183,6 @@ public sealed class DotNetProjectReferencesPreflightTests
         }
     }
 
-    private static PowerShellResult RunPowerShellScript(string scriptPath, string workingDirectory, string arguments)
-    {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        return new PowerShellResult(process.ExitCode, output, error);
-    }
-
     private static string NormalizeWhitespace(string text) => Regex.Replace(text, "\\s+", " ");
 
-    private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }

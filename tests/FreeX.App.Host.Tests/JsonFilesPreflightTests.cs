@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using FluentAssertions;
 
@@ -24,7 +23,7 @@ public sealed class JsonFilesPreflightTests
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-JsonFiles.ps1");
 
-        var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), "");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), "");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
@@ -42,7 +41,7 @@ public sealed class JsonFilesPreflightTests
             File.WriteAllText(Path.Combine(tempDirectory, "broken.json"), "{ \"name\": ");
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-JsonFiles.ps1");
 
-            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-JsonRoots \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-JsonRoots \"{tempDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("JSON validation failed");
@@ -54,27 +53,4 @@ public sealed class JsonFilesPreflightTests
         }
     }
 
-    private static PowerShellResult RunPowerShellScript(string scriptPath, string workingDirectory, string arguments)
-    {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        return new PowerShellResult(process.ExitCode, output, error);
-    }
-
-    private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }
