@@ -61,6 +61,85 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(
+        "1 Market St, San Francisco, California 94105",
+        "CA",
+        "500 5th Ave Apt 2B, New York, New York 10018-0110",
+        "NY")]
+    [InlineData(
+        "1 Market St, San Francisco, California 94105",
+        "94105",
+        "500 5th Ave Apt 2B, New York, New York 10018-0110",
+        "10018")]
+    [InlineData(
+        "500 5th Ave Apt 2B, New York, New York 10018-0110",
+        "10018-0110",
+        "123 Congress Ave Suite 400, Austin, Texas 78701-1234",
+        "78701-1234")]
+    [InlineData(
+        "500 5th Ave Apt 2B, New York, New York 10018-0110",
+        "0110",
+        "123 Congress Ave Suite 400, Austin, Texas 78701-1234",
+        "1234")]
+    [InlineData(
+        "1 Market St, San Francisco, California 94105",
+        "CA 94105",
+        "500 5th Ave Apt 2B, New York, New York 10018-0110",
+        "NY 10018-0110")]
+    [InlineData(
+        "1 Market St, San Francisco, California 94105",
+        "San Francisco",
+        "500 5th Ave Apt 2B, New York, New York 10018-0110",
+        "New York")]
+    [InlineData(
+        "500 5th Ave Apt 2B, New York, New York 10018-0110",
+        "500 5th Ave",
+        "123 Congress Ave Suite 400, Austin, Texas 78701",
+        "123 Congress Ave")]
+    [InlineData(
+        "500 5th Ave Apt 2B, New York, New York 10018-0110",
+        "Apt 2B",
+        "123 Congress Ave Suite 400, Austin, Texas 78701",
+        "Suite 400")]
+    [InlineData(
+        "500 5th Ave Apt 2B, New York, New York 10018-0110",
+        "2B",
+        "123 Congress Ave Suite 400, Austin, Texas 78701",
+        "400")]
+    public void Fill_UsAddressComponentExtraction_WithFullStateNames_NormalizesStateAndKeepsComponents(
+        string exampleSource,
+        string exampleExpected,
+        string remainingSource,
+        string expectedOutput)
+    {
+        var result = FlashFillService.Fill(
+            [(exampleSource, exampleExpected)],
+            [remainingSource]);
+
+        result.Should().BeEquivalentTo([expectedOutput], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UsAddressComponentExtraction_KeepsExistingStateAbbreviationBehavior()
+    {
+        var result = FlashFillService.Fill(
+            [("1 Market St, San Francisco, CA 94105", "CA")],
+            ["500 5th Ave Apt 2B, New York, NY 10018-0110"]);
+
+        result.Should().BeEquivalentTo(["NY"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UsAddressComponentExtraction_WithUnknownFullStateName_ReturnsNull()
+    {
+        var result = FlashFillService.Fill(
+            [("1 Market St, San Francisco, Atlantis 94105", "CA")],
+            ["500 5th Ave Apt 2B, New York, New York 10018-0110"]);
+
+        result.Should().BeNull();
+    }
+
 }
 
 public sealed class FlashFillCommandTests
