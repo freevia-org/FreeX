@@ -175,11 +175,15 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     {
         var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
         var layoutSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+        var sheetStyleOnlySource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Model", "Sheet.StyleOnly.cs"));
         var sanitizerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
         var stripperSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
 
         adapterSource.Should().Contain("GetClosedXmlStyleOnlyWorksheetPathsToStrip(");
         adapterSource.Should().Contain("CreateClosedXmlLoadSanitizationHints(");
+        adapterSource.Should().Contain("sheet.EnsureStyleOnlyCapacity(layoutWithStyleOnlyCells.ExplicitStyleOnlyCells.Count);");
+        adapterSource.Should().Contain("AddStyleOnlyRun(ref explicitStyleOnlyRuns");
+        adapterSource.Should().Contain("sheet.SetStyleOnlyRuns(explicitStyleOnlyRuns);");
         adapterSource.Should().Contain("layout.HasDuplicateStyleOnlyCellStyleIndexes");
         adapterSource.Should().Contain("layout.HasClosedXmlUnsupportedConditionalFormatting");
         adapterSource.Should().Contain("layout.HasWorksheetDynamicFilters");
@@ -189,6 +193,11 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         layoutSource.Should().Contain("cellLayout.HasDuplicateStyleOnlyCellStyleIndexes");
         layoutSource.Should().Contain("HasDynamicFilter(autoFilter)");
         layoutSource.Should().Contain("allowBlankType: false");
+
+        sheetStyleOnlySource.Should().Contain("EnsureStyleOnlyCapacity");
+        sheetStyleOnlySource.Should().Contain("StyleOnlyRun");
+        sheetStyleOnlySource.Should().Contain("TryGetStyleOnlyRun");
+        sheetStyleOnlySource.Should().Contain("_styleOnly.EnsureCapacity(capacity)");
 
         sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasPivotPackageMetadata");
