@@ -655,6 +655,19 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesStackedLegalSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders, Inc. LLC", "Northwind Traders"),
+                ("Adventure Works L.L.C. Inc.", "Adventure Works")
+            ],
+            ["Contoso Analytics Ltd PLC"]);
+
+        result.Should().BeEquivalentTo(["Contoso Analytics"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownOrganizationSuffixes_RemovesCommaAttachedLegalSuffixes()
     {
         var result = FlashFillService.Fill(
@@ -668,6 +681,19 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesCommaAttachedStackedLegalSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders,Inc,LLC", "Northwind Traders"),
+                ("Adventure Works,L.L.C.,Inc.", "Adventure Works")
+            ],
+            ["Fabrikam Labs,Inc,LLC"]);
+
+        result.Should().BeEquivalentTo(["Fabrikam Labs"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownOrganizationSuffixes_ReturnsNullForUnsuffixedRemainingNames()
     {
         var result = FlashFillService.Fill(
@@ -676,6 +702,19 @@ public sealed partial class FlashFillServiceTests
                 ("Adventure Works Inc.", "Adventure Works")
             ],
             ["Contoso Retail"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_KnownOrganizationSuffixes_ReturnsNullForUnsuffixedRemainingNamesAfterStackedExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders, Inc. LLC", "Northwind Traders"),
+                ("Adventure Works L.L.C. Inc.", "Adventure Works")
+            ],
+            ["Contoso Analytics"]);
 
         result.Should().BeNull();
     }
