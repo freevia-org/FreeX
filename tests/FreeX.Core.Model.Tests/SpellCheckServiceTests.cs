@@ -742,6 +742,49 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversMeetingCommunicationVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "MEATING meetng agnda MINUTS atendee ATTENDES mesage communcation notfication commnet notse. Keep meeting, agenda, minutes, attendee, attendees, message, communication, notification, comment, notes, premeating, mesage_id, https://meating.example.com/mesage, organizer@communcation.example.com, and \"C:\\notfication folder\\commnet file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "mesage MESAGE Mesage https://mesage.example.com/mesage editor@mesage.example.com mesage_id premesage \"C:\\mesage folder\\mesage file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "message");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("MEATING", "MEETING"),
+            ("meetng", "meeting"),
+            ("agnda", "agenda"),
+            ("MINUTS", "MINUTES"),
+            ("atendee", "attendee"),
+            ("ATTENDES", "ATTENDEES"),
+            ("mesage", "message"),
+            ("communcation", "communication"),
+            ("notfication", "notification"),
+            ("commnet", "comment"),
+            ("notse", "notes"));
+        plan.IssueCount.Should().Be(11);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "MEETING meeting agenda MINUTES attendee ATTENDEES message communication notification comment notes. Keep meeting, agenda, minutes, attendee, attendees, message, communication, notification, comment, notes, premeating, mesage_id, https://meating.example.com/mesage, organizer@communcation.example.com, and \"C:\\notfication folder\\commnet file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(11);
+        replaceAllCorrected.Should().Be(
+            "message MESSAGE Message https://mesage.example.com/mesage editor@mesage.example.com mesage_id premesage \"C:\\mesage folder\\mesage file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversRiskActionTrackingVocabularyTypos()
     {
         var wb = new Workbook("test");
