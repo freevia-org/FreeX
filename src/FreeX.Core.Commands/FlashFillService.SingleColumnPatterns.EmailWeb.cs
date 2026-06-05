@@ -270,6 +270,9 @@ public static partial class FlashFillService
     private static Func<string, string?>? TryUrlFirstQueryParameterValue(
         IReadOnlyList<(string Source, string Expected)> examples)
     {
+        if (TryUrlQueryParameterValueCore(examples) is not null)
+            return null;
+
         if (!examples.All(e => e.Expected.Length > 0 &&
                                TryGetFirstNonEmptyQueryParameterValue(e.Source, out var value) &&
                                value == e.Expected))

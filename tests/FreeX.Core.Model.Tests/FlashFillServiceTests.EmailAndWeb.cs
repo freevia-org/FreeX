@@ -676,6 +676,19 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeEquivalentTo(["C-300"], o => o.WithStrictOrdering());
     }
 
+    [Fact]
+    public void Fill_UrlQueryParameterValue_PrefersStableParameterNameOverFirstValue()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?q=road+bike&sort=asc", "road bike"),
+                ("https://fabrikam.example/find?q=gravel+bike&sort=desc", "gravel bike")
+            ],
+            ["https://northwind.example/catalog?sort=popular&q=electric+cargo+bike"]);
+
+        result.Should().BeEquivalentTo(["electric cargo bike"], o => o.WithStrictOrdering());
+    }
+
     [Theory]
     [InlineData("https://northwind.example/catalog")]
     [InlineData("https://northwind.example/catalog?product=&sort=")]
