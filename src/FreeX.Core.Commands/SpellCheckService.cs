@@ -1405,6 +1405,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sampel"))
+                {
+                    suggestion = "sample";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "slcier"))
                 {
                     suggestion = "slicer";
@@ -2672,6 +2678,12 @@ public static partial class SpellCheckService
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "resouces"))
                 {
                     suggestion = "resources";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "reagentt"))
+                {
+                    suggestion = "reagent";
                     return true;
                 }
 
@@ -4154,6 +4166,24 @@ public static partial class SpellCheckService
                 if (first == 'd' && EqualAsciiWordIgnoreCase(word, "delivarable"))
                 {
                     suggestion = "deliverable";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "centrifugee"))
+                {
+                    suggestion = "centrifuge";
+                    return true;
+                }
+
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "genotypingg"))
+                {
+                    suggestion = "genotyping";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "spectromtry"))
+                {
+                    suggestion = "spectrometry";
                     return true;
                 }
 
