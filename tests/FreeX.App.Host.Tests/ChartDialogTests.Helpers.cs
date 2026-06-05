@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -12,23 +11,19 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ChartDialogTests
 {
     private static string ReadChartDialogSource() =>
-        string.Join(Environment.NewLine, new[]
-        {
+        DialogSourceTestSupport.ReadHostSources(
             "ChartDialogs.cs",
             "SelectDataSourceDialog.cs",
             "SelectDataSourceDialog.Planning.cs",
             "SelectDataSourceDialog.Controls.cs",
-            "SelectDataSourceDialog.Actions.cs"
-        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", file))));
+            "SelectDataSourceDialog.Actions.cs");
 
     private static string ReadChartTypeDialogSource() =>
-        string.Join(Environment.NewLine, new[]
-        {
+        DialogSourceTestSupport.ReadHostSources(
             "ChartTypeDialogs.cs",
             "ChartTypeDialogs.Planner.cs",
             "ChartTypeDialogs.PickerUi.cs",
-            "ChartTypeDialogs.Change.cs"
-        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", file))));
+            "ChartTypeDialogs.Change.cs");
 
     private static T GetPrivateField<T>(object instance, string name)
         where T : class

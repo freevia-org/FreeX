@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -28,15 +27,14 @@ public sealed partial class FormatCellsDialogXamlTests
 
     private static string ReadFormatCellsDialogSource()
     {
-        return string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.Number.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsNumberControlPlanner.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsNumberFormatPlanner.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.Font.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.Fill.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.Border.cs")));
+        return DialogSourceTestSupport.ReadHostSources(
+            "FormatCellsDialog.xaml.cs",
+            "FormatCellsDialog.Number.cs",
+            "FormatCellsNumberControlPlanner.cs",
+            "FormatCellsNumberFormatPlanner.cs",
+            "FormatCellsDialog.Font.cs",
+            "FormatCellsDialog.Fill.cs",
+            "FormatCellsDialog.Border.cs");
     }
 
     private static T GetControl<T>(FormatCellsDialog dialog, string name)
