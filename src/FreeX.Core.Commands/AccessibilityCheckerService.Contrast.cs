@@ -556,6 +556,20 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
+        if (string.Equals(function.FunctionName, "IF", StringComparison.OrdinalIgnoreCase))
+        {
+            if (function.Arguments.Count != 3 ||
+                !TryCreateFormulaExpression(function.Arguments[0], out var condition) ||
+                !TryCreateFormulaExpression(function.Arguments[1], out var whenTrue) ||
+                !TryCreateFormulaExpression(function.Arguments[2], out var whenFalse))
+            {
+                return false;
+            }
+
+            expression = new ConditionalFormulaIfExpression(condition, whenTrue, whenFalse);
+            return true;
+        }
+
         if (TryCreateFormulaPredicate(function, out var predicate))
         {
             expression = new ConditionalFormulaPredicateExpression(predicate);
@@ -963,6 +977,11 @@ public static partial class AccessibilityCheckerService
     private sealed record ConditionalFormulaPredicateExpression(
         ConditionalFormulaPredicate Predicate) : ConditionalFormulaExpression;
 
+    private sealed record ConditionalFormulaIfExpression(
+        ConditionalFormulaExpression Condition,
+        ConditionalFormulaExpression WhenTrue,
+        ConditionalFormulaExpression WhenFalse) : ConditionalFormulaExpression;
+
     private enum ConditionalFormulaLogicalOperator
     {
         And,
@@ -1061,6 +1080,7 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaComparisonExpression comparison => EvaluateFormulaComparison(comparison.Comparison, rowOffset, colOffset),
                 ConditionalFormulaLogicalExpression logical => EvaluateFormulaLogical(logical, rowOffset, colOffset),
                 ConditionalFormulaPredicateExpression predicate => EvaluateFormulaPredicate(predicate.Predicate, rowOffset, colOffset),
+                ConditionalFormulaIfExpression ifExpression => EvaluateFormulaIf(ifExpression, rowOffset, colOffset),
                 _ => null
             };
 
@@ -1138,6 +1158,20 @@ public static partial class AccessibilityCheckerService
 
         private static bool? Negate(bool? value) =>
             value.HasValue ? !value.Value : null;
+
+        private bool? EvaluateFormulaIf(
+            ConditionalFormulaIfExpression ifExpression,
+            int rowOffset,
+            int colOffset)
+        {
+            var condition = EvaluateFormulaExpression(ifExpression.Condition, rowOffset, colOffset);
+            return condition switch
+            {
+                true => EvaluateFormulaExpression(ifExpression.WhenTrue, rowOffset, colOffset),
+                false => EvaluateFormulaExpression(ifExpression.WhenFalse, rowOffset, colOffset),
+                _ => null
+            };
+        }
 
         private bool? EvaluateFormulaPredicate(
             ConditionalFormulaPredicate predicate,
