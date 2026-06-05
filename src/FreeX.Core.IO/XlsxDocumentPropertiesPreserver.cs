@@ -81,6 +81,21 @@ internal static class XlsxDocumentPropertiesPreserver
         }
 
         var changed = false;
+        changed |= RemoveMismatchedRootRelationships(
+            relationshipsXml,
+            relationshipNs,
+            CorePropertiesPart,
+            CorePropertiesRelationshipType);
+        changed |= RemoveMismatchedRootRelationships(
+            relationshipsXml,
+            relationshipNs,
+            ExtendedPropertiesPart,
+            ExtendedPropertiesRelationshipType);
+        changed |= RemoveMismatchedRootRelationships(
+            relationshipsXml,
+            relationshipNs,
+            CustomPropertiesPart,
+            CustomPropertiesRelationshipType);
         changed |= NormalizeRootRelationship(
             archive,
             relationshipsXml,
@@ -104,6 +119,28 @@ internal static class XlsxDocumentPropertiesPreserver
             XlsxPackageXmlEditor.ReplaceXml(archive, "_rels/.rels", relationshipsXml);
 
         return changed;
+    }
+
+    private static bool RemoveMismatchedRootRelationships(
+        XDocument relationshipsXml,
+        XNamespace relationshipNs,
+        string partName,
+        string relationshipType)
+    {
+        var relationships = relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship =>
+                TargetsInternalPart(relationship, partName) &&
+                !string.Equals(
+                    relationship.Attribute("Type")?.Value?.Trim(),
+                    relationshipType,
+                    StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (relationships.Count == 0)
+            return false;
+
+        relationships.Remove();
+        return true;
     }
 
     private static bool NormalizeRootRelationship(
@@ -135,15 +172,7 @@ internal static class XlsxDocumentPropertiesPreserver
 
             var target = relationship.Attribute("Target")?.Value?.Trim();
             var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
-            var targetsCanonicalPart =
-                string.IsNullOrWhiteSpace(targetMode) ||
-                string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase);
-            targetsCanonicalPart = targetsCanonicalPart &&
-                !string.IsNullOrWhiteSpace(target) &&
-                string.Equals(
-                    XlsxPackagePath.ResolveRelationshipTarget("", target),
-                    partName,
-                    StringComparison.OrdinalIgnoreCase);
+            var targetsCanonicalPart = TargetsInternalPart(relationship, partName);
 
             if (targetsCanonicalPart && canonicalRelationship is null)
             {
@@ -176,6 +205,19 @@ internal static class XlsxDocumentPropertiesPreserver
             new XAttribute("Type", relationshipType),
             new XAttribute("Target", partName)));
         return true;
+    }
+
+    private static bool TargetsInternalPart(XElement relationship, string partName)
+    {
+        var target = relationship.Attribute("Target")?.Value?.Trim();
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        return (string.IsNullOrWhiteSpace(targetMode) ||
+                string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase)) &&
+            !string.IsNullOrWhiteSpace(target) &&
+            string.Equals(
+                XlsxPackagePath.ResolveRelationshipTarget("", target),
+                partName,
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool RemoveCorePropertiesServiceContentTypes(ZipArchive archive)

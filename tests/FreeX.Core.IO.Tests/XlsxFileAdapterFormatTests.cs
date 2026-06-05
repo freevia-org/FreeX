@@ -1,6 +1,8 @@
 using System.Reflection;
+using System.IO.Compression;
 using System.Xml.Linq;
 using ClosedXML.Excel;
+using DocumentFormat.OpenXml.Packaging;
 using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -220,6 +222,86 @@ public sealed class XlsxFileAdapterFormatTests
         using var loaded = new XLWorkbook(stream);
         loaded.Worksheet(1).Cell("A1").Style.Font.FontName.Should().Be("Arial");
         loaded.Worksheet(1).Cell("A1").Style.Font.FontSize.Should().Be(10);
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookDropsMalformedDuplicateCorePropertiesRelationship()
+    {
+        const string validCorePropertiesType =
+            "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+        const string malformedCorePropertiesType =
+            "http://schemas.openxmlformats.org/package/2006/relationships/meatadata/core-properties";
+        using var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            archive.GetEntry("docProps/core.xml")?.Delete();
+            var corePropertiesEntry = archive.CreateEntry("docProps/core.xml");
+            using var writer = new StreamWriter(corePropertiesEntry.Open());
+            writer.Write(
+                """
+                <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+                                   xmlns:dc="http://purl.org/dc/elements/1.1/"
+                                   xmlns:dcterms="http://purl.org/dc/terms/"
+                                   xmlns:dcmitype="http://purl.org/dc/dcmitype/"
+                                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                  <dc:creator>FreeX</dc:creator>
+                </cp:coreProperties>
+                """);
+        }
+
+        XlsxPackageTestHelper.PatchPackageXml(package, "[Content_Types].xml", document =>
+        {
+            XNamespace contentTypesNs = document.Root!.Name.Namespace;
+            document.Root.Add(new XElement(
+                contentTypesNs + "Override",
+                new XAttribute("PartName", "/docProps/core.xml"),
+                new XAttribute("ContentType", "application/vnd.openxmlformats-package.core-properties+xml")));
+        });
+        XlsxPackageTestHelper.PatchPackageXml(package, "_rels/.rels", document =>
+        {
+            XNamespace relNs = document.Root!.Name.Namespace;
+            document.Root
+                .Elements(relNs + "Relationship")
+                .Where(relationship =>
+                    string.Equals(
+                        relationship.Attribute("Type")?.Value,
+                        validCorePropertiesType,
+                        StringComparison.OrdinalIgnoreCase))
+                .Remove();
+            document.Root.Add(new XElement(
+                relNs + "Relationship",
+                new XAttribute("Id", "rIdMalformedCoreProps"),
+                new XAttribute("Type", malformedCorePropertiesType),
+                new XAttribute("Target", "/docProps/core.xml")));
+        });
+
+        var adapter = new XlsxFileAdapter();
+        package.Position = 0;
+        var workbook = adapter.Load(package);
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("forces full save"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relsXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "_rels/.rels");
+            var corePropertyRelationships = relsXml.Root!
+                .Elements(relNs + "Relationship")
+                .Where(relationship =>
+                    relationship.Attribute("Target")?.Value.Trim().TrimStart('/') is "docProps/core.xml")
+                .ToArray();
+
+            corePropertyRelationships.Should().ContainSingle();
+            corePropertyRelationships[0].Attribute("Type")!.Value.Should().Be(validCorePropertiesType);
+        }
+
+        saved.Position = 0;
+        using var document = SpreadsheetDocument.Open(saved, isEditable: false);
+        document.WorkbookPart.Should().NotBeNull();
     }
 
     [Fact]
