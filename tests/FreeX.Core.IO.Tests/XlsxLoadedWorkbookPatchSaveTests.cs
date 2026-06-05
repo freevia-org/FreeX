@@ -18,6 +18,13 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         { BlankValue.Instance, null, null }
     };
 
+    private static void PrepareLoadedWorkbookForEdit(Workbook workbook)
+    {
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+    }
+
     [Fact]
     public void Save_LoadedWorkbookWithExistingLiteralCellEdit_PatchesSourcePackage()
     {
@@ -26,6 +33,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("  patched value  "));
@@ -57,6 +65,25 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithUnpreparedDirectEdit_FallsBackInsteadOfCapturingEditAsBaseline()
+    {
+        var sourceBytes = CreateSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("direct edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_blocked_deferred_baseline_not_materialized");
+    }
+
+    [Fact]
     public void Save_LoadedUnchangedWorkbook_ReportsSourceCopyDiagnostics()
     {
         var sourceBytes = CreateSourcePackage();
@@ -64,6 +91,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
@@ -97,6 +125,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("new value"));
@@ -140,6 +169,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         var sourceStyleCell = sheet.GetCell(1, 2);
@@ -182,6 +212,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         var styleOnlyStyleId = sheet.GetStyleOnly(1, 4);
@@ -222,6 +253,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         var styleId = workbook.RegisterStyle(new CellStyle
@@ -258,6 +290,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.RowHeights[2] = 32;
@@ -310,6 +343,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.MergedRegions.Should().HaveCount(2);
@@ -360,6 +394,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         var address = new CellAddress(sheet.Id, 1, 1);
@@ -418,6 +453,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         var address = new CellAddress(sheet.Id, 2, 3);
@@ -461,6 +497,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("cell patched"));
@@ -492,6 +529,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.Comments[new CellAddress(sheet.Id, 1, 1)] = "New note";
@@ -513,6 +551,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.Comments[new CellAddress(sheet.Id, 2, 3)] = "Patched note";
@@ -534,6 +573,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.StructuredTables.Should().ContainSingle();
@@ -571,6 +611,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.StructuredTables.Should().ContainSingle();
@@ -602,6 +643,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Changed"));
@@ -623,6 +665,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.StructuredTables.Should().ContainSingle()
@@ -646,6 +689,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.Charts.Should().ContainSingle();
@@ -687,6 +731,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.Charts.Should().ContainSingle();
@@ -708,6 +753,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.PivotTables.Should().ContainSingle();
@@ -743,6 +789,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.PivotTables.Should().ContainSingle();
@@ -764,6 +811,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.ClearCell(2, 2);
@@ -802,6 +850,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
         cell.FormulaText.Should().Be("1+1");
@@ -836,6 +885,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.GetCell(1, 1)!.Value = new NumberValue(3);
@@ -868,6 +918,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
         cell.FormulaText = "1+2";
@@ -901,6 +952,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.ClearCell(1, 1);
@@ -927,6 +979,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
         cell.FormulaText = "1+2";
@@ -952,6 +1005,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.ShowGridlines = false;
@@ -974,6 +1028,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched value"));
@@ -1001,6 +1056,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         workbook.CustomViews.Should().BeEmpty();
         var sheet = workbook.GetSheetAt(0);
@@ -1026,6 +1082,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         workbook.CustomViews.Should().ContainSingle();
         var sheet = workbook.GetSheetAt(0);
@@ -1055,6 +1112,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(456));

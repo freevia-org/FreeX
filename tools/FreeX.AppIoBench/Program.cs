@@ -87,6 +87,22 @@ internal static class Program
             options,
             "PERF APP_XLSX_STAGE " +
             $"stage=edit_start edit={options.EditMode}");
+        if (options.EditMode != AppIoBenchEditMode.None)
+        {
+            ForceFullCollection();
+            var prepareAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+            var prepareStopwatch = Stopwatch.StartNew();
+            var prepared = XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var prepareReason);
+            prepareStopwatch.Stop();
+            var prepareAllocatedBytes = GC.GetTotalAllocatedBytes(precise: true) - prepareAllocatedBefore;
+            WritePerf(
+                options,
+                "PERF APP_XLSX_PREPARE_EDIT " +
+                $"prepared={prepared.ToString().ToLowerInvariant()} " +
+                $"reason=\"{prepareReason ?? ""}\" elapsed_ms={prepareStopwatch.Elapsed.TotalMilliseconds:F2} " +
+                $"allocated_bytes={prepareAllocatedBytes:N0}");
+        }
+
         var editResult = ApplyEdit(workbook, options);
         if (!editResult.Applied)
         {
