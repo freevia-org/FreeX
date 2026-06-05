@@ -16,6 +16,8 @@ public sealed class TesterReleaseReadinessPreflightTests
         script.Should().Contain("Unsupported release channel");
         script.Should().Contain("tools\\Test-RepositoryPreflight.ps1");
         script.Should().Contain("group: tester-release");
+        script.Should().Contain("refs/heads/release/*");
+        script.Should().Contain("refs/heads/codex/status-release-*");
         script.Should().Contain("signParameters.AllowUnsignedMsix = `$true");
         script.Should().Contain("Public-preview preflight requires completed accessibility gate inputs");
         script.Should().Contain("Tester release readiness preflight passed.");
@@ -32,7 +34,8 @@ public sealed class TesterReleaseReadinessPreflightTests
         plan.Should().Contain("-AccessibilityScreenReader");
         plan.Should().Contain("-AccessibilityUiaCatalog");
         plan.Should().Contain("-AccessibilityKnownIssues");
-        plan.Should().Contain("Release dispatches must run from `main`");
+        plan.Should().Contain("Release dispatches must run from `main` or an explicitly frozen release branch");
+        plan.Should().Contain("leave later `main` commits for the next release train");
         plan.Should().Contain("signs the package when `FREEX_MSIX_CERTIFICATE_BASE64` is configured");
         plan.Should().Contain("publishes an unsigned MSIX for tester continuity");
     }

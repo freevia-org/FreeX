@@ -8,7 +8,7 @@ Use this checklist before promoting a tester build beyond internal validation. P
 - Test result artifact was uploaded, even for failed release-gate attempts.
 - Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, and checksum artifacts were uploaded.
 - Stable latest checksum assets were included for both the `.exe` and MSIX packages.
-- Release ran from `main`; no overlapping tester-release dispatch was active.
+- Release ran from `main` or an explicitly frozen release branch (`release/*` or `codex/status-release-*`); no overlapping tester-release dispatch was active.
 - MSIX package was signed with the release certificate when signing secrets were configured; otherwise unsigned MSIX publication was accepted for this internal tester build.
 - GitHub release was published with the expected tester stream from `release/progress.json`.
 - Latest `.exe` and MSIX download links were checked from the published release.

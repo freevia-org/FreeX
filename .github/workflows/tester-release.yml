@@ -69,8 +69,11 @@ jobs:
       - name: Validate latest release source
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF -ne "refs/heads/main") {
-            throw "Tester releases publish stable latest assets and must run from refs/heads/main."
+          $isMain = $env:GITHUB_REF -eq "refs/heads/main"
+          $isReleaseBranch = $env:GITHUB_REF -like "refs/heads/release/*"
+          $isFrozenStatusBranch = $env:GITHUB_REF -like "refs/heads/codex/status-release-*"
+          if (-not ($isMain -or $isReleaseBranch -or $isFrozenStatusBranch)) {
+            throw "Tester releases publish stable latest assets and must run from refs/heads/main, refs/heads/release/*, or refs/heads/codex/status-release-*."
           }
 
       - name: Setup .NET

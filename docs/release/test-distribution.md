@@ -28,7 +28,7 @@ The `Tester Release` GitHub Actions workflow runs repository preflight, restore,
 - `FreeX-latest-win-x64.msix`
 - `FreeX-latest-win-x64.msix.sha256`
 
-Release dispatches must run from `main` because the workflow publishes stable latest assets, and a workflow-level `tester-release` concurrency group prevents overlapping dispatches from moving `latest` backward.
+Release dispatches must run from `main` or an explicitly frozen release branch (`release/*` or `codex/status-release-*`) because the workflow publishes stable latest assets. Freeze the candidate first, run the full release verification on that exact branch, and leave later `main` commits for the next release train. A workflow-level `tester-release` concurrency group prevents overlapping dispatches from moving `latest` backward.
 
 The hosted MSIX publish path signs the package when `FREEX_MSIX_CERTIFICATE_BASE64` is configured, with optional `FREEX_MSIX_CERTIFICATE_PASSWORD` and `FREEX_MSIX_TIMESTAMP_URL` inputs. Until a release certificate is available, the workflow passes `-AllowUnsignedMsix` and publishes an unsigned MSIX for tester continuity. `tools/Publish-UserTestBuild.ps1` derives the manifest `Publisher` from the signing certificate subject when signing is enabled, while direct local unsigned MSIX output still requires explicitly passing `-AllowUnsignedMsix`. Installer trust validation and Store-style submission remain release-gate work.
 

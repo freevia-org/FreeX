@@ -106,6 +106,8 @@ foreach ($marker in @(
     "group: tester-release",
     "Validate latest release source",
     "refs/heads/main",
+    "refs/heads/release/*",
+    "refs/heads/codex/status-release-*",
     "dotnet-version: 10.0.x",
     "tools\Test-RepositoryPreflight.ps1",
     "FreeX.DefaultTests.slnx",
@@ -134,7 +136,7 @@ $distributionPlan = Get-Content -LiteralPath $distributionPlanFile -Raw
 Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "At $overallCompletion% completion, default tester releases use the ``$stream`` stream." -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "Release dispatches must run from ``main`` because the workflow publishes stable latest assets" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "Release dispatches must run from ``main`` or an explicitly frozen release branch (``release/*`` or ``codex/status-release-*``) because the workflow publishes stable latest assets" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "signs the package when ``FREEX_MSIX_CERTIFICATE_BASE64`` is configured" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "publishes an unsigned MSIX for tester continuity" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "Keyboard-only smoke validation" -Label "Test distribution plan"
@@ -146,6 +148,7 @@ Assert-Contains -Text $checklist -Expected "release/progress.json" -Label "Teste
 Assert-Contains -Text $checklist -Expected "Test result artifact was uploaded, even for failed release-gate attempts." -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Versioned ``.exe``, latest ``.exe``, versioned MSIX, latest MSIX, and checksum artifacts" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Stable latest checksum assets were included for both the ``.exe`` and MSIX packages" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "Release ran from ``main`` or an explicitly frozen release branch" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Latest ``.exe`` and MSIX download links were checked from the published release." -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "MSIX package was signed with the release certificate when signing secrets were configured; otherwise unsigned MSIX publication was accepted for this internal tester build." -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Known accessibility issues" -Label "Tester release checklist"
