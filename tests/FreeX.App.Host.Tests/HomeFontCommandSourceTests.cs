@@ -94,6 +94,10 @@ public sealed class HomeFontCommandSourceTests
         source.Should().Contain("ApplyFontSizeAndFitRows(FontSizePlanner.Decrease(style.FontSize))");
         source.Should().Contain("private void FontColorBtn_Click(object sender, RoutedEventArgs e) => ApplySelectedFontColor();");
         source.Should().Contain("private void FillColorBtn_Click(object sender, RoutedEventArgs e) => ApplySelectedFillColor();");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void FontColorPickerBtn_Click(")
+            .Should().Contain("e.Handled = true;");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void FillColorPickerBtn_Click(")
+            .Should().Contain("e.Handled = true;");
         source.Should().Contain("TryShowColorPicker(\"Font Color\", _selectedFontColor, allowNoColor: false, out var color)");
         source.Should().Contain("_selectedFontColor = selected;");
         source.Should().Contain("TryShowColorPicker(\"Fill Color\", _selectedFillColor, allowNoColor: true, out var color)");

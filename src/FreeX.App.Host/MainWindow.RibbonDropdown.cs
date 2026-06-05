@@ -407,7 +407,12 @@ public partial class MainWindow
         }
 
         if (RibbonMetadata.IsDropdownMenuButton(button))
-            button.RaiseEvent(new RoutedEventArgs(RibbonMetadata.DropdownClickEvent, button));
+        {
+            var dropdownArgs = new RoutedEventArgs(RibbonMetadata.DropdownClickEvent, button);
+            button.RaiseEvent(dropdownArgs);
+            if (!dropdownArgs.Handled)
+                button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+        }
     }
 
     private static bool IsRibbonDropdownZoneClick(ButtonBase button, Point position)

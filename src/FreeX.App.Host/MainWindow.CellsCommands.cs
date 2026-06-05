@@ -15,13 +15,11 @@ public partial class MainWindow
 
     private void InsertPickerBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-            OpenRibbonContextMenu(btn, cm);
+        InsertCellsMenuItem_Click(sender, e);
     }
     private void DeletePickerBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-            OpenRibbonContextMenu(btn, cm);
+        DeleteCellsMenuItem_Click(sender, e);
     }
     private void FormatPickerBtn_Click(object sender, RoutedEventArgs e)
     {

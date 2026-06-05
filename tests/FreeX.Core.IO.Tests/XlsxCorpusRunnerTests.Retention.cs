@@ -2795,6 +2795,196 @@ public partial class XlsxCorpusRunnerTests
         act.Should().NotThrow();
     }
 
+    [Fact]
+    public void PackageHealth_RejectsPartsWithoutEffectiveContentType()
+    {
+        using var package = CreatePackageHealthProbePackage(archive =>
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                </Types>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/image1.png"/>
+                </Relationships>
+                """);
+            archive.CreateEntry("xl/media/image1.png");
+        });
+
+        var act = () => AssertPackageHealth(package, "missing image content type");
+
+        act.Should().Throw<Exception>().WithMessage("*xl/media/image1.png has no effective content type*");
+    }
+
+    [Fact]
+    public void PackageHealth_RejectsStaleContentTypeOverrides()
+    {
+        using var package = CreatePackageHealthProbePackage(archive =>
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/missing.xml" ContentType="application/xml"/>
+                </Types>
+                """);
+            WritePackageEntry(archive, "xl/workbook.xml", """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+        });
+
+        var act = () => AssertPackageHealth(package, "stale content type override");
+
+        act.Should().Throw<Exception>().WithMessage("*Override PartName '/xl/missing.xml' references missing package part*");
+    }
+
+    [Fact]
+    public void PackageHealth_RejectsDuplicateRelationshipIds()
+    {
+        using var package = CreatePackageHealthProbePackage(archive =>
+        {
+            WritePackageHealthContentTypes(archive);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/image1.png"/>
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/image2.png"/>
+                </Relationships>
+                """);
+            archive.CreateEntry("xl/media/image1.png");
+            archive.CreateEntry("xl/media/image2.png");
+        });
+
+        var act = () => AssertPackageHealth(package, "duplicate relationship id");
+
+        act.Should().Throw<Exception>().WithMessage("*duplicate Relationship Id rIdImage*");
+    }
+
+    [Fact]
+    public void PackageHealth_RejectsInvalidRelationshipTargetMode()
+    {
+        using var package = CreatePackageHealthProbePackage(archive =>
+        {
+            WritePackageHealthContentTypes(archive);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                TargetMode="Embed"
+                                Target="../media/image1.png"/>
+                </Relationships>
+                """);
+            archive.CreateEntry("xl/media/image1.png");
+        });
+
+        var act = () => AssertPackageHealth(package, "invalid relationship target mode");
+
+        act.Should().Throw<Exception>().WithMessage("*invalid TargetMode Embed*");
+    }
+
+    [Fact]
+    public void PackageHealth_RejectsAbsoluteRelationshipTargetWithoutExternalMode()
+    {
+        using var package = CreatePackageHealthProbePackage(archive =>
+        {
+            WritePackageHealthContentTypes(archive);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdExternal"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="https://example.com/image.png"/>
+                </Relationships>
+                """);
+        });
+
+        var act = () => AssertPackageHealth(package, "absolute target without external mode");
+
+        act.Should().Throw<Exception>().WithMessage("*targets external URI without TargetMode=External*");
+    }
+
+    [Fact]
+    public void PackageHealth_RejectsRelationshipPartsWithoutOwners()
+    {
+        using var package = CreatePackageHealthProbePackage(archive =>
+        {
+            WritePackageHealthContentTypes(archive);
+            WritePackageEntry(archive, "xl/worksheets/_rels/missing.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/image1.png"/>
+                </Relationships>
+                """);
+            archive.CreateEntry("xl/media/image1.png");
+        });
+
+        var act = () => AssertPackageHealth(package, "relationship part without owner");
+
+        act.Should().Throw<Exception>().WithMessage("*has no owning package part xl/worksheets/missing.xml*");
+    }
+
+    [Fact]
+    public void PackageHealth_RejectsNonCanonicalPackagePartNames()
+    {
+        using var package = CreatePackageHealthProbePackage(archive =>
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="xml" ContentType="application/xml"/>
+                </Types>
+                """);
+            WritePackageEntry(archive, "xl\\workbook.xml", """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+        });
+
+        var act = () => AssertPackageHealth(package, "non-canonical package part");
+
+        act.Should().Throw<Exception>().WithMessage("*uses a backslash in the package part name*");
+    }
+
+    private static MemoryStream CreatePackageHealthProbePackage(Action<ZipArchive> configure)
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            configure(archive);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static void WritePackageHealthContentTypes(ZipArchive archive)
+    {
+        WritePackageEntry(archive, "[Content_Types].xml", """
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Default Extension="png" ContentType="image/png"/>
+            </Types>
+            """);
+    }
+
     private static string[] CaptureKnownGapFixtureParts(string id)
     {
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage(id);

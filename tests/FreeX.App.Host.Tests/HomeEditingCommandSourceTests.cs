@@ -72,6 +72,9 @@ public sealed class HomeEditingCommandSourceTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeEditing.cs"));
 
         source.Should().Contain("AutoSumFormulaPlanner.BuildFormula(_workbook.GetSheet(_currentSheetId), func, addr)");
+        var autoSumButtonHandler = SourceMethodExtractor.ExtractMethodSource(source, "private void AutoSumPickerBtn_Click(");
+        autoSumButtonHandler.Should().Contain("InsertAutoSumFormula(\"SUM\");");
+        autoSumButtonHandler.Should().NotContain("OpenRibbonContextMenu");
         source.Should().Contain("private void AutoSumSumMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula(\"SUM\");");
         source.Should().Contain("private void AutoSumAvgMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula(\"AVERAGE\");");
         source.Should().Contain("private void AutoSumCountMenuItem_Click(object sender, RoutedEventArgs e) => InsertAutoSumFormula(\"COUNT\");");
