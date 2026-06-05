@@ -266,6 +266,7 @@ public static partial class FlashFillService
             ?? TryUrlQueryParameterValueCore(examples)
             ?? TryUrlLastQueryParameterName(examples)
             ?? TryUrlLastQueryParameterValue(examples)
+            ?? TryUrlLastRepeatedQueryParameterValue(examples)
             ?? TryUrlFragmentValue(examples);
     }
 
@@ -293,6 +294,50 @@ public static partial class FlashFillService
         }
 
         return source => TryGetLastNonEmptyQueryParameterValue(source, out var value) ? value : null;
+    }
+
+    private static Func<string, string?>? TryUrlLastRepeatedQueryParameterValue(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (TryUrlFirstQueryParameterValue(examples) is not null ||
+            TryUrlQueryParameterValueCore(examples) is not null ||
+            TryUrlLastQueryParameterValue(examples) is not null)
+        {
+            return null;
+        }
+
+        List<string>? candidateNames = null;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (expected.Length == 0 ||
+                !TryGetMatchingLastRepeatedQueryParameterNames(source, expected, out var currentNames) ||
+                currentNames.Count == 0)
+            {
+                return null;
+            }
+
+            if (candidateNames is null)
+            {
+                candidateNames = currentNames;
+                continue;
+            }
+
+            for (var i = candidateNames.Count - 1; i >= 0; i--)
+            {
+                if (!currentNames.Contains(candidateNames[i], StringComparer.Ordinal))
+                    candidateNames.RemoveAt(i);
+            }
+
+            if (candidateNames.Count == 0)
+                return null;
+        }
+
+        if (candidateNames is null || candidateNames.Count != 1)
+            return null;
+
+        var parameterName = candidateNames[0];
+        return source => TryGetLastNonEmptyQueryParameterValue(source, parameterName, out var value) ? value : null;
     }
 
     private static Func<string, string?>? TryUrlFirstQueryParameterValue(
@@ -586,6 +631,41 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static bool TryGetMatchingLastRepeatedQueryParameterNames(
+        string source,
+        string expected,
+        out List<string> parameterNames)
+    {
+        parameterNames = [];
+        if (!TryGetDecodedQueryParameters(source, out var parameters))
+            return false;
+
+        var valueCountsByName = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (name, _) in parameters)
+        {
+            valueCountsByName.TryGetValue(name, out var count);
+            valueCountsByName[name] = count + 1;
+        }
+
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (name, _) in parameters)
+        {
+            if (!seenNames.Add(name) ||
+                valueCountsByName[name] < 2)
+            {
+                continue;
+            }
+
+            if (TryGetLastNonEmptyQueryParameterValue(parameters, name, out var value) &&
+                value == expected)
+            {
+                parameterNames.Add(name);
+            }
+        }
+
+        return true;
+    }
+
     private static bool TryGetMatchingQueryParameterNames(
         string source,
         string expected,
@@ -672,6 +752,35 @@ public static partial class FlashFillService
         value = string.Empty;
         return TryGetDecodedQueryParameters(source, out var parameters) &&
                TryGetLastNonEmptyQueryParameterValue(parameters, out value);
+    }
+
+    private static bool TryGetLastNonEmptyQueryParameterValue(
+        string source,
+        string parameterName,
+        out string value)
+    {
+        value = string.Empty;
+        return TryGetDecodedQueryParameters(source, out var parameters) &&
+               TryGetLastNonEmptyQueryParameterValue(parameters, parameterName, out value);
+    }
+
+    private static bool TryGetLastNonEmptyQueryParameterValue(
+        IReadOnlyList<(string Name, string Value)> parameters,
+        string parameterName,
+        out string value)
+    {
+        for (var i = parameters.Count - 1; i >= 0; i--)
+        {
+            var (name, currentValue) = parameters[i];
+            if (name == parameterName && currentValue.Length > 0)
+            {
+                value = currentValue;
+                return true;
+            }
+        }
+
+        value = string.Empty;
+        return false;
     }
 
     private static bool TryGetLastNonEmptyQueryParameterValue(
