@@ -917,6 +917,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversConstructionFieldServiceVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "CONSTRCTION contracor Subcontracor bluepritn permitt insulatoin excavatoin scafolding SAFETEY punchlistt walkthru Workordr. Keep construction, contractor, subcontractor, blueprint, permit, insulation, excavation, scaffolding, safety, punchlist, walkthrough, workorder, preconstrction, contracor_id, https://contracor.example.com/bluepritn, field@scafolding.example.com, \"C:\\insulatoin folder\\walkthru file.xlsx\", and [C:\\excavatoin folder\\workordr file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("CONSTRCTION", "CONSTRUCTION"),
+            ("contracor", "contractor"),
+            ("Subcontracor", "Subcontractor"),
+            ("bluepritn", "blueprint"),
+            ("permitt", "permit"),
+            ("insulatoin", "insulation"),
+            ("excavatoin", "excavation"),
+            ("scafolding", "scaffolding"),
+            ("SAFETEY", "SAFETY"),
+            ("punchlistt", "punchlist"),
+            ("walkthru", "walkthrough"),
+            ("Workordr", "Workorder"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "CONSTRUCTION contractor Subcontractor blueprint permit insulation excavation scaffolding SAFETY punchlist walkthrough Workorder. Keep construction, contractor, subcontractor, blueprint, permit, insulation, excavation, scaffolding, safety, punchlist, walkthrough, workorder, preconstrction, contracor_id, https://contracor.example.com/bluepritn, field@scafolding.example.com, \"C:\\insulatoin folder\\walkthru file.xlsx\", and [C:\\excavatoin folder\\workordr file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversManufacturingProductionVocabularyTypos()
     {
         var wb = new Workbook("test");
