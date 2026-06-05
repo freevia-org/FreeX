@@ -29,6 +29,7 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
                         new XAttribute("r", "5"),
                         new XAttribute("hidden", "1"),
                         new XAttribute("ht", "18"),
+                        new XAttribute("customHeight", "1"),
                         new XAttribute("outlineLevel", "2"),
                         new XAttribute("collapsed", "1"),
                         Cell("A5", style: "4"),
@@ -81,6 +82,7 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
                         new XAttribute("r", "5"),
                         new XAttribute("hidden", "1"),
                         new XAttribute("ht", "18"),
+                        new XAttribute("customHeight", "1"),
                         new XAttribute("outlineLevel", "2"),
                         new XAttribute("collapsed", "1"),
                         new XAttribute("thickTop", "1"),
@@ -121,6 +123,33 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         });
         layout.CellLayout.PopulatedCellCount.Should().Be(2);
         layout.HasPreservableSourceSheetDataMetadata.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReadSheetDataLayout_TreatsNonCustomTallRowHeightAsAutofitDisplayHint()
+    {
+        var worksheet = new XDocument(
+            new XElement(WorksheetNs + "worksheet",
+                new XElement(WorksheetNs + "sheetData",
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "1"),
+                        new XAttribute("ht", "15.75")),
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "2"),
+                        new XAttribute("ht", "60.75")),
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "3"),
+                        new XAttribute("ht", "18"),
+                        new XAttribute("customHeight", "1")))));
+
+        var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheet, WorksheetNs);
+
+        layout.RowColumnLayout.RowHeights[1].Should().BeApproximately(20, 0.0001);
+        layout.RowColumnLayout.RowHeights[2].Should().BeApproximately(59, 0.0001);
+        layout.RowColumnLayout.RowHeights[3].Should().BeApproximately(24, 0.0001);
     }
 
     [Fact]

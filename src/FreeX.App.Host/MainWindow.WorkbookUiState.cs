@@ -243,11 +243,19 @@ public partial class MainWindow
 
     private static void SetSelectedItemIfChanged(ComboBox comboBox, object value)
     {
-        if (Equals(comboBox.SelectedItem, value))
+        var textValue = value?.ToString() ?? string.Empty;
+        if (Equals(comboBox.SelectedItem, value) ||
+            string.Equals(comboBox.Text, textValue, StringComparison.Ordinal))
             return;
 
         if (comboBox.Items.Contains(value))
+        {
             comboBox.SelectedItem = value;
+            return;
+        }
+
+        if (comboBox.IsEditable)
+            comboBox.Text = textValue;
     }
 
     private void ApplyStyleDiff(StyleDiff diff)

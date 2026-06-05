@@ -21,4 +21,15 @@ public sealed class AppDiagnosticsStartupTests
         source.Should().Contain("RecordEvent(\"app_ready\")");
         source.Should().Contain("RecordEvent(\"app_exit\"");
     }
+
+    [Fact]
+    public void AppStartup_OpensExistingWorkbookArgument()
+    {
+        var appSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+
+        appSource.Should().Contain("e.Args.FirstOrDefault(File.Exists)");
+        appSource.Should().Contain("OpenStartupFileAsync(startupWorkbookPath)");
+        backstageSource.Should().Contain("internal Task OpenStartupFileAsync(string path) => OpenFileAsync(path);");
+    }
 }

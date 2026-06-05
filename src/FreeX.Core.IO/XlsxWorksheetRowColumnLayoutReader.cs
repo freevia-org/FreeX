@@ -7,6 +7,8 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetRowColumnLayoutReader
 {
+    private const double PointsToDips = 96.0 / 72.0;
+    private const double CachedAutoFitRowHeightScale = 14.5 / 15.0;
     private static readonly SheetId ParseOnlySheetId = default;
 
     private static readonly HashSet<string> ModeledRowAttributes = new(StringComparer.Ordinal)
@@ -416,8 +418,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         if (XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("hidden")?.Value))
             hiddenRows.Add(rowNumber);
 
-        if (ParseOptionalDouble(row.Attribute("ht")?.Value) is { } heightPoints && heightPoints > 0)
-            rowHeights[rowNumber] = heightPoints * (96.0 / 72.0);
+        if (TryReadRowHeight(row.Attribute("ht")?.Value, row.Attribute("customHeight")?.Value, out var height))
+            rowHeights[rowNumber] = height;
 
         var outlineStr = row.Attribute("outlineLevel")?.Value;
         if (int.TryParse(outlineStr, out var outlineLevel) && outlineLevel > 0)
@@ -439,8 +441,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         if (XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("hidden")))
             hiddenRows.Add(rowNumber);
 
-        if (ParseOptionalDouble(row.GetAttribute("ht")) is { } heightPoints && heightPoints > 0)
-            rowHeights[rowNumber] = heightPoints * (96.0 / 72.0);
+        if (TryReadRowHeight(row.GetAttribute("ht"), row.GetAttribute("customHeight"), out var height))
+            rowHeights[rowNumber] = height;
 
         var outlineStr = row.GetAttribute("outlineLevel");
         if (int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0)
@@ -498,6 +500,38 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 columnWidths[colNumber] = width;
         }
     }
+
+    private static bool TryReadRowHeight(string? rawHeight, string? rawCustomHeight, out double height)
+    {
+        height = 0;
+        if (ParseOptionalDouble(rawHeight) is not { } xlsxHeight || xlsxHeight <= 0)
+            return false;
+
+        if (XlsxWorksheetXmlValueParser.IsTruthy(rawCustomHeight))
+        {
+            height = RowHeightPointsToPixels(xlsxHeight);
+            return true;
+        }
+
+        // Excel may persist cached autofit heights without customHeight. Small cached
+        // rows such as 15.75 display as the next lower point row in Excel, while tall
+        // wrapped rows need a different normalization to match the visible autofit.
+        if (xlsxHeight <= 20.0)
+        {
+            var normalizedPoints = Math.Floor(xlsxHeight);
+            if (normalizedPoints <= 0 || Math.Abs(normalizedPoints - xlsxHeight) < 0.001)
+                return false;
+
+            height = RowHeightPointsToPixels(normalizedPoints);
+            return true;
+        }
+
+        height = Math.Round(xlsxHeight * CachedAutoFitRowHeightScale, MidpointRounding.AwayFromZero);
+        return true;
+    }
+
+    private static double RowHeightPointsToPixels(double points) =>
+        Math.Round(points * PointsToDips, MidpointRounding.AwayFromZero);
 
     private static double? ParseOptionalDouble(string? value) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&

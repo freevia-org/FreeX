@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
 using FreeX.Core.IO;
@@ -67,6 +68,158 @@ public sealed class XlsxFileAdapterFormatTests
         loadedSheet.GetStyleOnly(1, 5).Should().NotBeNull();
         loaded.GetStyle(loadedSheet.GetStyleOnly(1, 3)!.Value).FillColor.Should().Be(new CellColor(221, 235, 247));
         loaded.GetStyle(loadedSheet.GetStyleOnly(1, 5)!.Value).BorderBottom.Style.Should().Be(BorderStyle.Thin);
+    }
+
+    [Fact]
+    public void Load_AppliesNativeCellXfBordersToPopulatedCells()
+    {
+        using var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        XlsxPackageTestHelper.PatchPackageXml(package, "xl/styles.xml", document =>
+        {
+            XNamespace ns = document.Root!.Name.Namespace;
+            document.Root.Element(ns + "borders")!.ReplaceWith(
+                new XElement(ns + "borders",
+                    new XAttribute("count", "2"),
+                    new XElement(ns + "border",
+                        new XElement(ns + "left"),
+                        new XElement(ns + "right"),
+                        new XElement(ns + "top"),
+                        new XElement(ns + "bottom"),
+                        new XElement(ns + "diagonal")),
+                    new XElement(ns + "border",
+                        new XElement(ns + "left", new XAttribute("style", "medium")),
+                        new XElement(ns + "right", new XAttribute("style", "medium")),
+                        new XElement(ns + "top", new XAttribute("style", "medium")),
+                        new XElement(ns + "bottom", new XAttribute("style", "medium")),
+                        new XElement(ns + "diagonal"))));
+            document.Root.Element(ns + "cellXfs")!.ReplaceWith(
+                new XElement(ns + "cellXfs",
+                    new XAttribute("count", "2"),
+                    new XElement(ns + "xf", new XAttribute("numFmtId", "0"), new XAttribute("fontId", "0"), new XAttribute("fillId", "0"), new XAttribute("borderId", "0"), new XAttribute("xfId", "0")),
+                    new XElement(ns + "xf", new XAttribute("numFmtId", "0"), new XAttribute("fontId", "0"), new XAttribute("fillId", "0"), new XAttribute("borderId", "1"), new XAttribute("xfId", "0"), new XAttribute("applyBorder", "1"))));
+        });
+        XlsxPackageTestHelper.PatchWorksheetXml(package, document =>
+        {
+            XNamespace ns = document.Root!.Name.Namespace;
+            document.Root
+                .Element(ns + "sheetData")!
+                .Element(ns + "row")!
+                .Element(ns + "c")!
+                .SetAttributeValue("s", "1");
+        });
+
+        var loaded = new XlsxFileAdapter().Load(package);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var style = loaded.GetStyle(loadedSheet.GetCell(1, 1)!.StyleId);
+
+        style.BorderTop.Style.Should().Be(BorderStyle.Medium);
+        style.BorderRight.Style.Should().Be(BorderStyle.Medium);
+        style.BorderBottom.Style.Should().Be(BorderStyle.Medium);
+        style.BorderLeft.Style.Should().Be(BorderStyle.Medium);
+    }
+
+    [Fact]
+    public void CellBorderStyleReader_ReadsCellXfBorderTable()
+    {
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var stylesXml = new XDocument(
+            new XElement(ns + "styleSheet",
+                new XElement(ns + "borders",
+                    new XElement(ns + "border",
+                        new XElement(ns + "left"),
+                        new XElement(ns + "right"),
+                        new XElement(ns + "top"),
+                        new XElement(ns + "bottom")),
+                    new XElement(ns + "border",
+                        new XElement(ns + "left", new XAttribute("style", "thin")),
+                        new XElement(ns + "right", new XAttribute("style", "dashed")),
+                        new XElement(ns + "top", new XAttribute("style", "medium"),
+                            new XElement(ns + "color", new XAttribute("rgb", "FF1F4E79"))),
+                        new XElement(ns + "bottom", new XAttribute("style", "double")))),
+                new XElement(ns + "cellXfs",
+                    new XElement(ns + "xf", new XAttribute("borderId", "0")),
+                    new XElement(ns + "xf", new XAttribute("borderId", "1")))));
+
+        var table = XlsxCellBorderStyleReader.Read(stylesXml, WorkbookTheme.Office, new WorkbookIndexedColorPalette());
+
+        table.TryGetVisibleBorders(1, out var borders).Should().BeTrue();
+        borders.Top.Should().Be(new CellBorder(BorderStyle.Medium, CellColor.FromArgb(0x1F, 0x4E, 0x79)));
+        borders.Right.Style.Should().Be(BorderStyle.Dashed);
+        borders.Bottom.Style.Should().Be(BorderStyle.Double);
+        borders.Left.Style.Should().Be(BorderStyle.Thin);
+    }
+
+    [Fact]
+    public void Load_UsesWorkbookDefaultStyleFromXlsxStyleZero()
+    {
+        using var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        XlsxPackageTestHelper.PatchPackageXml(package, "xl/styles.xml", document =>
+        {
+            XNamespace ns = document.Root!.Name.Namespace;
+            var font = document.Root.Element(ns + "fonts")!.Elements(ns + "font").First();
+            font.Element(ns + "name")!.SetAttributeValue("val", "Arial");
+            font.Element(ns + "sz")!.SetAttributeValue("val", "10");
+        });
+
+        var loaded = new XlsxFileAdapter().Load(package);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var defaultStyle = loaded.GetStyle(StyleId.Default);
+
+        defaultStyle.FontName.Should().Be("Arial");
+        defaultStyle.FontSize.Should().Be(10);
+        loadedSheet.GetCell(1, 1)!.StyleId.Should().Be(StyleId.Default);
+    }
+
+    [Fact]
+    public void Load_UsesAptosNarrowStandardRowHeightWhenSheetDefaultIsUncustomized()
+    {
+        using var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        XlsxPackageTestHelper.PatchPackageXml(package, "xl/styles.xml", document =>
+        {
+            XNamespace ns = document.Root!.Name.Namespace;
+            foreach (var font in document.Root.Element(ns + "fonts")!.Elements(ns + "font"))
+            {
+                font.Element(ns + "name")!.SetAttributeValue("val", "Aptos Narrow");
+                font.Element(ns + "sz")!.SetAttributeValue("val", "11");
+            }
+        });
+        XlsxPackageTestHelper.PatchWorksheetXml(package, document =>
+        {
+            XNamespace ns = document.Root!.Name.Namespace;
+            var sheetFormat = document.Root!.Element(ns + "sheetFormatPr");
+            if (sheetFormat is null)
+            {
+                sheetFormat = new XElement(ns + "sheetFormatPr");
+                document.Root.AddFirst(sheetFormat);
+            }
+
+            sheetFormat.SetAttributeValue("defaultRowHeight", "15");
+            sheetFormat.SetAttributeValue("customHeight", null);
+        });
+
+        var loaded = new XlsxFileAdapter().Load(package);
+
+        loaded.GetSheetAt(0).DefaultRowHeight.Should().Be(19);
+    }
+
+    [Fact]
+    public void Save_WritesWorkbookDefaultStyleToXlsxStyleZero()
+    {
+        var workbook = new Workbook("Default style", new CellStyle
+        {
+            FontName = "Arial",
+            FontSize = 10
+        });
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("default font"));
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        using var loaded = new XLWorkbook(stream);
+        loaded.Worksheet(1).Cell("A1").Style.Font.FontName.Should().Be("Arial");
+        loaded.Worksheet(1).Cell("A1").Style.Font.FontSize.Should().Be(10);
     }
 
     [Fact]
@@ -304,7 +457,7 @@ public sealed class XlsxFileAdapterFormatTests
             "var hasSourcePackage = SourcePackages.TryGetValue(workbook, out var sourcePackage);",
             StringComparison.Ordinal);
         var freshSaveReturn = savePostProcessingSource.IndexOf(
-            "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            NormalizeStylesheetForSchema();\n            NormalizeWorkbookForSchema();\n            return;\n        }",
+            "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            NormalizeStylesheetForSchema();\n            NormalizeDocumentPropertiesPackageGraph();\n            NormalizeWorkbookForSchema();\n            return;\n        }",
             StringComparison.Ordinal);
         var sourceReplay = savePostProcessingSource.IndexOf(
             "var sourceParts = PreserveSourcePackageParts(workbook, packageStream);",

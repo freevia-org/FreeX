@@ -62,7 +62,7 @@ public class ViewportLayoutTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        sheet.DefaultColumnWidth = 10;
+        sheet.DefaultColumnWidth = 10.75;
 
         var viewport = new ViewportService().GetViewport(
             workbook,
@@ -80,7 +80,7 @@ public class ViewportLayoutTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        sheet.DefaultColumnWidth = 8.75;
+        sheet.DefaultColumnWidth = 9.3;
 
         var viewport = new ViewportService().GetViewport(
             workbook,
@@ -117,7 +117,7 @@ public class ViewportLayoutTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
-        sheet.DefaultColumnWidth = 10;
+        sheet.DefaultColumnWidth = 10.75;
         sheet.FrozenCols = 1;
 
         var viewport = new ViewportService().GetViewport(
@@ -142,7 +142,7 @@ public class ViewportLayoutTests
         var address = new ViewportService().HitTest(
             workbook,
             sheet.Id,
-            x: sheet.DefaultColumnWidth * 8 + 1,
+            x: 65,
             y: 1,
             zoom: 1);
 
@@ -169,6 +169,23 @@ public class ViewportLayoutTests
         address.Should().NotBeNull();
         address!.Value.Row.Should().Be(2);
         address.Value.Col.Should().Be(2);
+    }
+
+    [Fact]
+    public void GetViewport_ConvertsExcelColumnWidthsToPixels()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DefaultColumnWidth = 8.43;
+        sheet.ColumnWidths[2] = 14.5703125;
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300));
+
+        viewport.ColMetrics[0].Width.Should().Be(64);
+        viewport.ColMetrics[1].Width.Should().Be(107);
     }
 
     [Fact]

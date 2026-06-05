@@ -42,6 +42,16 @@ public sealed class GridViewTextDecorationTests
     }
 
     [Fact]
+    public void ResolveCellFontNameForDisplay_MapsUnavailableAptosNarrowToCalibri()
+    {
+        var fontName = GridView.ResolveCellFontNameForDisplay(
+            "Aptos Narrow",
+            candidate => string.Equals(candidate, "Calibri", StringComparison.OrdinalIgnoreCase));
+
+        fontName.Should().Be("Calibri");
+    }
+
+    [Fact]
     public void ResolveShrinkFontSize_ReducesFontSizeUntilTextFitsAndRespectsFloor()
     {
         var reduced = GridView.ResolveShrinkFontSize(
@@ -58,6 +68,13 @@ public sealed class GridViewTextDecorationTests
             measureTextWidth: fontSize => fontSize * 8);
 
         floored.Should().Be(6);
+    }
+
+    [Fact]
+    public void ToDisplayFontSize_UsesExcelGridScreenScale()
+    {
+        GridView.ToDisplayFontSize(11).Should().BeApproximately(14.6667, 0.0001);
+        GridView.ToDisplayFontSize(0).Should().Be(1);
     }
 
     [Fact]
