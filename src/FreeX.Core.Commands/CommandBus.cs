@@ -14,15 +14,20 @@ public sealed class CommandBus : ICommandBus
     private readonly Dictionary<WorkbookId, CommandStack> _stacks = [];
     private readonly Dictionary<WorkbookId, Func<IWorkbookCommand>> _repeatableCommandFactories = [];
     private readonly Func<WorkbookId, ICommandContext> _contextFactory;
+    private readonly Action<WorkbookId, ICommandContext>? _beforeMutation;
 
-    public CommandBus(Func<WorkbookId, ICommandContext> contextFactory)
+    public CommandBus(
+        Func<WorkbookId, ICommandContext> contextFactory,
+        Action<WorkbookId, ICommandContext>? beforeMutation = null)
     {
         _contextFactory = contextFactory;
+        _beforeMutation = beforeMutation;
     }
 
     public CommandOutcome Execute(WorkbookId workbookId, IWorkbookCommand command)
     {
         var ctx = _contextFactory(workbookId);
+        RunBeforeMutation(workbookId, ctx);
         var outcome = command.Apply(ctx);
 
         if (outcome.Success)
@@ -55,6 +60,7 @@ public sealed class CommandBus : ICommandBus
         var command = entry.Command;
         try
         {
+            RunBeforeMutation(workbookId, ctx);
             command.Revert(ctx);
         }
         catch (Exception ex)
@@ -78,6 +84,7 @@ public sealed class CommandBus : ICommandBus
         CommandOutcome outcome;
         try
         {
+            RunBeforeMutation(workbookId, ctx);
             outcome = command.Apply(ctx);
         }
         catch (Exception ex)
@@ -110,6 +117,9 @@ public sealed class CommandBus : ICommandBus
 
     public bool CanRepeat(WorkbookId workbookId) =>
         _repeatableCommandFactories.ContainsKey(workbookId);
+
+    private void RunBeforeMutation(WorkbookId workbookId, ICommandContext context) =>
+        _beforeMutation?.Invoke(workbookId, context);
 
     private CommandStack GetOrCreateStack(WorkbookId id)
     {

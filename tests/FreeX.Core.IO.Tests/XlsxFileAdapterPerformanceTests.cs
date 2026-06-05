@@ -11,6 +11,13 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class XlsxFileAdapterPerformanceTests
 {
+    private static void PrepareLoadedWorkbookForEdit(Workbook workbook)
+    {
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+    }
+
     [BenchmarkFact]
     [Trait("Category", "ExternalWorkbook")]
     public void Benchmark_LoadExternalWorkbook_ReportsTiming()
@@ -163,6 +170,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             Workbook workbook;
             using (var stream = File.OpenRead(path))
                 workbook = adapter.Load(stream);
+            PrepareLoadedWorkbookForEdit(workbook);
 
             workbook.SheetCount.Should().BeGreaterThan(0);
             var firstSheet = workbook.GetSheetAt(0);
@@ -366,6 +374,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("ref string? currentModelFingerprint");
         snapshotSource.Should().Contain("currentModelFingerprint,");
         snapshotSource.Should().Contain("GetModelFingerprint(workbook, currentModelFingerprint)");
+        snapshotSource.Should().Contain("TryPrepareLoadedPackageSnapshotForEdit(Workbook workbook, out string? blockReason)");
+        snapshotSource.Should().Contain("TryEnsureCellPatchBaseline(");
+        snapshotSource.Should().Contain("IsCellPatchBaselineLazy: true");
+        snapshotSource.Should().Contain("patch_blocked_deferred_baseline_not_materialized");
         snapshotSource.Should().Contain("patchedPackage.TryGetBuffer");
         snapshotSource.Should().Contain("mergeRegionChanges,");
         snapshotSource.Should().Contain("hyperlinkChanges,");
@@ -430,6 +442,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         Workbook workbook;
         using (var source = new MemoryStream(package, writable: true))
             workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
 
         package[0] = 0;
         package[1] = 0;
