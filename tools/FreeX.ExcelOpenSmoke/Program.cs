@@ -84,6 +84,14 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
     private const string CommentsRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    private const string CustomXmlContentType =
+        "application/xml";
+    private const string CustomXmlPropertiesContentType =
+        "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
+    private const string CustomXmlRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
+    private const string CustomXmlPropertiesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps";
     private const string ExternalLinkContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
     private const string ExternalLinkRelationshipType =
@@ -161,6 +169,8 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace OfficeRelationshipNs =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace CustomXmlNs =
+        "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
     private static readonly XNamespace SpreadsheetNs =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace SlicerNs =
@@ -425,6 +435,7 @@ internal static class ExcelOpenSmoke
                 AssertPivotPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertExternalLinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertCalcChainPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertCustomXmlPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSlicerTimelinePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertRequiredFreeXSavedPackageParts(freeXSave.SavedPath, input.Expectations, input.SourcePath);
                 AssertRequiredFreeXSavedPackageRelationships(freeXSave.SavedPath, input.Expectations, input.SourcePath);
@@ -626,6 +637,7 @@ internal static class ExcelOpenSmoke
             AssertPivotPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertExternalLinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertCalcChainPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertCustomXmlPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSlicerTimelinePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertRequiredExcelSavedPackageParts(excelSavedPath, expectations, stagedPath);
             AssertRequiredExcelSavedPackageRelationships(excelSavedPath, expectations, stagedPath);
@@ -3802,6 +3814,308 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid calc-chain package graph: {sample}{suffix}");
+    }
+
+    private static void AssertCustomXmlPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var customXmlRelationships = FindPackageRelationshipsByType(archive, CustomXmlRelationshipType);
+        var customXmlItemParts = FindCustomXmlItemParts(archive);
+        if (customXmlRelationships.Count == 0 && customXmlItemParts.Count == 0)
+            return;
+
+        var issues = new List<string>();
+        var validatedCustomXmlParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var referencedPropertiesParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var relationshipReference in customXmlRelationships)
+        {
+            AddCustomXmlRelationshipIssues(
+                archive,
+                relationshipReference,
+                validatedCustomXmlParts,
+                referencedPropertiesParts,
+                issues);
+        }
+
+        foreach (var customXmlItemPart in customXmlItemParts)
+        {
+            if (!validatedCustomXmlParts.Contains(customXmlItemPart))
+                issues.Add($"{customXmlItemPart} is present without a customXml relationship");
+        }
+
+        foreach (var propertiesPart in FindCustomXmlPropertiesParts(archive))
+        {
+            if (!referencedPropertiesParts.Contains(propertiesPart))
+                issues.Add($"{propertiesPart} is present without a customXmlProps relationship");
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidCustomXmlPackage(label, sourcePath, issues);
+    }
+
+    private static List<PackageRelationshipReference> FindPackageRelationshipsByType(
+        ZipArchive archive,
+        string relationshipType)
+    {
+        var relationships = new List<PackageRelationshipReference>();
+        foreach (var relationshipEntry in archive.Entries.Where(entry => IsPackageRelationshipPart(entry.FullName)))
+        {
+            var relationshipPart = NormalizePackagePart(relationshipEntry.FullName);
+            foreach (var relationship in LoadPackageXml(relationshipEntry).Root?.Elements(PackageRelationshipNs + "Relationship") ?? [])
+            {
+                if (string.Equals(relationship.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase))
+                    relationships.Add(new PackageRelationshipReference(relationshipPart, relationship));
+            }
+        }
+
+        return relationships;
+    }
+
+    private static HashSet<string> FindCustomXmlItemParts(ZipArchive archive) =>
+        archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .Where(IsCustomXmlItemPart)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static HashSet<string> FindCustomXmlPropertiesParts(ZipArchive archive) =>
+        archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .Where(IsCustomXmlPropertiesPart)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsCustomXmlItemPart(string part)
+    {
+        part = NormalizePackagePart(part);
+        if (!part.StartsWith("customXml/", StringComparison.OrdinalIgnoreCase) ||
+            part.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+            !part.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var fileName = part[(part.LastIndexOf('/') + 1)..];
+        return !fileName.StartsWith("itemProps", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCustomXmlPropertiesPart(string part)
+    {
+        part = NormalizePackagePart(part);
+        if (!part.StartsWith("customXml/", StringComparison.OrdinalIgnoreCase) ||
+            part.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+            !part.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var fileName = part[(part.LastIndexOf('/') + 1)..];
+        return fileName.StartsWith("itemProps", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddCustomXmlRelationshipIssues(
+        ZipArchive archive,
+        PackageRelationshipReference relationshipReference,
+        HashSet<string> validatedCustomXmlParts,
+        HashSet<string> referencedPropertiesParts,
+        List<string> issues)
+    {
+        var relationship = relationshipReference.Relationship;
+        var relationshipId = relationship.Attribute("Id")?.Value;
+        var relationshipLabel =
+            $"{relationshipReference.RelationshipPart} customXml relationship {FormatRelationshipIssueId(relationshipId)}";
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} is external");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} has invalid TargetMode {targetMode}");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{relationshipLabel} has no Target");
+            return;
+        }
+
+        target = target.Trim();
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add($"{relationshipLabel} targets external URI without TargetMode=External: {target}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                relationshipReference.RelationshipPart,
+                target,
+                out var customXmlPart,
+                out var targetIssue))
+        {
+            issues.Add($"{relationshipLabel} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!IsCustomXmlItemPart(customXmlPart))
+            issues.Add($"{relationshipLabel} targets {customXmlPart}, which is not a custom XML item part");
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, customXmlPart, CustomXmlContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var customXmlEntry = FindPackageEntry(archive, customXmlPart);
+        if (customXmlEntry is null)
+        {
+            issues.Add($"{relationshipLabel} targets missing package part {customXmlPart}");
+            return;
+        }
+
+        if (!validatedCustomXmlParts.Add(customXmlPart))
+            return;
+
+        var customXml = LoadPackageXml(customXmlEntry);
+        if (customXml.Root is null)
+            issues.Add($"{customXmlPart} has no custom XML root element");
+
+        AddCustomXmlPropertiesRelationshipIssues(
+            archive,
+            customXmlPart,
+            referencedPropertiesParts,
+            issues);
+    }
+
+    private static void AddCustomXmlPropertiesRelationshipIssues(
+        ZipArchive archive,
+        string customXmlPart,
+        HashSet<string> referencedPropertiesParts,
+        List<string> issues)
+    {
+        var relationshipPart = GetRelationshipPartForPackagePart(customXmlPart);
+        var relationshipEntry = FindPackageEntry(archive, relationshipPart);
+        if (relationshipEntry is null)
+        {
+            issues.Add($"{customXmlPart} has no relationship part for custom XML properties");
+            return;
+        }
+
+        var propertiesRelationships = LoadPackageXml(relationshipEntry)
+            .Root?
+            .Elements(PackageRelationshipNs + "Relationship")
+            .Where(relationship => string.Equals(
+                relationship.Attribute("Type")?.Value,
+                CustomXmlPropertiesRelationshipType,
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray() ?? [];
+        if (propertiesRelationships.Length == 0)
+        {
+            issues.Add($"{customXmlPart} has no customXmlProps relationship in {relationshipPart}");
+            return;
+        }
+
+        foreach (var propertiesRelationship in propertiesRelationships)
+        {
+            AddCustomXmlPropertiesPartIssues(
+                archive,
+                customXmlPart,
+                relationshipPart,
+                propertiesRelationship,
+                referencedPropertiesParts,
+                issues);
+        }
+    }
+
+    private static void AddCustomXmlPropertiesPartIssues(
+        ZipArchive archive,
+        string customXmlPart,
+        string relationshipPart,
+        XElement relationship,
+        HashSet<string> referencedPropertiesParts,
+        List<string> issues)
+    {
+        var relationshipId = relationship.Attribute("Id")?.Value;
+        var relationshipLabel =
+            $"{customXmlPart} customXmlProps relationship {FormatRelationshipIssueId(relationshipId)}";
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} is external");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} has invalid TargetMode {targetMode}");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{relationshipLabel} has no Target");
+            return;
+        }
+
+        target = target.Trim();
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add($"{relationshipLabel} targets external URI without TargetMode=External: {target}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                relationshipPart,
+                target,
+                out var propertiesPart,
+                out var targetIssue))
+        {
+            issues.Add($"{relationshipLabel} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!IsCustomXmlPropertiesPart(propertiesPart))
+            issues.Add($"{relationshipLabel} targets {propertiesPart}, which is not a custom XML properties part");
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, propertiesPart, CustomXmlPropertiesContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var propertiesEntry = FindPackageEntry(archive, propertiesPart);
+        if (propertiesEntry is null)
+        {
+            issues.Add($"{relationshipLabel} targets missing package part {propertiesPart}");
+            return;
+        }
+
+        referencedPropertiesParts.Add(propertiesPart);
+        var propertiesXml = LoadPackageXml(propertiesEntry);
+        if (propertiesXml.Root?.Name != CustomXmlNs + "datastoreItem")
+        {
+            issues.Add($"{propertiesPart} has an invalid custom XML properties root element");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(propertiesXml.Root.Attribute(CustomXmlNs + "itemID")?.Value))
+            issues.Add($"{propertiesPart} datastoreItem has no itemID");
+    }
+
+    private static void ThrowInvalidCustomXmlPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid custom XML package graph: {sample}{suffix}");
     }
 
     private static void AssertSlicerTimelinePackageComplete(string xlsxPath, string label, string sourcePath)
@@ -8431,6 +8745,10 @@ internal static class ExcelOpenSmoke
     private sealed record ExternalBookReference(
         int Ordinal,
         string? RelationshipId);
+
+    private sealed record PackageRelationshipReference(
+        string RelationshipPart,
+        XElement Relationship);
 
     private sealed record SlicerTimelineRelationshipReference(
         int Ordinal,
