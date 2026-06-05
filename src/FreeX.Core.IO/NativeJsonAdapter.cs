@@ -324,6 +324,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     var cell = cDto.Formula != null
                         ? Cell.FromFormula(NormalizeNativeFormulaText(cDto.Formula))
                         : Cell.FromValue(value);
+                    if (cDto.Formula != null)
+                        cell.ArrayMode = ParseFormulaArrayMode(cDto.FormulaArrayMode);
                     if (cDto.Formula != null && value is not BlankValue)
                         cell.Value = value;
                     cell.IgnoreFormulaError = cDto.IgnoreFormulaError;
@@ -490,6 +492,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         return !string.IsNullOrWhiteSpace(dto.Address) &&
                CellAddress.TryParse(dto.Address, sheetId, out address);
     }
+
+    private static FormulaArrayMode ParseFormulaArrayMode(string? value) =>
+        Enum.TryParse<FormulaArrayMode>(value, ignoreCase: true, out var parsed) &&
+        Enum.IsDefined(parsed)
+            ? parsed
+            : FormulaArrayMode.Dynamic;
 
     private static Sheet? ResolveLoadedSheet(
         Workbook workbook,

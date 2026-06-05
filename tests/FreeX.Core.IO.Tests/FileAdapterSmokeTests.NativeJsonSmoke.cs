@@ -114,6 +114,38 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_FormulaArrayMode()
+    {
+        var workbook = new Workbook("FormulaArrayMode");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            FormulaText = "B1:B2",
+            ArrayMode = FormulaArrayMode.Implicit
+        });
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        using (var document = JsonDocument.Parse(stream))
+        {
+            document.RootElement
+                .GetProperty("Sheets")[0]
+                .GetProperty("Cells")[0]
+                .GetProperty("FormulaArrayMode")
+                .GetString()
+                .Should().Be(nameof(FormulaArrayMode.Implicit));
+        }
+
+        stream.Position = 0;
+        var cell = adapter.Load(stream).GetSheetAt(0).GetCell(1, 1)!;
+        cell.FormulaText.Should().Be("B1:B2");
+        cell.ArrayMode.Should().Be(FormulaArrayMode.Implicit);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_SaveThenResolveOpenAdapterAndReload()
     {
         var workbook = new Workbook("ResolvableNative");
