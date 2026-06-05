@@ -84,6 +84,8 @@ public sealed class OpenWorkbookLoader
                 () =>
                 {
                     _recalculateAllFormulas(workbook);
+                    if (adapter is XlsxFileAdapter xlsxAdapter)
+                        xlsxAdapter.RebaseLoadedPackageSnapshot(workbook);
                     return true;
                 });
         }

@@ -92,6 +92,7 @@ public sealed partial class Sheet
             }
         }
 
+        RemoveRedundantStyleOnlyRunOverlays();
         RecalculateStyleOnlyOverlayNewCellCount();
     }
 
@@ -102,22 +103,23 @@ public sealed partial class Sheet
         {
             foreach (var run in runs)
             {
-                for (var col = run.StartCol;; col++)
+                var col = run.StartCol;
+                while (true)
                 {
                     var key = (run.Row, col);
                     if (_styleOnly.TryGetValue(key, out var overlayStyleId))
                     {
                         yield return (key, overlayStyleId);
-                        continue;
                     }
-
-                    if (_styleOnlyRunTombstones?.Contains(key) == true)
-                        continue;
-
-                    yield return (key, run.StyleId);
+                    else if (_styleOnlyRunTombstones?.Contains(key) != true)
+                    {
+                        yield return (key, run.StyleId);
+                    }
 
                     if (col == run.EndCol)
                         break;
+
+                    col++;
                 }
             }
         }
@@ -129,6 +131,39 @@ public sealed partial class Sheet
 
             yield return (entry.Key, entry.Value);
         }
+    }
+
+    /// <summary>
+    /// Returns compressed style-only runs when there are no mutable overlays or tombstones.
+    /// Callers that need exact cell-level output should use <see cref="GetStyleOnlyEntries"/>.
+    /// </summary>
+    public bool TryGetCompressedStyleOnlyRuns(out IReadOnlyList<StyleOnlyRun> runs)
+    {
+        runs = _styleOnlyRuns ?? [];
+        return _styleOnly.Count == 0 &&
+               (_styleOnlyRunTombstones is null || _styleOnlyRunTombstones.Count == 0);
+    }
+
+    private void RemoveRedundantStyleOnlyRunOverlays()
+    {
+        if (_styleOnly.Count == 0 || _styleOnlyRuns is not { Count: > 0 })
+            return;
+
+        List<(uint Row, uint Col)>? redundantKeys = null;
+        foreach (var (key, styleId) in _styleOnly)
+        {
+            if (TryGetStyleOnlyRun(key.Row, key.Col) != styleId)
+                continue;
+
+            redundantKeys ??= [];
+            redundantKeys.Add(key);
+        }
+
+        if (redundantKeys is null)
+            return;
+
+        foreach (var key in redundantKeys)
+            _styleOnly.Remove(key);
     }
 
     private void RecalculateStyleOnlyOverlayNewCellCount()

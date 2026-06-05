@@ -61,4 +61,56 @@ public sealed class SheetStyleOnlyRunTests
         sheet.StyleOnlyCellCount.Should().Be(3);
         sheet.GetStyleOnly(5, 5).Should().BeNull();
     }
+
+    [Fact]
+    public void GetStyleOnlyEntries_StopsWhenOverlayTouchesRunEnd()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        var baseStyle = new StyleId(1);
+        var overrideStyle = new StyleId(2);
+
+        sheet.SetStyleOnlyRuns([new StyleOnlyRun(1, 1, 3, baseStyle)]);
+        sheet.SetStyleOnly(1, 3, overrideStyle);
+
+        sheet.GetStyleOnlyEntries().Should().Equal(
+            (((uint)1, (uint)1), baseStyle),
+            (((uint)1, (uint)2), baseStyle),
+            (((uint)1, (uint)3), overrideStyle));
+    }
+
+    [Fact]
+    public void SetStyleOnlyRuns_RemovesRedundantRunBackedOverlays()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        var baseStyle = new StyleId(1);
+        var overrideStyle = new StyleId(2);
+
+        sheet.SetStyleOnly(1, 1, baseStyle);
+        sheet.SetStyleOnly(1, 2, overrideStyle);
+        sheet.SetStyleOnly(1, 3, baseStyle);
+
+        sheet.SetStyleOnlyRuns([new StyleOnlyRun(1, 1, 3, baseStyle)]);
+
+        sheet.StyleOnlyCellCount.Should().Be(3);
+        sheet.GetStyleOnlyEntries().Should().Equal(
+            (((uint)1, (uint)1), baseStyle),
+            (((uint)1, (uint)2), overrideStyle),
+            (((uint)1, (uint)3), baseStyle));
+
+        sheet.TryGetCompressedStyleOnlyRuns(out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryGetCompressedStyleOnlyRuns_ReturnsRunsWhenNoOverlaysRemain()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        var baseStyle = new StyleId(1);
+
+        sheet.SetStyleOnly(1, 1, baseStyle);
+        sheet.SetStyleOnly(1, 2, baseStyle);
+        sheet.SetStyleOnlyRuns([new StyleOnlyRun(1, 1, 2, baseStyle)]);
+
+        sheet.TryGetCompressedStyleOnlyRuns(out var runs).Should().BeTrue();
+        runs.Should().Equal(new StyleOnlyRun(1, 1, 2, baseStyle));
+    }
 }

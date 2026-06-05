@@ -13,7 +13,13 @@ public sealed partial class NativeJsonAdapter
     /// <summary>Exposed for unit tests to verify the static instance is reused.</summary>
     internal static JsonSerializerOptions SaveOptionsForTest => SaveOptions;
 
-    public void Save(Workbook workbook, Stream stream)
+    public void Save(Workbook workbook, Stream stream) =>
+        Save(workbook, stream, includeStyleOnlyCells: true);
+
+    internal void SaveForFingerprint(Workbook workbook, Stream stream) =>
+        Save(workbook, stream, includeStyleOnlyCells: false);
+
+    private static void Save(Workbook workbook, Stream stream, bool includeStyleOnlyCells)
     {
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);
 
@@ -284,7 +290,7 @@ public sealed partial class NativeJsonAdapter
                     .ToList(),
                 ConditionalFormats = ToConditionalFormatDtos(s.ConditionalFormats, s.Id),
                 Cells = new CellDtoSequence(s),
-                StyleOnlyCells = new StyleOnlyCellDtoSequence(s)
+                StyleOnlyCells = includeStyleOnlyCells ? new StyleOnlyCellDtoSequence(s) : StyleOnlyCellDtoSequence.Empty
             }).ToList()
         };
 
