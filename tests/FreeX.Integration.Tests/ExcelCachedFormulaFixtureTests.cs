@@ -60,6 +60,26 @@ public sealed class ExcelCachedFormulaFixtureTests
         sheet.GetValue(15, 6).Should().Be(BlankValue.Instance);
     }
 
+    [Fact]
+    public void LoadedWorkbookRecalc_AppliesLegacyImplicitIntersectionForExcelDefinedName()
+    {
+        const string definedNames = """
+                  <definedNames>
+                    <definedName name="SalesRow">ImplicitIntersection!$A$7:$J$7</definedName>
+                  </definedNames>
+                """;
+        using var fixture = CreateLegacyImplicitIntersectionWorkbook("SalesRow*B15", definedNames);
+        var workbook = new XlsxFileAdapter().Load(fixture);
+        var sheet = workbook.Sheets.Should().ContainSingle().Subject;
+
+        var report = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator())
+            .RecalculateAllFormulas(workbook);
+
+        report.Errors.Should().BeEmpty();
+        sheet.GetValue(15, 5).Should().Be(new NumberValue(50));
+        sheet.GetValue(15, 6).Should().Be(BlankValue.Instance);
+    }
+
     private static IEnumerable<string> CompareFormulaCellsToCachedResults(Workbook workbook)
     {
         var evaluator = new FormulaEvaluator();
@@ -246,7 +266,9 @@ public sealed class ExcelCachedFormulaFixtureTests
         return stream;
     }
 
-    private static MemoryStream CreateLegacyImplicitIntersectionWorkbook()
+    private static MemoryStream CreateLegacyImplicitIntersectionWorkbook(
+        string formula = "A7:J7*B15",
+        string definedNamesXml = "")
     {
         var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
@@ -276,17 +298,18 @@ public sealed class ExcelCachedFormulaFixtureTests
                 </Relationships>
                 """);
             AddXml(archive, "xl/workbook.xml",
-                """
+                $"""
                 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
                   <sheets>
                     <sheet name="ImplicitIntersection" sheetId="1" r:id="rId1"/>
                   </sheets>
+                {definedNamesXml}
                   <calcPr calcMode="auto"/>
                 </workbook>
                 """);
             AddXml(archive, "xl/worksheets/sheet1.xml",
-                """
+                $"""
                 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
                   <sheetData>
@@ -297,7 +320,7 @@ public sealed class ExcelCachedFormulaFixtureTests
                     </row>
                     <row r="15">
                       <c r="B15"><v>10</v></c>
-                      <c r="E15"><f>A7:J7*B15</f><v>50</v></c>
+                      <c r="E15"><f>{formula}</f><v>50</v></c>
                     </row>
                   </sheetData>
                 </worksheet>
