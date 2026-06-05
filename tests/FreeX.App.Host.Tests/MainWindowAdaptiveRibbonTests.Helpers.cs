@@ -52,17 +52,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         return (Rect)args[1];
     }
 
-    private static IEnumerable<DependencyObject> EnumerateSelfAndVisualDescendants(DependencyObject root)
-    {
-        yield return root;
-
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            foreach (var descendant in EnumerateSelfAndVisualDescendants(child))
-                yield return descendant;
-        }
-    }
+    private static IEnumerable<DependencyObject> EnumerateSelfAndVisualDescendants(DependencyObject root) =>
+        WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(root);
 
     private sealed class MainWindowHarness : IDisposable
     {
@@ -800,18 +791,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 tabs.SelectedIndex = 1;
             _window.UpdateLayout();
             PumpDispatcher();
-        }
-
-        private static IEnumerable<DependencyObject> EnumerateSelfAndVisualDescendants(DependencyObject root)
-        {
-            yield return root;
-
-            for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
-            {
-                var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-                foreach (var descendant in EnumerateSelfAndVisualDescendants(child))
-                    yield return descendant;
-            }
         }
 
         private static IEnumerable<DependencyObject> EnumerateLogicalDescendants(DependencyObject root)
