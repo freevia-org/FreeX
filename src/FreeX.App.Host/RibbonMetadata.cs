@@ -60,6 +60,13 @@ public static class RibbonMetadata
             typeof(RibbonMetadata),
             new FrameworkPropertyMetadata(false));
 
+    public static readonly RoutedEvent DropdownClickEvent =
+        EventManager.RegisterRoutedEvent(
+            "DropdownClick",
+            RoutingStrategy.Bubble,
+            typeof(RoutedEventHandler),
+            typeof(RibbonMetadata));
+
     public static readonly DependencyProperty DropdownZoneHandlerAttachedProperty =
         DependencyProperty.RegisterAttached(
             "DropdownZoneHandlerAttached",
@@ -121,6 +128,18 @@ public static class RibbonMetadata
 
     public static void SetDropdownMenuButton(DependencyObject element, bool value) =>
         element.SetValue(DropdownMenuButtonProperty, value);
+
+    public static void AddDropdownClickHandler(DependencyObject element, RoutedEventHandler handler)
+    {
+        if (element is UIElement uiElement)
+            uiElement.AddHandler(DropdownClickEvent, handler);
+    }
+
+    public static void RemoveDropdownClickHandler(DependencyObject element, RoutedEventHandler handler)
+    {
+        if (element is UIElement uiElement)
+            uiElement.RemoveHandler(DropdownClickEvent, handler);
+    }
 
     public static bool GetDropdownZoneHandlerAttached(DependencyObject element) =>
         (bool)element.GetValue(DropdownZoneHandlerAttachedProperty);
