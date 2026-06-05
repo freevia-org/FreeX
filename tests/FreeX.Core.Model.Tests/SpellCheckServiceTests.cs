@@ -1260,6 +1260,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Manul documnt DOCUMENTATON instrction Guidline suport SUPPORTT troubleshot Resoluton KNOWLEGE artcle tickett. Keep manual, document, documentation, instruction, guideline, support, troubleshoot, resolution, knowledge, article, ticket, premanul, documnt_id, https://manul.example.com/documnt, docs@suport.example.com, and \"C:\\documentaton folder\\tickett file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Manul", "Manual"),
+            ("documnt", "document"),
+            ("DOCUMENTATON", "DOCUMENTATION"),
+            ("instrction", "instruction"),
+            ("Guidline", "Guideline"),
+            ("suport", "support"),
+            ("SUPPORTT", "SUPPORT"),
+            ("troubleshot", "troubleshoot"),
+            ("Resoluton", "Resolution"),
+            ("KNOWLEGE", "KNOWLEDGE"),
+            ("artcle", "article"),
+            ("tickett", "ticket"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Manual document DOCUMENTATION instruction Guideline support SUPPORT troubleshoot Resolution KNOWLEDGE article ticket. Keep manual, document, documentation, instruction, guideline, support, troubleshoot, resolution, knowledge, article, ticket, premanul, documnt_id, https://manul.example.com/documnt, docs@suport.example.com, and \"C:\\documentaton folder\\tickett file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");
