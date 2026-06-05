@@ -466,6 +466,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSingleXmlCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSmartTagMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -681,6 +682,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSingleXmlCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSmartTagMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -4539,6 +4541,154 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet sort/data-consolidation metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetPrintOptionsMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetPrintOptionsMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetPrintOptionsMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetPrintOptionsMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var printOptionsElements = root.Elements(SpreadsheetNs + "printOptions").ToArray();
+        if (printOptionsElements.Length > 1)
+            issues.Add($"{worksheetPart} has {printOptionsElements.Length} printOptions elements; expected at most one");
+
+        foreach (var printOptions in printOptionsElements.Select((element, index) => new WorksheetPrintOptionsReference(index + 1, element)))
+        {
+            AddWorksheetPrintOptionsIssues(worksheetPart, root, printOptions, issues);
+        }
+    }
+
+    private static void AddWorksheetPrintOptionsIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetPrintOptionsReference printOptionsReference,
+        List<string> issues)
+    {
+        var printOptions = printOptionsReference.Element;
+        var description = $"printOptions #{printOptionsReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            printOptions,
+            description,
+            [
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            printOptions,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks"
+            ],
+            issues);
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "horizontalCentered", printOptions.Attribute("horizontalCentered")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "verticalCentered", printOptions.Attribute("verticalCentered")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "headings", printOptions.Attribute("headings")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "gridLines", printOptions.Attribute("gridLines")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "gridLinesSet", printOptions.Attribute("gridLinesSet")?.Value, issues);
+
+        if (printOptions.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetMetadataPreviousOrderingIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        XElement metadataElement,
+        string description,
+        IReadOnlyCollection<string> earlierWorksheetElements,
+        List<string> issues)
+    {
+        var worksheetChildren = worksheetRoot.Elements().ToArray();
+        var metadataIndex = Array.IndexOf(worksheetChildren, metadataElement);
+        if (metadataIndex < 0)
+            return;
+
+        foreach (var laterEarlierElement in worksheetChildren
+                     .Skip(metadataIndex + 1)
+                     .Where(element =>
+                         element.Name.Namespace == SpreadsheetNs &&
+                         earlierWorksheetElements.Contains(element.Name.LocalName)))
+        {
+            issues.Add($"{worksheetPart} {description} appears before {laterEarlierElement.Name.LocalName}; expected schema order after that element");
+        }
+    }
+
+    private static void ThrowInvalidWorksheetPrintOptionsMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet printOptions metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetDiagnosticMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -11340,6 +11490,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetDataRefReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetPrintOptionsReference(
         int Ordinal,
         XElement Element);
 
