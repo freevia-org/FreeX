@@ -262,8 +262,22 @@ public static partial class FlashFillService
     private static Func<string, string?>? TryUrlQueryParameterValue(IReadOnlyList<(string Source, string Expected)> examples)
     {
         return TryUrlFirstQueryParameterName(examples)
+            ?? TryUrlFirstQueryParameterValue(examples)
             ?? TryUrlQueryParameterValueCore(examples)
             ?? TryUrlFragmentValue(examples);
+    }
+
+    private static Func<string, string?>? TryUrlFirstQueryParameterValue(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => e.Expected.Length > 0 &&
+                               TryGetFirstNonEmptyQueryParameterValue(e.Source, out var value) &&
+                               value == e.Expected))
+        {
+            return null;
+        }
+
+        return source => TryGetFirstNonEmptyQueryParameterValue(source, out var value) ? value : null;
     }
 
     private static Func<string, string?>? TryUrlQueryParameterValueCore(
@@ -568,6 +582,15 @@ public static partial class FlashFillService
 
     private static bool TryGetFirstNonEmptyQueryParameterValue(
         string source,
+        out string value)
+    {
+        value = string.Empty;
+        return TryGetDecodedQueryParameters(source, out var parameters) &&
+               TryGetFirstNonEmptyQueryParameterValue(parameters, out value);
+    }
+
+    private static bool TryGetFirstNonEmptyQueryParameterValue(
+        string source,
         string parameterName,
         out string value)
     {
@@ -594,17 +617,33 @@ public static partial class FlashFillService
         return false;
     }
 
+    private static bool TryGetFirstNonEmptyQueryParameterValue(
+        IReadOnlyList<(string Name, string Value)> parameters,
+        out string value)
+    {
+        foreach (var (_, currentValue) in parameters)
+        {
+            if (!string.IsNullOrWhiteSpace(currentValue))
+            {
+                value = currentValue;
+                return true;
+            }
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
     private static bool TryGetFirstDecodedQueryParameterName(string source, out string name)
     {
         name = string.Empty;
         if (!IsHttpOrHttpsUrlCandidate(source) ||
-            !TryCreateHttpWebUri(source, out var uri) ||
-            uri.Query.Length <= 1)
+            !TryCreateHttpWebUri(source, out _) ||
+            !TryGetRawUrlQuery(source, out var query))
         {
             return false;
         }
 
-        var query = uri.Query[1..];
         foreach (var segment in query.Split(['&', ';'], StringSplitOptions.None))
         {
             if (segment.Length == 0)
@@ -628,16 +667,39 @@ public static partial class FlashFillService
         return false;
     }
 
+    private static bool TryGetRawUrlQuery(string source, out string query)
+    {
+        query = string.Empty;
+
+        var candidate = source.Trim();
+        var queryStart = candidate.IndexOf('?', StringComparison.Ordinal);
+        if (queryStart < 0)
+            return false;
+
+        var fragmentStart = candidate.IndexOf('#', StringComparison.Ordinal);
+        if (fragmentStart >= 0 && fragmentStart < queryStart)
+            return false;
+
+        var queryEnd = fragmentStart >= 0 ? fragmentStart : candidate.Length;
+        if (queryEnd <= queryStart + 1)
+            return false;
+
+        query = candidate[(queryStart + 1)..queryEnd];
+        return true;
+    }
+
     private static bool TryGetDecodedQueryParameters(
         string source,
         out List<(string Name, string Value)> parameters)
     {
         parameters = [];
 
-        if (!TryCreateHttpWebUri(source, out var uri) || uri.Query.Length <= 1)
+        if (!TryCreateHttpWebUri(source, out _) ||
+            !TryGetRawUrlQuery(source, out var query))
+        {
             return false;
+        }
 
-        var query = uri.Query[1..];
         foreach (var segment in query.Split(['&', ';'], StringSplitOptions.None))
         {
             if (segment.Length == 0)
@@ -658,7 +720,7 @@ public static partial class FlashFillService
                 return false;
             }
 
-            if (name.Length == 0 || value.Length == 0)
+            if (name.Length == 0 || string.IsNullOrWhiteSpace(value))
                 continue;
 
             parameters.Add((name, value));
@@ -731,6 +793,10 @@ public static partial class FlashFillService
 
     private static bool TryDecodeQueryComponent(string source, out string decoded)
     {
+        decoded = string.Empty;
+        if (!HasValidPercentEscapes(source))
+            return false;
+
         try
         {
             decoded = Uri.UnescapeDataString(source.Replace('+', ' '));
