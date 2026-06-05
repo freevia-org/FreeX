@@ -516,12 +516,10 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     private static string ReadNamedRangeDialogSource() =>
-        string.Join(Environment.NewLine, new[]
-        {
+        DialogSourceTestSupport.ReadHostSources(
             "NamedRangeDialog.xaml.cs",
             "NameDefinitionDialog.cs",
-            "NamedRangeDialogPlanner.cs"
-        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", file))));
+            "NamedRangeDialogPlanner.cs");
 
     private static T GetPrivateField<T>(object instance, string name)
         where T : class
