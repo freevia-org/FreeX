@@ -40,6 +40,13 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\u221242")]
     [InlineData("(\u2212 42%)")]
     [InlineData("(\u2212 42\uFF05)")]
+    [InlineData("\uFF14\uFF12")]
+    [InlineData("\uFF11\uFF0C\uFF12\uFF13\uFF14\uFF0E\uFF15\uFF10")]
+    [InlineData("'\uFF11\uFF0C\uFF12\uFF13\uFF14\uFF0E\uFF15\uFF10")]
+    [InlineData("\uFF0D \uFF11\uFF12\uFF0E\uFF15%")]
+    [InlineData("\u2212\uFF14\uFF12\uFF05")]
+    [InlineData("(\uFF11\uFF0C\uFF12\uFF13\uFF14\uFF0E\uFF15\uFF10)")]
+    [InlineData("(\u2212 \uFF14\uFF12\uFF05)")]
     public void FindFormulaErrorIssues_ReturnsFormattedNumbersStoredAsText(string value)
     {
         var wb = new Workbook("test");
@@ -137,6 +144,10 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\uFF0D $1,234.50")]
     [InlineData("\uFE63\u20AC25%")]
     [InlineData("\uFF0B 42 \u20B1")]
+    [InlineData("$\uFF11\uFF0C\uFF12\uFF13\uFF14\uFF0E\uFF15\uFF10")]
+    [InlineData("+ \u20AC\uFF12\uFF15\uFF05")]
+    [InlineData("'(\uFF14\uFF12 \uFFE5)")]
+    [InlineData("(- \uFFE5\uFF11\uFF0C\uFF12\uFF13\uFF14\uFF0E\uFF15\uFF10)")]
     public void FindFormulaErrorIssues_ReturnsCurrencyNumbersStoredAsText(string value)
     {
         var wb = new Workbook("test");
@@ -242,6 +253,9 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\u20B1PHP 42")]
     [InlineData("VND \u20AB42")]
     [InlineData("42 NGN \u20A6")]
+    [InlineData("$\uFF14\uFF12USD")]
+    [InlineData("\u20AC\uFF11\uFF12\uFF13\uFF21")]
+    [InlineData("\u00A5\uFF11\uFF0E\uFF12\uFF0E\uFF13")]
     public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidCurrencyText(string value)
     {
         var wb = new Workbook("test");
@@ -281,6 +295,13 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("4\uFF052")]
     [InlineData("42\uFE6Akg")]
     [InlineData("42\uFF05 USD")]
+    [InlineData("\uFF0D-\uFF14\uFF12")]
+    [InlineData("\uFF0B+\uFF14\uFF12")]
+    [InlineData("\uFF14\uFF05\uFF12")]
+    [InlineData("\uFF14\uFF12kg")]
+    [InlineData("\uFF14\uFF12\uFF05 USD")]
+    [InlineData("\uFF11\uFF12\uFF13\uFF21")]
+    [InlineData("\uFF11\uFF0E\uFF12\uFF0E\uFF13")]
     public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidNumberText(string value)
     {
         var wb = new Workbook("test");
