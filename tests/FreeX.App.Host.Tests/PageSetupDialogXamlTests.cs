@@ -79,7 +79,7 @@ public sealed class PageSetupDialogXamlTests
     public void PrintTitlesCommand_OpensPageSetupSheetTabWithRowsRepeatFocus()
     {
         var source = ReadPageSetupDialogSource();
-        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+        var handlerSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
 
         source.Should().Contain("PageSetupInitialFocusTarget.RepeatRows");
         source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
@@ -94,7 +94,7 @@ public sealed class PageSetupDialogXamlTests
     public void ScaleToFitCommand_OpensPageSetupPageTabWithActiveScalingInputFocus()
     {
         var source = ReadPageSetupDialogSource();
-        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+        var handlerSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
 
         source.Should().Contain("PageSetupInitialFocusTarget.ScaleToFit");
         source.Should().Contain("PageSetupTabs.SelectedItem = PageTab;");
@@ -260,7 +260,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupHandler_WiresRangePickersToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
 
         source.Should().Contain("new PageSetupDialog(");
         source.Should().Contain("request => ApplyPageSetupRangeSelection(dialog, request)");
@@ -383,7 +383,7 @@ public sealed class PageSetupDialogXamlTests
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
-        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+        var handlerSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
 
         foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
             xaml.ShouldContainLocalizedAttribute("Content", content);
@@ -427,8 +427,8 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupHandler_AppliesHeaderFooterValuesReturnedByDialog()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
-        var builderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupCommandBuilder.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
+        var builderSource = DialogSourceTestSupport.ReadHostSources("PageSetupCommandBuilder.cs");
 
         source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
         builderSource.Should().Contain("new CompositeWorkbookCommand(");
@@ -444,8 +444,8 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupHandler_AppliesPrintAreaReturnedByDialog()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
-        var builderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupCommandBuilder.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
+        var builderSource = DialogSourceTestSupport.ReadHostSources("PageSetupCommandBuilder.cs");
 
         source.Should().Contain("PageSetupCommandBuilder.Build(sheetId, dialog)");
         builderSource.Should().Contain("CreatePrintAreaCommand(sheetId, dialog.PrintArea)");
@@ -493,15 +493,14 @@ public sealed class PageSetupDialogXamlTests
     }
 
     private static string ReadPageSetupDialogSource() =>
-        string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.HeaderFooter.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.Population.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.RangeSelection.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.ValidationFocus.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupRangeSelectionFormatter.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupCommandBuilder.cs")));
+        DialogSourceTestSupport.ReadHostSources(
+            "PageSetupDialog.xaml.cs",
+            "PageSetupDialog.HeaderFooter.cs",
+            "PageSetupDialog.Population.cs",
+            "PageSetupDialog.RangeSelection.cs",
+            "PageSetupDialog.ValidationFocus.cs",
+            "PageSetupRangeSelectionFormatter.cs",
+            "PageSetupCommandBuilder.cs");
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)
     {
