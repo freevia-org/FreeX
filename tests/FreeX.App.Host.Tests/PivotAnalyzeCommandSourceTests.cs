@@ -31,7 +31,7 @@ public sealed class PivotAnalyzeCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadPivotAnalyzeTabXaml(), title);
+        var button = ReadPivotAnalyzeTabXaml().ExtractButtonElementByInvariantCommandName(title);
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -46,7 +46,7 @@ public sealed class PivotAnalyzeCommandSourceTests
 
         foreach (var title in new[] { "PivotTable Name", "PivotTable Options", "Clear", "Select", "Move PivotTable" })
         {
-            var button = ExtractButtonElementByTitle(xaml, title);
+            var button = xaml.ExtractButtonElementByInvariantCommandName(title);
             button.Should().NotContain("IsEnabled=\"False\"");
             button.Should().NotContain("Deferred");
             button.Should().Contain("Click=");
@@ -62,7 +62,7 @@ public sealed class PivotAnalyzeCommandSourceTests
         string title,
         string descriptionKey)
     {
-        var button = ExtractButtonElementByTitle(ReadPivotAnalyzeTabXaml(), title);
+        var button = ReadPivotAnalyzeTabXaml().ExtractButtonElementByInvariantCommandName(title);
         var resources = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "Strings.resx"));
 
         button.Should().Contain($"local:RibbonTooltip.Description=\"{{local:Loc Key={descriptionKey}}}\"");
@@ -110,7 +110,7 @@ public sealed class PivotAnalyzeCommandSourceTests
 
     private static string ReadPivotAnalyzeTabXaml()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
         var start = xaml.IndexOf("Header=\"{local:Loc Key=MainWindow_Header_PivotTableAnalyze}\"", StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0, "the PivotTable Analyze contextual tab should be present");
 
@@ -119,21 +119,4 @@ public sealed class PivotAnalyzeCommandSourceTests
         return xaml[start..end];
     }
 
-    private static string ExtractButtonElementByTitle(string xaml, string title)
-    {
-        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} PivotTable Analyze command should be present");
-
-        var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} PivotTable Analyze command should be a Button");
-
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + "</Button>".Length
-            : selfClosingEnd + 2;
-
-        end.Should().BeGreaterThan(titleIndex, $"the {title} PivotTable Analyze button should have a closing marker");
-        return xaml[start..end];
-    }
 }

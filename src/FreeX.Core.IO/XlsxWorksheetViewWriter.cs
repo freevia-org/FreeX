@@ -68,10 +68,16 @@ internal static class XlsxWorksheetViewWriter
             return;
 
         var worksheetXml = LoadXml(worksheetEntry);
+        if (UpdateSheetView(worksheetXml, sheet))
+            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+    }
+
+    internal static bool UpdateSheetView(XDocument worksheetXml, Sheet sheet)
+    {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var root = worksheetXml.Root;
         if (root is null)
-            return;
+            return false;
 
         var changed = false;
         var sheetViews = root.Element(worksheetNs + "sheetViews");
@@ -132,8 +138,7 @@ internal static class XlsxWorksheetViewWriter
             }
         }
 
-        if (changed)
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+        return changed;
     }
 
     private static string? ToOptionalA1(uint? row, uint? col)

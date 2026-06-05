@@ -1124,8 +1124,8 @@ public sealed partial class FlashFillServiceTests
     {
         var result = FlashFillService.Fill(
             [
-                ("https://shop.example.com/search?sort-order=popular&product-category=powder-skis", "Product Category"),
-                ("https://shop.example.com/search?delivery-method=ground&shipping_option=air", "Shipping Option")
+                ("https://shop.example.com/search?sort-order=popular&product-category=powder-skis&page-size=20", "Product Category"),
+                ("https://shop.example.com/search?delivery-method=ground&shipping_option=air&sortOrder=desc", "Shipping Option")
             ],
             ["https://shop.example.com/search?promoCode=spring&sort=popular"]);
 
@@ -1141,6 +1141,77 @@ public sealed partial class FlashFillServiceTests
                 ("https://shop.example.com/search?shipping%20option=ground&sort=popular", "shipping option")
             ],
             ["https://shop.example.com/search?promo+code=spring&sort=popular"]);
+
+        result.Should().BeEquivalentTo(["promo code"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterNameTitle_TitleizesDecodedLastQueryParameterNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?sort=popular&product-category=powder-skis", "Product Category"),
+                ("https://shop.example.com/search?sort=popular&shipping_option=ground", "Shipping Option")
+            ],
+            ["https://shop.example.com/search?sort=popular&promoCode=spring"]);
+
+        result.Should().BeEquivalentTo(["Promo Code"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterNameTitle_TitleizesPercentAndPlusDecodedNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?sort=popular&product+category=powder-skis", "Product Category"),
+                ("https://shop.example.com/search?sort=popular&shipping%20option=ground", "Shipping Option")
+            ],
+            [
+                "https://shop.example.com/search?sort=popular&promo_code=spring",
+                "https://shop.example.com/search?sort=popular&discountRate=10"
+            ]);
+
+        result.Should().BeEquivalentTo(["Promo Code", "Discount Rate"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterNameTitle_ReturnsNullForMissingOrEmptyLastQueryName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?sort=popular&product-category=powder-skis", "Product Category"),
+                ("https://shop.example.com/search?sort=popular&shipping_option=ground", "Shipping Option")
+            ],
+            [
+                "https://shop.example.com/search?sort=popular&",
+                "https://shop.example.com/search?sort=popular&=spring"
+            ]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterNameTitle_ReturnsNullForDuplicateMatchingExampleCandidates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?sort=popular&product-category=powder-skis&product_category=skis", "Product Category"),
+                ("https://shop.example.com/search?sort=popular&shipping-option=ground&shipping_option=air", "Shipping Option")
+            ],
+            ["https://shop.example.com/search?sort=popular&promoCode=spring"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterNameTitle_LeavesRawLastQueryNameExtractionPrecedence()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?sort=popular&product+category=powder-skis", "product category"),
+                ("https://shop.example.com/search?sort=popular&shipping%20option=ground", "shipping option")
+            ],
+            ["https://shop.example.com/search?sort=popular&promo+code=spring"]);
 
         result.Should().BeEquivalentTo(["promo code"], o => o.WithStrictOrdering());
     }

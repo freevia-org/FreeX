@@ -19,8 +19,8 @@ public sealed class HomeAlignmentCommandSourceTests
         string keyTip,
         string handler)
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var toggle = ExtractElementByName(xaml, "ToggleButton", name);
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var toggle = xaml.ExtractElementByName("ToggleButton", name);
 
         toggle.ShouldContainInvariantCommandName(title);
         toggle.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -37,8 +37,8 @@ public sealed class HomeAlignmentCommandSourceTests
         string keyTip,
         string handler)
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var button = ExtractButtonElementByClickHandler(xaml, handler);
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var button = xaml.ExtractButtonElementByClickHandler(handler);
 
         button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -57,8 +57,8 @@ public sealed class HomeAlignmentCommandSourceTests
         string keyTip,
         string handler)
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var menuItem = ExtractMenuItemElementByClickHandler(xaml, handler);
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var menuItem = xaml.ExtractMenuItemElementByClickHandler(handler);
 
         menuItem.ShouldContainLocalizedAttribute("Header", header);
         menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -88,54 +88,4 @@ public sealed class HomeAlignmentCommandSourceTests
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: 90))");
     }
 
-    private static string ExtractElementByName(string xaml, string elementName, string name)
-    {
-        var nameIndex = xaml.IndexOf($"x:Name=\"{name}\"", StringComparison.Ordinal);
-        nameIndex.Should().BeGreaterThanOrEqualTo(0, $"the {name} {elementName} should be present");
-
-        var start = xaml.LastIndexOf($"<{elementName}", nameIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {name} {elementName} should have a start tag");
-
-        var end = xaml.IndexOf($"</{elementName}>", nameIndex, StringComparison.Ordinal);
-        if (end >= nameIndex)
-            return xaml.Substring(start, end - start + elementName.Length + 3);
-
-        end = xaml.IndexOf("/>", nameIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThanOrEqualTo(nameIndex, $"the {name} {elementName} should have an end tag or be self-closing");
-        return xaml.Substring(start, end - start + 2);
-    }
-
-    private static string ExtractButtonElementByClickHandler(string xaml, string clickHandler)
-    {
-        var clickIndex = xaml.IndexOf($"Click=\"{clickHandler}\"", StringComparison.Ordinal);
-        clickIndex.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} button should be present");
-
-        var start = xaml.LastIndexOf("<Button", clickIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} button should have a Button start tag");
-
-        var end = xaml.IndexOf("</Button>", clickIndex, StringComparison.Ordinal);
-        if (end >= clickIndex)
-            return xaml.Substring(start, end - start + "</Button>".Length);
-
-        end = xaml.IndexOf("/>", clickIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThanOrEqualTo(clickIndex, $"the {clickHandler} button should be self-closing or have an end tag");
-        return xaml.Substring(start, end - start + 2);
-    }
-
-    private static string ExtractMenuItemElementByClickHandler(string xaml, string clickHandler)
-    {
-        var clickIndex = xaml.IndexOf($"Click=\"{clickHandler}\"", StringComparison.Ordinal);
-        clickIndex.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} menu item should be present");
-
-        var start = xaml.LastIndexOf("<MenuItem", clickIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} menu item should have a start tag");
-
-        var end = xaml.IndexOf("</MenuItem>", clickIndex, StringComparison.Ordinal);
-        if (end >= clickIndex)
-            return xaml.Substring(start, end - start + "</MenuItem>".Length);
-
-        end = xaml.IndexOf("/>", clickIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThanOrEqualTo(clickIndex, $"the {clickHandler} menu item should have an end tag or be self-closing");
-        return xaml.Substring(start, end - start + 2);
-    }
 }

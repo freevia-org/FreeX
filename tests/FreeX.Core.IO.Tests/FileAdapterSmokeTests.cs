@@ -14207,16 +14207,33 @@ public partial class FileAdapterSmokeTests
         adapter.Save(workbook, source);
         source.Position = 0;
         AddHeaderFooterLegacyDrawingPackage(source);
+        var sourceBytes = source.ToArray();
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(loaded, out var prepareBlockReason)
+            .Should()
+            .BeTrue(prepareBlockReason);
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
-        saved.Position = 0;
+        var savedBytes = saved.ToArray();
 
-        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/drawings/vmlDrawing1.vml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/vmlDrawing1.vml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/vmlDrawing1.vml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/vmlDrawing1.vml.rels"));
+        ReadPackageEntry(savedBytes, "xl/media/headerFooterImage1.png")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/media/headerFooterImage1.png"));
+
+        using var archive = new ZipArchive(new MemoryStream(savedBytes, writable: false), ZipArchiveMode.Read, leaveOpen: false);
         archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull();
         archive.GetEntry("xl/media/headerFooterImage1.png").Should().NotBeNull();
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
@@ -14234,6 +14251,11 @@ public partial class FileAdapterSmokeTests
                 string.Equals(rel.Attribute("Id")?.Value, relId, StringComparison.Ordinal) &&
                 string.Equals(rel.Attribute("Target")?.Value, "../drawings/vmlDrawing1.vml", StringComparison.Ordinal));
         hasLegacyDrawingRelationship.Should().BeTrue();
+
+        using var reload = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reload).GetSheetAt(0);
+        reloadedSheet.PageHeaderPictures.Left.Should().NotBeNull();
+        reloadedSheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("edited"));
     }
 
     [Fact]
@@ -24719,6 +24741,18 @@ public partial class FileAdapterSmokeTests
     {
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static byte[] ReadPackageEntry(byte[] packageBytes, string path)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry(path);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        using var bytes = new MemoryStream();
+        entryStream.CopyTo(bytes);
+        return bytes.ToArray();
     }
 
     private static string? ReadSheetProtectionAttribute(Stream packageStream, string attributeName)
