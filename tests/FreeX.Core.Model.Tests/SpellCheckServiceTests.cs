@@ -2029,6 +2029,57 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversResearchLabScienceVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "RESERCH Experment sampel SAMPLNG labratory Protocolll hypothsis ANALYSISIS reagentt Calibraton microscop sequencng Genotypingg chromatograpy spectromtry Centrifugee incubaton replicatee Specimennt. Keep research, experiment, sample, sampling, laboratory, protocol, hypothesis, analysis, reagent, calibration, microscope, sequencing, genotyping, chromatography, spectrometry, centrifuge, incubation, replicate, specimen, prereserch, reserch_id, https://reserch.example.com/microscop, lab@reagentt.example.com, \"C:\\labratory folder\\sequencng file.xlsx\", and [C:\\chromatograpy folder\\spectromtry file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "reserch RESERCH Reserch https://reserch.example.com/reserch lab@reserch.example.com reserch_id prereserch \"C:\\reserch folder\\reserch file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "research");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("RESERCH", "RESEARCH"),
+            ("Experment", "Experiment"),
+            ("sampel", "sample"),
+            ("SAMPLNG", "SAMPLING"),
+            ("labratory", "laboratory"),
+            ("Protocolll", "Protocol"),
+            ("hypothsis", "hypothesis"),
+            ("ANALYSISIS", "ANALYSIS"),
+            ("reagentt", "reagent"),
+            ("Calibraton", "Calibration"),
+            ("microscop", "microscope"),
+            ("sequencng", "sequencing"),
+            ("Genotypingg", "Genotyping"),
+            ("chromatograpy", "chromatography"),
+            ("spectromtry", "spectrometry"),
+            ("Centrifugee", "Centrifuge"),
+            ("incubaton", "incubation"),
+            ("replicatee", "replicate"),
+            ("Specimennt", "Specimen"));
+        plan.IssueCount.Should().Be(19);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "RESEARCH Experiment sample SAMPLING laboratory Protocol hypothesis ANALYSIS reagent Calibration microscope sequencing Genotyping chromatography spectrometry Centrifuge incubation replicate Specimen. Keep research, experiment, sample, sampling, laboratory, protocol, hypothesis, analysis, reagent, calibration, microscope, sequencing, genotyping, chromatography, spectrometry, centrifuge, incubation, replicate, specimen, prereserch, reserch_id, https://reserch.example.com/microscop, lab@reagentt.example.com, \"C:\\labratory folder\\sequencng file.xlsx\", and [C:\\chromatograpy folder\\spectromtry file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(19);
+        replaceAllCorrected.Should().Be(
+            "research RESEARCH Research https://reserch.example.com/reserch lab@reserch.example.com reserch_id prereserch \"C:\\reserch folder\\reserch file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");
