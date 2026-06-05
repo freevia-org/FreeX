@@ -35,282 +35,241 @@ public sealed class SolutionProjectsPreflightTests
     public void SolutionProjectsPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Included"));
 
-        try
-        {
-            var solutionPath = Path.Combine(tempDirectory, "FreeX.slnx");
-            File.WriteAllText(
-                solutionPath,
-                """
-                <Solution>
-                  <Folder Name="/src/">
-                    <Project Path="src/Included/Included.csproj" />
-                  </Folder>
-                </Solution>
-                """);
-            File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
+        var solutionPath = Path.Combine(tempDirectory, "FreeX.slnx");
+        File.WriteAllText(
+            solutionPath,
+            """
+            <Solution>
+              <Folder Name="/src/">
+                <Project Path="src/Included/Included.csproj" />
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{solutionPath}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{solutionPath}\"");
 
-            result.ExitCode.Should().Be(0, result.Error);
-            result.Output.Should().Contain("Validated 1 solution project entry(s).");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("Validated 1 solution project entry(s).");
     }
 
     [Fact]
     public void SolutionProjectsPreflight_RecognizesNestedSolutionFolders()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Nested"));
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "FreeX.slnx"),
-                """
-                <Solution>
-                  <Folder Name="/src/">
-                    <Folder Name="/src/Nested/">
-                      <Project Path="src/Nested/Nested.csproj" />
-                    </Folder>
-                  </Folder>
-                </Solution>
-                """);
-            File.WriteAllText(Path.Combine(tempDirectory, "src", "Nested", "Nested.csproj"), "<Project />");
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "FreeX.slnx"),
+            """
+            <Solution>
+              <Folder Name="/src/">
+                <Folder Name="/src/Nested/">
+                  <Project Path="src/Nested/Nested.csproj" />
+                </Folder>
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "Nested", "Nested.csproj"), "<Project />");
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
-            result.ExitCode.Should().Be(0, result.Error);
-            result.Output.Should().Contain("Validated 1 solution project entry(s).");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("Validated 1 solution project entry(s).");
     }
 
     [Fact]
     public void SolutionProjectsPreflight_IgnoresTransientAndNestedAgentWorktreeProjects()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Included"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "FreeX.App.Host"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch"));
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "FreeX.slnx"),
-                """
-                <Solution>
-                  <Folder Name="/src/">
-                    <Project Path="src/Included/Included.csproj" />
-                  </Folder>
-                </Solution>
-                """);
-            File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
-            File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host_abc123_wpftmp.csproj"), "<Project />");
-            File.WriteAllText(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project />");
-            File.WriteAllText(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project />");
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "FreeX.slnx"),
+            """
+            <Solution>
+              <Folder Name="/src/">
+                <Project Path="src/Included/Included.csproj" />
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host_abc123_wpftmp.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project />");
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
-            result.ExitCode.Should().Be(0, result.Error);
-            result.Output.Should().Contain("Validated 1 solution project entry(s).");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("Validated 1 solution project entry(s).");
     }
 
     [Fact]
     public void SolutionProjectsPreflight_FailsWhenSolutionContainsDuplicateProjectEntry()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Duplicate"));
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "FreeX.slnx"),
-                """
-                <Solution>
-                  <Folder Name="/src/">
-                    <Project Path="src/Duplicate/Duplicate.csproj" />
-                    <Project Path="src/Duplicate/Duplicate.csproj" />
-                  </Folder>
-                </Solution>
-                """);
-            File.WriteAllText(Path.Combine(tempDirectory, "src", "Duplicate", "Duplicate.csproj"), "<Project />");
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "FreeX.slnx"),
+            """
+            <Solution>
+              <Folder Name="/src/">
+                <Project Path="src/Duplicate/Duplicate.csproj" />
+                <Project Path="src/Duplicate/Duplicate.csproj" />
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "Duplicate", "Duplicate.csproj"), "<Project />");
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
-            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
-            result.ExitCode.Should().NotBe(0);
-            combinedOutput.Should().Contain("Duplicate solution project entry");
-            combinedOutput.Should().Contain("src/Duplicate/Duplicate.csproj");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+        result.ExitCode.Should().NotBe(0);
+        combinedOutput.Should().Contain("Duplicate solution project entry");
+        combinedOutput.Should().Contain("src/Duplicate/Duplicate.csproj");
     }
 
     [Fact]
     public void SolutionProjectsPreflight_FailsWhenSolutionProjectPathEscapesSolutionRoot()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
-        var solutionRoot = Path.Combine(tempDirectory, "repo");
+        using var temp = new TestTemporaryDirectory();
+        var solutionRoot = Path.Combine(temp.Path, "repo");
+
         Directory.CreateDirectory(solutionRoot);
-        Directory.CreateDirectory(Path.Combine(tempDirectory, "external"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "external"));
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(solutionRoot, "FreeX.slnx"),
-                """
-                <Solution>
-                  <Folder Name="/src/">
-                    <Project Path="../external/Outside.csproj" />
-                  </Folder>
-                </Solution>
-                """);
-            File.WriteAllText(Path.Combine(tempDirectory, "external", "Outside.csproj"), "<Project />");
+        File.WriteAllText(
+            Path.Combine(solutionRoot, "FreeX.slnx"),
+            """
+            <Solution>
+              <Folder Name="/src/">
+                <Project Path="../external/Outside.csproj" />
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "external", "Outside.csproj"), "<Project />");
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{solutionRoot}\" -SolutionPath \"{Path.Combine(solutionRoot, "FreeX.slnx")}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{solutionRoot}\" -SolutionPath \"{Path.Combine(solutionRoot, "FreeX.slnx")}\"");
 
-            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
-            result.ExitCode.Should().NotBe(0);
-            combinedOutput.Should().Contain("escapes solution root");
-            combinedOutput.Should().Contain("../external/Outside.csproj");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+        result.ExitCode.Should().NotBe(0);
+        combinedOutput.Should().Contain("escapes solution root");
+        combinedOutput.Should().Contain("../external/Outside.csproj");
     }
 
     [Fact]
     public void SolutionProjectsPreflight_FailsWhenToolProjectIsMissingFromSolution()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Included"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, "tools", "MissingTool"));
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "FreeX.slnx"),
-                """
-                <Solution>
-                  <Folder Name="/src/">
-                    <Project Path="src/Included/Included.csproj" />
-                  </Folder>
-                </Solution>
-                """);
-            File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
-            File.WriteAllText(Path.Combine(tempDirectory, "tools", "MissingTool", "MissingTool.csproj"), "<Project />");
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "FreeX.slnx"),
+            """
+            <Solution>
+              <Folder Name="/src/">
+                <Project Path="src/Included/Included.csproj" />
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(tempDirectory, "tools", "MissingTool", "MissingTool.csproj"), "<Project />");
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
-            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
-            result.ExitCode.Should().NotBe(0);
-            combinedOutput.Should().Contain("missing from solution");
-            combinedOutput.Should().Contain("tools/MissingTool/MissingTool.csproj");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+        result.ExitCode.Should().NotBe(0);
+        combinedOutput.Should().Contain("missing from solution");
+        combinedOutput.Should().Contain("tools/MissingTool/MissingTool.csproj");
     }
 
     [Fact]
     public void SolutionProjectsPreflight_FailsWhenProjectIsMissingFromSolution()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Included"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Missing"));
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "FreeX.slnx"),
-                """
-                <Solution>
-                  <Folder Name="/src/">
-                    <Project Path="src/Included/Included.csproj" />
-                  </Folder>
-                </Solution>
-                """);
-            File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
-            File.WriteAllText(Path.Combine(tempDirectory, "src", "Missing", "Missing.csproj"), "<Project />");
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "FreeX.slnx"),
+            """
+            <Solution>
+              <Folder Name="/src/">
+                <Project Path="src/Included/Included.csproj" />
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "Missing", "Missing.csproj"), "<Project />");
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
-            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
-            result.ExitCode.Should().NotBe(0);
-            combinedOutput.Should().Contain("missing from solution");
-            combinedOutput.Should().Contain("src/Missing/Missing.csproj");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+        result.ExitCode.Should().NotBe(0);
+        combinedOutput.Should().Contain("missing from solution");
+        combinedOutput.Should().Contain("src/Missing/Missing.csproj");
     }
 
     [Fact]
     public void SolutionProjectsPreflight_FailsWhenSolutionReferencesMissingProject()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Included"));
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "FreeX.slnx"),
-                """
-                <Solution>
-                  <Folder Name="/src/">
-                    <Project Path="src/Included/Included.csproj" />
-                    <Project Path="src/Missing/Missing.csproj" />
-                  </Folder>
-                </Solution>
-                """);
-            File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "FreeX.slnx"),
+            """
+            <Solution>
+              <Folder Name="/src/">
+                <Project Path="src/Included/Included.csproj" />
+                <Project Path="src/Missing/Missing.csproj" />
+              </Folder>
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
-            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
-            result.ExitCode.Should().NotBe(0);
-            combinedOutput.Should().Contain("references missing project");
-            combinedOutput.Should().Contain("src/Missing/Missing.csproj");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+        result.ExitCode.Should().NotBe(0);
+        combinedOutput.Should().Contain("references missing project");
+        combinedOutput.Should().Contain("src/Missing/Missing.csproj");
     }
 
     private static string NormalizeWhitespace(string text) => Regex.Replace(text, "\\s+", " ");

@@ -81,371 +81,299 @@ public sealed class GitHubWorkflowPreflightTests
     [Fact]
     public void GitHubWorkflowPreflight_FailsWhenJobOmitsTimeout()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "broken.yml"),
-                """
-                name: Broken
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
 
-                on:
-                  workflow_dispatch:
+            on:
+              workflow_dispatch:
 
-                permissions:
-                  contents: read
+            permissions:
+              contents: read
 
-                jobs:
-                  build:
-                    runs-on: windows-latest
-                    steps:
-                      - name: Safe shell
-                        shell: pwsh
-                        run: dotnet restore FreeX.slnx
-                """);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+            jobs:
+              build:
+                runs-on: windows-latest
+                steps:
+                  - name: Safe shell
+                    shell: pwsh
+                    run: dotnet restore FreeX.slnx
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("must declare timeout-minutes");
-            (result.Output + result.Error).Should().Contain("broken.yml");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("must declare timeout-minutes");
+        (result.Output + result.Error).Should().Contain("broken.yml");
     }
 
     [Fact]
     public void GitHubWorkflowPreflight_FailsWhenUploadArtifactOmitsMissingFilePolicy()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "broken.yml"),
-                """
-                name: Broken
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
 
-                on:
-                  workflow_dispatch:
+            on:
+              workflow_dispatch:
 
-                permissions:
-                  contents: read
+            permissions:
+              contents: read
 
-                jobs:
-                  build:
-                    runs-on: windows-latest
-                    timeout-minutes: 5
-                    steps:
-                      - name: Upload release artifact
-                        uses: actions/upload-artifact@v7
-                        with:
-                          name: freex-release
-                          path: artifacts/upload/*.exe
-                """);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+            jobs:
+              build:
+                runs-on: windows-latest
+                timeout-minutes: 5
+                steps:
+                  - name: Upload release artifact
+                    uses: actions/upload-artifact@v7
+                    with:
+                      name: freex-release
+                      path: artifacts/upload/*.exe
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("actions/upload-artifact steps must set if-no-files-found to error or warn");
-            (result.Output + result.Error).Should().Contain("broken.yml");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("actions/upload-artifact steps must set if-no-files-found to error or warn");
+        (result.Output + result.Error).Should().Contain("broken.yml");
     }
 
     [Fact]
     public void GitHubWorkflowPreflight_FailsWhenCheckoutPersistsCredentials()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "broken.yml"),
-                """
-                name: Broken
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
 
-                on:
-                  workflow_dispatch:
+            on:
+              workflow_dispatch:
 
-                permissions:
-                  contents: read
+            permissions:
+              contents: read
 
-                jobs:
-                  build:
-                    runs-on: windows-latest
-                    steps:
-                      - name: Checkout
-                        uses: actions/checkout@v6
-                        with:
-                          fetch-depth: 0
-                      - name: Safe shell
-                        shell: pwsh
-                        run: dotnet restore FreeX.slnx
-                """);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+            jobs:
+              build:
+                runs-on: windows-latest
+                steps:
+                  - name: Checkout
+                    uses: actions/checkout@v6
+                    with:
+                      fetch-depth: 0
+                  - name: Safe shell
+                    shell: pwsh
+                    run: dotnet restore FreeX.slnx
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("actions/checkout steps must set persist-credentials: false");
-            (result.Output + result.Error).Should().Contain("broken.yml");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("actions/checkout steps must set persist-credentials: false");
+        (result.Output + result.Error).Should().Contain("broken.yml");
     }
 
     [Fact]
     public void GitHubWorkflowPreflight_FailsWhenWorkflowUsesSelfHostedRunner()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "broken.yml"),
-                """
-                name: Broken
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
 
-                on:
-                  workflow_dispatch:
+            on:
+              workflow_dispatch:
 
-                permissions:
-                  contents: read
+            permissions:
+              contents: read
 
-                jobs:
-                  build:
-                    runs-on: [self-hosted, windows]
-                    steps:
-                      - name: Safe shell
-                        shell: pwsh
-                        run: dotnet restore FreeX.slnx
-                """);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+            jobs:
+              build:
+                runs-on: [self-hosted, windows]
+                steps:
+                  - name: Safe shell
+                    shell: pwsh
+                    run: dotnet restore FreeX.slnx
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("workflow must not use self-hosted runners");
-            (result.Output + result.Error).Should().Contain("broken.yml");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("workflow must not use self-hosted runners");
+        (result.Output + result.Error).Should().Contain("broken.yml");
     }
 
     [Fact]
     public void GitHubWorkflowPreflight_FailsWhenWorkflowUsesPullRequestTarget()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "broken.yml"),
-                """
-                name: Broken
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
 
-                on:
-                  pull_request_target:
+            on:
+              pull_request_target:
 
-                permissions:
-                  contents: read
+            permissions:
+              contents: read
 
-                jobs:
-                  build:
-                    runs-on: windows-latest
-                    steps:
-                      - name: Safe shell
-                        shell: pwsh
-                        run: dotnet restore FreeX.slnx
-                """);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+            jobs:
+              build:
+                runs-on: windows-latest
+                steps:
+                  - name: Safe shell
+                    shell: pwsh
+                    run: dotnet restore FreeX.slnx
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("workflow must not use the privileged pull_request_target event");
-            (result.Output + result.Error).Should().Contain("broken.yml");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("workflow must not use the privileged pull_request_target event");
+        (result.Output + result.Error).Should().Contain("broken.yml");
     }
 
     [Fact]
     public void GitHubWorkflowPreflight_FailsWhenWorkflowRequestsWriteAllPermissions()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "broken.yml"),
-                """
-                name: Broken
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
 
-                on:
-                  workflow_dispatch:
+            on:
+              workflow_dispatch:
 
-                permissions: write-all
+            permissions: write-all
 
-                jobs:
-                  build:
-                    runs-on: windows-latest
-                    steps:
-                      - name: Safe shell
-                        shell: pwsh
-                        run: dotnet restore FreeX.slnx
-                """);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+            jobs:
+              build:
+                runs-on: windows-latest
+                steps:
+                  - name: Safe shell
+                    shell: pwsh
+                    run: dotnet restore FreeX.slnx
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("workflow must not request write-all permissions");
-            (result.Output + result.Error).Should().Contain("broken.yml");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("workflow must not request write-all permissions");
+        (result.Output + result.Error).Should().Contain("broken.yml");
     }
 
     [Fact]
     public void GitHubWorkflowPreflight_FailsWhenRunStepOmitsShell()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "broken.yml"),
-                """
-                name: Broken
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
 
-                on:
-                  workflow_dispatch:
+            on:
+              workflow_dispatch:
 
-                permissions:
-                  contents: read
+            permissions:
+              contents: read
 
-                jobs:
-                  build:
-                    runs-on: windows-latest
-                    steps:
-                      - name: Missing shell
-                        run: dotnet restore FreeX.slnx
-                """);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+            jobs:
+              build:
+                runs-on: windows-latest
+                steps:
+                  - name: Missing shell
+                    run: dotnet restore FreeX.slnx
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("must declare an explicit shell");
-            (result.Output + result.Error).Should().Contain("Missing shell");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("must declare an explicit shell");
+        (result.Output + result.Error).Should().Contain("Missing shell");
     }
 
     [Fact]
     public void GitHubWorkflowPreflight_FailsWhenLocalActionEscapesWorkspace()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "broken.yml"),
-                """
-                name: Broken
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
 
-                on:
-                  workflow_dispatch:
+            on:
+              workflow_dispatch:
 
-                permissions:
-                  contents: read
+            permissions:
+              contents: read
 
-                jobs:
-                  build:
-                    runs-on: windows-latest
-                    steps:
-                      - uses: ./../outside-action
-                """);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+            jobs:
+              build:
+                runs-on: windows-latest
+                steps:
+                  - uses: ./../outside-action
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("must stay within the workflow workspace");
-            (result.Output + result.Error).Should().Contain("./../outside-action");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("must stay within the workflow workspace");
+        (result.Output + result.Error).Should().Contain("./../outside-action");
     }
 
     [Fact]
     public void GitHubWorkflowPreflight_FailsForFloatingActionReference()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "broken.yml"),
-                """
-                name: Broken
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
 
-                on:
-                  workflow_dispatch:
+            on:
+              workflow_dispatch:
 
-                permissions:
-                  contents: read
+            permissions:
+              contents: read
 
-                jobs:
-                  build:
-                    runs-on: windows-latest
-                    steps:
-                      - uses: actions/checkout@main
-                """);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+            jobs:
+              build:
+                runs-on: windows-latest
+                steps:
+                  - uses: actions/checkout@main
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("GitHub workflow validation failed");
-            (result.Output + result.Error).Should().Contain("actions/checkout@main");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("GitHub workflow validation failed");
+        (result.Output + result.Error).Should().Contain("actions/checkout@main");
     }
 
 }
