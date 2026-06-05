@@ -40,6 +40,10 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("\"--self-contained\", \"false\"");
         script.Should().Contain("-p:Version=$assemblyVersion");
         script.Should().Contain("-p:InformationalVersion=$informationalVersion");
+        script.Should().NotContain("--disable-build-servers");
+        script.Should().NotContain("-p:UseSharedCompilation=false");
+        script.Should().NotContain("-p:NodeReuse=false");
+        script.Should().NotContain("/nr:false");
         script.Should().Contain("-p:PublishSingleFile=true");
         script.Should().Contain("-p:FreeXTesterReleaseEnglishOnly=true");
         script.Should().NotContain("-p:EnableCompressionInSingleFile=true");

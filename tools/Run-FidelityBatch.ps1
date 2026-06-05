@@ -49,7 +49,7 @@ if (-not $SkipFetch) {
 }
 
 Write-Host "== Building FreeX.FidelityCompare (Release) =="
-dotnet build $project -c Release --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1 | Out-Host
+dotnet build $project -c Release | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "Build failed." }
 
 $exe = Join-Path $repoRoot 'tools/FreeX.FidelityCompare/bin/Release/net10.0-windows/FreeX.FidelityCompare.exe'
