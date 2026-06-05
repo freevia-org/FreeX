@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -53,7 +52,7 @@ public sealed class CellShiftDialogTests
     [Fact]
     public void DialogButtons_ExposeKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CellShiftDialog.cs"));
+        var source = ReadCellShiftDialogSource();
 
         source.Should().Contain("CellShiftDialogPlanner.GetAvailableChoices");
         source.Should().Contain("CellShiftDialogPlanner.ToKeyboardChoice");
@@ -65,7 +64,7 @@ public sealed class CellShiftDialogTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesDefaultShiftChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CellShiftDialog.cs"));
+        var source = ReadCellShiftDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -117,6 +116,9 @@ public sealed class CellShiftDialogTests
             }
         });
     }
+
+    private static string ReadCellShiftDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("CellShiftDialog.cs");
 
     private static IReadOnlyList<RadioButton> GetButtons(CellShiftDialog dialog)
     {
