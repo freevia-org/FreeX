@@ -569,8 +569,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             reader.MoveToAttribute(i);
             var isNativeOnly =
                 reader.NamespaceURI != XNamespace.Xmlns.NamespaceName &&
-                (reader.NamespaceURI.Length != 0 ||
-                 !modeledAttributeNames.Contains(reader.LocalName));
+                !modeledAttributeNames.Contains(reader.LocalName);
             if (isNativeOnly)
             {
                 reader.MoveToElement();
