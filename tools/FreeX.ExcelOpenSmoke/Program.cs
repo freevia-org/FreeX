@@ -469,6 +469,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageMarginsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageSetupMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetHeaderFooterMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageBreakMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSingleXmlCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -688,6 +689,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageMarginsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageSetupMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetHeaderFooterMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageBreakMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSingleXmlCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -5000,6 +5002,165 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet pageSetup metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetHeaderFooterMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetHeaderFooterMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetHeaderFooterMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetHeaderFooterMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var headerFooterElements = root.Elements(SpreadsheetNs + "headerFooter").ToArray();
+        if (headerFooterElements.Length > 1)
+            issues.Add($"{worksheetPart} has {headerFooterElements.Length} headerFooter elements; expected at most one");
+
+        foreach (var headerFooter in headerFooterElements.Select((element, index) => new WorksheetHeaderFooterReference(index + 1, element)))
+        {
+            AddWorksheetHeaderFooterIssues(worksheetPart, root, headerFooter, issues);
+        }
+    }
+
+    private static void AddWorksheetHeaderFooterIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetHeaderFooterReference headerFooterReference,
+        List<string> issues)
+    {
+        var headerFooter = headerFooterReference.Element;
+        var description = $"headerFooter #{headerFooterReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            headerFooter,
+            description,
+            [
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            headerFooter,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup"
+            ],
+            issues);
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "differentOddEven", headerFooter.Attribute("differentOddEven")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "differentFirst", headerFooter.Attribute("differentFirst")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "scaleWithDoc", headerFooter.Attribute("scaleWithDoc")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "alignWithMargins", headerFooter.Attribute("alignWithMargins")?.Value, issues);
+
+        var seenChildNames = new HashSet<string>(StringComparer.Ordinal);
+        var previousKnownChildOrder = -1;
+        foreach (var child in headerFooter.Elements())
+        {
+            if (child.Name.Namespace != SpreadsheetNs || !IsKnownWorksheetHeaderFooterChild(child.Name.LocalName))
+            {
+                issues.Add($"{worksheetPart} {description} has unexpected child element {child.Name.LocalName}");
+                continue;
+            }
+
+            if (!seenChildNames.Add(child.Name.LocalName))
+                issues.Add($"{worksheetPart} {description} has duplicate {child.Name.LocalName} elements");
+
+            var childOrder = GetWorksheetHeaderFooterChildOrder(child.Name.LocalName);
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"{worksheetPart} {description} child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+
+            if (child.Elements().Any())
+                issues.Add($"{worksheetPart} {description} child {child.Name.LocalName} has child elements; expected text only");
+        }
+    }
+
+    private static bool IsKnownWorksheetHeaderFooterChild(string name) =>
+        GetWorksheetHeaderFooterChildOrder(name) >= 0;
+
+    private static int GetWorksheetHeaderFooterChildOrder(string name) =>
+        name switch
+        {
+            "oddHeader" => 0,
+            "oddFooter" => 1,
+            "evenHeader" => 2,
+            "evenFooter" => 3,
+            "firstHeader" => 4,
+            "firstFooter" => 5,
+            _ => -1
+        };
+
+    private static void ThrowInvalidWorksheetHeaderFooterMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet headerFooter metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetPageBreakMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -12131,6 +12292,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetPageSetupReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetHeaderFooterReference(
         int Ordinal,
         XElement Element);
 
