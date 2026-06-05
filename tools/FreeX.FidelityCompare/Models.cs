@@ -75,6 +75,7 @@ internal sealed class FileResult
 
     public string File { get; }
     public string? FreeXError;
+    public string? FreeXRecalcError;
     public string? ExcelError;
 
     public bool FreeXLoaded => FreeXError is null && FreeX is not null;
@@ -112,6 +113,7 @@ internal sealed class FidelityOptions
     public string? Filter;
     public double ValueMismatchTolerancePercent = 0.5; // allow this % of compared cells to differ before failing
     public int MaxMismatchSamples = 25;
+    public bool Recalc; // recompute FreeX formulas (compute-fidelity) instead of trusting the loaded cache
 
     public static FidelityOptions Parse(string[] args)
     {
@@ -125,6 +127,7 @@ internal sealed class FidelityOptions
                 case "--filter": options.Filter = args[++i]; break;
                 case "--out": options.OutputDirectory = args[++i]; break;
                 case "--tolerance": options.ValueMismatchTolerancePercent = double.Parse(args[++i], CultureInfo.InvariantCulture); break;
+                case "--recalc": options.Recalc = true; break;
             }
         }
 
@@ -153,12 +156,14 @@ internal sealed class FidelityOptions
             FreeX.FidelityCompare — on-demand FreeX vs Excel functional fidelity batch
 
             Usage:
-              FreeX.FidelityCompare [--filter <substr>] [--out <dir>] [--corpus <dir>] [--tolerance <pct>]
+              FreeX.FidelityCompare [--filter <substr>] [--out <dir>] [--corpus <dir>] [--tolerance <pct>] [--recalc]
 
               --filter <substr>   Only run corpus files whose name contains <substr>.
               --out <dir>         Run output directory (default: fidelity-corpus/runs/<timestamp>).
               --corpus <dir>      fidelity-corpus root (default: auto-located).
               --tolerance <pct>   Max % of compared cells allowed to differ before a file FAILs (default 0.5).
+              --recalc            Recompute FreeX formulas before comparing (compute-fidelity: FreeX engine
+                                  vs Excel) instead of trusting the file's cached results (load-fidelity).
 
             Requires Microsoft Excel installed (COM automation). Not part of build/test/CI.
             Download the corpus first: pwsh tools/Fetch-FidelityCorpus.ps1

@@ -32,7 +32,11 @@ param(
     [string]$Filter,
     [string]$Out,
     [switch]$SkipFetch,
-    [double]$Tolerance = 0.5
+    [double]$Tolerance = 0.5,
+    # Compute-fidelity: recompute FreeX formulas before comparing (FreeX engine vs Excel) instead of
+    # trusting the file's cached results. Noisier on workbooks that use legacy array/implicit-intersection
+    # formulas (see docs/testing/fidelity-batch.md).
+    [switch]$Recalc
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,6 +58,7 @@ if (-not (Test-Path $exe)) { throw "Executable not found: $exe" }
 $argList = @('--tolerance', $Tolerance)
 if ($Filter) { $argList += @('--filter', $Filter) }
 if ($Out) { $argList += @('--out', $Out) }
+if ($Recalc) { $argList += '--recalc' }
 
 Write-Host "== Running fidelity batch =="
 & $exe @argList
