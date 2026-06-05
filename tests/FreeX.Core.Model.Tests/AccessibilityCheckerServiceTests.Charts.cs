@@ -48,6 +48,9 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Theory]
     [InlineData("Chart Title")]
     [InlineData("chart title")]
+    [InlineData("Chart")]
+    [InlineData("Graph")]
+    [InlineData("Graph Title")]
     [InlineData("Title")]
     [InlineData("Chart 1")]
     public void FindIssues_FlagsChartsWithGenericTitleText(string title)
@@ -80,6 +83,37 @@ public sealed partial class AccessibilityCheckerServiceTests
 
         issue.Location.Should().Be("A1:B4");
         issue.Message.Should().Be("Chart title should describe the chart.");
+    }
+
+    [Fact]
+    public void FindIssues_AllowsDescriptiveChartTitleTextContainingGenericWords()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales chart",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Sales"
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = dataRange,
+            Title = "Pipeline graph",
+            XAxisTitle = "Pipeline stage",
+            YAxisTitle = "Deal value"
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should()
+            .NotContain(i => i.Kind == AccessibilityIssueKind.GenericChartTitle);
     }
 
     [Fact]
@@ -135,8 +169,13 @@ public sealed partial class AccessibilityCheckerServiceTests
             "Chart Y-axis is missing a title.");
     }
 
-    [Fact]
-    public void FindIssues_FlagsChartsWithGenericAxisTitles()
+    [Theory]
+    [InlineData("Axis Title", "Value Axis 1")]
+    [InlineData("X Axis Title", "Y Axis Title")]
+    [InlineData("x-axis title", "y-axis title")]
+    [InlineData("Horizontal Axis Title", "Vertical Axis Title")]
+    [InlineData("Category Axis Title", "Value Axis Title")]
+    public void FindIssues_FlagsChartsWithGenericAxisTitles(string xAxisTitle, string yAxisTitle)
     {
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Charts");
@@ -148,8 +187,8 @@ public sealed partial class AccessibilityCheckerServiceTests
             Type = ChartType.Line,
             DataRange = dataRange,
             Title = "Sales by quarter",
-            XAxisTitle = "Axis Title",
-            YAxisTitle = "Value Axis 1"
+            XAxisTitle = xAxisTitle,
+            YAxisTitle = yAxisTitle
         });
 
         var issues = AccessibilityCheckerService.FindIssues(workbook)
@@ -159,6 +198,37 @@ public sealed partial class AccessibilityCheckerServiceTests
         issues.Select(i => i.Message).Should().Equal(
             "Chart X-axis title should describe the axis.",
             "Chart Y-axis title should describe the axis.");
+    }
+
+    [Fact]
+    public void FindIssues_AllowsDescriptiveChartAxisTitlesContainingGenericWords()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            XAxisTitle = "Horizontal axis quarter",
+            YAxisTitle = "Value axis revenue"
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Pipeline by stage",
+            XAxisTitle = "Category axis pipeline stage",
+            YAxisTitle = "Y axis open deal value"
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should()
+            .NotContain(i => i.Kind == AccessibilityIssueKind.GenericChartAxisTitle);
     }
 
     [Fact]

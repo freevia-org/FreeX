@@ -21,27 +21,19 @@ public sealed class ToolScriptsPreflightTests
     [Fact]
     public void ToolScriptsPreflight_FailsWhenPreflightScriptOmitsFailFastMode()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-tool-script-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(Path.Combine(tempDirectory, "Test-MissingFailFast.ps1"), "Write-Host \"ok\"");
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
+        File.WriteAllText(Path.Combine(temp.Path, "Test-MissingFailFast.ps1"), "Write-Host \"ok\"");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ScriptDirectory \"{tempDirectory}\"");
-            var combinedOutput = (result.Output + result.Error)
-                .Replace("\r", string.Empty, StringComparison.Ordinal)
-                .Replace("\n", string.Empty, StringComparison.Ordinal);
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ScriptDirectory \"{temp.Path}\"");
+        var combinedOutput = (result.Output + result.Error)
+            .Replace("\r", string.Empty, StringComparison.Ordinal)
+            .Replace("\n", string.Empty, StringComparison.Ordinal);
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("PowerShell fail-fast validation failed");
-            combinedOutput.Should().Contain("Test-MissingFailFast.ps1");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("PowerShell fail-fast validation failed");
+        combinedOutput.Should().Contain("Test-MissingFailFast.ps1");
     }
 
     [Fact]
@@ -59,23 +51,15 @@ public sealed class ToolScriptsPreflightTests
     [Fact]
     public void ToolScriptsPreflight_FailsWhenScriptHasSyntaxError()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-tool-script-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(Path.Combine(tempDirectory, "broken.ps1"), "param(`nif (`n");
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
+        File.WriteAllText(Path.Combine(temp.Path, "broken.ps1"), "param(`nif (`n");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ScriptDirectory \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ScriptDirectory \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("PowerShell syntax validation failed");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("PowerShell syntax validation failed");
     }
 
 }
