@@ -580,7 +580,9 @@ public static partial class AccessibilityCheckerService
             ? ConditionalFormulaLogicalOperator.And
             : string.Equals(function.FunctionName, "OR", StringComparison.OrdinalIgnoreCase)
                 ? ConditionalFormulaLogicalOperator.Or
-                : (ConditionalFormulaLogicalOperator?)null;
+                : string.Equals(function.FunctionName, "XOR", StringComparison.OrdinalIgnoreCase)
+                    ? ConditionalFormulaLogicalOperator.Xor
+                    : (ConditionalFormulaLogicalOperator?)null;
         if (!logicalOperator.HasValue || function.Arguments.Count == 0)
             return false;
 
@@ -986,6 +988,7 @@ public static partial class AccessibilityCheckerService
     {
         And,
         Or,
+        Xor,
         Not
     }
 
@@ -1113,6 +1116,7 @@ public static partial class AccessibilityCheckerService
             {
                 ConditionalFormulaLogicalOperator.And => EvaluateFormulaAnd(logical.Operands, rowOffset, colOffset),
                 ConditionalFormulaLogicalOperator.Or => EvaluateFormulaOr(logical.Operands, rowOffset, colOffset),
+                ConditionalFormulaLogicalOperator.Xor => EvaluateFormulaXor(logical.Operands, rowOffset, colOffset),
                 ConditionalFormulaLogicalOperator.Not => logical.Operands.Count == 1
                     ? Negate(EvaluateFormulaExpression(logical.Operands[0], rowOffset, colOffset))
                     : null,
@@ -1154,6 +1158,25 @@ public static partial class AccessibilityCheckerService
             }
 
             return hasUnknown ? null : false;
+        }
+
+        private bool? EvaluateFormulaXor(
+            IReadOnlyList<ConditionalFormulaExpression> operands,
+            int rowOffset,
+            int colOffset)
+        {
+            var trueCount = 0;
+            for (var i = 0; i < operands.Count; i++)
+            {
+                var result = EvaluateFormulaExpression(operands[i], rowOffset, colOffset);
+                if (!result.HasValue)
+                    return null;
+
+                if (result.Value)
+                    trueCount++;
+            }
+
+            return trueCount % 2 == 1;
         }
 
         private static bool? Negate(bool? value) =>
