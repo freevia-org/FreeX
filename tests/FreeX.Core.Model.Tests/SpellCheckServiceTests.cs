@@ -884,6 +884,39 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversFacilitiesRealEstateVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "FACILTY facilties Tenent occupncy leasng maintenence renovatn utilties janitoral inspeciton. Keep facilty_id, https://facilty.example.com/leasng, realestate@maintenence.example.com, \"C:\\occupncy folder\\inspeciton file.xlsx\", and [C:\\renovatn folder\\janitoral file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("FACILTY", "FACILITY"),
+            ("facilties", "facilities"),
+            ("Tenent", "Tenant"),
+            ("occupncy", "occupancy"),
+            ("leasng", "leasing"),
+            ("maintenence", "maintenance"),
+            ("renovatn", "renovation"),
+            ("utilties", "utilities"),
+            ("janitoral", "janitorial"),
+            ("inspeciton", "inspection"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "FACILITY facilities Tenant occupancy leasing maintenance renovation utilities janitorial inspection. Keep facilty_id, https://facilty.example.com/leasng, realestate@maintenence.example.com, \"C:\\occupncy folder\\inspeciton file.xlsx\", and [C:\\renovatn folder\\janitoral file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
