@@ -467,6 +467,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetPageMarginsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageSetupMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageBreakMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -685,6 +686,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetPageMarginsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageSetupMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageBreakMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -4693,6 +4695,132 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet printOptions metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetPageMarginsMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetPageMarginsMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetPageMarginsMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetPageMarginsMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var pageMarginsElements = root.Elements(SpreadsheetNs + "pageMargins").ToArray();
+        if (pageMarginsElements.Length > 1)
+            issues.Add($"{worksheetPart} has {pageMarginsElements.Length} pageMargins elements; expected at most one");
+
+        foreach (var pageMargins in pageMarginsElements.Select((element, index) => new WorksheetPageMarginsReference(index + 1, element)))
+        {
+            AddWorksheetPageMarginsIssues(worksheetPart, root, pageMargins, issues);
+        }
+    }
+
+    private static void AddWorksheetPageMarginsIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetPageMarginsReference pageMarginsReference,
+        List<string> issues)
+    {
+        var pageMargins = pageMarginsReference.Element;
+        var description = $"pageMargins #{pageMarginsReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            pageMargins,
+            description,
+            [
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            pageMargins,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions"
+            ],
+            issues);
+
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "left", pageMargins.Attribute("left")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "right", pageMargins.Attribute("right")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "top", pageMargins.Attribute("top")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "bottom", pageMargins.Attribute("bottom")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "header", pageMargins.Attribute("header")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "footer", pageMargins.Attribute("footer")?.Value, issues);
+
+        if (pageMargins.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void ThrowInvalidWorksheetPageMarginsMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet pageMargins metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetPageSetupMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -11995,6 +12123,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetPrintOptionsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetPageMarginsReference(
         int Ordinal,
         XElement Element);
 
