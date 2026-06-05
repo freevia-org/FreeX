@@ -45,68 +45,60 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_RoundTripsProofingCustomDictionaryEditorWords()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "FreeXOptionsDialogProofingTests", Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(tempDirectory, "options.json");
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "options.json");
         using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
 
-        try
+        StaTestRunner.Run(() =>
         {
-            StaTestRunner.Run(() =>
+            var dialog = new OptionsDialog(new FreeXOptions
             {
-                var dialog = new OptionsDialog(new FreeXOptions
-                {
-                    SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
-                });
-                dialog.Show();
-                try
-                {
-                    var wordsList = GetControl<ListBox>(dialog, "ProofingCustomDictionaryWordsList");
-                    var wordBox = GetControl<TextBox>(dialog, "ProofingCustomDictionaryWordBox");
-                    var addButton = GetControl<Button>(dialog, "ProofingCustomDictionaryAddWordButton");
-                    var removeButton = GetControl<Button>(dialog, "ProofingCustomDictionaryRemoveWordButton");
-                    var clearButton = GetControl<Button>(dialog, "ProofingCustomDictionaryClearWordsButton");
-
-                    GetWords(wordsList).Should().Equal("adn", "TeH");
-
-                    wordBox.Text = "  Recieve  ";
-                    Click(addButton);
-                    GetWords(wordsList).Should().Equal("adn", "Recieve", "TeH");
-
-                    wordBox.Text = "recieve";
-                    Click(addButton);
-                    GetWords(wordsList).Should().Equal("adn", "Recieve", "TeH");
-
-                    wordsList.SelectedItem = "adn";
-                    Click(removeButton);
-                    GetWords(wordsList).Should().Equal("Recieve", "TeH");
-
-                    Click(clearButton);
-                    GetWords(wordsList).Should().BeEmpty();
-
-                    wordBox.Text = "  Final  ";
-                    Click(addButton);
-                    GetWords(wordsList).Should().Equal("Final");
-
-                    ClickOkAllowingNonModalDialogResult(dialog);
-
-                    dialog.Result.SpellCheckCustomDictionaryWords.Should().Equal("Final");
-                }
-                finally
-                {
-                    dialog.Close();
-                }
+                SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
             });
+            dialog.Show();
+            try
+            {
+                var wordsList = GetControl<ListBox>(dialog, "ProofingCustomDictionaryWordsList");
+                var wordBox = GetControl<TextBox>(dialog, "ProofingCustomDictionaryWordBox");
+                var addButton = GetControl<Button>(dialog, "ProofingCustomDictionaryAddWordButton");
+                var removeButton = GetControl<Button>(dialog, "ProofingCustomDictionaryRemoveWordButton");
+                var clearButton = GetControl<Button>(dialog, "ProofingCustomDictionaryClearWordsButton");
 
-            FreeXOptions.LoadFromPath(path)
-                .SpellCheckCustomDictionaryWords
-                .Should()
-                .Equal("Final");
-        }
-        finally
-        {
-            if (Directory.Exists(tempDirectory))
-                Directory.Delete(tempDirectory, recursive: true);
-        }
+                GetWords(wordsList).Should().Equal("adn", "TeH");
+
+                wordBox.Text = "  Recieve  ";
+                Click(addButton);
+                GetWords(wordsList).Should().Equal("adn", "Recieve", "TeH");
+
+                wordBox.Text = "recieve";
+                Click(addButton);
+                GetWords(wordsList).Should().Equal("adn", "Recieve", "TeH");
+
+                wordsList.SelectedItem = "adn";
+                Click(removeButton);
+                GetWords(wordsList).Should().Equal("Recieve", "TeH");
+
+                Click(clearButton);
+                GetWords(wordsList).Should().BeEmpty();
+
+                wordBox.Text = "  Final  ";
+                Click(addButton);
+                GetWords(wordsList).Should().Equal("Final");
+
+                ClickOkAllowingNonModalDialogResult(dialog);
+
+                dialog.Result.SpellCheckCustomDictionaryWords.Should().Equal("Final");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+
+        FreeXOptions.LoadFromPath(path)
+            .SpellCheckCustomDictionaryWords
+            .Should()
+            .Equal("Final");
     }
 
     [Fact]
