@@ -479,6 +479,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetDimensionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetFormatMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetMergeCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -714,6 +715,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetDimensionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetFormatMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetMergeCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -5610,6 +5612,348 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet sheetFormatPr metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetProtectionMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetProtectionMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetProtectionMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetProtectionMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var sheetProtectionElements = root.Elements(SpreadsheetNs + "sheetProtection").ToArray();
+        if (sheetProtectionElements.Length > 1)
+            issues.Add($"{worksheetPart} has {sheetProtectionElements.Length} sheetProtection elements; expected at most one");
+
+        foreach (var sheetProtection in sheetProtectionElements.Select((element, index) => new WorksheetSheetProtectionReference(index + 1, element)))
+        {
+            AddWorksheetSheetProtectionIssues(worksheetPart, root, sheetProtection, issues);
+        }
+
+        var protectedRangesElements = root.Elements(SpreadsheetNs + "protectedRanges").ToArray();
+        if (protectedRangesElements.Length > 1)
+            issues.Add($"{worksheetPart} has {protectedRangesElements.Length} protectedRanges elements; expected at most one");
+
+        foreach (var protectedRanges in protectedRangesElements.Select((element, index) => new WorksheetProtectedRangesReference(index + 1, element)))
+        {
+            AddWorksheetProtectedRangesIssues(worksheetPart, root, protectedRanges, issues);
+        }
+    }
+
+    private static void AddWorksheetSheetProtectionIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetSheetProtectionReference sheetProtectionReference,
+        List<string> issues)
+    {
+        var sheetProtection = sheetProtectionReference.Element;
+        var description = $"sheetProtection #{sheetProtectionReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            sheetProtection,
+            description,
+            [
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            sheetProtection,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr"
+            ],
+            issues);
+
+        foreach (var attribute in sheetProtection.Attributes().Where(attribute => IsKnownWorksheetSheetProtectionBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "spinCount", sheetProtection.Attribute("spinCount")?.Value, issues);
+        AddOptionalWorksheetMetadataNonEmptyAttributeIssue(worksheetPart, description, "algorithmName", sheetProtection.Attribute("algorithmName")?.Value, issues);
+        AddOptionalWorksheetMetadataNonEmptyAttributeIssue(worksheetPart, description, "hashValue", sheetProtection.Attribute("hashValue")?.Value, issues);
+        AddOptionalWorksheetMetadataNonEmptyAttributeIssue(worksheetPart, description, "saltValue", sheetProtection.Attribute("saltValue")?.Value, issues);
+        AddOptionalWorksheetMetadataNonEmptyAttributeIssue(worksheetPart, description, "password", sheetProtection.Attribute("password")?.Value, issues);
+
+        if (sheetProtection.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool IsKnownWorksheetSheetProtectionBooleanAttribute(string name) =>
+        name is "sheet" or
+            "objects" or
+            "scenarios" or
+            "formatCells" or
+            "formatColumns" or
+            "formatRows" or
+            "insertColumns" or
+            "insertRows" or
+            "insertHyperlinks" or
+            "deleteColumns" or
+            "deleteRows" or
+            "selectLockedCells" or
+            "sort" or
+            "autoFilter" or
+            "pivotTables" or
+            "selectUnlockedCells";
+
+    private static void AddWorksheetProtectedRangesIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetProtectedRangesReference protectedRangesReference,
+        List<string> issues)
+    {
+        var protectedRanges = protectedRangesReference.Element;
+        var description = $"protectedRanges #{protectedRangesReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            protectedRanges,
+            description,
+            [
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            protectedRanges,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in protectedRanges.Elements().Where(element => element.Name != SpreadsheetNs + "protectedRange"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected protectedRange entries only");
+        }
+
+        var protectedRangeElements = protectedRanges.Elements(SpreadsheetNs + "protectedRange").ToArray();
+        if (protectedRangeElements.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no protectedRange entries");
+
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenRanges = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var protectedRange in protectedRangeElements.Select((element, index) => new WorksheetProtectedRangeReference(index + 1, element)))
+        {
+            AddWorksheetProtectedRangeIssues(worksheetPart, description, protectedRange, seenNames, seenRanges, issues);
+        }
+    }
+
+    private static void AddWorksheetProtectedRangeIssues(
+        string worksheetPart,
+        string protectedRangesDescription,
+        WorksheetProtectedRangeReference protectedRangeReference,
+        HashSet<string> seenNames,
+        HashSet<string> seenRanges,
+        List<string> issues)
+    {
+        var protectedRange = protectedRangeReference.Element;
+        var description = $"{protectedRangesDescription} protectedRange #{protectedRangeReference.Ordinal}";
+
+        var sqref = protectedRange.Attribute("sqref")?.Value;
+        if (string.IsNullOrWhiteSpace(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has no sqref");
+        }
+        else if (!IsValidPackageSqref(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid sqref '{sqref}'");
+        }
+        else
+        {
+            var normalizedSqref = NormalizePackageSqref(sqref);
+            if (!seenRanges.Add(normalizedSqref))
+                issues.Add($"{worksheetPart} {protectedRangesDescription} has duplicate protectedRange sqref '{normalizedSqref}'");
+        }
+
+        var name = protectedRange.Attribute("name")?.Value;
+        if (protectedRange.Attribute("name") is not null)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                issues.Add($"{worksheetPart} {description} has blank name");
+            }
+            else if (!seenNames.Add(name.Trim()))
+            {
+                issues.Add($"{worksheetPart} {protectedRangesDescription} has duplicate protectedRange name '{name}'");
+            }
+        }
+
+        AddOptionalWorksheetMetadataNonEmptyAttributeIssue(worksheetPart, description, "password", protectedRange.Attribute("password")?.Value, issues);
+        AddOptionalWorksheetMetadataNonEmptyAttributeIssue(worksheetPart, description, "securityDescriptor", protectedRange.Attribute("securityDescriptor")?.Value, issues);
+        AddOptionalWorksheetMetadataNonEmptyAttributeIssue(worksheetPart, description, "algorithmName", protectedRange.Attribute("algorithmName")?.Value, issues);
+        AddOptionalWorksheetMetadataNonEmptyAttributeIssue(worksheetPart, description, "hashValue", protectedRange.Attribute("hashValue")?.Value, issues);
+        AddOptionalWorksheetMetadataNonEmptyAttributeIssue(worksheetPart, description, "saltValue", protectedRange.Attribute("saltValue")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "spinCount", protectedRange.Attribute("spinCount")?.Value, issues);
+
+        var extensionLists = protectedRange.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetProtectedRangeExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+
+        foreach (var unexpectedChild in protectedRange.Elements().Where(element => element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+    }
+
+    private static void AddWorksheetProtectedRangeExtensionListIssues(
+        string worksheetPart,
+        string protectedRangeDescription,
+        int ordinal,
+        XElement extensionList,
+        List<string> issues)
+    {
+        var description = $"{protectedRangeDescription} extLst #{ordinal}";
+        var extensions = extensionList.Elements(SpreadsheetNs + "ext").ToArray();
+        if (extensions.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no ext entries");
+
+        var seenUris = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var extension in extensions.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            var extensionDescription = $"{description} ext #{extension.Ordinal}";
+            var uri = extension.Element.Attribute("uri")?.Value;
+            if (string.IsNullOrWhiteSpace(uri))
+                issues.Add($"{worksheetPart} {extensionDescription} has no uri");
+            else if (!seenUris.Add(uri.Trim()))
+                issues.Add($"{worksheetPart} {description} has duplicate ext uri '{uri}'");
+        }
+
+        foreach (var unexpectedChild in extensionList.Elements().Where(element => element.Name != SpreadsheetNs + "ext"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected ext entries only");
+        }
+    }
+
+    private static void AddOptionalWorksheetMetadataNonEmptyAttributeIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (value is null || !string.IsNullOrWhiteSpace(value))
+            return;
+
+        issues.Add($"{worksheetPart} {description} has blank {attributeName} attribute");
+    }
+
+    private static void ThrowInvalidWorksheetProtectionMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet protection metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetSheetViewsMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -15028,6 +15372,18 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetCalculationPropertiesReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSheetProtectionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetProtectedRangesReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetProtectedRangeReference(
         int Ordinal,
         XElement Element);
 
