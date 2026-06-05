@@ -997,7 +997,16 @@ public sealed partial class XlsxFileAdapter
                     return false;
                 }
 
-                if (root.Element(workbookNs + "legacyDrawingHF") is not null)
+                var headerFooterVmlDrawings = root.Elements(workbookNs + "legacyDrawingHF").ToList();
+                if (headerFooterVmlDrawings.Count > 1 ||
+                    (headerFooterVmlDrawings.Count == 1 &&
+                     !TryAddPatchSafeHeaderFooterVmlDrawingPaths(
+                         archive,
+                         worksheetPath,
+                         worksheetXml,
+                         headerFooterVmlDrawings[0],
+                         sheet,
+                         allowedVmlDrawingPaths)))
                 {
                     blockReason = "package_guard_header_footer_vml";
                     return false;
@@ -1623,6 +1632,63 @@ public sealed partial class XlsxFileAdapter
             }
 
             allowedVmlDrawingPaths.Add(vmlPath);
+            return true;
+        }
+
+        private static bool TryAddPatchSafeHeaderFooterVmlDrawingPaths(
+            ZipArchive archive,
+            string worksheetPath,
+            XDocument worksheetXml,
+            XElement legacyDrawing,
+            Sheet sheet,
+            HashSet<string> allowedVmlDrawingPaths)
+        {
+            if (!XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet))
+                return false;
+
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relationshipId = legacyDrawing.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(relationshipId))
+                return false;
+
+            var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (relationshipsEntry is null)
+                return false;
+
+            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            var relationshipsRoot = relationshipsXml.Root;
+            if (relationshipsRoot is null)
+                return false;
+
+            var relationships = relationshipsRoot.Elements(packageRelNs + "Relationship").ToList();
+            if (!TryGetRelationship(relationships, relationshipId, VmlDrawingRelationshipType, out var target))
+                return false;
+
+            var vmlPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
+            var fileName = vmlPath[(vmlPath.LastIndexOf('/') + 1)..];
+            if (!vmlPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+                vmlPath.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) ||
+                !fileName.StartsWith("vmlDrawing", StringComparison.OrdinalIgnoreCase) ||
+                !vmlPath.EndsWith(".vml", StringComparison.OrdinalIgnoreCase) ||
+                archive.GetEntry(vmlPath) is null)
+            {
+                return false;
+            }
+
+            var vmlRelsPath = XlsxPackagePath.GetRelationshipPartPath(vmlPath);
+            if (archive.GetEntry(vmlRelsPath) is not { } vmlRelsEntry ||
+                !IsValidRelationshipPart(vmlRelsEntry))
+            {
+                return false;
+            }
+
+            var sourcePictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
+            if (!XlsxHeaderFooterPicturePackagePlanner.PictureSetsEqual(sourcePictures, sheet))
+                return false;
+
+            allowedVmlDrawingPaths.Add(vmlPath);
+            allowedVmlDrawingPaths.Add(vmlRelsPath);
             return true;
         }
 
