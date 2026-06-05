@@ -541,6 +541,32 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_UrlQueryParameterValue_ExtractsSemicolonSeparatedDecodedParameterValue()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?q=road+bike;sort=asc", "road bike"),
+                ("https://fabrikam.example/find?sort=desc;q=gravel%20bike#results", "gravel bike")
+            ],
+            ["https://northwind.example/catalog?sort=popular;q=electric%20cargo+bike"]);
+
+        result.Should().BeEquivalentTo(["electric cargo bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlQueryParameterValue_PreservesEncodedSemicolonsInsideValues()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?q=road%3Bbike;sort=asc", "road;bike"),
+                ("https://fabrikam.example/find?sort=desc;q=gravel%3Bbike#results", "gravel;bike")
+            ],
+            ["https://northwind.example/catalog?sort=popular;q=electric%3Bcargo+bike"]);
+
+        result.Should().BeEquivalentTo(["electric;cargo bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_UrlQueryParameterValue_HandlesBareWebAddressesWithQueryStrings()
     {
         var result = FlashFillService.Fill(
