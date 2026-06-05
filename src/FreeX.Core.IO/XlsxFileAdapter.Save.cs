@@ -35,6 +35,7 @@ public sealed partial class XlsxFileAdapter
             : patchDiagnostics;
 
         using var xlWorkbook = new XLWorkbook();
+        XlsxClosedXmlCellMapper.ApplyStyle(xlWorkbook.Style, workbook.GetStyle(StyleId.Default));
         xlWorkbook.CalculateMode = workbook.CalculationMode == WorkbookCalculationMode.Manual
             ? XLCalculateMode.Manual
             : XLCalculateMode.Auto;
@@ -43,6 +44,7 @@ public sealed partial class XlsxFileAdapter
         foreach (var sheet in workbook.Sheets)
         {
             var xlSheet = xlWorkbook.Worksheets.Add(sheet.Name);
+            XlsxClosedXmlCellMapper.ApplyStyle(xlSheet.Style, workbook.GetStyle(StyleId.Default));
             xlSheet.Visibility = sheet.IsVeryHidden
                 ? XLWorksheetVisibility.VeryHidden
                 : sheet.IsHidden ? XLWorksheetVisibility.Hidden : XLWorksheetVisibility.Visible;

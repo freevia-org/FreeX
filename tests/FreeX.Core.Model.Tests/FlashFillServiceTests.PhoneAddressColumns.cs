@@ -642,6 +642,67 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeEquivalentTo([firstExpected, secondExpected], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData(".", "alan.m.turing@contoso.com", "katherine.c.johnson@contoso.com")]
+    [InlineData("_", "alan_m_turing@contoso.com", "katherine_c_johnson@contoso.com")]
+    [InlineData("-", "alan-m-turing@contoso.com", "katherine-c-johnson@contoso.com")]
+    public void FillFromColumns_ThreeSourceMiddleInitialEmail_LearnsSeparatedAliasAndConstantDomain(
+        string separator,
+        string firstExpected,
+        string secondExpected)
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            [$"ada{separator}b{separator}lovelace@contoso.com", $"grace{separator}b{separator}hopper@contoso.com"],
+            [
+                ["Alan", "Mathison", "Turing"],
+                ["Katherine", "Coleman", "Johnson"]
+            ]);
+
+        result.Should().BeEquivalentTo([firstExpected, secondExpected], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_ThreeSourceMiddleInitialEmail_LearnsCompactFirstMiddleInitialLastAndConstantDomain()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["adablovelace@contoso.com", "gracebhopper@contoso.com"],
+            [
+                ["Alan", "Mathison", "Turing"],
+                ["Katherine", "Coleman", "Johnson"]
+            ]);
+
+        result.Should().BeEquivalentTo(
+            ["alanmturing@contoso.com", "katherinecjohnson@contoso.com"],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_ThreeSourceMiddleInitialEmail_LearnsCompactInitialsLastAndConstantDomain()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["ablovelace@contoso.com", "gbhopper@contoso.com"],
+            [
+                ["Alan", "Mathison", "Turing"],
+                ["Katherine", "Coleman", "Johnson"]
+            ]);
+
+        result.Should().BeEquivalentTo(
+            ["amturing@contoso.com", "kcjohnson@contoso.com"],
+            o => o.WithStrictOrdering());
+    }
+
     [Fact]
     public void FillFromColumns_ThreeSourceFirstInitialLastEmail_LearnsConstantDomain()
     {
@@ -694,6 +755,60 @@ public sealed partial class FlashFillServiceTests
             ]);
 
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public void FillFromColumns_ThreeSourceMiddleInitialEmail_ReturnsNullWhenExampleDomainsDiffer()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["ada.b.lovelace@contoso.com", "grace.b.hopper@example.org"],
+            [
+                ["Alan", "Mathison", "Turing"]
+            ]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void FillFromColumns_ThreeSourceMiddleInitialEmail_ReturnsNullWhenRemainingMissingOrBlankMiddleOrLast()
+    {
+        var missingLastResult = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["ada.b.lovelace@contoso.com", "grace.b.hopper@contoso.com"],
+            [
+                ["Alan", "Mathison"]
+            ]);
+
+        var blankMiddleResult = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["ada.b.lovelace@contoso.com", "grace.b.hopper@contoso.com"],
+            [
+                ["Alan", "", "Turing"]
+            ]);
+
+        var blankLastResult = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["ada.b.lovelace@contoso.com", "grace.b.hopper@contoso.com"],
+            [
+                ["Alan", "Mathison", ""]
+            ]);
+
+        missingLastResult.Should().BeNull();
+        blankMiddleResult.Should().BeNull();
+        blankLastResult.Should().BeNull();
     }
 
     [Fact]

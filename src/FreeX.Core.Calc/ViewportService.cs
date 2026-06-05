@@ -515,7 +515,8 @@ public sealed partial class ViewportService : IViewportService
                             sourceSheet,
                             cell,
                             ref style,
-                            EstimateCharacterWidth(sourceSheet.ColumnWidths.GetValueOrDefault(col, sourceSheet.DefaultColumnWidth))),
+                            EstimateCharacterWidth(ColumnWidthToPixels(
+                                sourceSheet.ColumnWidths.GetValueOrDefault(col, sourceSheet.DefaultColumnWidth)))),
                         cell.Value));
                 }
             }
@@ -805,7 +806,31 @@ public sealed partial class ViewportService : IViewportService
         return true;
     }
 
-    private static int EstimateCharacterWidth(double pixelWidth) =>
-        Math.Max(1, (int)Math.Round(pixelWidth / 8.0, MidpointRounding.AwayFromZero));
+    private static double GetDefaultColumnWidthPixels(Sheet sheet) =>
+        Math.Max(1, ColumnWidthToPixels(sheet.DefaultColumnWidth));
+
+    private static double GetColumnWidthPixels(Sheet sheet, uint col) =>
+        Math.Max(1, ColumnWidthToPixels(sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth)));
+
+    private static double ColumnWidthToPixels(double width)
+    {
+        if (!double.IsFinite(width) || width <= 0)
+            return 0;
+
+        return width < 1
+            ? Math.Round(width * 12.0, MidpointRounding.AwayFromZero)
+            : Math.Round(width * 7.0 + 5.0, MidpointRounding.AwayFromZero);
+    }
+
+    private static int EstimateCharacterWidth(double pixelWidth)
+    {
+        if (!double.IsFinite(pixelWidth) || pixelWidth <= 0)
+            return 1;
+
+        var width = pixelWidth <= 12
+            ? pixelWidth / 12.0
+            : (pixelWidth - 5.0) / 7.0;
+        return Math.Max(1, (int)Math.Round(width, MidpointRounding.AwayFromZero));
+    }
 
 }

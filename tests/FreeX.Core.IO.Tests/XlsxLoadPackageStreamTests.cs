@@ -208,6 +208,56 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void ClosedXmlLoadSanitizer_RemovesChartSheetDrawingReferencesFromTransientPackage()
+    {
+        using var package = CreatePackageWithChartSheetDrawingReferences();
+        var hints = new XlsxClosedXmlLoadSanitizationHints(
+            HasPivotPackageMetadata: false,
+            HasChartExChartParts: false,
+            HasDrawingPackageParts: true,
+            HasConditionalFormattingBlocks: false,
+            HasUnsupportedConditionalFormattingBlocks: false,
+            HasWorksheetDynamicFilters: false,
+            MergeCellWorksheetPathsToStrip: null);
+
+        var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
+            package,
+            removeUnsupportedConditionalFormatting: false,
+            removeAllConditionalFormatting: false,
+            hints);
+
+        try
+        {
+            sanitized.Should().NotBeSameAs(package);
+            using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
+            archive.GetEntry("xl/drawings/drawing1.xml").Should().BeNull();
+            archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels").Should().BeNull();
+            archive.GetEntry("xl/charts/chart1.xml").Should().BeNull();
+            archive.GetEntry("xl/chartsheets/sheet1.xml").Should().NotBeNull();
+
+            XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            LoadPackageXml(archive, "xl/chartsheets/sheet1.xml")
+                .Root!
+                .Elements(sheetNs + "drawing")
+                .Should()
+                .BeEmpty();
+
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            LoadPackageXml(archive, "xl/chartsheets/_rels/sheet1.xml.rels")
+                .Root!
+                .Elements(packageRelNs + "Relationship")
+                .Select(relationship => relationship.Attribute("Target")?.Value)
+                .Should()
+                .NotContain("../drawings/drawing1.xml");
+        }
+        finally
+        {
+            if (!ReferenceEquals(sanitized, package))
+                sanitized.Dispose();
+        }
+    }
+
+    [Fact]
     public void ClosedXmlLoadSanitizer_FusesStyleOnlyStripAndDrawingCleanup()
     {
         using var package = CreatePackageWithDrawingReferences();
@@ -684,6 +734,63 @@ public sealed class XlsxLoadPackageStreamTests
             var imageEntry = archive.CreateEntry("xl/media/image1.png", CompressionLevel.Optimal);
             using var imageStream = imageEntry.Open();
             imageStream.Write([0x89, 0x50, 0x4E, 0x47]);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static MemoryStream CreatePackageWithChartSheetDrawingReferences()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(
+                archive,
+                "[Content_Types].xml",
+                """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/chartsheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml"/>
+                  <Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
+                  <Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>
+                </Types>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/chartsheets/sheet1.xml",
+                """
+                <chartsheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+                  <drawing r:id="rIdDrawing"/>
+                </chartsheet>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/chartsheets/_rels/sheet1.xml.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdDrawing" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/drawings/drawing1.xml",
+                """
+                <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/drawings/_rels/drawing1.xml.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdChart" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(archive, "xl/charts/chart1.xml", "<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"/>");
         }
 
         package.Position = 0;

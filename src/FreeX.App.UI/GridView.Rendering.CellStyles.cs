@@ -8,6 +8,10 @@ namespace FreeX.App.UI;
 public partial class GridView
 {
     private readonly record struct CellTypefaceKey(string FontName, bool Italic, bool Bold);
+    private static readonly Lazy<HashSet<string>> AvailableCellFontNames = new(() =>
+        Fonts.SystemFontFamilies
+            .Select(font => font.Source)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase));
 
     private static void DrawBorderEdge(
         DrawingContext dc,
@@ -211,10 +215,23 @@ public partial class GridView
 
     private static CellTypefaceKey CreateCellTypefaceKey(CellStyle? style)
     {
-        var fontName = string.IsNullOrWhiteSpace(style?.FontName)
-            ? "Calibri"
-            : style!.FontName;
+        var fontName = ResolveCellFontNameForDisplay(style?.FontName);
         return new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true);
+    }
+
+    internal static string ResolveCellFontNameForDisplay(string? fontName) =>
+        ResolveCellFontNameForDisplay(fontName, AvailableCellFontNames.Value.Contains);
+
+    internal static string ResolveCellFontNameForDisplay(string? fontName, Func<string, bool> isAvailable)
+    {
+        var requested = string.IsNullOrWhiteSpace(fontName) ? "Calibri" : fontName.Trim();
+        if (isAvailable(requested))
+            return requested;
+
+        return string.Equals(requested, "Aptos Narrow", StringComparison.OrdinalIgnoreCase) &&
+            isAvailable("Calibri")
+                ? "Calibri"
+                : requested;
     }
 
     private static Typeface CreateCellTypeface(CellTypefaceKey key)
