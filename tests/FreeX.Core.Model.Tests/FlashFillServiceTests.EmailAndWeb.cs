@@ -1065,6 +1065,74 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_UrlQueryParameterNameTitle_TitleizesDecodedQueryParameterNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?product-category=powder-skis&sort=popular", "Product Category"),
+                ("https://shop.example.com/search?shipping_option=ground&sort=popular", "Shipping Option")
+            ],
+            ["https://shop.example.com/search?promoCode=spring&sort=popular"]);
+
+        result.Should().BeEquivalentTo(["Promo Code"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlQueryParameterNameTitle_TitleizesPercentAndPlusDecodedNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?product+category=powder-skis&sort=popular", "Product Category"),
+                ("https://shop.example.com/search?shipping%20option=ground&sort=popular", "Shipping Option")
+            ],
+            [
+                "https://shop.example.com/search?promo_code=spring&sort=popular",
+                "https://shop.example.com/search?discountRate=10&sort=popular"
+            ]);
+
+        result.Should().BeEquivalentTo(["Promo Code", "Discount Rate"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlQueryParameterNameTitle_ReturnsNullForMissingOrEmptyQueryName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?product-category=powder-skis&sort=popular", "Product Category"),
+                ("https://shop.example.com/search?shipping_option=ground&sort=popular", "Shipping Option")
+            ],
+            ["https://shop.example.com/search?=spring&sort=popular"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_UrlQueryParameterNameTitle_ReturnsNullForMultipleMatchingExampleCandidates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?product-category=powder-skis&product_category=skis", "Product Category"),
+                ("https://shop.example.com/search?shipping-option=ground&shipping_option=air", "Shipping Option")
+            ],
+            ["https://shop.example.com/search?promoCode=spring&sort=popular"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_UrlQueryParameterNameTitle_LeavesRawQueryNameExtractionPrecedence()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?product+category=powder-skis&sort=popular", "product category"),
+                ("https://shop.example.com/search?shipping%20option=ground&sort=popular", "shipping option")
+            ],
+            ["https://shop.example.com/search?promo+code=spring&sort=popular"]);
+
+        result.Should().BeEquivalentTo(["promo code"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_UrlFirstQueryParameterValue_TakesPrecedenceWhenLastNameAlsoMatchesExamples()
     {
         var result = FlashFillService.Fill(
