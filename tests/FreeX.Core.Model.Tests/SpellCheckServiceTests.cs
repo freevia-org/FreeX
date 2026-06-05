@@ -984,6 +984,42 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversEnergyUtilitiesVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "ELECTRICTY generaton Transmision distrubution substaton meterng griddd voltagee waterr sewerr pipelinee emisson sustainablity. Keep electricty_id, https://electricty.example.com/generaton, utility@pipelinee.example.com, \"C:\\substaton folder\\voltagee file.xlsx\", and [C:\\meterng folder\\sustainablity file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("ELECTRICTY", "ELECTRICITY"),
+            ("generaton", "generation"),
+            ("Transmision", "Transmission"),
+            ("distrubution", "distribution"),
+            ("substaton", "substation"),
+            ("meterng", "metering"),
+            ("griddd", "grid"),
+            ("voltagee", "voltage"),
+            ("waterr", "water"),
+            ("sewerr", "sewer"),
+            ("pipelinee", "pipeline"),
+            ("emisson", "emission"),
+            ("sustainablity", "sustainability"));
+        plan.IssueCount.Should().Be(13);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "ELECTRICITY generation Transmission distribution substation metering grid voltage water sewer pipeline emission sustainability. Keep electricty_id, https://electricty.example.com/generaton, utility@pipelinee.example.com, \"C:\\substaton folder\\voltagee file.xlsx\", and [C:\\meterng folder\\sustainablity file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(13);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
