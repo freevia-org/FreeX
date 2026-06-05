@@ -296,6 +296,62 @@ public static partial class FlashFillService
 
     private static Func<string, string?>? TryDateNormalization(IReadOnlyList<(string Source, string Expected)> examples)
     {
+        return TryDateQuarterExtraction(examples)
+            ?? TryDateValueNormalization(examples);
+    }
+
+    private static Func<string, string?>? TryDateQuarterExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (source, expected) in examples)
+        {
+            if (!TryParseQuarterOutput(expected, out var expectedQuarter) ||
+                !TryParseDateQuarterSource(source, out var sourceQuarter) ||
+                sourceQuarter != expectedQuarter)
+            {
+                return null;
+            }
+        }
+
+        return source => TryParseDateQuarterSource(source, out var quarter)
+            ? FormatQuarter(quarter)
+            : null;
+    }
+
+    private static bool TryParseDateQuarterSource(string source, out int quarter)
+    {
+        if (TryParseDateLikeValue(source, out var date, out _) ||
+            TryFindEmbeddedDateLikeValue(source, out date, out _))
+        {
+            quarter = GetCalendarQuarter(date.Month);
+            return true;
+        }
+
+        quarter = 0;
+        return false;
+    }
+
+    private static bool TryParseQuarterOutput(string expected, out int quarter)
+    {
+        if (expected.Length == 2 &&
+            expected[0] == 'Q' &&
+            expected[1] is >= '1' and <= '4')
+        {
+            quarter = expected[1] - '0';
+            return true;
+        }
+
+        quarter = 0;
+        return false;
+    }
+
+    private static int GetCalendarQuarter(int month) =>
+        ((month - 1) / 3) + 1;
+
+    private static string FormatQuarter(int quarter) =>
+        "Q" + quarter.ToString(CultureInfo.InvariantCulture);
+
+    private static Func<string, string?>? TryDateValueNormalization(IReadOnlyList<(string Source, string Expected)> examples)
+    {
         DateOutputPattern? outputPattern = null;
         var changedAny = false;
 

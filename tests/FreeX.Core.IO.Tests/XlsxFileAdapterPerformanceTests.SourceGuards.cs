@@ -234,7 +234,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasChartExChartParts");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasDrawingPackageParts");
         sanitizerSource.Should().Contain("RemoveDrawingPackageParts(archive)");
-        sanitizerSource.Should().Contain("RemoveWorksheetDrawingReferences(archive)");
+        sanitizerSource.Should().Contain("RemoveSheetDrawingReferences(archive)");
         sanitizerSource.Should().Contain("RemoveContentTypeOverrides(archive, removedParts)");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters");

@@ -131,13 +131,24 @@ public static partial class NumberFormatter
     {
         if (sections.Length == 1 && (sections[0].Length == 0 || sections[0][0] != '['))
         {
+            // A single-section format applies to negatives by formatting the MAGNITUDE and prepending a
+            // leading minus to the whole result (so "-" sits before any prefix: -¥12.30, not ¥-12.30).
+            // For prefix-free formats this is identical to the inline minus, so plain formats are unaffected.
+            var sign = "";
+            var magnitude = value;
+            if (value < 0)
+            {
+                sign = "-";
+                magnitude = -value;
+            }
+
             var singleSectionText = sections[0] == ""
                 ? ""
-                : TryFormatPlainNumericSection(value, sections[0], out var plainNumericText)
+                : TryFormatPlainNumericSection(magnitude, sections[0], out var plainNumericText)
                     ? plainNumericText
-                    : ApplyNumericFormat(value, sections[0]);
+                    : ApplyNumericFormat(magnitude, sections[0]);
             singleSectionText = ApplyAccountingTargetWidth(singleSectionText, sections[0], targetWidthCharacters);
-            return new FormatResult(singleSectionText);
+            return new FormatResult(sign + singleSectionText);
         }
 
         var parsedSections = ParseSections(sections, indexedColors, theme, out var hasConditions);

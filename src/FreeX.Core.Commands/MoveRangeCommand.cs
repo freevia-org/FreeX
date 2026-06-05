@@ -9,7 +9,9 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private readonly GridRange _sourceRange;
     private readonly CellAddress _destination;
     private IReadOnlyList<CellAddress> _affectedCells = [];
+    private IReadOnlyList<CellAddress> _payloadAffectedCells = [];
     private List<CellSnapshot>? _snapshot;
+    private Dictionary<CellAddress, string>? _formulaSnapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
@@ -55,7 +57,9 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         if (targetRange == _sourceRange)
         {
             _affectedCells = [];
+            _payloadAffectedCells = [];
             _snapshot = [];
+            _formulaSnapshot = [];
             return new CommandOutcome(true, AffectedCells: _affectedCells);
         }
 
@@ -79,12 +83,20 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             }
         }
 
-        var payloads = CaptureSourcePayloads(sheet, _sourceRange, _destination);
         _snapshot = CaptureCellSnapshots(sheet, affected);
         _commentSnapshot = CaptureDictionary(sheet.Comments, affected);
         _threadedCommentSnapshot = CaptureDictionary(sheet.ThreadedComments, affected);
         _hyperlinkSnapshot = CaptureDictionary(sheet.Hyperlinks, affected);
         _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, affected);
+        _payloadAffectedCells = affected;
+
+        _formulaSnapshot = [];
+        RowColumnShiftHelpers.RewriteAllFormulas(
+            ctx.Workbook,
+            CreateMoveRangeOp(sheet, _sourceRange, _destination),
+            _formulaSnapshot);
+
+        var payloads = CaptureSourcePayloads(sheet, _sourceRange, _destination);
 
         foreach (var address in affected)
             ClearAddress(sheet, address);
@@ -92,7 +104,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         foreach (var payload in payloads)
             WritePayload(sheet, payload);
 
-        _affectedCells = affected;
+        _affectedCells = MergeAffectedCells(affected, _formulaSnapshot.Keys);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
@@ -102,13 +114,16 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (_formulaSnapshot is not null)
+            RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+
         foreach (var snapshot in _snapshot)
             RestoreCellSnapshot(sheet, snapshot);
 
-        RestoreDictionary(sheet.Comments, _commentSnapshot, _affectedCells);
-        RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot, _affectedCells);
-        RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, _affectedCells);
-        RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, _affectedCells);
+        RestoreDictionary(sheet.Comments, _commentSnapshot, _payloadAffectedCells);
+        RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot, _payloadAffectedCells);
+        RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, _payloadAffectedCells);
+        RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, _payloadAffectedCells);
     }
 
     private static IReadOnlyList<CellAddress> CreateAffectedCellList(GridRange sourceRange, GridRange targetRange)
@@ -135,7 +150,6 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         var payloads = new List<MovePayload>(GetSafeListCapacity(sourceRange.CellCount));
         var rowDelta = (long)destination.Row - sourceRange.Start.Row;
         var colDelta = (long)destination.Col - sourceRange.Start.Col;
-        var pasteOffset = new PasteOffsetOp(checked((int)rowDelta), checked((int)colDelta));
 
         foreach (var source in sourceRange.AllCells())
         {
@@ -145,11 +159,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                 checked((uint)(source.Col + colDelta)));
             var cell = sheet.GetCell(source)?.Clone();
             if (cell?.FormulaText is { } formulaText)
-            {
-                cell.FormulaText =
-                    FormulaRewriter.Rewrite(formulaText, pasteOffset, sheet.Name)
-                    ?? formulaText;
-            }
+                cell.FormulaText = formulaText;
 
             payloads.Add(new MovePayload(
                 target,
@@ -164,6 +174,41 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         }
 
         return payloads;
+    }
+
+    private static MoveRangeOp CreateMoveRangeOp(Sheet sheet, GridRange sourceRange, CellAddress destination)
+    {
+        var rowDelta = checked((int)((long)destination.Row - sourceRange.Start.Row));
+        var colDelta = checked((int)((long)destination.Col - sourceRange.Start.Col));
+        return new MoveRangeOp(
+            sheet.Name,
+            sourceRange.Start.Row,
+            sourceRange.Start.Col,
+            sourceRange.End.Row,
+            sourceRange.End.Col,
+            rowDelta,
+            colDelta);
+    }
+
+    private static IReadOnlyList<CellAddress> MergeAffectedCells(
+        IReadOnlyList<CellAddress> movedCells,
+        IEnumerable<CellAddress> formulaCells)
+    {
+        var seen = new HashSet<CellAddress>();
+        var affected = new List<CellAddress>(movedCells.Count);
+        foreach (var address in movedCells)
+        {
+            if (seen.Add(address))
+                affected.Add(address);
+        }
+
+        foreach (var address in formulaCells)
+        {
+            if (seen.Add(address))
+                affected.Add(address);
+        }
+
+        return affected;
     }
 
     private static List<CellSnapshot> CaptureCellSnapshots(Sheet sheet, IReadOnlyList<CellAddress> addresses)

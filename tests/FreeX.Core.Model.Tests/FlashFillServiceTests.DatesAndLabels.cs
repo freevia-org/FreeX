@@ -237,6 +237,71 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_DateQuarterExtraction_FormatsNumericDateSources()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("2023-02-09", "Q1"),
+                ("8/15/2023", "Q3")
+            ],
+            ["11.05.2023", "2024-04-01"]);
+
+        result.Should().BeEquivalentTo(["Q4", "Q2"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateQuarterExtraction_FormatsMonthNameDateSources()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("9 February 2023", "Q1"),
+                ("August 15, 2023", "Q3")
+            ],
+            ["October 5 2024", "2022 May 31"]);
+
+        result.Should().BeEquivalentTo(["Q4", "Q2"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateQuarterExtraction_FormatsEmbeddedLabeledDateSources()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ship date: 2023-02-09", "Q1"),
+                ("Due date: August 15, 2023", "Q3")
+            ],
+            ["Renewal date: October 5 2024 confirmed", "Review date: 2024-04-01"]);
+
+        result.Should().BeEquivalentTo(["Q4", "Q2"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateQuarterExtraction_ReturnsNullWhenRemainingIsInvalidDate()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("2023-02-09", "Q1"),
+                ("8/15/2023", "Q3")
+            ],
+            ["2023-02-30"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_DateQuarterExtraction_ReturnsNullWhenRemainingHasMultipleDates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ship date: 2023-02-09", "Q1"),
+                ("Due date: August 15, 2023", "Q3")
+            ],
+            ["Window: 2023-02-09 to 2023-08-15"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_EmbeddedDateExtraction_NormalizesDateInsideLabels()
     {
         var result = FlashFillService.Fill(
@@ -477,6 +542,54 @@ public sealed partial class FlashFillServiceTests
             [remaining]);
 
         result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("Project (Old) (North)", "North", "Task (Archive) (South)", "South", "Case (Draft) (West)", "West")]
+    [InlineData("Project [Old] [North]", "North", "Task [Archive] [South]", "South", "Case [Draft] [West]", "West")]
+    [InlineData("Project {Old} {North}", "North", "Task {Archive} {South}", "South", "Case {Draft} {West}", "West")]
+    [InlineData("Project \"Old\" \"North\"", "North", "Task \"Archive\" \"South\"", "South", "Case \"Draft\" \"West\"", "West")]
+    [InlineData("Project 'Old' 'North'", "North", "Task 'Archive' 'South'", "South", "Case 'Draft' 'West'", "West")]
+    [InlineData("Project <Old> <North>", "North", "Task <Archive> <South>", "South", "Case <Draft> <West>", "West")]
+    public void Fill_PairedDelimiterExtraction_ExtractsLastMatchingQualifierWhenExamplesRequireIt(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PairedDelimiterExtraction_KeepsFirstMatchingQualifierWhenExamplesUseFirstPair()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Project (Old) (North)", "Old"),
+                ("Task (Archive) (South)", "Archive")
+            ],
+            ["Case (Draft) (West)"]);
+
+        result.Should().BeEquivalentTo(["Draft"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PairedDelimiterExtraction_ReturnsNullWhenLastQualifierPatternHasNoNonEmptyPair()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Project (Old) (North)", "North"),
+                ("Task (Archive) (South)", "South")
+            ],
+            ["Case ()"]);
+
+        result.Should().BeNull();
     }
 
     [Fact]

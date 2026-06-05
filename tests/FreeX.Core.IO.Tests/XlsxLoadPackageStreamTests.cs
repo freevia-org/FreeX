@@ -159,6 +159,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -208,9 +209,9 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
-    public void ClosedXmlLoadSanitizer_RemovesChartSheetDrawingReferencesFromTransientPackage()
+    public void ClosedXmlLoadSanitizer_RemovesDrawingPackagePartsFromChartsheetPackage()
     {
-        using var package = CreatePackageWithChartSheetDrawingReferences();
+        using var package = CreatePackageWithChartsheetDrawingReferences();
         var hints = new XlsxClosedXmlLoadSanitizationHints(
             HasPivotPackageMetadata: false,
             HasChartExChartParts: false,
@@ -218,6 +219,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -229,32 +231,41 @@ public sealed class XlsxLoadPackageStreamTests
         try
         {
             sanitized.Should().NotBeSameAs(package);
-            using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
-            archive.GetEntry("xl/drawings/drawing1.xml").Should().BeNull();
-            archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels").Should().BeNull();
-            archive.GetEntry("xl/charts/chart1.xml").Should().BeNull();
-            archive.GetEntry("xl/chartsheets/sheet1.xml").Should().NotBeNull();
-
-            XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            LoadPackageXml(archive, "xl/chartsheets/sheet1.xml")
-                .Root!
-                .Elements(sheetNs + "drawing")
-                .Should()
-                .BeEmpty();
-
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-            LoadPackageXml(archive, "xl/chartsheets/_rels/sheet1.xml.rels")
-                .Root!
-                .Elements(packageRelNs + "Relationship")
-                .Select(relationship => relationship.Attribute("Target")?.Value)
-                .Should()
-                .NotContain("../drawings/drawing1.xml");
+            AssertChartsheetDrawingPackageCleaned(sanitized);
         }
         finally
         {
             if (!ReferenceEquals(sanitized, package))
                 sanitized.Dispose();
         }
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_FusesStyleOnlyStripAndChartsheetDrawingCleanup()
+    {
+        using var package = CreatePackageWithChartsheetDrawingReferences();
+        var hints = new XlsxClosedXmlLoadSanitizationHints(
+            HasPivotPackageMetadata: false,
+            HasChartExChartParts: false,
+            HasDrawingPackageParts: true,
+            HasConditionalFormattingBlocks: false,
+            HasUnsupportedConditionalFormattingBlocks: false,
+            HasWorksheetDynamicFilters: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
+            MergeCellWorksheetPathsToStrip: null);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
+            package,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "xl/worksheets/sheet1.xml"
+            },
+            removeUnsupportedConditionalFormatting: false,
+            removeAllConditionalFormatting: false,
+            hints);
+
+        sanitized.Should().NotBeSameAs(package);
+        AssertChartsheetDrawingPackageCleaned(sanitized);
     }
 
     [Fact]
@@ -268,6 +279,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -324,6 +336,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -340,6 +353,30 @@ public sealed class XlsxLoadPackageStreamTests
         archive.GetEntry("xl/charts/chart1.xml").Should().BeNull();
         archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull();
         archive.GetEntry("xl/media/image1.png").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_NormalizesMalformedDocumentPropertyRootRelationships()
+    {
+        using var package = CreatePackageWithMalformedDocumentPropertyRootRelationship();
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(package);
+
+        sanitized.Should().NotBeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationships = LoadPackageXml(archive, "_rels/.rels")
+            .Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship => string.Equals(
+                relationship.Attribute("Target")?.Value?.TrimStart('/'),
+                "docProps/core.xml",
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        relationships.Should().ContainSingle();
+        relationships[0].Attribute("Type")!.Value.Should().Be(
+            "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties");
+        relationships[0].Attribute("Target")!.Value.Should().Be("docProps/core.xml");
     }
 
     [Fact]
@@ -372,6 +409,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
             HasWorksheetDynamicFilters: false,
+            HasDocumentPropertiesPackageGraphIssues: false,
             MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "xl/worksheets/sheet1.xml"
@@ -644,6 +682,39 @@ public sealed class XlsxLoadPackageStreamTests
     private static MemoryStream CreatePackageWithWorksheet(string worksheetXml, bool includeLargePayload)
         => CreatePackageWithWorksheets([("xl/worksheets/sheet1.xml", worksheetXml)], includeLargePayload);
 
+    private static MemoryStream CreatePackageWithMalformedDocumentPropertyRootRelationship()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(
+                archive,
+                "_rels/.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="/xl/workbook.xml"/>
+                  <Relationship Id="rIdMalformedCore" Type="http://schemas.openxmlformats.org/package/2006/relationships/meatadata/core-properties" Target="/docProps/core.xml"/>
+                  <Relationship Id="rIdCore" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/docProps/core.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(
+                archive,
+                "docProps/core.xml",
+                """
+                <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/workbook.xml",
+                """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
     private static MemoryStream CreatePackageWithWorksheets(
         IReadOnlyList<(string Path, string Xml)> worksheets,
         bool includeLargePayload)
@@ -740,7 +811,7 @@ public sealed class XlsxLoadPackageStreamTests
         return package;
     }
 
-    private static MemoryStream CreatePackageWithChartSheetDrawingReferences()
+    private static MemoryStream CreatePackageWithChartsheetDrawingReferences()
     {
         var package = new MemoryStream();
         using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
@@ -752,10 +823,41 @@ public sealed class XlsxLoadPackageStreamTests
                 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
                   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
                   <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
                   <Override PartName="/xl/chartsheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
                   <Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
                   <Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>
                 </Types>
+                """);
+            WritePackageEntry(
+                archive,
+                "_rels/.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdWorkbook" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/workbook.xml",
+                """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Chart" sheetId="1" r:id="rIdChartsheet"/>
+                    <sheet name="Data" sheetId="2" r:id="rIdWorksheet"/>
+                  </sheets>
+                </workbook>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdChartsheet" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet" Target="chartsheets/sheet1.xml"/>
+                  <Relationship Id="rIdWorksheet" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                </Relationships>
                 """);
             WritePackageEntry(
                 archive,
@@ -763,7 +865,8 @@ public sealed class XlsxLoadPackageStreamTests
                 """
                 <chartsheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-                  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+                  <sheetPr/>
+                  <sheetViews/>
                   <drawing r:id="rIdDrawing"/>
                 </chartsheet>
                 """);
@@ -774,6 +877,16 @@ public sealed class XlsxLoadPackageStreamTests
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
                   <Relationship Id="rIdDrawing" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
                 </Relationships>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/worksheets/sheet1.xml",
+                """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="1"><c r="A1" s="1"/></row>
+                  </sheetData>
+                </worksheet>
                 """);
             WritePackageEntry(
                 archive,
@@ -795,6 +908,33 @@ public sealed class XlsxLoadPackageStreamTests
 
         package.Position = 0;
         return package;
+    }
+
+    private static void AssertChartsheetDrawingPackageCleaned(MemoryStream package)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/drawings/drawing1.xml").Should().BeNull();
+        archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels").Should().BeNull();
+        archive.GetEntry("xl/charts/chart1.xml").Should().BeNull();
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var chartsheetXml = LoadPackageXml(archive, "xl/chartsheets/sheet1.xml");
+        chartsheetXml.Root!.Elements(sheetNs + "drawing").Should().BeEmpty();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relsXml = LoadPackageXml(archive, "xl/chartsheets/_rels/sheet1.xml.rels");
+        relsXml.Root!.Elements(packageRelNs + "Relationship")
+            .Select(relationship => relationship.Attribute("Target")?.Value)
+            .Should()
+            .NotContain("../drawings/drawing1.xml");
+
+        XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        contentTypesXml.Root!.Elements(contentTypesNs + "Override")
+            .Select(element => element.Attribute("PartName")?.Value)
+            .Should()
+            .NotContain(["/xl/drawings/drawing1.xml", "/xl/charts/chart1.xml"]);
     }
 
     private static void WritePackageEntry(ZipArchive archive, string path, string content)
