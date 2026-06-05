@@ -109,6 +109,25 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedUnchangedWorkbookAboveLegacyFingerprintLimit_CopiesSourcePackage()
+    {
+        var sourceBytes = CreateDenseSourcePackage(rowCount: 100, columnCount: 251);
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        workbook.Sheets.Sum(sheet => sheet.CellCount).Should().BeGreaterThan(25_000);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.PathLabel.Should().Be("source_copy");
+        adapter.LastSaveDiagnostics.Reason.Should().Be("model_unchanged");
+        saved.ToArray().Should().Equal(sourceBytes);
+    }
+
+    [Fact]
     public void Save_NewWorkbook_ReportsNoSourcePackageFullSaveDiagnostics()
     {
         var adapter = new XlsxFileAdapter();
@@ -1767,6 +1786,24 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             sheet.Cell("A1").Value = "original value";
             sheet.Cell("B2").Value = 123.45;
             sheet.Cell("C3").Value = true;
+            workbook.SaveAs(stream);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateDenseSourcePackage(int rowCount, int columnCount)
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Data");
+            for (var row = 1; row <= rowCount; row++)
+            {
+                for (var column = 1; column <= columnCount; column++)
+                    sheet.Cell(row, column).Value = (row * 1000) + column;
+            }
+
             workbook.SaveAs(stream);
         }
 

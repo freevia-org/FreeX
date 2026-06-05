@@ -316,8 +316,11 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     {
         var snapshotSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
 
-        snapshotSource.Should().Contain("private const int FingerprintCellLimit = 25_000;");
-        (DenseSheetCount * DenseRowsPerSheet * DenseColumnsPerSheet).Should().BeLessThan(25_000);
+        snapshotSource.Should().Contain("private const int FingerprintCellLimit = 100_000;");
+        snapshotSource.Should().Contain("private const int FingerprintCompressedStyleOnlyCellLimit = 1_250_000;");
+        snapshotSource.Should().Contain("styleOnlyCellCount += sheet.StyleOnlyCellCount;");
+        snapshotSource.Should().Contain("!sheet.TryGetCompressedStyleOnlyRuns(out _)");
+        (DenseSheetCount * DenseRowsPerSheet * DenseColumnsPerSheet).Should().BeLessThan(100_000);
     }
 
     [Fact]
