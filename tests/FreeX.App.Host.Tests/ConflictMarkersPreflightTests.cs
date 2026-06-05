@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using FluentAssertions;
 
@@ -45,8 +44,8 @@ public sealed class ConflictMarkersPreflightTests
         {
             File.WriteAllText(Path.Combine(tempDirectory, "tracked.cs"), "namespace Scratch;");
             File.WriteAllText(Path.Combine(tempDirectory, "untracked.cs"), $"<<<<<<< HEAD{Environment.NewLine}");
-            RunProcess("git", "init", tempDirectory).ExitCode.Should().Be(0);
-            RunProcess("git", "add tracked.cs", tempDirectory).ExitCode.Should().Be(0);
+            TestProcessRunner.Run("git", "init", tempDirectory).ExitCode.Should().Be(0);
+            TestProcessRunner.Run("git", "add tracked.cs", tempDirectory).ExitCode.Should().Be(0);
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
             var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
@@ -69,8 +68,8 @@ public sealed class ConflictMarkersPreflightTests
         try
         {
             File.WriteAllText(Path.Combine(tempDirectory, "broken.cs"), $"namespace Scratch;{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}");
-            RunProcess("git", "init", tempDirectory).ExitCode.Should().Be(0);
-            RunProcess("git", "add broken.cs", tempDirectory).ExitCode.Should().Be(0);
+            TestProcessRunner.Run("git", "init", tempDirectory).ExitCode.Should().Be(0);
+            TestProcessRunner.Run("git", "add broken.cs", tempDirectory).ExitCode.Should().Be(0);
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
             var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
@@ -132,28 +131,6 @@ public sealed class ConflictMarkersPreflightTests
         {
             DeleteDirectory(tempDirectory);
         }
-    }
-
-    private static PowerShellResult RunProcess(string fileName, string arguments, string workingDirectory)
-    {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = fileName,
-            Arguments = arguments,
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        return new PowerShellResult(process.ExitCode, output, error);
     }
 
     private static void DeleteDirectory(string directory)
