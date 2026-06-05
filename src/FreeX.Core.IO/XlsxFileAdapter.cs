@@ -683,6 +683,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             hasConditionalFormattingBlocks,
             hasClosedXmlUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters,
+            null,
             mergeCellWorksheetPathsToStrip);
     }
 
