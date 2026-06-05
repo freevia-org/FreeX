@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -108,13 +107,11 @@ public sealed partial class ThreadedCommentDialogTests
         keys.Select(key => GetAccessKey(UiText.Get(key))).Should().OnlyHaveUniqueItems();
     }
 
-    private static string ReadThreadedCommentDialogSource()
-    {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ThreadedCommentDialog.cs"));
-        var start = source.IndexOf("public sealed class ThreadedCommentDialog", StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0);
-        return source[start..];
-    }
+    private static string ReadThreadedCommentDialogSource() =>
+        DialogSourceTestSupport.ReadClassSource(
+            "ThreadedCommentDialog.cs",
+            "public sealed class ThreadedCommentDialog",
+            "");
 
     private static char GetAccessKey(string label)
     {
