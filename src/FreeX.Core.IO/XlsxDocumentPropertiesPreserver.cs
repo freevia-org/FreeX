@@ -5,12 +5,25 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxDocumentPropertiesPreserver
 {
+    private const string CorePropertiesPart = "docProps/core.xml";
+    private const string CorePropertiesContentType =
+        "application/vnd.openxmlformats-package.core-properties+xml";
+    private const string CorePropertiesRelationshipType =
+        "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+    private const string ExtendedPropertiesPart = "docProps/app.xml";
+    private const string ExtendedPropertiesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+    private const string CustomPropertiesPart = "docProps/custom.xml";
+    private const string CustomPropertiesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
+    private const string CorePropertiesServicePartPrefix = "package/services/metadata/core-properties/";
+
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
         PreserveDocumentPropertyElements(
             sourceArchive,
             targetArchive,
-            "docProps/core.xml",
+            CorePropertiesPart,
             [
                 XName.Get("subject", "http://purl.org/dc/elements/1.1/"),
                 XName.Get("keywords", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
@@ -23,7 +36,7 @@ internal static class XlsxDocumentPropertiesPreserver
         PreserveDocumentPropertyElements(
             sourceArchive,
             targetArchive,
-            "docProps/app.xml",
+            ExtendedPropertiesPart,
             [
                 XName.Get("Application", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
                 XName.Get("Company", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
@@ -32,7 +45,183 @@ internal static class XlsxDocumentPropertiesPreserver
                 XName.Get("Template", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties")
             ]);
 
-        PreserveDocumentPropertyPart(sourceArchive, targetArchive, "docProps/custom.xml");
+        PreserveDocumentPropertyPart(sourceArchive, targetArchive, CustomPropertiesPart);
+    }
+
+    public static void NormalizePackageGraph(Stream packageStream)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        NormalizePackageGraph(archive);
+    }
+
+    internal static void NormalizePackageGraph(ZipArchive archive)
+    {
+        foreach (var serviceEntry in archive.Entries
+                     .Where(entry => entry.FullName.StartsWith(CorePropertiesServicePartPrefix, StringComparison.OrdinalIgnoreCase))
+                     .ToArray())
+        {
+            serviceEntry.Delete();
+        }
+
+        RemoveCorePropertiesServiceContentTypes(archive);
+        NormalizeRootRelationships(archive);
+    }
+
+    private static bool NormalizeRootRelationships(ZipArchive archive)
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsEntry = archive.GetEntry("_rels/.rels");
+        var relationshipsXml = relationshipsEntry is null
+            ? new XDocument(new XElement(relationshipNs + "Relationships"))
+            : XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+        if (relationshipsXml.Root is null ||
+            relationshipsXml.Root.Name != relationshipNs + "Relationships")
+        {
+            return false;
+        }
+
+        var changed = false;
+        changed |= NormalizeRootRelationship(
+            archive,
+            relationshipsXml,
+            relationshipNs,
+            CorePropertiesPart,
+            CorePropertiesRelationshipType);
+        changed |= NormalizeRootRelationship(
+            archive,
+            relationshipsXml,
+            relationshipNs,
+            ExtendedPropertiesPart,
+            ExtendedPropertiesRelationshipType);
+        changed |= NormalizeRootRelationship(
+            archive,
+            relationshipsXml,
+            relationshipNs,
+            CustomPropertiesPart,
+            CustomPropertiesRelationshipType);
+
+        if (changed || (relationshipsEntry is null && relationshipsXml.Root.HasElements))
+            XlsxPackageXmlEditor.ReplaceXml(archive, "_rels/.rels", relationshipsXml);
+
+        return changed;
+    }
+
+    private static bool NormalizeRootRelationship(
+        ZipArchive archive,
+        XDocument relationshipsXml,
+        XNamespace relationshipNs,
+        string partName,
+        string relationshipType)
+    {
+        var changed = false;
+        var hasPart = archive.GetEntry(partName) is not null;
+        var relationships = relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship => string.Equals(
+                relationship.Attribute("Type")?.Value?.Trim(),
+                relationshipType,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        XElement? canonicalRelationship = null;
+        foreach (var relationship in relationships)
+        {
+            if (!hasPart)
+            {
+                relationship.Remove();
+                changed = true;
+                continue;
+            }
+
+            var target = relationship.Attribute("Target")?.Value?.Trim();
+            var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+            var targetsCanonicalPart =
+                string.IsNullOrWhiteSpace(targetMode) ||
+                string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase);
+            targetsCanonicalPart = targetsCanonicalPart &&
+                !string.IsNullOrWhiteSpace(target) &&
+                string.Equals(
+                    XlsxPackagePath.ResolveRelationshipTarget("", target),
+                    partName,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (targetsCanonicalPart && canonicalRelationship is null)
+            {
+                canonicalRelationship = relationship;
+                if (!string.Equals(target, partName, StringComparison.Ordinal))
+                {
+                    relationship.SetAttributeValue("Target", partName);
+                    changed = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(targetMode))
+                {
+                    relationship.SetAttributeValue("TargetMode", null);
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            relationship.Remove();
+            changed = true;
+        }
+
+        if (!hasPart || canonicalRelationship is not null)
+            return changed;
+
+        relationshipsXml.Root!.Add(new XElement(
+            relationshipNs + "Relationship",
+            new XAttribute("Id", XlsxPackageXmlEditor.NextRelationshipId(relationshipsXml, relationshipNs)),
+            new XAttribute("Type", relationshipType),
+            new XAttribute("Target", partName)));
+        return true;
+    }
+
+    private static bool RemoveCorePropertiesServiceContentTypes(ZipArchive archive)
+    {
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return false;
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        var root = contentTypesXml.Root;
+        if (root is null)
+            return false;
+
+        var changed = false;
+        var serviceOverrides = root
+            .Elements(contentTypeNs + "Override")
+            .Where(element =>
+            {
+                var partName = element.Attribute("PartName")?.Value?.Trim().TrimStart('/');
+                return !string.IsNullOrWhiteSpace(partName) &&
+                    partName.StartsWith(CorePropertiesServicePartPrefix, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToArray();
+        foreach (var serviceOverride in serviceOverrides)
+        {
+            serviceOverride.Remove();
+            changed = true;
+        }
+
+        var serviceDefaults = root
+            .Elements(contentTypeNs + "Default")
+            .Where(element =>
+                string.Equals(element.Attribute("Extension")?.Value?.Trim(), "psmdcp", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(element.Attribute("ContentType")?.Value?.Trim(), CorePropertiesContentType, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        foreach (var serviceDefault in serviceDefaults)
+        {
+            serviceDefault.Remove();
+            changed = true;
+        }
+
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(archive, "[Content_Types].xml", contentTypesXml);
+
+        return changed;
     }
 
     private static void PreserveDocumentPropertyPart(ZipArchive sourceArchive, ZipArchive targetArchive, string partName)
