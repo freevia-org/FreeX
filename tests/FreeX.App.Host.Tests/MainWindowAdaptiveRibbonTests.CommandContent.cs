@@ -104,11 +104,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
             RibbonMetadata.SetCommandContentLayout(grid, RibbonCommandContentLayout.IconOnly);
             grid.Children.Add(icon);
+            var button = new Button { Content = grid, Width = 38, Height = 24 };
             var addChevron = typeof(MainWindow)
                 .GetMethod("AddRibbonDropdownChevronToGrid", BindingFlags.Static | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "AddRibbonDropdownChevronToGrid");
 
-            addChevron.Invoke(null, [grid, RibbonCommandContentLayout.IconOnly]);
+            addChevron.Invoke(null, [button, grid, RibbonCommandContentLayout.IconOnly]);
 
             var chevron = grid.Children
                 .OfType<FrameworkElement>()
@@ -150,12 +151,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth).Should().BeTrue();
             fullWidth.Should().Be(128);
             compactWidth.Should().Be(38);
-            content.ColumnDefinitions[^1].Width.Value.Should().Be(14);
+            content.ColumnDefinitions[^1].Width.Value.Should().Be(18);
         });
     }
 
     [Fact]
-    public void SmallRibbonMenuButtonDropdownZoneOnlyCoversChevronLane()
+    public void SmallRibbonMenuButtonDropdownZoneAlignsChevronLaneToRightEdge()
     {
         StaTestRunner.Run(() =>
         {
@@ -189,12 +190,13 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                     .TransformBounds(new Rect(0, 0, chevron.ActualWidth, chevron.ActualHeight));
                 var dropdownBounds = GetRibbonDropdownZoneBounds(button);
 
-                dropdownBounds.Width.Should().BeApproximately(14, 0.5);
+                dropdownBounds.Width.Should().BeApproximately(18, 0.5);
                 dropdownBounds.Height.Should().BeApproximately(button.ActualHeight, 0.5);
+                dropdownBounds.Right.Should().BeApproximately(button.ActualWidth, 0.5);
                 dropdownBounds.Left.Should().BeLessThanOrEqualTo(chevronBounds.Left + 0.5);
                 dropdownBounds.Right.Should().BeGreaterThanOrEqualTo(chevronBounds.Right - 0.5);
-                dropdownBounds.Right.Should().BeLessThan(button.ActualWidth - 8,
-                    "the dropdown lane should not stretch across trailing empty button chrome");
+                chevronBounds.Right.Should().BeGreaterThan(button.ActualWidth - button.Padding.Right - 12,
+                    "the chevron should sit inside the right-aligned split lane instead of directly after the label");
             }
             finally
             {
