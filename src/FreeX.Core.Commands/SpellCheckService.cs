@@ -755,6 +755,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "cliam"))
+                {
+                    suggestion = "claim";
+                    return true;
+                }
+
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "feild"))
                 {
                     suggestion = "field";
@@ -973,6 +979,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "cliams"))
+                {
+                    suggestion = "claims";
+                    return true;
+                }
+
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fomula"))
                 {
                     suggestion = "formula";
@@ -1168,6 +1180,12 @@ public static partial class SpellCheckService
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "payble"))
                 {
                     suggestion = "payable";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "premum"))
+                {
+                    suggestion = "premium";
                     return true;
                 }
 
@@ -1937,6 +1955,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acturial"))
+                {
+                    suggestion = "actuarial";
+                    return true;
+                }
+
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "annuitiy"))
+                {
+                    suggestion = "annuity";
+                    return true;
+                }
+
                 if (first == 'b' && EqualAsciiWordIgnoreCase(word, "buisness"))
                 {
                     suggestion = "business";
@@ -2473,6 +2503,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "deductble"))
+                {
+                    suggestion = "deductible";
+                    return true;
+                }
+
                 if (first == 'e' && EqualAsciiWordIgnoreCase(word, "existance"))
                 {
                     suggestion = "existence";
@@ -2853,6 +2889,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "endorsemnt"))
+                {
+                    suggestion = "endorsement";
+                    return true;
+                }
+
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "forcasting"))
                 {
                     suggestion = "forecasting";
@@ -3113,6 +3155,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'b' && EqualAsciiWordIgnoreCase(word, "benificiary"))
+                {
+                    suggestion = "beneficiary";
+                    return true;
+                }
+
                 if (first == 'n' && EqualAsciiWordIgnoreCase(word, "notfication"))
                 {
                     suggestion = "notification";
@@ -3146,6 +3194,18 @@ public static partial class SpellCheckService
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "requirments"))
                 {
                     suggestion = "requirements";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "reinsurence"))
+                {
+                    suggestion = "reinsurance";
+                    return true;
+                }
+
+                if (first == 'u' && EqualAsciiWordIgnoreCase(word, "underwritng"))
+                {
+                    suggestion = "underwriting";
                     return true;
                 }
 
