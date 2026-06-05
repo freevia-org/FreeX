@@ -6,7 +6,6 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using FluentAssertions;
 using FreeX.Core.Model;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -28,10 +27,9 @@ public sealed partial class ProtectionDialogTests
     }
 
     private static string ReadProtectionDialogSources() =>
-        string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ProtectionDialogs.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialogPlanner.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ProtectionDialogPlanner.cs")));
+        DialogSourceTestSupport.ReadHostSources(
+            "ProtectionDialogs.cs",
+            "AllowEditRangeDialog.cs",
+            "AllowEditRangeDialogPlanner.cs",
+            "ProtectionDialogPlanner.cs");
 }
