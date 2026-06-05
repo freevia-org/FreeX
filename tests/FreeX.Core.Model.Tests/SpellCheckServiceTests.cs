@@ -868,6 +868,51 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversLegalCompliancePolicyVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Complaince polcy contrct AGREEMNT privicy CONFIDENTAL confidntial regulaton signiture authorizaton certificaton liablity AUDT. Keep compliance, policy, contract, agreement, privacy, confidential, regulation, signature, authorization, certification, liability, audit, prepolcy, contrct_id, https://complaince.example.com/polcy, legal@privicy.example.com, and \"C:\\confidental folder\\signiture file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "polcy POLCY Polcy https://polcy.example.com/polcy legal@polcy.example.com polcy_id prepolcy \"C:\\polcy folder\\polcy file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "policy");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Complaince", "Compliance"),
+            ("polcy", "policy"),
+            ("contrct", "contract"),
+            ("AGREEMNT", "AGREEMENT"),
+            ("privicy", "privacy"),
+            ("CONFIDENTAL", "CONFIDENTIAL"),
+            ("confidntial", "confidential"),
+            ("regulaton", "regulation"),
+            ("signiture", "signature"),
+            ("authorizaton", "authorization"),
+            ("certificaton", "certification"),
+            ("liablity", "liability"),
+            ("AUDT", "AUDIT"));
+        plan.IssueCount.Should().Be(13);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Compliance policy contract AGREEMENT privacy CONFIDENTIAL confidential regulation signature authorization certification liability AUDIT. Keep compliance, policy, contract, agreement, privacy, confidential, regulation, signature, authorization, certification, liability, audit, prepolcy, contrct_id, https://complaince.example.com/polcy, legal@privicy.example.com, and \"C:\\confidental folder\\signiture file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(13);
+        replaceAllCorrected.Should().Be(
+            "policy POLICY Policy https://polcy.example.com/polcy legal@polcy.example.com polcy_id prepolcy \"C:\\polcy folder\\polcy file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversInvoiceSupplyChainVocabularyTypos()
     {
         var wb = new Workbook("test");
