@@ -90,6 +90,18 @@ public static partial class AccessibilityCheckerService
                 AddLowContrastTextBoxTextIssue(issues, workbook, sheet, textBox);
             }
 
+            foreach (var pivot in sheet.PivotTables)
+            {
+                AddAltTextIssue(
+                    issues,
+                    sheet,
+                    pivot.TargetRange.Start,
+                    "PivotTable",
+                    pivot.AltTextDescription,
+                    pivot.AltTextTitle,
+                    name: null);
+            }
+
             foreach (var (address, target) in sheet.Hyperlinks)
             {
                 if (sheet.GetCell(address)?.Value is TextValue displayText &&
