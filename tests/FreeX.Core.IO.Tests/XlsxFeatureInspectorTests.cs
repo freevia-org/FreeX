@@ -73,6 +73,4 @@ public partial class XlsxFeatureInspectorTests
                     new XElement(chartExNs + "plotArea", region))))
             .ToString(SaveOptions.DisableFormatting);
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }

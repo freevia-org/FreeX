@@ -156,7 +156,7 @@ public partial class XlsxFeatureInspectorTests
     [Fact]
     public void InspectRelationships_AvoidsLowercaseStringAllocations()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxFeatureInspector.cs"));
         var relationshipInspection = source[
             source.IndexOf("private static IEnumerable<XlsxUnsupportedFeatureKind> InspectRelationships", StringComparison.Ordinal)..
