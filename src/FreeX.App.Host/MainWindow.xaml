@@ -506,16 +506,19 @@
                                         </Grid>
                                     </Button>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
-                                    <Button x:Name="FillColorBtn" Width="28" Height="22"
+                                    <Button x:Name="FillColorBtn" Width="38" Height="22"
                                             Style="{StaticResource RibbonIconButton}"
                                             Click="FillColorBtn_Click"
                                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_FillColor}"
                                             AutomationProperties.AutomationId="HomeFillColorButton"
-                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenTheFillColorPickerForSelectedCells}"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ColorTheBackgroundOfTheSelectedCells}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FillColor}"
                                             local:RibbonTooltip.KeyTip="H"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ColorTheBackgroundOfTheSelectedCells}" local:RibbonMetadata.CommandName="Fill Color">
-                                        <Grid Width="20" Height="18">
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ColorTheBackgroundOfTheSelectedCells}"
+                                            local:RibbonMetadata.CommandName="Fill Color"
+                                            local:RibbonMetadata.DropdownMenuButton="True"
+                                            local:RibbonMetadata.DropdownClick="FillColorPickerBtn_Click">
+                                        <Grid Width="20" Height="18" SnapsToDevicePixels="True">
                                             <Rectangle Width="17" Height="15" Fill="{Binding ElementName=FillColorBar, Path=Fill}"
                                                        Stroke="#555" StrokeThickness="1"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -525,19 +528,26 @@
                                             <Rectangle x:Name="FillColorBar" Width="0" Height="0" Fill="#FFFF00"/>
                                         </Grid>
                                     </Button>
-                                    <Button x:Name="FontColorBtn" Width="28" Height="22"
+                                    <Button x:Name="FontColorBtn" Width="38" Height="22"
                                             Style="{StaticResource RibbonIconButton}"
                                             Click="FontColorBtn_Click"
                                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_FontColor}"
                                             AutomationProperties.AutomationId="HomeFontColorButton"
-                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenTheFontColorPickerForSelectedCells}"
+                                            AutomationProperties.HelpText="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheColorOfTheText}"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FontColor}"
                                             local:RibbonTooltip.KeyTip="FC"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheColorOfTheText}" local:RibbonMetadata.CommandName="Font Color">
-                                        <StackPanel>
-                                            <TextBlock Text="A" FontFamily="Segoe UI" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,-3,0,0"/>
-                                            <Rectangle x:Name="FontColorBar" Height="3" Width="17" Fill="#FF0000" Margin="0,0,0,0"/>
-                                        </StackPanel>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChangeTheColorOfTheText}"
+                                            local:RibbonMetadata.CommandName="Font Color"
+                                            local:RibbonMetadata.DropdownMenuButton="True"
+                                            local:RibbonMetadata.DropdownClick="FontColorPickerBtn_Click">
+                                        <Grid Width="20" Height="18" SnapsToDevicePixels="True">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="3"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Text="A" FontFamily="Segoe UI" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,-3,0,0"/>
+                                            <Rectangle x:Name="FontColorBar" Grid.Row="1" Height="3" Width="17" Fill="#FF0000" Margin="0,0,0,0"/>
+                                        </Grid>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
