@@ -713,6 +713,134 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_UrlLastQueryParameterValue_ExtractsDecodedLastValueAcrossAmpersandQueries()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=skip&category=road%20bike", "road bike"),
+                ("https://fabrikam.example/find?source=mail&item=gravel%20bike", "gravel bike")
+            ],
+            ["https://northwind.example/catalog?ref=nav&product=electric%20cargo+bike"]);
+
+        result.Should().BeEquivalentTo(["electric cargo bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterValue_ExtractsDecodedLastValueAcrossSemicolonQueries()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=skip;category=road%20bike", "road bike"),
+                ("https://fabrikam.example/find?source=mail;item=gravel%20bike", "gravel bike")
+            ],
+            ["https://northwind.example/catalog?ref=nav;product=electric%20cargo+bike"]);
+
+        result.Should().BeEquivalentTo(["electric cargo bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterValue_PreservesEncodedSemicolonsInsideValues()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=skip&category=road%3Bbike", "road;bike"),
+                ("https://fabrikam.example/find?source=mail&item=gravel%3Bbike", "gravel;bike")
+            ],
+            ["https://northwind.example/catalog?ref=nav&product=electric%3Bcargo+bike"]);
+
+        result.Should().BeEquivalentTo(["electric;cargo bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterValue_DecodesPlusAsSpace()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=skip&category=road+bike", "road bike"),
+                ("https://fabrikam.example/find?source=mail&item=gravel+bike", "gravel bike")
+            ],
+            ["https://northwind.example/catalog?ref=nav&product=electric+cargo+bike"]);
+
+        result.Should().BeEquivalentTo(["electric cargo bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterValue_HandlesBareWebAddressesWithQueryStrings()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("www.contoso.example/search?first=skip&category=A-100", "A-100"),
+                ("fabrikam.example/find?source=mail;item=B-200", "B-200")
+            ],
+            ["northwind.example/catalog?ref=nav&product=C-300"]);
+
+        result.Should().BeEquivalentTo(["C-300"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterValue_TrimsFragments()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=skip&category=road+bike#results", "road bike"),
+                ("https://fabrikam.example/find?source=mail;item=gravel+bike#top", "gravel bike")
+            ],
+            ["https://northwind.example/catalog?ref=nav&product=electric+cargo+bike#details"]);
+
+        result.Should().BeEquivalentTo(["electric cargo bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterValue_UsesPreviousNonEmptyValueWhenLaterValuesAreBlank()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=skip&category=road+bike&empty=", "road bike"),
+                ("https://fabrikam.example/find?source=mail;item=gravel+bike;empty=%20", "gravel bike")
+            ],
+            [
+                "https://northwind.example/catalog?ref=nav&product=electric+cargo+bike&empty=",
+                "https://adatum.example/catalog?ref=nav;sku=Touring+Bike;empty=+"
+            ]);
+
+        result.Should().BeEquivalentTo(["electric cargo bike", "Touring Bike"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("https://northwind.example/catalog")]
+    [InlineData("https://northwind.example/catalog?product=&empty=+")]
+    [InlineData("https://northwind.example/catalog?ref=nav&product=electric%ZZbike")]
+    [InlineData("ftp://northwind.example/catalog?ref=nav&product=electric+bike")]
+    [InlineData("https://user@northwind.example/catalog?ref=nav&product=electric+bike")]
+    [InlineData("https://localhost/catalog?ref=nav&product=electric+bike")]
+    public void Fill_UrlLastQueryParameterValue_ReturnsNullForUnsupportedInvalidOrBlankRemainingUrl(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=skip&category=road+bike", "road bike"),
+                ("https://fabrikam.example/find?source=mail&item=gravel+bike", "gravel bike")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterName_TakesPrecedenceWhenLastValueAlsoMatchesExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=skip&source=source", "source"),
+                ("https://fabrikam.example/find?source=skip&channel=channel", "channel")
+            ],
+            ["https://northwind.example/catalog?first=skip&ref=value"]);
+
+        result.Should().BeEquivalentTo(["ref"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_UrlFirstQueryParameterValue_ExtractsDecodedFirstValuesAcrossDifferentParameterNames()
     {
         var result = FlashFillService.Fill(
