@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using static FreeX.App.Host.Tests.LocalizedXamlTestSupport;
 
 namespace FreeX.App.Host.Tests;
 
@@ -23,7 +24,8 @@ public sealed class PageLayoutCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractElementByTitle(ReadMainWindowXaml(), title, "Button", handler);
+        var button = ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -55,7 +57,8 @@ public sealed class PageLayoutCommandSourceTests
         string keyTip,
         string handler)
     {
-        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, handler);
+        var item = ReadMainWindowXaml()
+            .ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header, $"Click=\"{handler}\"");
 
         item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -70,7 +73,8 @@ public sealed class PageLayoutCommandSourceTests
         string keyTip,
         string handler)
     {
-        var checkBox = ExtractElementByTitle(ReadMainWindowXaml(), title, "CheckBox");
+        var checkBox = ReadMainWindowXaml()
+            .ExtractElementByInvariantCommandName("CheckBox", title);
 
         checkBox.ShouldContainLocalizedAttribute("Content", "View");
         checkBox.ShouldContainInvariantCommandName(title);
@@ -87,7 +91,8 @@ public sealed class PageLayoutCommandSourceTests
         string keyTip,
         string handler)
     {
-        var checkBox = ExtractElementByTitle(ReadMainWindowXaml(), title, "CheckBox");
+        var checkBox = ReadMainWindowXaml()
+            .ExtractElementByInvariantCommandName("CheckBox", title);
 
         checkBox.ShouldContainLocalizedAttribute("Content", "Print");
         checkBox.ShouldContainInvariantCommandName(title);
@@ -117,46 +122,4 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("new SetPrintOptionsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked)");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
-    private static string ExtractElementByTitle(string xaml, string title, string elementName, string? handler = null)
-    {
-        var searchIndex = 0;
-        while (true)
-        {
-            var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", searchIndex, StringComparison.Ordinal);
-            titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Page Layout command should be present");
-
-            var start = xaml.LastIndexOf($"<{elementName}", titleIndex, StringComparison.Ordinal);
-            start.Should().BeGreaterThanOrEqualTo(0, $"the {title} Page Layout command should be a {elementName}");
-
-            var closingEnd = xaml.IndexOf($"</{elementName}>", titleIndex, StringComparison.Ordinal);
-            var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-            var nextElement = xaml.IndexOf($"<{elementName} ", titleIndex + 1, StringComparison.Ordinal);
-            var end = closingEnd >= 0 && (nextElement < 0 || closingEnd < nextElement)
-                ? closingEnd + elementName.Length + 3
-                : selfClosingEnd + 2;
-
-            end.Should().BeGreaterThan(titleIndex, $"the {title} Page Layout element should have a closing marker");
-            var element = xaml[start..end];
-            if (handler is null || element.Contains($"Click=\"{handler}\"", StringComparison.Ordinal))
-                return element;
-
-            searchIndex = end;
-        }
-    }
-
-    private static string ExtractMenuItemElementByHeader(string xaml, string header, string handler)
-    {
-        var clickIndex = xaml.IndexOf($"Click=\"{handler}\"", StringComparison.Ordinal);
-        clickIndex.Should().BeGreaterThanOrEqualTo(0, $"the {header} Page Layout menu item should be present");
-
-        var start = xaml.LastIndexOf("<MenuItem", clickIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {header} Page Layout command should be a MenuItem");
-
-        var end = xaml.IndexOf("/>", clickIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThan(clickIndex, $"the {header} Page Layout menu item should be self-closing");
-        return xaml[start..(end + 2)];
-    }
 }

@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using static FreeX.App.Host.Tests.LocalizedXamlTestSupport;
 
 namespace FreeX.App.Host.Tests;
 
@@ -21,7 +22,8 @@ public sealed class PivotDesignCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadPivotTableDesignTabXaml(), title);
+        var button = ReadPivotTableDesignTabXaml()
+            .ExtractButtonElementByInvariantCommandName(title);
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -53,9 +55,6 @@ public sealed class PivotDesignCommandSourceTests
         source.Should().Contain("UpdateViewport();");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
     private static string ReadPivotTableDesignTabXaml()
     {
         var xaml = ReadMainWindowXaml();
@@ -68,24 +67,6 @@ public sealed class PivotDesignCommandSourceTests
         var end = xaml.IndexOf("<TabItem Header=\"{local:Loc Key=MainWindow_Header_Help}\"", tabNameIndex, StringComparison.Ordinal);
         end.Should().BeGreaterThan(tabNameIndex, "the PivotTable Design contextual tab should end before the Help tab");
 
-        return xaml[start..end];
-    }
-
-    private static string ExtractButtonElementByTitle(string xaml, string title)
-    {
-        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} PivotTable Design command should be present");
-
-        var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} PivotTable Design command should be a Button");
-
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + "</Button>".Length
-            : selfClosingEnd + 2;
-
-        end.Should().BeGreaterThan(titleIndex, $"the {title} PivotTable Design button should have a closing marker");
         return xaml[start..end];
     }
 }
