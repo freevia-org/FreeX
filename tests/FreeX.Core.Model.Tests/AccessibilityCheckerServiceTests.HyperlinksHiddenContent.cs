@@ -320,6 +320,28 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsHiddenSheetsThatContainOnlyVisibleCharts()
+    {
+        var workbook = new Workbook("Accessibility");
+        var hiddenSheet = workbook.AddSheet("Archived Chart");
+        hiddenSheet.IsHidden = true;
+        hiddenSheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            Title = "Regional revenue",
+            DataRange = new GridRange(new CellAddress(hiddenSheet.Id, 3, 2), new CellAddress(hiddenSheet.Id, 8, 4))
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HiddenSheetWithContent).Subject;
+
+        issue.SheetId.Should().Be(hiddenSheet.Id);
+        issue.SheetName.Should().Be("Archived Chart");
+        issue.Location.Should().Be("Archived Chart");
+        issue.Message.Should().Be("Hidden sheets with content may not be available to assistive technologies.");
+    }
+
+    [Fact]
     public void FindIssues_FlagsHiddenRowsAndColumnsThatContainContent()
     {
         var workbook = new Workbook("Accessibility");
@@ -378,6 +400,74 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal("C:C", "D:D");
         issues.Should().NotContain(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent && i.Location == "22:22");
         issues.Should().NotContain(i => i.Kind == AccessibilityIssueKind.HiddenColumnWithContent && i.Location == "A:A");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHiddenRowsAndColumnsThatIntersectVisibleChartDataRange()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Chart Summary");
+        sheet.HiddenRows.Add(5);
+        sheet.FilterHiddenRows.Add(6);
+        sheet.GroupHiddenRows.Add(7);
+        sheet.HiddenRows.Add(12);
+        sheet.HiddenCols.Add(3);
+        sheet.GroupHiddenCols.Add(4);
+        sheet.HiddenCols.Add(8);
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            Title = "Revenue trend",
+            DataRange = new GridRange(new CellAddress(sheet.Id, 4, 2), new CellAddress(sheet.Id, 8, 5))
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .Equal("5:5", "6:6", "7:7");
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenColumnWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .Equal("C:C", "D:D");
+        issues.Should().NotContain(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent && i.Location == "12:12");
+        issues.Should().NotContain(i => i.Kind == AccessibilityIssueKind.HiddenColumnWithContent && i.Location == "H:H");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresHiddenChartsForHiddenContentChecks()
+    {
+        var workbook = new Workbook("Accessibility");
+        var hiddenSheet = workbook.AddSheet("Hidden Chart Archive");
+        hiddenSheet.IsHidden = true;
+        hiddenSheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(hiddenSheet.Id, 3, 2), new CellAddress(hiddenSheet.Id, 6, 4)),
+            IsVisible = false
+        });
+        var rowColumnSheet = workbook.AddSheet("Hidden Chart Data");
+        rowColumnSheet.HiddenRows.Add(4);
+        rowColumnSheet.HiddenCols.Add(3);
+        rowColumnSheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(rowColumnSheet.Id, 2, 2), new CellAddress(rowColumnSheet.Id, 5, 4)),
+            IsVisible = false
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().NotContain(i =>
+            i.Kind == AccessibilityIssueKind.HiddenSheetWithContent &&
+            i.SheetId == hiddenSheet.Id);
+        issues.Should().NotContain(i =>
+            i.Kind == AccessibilityIssueKind.HiddenRowWithContent &&
+            i.SheetId == rowColumnSheet.Id);
+        issues.Should().NotContain(i =>
+            i.Kind == AccessibilityIssueKind.HiddenColumnWithContent &&
+            i.SheetId == rowColumnSheet.Id);
     }
 
     [Fact]
