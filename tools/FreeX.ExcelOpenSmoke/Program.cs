@@ -460,6 +460,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomPropertyPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetSingleXmlCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSmartTagMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertLegacyCommentPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -667,6 +668,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomPropertyPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetSingleXmlCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSmartTagMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertLegacyCommentPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3365,6 +3367,21 @@ internal static class ExcelOpenSmoke
             CellAddress.TryParse(rangeParts[1], sheet, out _);
     }
 
+    private static bool IsValidLocalCellReference(string reference)
+    {
+        reference = reference.Trim();
+        if (reference.Length == 0 ||
+            reference.Contains('!', StringComparison.Ordinal) ||
+            reference.Contains('[', StringComparison.Ordinal) ||
+            reference.Contains(']', StringComparison.Ordinal) ||
+            reference.Contains(':', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return CellAddress.TryParse(reference, SheetId.New(), out _);
+    }
+
     private static bool IsValidPackageBoolean(string value)
     {
         value = value.Trim();
@@ -3382,6 +3399,176 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet scenario metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetSingleXmlCellsMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetSingleXmlCellsIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetSingleXmlCellsMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetSingleXmlCellsIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var containers = root.Elements(SpreadsheetNs + "singleXmlCells").ToArray();
+        if (containers.Length > 1)
+            issues.Add($"{worksheetPart} has {containers.Length} singleXmlCells elements; expected at most one");
+
+        foreach (var container in containers.Select((element, index) => new WorksheetSingleXmlCellsReference(index + 1, element)))
+        {
+            AddWorksheetSingleXmlCellsContainerIssues(worksheetPart, root, container, issues);
+        }
+    }
+
+    private static void AddWorksheetSingleXmlCellsContainerIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetSingleXmlCellsReference containerReference,
+        List<string> issues)
+    {
+        var container = containerReference.Element;
+        var description = $"singleXmlCells #{containerReference.Ordinal}";
+
+        AddWorksheetSingleXmlCellsOrderingIssues(worksheetPart, worksheetRoot, container, description, issues);
+
+        foreach (var unexpectedChild in container.Elements().Where(element => element.Name != SpreadsheetNs + "singleXmlCell"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var cells = container.Elements(SpreadsheetNs + "singleXmlCell").ToArray();
+        if (cells.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no singleXmlCell entries");
+
+        var seenIds = new HashSet<int>();
+        var seenReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cell in cells.Select((element, index) => new WorksheetSingleXmlCellReference(index + 1, element)))
+        {
+            AddWorksheetSingleXmlCellIssues(worksheetPart, description, cell, issues);
+
+            if (TryParseNonNegativePackageInt(cell.Element.Attribute("id")?.Value, out var id) && !seenIds.Add(id))
+                issues.Add($"{worksheetPart} {description} has duplicate singleXmlCell id {id}");
+
+            var reference = cell.Element.Attribute("r")?.Value;
+            if (!string.IsNullOrWhiteSpace(reference) &&
+                IsValidLocalCellReference(reference) &&
+                !seenReferences.Add(reference.Trim()))
+            {
+                issues.Add($"{worksheetPart} {description} has duplicate singleXmlCell r reference '{reference}'");
+            }
+        }
+    }
+
+    private static void AddWorksheetSingleXmlCellsOrderingIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        XElement singleXmlCells,
+        string description,
+        List<string> issues)
+    {
+        string[] laterWorksheetElements =
+        [
+            "smartTags",
+            "drawing",
+            "legacyDrawing",
+            "legacyDrawingHF",
+            "picture",
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts",
+            "extLst"
+        ];
+
+        var worksheetChildren = worksheetRoot.Elements().ToArray();
+        var singleXmlCellsIndex = Array.IndexOf(worksheetChildren, singleXmlCells);
+        if (singleXmlCellsIndex < 0)
+            return;
+
+        foreach (var earlierLaterElement in worksheetChildren
+                     .Take(singleXmlCellsIndex)
+                     .Where(element =>
+                         element.Name.Namespace == SpreadsheetNs &&
+                         laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal)))
+        {
+            issues.Add($"{worksheetPart} {description} appears after {earlierLaterElement.Name.LocalName}; expected schema order before that element");
+        }
+    }
+
+    private static void AddWorksheetSingleXmlCellIssues(
+        string worksheetPart,
+        string containerDescription,
+        WorksheetSingleXmlCellReference cellReference,
+        List<string> issues)
+    {
+        var cell = cellReference.Element;
+        var description = $"{containerDescription} singleXmlCell #{cellReference.Ordinal}";
+
+        AddRequiredNonNegativePackageIntIssue(worksheetPart, description, "id", cell.Attribute("id")?.Value, issues);
+
+        var reference = cell.Attribute("r")?.Value;
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            issues.Add($"{worksheetPart} {description} has no r reference");
+        }
+        else if (!IsValidLocalCellReference(reference))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid local r reference '{reference}'");
+        }
+
+        AddRequiredNonNegativePackageIntIssue(worksheetPart, description, "xmlCellPrId", cell.Attribute("xmlCellPrId")?.Value, issues);
+
+        if (cell.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddRequiredNonNegativePackageIntIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            issues.Add($"{worksheetPart} {description} has no {attributeName}");
+        }
+        else if (!TryParseNonNegativePackageInt(value, out _))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+        }
+    }
+
+    private static void ThrowInvalidWorksheetSingleXmlCellsMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet singleXmlCells metadata: {sample}{suffix}");
     }
 
     private static void AssertSmartTagMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -9704,6 +9891,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetScenarioInputCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSingleXmlCellsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSingleXmlCellReference(
         int Ordinal,
         XElement Element);
 
