@@ -304,9 +304,9 @@ public partial class ExportPlannerTests
             var dialog = new ExportOptionsDialog(hasSelection: true, format: format);
             try
             {
-                var pdfABox = FindLogicalChildren<CheckBox>(dialog)
+                var pdfABox = WpfTestTree.FindLogicalDescendants<CheckBox>(dialog)
                     .Single(box => Equals(box.Content, UiText.Get("ExportOptions_PdfACompliantNotSupported")));
-                var structureTagsBox = FindLogicalChildren<CheckBox>(dialog)
+                var structureTagsBox = WpfTestTree.FindLogicalDescendants<CheckBox>(dialog)
                     .Single(box => Equals(box.Content, UiText.Get("ExportOptions_DocumentStructureTagsNotSupported")));
                 var expectedPdfAHelpText = UiText.Get(expectedPdfAHelpTextKey);
                 var expectedStructureTagsHelpText = UiText.Get(expectedStructureTagsHelpTextKey);

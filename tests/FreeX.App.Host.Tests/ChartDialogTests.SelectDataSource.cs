@@ -73,7 +73,7 @@ public sealed partial class ChartDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new SelectDataSourceDialog("A1:D12");
-            var buttons = FindLogicalDescendants<Button>(dialog)
+            var buttons = WpfTestTree.FindLogicalDescendants<Button>(dialog)
                 .Where(button => button.Content is string)
                 .ToDictionary(button => (string)button.Content);
 
@@ -94,10 +94,10 @@ public sealed partial class ChartDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new SelectDataSourceDialog("A1:D12");
-            var buttons = FindLogicalDescendants<Button>(dialog)
+            var buttons = WpfTestTree.FindLogicalDescendants<Button>(dialog)
                 .Where(button => button.Content is string)
                 .ToDictionary(button => (string)button.Content);
-            var lists = FindLogicalDescendants<ListBox>(dialog).ToList();
+            var lists = WpfTestTree.FindLogicalDescendants<ListBox>(dialog).ToList();
 
             lists[0].SelectedIndex.Should().Be(0);
             lists[1].SelectedIndex.Should().Be(0);
@@ -135,7 +135,7 @@ public sealed partial class ChartDialogTests
         {
             var requests = new List<SelectDataSourceRangeSelectionRequest>();
             var dialog = new SelectDataSourceDialog(" A1:D12 ", requestRangeSelection: requests.Add);
-            var picker = FindLogicalDescendants<Button>(dialog)
+            var picker = WpfTestTree.FindLogicalDescendants<Button>(dialog)
                 .Single(button => AutomationProperties.GetName(button) == "Select chart data range");
 
             picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -154,7 +154,7 @@ public sealed partial class ChartDialogTests
 
             dialog.ApplyRangeSelection("Sheet2!B2:E20");
 
-            FindLogicalDescendants<TextBox>(dialog)
+            WpfTestTree.FindLogicalDescendants<TextBox>(dialog)
                 .Single()
                 .Text.Should().Be("Sheet2!B2:E20");
         });

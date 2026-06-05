@@ -14,11 +14,11 @@ public sealed partial class SymbolPickerDialogSourceTests
             var dialog = new SymbolPickerDialog();
             try
             {
-                var fontBox = FindLogicalChildren<ComboBox>(dialog)
+                var fontBox = WpfTestTree.FindLogicalDescendants<ComboBox>(dialog)
                     .Single(box => AutomationProperties.GetName(box) == UiText.Get("SymbolPicker_FontAutomationName"));
-                var preview = FindLogicalChildren<TextBlock>(dialog)
+                var preview = WpfTestTree.FindLogicalDescendants<TextBlock>(dialog)
                     .Single(text => AutomationProperties.GetName(text) == UiText.Get("SymbolPicker_SelectedSymbolPreviewAutomationName"));
-                var symbolButtons = FindLogicalChildren<Button>(dialog)
+                var symbolButtons = WpfTestTree.FindLogicalDescendants<Button>(dialog)
                     .Where(button => button.Tag is string)
                     .ToList();
 
