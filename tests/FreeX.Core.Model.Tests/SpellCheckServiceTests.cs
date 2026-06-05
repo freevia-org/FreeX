@@ -1056,6 +1056,44 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversHospitalityFoodServiceVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "RESTURANT restaraunt Caterng reservaton hospitallity menuu ingredent ingredents alergens nutriton beveragee banquettt roomservce housekeepng conciergee. Valid allergen. Keep resturant_id, https://resturant.example.com/caterng, chef@ingredent.example.com, \"C:\\reservaton folder\\conciergee file.xlsx\", and [C:\\housekeepng folder\\banquettt file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("RESTURANT", "RESTAURANT"),
+            ("restaraunt", "restaurant"),
+            ("Caterng", "Catering"),
+            ("reservaton", "reservation"),
+            ("hospitallity", "hospitality"),
+            ("menuu", "menu"),
+            ("ingredent", "ingredient"),
+            ("ingredents", "ingredients"),
+            ("alergens", "allergens"),
+            ("nutriton", "nutrition"),
+            ("beveragee", "beverage"),
+            ("banquettt", "banquet"),
+            ("roomservce", "room service"),
+            ("housekeepng", "housekeeping"),
+            ("conciergee", "concierge"));
+        plan.IssueCount.Should().Be(15);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "RESTAURANT restaurant Catering reservation hospitality menu ingredient ingredients allergens nutrition beverage banquet room service housekeeping concierge. Valid allergen. Keep resturant_id, https://resturant.example.com/caterng, chef@ingredent.example.com, \"C:\\reservaton folder\\conciergee file.xlsx\", and [C:\\housekeepng folder\\banquettt file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(15);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
