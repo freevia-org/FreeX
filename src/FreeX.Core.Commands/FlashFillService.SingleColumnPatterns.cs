@@ -1585,6 +1585,16 @@ public static partial class FlashFillService
                 : null;
         }
 
+        foreach (var (open, close) in PairedDelimiters)
+        {
+            if (!examples.All(e => TryExtractBetweenLastPairedDelimiters(e.Source, open, close, out var extracted) && extracted == e.Expected))
+                continue;
+
+            return source => TryExtractBetweenLastPairedDelimiters(source, open, close, out var extracted)
+                ? extracted
+                : null;
+        }
+
         return null;
     }
 
@@ -1600,6 +1610,30 @@ public static partial class FlashFillService
             return false;
 
         extracted = source[(openIndex + 1)..closeIndex].Trim();
+        return extracted.Length > 0;
+    }
+
+    private static bool TryExtractBetweenLastPairedDelimiters(string source, char open, char close, out string extracted)
+    {
+        extracted = string.Empty;
+        var searchStart = 0;
+        while (searchStart < source.Length)
+        {
+            var openIndex = source.IndexOf(open, searchStart);
+            if (openIndex < 0)
+                break;
+
+            var closeIndex = source.IndexOf(close, openIndex + 1);
+            if (closeIndex < 0)
+                break;
+
+            var candidate = source[(openIndex + 1)..closeIndex].Trim();
+            if (candidate.Length > 0)
+                extracted = candidate;
+
+            searchStart = closeIndex + 1;
+        }
+
         return extracted.Length > 0;
     }
 
