@@ -119,7 +119,15 @@ public sealed class RecalcEngine
                 }
                 var result = _evaluator.Evaluate(cachedAst, sheet, workbook, addr);
 
-                if (result is RangeValue rv)
+                if (result is RangeValue implicitRange && cell.ArrayMode == FormulaArrayMode.Implicit)
+                {
+                    // Legacy implicit intersection (@): resolve the range to the single cell that shares
+                    // this formula's row/column instead of spilling.
+                    sheet.ClearSpillRange(addr);
+                    cell.Value = ImplicitIntersection.Resolve(implicitRange, addr.Row, addr.Col);
+                    AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
+                }
+                else if (result is RangeValue rv)
                 {
                     sheet.ClearSpillRange(addr);
                     if (TryEvaluateLegacyImplicitIntersection(cachedAst, rv, addr, out var intersectedValue))
