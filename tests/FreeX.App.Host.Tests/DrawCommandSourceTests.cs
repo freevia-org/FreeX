@@ -8,7 +8,7 @@ public sealed class DrawCommandSourceTests
     [Fact]
     public void DrawTab_DoesNotSurfaceOutOfScopeInkCommands()
     {
-        var xaml = ReadMainWindowXaml();
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
 
         xaml.Should().NotContain("DrawToolsGroup");
         xaml.Should().NotContain("DrawPensGroup");
@@ -41,7 +41,8 @@ public sealed class DrawCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractElementByTitle(ReadMainWindowXaml(), title, "Button");
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractElementByInvariantCommandName("Button", title);
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -57,7 +58,8 @@ public sealed class DrawCommandSourceTests
         string keyTip,
         string handler)
     {
-        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, handler);
+        var item = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header, $"Click=\"{handler}\"");
 
         item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -108,27 +110,4 @@ public sealed class DrawCommandSourceTests
         drawingSource.Should().Contain("TryExecuteCommand(");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
-    private static string ExtractElementByTitle(string xaml, string title, string elementName)
-    {
-        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Draw command should be present");
-
-        var start = xaml.LastIndexOf($"<{elementName}", titleIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} Draw command should be a {elementName}");
-
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf($"</{elementName}>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + elementName.Length + 3
-            : selfClosingEnd + 2;
-
-        end.Should().BeGreaterThan(titleIndex, $"the {title} Draw element should have a closing marker");
-        return xaml[start..end];
-    }
-
-    private static string ExtractMenuItemElementByHeader(string xaml, string header, string handler)
-        => xaml.ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header, $"Click=\"{handler}\"");
 }
