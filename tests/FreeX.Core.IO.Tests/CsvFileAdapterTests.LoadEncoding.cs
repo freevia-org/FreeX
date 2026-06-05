@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Text;
 using FluentAssertions;
 using FreeX.Core.IO;
@@ -24,24 +23,16 @@ public sealed partial class CsvFileAdapterTests
     [Fact]
     public void Load_UsesCurrentCultureForSeparatorDirectedCsvNumbersWithInvariantFallback()
     {
-        var originalCulture = CultureInfo.CurrentCulture;
-        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-        try
-        {
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=;\r\nValue;Rate;Invariant;Bad\r\n1,25;12,5%;1.25;Infinity\r\n"));
+        using var cultureScope = TestCultureScope.CurrentCulture("fr-FR");
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=;\r\nValue;Rate;Invariant;Bad\r\n1,25;12,5%;1.25;Infinity\r\n"));
 
-            var workbook = new CsvFileAdapter().Load(stream);
-            var sheet = workbook.Sheets.Single();
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
 
-            sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new NumberValue(1.25));
-            sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(0.125));
-            sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new NumberValue(1.25));
-            sheet.GetValue(new CellAddress(sheet.Id, 2, 4)).Should().Be(new TextValue("Infinity"));
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = originalCulture;
-        }
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new NumberValue(1.25));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(0.125));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new NumberValue(1.25));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 4)).Should().Be(new TextValue("Infinity"));
     }
 
     [Fact]

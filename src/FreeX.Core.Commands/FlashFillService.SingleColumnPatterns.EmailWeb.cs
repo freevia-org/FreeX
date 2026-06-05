@@ -248,6 +248,13 @@ public static partial class FlashFillService
 
     private static Func<string, string?>? TryUrlQueryParameterValue(IReadOnlyList<(string Source, string Expected)> examples)
     {
+        return TryUrlQueryParameterValueCore(examples)
+            ?? TryUrlFragmentValue(examples);
+    }
+
+    private static Func<string, string?>? TryUrlQueryParameterValueCore(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
         List<string>? candidateNames = null;
 
         foreach (var (source, expected) in examples)
@@ -280,6 +287,14 @@ public static partial class FlashFillService
 
         var parameterName = candidateNames[0];
         return source => TryGetFirstNonEmptyQueryParameterValue(source, parameterName, out var value) ? value : null;
+    }
+
+    private static Func<string, string?>? TryUrlFragmentValue(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetDecodedUrlFragment(e.Source, out var fragment) && fragment == e.Expected))
+            return null;
+
+        return source => TryGetDecodedUrlFragment(source, out var fragment) ? fragment : null;
     }
 
     private static bool TryGetFinalUrlPathSegmentStem(string source, out string stem)
@@ -602,6 +617,30 @@ public static partial class FlashFillService
         }
 
         return parameters.Count > 0;
+    }
+
+    private static bool TryGetDecodedUrlFragment(string source, out string fragment)
+    {
+        fragment = string.Empty;
+
+        var candidate = source.Trim();
+        if (candidate.Length == 0 ||
+            candidate.Any(char.IsWhiteSpace) ||
+            !IsHttpOrHttpsUrlCandidate(candidate) ||
+            !Uri.TryCreate(candidate, UriKind.Absolute, out var uri) ||
+            uri is null ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            uri.UserInfo.Length > 0 ||
+            !TryNormalizeWebHost(uri.Host, out _))
+        {
+            return false;
+        }
+
+        if (uri.Fragment.Length <= 1)
+            return false;
+
+        return TryDecodeQueryComponent(uri.Fragment[1..], out fragment) &&
+               fragment.Length > 0;
     }
 
     private static bool TryCreateHttpWebUri(string source, out Uri uri)

@@ -28,10 +28,20 @@ public sealed partial class XlsxFileAdapter
     }
 
     private static string CreateSourceModelFingerprint(Workbook workbook)
+        => CreateModelFingerprint(workbook, forPatchValidation: false);
+
+    private static string CreatePatchValidationModelFingerprint(Workbook workbook)
+        => CreateModelFingerprint(workbook, forPatchValidation: true);
+
+    private static string CreateModelFingerprint(Workbook workbook, bool forPatchValidation)
     {
         using var hash = SHA256.Create();
         using var stream = new CryptoStream(Stream.Null, hash, CryptoStreamMode.Write, leaveOpen: true);
-        new NativeJsonAdapter().SaveForFingerprint(workbook, stream);
+        var adapter = new NativeJsonAdapter();
+        if (forPatchValidation)
+            adapter.SaveForPatchValidationFingerprint(workbook, stream);
+        else
+            adapter.SaveForFingerprint(workbook, stream);
         WriteStyleOnlyFingerprint(workbook, stream);
         stream.FlushFinalBlock();
         return Convert.ToHexString(hash.Hash ?? []);
@@ -385,7 +395,7 @@ public sealed partial class XlsxFileAdapter
             return this with
             {
                 ModelFingerprint = null,
-                CellPatchBaseline = CellPatchBaseline.Rebase(workbook, CreateSourceModelFingerprint(workbook)),
+                CellPatchBaseline = CellPatchBaseline.Rebase(workbook, CreatePatchValidationModelFingerprint(workbook)),
                 CellPatchBaselineBlockReason = null
             };
         }
@@ -450,9 +460,6 @@ public sealed partial class XlsxFileAdapter
                     out var changeBlockReason))
                 return Fail(changeBlockReason ?? "patch_blocked_changes_not_patchable", out diagnostics);
 
-            currentModelFingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
-            var patchedModelFingerprint = currentModelFingerprint ?? CreateModelFingerprint(workbook);
-            currentModelFingerprint = patchedModelFingerprint;
             if (changes.Count == 0 &&
                 dimensionChanges.Count == 0 &&
                 mergeRegionChanges.Count == 0 &&
@@ -463,6 +470,10 @@ public sealed partial class XlsxFileAdapter
                 diagnostics = XlsxSaveDiagnostics.SourceCopy("model_unchanged_after_patch_baseline");
                 return true;
             }
+
+            currentModelFingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
+            var patchedSourceModelFingerprint = currentModelFingerprint;
+            var patchedPatchValidationFingerprint = CreatePatchValidationModelFingerprint(workbook);
 
             using var patchedPackage = new MemoryStream(Count + 4096);
             patchedPackage.Write(Buffer, Offset, Count);
@@ -567,7 +578,7 @@ public sealed partial class XlsxFileAdapter
                     patchedBuffer.Array,
                     patchedBuffer.Offset,
                     (int)patchedPackage.Length,
-                    patchedModelFingerprint,
+                    patchedSourceModelFingerprint,
                     WorksheetsWithPreservableSourceMetadata,
                     HasUnsupportedConditionalFormatting,
                     allowsCellPatchSave,
@@ -578,7 +589,7 @@ public sealed partial class XlsxFileAdapter
                         mergeRegionChanges,
                         hyperlinkChanges,
                         commentChanges,
-                        patchedModelFingerprint),
+                        patchedPatchValidationFingerprint),
                     CellPatchBaselineBlockReason));
             }
             else
@@ -587,7 +598,7 @@ public sealed partial class XlsxFileAdapter
                 SourcePackages.Add(workbook, Capture(
                     patchedPackage,
                     workbook,
-                    currentModelFingerprint,
+                    patchedSourceModelFingerprint,
                     WorksheetsWithPreservableSourceMetadata,
                     HasUnsupportedConditionalFormatting));
             }
@@ -2034,7 +2045,7 @@ public sealed partial class XlsxFileAdapter
                     sourceStyleIndexesByStyleId,
                     chartSourceRanges,
                     pivotSourceRanges,
-                    CreateSourceModelFingerprint(workbook));
+                    CreatePatchValidationModelFingerprint(workbook));
             }
             catch
             {
@@ -3210,7 +3221,7 @@ public sealed partial class XlsxFileAdapter
                 }
 
                 return string.Equals(
-                    CreateSourceModelFingerprint(workbook),
+                    CreatePatchValidationModelFingerprint(workbook),
                     _modelFingerprint,
                     StringComparison.Ordinal);
             }
