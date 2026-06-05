@@ -1063,6 +1063,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "cultre"))
+                {
+                    suggestion = "culture";
+                    return true;
+                }
+
                 if (first == 'e' && EqualAsciiWordIgnoreCase(word, "exhbit"))
                 {
                     suggestion = "exhibit";
@@ -1890,6 +1896,18 @@ public static partial class SpellCheckService
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "renewel"))
                 {
                     suggestion = "renewal";
+                    return true;
+                }
+
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "localee"))
+                {
+                    suggestion = "locale";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "resorce"))
+                {
+                    suggestion = "resource";
                     return true;
                 }
 
@@ -2789,6 +2807,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "langauge"))
+                {
+                    suggestion = "language";
+                    return true;
+                }
+
                 if (first == 'm' && EqualAsciiWordIgnoreCase(word, "manfiest"))
                 {
                     suggestion = "manifest";
@@ -2810,6 +2834,12 @@ public static partial class SpellCheckService
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "previeww"))
                 {
                     suggestion = "preview";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "resxfile"))
+                {
+                    suggestion = "resource file";
                     return true;
                 }
 
@@ -3613,6 +3643,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fallbackk"))
+                {
+                    suggestion = "fallback";
+                    return true;
+                }
+
                 if (first == 'e' && EqualAsciiWordIgnoreCase(word, "evacuaton"))
                 {
                     suggestion = "evacuation";
@@ -3688,6 +3724,12 @@ public static partial class SpellCheckService
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "tournment"))
                 {
                     suggestion = "tournament";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "timezonee"))
+                {
+                    suggestion = "time zone";
                     return true;
                 }
 
@@ -4755,6 +4797,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "translaton"))
+                {
+                    suggestion = "translation";
+                    return true;
+                }
+
                 if (first == 'u' && EqualAsciiWordIgnoreCase(word, "utilzation"))
                 {
                     suggestion = "utilization";
@@ -4880,6 +4928,18 @@ public static partial class SpellCheckService
                 if (first == 'i' && EqualAsciiWordIgnoreCase(word, "instalation"))
                 {
                     suggestion = "installation";
+                    return true;
+                }
+
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "localizaton"))
+                {
+                    suggestion = "localization";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "righttoleft"))
+                {
+                    suggestion = "right to left";
                     return true;
                 }
 
@@ -5197,6 +5257,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "globalizaton"))
+                {
+                    suggestion = "globalization";
+                    return true;
+                }
+
                 if (first == 'b' && EqualAsciiWordIgnoreCase(word, "biodiveristy"))
                 {
                     suggestion = "biodiversity";
@@ -5218,6 +5284,12 @@ public static partial class SpellCheckService
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "reimbursment"))
                 {
                     suggestion = "reimbursement";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pluralizaton"))
+                {
+                    suggestion = "pluralization";
                     return true;
                 }
 
@@ -5375,6 +5447,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "regionalseting"))
+                {
+                    suggestion = "regional setting";
+                    return true;
+                }
+
                 break;
             case 15:
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "reconcilliation"))
@@ -5388,6 +5466,22 @@ public static partial class SpellCheckService
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "releasecandidate"))
                 {
                     suggestion = "release candidate";
+                    return true;
+                }
+
+                break;
+            case 17:
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pseudolocalizaton"))
+                {
+                    suggestion = "pseudolocalization";
+                    return true;
+                }
+
+                break;
+            case 19:
+                if (first == 'i' && EqualAsciiWordIgnoreCase(word, "internatonalization"))
+                {
+                    suggestion = "internationalization";
                     return true;
                 }
 

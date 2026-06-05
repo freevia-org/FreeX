@@ -2480,6 +2480,53 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversLocalizationGlobalizationResourceVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "LOCALIZATON Globalizaton Internatonalization translaton Langauge cultre resorce Resxfile Fallbackk localee Regionalseting Pseudolocalizaton pluralizaton TIMEZONEE Righttoleft. Keep localization, globalization, internationalization, translation, language, culture, resource, resource file, fallback, locale, regional setting, pseudolocalization, pluralization, time zone, right to left, prelocalizaton, localizaton_id, https://localizaton.example.com/resxfile, i18n@langauge.example.com, \"C:\\cultre folder\\timezonee file.resx\", and [C:\\resorce folder\\righttoleft file.resx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "localizaton LOCALIZATON Localizaton https://localizaton.example.com/localizaton i18n@localizaton.example.com localizaton_id prelocalizaton \"C:\\localizaton folder\\localizaton file.resx\" [C:\\localizaton folder\\localizaton file.resx].")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "localization");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("LOCALIZATON", "LOCALIZATION"),
+            ("Globalizaton", "Globalization"),
+            ("Internatonalization", "Internationalization"),
+            ("translaton", "translation"),
+            ("Langauge", "Language"),
+            ("cultre", "culture"),
+            ("resorce", "resource"),
+            ("Resxfile", "Resource file"),
+            ("Fallbackk", "Fallback"),
+            ("localee", "locale"),
+            ("Regionalseting", "Regional setting"),
+            ("Pseudolocalizaton", "Pseudolocalization"),
+            ("pluralizaton", "pluralization"),
+            ("TIMEZONEE", "TIME ZONE"),
+            ("Righttoleft", "Right to left"));
+        plan.IssueCount.Should().Be(15);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "LOCALIZATION Globalization Internationalization translation Language culture resource Resource file Fallback locale Regional setting Pseudolocalization pluralization TIME ZONE Right to left. Keep localization, globalization, internationalization, translation, language, culture, resource, resource file, fallback, locale, regional setting, pseudolocalization, pluralization, time zone, right to left, prelocalizaton, localizaton_id, https://localizaton.example.com/resxfile, i18n@langauge.example.com, \"C:\\cultre folder\\timezonee file.resx\", and [C:\\resorce folder\\righttoleft file.resx].");
+        plan.Edits[0].ReplacementCount.Should().Be(15);
+        replaceAllCorrected.Should().Be(
+            "localization LOCALIZATION Localization https://localizaton.example.com/localizaton i18n@localizaton.example.com localizaton_id prelocalizaton \"C:\\localizaton folder\\localizaton file.resx\" [C:\\localizaton folder\\localizaton file.resx].");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");
