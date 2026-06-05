@@ -175,6 +175,22 @@ public partial class FormulaEvaluatorTests
             .Should().Be(ErrorValue.Value);
     }
 
+    [Fact]
+    public void SingleFunction_UsesFormulaRowOrColumn()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(40));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(50));
+
+        _evaluator.Evaluate("=_xlfn.SINGLE(A1:A3)", sheet, currentCell: new CellAddress(sheet.Id, 2, 3))
+            .Should().Be(new NumberValue(20));
+        _evaluator.Evaluate("=SINGLE(A1:C1)", sheet, currentCell: new CellAddress(sheet.Id, 3, 2))
+            .Should().Be(new NumberValue(40));
+    }
+
     // ── String concatenation ──
 
     [Fact]
