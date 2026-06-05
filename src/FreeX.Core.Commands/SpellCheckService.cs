@@ -955,9 +955,21 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "manger"))
+                {
+                    suggestion = "manager";
+                    return true;
+                }
+
                 if (first == 'm' && EqualAsciiWordIgnoreCase(word, "messge"))
                 {
                     suggestion = "message";
+                    return true;
+                }
+
+                if (first == 'o' && EqualAsciiWordIgnoreCase(word, "onbord"))
+                {
+                    suggestion = "onboard";
                     return true;
                 }
 
@@ -1143,6 +1155,24 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "employe"))
+                {
+                    suggestion = "employee";
+                    return true;
+                }
+
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "emploee"))
+                {
+                    suggestion = "employee";
+                    return true;
+                }
+
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "emplyee"))
+                {
+                    suggestion = "employee";
+                    return true;
+                }
+
                 if (first == 'b' && EqualAsciiWordIgnoreCase(word, "beleive"))
                 {
                     suggestion = "believe";
@@ -1182,6 +1212,12 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "forcast"))
                 {
                     suggestion = "forecast";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "maneger"))
+                {
+                    suggestion = "manager";
                     return true;
                 }
 
@@ -1371,6 +1407,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "vacaton"))
+                {
+                    suggestion = "vacation";
+                    return true;
+                }
+
                 break;
             case 8:
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acheived"))
@@ -1388,6 +1430,12 @@ public static partial class SpellCheckService
                 if (first == 'b' && EqualAsciiWordIgnoreCase(word, "begining"))
                 {
                     suggestion = "beginning";
+                    return true;
+                }
+
+                if (first == 'b' && EqualAsciiWordIgnoreCase(word, "benifits"))
+                {
+                    suggestion = "benefits";
                     return true;
                 }
 
@@ -1663,6 +1711,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "departmnt"))
+                {
+                    suggestion = "department";
+                    return true;
+                }
+
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "forcasted"))
                 {
                     suggestion = "forecasted";
@@ -1705,9 +1759,21 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'o' && EqualAsciiWordIgnoreCase(word, "onbording"))
+                {
+                    suggestion = "onboarding";
+                    return true;
+                }
+
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "referance"))
                 {
                     suggestion = "reference";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "recruting"))
+                {
+                    suggestion = "recruiting";
                     return true;
                 }
 
@@ -1747,6 +1813,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "trainging"))
+                {
+                    suggestion = "training";
+                    return true;
+                }
+
                 if (first == 'w' && EqualAsciiWordIgnoreCase(word, "workboook"))
                 {
                     suggestion = "workbook";
@@ -1782,6 +1854,12 @@ public static partial class SpellCheckService
                 if (first == 'd' && EqualAsciiWordIgnoreCase(word, "dependancy"))
                 {
                     suggestion = "dependency";
+                    return true;
+                }
+
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "departmant"))
+                {
+                    suggestion = "department";
                     return true;
                 }
 
@@ -1848,6 +1926,18 @@ public static partial class SpellCheckService
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "percenatge"))
                 {
                     suggestion = "percentage";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "perfomance"))
+                {
+                    suggestion = "performance";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "performnce"))
+                {
+                    suggestion = "performance";
                     return true;
                 }
 
