@@ -130,12 +130,7 @@ public sealed class RecalcEngine
                 else if (result is RangeValue rv)
                 {
                     sheet.ClearSpillRange(addr);
-                    if (TryEvaluateLegacyImplicitIntersection(cachedAst, rv, addr, out var intersectedValue))
-                    {
-                        cell.Value = intersectedValue;
-                        AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
-                    }
-                    else if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
+                    if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
                     {
                         cell.Value = ErrorValue.Spill;
                         AddError(ref errors, addr, "#SPILL!");
@@ -187,95 +182,6 @@ public sealed class RecalcEngine
             errors ?? EmptyErrors,
             cyclicCells ?? EmptyCells);
     }
-
-    private static bool TryEvaluateLegacyImplicitIntersection(
-        FormulaNode formula,
-        RangeValue range,
-        CellAddress currentCell,
-        out ScalarValue value)
-    {
-        value = BlankValue.Instance;
-        if (PreservesDynamicArraySpill(formula))
-            return false;
-
-        value = ResolveImplicitIntersection(range, currentCell);
-        return true;
-    }
-
-    private static ScalarValue ResolveImplicitIntersection(RangeValue range, CellAddress currentCell)
-    {
-        if (range.RowCount == 1 && range.ColCount == 1)
-            return range.Cells[0, 0];
-
-        var rowOffset = TryGetOffset(currentCell.Row, range.StartRow, range.RowCount);
-        var colOffset = TryGetOffset(currentCell.Col, range.StartCol, range.ColCount);
-
-        if (rowOffset is { } row && colOffset is { } col)
-            return range.Cells[row, col];
-
-        if (range.RowCount == 1 && colOffset is { } rowVectorCol)
-            return range.Cells[0, rowVectorCol];
-
-        if (range.ColCount == 1 && rowOffset is { } columnVectorRow)
-            return range.Cells[columnVectorRow, 0];
-
-        return ErrorValue.Value;
-    }
-
-    private static int? TryGetOffset(uint coordinate, uint start, int count)
-    {
-        var offset = (long)coordinate - start;
-        return offset >= 0 && offset < count ? (int)offset : null;
-    }
-
-    private static bool PreservesDynamicArraySpill(FormulaNode formula) =>
-        formula switch
-        {
-            ArrayConstantNode => true,
-            FunctionCallNode => true,
-            BinaryOpNode binary => ContainsExplicitDynamicArrayExpression(binary.Left) ||
-                                   ContainsExplicitDynamicArrayExpression(binary.Right),
-            UnaryOpNode unary => ContainsExplicitDynamicArrayExpression(unary.Operand),
-            _ => false
-        };
-
-    private static bool ContainsExplicitDynamicArrayExpression(FormulaNode formula) =>
-        formula switch
-        {
-            ArrayConstantNode => true,
-            FunctionCallNode function => IsDynamicArraySpillFunction(function.FunctionName) ||
-                                         function.Arguments.Any(ContainsExplicitDynamicArrayExpression),
-            BinaryOpNode binary => ContainsExplicitDynamicArrayExpression(binary.Left) ||
-                                   ContainsExplicitDynamicArrayExpression(binary.Right),
-            UnaryOpNode unary => ContainsExplicitDynamicArrayExpression(unary.Operand),
-            _ => false
-        };
-
-    private static bool IsDynamicArraySpillFunction(string functionName) =>
-        functionName.ToUpperInvariant() is
-            "SEQUENCE" or
-            "RANDARRAY" or
-            "FILTER" or
-            "SORT" or
-            "SORTBY" or
-            "TAKE" or
-            "DROP" or
-            "CHOOSEROWS" or
-            "CHOOSECOLS" or
-            "VSTACK" or
-            "HSTACK" or
-            "TOROW" or
-            "TOCOL" or
-            "WRAPROWS" or
-            "WRAPCOLS" or
-            "EXPAND" or
-            "UNIQUE" or
-            "TRIMRANGE" or
-            "TEXTSPLIT" or
-            "TRANSPOSE" or
-            "MMULT" or
-            "MINVERSE" or
-            "MUNIT";
 
     private IEnumerable<CellAddress> BuildChangedSetForTraversal(IReadOnlyList<CellAddress> changedCells)
     {

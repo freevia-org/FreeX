@@ -399,6 +399,7 @@ public sealed partial class NativeJsonAdapter
                 writer,
                 cell.Value,
                 cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null,
+                cell.HasFormula ? cell.ArrayMode : FormulaArrayMode.Dynamic,
                 cell.IgnoreFormulaError,
                 GetNativeStyleId(cell.StyleId),
                 style: null,

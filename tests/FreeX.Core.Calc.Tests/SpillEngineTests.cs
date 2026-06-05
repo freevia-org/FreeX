@@ -159,36 +159,40 @@ public class SpillEngineTests
     }
 
     [Fact]
-    public void Recalc_LegacyRowRangeArithmetic_ImplicitlyIntersectsByFormulaColumn()
+    public void Recalc_DynamicRowRangeArithmetic_SpillsFromFirstElement()
     {
         var (engine, wb) = MakeEngine();
         var sheet = wb.Sheets.First();
         sheet.SetCell(new CellAddress(sheet.Id, 7, 1), new NumberValue(2));
-        sheet.SetCell(new CellAddress(sheet.Id, 7, 5), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 2), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 3), new NumberValue(4));
         sheet.SetCell(new CellAddress(sheet.Id, 15, 2), new NumberValue(10));
         var formula = new CellAddress(sheet.Id, 15, 5);
-        sheet.SetFormula(formula, "A7:J7*B15");
+        sheet.SetFormula(formula, "A7:C7*B15");
         engine.RebuildFormulaDependencies(wb);
         engine.Recalculate(wb, [formula]);
 
-        sheet.GetValue(15, 5).Should().Be(new NumberValue(50));
-        sheet.GetValue(15, 6).Should().Be(BlankValue.Instance);
+        sheet.GetValue(15, 5).Should().Be(new NumberValue(20));
+        sheet.GetValue(15, 6).Should().Be(new NumberValue(30));
+        sheet.GetValue(15, 7).Should().Be(new NumberValue(40));
     }
 
     [Fact]
-    public void Recalc_LegacyColumnRangeArithmetic_ImplicitlyIntersectsByFormulaRow()
+    public void Recalc_DynamicColumnRangeArithmetic_SpillsFromFirstElement()
     {
         var (engine, wb) = MakeEngine();
         var sheet = wb.Sheets.First();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(5));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(7));
         var formula = new CellAddress(sheet.Id, 3, 4);
-        sheet.SetFormula(formula, "A1:A5+10");
+        sheet.SetFormula(formula, "A1:A3+10");
         engine.RebuildFormulaDependencies(wb);
         engine.Recalculate(wb, [formula]);
 
-        sheet.GetValue(3, 4).Should().Be(new NumberValue(17));
-        sheet.GetValue(4, 4).Should().Be(BlankValue.Instance);
+        sheet.GetValue(3, 4).Should().Be(new NumberValue(12));
+        sheet.GetValue(4, 4).Should().Be(new NumberValue(15));
+        sheet.GetValue(5, 4).Should().Be(new NumberValue(17));
     }
 
     [Fact]

@@ -998,7 +998,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static bool PatchBlockReasonInvalidatesCalcChain(string reason) =>
-            reason is "change_formula_text" or "change_formula_to_literal";
+            reason is "change_formula_text" or "change_formula_to_literal" or "change_formula_array_mode";
 
         private static bool ChangesInvalidateCalcChain(IEnumerable<XlsxCellValuePatch> changes) =>
             changes.Any(change =>
@@ -3492,6 +3492,7 @@ public sealed partial class XlsxFileAdapter
                             new XlsxPatchCell(
                                 cell.Value,
                                 cell.FormulaText,
+                                cell.ArrayMode,
                                 cell.StyleId,
                                 sourceStyleIndex,
                                 cell.IgnoreFormulaError));
@@ -3566,6 +3567,7 @@ public sealed partial class XlsxFileAdapter
                         new XlsxPatchCell(
                             cell.Value,
                             cell.FormulaText,
+                            cell.ArrayMode,
                             cell.StyleId,
                             sourceStyleIndex,
                             cell.IgnoreFormulaError));
@@ -3815,6 +3817,8 @@ public sealed partial class XlsxFileAdapter
                             cell.Value,
                             OriginalFormulaText: null,
                             NewFormulaText: null,
+                            OriginalArrayMode: FormulaArrayMode.Dynamic,
+                            NewArrayMode: FormulaArrayMode.Dynamic,
                             OriginalStyleId: originalStyleId,
                             NewStyleId: cell.StyleId,
                             OriginalSourceStyleIndex: originalSourceStyleIndex,
@@ -3831,6 +3835,12 @@ public sealed partial class XlsxFileAdapter
                     if (cell.IgnoreFormulaError != original.IgnoreFormulaError)
                     {
                         return Fail("change_formula_error_metadata", out blockReason);
+                    }
+
+                    if ((cell.HasFormula || original.FormulaText is not null) &&
+                        cell.ArrayMode != original.ArrayMode)
+                    {
+                        return Fail("change_formula_array_mode", out blockReason);
                     }
 
                     var styleChanged = cell.StyleId != original.StyleId;
@@ -3899,6 +3909,8 @@ public sealed partial class XlsxFileAdapter
                         cell.Value,
                         original.FormulaText,
                         cell.FormulaText,
+                        original.ArrayMode,
+                        cell.ArrayMode,
                         original.StyleId,
                         cell.StyleId,
                         original.SourceStyleIndex,
@@ -3936,6 +3948,8 @@ public sealed partial class XlsxFileAdapter
                         BlankValue.Instance,
                         original.FormulaText,
                         NewFormulaText: null,
+                        original.ArrayMode,
+                        NewArrayMode: FormulaArrayMode.Dynamic,
                         original.StyleId,
                         NewStyleId: StyleId.Default,
                         original.SourceStyleIndex,
@@ -4879,6 +4893,7 @@ public sealed partial class XlsxFileAdapter
                 Cell Cell,
                 ScalarValue CurrentValue,
                 string? CurrentFormulaText,
+                FormulaArrayMode CurrentArrayMode,
                 StyleId CurrentStyleId,
                 bool CurrentIgnoreFormulaError)>(changes.Count);
             var insertedCells = new List<(Sheet Sheet, uint Row, uint Col, Cell CurrentCell)>();
@@ -4968,6 +4983,7 @@ public sealed partial class XlsxFileAdapter
                         {
                             Value = change.OriginalValue,
                             FormulaText = change.OriginalFormulaText,
+                            ArrayMode = change.OriginalArrayMode,
                             StyleId = change.OriginalStyleId,
                             IgnoreFormulaError = change.OriginalIgnoreFormulaError
                         };
@@ -4984,10 +5000,12 @@ public sealed partial class XlsxFileAdapter
                         changedCell,
                         changedCell.Value,
                         changedCell.FormulaText,
+                        changedCell.ArrayMode,
                         changedCell.StyleId,
                         changedCell.IgnoreFormulaError));
                     changedCell.Value = change.OriginalValue;
                     changedCell.FormulaText = change.OriginalFormulaText;
+                    changedCell.ArrayMode = change.OriginalArrayMode;
                     changedCell.StyleId = change.OriginalStyleId;
                     changedCell.IgnoreFormulaError = change.OriginalIgnoreFormulaError;
                 }
@@ -4999,10 +5017,11 @@ public sealed partial class XlsxFileAdapter
             }
             finally
             {
-                foreach (var (cell, currentValue, currentFormulaText, currentStyleId, currentIgnoreFormulaError) in restoredCells)
+                foreach (var (cell, currentValue, currentFormulaText, currentArrayMode, currentStyleId, currentIgnoreFormulaError) in restoredCells)
                 {
                     cell.Value = currentValue;
                     cell.FormulaText = currentFormulaText;
+                    cell.ArrayMode = currentArrayMode;
                     cell.StyleId = currentStyleId;
                     cell.IgnoreFormulaError = currentIgnoreFormulaError;
                 }
@@ -7393,6 +7412,7 @@ public sealed partial class XlsxFileAdapter
                         FormulaText = change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue
                             ? change.NewFormulaText
                             : current.FormulaText,
+                        ArrayMode = change.NewArrayMode,
                         StyleId = change.NewStyleId,
                         SourceStyleIndex = change.HasStyleChange
                             ? change.NewSourceStyleIndex
@@ -7415,6 +7435,7 @@ public sealed partial class XlsxFileAdapter
                     new XlsxPatchCell(
                         change.NewValue,
                         null,
+                        FormulaArrayMode.Dynamic,
                         change.NewStyleId,
                         change.NewSourceStyleIndex,
                         false));
@@ -7537,6 +7558,7 @@ public sealed partial class XlsxFileAdapter
     private readonly record struct XlsxPatchCell(
         ScalarValue Value,
         string? FormulaText,
+        FormulaArrayMode ArrayMode,
         StyleId StyleId,
         string? SourceStyleIndex,
         bool IgnoreFormulaError);
@@ -7551,6 +7573,8 @@ public sealed partial class XlsxFileAdapter
         ScalarValue NewValue,
         string? OriginalFormulaText,
         string? NewFormulaText,
+        FormulaArrayMode OriginalArrayMode,
+        FormulaArrayMode NewArrayMode,
         StyleId OriginalStyleId,
         StyleId NewStyleId,
         string? OriginalSourceStyleIndex,
