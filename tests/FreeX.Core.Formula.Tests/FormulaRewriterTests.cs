@@ -251,6 +251,46 @@ public class FormulaRewriterTests
     }
 
     [Fact]
+    public void MoveRange_CellRefsInsideSource_RetargetEvenWhenAbsolute()
+    {
+        var op = new MoveRangeOp("Sheet1", 1, 1, 1, 2, 2, 2);
+
+        var result = FormulaRewriter.Rewrite("A1+$A$1+B1", op, "Sheet1");
+
+        result.Should().Be("C3+$C$3+D3");
+    }
+
+    [Fact]
+    public void MoveRange_CellRefsOutsideSource_AreUnchanged()
+    {
+        var op = new MoveRangeOp("Sheet1", 1, 2, 1, 2, 2, 2);
+
+        var result = FormulaRewriter.Rewrite("A1+$A$1+SUM(A1:A2)", op, "Sheet1");
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void MoveRange_RangeRef_RewritesOnlyWhenBothEndpointsMoved()
+    {
+        var op = new MoveRangeOp("Sheet1", 1, 1, 1, 2, 2, 2);
+
+        var result = FormulaRewriter.Rewrite("SUM(A1:B1)+SUM(A1:C1)", op, "Sheet1");
+
+        result.Should().Be("SUM(C3:D3)+SUM(A1:C1)");
+    }
+
+    [Fact]
+    public void MoveRange_SingleCellEndpointMove_ExpandsOneAxisRangeOnlyWhenMovingOutward()
+    {
+        var op = new MoveRangeOp("Sheet1", 1, 2, 1, 2, 0, 3);
+
+        var result = FormulaRewriter.Rewrite("SUM(A1:B1)+SUM(B1:C1)", op, "Sheet1");
+
+        result.Should().Be("SUM(A1:E1)+SUM(B1:C1)");
+    }
+
+    [Fact]
     public void Rewrite_ParseFailure_ReturnsNull()
     {
         // Malformed formula should not throw — returns null
