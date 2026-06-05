@@ -285,6 +285,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBooleanFunctions()
+    {
+        AssertFormulaBooleanContrastLocations("=TRUE()", "B1", "B2", "B3", "B4");
+        AssertFormulaBooleanContrastLocations("=FALSE()");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumericLiterals()
     {
         AssertFormulaBooleanContrastLocations("=1", "B1", "B2", "B3", "B4");
@@ -323,6 +330,15 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaBooleanContrastLocations("AND($A1>=100,$C1)", "B2");
         AssertFormulaBooleanContrastLocations("OR($A1>=100,$C1)", "B1", "B2", "B3");
         AssertFormulaBooleanContrastLocations("NOT($C1)", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBooleanFunctionsInsideLogicalWrappers()
+    {
+        AssertFormulaBooleanContrastLocations("AND(TRUE(),$A1>=100)", "B2", "B3");
+        AssertFormulaBooleanContrastLocations("OR(FALSE(),$C1)", "B1", "B2");
+        AssertFormulaBooleanContrastLocations("NOT(FALSE())", "B1", "B2", "B3", "B4");
+        AssertFormulaBooleanContrastLocations("XOR(TRUE(),$C1)", "B3", "B4");
     }
 
     [Fact]
@@ -410,6 +426,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIfBooleanBranches()
     {
         AssertFormulaIfContrastLocations("IF($A1>=100,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaIfContrastLocations("IF($A1>=100,TRUE(),FALSE())", "B2", "B4");
     }
 
     [Fact]
@@ -437,6 +454,15 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaPredicateContrastLocations("XOR(ISNUMBER($A1),$C1)", "B2", "B3", "B5");
         AssertFormulaXorContrastLocations("XOR(IF($A1>=100,TRUE,FALSE),$C1=\"Open\")", "B2", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatBooleanFunctionsWithArguments()
+    {
+        AssertFormulaBooleanContrastLocations("=TRUE(1)");
+        AssertFormulaBooleanContrastLocations("NOT(FALSE($A1))");
+        AssertFormulaBooleanContrastLocations("AND(TRUE(1),$A1>=100)");
+        AssertFormulaIfContrastLocations("IF($A1>=100,TRUE(1),FALSE())");
     }
 
     [Fact]
