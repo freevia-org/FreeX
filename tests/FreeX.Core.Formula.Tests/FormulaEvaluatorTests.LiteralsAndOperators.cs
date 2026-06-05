@@ -147,6 +147,34 @@ public partial class FormulaEvaluatorTests
         _evaluator.Evaluate("=(-2)^2", sheet).Should().Be(new NumberValue(4));
     }
 
+    [Fact]
+    public void ExplicitImplicitIntersection_UsesFormulaRowOrColumn()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(40));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(50));
+
+        _evaluator.Evaluate("=@A1:A3", sheet, currentCell: new CellAddress(sheet.Id, 2, 3))
+            .Should().Be(new NumberValue(20));
+        _evaluator.Evaluate("=@A1:C1", sheet, currentCell: new CellAddress(sheet.Id, 3, 2))
+            .Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
+    public void ExplicitImplicitIntersection_ReturnsValueErrorWhenRangeMissesFormulaCell()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(30));
+
+        _evaluator.Evaluate("=@A1:C1", sheet, currentCell: new CellAddress(sheet.Id, 3, 4))
+            .Should().Be(ErrorValue.Value);
+    }
+
     // ── String concatenation ──
 
     [Fact]

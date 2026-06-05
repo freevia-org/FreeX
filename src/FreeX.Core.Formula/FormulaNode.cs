@@ -87,4 +87,4 @@ public enum BinaryOperator
 }
 
 /// <summary>Unary operators.</summary>
-public enum UnaryOperator { Negate, Percent }
+public enum UnaryOperator { Negate, Percent, ImplicitIntersection }
