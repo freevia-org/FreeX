@@ -196,7 +196,11 @@ public static partial class FlashFillService
             s => GetNameToken(s, 0) + " " + GetNameToken(s, 1) + " " + GetNameToken(s, 2),
             s => GetNameToken(s, 2) + ", " + GetNameToken(s, 0) + " " + GetNameToken(s, 1),
             s => GetNameToken(s, 0) + " " + GetNameInitial(s, 1) + ". " + GetNameToken(s, 2),
-            s => GetNameInitial(s, 0) + ". " + GetNameInitial(s, 1) + ". " + GetNameToken(s, 2)
+            s => GetNameInitial(s, 0) + ". " + GetNameInitial(s, 1) + ". " + GetNameToken(s, 2),
+            s => GetNameToken(s, 2) + ", " + GetNameToken(s, 0) + " " + GetNameInitial(s, 1) + ".",
+            s => GetNameToken(s, 2) + ", " + GetNameInitial(s, 0) + ". " + GetNameInitial(s, 1) + ".",
+            s => GetNameToken(s, 0) + " " + GetNameToken(s, 1) + " " + GetNameInitial(s, 2) + ".",
+            s => GetNameInitial(s, 0) + ". " + GetNameInitial(s, 1) + ". " + GetNameInitial(s, 2) + "."
         };
 
         foreach (var pattern in patterns)
