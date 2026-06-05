@@ -304,7 +304,7 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
-    public void Fill_EmbeddedTimeRangeEndpointExtraction_ReturnsNullForIdenticalRangeFrames()
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ExtractsSecondEndpointFromIdenticalRangeFrames()
     {
         var result = FlashFillService.Fill(
             [
@@ -312,6 +312,45 @@ public sealed partial class FlashFillServiceTests
                 ("Window 08:05 to 11:30", "11:30")
             ],
             ["Window 07:30 to 08:45"]);
+
+        result.Should().BeEquivalentTo(["08:45"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ExtractsFirstEndpointFromIdenticalRangeFrames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 09:30 to 10:45", "09:30"),
+                ("Window 08:05 to 11:30", "08:05")
+            ],
+            ["Window 07:30 to 08:45"]);
+
+        result.Should().BeEquivalentTo(["07:30"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ReturnsNullForComponentOnlyExamplesInRange()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 14:05 to 16:40", "14"),
+                ("Window 09:30 to 10:45", "09")
+            ],
+            ["Window 07:30 to 08:45"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ReturnsNullForIdenticalFirstEndpointFramesMovingTogether()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 14:05 to 16:40", "14:05"),
+                ("Window 10:00 to 12:00", "10:00")
+            ],
+            ["Window 09:30 to 10:45"]);
 
         result.Should().BeNull();
     }

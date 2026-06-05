@@ -9,7 +9,7 @@ public sealed partial class SourceTodoDocumentationTests
     [Fact]
     public void SourceText_DoesNotContainMojibake()
     {
-        var repoDirectory = FindRepoDirectory();
+        var repoDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
         var sourceDirectory = Path.Combine(repoDirectory, "src");
         var invalidLines = Directory
             .EnumerateFiles(sourceDirectory, "*.*", SearchOption.AllDirectories)
@@ -24,7 +24,7 @@ public sealed partial class SourceTodoDocumentationTests
     [Fact]
     public void DocumentationText_DoesNotContainMojibake()
     {
-        var repoDirectory = FindRepoDirectory();
+        var repoDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
         var docsDirectory = Path.Combine(repoDirectory, "docs");
         var invalidLines = Directory
             .EnumerateFiles(docsDirectory, "*.md", SearchOption.AllDirectories)
@@ -37,7 +37,7 @@ public sealed partial class SourceTodoDocumentationTests
     [Fact]
     public void SourceDeferredWorkMarkers_LinkToTrackingDocumentation()
     {
-        var repoDirectory = FindRepoDirectory();
+        var repoDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
         var sourceDirectory = Path.Combine(repoDirectory, "src");
         var invalidMarkers = Directory
             .EnumerateFiles(sourceDirectory, "*.cs", SearchOption.AllDirectories)
@@ -47,13 +47,6 @@ public sealed partial class SourceTodoDocumentationTests
 
         invalidMarkers.Should().BeEmpty(
             "source TODO/FIXME/HACK/XXX markers must use '// TODO(owner): note (ref: docs/file.md#anchor)' so deferred work remains traceable");
-    }
-
-    private static string FindRepoDirectory()
-    {
-        var hostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var sourceDirectory = Directory.GetParent(hostDirectory)!.FullName;
-        return Directory.GetParent(sourceDirectory)!.FullName;
     }
 
     private static bool IsTrackedSourceFile(string path)
