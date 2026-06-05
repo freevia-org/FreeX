@@ -67,6 +67,15 @@ internal static class XlsxClosedXmlCellMapper
                 catch { return ErrorValue.Num; }
             }
         }
+        if (xlValue.IsTimeSpan)
+        {
+            // Excel stores times-of-day and elapsed durations as a fraction-of-a-day serial number;
+            // ClosedXML surfaces a number with a time/duration format as a TimeSpan. Keep it numeric like
+            // Excel (with the exact serial) instead of letting it fall through to TextValue("9:00:00").
+            return TryGetUnifiedNumber(xlValue, out var serial)
+                ? new NumberValue(serial)
+                : new NumberValue(xlValue.GetTimeSpan().TotalDays);
+        }
         if (xlValue.IsError) return MapErrorValue(xlValue.GetError());
         return new TextValue(xlValue.ToString());
     }
