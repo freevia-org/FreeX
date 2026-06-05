@@ -34,6 +34,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
     private readonly ICommandBus _commandBus;
+    private readonly ICommandStackChangeNotifier? _commandStackChangeNotifier;
     private readonly IUserMessageService _messageService;
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
@@ -212,6 +213,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         _logger = logger;
         _viewportService = viewportService;
         _commandBus = commandBus;
+        _commandStackChangeNotifier = commandBus as ICommandStackChangeNotifier;
         _messageService = messageService;
         _recalcEngine = recalcEngine;
         _fileAdapters = fileAdapters;
@@ -228,6 +230,9 @@ public partial class MainWindow : Window, IWorkbookWindow
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
+        if (_commandStackChangeNotifier is not null)
+            _commandStackChangeNotifier.StackChanged += CommandStackChangeNotifier_StackChanged;
+
         RibbonMenuIconSeeder.Register();
         RebuildQuickAccessToolbar();
         InitializeQuickAccessToolbarCustomizationContextMenus();
@@ -279,6 +284,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         this.Deactivated += MainWindow_Deactivated;
         this.TextInput += MainWindow_TextInput;
         Closing += MainWindow_Closing;
+        Closed += MainWindow_Closed;
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
         FormulaBar.TextChanged += (_, _) =>
         {
@@ -313,6 +319,26 @@ public partial class MainWindow : Window, IWorkbookWindow
 
     private void RecordDiagnosticEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null) =>
         _diagnostics?.RecordEvent(eventName, properties);
+
+    private void CommandStackChangeNotifier_StackChanged(object? sender, CommandStackChangedEventArgs e)
+    {
+        if (e.WorkbookId != _workbook.Id)
+            return;
+
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(() => CommandStackChangeNotifier_StackChanged(sender, e));
+            return;
+        }
+
+        RefreshQuickAccessToolbarCommandStates();
+    }
+
+    private void MainWindow_Closed(object? sender, EventArgs e)
+    {
+        if (_commandStackChangeNotifier is not null)
+            _commandStackChangeNotifier.StackChanged -= CommandStackChangeNotifier_StackChanged;
+    }
 
     private void UpdateMaxRestoreButtonState()
     {
