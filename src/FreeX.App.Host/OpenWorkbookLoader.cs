@@ -73,7 +73,8 @@ public sealed class OpenWorkbookLoader
             });
         ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
 
-        if (WorkbookFormulaScanner.HasFormulas(workbook))
+        if (WorkbookFormulaScanner.HasFormulas(workbook) &&
+            ShouldRecalculateLoadedFormulas(workbook, adapter, isOpenXmlExcelPackage))
         {
             await RunStageAsync(
                 progress,
@@ -183,6 +184,21 @@ public sealed class OpenWorkbookLoader
         extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) ||
         extension.Equals(".xltx", StringComparison.OrdinalIgnoreCase) ||
         extension.Equals(".xltm", StringComparison.OrdinalIgnoreCase);
+
+    private static bool ShouldRecalculateLoadedFormulas(
+        Workbook workbook,
+        IFileAdapter adapter,
+        bool isOpenXmlExcelPackage)
+    {
+        if (isOpenXmlExcelPackage && adapter is XlsxFileAdapter)
+        {
+            return workbook.FullCalculationOnLoad ||
+                   workbook.ForceFullCalculation ||
+                   workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad);
+        }
+
+        return true;
+    }
 
     private static string CreateExcelCompatibleSheetName(string displayName)
     {

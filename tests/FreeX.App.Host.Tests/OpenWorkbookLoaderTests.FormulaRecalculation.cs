@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using System.IO;
+using System.IO.Compression;
 
 namespace FreeX.App.Host.Tests;
 
@@ -86,6 +87,79 @@ public sealed partial class OpenWorkbookLoaderTests
     }
 
     [Fact]
+    public async Task LoadAsync_XlsxWithCachedFormulasTrustsCachedValuesByDefault()
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+        await File.WriteAllBytesAsync(tempPath, CreateCachedFormulaXlsx());
+        try
+        {
+            var recalculateCalled = false;
+            var loader = new OpenWorkbookLoader(_ => recalculateCalled = true);
+
+            var result = await loader.LoadAsync(
+                tempPath,
+                new XlsxFileAdapter(),
+                ".xlsx",
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+                new TestProgress<OpenProgressUpdate>(_ => { }));
+
+            recalculateCalled.Should().BeFalse();
+            var formulaCell = result.Workbook.Sheets.Single().GetCell(1, 3);
+            formulaCell.Should().NotBeNull();
+            formulaCell!.FormulaText.Should().Be("SUM(A1:B1)");
+            formulaCell.Value.Should().Be(new NumberValue(5));
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task LoadAsync_XlsxRecalculatesWhenFullCalculationIsRequested(
+        bool workbookFullCalculationOnLoad,
+        bool forceFullCalculation,
+        bool sheetFullCalculationOnLoad)
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+        await File.WriteAllBytesAsync(
+            tempPath,
+            CreateCachedFormulaXlsx(
+                workbookFullCalculationOnLoad,
+                forceFullCalculation,
+                sheetFullCalculationOnLoad));
+        try
+        {
+            var recalculateCalled = false;
+            var loader = new OpenWorkbookLoader(workbook =>
+            {
+                recalculateCalled = true;
+                workbook.FullCalculationOnLoad.Should().Be(workbookFullCalculationOnLoad);
+                workbook.ForceFullCalculation.Should().Be(forceFullCalculation);
+                workbook.Sheets.Single().FullCalculationOnLoad.Should().Be(sheetFullCalculationOnLoad);
+                workbook.Sheets.Single().GetCell(1, 3)!.Value = new NumberValue(42);
+            });
+
+            var result = await loader.LoadAsync(
+                tempPath,
+                new XlsxFileAdapter(),
+                ".xlsx",
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+                new TestProgress<OpenProgressUpdate>(_ => { }));
+
+            recalculateCalled.Should().BeTrue();
+            result.Workbook.Sheets.Single().GetCell(1, 3)!.Value.Should().Be(new NumberValue(42));
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
+    [Fact]
     public void WorkbookFormulaScanner_UsesSheetFormulaCountsInsteadOfScanningCells()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find(
@@ -94,5 +168,81 @@ public sealed partial class OpenWorkbookLoaderTests
         source.Should().Contain("sheet.HasFormulas");
         source.Should().NotContain("EnumerateCells");
         source.Should().NotContain(".Any(");
+    }
+
+    private static byte[] CreateCachedFormulaXlsx(
+        bool workbookFullCalculationOnLoad = false,
+        bool forceFullCalculation = false,
+        bool sheetFullCalculationOnLoad = false)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AddXml(archive, "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                </Types>
+                """);
+            AddXml(archive, "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """);
+            AddXml(archive, "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                </Relationships>
+                """);
+
+            var calcAttributes = " calcMode=\"auto\"" +
+                                 (workbookFullCalculationOnLoad ? " fullCalcOnLoad=\"1\"" : string.Empty) +
+                                 (forceFullCalculation ? " forceFullCalc=\"1\"" : string.Empty);
+            AddXml(archive, "xl/workbook.xml",
+                $$"""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="FormulaCases" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                  <calcPr{{calcAttributes}}/>
+                </workbook>
+                """);
+
+            var sheetCalcProperties = sheetFullCalculationOnLoad
+                ? """<sheetCalcPr fullCalcOnLoad="1"/>"""
+                : string.Empty;
+            AddXml(archive, "xl/worksheets/sheet1.xml",
+                $$"""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  {{sheetCalcProperties}}
+                  <sheetData>
+                    <row r="1">
+                      <c r="A1"><v>2</v></c>
+                      <c r="B1"><v>3</v></c>
+                      <c r="C1"><f>SUM(A1:B1)</f><v>5</v></c>
+                    </row>
+                  </sheetData>
+                </worksheet>
+                """);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static void AddXml(ZipArchive archive, string path, string xml)
+    {
+        var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write(xml);
     }
 }
