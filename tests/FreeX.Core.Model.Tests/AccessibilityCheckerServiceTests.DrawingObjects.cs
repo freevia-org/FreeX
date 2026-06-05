@@ -63,8 +63,15 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Image 2.")]
     [InlineData("Image_2")]
     [InlineData("image (1).png")]
+    [InlineData("IMG_1234")]
     [InlineData("IMG_0001.jpg")]
     [InlineData("IMG_0001 (copy).jpg")]
+    [InlineData("DSC_0001")]
+    [InlineData("DSC-0001")]
+    [InlineData("dsc 0001")]
+    [InlineData("DSCF1234")]
+    [InlineData("PXL_20260605_123456789")]
+    [InlineData("PXL-20260605-123456789")]
     [InlineData("Object")]
     [InlineData("Object 1")]
     [InlineData("Graphic")]
@@ -173,6 +180,9 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Screenshot 2026-06-04 showing sales dashboard")]
     [InlineData("Screenshot_2026-06-04 showing sales dashboard")]
     [InlineData("Photo of warehouse team")]
+    [InlineData("Storefront IMG_1234")]
+    [InlineData("Warehouse DSC_0001 reference")]
+    [InlineData("PXL_20260605_123456789 showing loading dock")]
     [InlineData("Status icon legend")]
     [InlineData("Drawing of approval workflow")]
     [InlineData("Group status legend")]
@@ -393,6 +403,42 @@ public sealed partial class AccessibilityCheckerServiceTests
             "Picture alternate text should describe the object.",
             "Shape alternate text should describe the object.",
             "Shape alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
+            "Text box alternate text should describe the object.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsCameraDefaultDrawingObjectTitleOrNameWithoutDescriptiveAltText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            Title = "IMG_1234"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            Name = "DSC_0001"
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Text = "Dock photo",
+            Title = "PXL_20260605_123456789",
+            FillColor = CellColor.White
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind == AccessibilityIssueKind.GenericAltText)
+            .ToList();
+
+        issues.Select(i => i.Location).Should().Equal("A1", "A2", "A3");
+        issues.Select(i => i.Message).Should().Equal(
+            "Picture alternate text should describe the object.",
             "Shape alternate text should describe the object.",
             "Text box alternate text should describe the object.");
     }
