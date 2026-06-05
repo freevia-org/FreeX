@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -12,7 +11,7 @@ public sealed partial class WorkbookThemeDialogXamlTests
     public void Dialog_ExposesColorPickerButtonsForEveryThemeColorSlot()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("WorkbookThemeDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookThemeDialog.xaml.cs");
 
         var expectedPickerNames = new[]
         {
@@ -96,7 +95,7 @@ public sealed partial class WorkbookThemeDialogXamlTests
     [Fact]
     public void ColorPickerSwatches_UpdateWithThemeColors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookThemeDialog.xaml.cs");
 
         source.Should().Contain("UpdateColorPickerSwatches();");
         source.Should().Contain("private void UpdateColorPickerSwatches()");
