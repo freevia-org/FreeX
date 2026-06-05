@@ -384,6 +384,14 @@ public static partial class FlashFillService
         return source => TryRemoveFinalDottedToken(source, out var stem) ? stem : null;
     }
 
+    private static Func<string, string?>? TryRemoveLeadingDottedToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryRemoveLeadingDottedToken(e.Source, out var remainder) && remainder == e.Expected))
+            return null;
+
+        return source => TryRemoveLeadingDottedToken(source, out var remainder) ? remainder : null;
+    }
+
     private static Func<string, string?>? TryRemoveFinalDelimitedToken(IReadOnlyList<(string Source, string Expected)> examples)
     {
         foreach (var delimiter in FinalDelimitedTokenDelimiters)
@@ -449,6 +457,21 @@ public static partial class FlashFillService
 
         stem = source[..lastDotIndex].Trim();
         return stem.Length > 0;
+    }
+
+    private static bool TryRemoveLeadingDottedToken(string source, out string remainder)
+    {
+        remainder = string.Empty;
+        var firstDotIndex = source.IndexOf('.');
+        if (firstDotIndex <= 0 || firstDotIndex == source.Length - 1)
+            return false;
+
+        var leadingToken = source[..firstDotIndex].Trim();
+        if (leadingToken.Length == 0)
+            return false;
+
+        remainder = source[(firstDotIndex + 1)..].Trim();
+        return remainder.Length > 0;
     }
 
     private static bool TryRemoveFinalDelimitedToken(string source, char delimiter, out string stem)
