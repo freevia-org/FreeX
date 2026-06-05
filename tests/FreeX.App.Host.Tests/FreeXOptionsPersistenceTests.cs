@@ -6,13 +6,12 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class FreeXOptionsPersistenceTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(Path.GetTempPath(), "FreeXOptionsTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temp = new();
 
     [Fact]
     public void LoadFromPath_WhenJsonIsInvalid_ReturnsDefaultsWithObservableError()
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var path = Path.Combine(_tempDirectory, "options.json");
+        var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, "{ not-json");
 
         var options = FreeXOptions.LoadFromPath(path);
@@ -25,21 +24,19 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     [Fact]
     public void SaveToPath_WhenTargetCannotBeWritten_ReturnsFalseWithObservableError()
     {
-        Directory.CreateDirectory(_tempDirectory);
         var options = new FreeXOptions();
 
-        var saved = options.SaveToPath(_tempDirectory);
+        var saved = options.SaveToPath(_temp.Path);
 
         saved.Should().BeFalse();
         options.LastPersistenceError.Should().Contain("Failed to save options");
-        options.LastPersistenceError.Should().Contain(_tempDirectory);
+        options.LastPersistenceError.Should().Contain(_temp.Path);
     }
 
     [Fact]
     public void LoadFromPath_NormalizesLegacyJsonDefaultFormatToFreexWorkbook()
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var path = Path.Combine(_tempDirectory, "options.json");
+        var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, """{ "DefaultFormat": ".json" }""");
 
         var options = FreeXOptions.LoadFromPath(path);
@@ -55,8 +52,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         int persistedSheetCount,
         int expectedSheetCount)
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var path = Path.Combine(_tempDirectory, "options.json");
+        var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, $$"""{ "DefaultSheetCount": {{persistedSheetCount}} }""");
 
         var options = FreeXOptions.LoadFromPath(path);
@@ -71,8 +67,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         string persistedFontName,
         string expectedFontName)
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var path = Path.Combine(_tempDirectory, "options.json");
+        var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, $$"""{ "DefaultFontName": "{{persistedFontName}}" }""");
 
         var options = FreeXOptions.LoadFromPath(path);
@@ -88,8 +83,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         int persistedFontSize,
         int expectedFontSize)
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var path = Path.Combine(_tempDirectory, "options.json");
+        var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, $$"""{ "DefaultFontSize": {{persistedFontSize}} }""");
 
         var options = FreeXOptions.LoadFromPath(path);
@@ -100,8 +94,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     [Fact]
     public void LoadFromPath_NormalizesUserName()
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var path = Path.Combine(_tempDirectory, "options.json");
+        var path = Path.Combine(_temp.Path, "options.json");
         File.WriteAllText(path, """{ "UserName": "  Analyst  " }""");
 
         var options = FreeXOptions.LoadFromPath(path);
@@ -112,8 +105,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     [Fact]
     public void SaveToPath_NormalizesDefaultFontOptions()
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var path = Path.Combine(_tempDirectory, "options.json");
+        var path = Path.Combine(_temp.Path, "options.json");
         var options = new FreeXOptions
         {
             DefaultFontName = "  Aptos  ",
@@ -132,21 +124,19 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     [Fact]
     public void Save_WhenStorePathCannotBeWritten_ReturnsFalseWithObservableError()
     {
-        Directory.CreateDirectory(_tempDirectory);
-        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, _tempDirectory);
+        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, _temp.Path);
         var options = new FreeXOptions();
 
         options.Save().Should().BeFalse();
 
         options.LastPersistenceError.Should().Contain("Failed to save options");
-        options.LastPersistenceError.Should().Contain(_tempDirectory);
+        options.LastPersistenceError.Should().Contain(_temp.Path);
     }
 
     [Fact]
     public void SaveToPath_WritesAtomicallyAndClearsPreviousError()
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var path = Path.Combine(_tempDirectory, "options.json");
+        var path = Path.Combine(_temp.Path, "options.json");
         var options = new FreeXOptions
         {
             DefaultFormat = ".fxl",
@@ -163,7 +153,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh", ""]
         };
 
-        options.SaveToPath(_tempDirectory).Should().BeFalse();
+        options.SaveToPath(_temp.Path).Should().BeFalse();
         options.SaveToPath(path).Should().BeTrue();
 
         options.LastPersistenceError.Should().BeNull();
@@ -185,7 +175,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             QuickAccessToolbarCommandIds.Save,
             QuickAccessToolbarCommandIds.Print);
         reloaded.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
-        Directory.EnumerateFiles(_tempDirectory, "*.tmp").Should().BeEmpty();
+        Directory.EnumerateFiles(_temp.Path, "*.tmp").Should().BeEmpty();
     }
 
     [Fact]
@@ -217,7 +207,6 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_tempDirectory))
-            Directory.Delete(_tempDirectory, recursive: true);
+        _temp.Dispose();
     }
 }
