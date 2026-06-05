@@ -103,7 +103,8 @@ public sealed partial class XlsxFileAdapter
         bool AllowsCellPatchSave,
         string? CellPatchEligibilityBlockReason,
         XlsxCellPatchBaseline? CellPatchBaseline,
-        string? CellPatchBaselineBlockReason)
+        string? CellPatchBaselineBlockReason,
+        bool IsCellPatchEligibilityLazy = false)
     {
         private const int FingerprintCellLimit = 25_000;
         private const int CellPatchBaselineLimit = 250_000;
@@ -189,12 +190,6 @@ public sealed partial class XlsxFileAdapter
 
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var bytes = ReadBytes(stream);
-            var allowsCellPatchSave = AllowsCellPatchSaveForPackage(
-                bytes,
-                0,
-                bytes.Length,
-                workbook,
-                out var cellPatchEligibilityBlockReason);
             var cellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
                 bytes,
                 0,
@@ -209,10 +204,11 @@ public sealed partial class XlsxFileAdapter
                 fingerprint,
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting,
-                allowsCellPatchSave,
-                cellPatchEligibilityBlockReason,
+                AllowsCellPatchSave: false,
+                CellPatchEligibilityBlockReason: null,
                 cellPatchBaseline,
-                cellPatchBaselineBlockReason);
+                cellPatchBaselineBlockReason,
+                IsCellPatchEligibilityLazy: true);
         }
 
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
@@ -282,12 +278,6 @@ public sealed partial class XlsxFileAdapter
                     buffer.Offset >= 0 &&
                     buffer.Offset + (int)stream.Length <= buffer.Array.Length)
                 {
-                    var reusedAllowsCellPatchSave = AllowsCellPatchSaveForPackage(
-                        buffer.Array,
-                        buffer.Offset,
-                        (int)stream.Length,
-                        workbook,
-                        out var reusedCellPatchEligibilityBlockReason);
                     var reusedCellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
                         buffer.Array,
                         buffer.Offset,
@@ -303,10 +293,11 @@ public sealed partial class XlsxFileAdapter
                         fingerprint,
                         worksheetsWithPreservableSourceMetadata,
                         hasUnsupportedConditionalFormatting,
-                        reusedAllowsCellPatchSave,
-                        reusedCellPatchEligibilityBlockReason,
+                        AllowsCellPatchSave: false,
+                        CellPatchEligibilityBlockReason: null,
                         reusedCellPatchBaseline,
-                        reusedCellPatchBaselineBlockReason);
+                        reusedCellPatchBaselineBlockReason,
+                        IsCellPatchEligibilityLazy: true);
                 }
 
                 var copiedBytes = buffer.Array is not null &&
@@ -315,12 +306,6 @@ public sealed partial class XlsxFileAdapter
                     buffer.Offset + (int)stream.Length <= buffer.Array.Length
                     ? buffer.Array.AsSpan(buffer.Offset, (int)stream.Length).ToArray()
                     : ReadBytes(stream);
-                var copiedAllowsCellPatchSave = AllowsCellPatchSaveForPackage(
-                    copiedBytes,
-                    0,
-                    copiedBytes.Length,
-                    workbook,
-                    out var copiedCellPatchEligibilityBlockReason);
                 var copiedCellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
                     copiedBytes,
                     0,
@@ -336,19 +321,14 @@ public sealed partial class XlsxFileAdapter
                     fingerprint,
                     worksheetsWithPreservableSourceMetadata,
                     hasUnsupportedConditionalFormatting,
-                    copiedAllowsCellPatchSave,
-                    copiedCellPatchEligibilityBlockReason,
+                    AllowsCellPatchSave: false,
+                    CellPatchEligibilityBlockReason: null,
                     copiedCellPatchBaseline,
-                    copiedCellPatchBaselineBlockReason);
+                    copiedCellPatchBaselineBlockReason,
+                    IsCellPatchEligibilityLazy: true);
             }
 
             var bytes = ReadBytes(stream);
-            var allowsCellPatchSave = AllowsCellPatchSaveForPackage(
-                bytes,
-                0,
-                bytes.Length,
-                workbook,
-                out var cellPatchEligibilityBlockReason);
             var cellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
                 bytes,
                 0,
@@ -364,10 +344,11 @@ public sealed partial class XlsxFileAdapter
                 fingerprint,
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting,
-                allowsCellPatchSave,
-                cellPatchEligibilityBlockReason,
+                AllowsCellPatchSave: false,
+                CellPatchEligibilityBlockReason: null,
                 cellPatchBaseline,
-                cellPatchBaselineBlockReason);
+                cellPatchBaselineBlockReason,
+                IsCellPatchEligibilityLazy: true);
         }
 
         private static byte[] ReadBytes(Stream stream)
@@ -450,8 +431,9 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
 
-            if (!AllowsCellPatchSave)
-                return Fail(CellPatchEligibilityBlockReason ?? "patch_blocked_package_or_workbook_requires_full_save", out diagnostics);
+            var (allowsCellPatchSave, cellPatchEligibilityBlockReason) = ResolveCellPatchEligibility(workbook);
+            if (!allowsCellPatchSave)
+                return Fail(cellPatchEligibilityBlockReason ?? "patch_blocked_package_or_workbook_requires_full_save", out diagnostics);
 
             if (CellPatchBaseline is null)
                 return Fail(CellPatchBaselineBlockReason ?? "patch_blocked_baseline_unavailable", out diagnostics);
@@ -588,8 +570,8 @@ public sealed partial class XlsxFileAdapter
                     patchedModelFingerprint,
                     WorksheetsWithPreservableSourceMetadata,
                     HasUnsupportedConditionalFormatting,
-                    AllowsCellPatchSave,
-                    CellPatchEligibilityBlockReason,
+                    allowsCellPatchSave,
+                    cellPatchEligibilityBlockReason,
                     CellPatchBaseline.WithAppliedChanges(
                         changes,
                         dimensionChanges,
@@ -618,6 +600,20 @@ public sealed partial class XlsxFileAdapter
                 hyperlinkChanges.Count,
                 commentChanges.Count);
             return true;
+        }
+
+        private (bool AllowsCellPatchSave, string? BlockReason) ResolveCellPatchEligibility(Workbook workbook)
+        {
+            if (!IsCellPatchEligibilityLazy)
+                return (AllowsCellPatchSave, CellPatchEligibilityBlockReason);
+
+            var allowsCellPatchSave = AllowsCellPatchSaveForPackage(
+                Buffer,
+                Offset,
+                Count,
+                workbook,
+                out var blockReason);
+            return (allowsCellPatchSave, blockReason);
         }
 
         private static void NormalizePatchCustomViews(ZipArchive archive, Workbook workbook)
@@ -1944,6 +1940,7 @@ public sealed partial class XlsxFileAdapter
                     archive,
                     workbook,
                     worksheetPathMap,
+                    sheetXmlLayout,
                     out var chartSourceRangeBlockReason);
                 if (chartSourceRanges is null)
                 {
@@ -1993,7 +1990,7 @@ public sealed partial class XlsxFileAdapter
                         return null;
                     }
 
-                    var sourceHyperlinks = ReadSourceHyperlinks(archive, worksheetPath, sheet.Id);
+                    var sourceHyperlinks = ReadSourceHyperlinks(archive, worksheetPath, sheet);
                     var sourceComments = ReadSourceComments(archive, worksheetPath, sheet);
                     var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(sheet.CellCount);
                     foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
@@ -3438,8 +3435,11 @@ public sealed partial class XlsxFileAdapter
         private static IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> ReadSourceHyperlinks(
             ZipArchive archive,
             string worksheetPath,
-            SheetId sheetId)
+            Sheet sheet)
         {
+            if (sheet.Hyperlinks.Count == 0)
+                return new Dictionary<CellAddress, XlsxSourceHyperlink>();
+
             var entry = archive.GetEntry(worksheetPath);
             if (entry is null)
                 return new Dictionary<CellAddress, XlsxSourceHyperlink>();
@@ -3462,7 +3462,7 @@ public sealed partial class XlsxFileAdapter
                 foreach (var hyperlink in hyperlinks.Elements(worksheetNs + "hyperlink"))
                 {
                     var reference = hyperlink.Attribute("ref")?.Value;
-                    if (!TryParseSingleCellReference(reference, sheetId, out var address) ||
+                    if (!TryParseSingleCellReference(reference, sheet.Id, out var address) ||
                         ambiguous.Contains(address))
                     {
                         continue;
@@ -4637,6 +4637,14 @@ public sealed partial class XlsxFileAdapter
             Workbook workbook,
             XlsxWorkbookWorksheetPathMap worksheetPathMap,
             out string? blockReason)
+            => TryCreate(archive, workbook, worksheetPathMap, sheetXmlLayout: null, out blockReason);
+
+        public static XlsxChartSourceRangeIndex? TryCreate(
+            ZipArchive archive,
+            Workbook workbook,
+            XlsxWorkbookWorksheetPathMap worksheetPathMap,
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout,
+            out string? blockReason)
         {
             blockReason = null;
             try
@@ -4656,24 +4664,23 @@ public sealed partial class XlsxFileAdapter
                     }
 
                     if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath) ||
-                        !TryReadWorksheetChartPaths(archive, worksheetPath, out var chartPaths))
+                        !TryReadWorksheetChartParts(archive, worksheetPath, sheetXmlLayout, sheet, out var chartParts))
                     {
                         blockReason = "baseline_chart_source_graph";
                         return null;
                     }
 
-                    if (chartPaths.Count != sheet.Charts.Count)
+                    if (chartParts.Count != sheet.Charts.Count)
                     {
                         blockReason = "baseline_chart_source_count";
                         return null;
                     }
 
                     sheetBaselines.Add(new XlsxChartSourceSheetBaseline(sheet.Id, sheet.Name, sheet.Charts.Count));
-                    foreach (var chartPath in chartPaths)
+                    foreach (var chartPart in chartParts)
                     {
                         if (!TryReadChartSourceRanges(
-                                archive,
-                                chartPath,
+                                chartPart.Xml,
                                 sheetIdsByName,
                                 out var chartRanges))
                         {
@@ -4826,6 +4833,46 @@ public sealed partial class XlsxFileAdapter
             return true;
         }
 
+        private static bool TryReadWorksheetChartParts(
+            ZipArchive archive,
+            string worksheetPath,
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout,
+            Sheet sheet,
+            out IReadOnlyList<XlsxChartPackagePart> chartParts)
+        {
+            if (sheetXmlLayout is not null &&
+                sheetXmlLayout.TryGetValue(sheet.Name, out var layout) &&
+                string.Equals(layout.WorksheetPath, worksheetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                chartParts = layout.ChartParts;
+                return true;
+            }
+
+            chartParts = [];
+            if (!TryReadWorksheetChartPaths(archive, worksheetPath, out var chartPaths))
+                return false;
+
+            if (chartPaths.Count == 0)
+                return true;
+
+            var parts = new List<XlsxChartPackagePart>(chartPaths.Count);
+            foreach (var chartPath in chartPaths)
+            {
+                var chartEntry = archive.GetEntry(chartPath);
+                if (chartEntry is null)
+                    return false;
+
+                parts.Add(new XlsxChartPackagePart(
+                    XlsxPackageXmlEditor.LoadXml(chartEntry),
+                    Relationships: null,
+                    Name: null,
+                    Anchor: null));
+            }
+
+            chartParts = parts;
+            return true;
+        }
+
         private static bool TryReadChartSourceRanges(
             ZipArchive archive,
             string chartPath,
@@ -4838,6 +4885,15 @@ public sealed partial class XlsxFileAdapter
                 return false;
 
             var chartXml = XlsxPackageXmlEditor.LoadXml(chartEntry);
+            return TryReadChartSourceRanges(chartXml, sheetIdsByName, out ranges);
+        }
+
+        private static bool TryReadChartSourceRanges(
+            XDocument chartXml,
+            IReadOnlyDictionary<string, SheetId> sheetIdsByName,
+            out IReadOnlyList<GridRange> ranges)
+        {
+            ranges = [];
             var formulas = chartXml
                 .Descendants()
                 .Where(element => string.Equals(element.Name.LocalName, "f", StringComparison.Ordinal))
