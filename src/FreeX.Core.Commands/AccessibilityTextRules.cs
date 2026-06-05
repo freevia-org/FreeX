@@ -40,9 +40,15 @@ internal static partial class AccessibilityTextRules
     private static readonly HashSet<string> GenericAltTexts = new(StringComparer.OrdinalIgnoreCase)
     {
         "autoshape",
+        "arrow",
+        "block arrow",
+        "callout",
+        "connector",
+        "curved connector",
         "diagram",
         "drawing",
         "ellipse",
+        "flowchart",
         "freeform",
         "graphic",
         "group",
@@ -56,17 +62,26 @@ internal static partial class AccessibilityTextRules
         "rectangle",
         "screenshot",
         "shape",
+        "smartart",
+        "straight connector",
         "text",
         "text box",
-        "textbox"
+        "textbox",
+        "wordart"
     };
 
     private static readonly string[] GenericNumberedAltTextPrefixes =
     [
         "autoshape",
+        "arrow",
+        "block arrow",
+        "callout",
+        "connector",
+        "curved connector",
         "diagram",
         "drawing",
         "ellipse",
+        "flowchart",
         "freeform",
         "graphic",
         "group",
@@ -80,22 +95,42 @@ internal static partial class AccessibilityTextRules
         "rectangle",
         "screenshot",
         "shape",
+        "smartart",
+        "straight connector",
         "text box",
-        "textbox"
+        "textbox",
+        "wordart"
     ];
+
+    private static readonly HashSet<string> GenericChartTitles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "chart",
+        "chart title",
+        "graph",
+        "graph title",
+        "title"
+    };
 
     private static readonly HashSet<string> GenericChartAxisTitles = new(StringComparer.OrdinalIgnoreCase)
     {
         "axis",
         "axis title",
         "category axis",
+        "category axis title",
         "horizontal axis",
+        "horizontal axis title",
         "value axis",
+        "value axis title",
         "vertical axis",
+        "vertical axis title",
         "x axis",
+        "x axis title",
         "x-axis",
+        "x-axis title",
         "y axis",
-        "y-axis"
+        "y axis title",
+        "y-axis",
+        "y-axis title"
     };
 
     public static bool IsDescriptiveHyperlinkText(string displayText, string target)
@@ -123,8 +158,7 @@ internal static partial class AccessibilityTextRules
     public static bool IsGenericChartTitle(string title)
     {
         var text = NormalizeComparableText(title);
-        return string.Equals(text, "Chart Title", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(text, "Title", StringComparison.OrdinalIgnoreCase) ||
+        return GenericChartTitles.Contains(text) ||
             ChartNumberTitleRegex().IsMatch(text);
     }
 

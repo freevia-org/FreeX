@@ -37,51 +37,35 @@ public sealed class ConflictMarkersPreflightTests
     [Fact]
     public void ConflictMarkersPreflight_DefaultScanUsesTrackedFilesOnly()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-conflict-marker-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(Path.Combine(tempDirectory, "tracked.cs"), "namespace Scratch;");
-            File.WriteAllText(Path.Combine(tempDirectory, "untracked.cs"), $"<<<<<<< HEAD{Environment.NewLine}");
-            TestProcessRunner.Run("git", "init", tempDirectory).ExitCode.Should().Be(0);
-            TestProcessRunner.Run("git", "add tracked.cs", tempDirectory).ExitCode.Should().Be(0);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+        File.WriteAllText(Path.Combine(temp.Path, "tracked.cs"), "namespace Scratch;");
+        File.WriteAllText(Path.Combine(temp.Path, "untracked.cs"), $"<<<<<<< HEAD{Environment.NewLine}");
+        TestProcessRunner.Run("git", "init", temp.Path).ExitCode.Should().Be(0);
+        AddGitIndexEntry(temp.Path, "tracked.cs");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{temp.Path}\"");
 
-            result.ExitCode.Should().Be(0, result.Error);
-            result.Output.Should().Contain("Validated 1 text file(s) for Git conflict markers.");
-        }
-        finally
-        {
-            DeleteDirectory(tempDirectory);
-        }
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("Validated 1 text file(s) for Git conflict markers.");
     }
 
     [Fact]
     public void ConflictMarkersPreflight_DefaultScanFailsForTrackedConflictMarker()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-conflict-marker-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(Path.Combine(tempDirectory, "broken.cs"), $"namespace Scratch;{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}");
-            TestProcessRunner.Run("git", "init", tempDirectory).ExitCode.Should().Be(0);
-            TestProcessRunner.Run("git", "add broken.cs", tempDirectory).ExitCode.Should().Be(0);
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+        File.WriteAllText(Path.Combine(temp.Path, "broken.cs"), $"namespace Scratch;{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}");
+        TestProcessRunner.Run("git", "init", temp.Path).ExitCode.Should().Be(0);
+        AddGitIndexEntry(temp.Path, "broken.cs");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
-            (result.Output + result.Error).Should().Contain("broken.cs");
-        }
-        finally
-        {
-            DeleteDirectory(tempDirectory);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
+        (result.Output + result.Error).Should().Contain("broken.cs");
     }
 
     [Theory]
@@ -90,58 +74,38 @@ public sealed class ConflictMarkersPreflightTests
     [InlineData(">>>>>>> feature")]
     public void ConflictMarkersPreflight_FailsWhenConflictMarkerIsPresent(string marker)
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-conflict-marker-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(Path.Combine(tempDirectory, "broken.cs"), $"namespace Scratch;{Environment.NewLine}{marker}{Environment.NewLine}");
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+        File.WriteAllText(Path.Combine(temp.Path, "broken.cs"), $"namespace Scratch;{Environment.NewLine}{marker}{Environment.NewLine}");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-SearchRoots \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-SearchRoots \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
-            (result.Output + result.Error).Should().Contain("broken.cs");
-        }
-        finally
-        {
-            DeleteDirectory(tempDirectory);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
+        (result.Output + result.Error).Should().Contain("broken.cs");
     }
 
     [Fact]
     public void ConflictMarkersPreflight_FailsWhenSolutionContainsConflictMarker()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-conflict-marker-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(Path.Combine(tempDirectory, "broken.slnx"), $"<Solution>{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}</Solution>");
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+        File.WriteAllText(Path.Combine(temp.Path, "broken.slnx"), $"<Solution>{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}</Solution>");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-SearchRoots \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-SearchRoots \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
-            (result.Output + result.Error).Should().Contain("broken.slnx");
-        }
-        finally
-        {
-            DeleteDirectory(tempDirectory);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
+        (result.Output + result.Error).Should().Contain("broken.slnx");
     }
 
-    private static void DeleteDirectory(string directory)
+    private static void AddGitIndexEntry(string repositoryPath, string fileName)
     {
-        if (!Directory.Exists(directory))
-            return;
+        const string EmptyBlobSha = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391";
 
-        foreach (var path in Directory.EnumerateFileSystemEntries(directory, "*", SearchOption.AllDirectories))
-            File.SetAttributes(path, FileAttributes.Normal);
-
-        Directory.Delete(directory, recursive: true);
+        TestProcessRunner.Run("git", $"update-index --add --cacheinfo 100644,{EmptyBlobSha},{fileName}", repositoryPath)
+            .ExitCode.Should().Be(0);
     }
-
 }

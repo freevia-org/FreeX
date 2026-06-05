@@ -33,24 +33,16 @@ public sealed class JsonFilesPreflightTests
     [Fact]
     public void JsonFilesPreflight_FailsWhenJsonIsMalformed()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-json-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(Path.Combine(tempDirectory, "broken.json"), "{ \"name\": ");
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-JsonFiles.ps1");
+        File.WriteAllText(Path.Combine(temp.Path, "broken.json"), "{ \"name\": ");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-JsonFiles.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-JsonRoots \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-JsonRoots \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("JSON validation failed");
-            (result.Output + result.Error).Should().Contain("broken.json");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("JSON validation failed");
+        (result.Output + result.Error).Should().Contain("broken.json");
     }
 
 }
