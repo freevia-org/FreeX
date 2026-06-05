@@ -1376,7 +1376,7 @@ public static partial class FormulaAuditingService
     }
 
     private static bool IsSupportedPercentSign(char value) =>
-        value is '%' or '\uFF05' or '\uFE6A';
+        value is '%' or '\uFF05' or '\uFE6A' or '\u066A';
 
     private static bool TryParseFiniteNumberText(string text)
     {
@@ -1444,12 +1444,20 @@ public static partial class FormulaAuditingService
         if (value is >= '\uFF10' and <= '\uFF19')
             return (char)('0' + value - '\uFF10');
 
+        if (value is >= '\u0660' and <= '\u0669')
+            return (char)('0' + value - '\u0660');
+
+        if (value is >= '\u06F0' and <= '\u06F9')
+            return (char)('0' + value - '\u06F0');
+
         return value switch
         {
             '\uFF0C' => ',',
             '\uFE50' => ',',
+            '\u066C' => ',',
             '\uFF0E' => '.',
             '\uFE52' => '.',
+            '\u066B' => '.',
             '\uFF25' => 'E',
             '\uFF45' => 'e',
             '\uFF0B' => '+',
