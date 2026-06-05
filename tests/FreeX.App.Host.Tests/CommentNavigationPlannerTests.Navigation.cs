@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -36,7 +35,7 @@ public sealed partial class CommentNavigationPlannerTests
         var comments = Enumerable.Range(1, 100_000)
             .Select(index => new CellAddress(sheetId, (uint)index, 1))
             .ToArray();
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CommentNavigationPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CommentNavigationPlanner.cs");
 
         source.Should().Contain("FindFirstAfter");
         source.Should().NotContain("FirstOrDefault(address => address.Row > current.Row");
