@@ -158,6 +158,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("packageParts = XlsxLoadPackageParts.Inspect(packageArchive);");
         adapterSource.Should().Contain("if (packageParts.HasPivotPackageParts)");
         adapterSource.Should().Contain("packageParts.HasChartExChartParts");
+        adapterSource.Should().Contain("packageParts.HasDrawingPackageParts");
         adapterSource.Should().Contain("InspectChartExChartParts(archive)");
         adapterSource.Should().Contain("if (packageParts.HasSlicerTimelinePackageParts)");
         adapterSource.Should().Contain("if (packageParts.HasExternalLinks)");
@@ -205,6 +206,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sanitizerSource.Should().Contain("TryCreateSanitizationRequirementsFromHints(");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasPivotPackageMetadata");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasChartExChartParts");
+        sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasDrawingPackageParts");
+        sanitizerSource.Should().Contain("RemoveDrawingPackageParts(archive)");
+        sanitizerSource.Should().Contain("RemoveWorksheetDrawingReferences(archive)");
+        sanitizerSource.Should().Contain("RemoveContentTypeOverrides(archive, removedParts)");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters");
 

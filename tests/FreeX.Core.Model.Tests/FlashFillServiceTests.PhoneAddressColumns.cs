@@ -262,6 +262,44 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Theory]
+    [InlineData("Apt # 4B", "Suite # 200", "# 12")]
+    [InlineData("4B", "200", "12")]
+    [InlineData("123 Pine St", "55 Burnside Ave", "1600 Amphitheatre Pkwy")]
+    public void Fill_AddressUnits_ExtractsSpacedHashUnitParts(
+        string firstExpected,
+        string secondExpected,
+        string remainingExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St Apt # 4B, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave Suite # 200, Portland, OR 97209", secondExpected)
+            ],
+            ["1600 Amphitheatre Pkwy # 12, Mountain View, CA 94043"]);
+
+        result.Should().BeEquivalentTo([remainingExpected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("Apt # 4B", "Suite # 200", "Unit # 5")]
+    [InlineData("4B", "200", "5")]
+    [InlineData("123 Pine St", "55 Burnside Ave", "400 Oak Ave")]
+    public void Fill_AddressUnits_ExtractsUnitDesignatorWithSpacedHashParts(
+        string firstExpected,
+        string secondExpected,
+        string remainingExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St Apt # 4B, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave Suite # 200, Portland, OR 97209", secondExpected)
+            ],
+            ["400 Oak Ave Unit # 5, Tacoma, WA 98402"]);
+
+        result.Should().BeEquivalentTo([remainingExpected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
     [InlineData("Apt 4B", "Suite 200")]
     [InlineData("4B", "200")]
     [InlineData("123 Pine St", "55 Burnside Ave")]
@@ -275,6 +313,21 @@ public sealed partial class FlashFillServiceTests
                 ("55 Burnside Ave Suite 200, Portland, OR 97209", secondExpected)
             ],
             ["1600 Amphitheatre Pkwy, Mountain View, CA 94043"]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("1600 Amphitheatre Pkwy Apt #, Mountain View, CA 94043")]
+    [InlineData("# 12, Mountain View, CA 94043")]
+    public void Fill_AddressUnits_ReturnsNullWhenRemainingSpacedHashUnitIsMalformed(string remainingAddress)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St Apt # 4B, Seattle, WA 98101", "Apt # 4B"),
+                ("55 Burnside Ave Suite # 200, Portland, OR 97209", "Suite # 200")
+            ],
+            [remainingAddress]);
 
         result.Should().BeNull();
     }

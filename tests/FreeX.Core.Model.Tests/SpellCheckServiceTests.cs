@@ -669,6 +669,87 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversAccountingLedgerVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "ACOUNT acounts acural accrul acrued payble paybles Variace FORECASTNG capitalizaton amortizaton depriciation reconcilation remitance witholding LEDGR jounral Ballance statemnt amout liabilties. Keep https://acount.example.com/payble, accountant@remitance.example.com, and \"C:\\witholding folder\\ledgr file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("ACOUNT", "ACCOUNT"),
+            ("acounts", "accounts"),
+            ("acural", "accrual"),
+            ("accrul", "accrual"),
+            ("acrued", "accrued"),
+            ("payble", "payable"),
+            ("paybles", "payables"),
+            ("Variace", "Variance"),
+            ("FORECASTNG", "FORECASTING"),
+            ("capitalizaton", "capitalization"),
+            ("amortizaton", "amortization"),
+            ("depriciation", "depreciation"),
+            ("reconcilation", "reconciliation"),
+            ("remitance", "remittance"),
+            ("witholding", "withholding"),
+            ("LEDGR", "LEDGER"),
+            ("jounral", "journal"),
+            ("Ballance", "Balance"),
+            ("statemnt", "statement"),
+            ("amout", "amount"),
+            ("liabilties", "liabilities"));
+        plan.IssueCount.Should().Be(21);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "ACCOUNT accounts accrual accrual accrued payable payables Variance FORECASTING capitalization amortization depreciation reconciliation remittance withholding LEDGER journal Balance statement amount liabilities. Keep https://acount.example.com/payble, accountant@remitance.example.com, and \"C:\\witholding folder\\ledgr file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(21);
+    }
+
+    [Fact]
+    public void PlanKnownCorrections_CoversTaxAuditBillingVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Taxble TAXABL deductable deducton expenss expensses reimbursment reinbursement billng billablee AUDITT auditng witholdings remitances. Valid expensable comptroller vatable. Keep taxble_id, https://taxble.example.com/billng, billing@auditt.example.com, and \"C:\\reimbursment folder\\auditng file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Taxble", "Taxable"),
+            ("TAXABL", "TAXABLE"),
+            ("deductable", "deductible"),
+            ("deducton", "deduction"),
+            ("expenss", "expense"),
+            ("expensses", "expenses"),
+            ("reimbursment", "reimbursement"),
+            ("reinbursement", "reimbursement"),
+            ("billng", "billing"),
+            ("billablee", "billable"),
+            ("AUDITT", "AUDIT"),
+            ("auditng", "auditing"),
+            ("witholdings", "withholdings"),
+            ("remitances", "remittances"));
+        plan.IssueCount.Should().Be(14);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Taxable TAXABLE deductible deduction expense expenses reimbursement reimbursement billing billable AUDIT auditing withholdings remittances. Valid expensable comptroller vatable. Keep taxble_id, https://taxble.example.com/billng, billing@auditt.example.com, and \"C:\\reimbursment folder\\auditng file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(14);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
