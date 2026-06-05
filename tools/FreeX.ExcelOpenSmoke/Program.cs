@@ -462,6 +462,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDimensionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetFormatMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -676,6 +677,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDimensionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetFormatMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3526,6 +3528,123 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet dimension metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetCalculationPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetCalculationPropertiesMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetCalculationPropertiesMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetCalculationPropertiesMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var calculationProperties = root.Elements(SpreadsheetNs + "sheetCalcPr").ToArray();
+        if (calculationProperties.Length > 1)
+            issues.Add($"{worksheetPart} has {calculationProperties.Length} sheetCalcPr elements; expected at most one");
+
+        foreach (var sheetCalcPr in calculationProperties.Select((element, index) => new WorksheetCalculationPropertiesReference(index + 1, element)))
+        {
+            AddWorksheetCalculationPropertyIssues(worksheetPart, root, sheetCalcPr, issues);
+        }
+    }
+
+    private static void AddWorksheetCalculationPropertyIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetCalculationPropertiesReference calculationPropertiesReference,
+        List<string> issues)
+    {
+        var sheetCalcPr = calculationPropertiesReference.Element;
+        var description = $"sheetCalcPr #{calculationPropertiesReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            sheetCalcPr,
+            description,
+            [
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        var worksheetChildren = worksheetRoot.Elements().ToArray();
+        var calculationPropertiesIndex = Array.IndexOf(worksheetChildren, sheetCalcPr);
+        if (calculationPropertiesIndex >= 0 &&
+            worksheetChildren
+                .Skip(calculationPropertiesIndex + 1)
+                .Any(element => element.Name.Namespace == SpreadsheetNs && element.Name.LocalName == "sheetData"))
+        {
+            issues.Add($"{worksheetPart} {description} appears before sheetData; expected schema order after that element");
+        }
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "fullCalcOnLoad", sheetCalcPr.Attribute("fullCalcOnLoad")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "calcId", sheetCalcPr.Attribute("calcId")?.Value, issues);
+
+        if (sheetCalcPr.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void ThrowInvalidWorksheetCalculationPropertiesMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet sheetCalcPr metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetSheetFormatMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -11169,6 +11288,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetDimensionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetCalculationPropertiesReference(
         int Ordinal,
         XElement Element);
 
