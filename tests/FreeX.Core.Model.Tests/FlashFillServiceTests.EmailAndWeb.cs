@@ -1124,8 +1124,8 @@ public sealed partial class FlashFillServiceTests
     {
         var result = FlashFillService.Fill(
             [
-                ("https://shop.example.com/search?sort-order=popular&product-category=powder-skis", "Product Category"),
-                ("https://shop.example.com/search?delivery-method=ground&shipping_option=air", "Shipping Option")
+                ("https://shop.example.com/search?sort-order=popular&product-category=powder-skis&page-size=20", "Product Category"),
+                ("https://shop.example.com/search?delivery-method=ground&shipping_option=air&sortOrder=desc", "Shipping Option")
             ],
             ["https://shop.example.com/search?promoCode=spring&sort=popular"]);
 
