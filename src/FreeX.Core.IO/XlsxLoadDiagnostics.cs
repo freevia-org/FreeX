@@ -15,12 +15,16 @@ internal sealed record XlsxLoadDiagnostics(
     XlsxLoadPhaseDiagnostics StyleMetadata,
     XlsxLoadPhaseDiagnostics SheetXmlLayout,
     XlsxLoadPhaseDiagnostics ClosedXmlLoad,
+    XlsxLoadPhaseDiagnostics ClosedXmlPackagePreparation,
+    XlsxLoadPhaseDiagnostics ClosedXmlWorkbookOpen,
     XlsxLoadPhaseDiagnostics WorkbookMaterialization,
     XlsxLoadPhaseDiagnostics SourceSnapshot)
 {
     public static XlsxLoadDiagnostics NotRun { get; } = new(
         0,
         0,
+        XlsxLoadPhaseDiagnostics.NotRun,
+        XlsxLoadPhaseDiagnostics.NotRun,
         XlsxLoadPhaseDiagnostics.NotRun,
         XlsxLoadPhaseDiagnostics.NotRun,
         XlsxLoadPhaseDiagnostics.NotRun,

@@ -140,10 +140,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheetXmlLayoutHadWarnings);
         });
         packageStream.Position = 0;
-        var (closedXmlLoad, closedXmlLoadDiagnostics) = MeasureLoadPhase(() => OpenClosedXmlWorkbookWithSanitizationFallback(
+        var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(
             packageStream,
             styleOnlyWorksheetPathsToStrip,
-            sanitizationHints));
+            sanitizationHints);
+        var closedXmlLoadDiagnostics = closedXmlLoad.Diagnostics;
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
         var materializationAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
@@ -492,7 +493,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             packageMetadataDiagnostics,
             styleMetadataDiagnostics,
             sheetXmlLayoutDiagnostics,
-            closedXmlLoadDiagnostics,
+            closedXmlLoadDiagnostics.Total,
+            closedXmlLoadDiagnostics.PackagePreparation,
+            closedXmlLoadDiagnostics.WorkbookOpen,
             materializationDiagnostics,
             sourceSnapshotDiagnostics);
         return workbook;
@@ -597,6 +600,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         return new XlsxClosedXmlLoadSanitizationHints(
             packageParts.HasInspected ? packageParts.HasPivotPackageParts : null,
             packageParts.HasInspected ? packageParts.HasChartExChartParts : null,
+            !sheetXmlLayoutHadWarnings && packageParts.HasInspected ? packageParts.HasDrawingPackageParts : null,
             hasConditionalFormattingBlocks,
             hasClosedXmlUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters);
@@ -692,6 +696,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             bool hasTheme,
             bool hasPivotPackageParts,
             bool? hasChartExChartParts,
+            bool hasDrawingPackageParts,
             bool hasSlicerTimelinePackageParts,
             bool hasExternalLinks,
             bool hasStructuredTables)
@@ -702,6 +707,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             HasTheme = hasTheme;
             HasPivotPackageParts = hasPivotPackageParts;
             HasChartExChartParts = hasChartExChartParts;
+            HasDrawingPackageParts = hasDrawingPackageParts;
             HasSlicerTimelinePackageParts = hasSlicerTimelinePackageParts;
             HasExternalLinks = hasExternalLinks;
             HasStructuredTables = hasStructuredTables;
@@ -714,6 +720,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         public bool HasTheme { get; }
         public bool HasPivotPackageParts { get; }
         public bool? HasChartExChartParts { get; }
+        public bool HasDrawingPackageParts { get; }
         public bool HasSlicerTimelinePackageParts { get; }
         public bool HasExternalLinks { get; }
         public bool HasStructuredTables { get; }
@@ -724,6 +731,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             var hasStyles = false;
             var hasTheme = false;
             var hasPivotPackageParts = false;
+            var hasDrawingPackageParts = false;
             var hasSlicerTimelinePackageParts = false;
             var hasExternalLinks = false;
             var hasStructuredTables = false;
@@ -737,6 +745,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasPivotPackageParts |=
                     EntryPathStartsWith(path, "xl/pivotCache/") ||
                     EntryPathStartsWith(path, "xl/pivotTables/");
+                hasDrawingPackageParts |=
+                    EntryPathStartsWith(path, "xl/drawings/drawing") ||
+                    EntryPathStartsWith(path, "xl/drawings/_rels/drawing") ||
+                    EntryPathStartsWith(path, "xl/charts/");
                 hasSlicerTimelinePackageParts |=
                     EntryPathStartsWith(path, "xl/slicerCaches/") ||
                     EntryPathStartsWith(path, "xl/slicers/") ||
@@ -749,6 +761,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     hasStyles &&
                     hasTheme &&
                     hasPivotPackageParts &&
+                    hasDrawingPackageParts &&
                     hasSlicerTimelinePackageParts &&
                     hasExternalLinks &&
                     hasStructuredTables)
@@ -764,6 +777,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasTheme,
                 hasPivotPackageParts,
                 InspectChartExChartParts(archive),
+                hasDrawingPackageParts,
                 hasSlicerTimelinePackageParts,
                 hasExternalLinks,
                 hasStructuredTables);
@@ -888,19 +902,24 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         MemoryStream PackageStream,
         bool CanReuseBufferForSnapshot);
 
-    private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithSanitizationFallback(
+    private static ClosedXmlLoadResult OpenClosedXmlWorkbookWithSanitizationFallback(
         MemoryStream packageStream,
         IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip,
         XlsxClosedXmlLoadSanitizationHints sanitizationHints)
     {
-        var closedXmlPackageStream = CreateClosedXmlParsePackage(
+        var totalAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+        var totalStopwatch = Stopwatch.StartNew();
+        var packagePreparationDiagnostics = XlsxLoadPhaseDiagnostics.NotRun;
+        var workbookOpenDiagnostics = XlsxLoadPhaseDiagnostics.NotRun;
+
+        var closedXmlPackageStream = MeasurePackagePreparation(() => CreateClosedXmlParsePackage(
             packageStream,
             styleOnlyWorksheetPathsToStrip,
             sanitizationHints,
-            removeUnsupportedConditionalFormatting: false);
+            removeUnsupportedConditionalFormatting: false));
         try
         {
-            return (closedXmlPackageStream, new XLWorkbook(closedXmlPackageStream));
+            return Complete(closedXmlPackageStream, MeasureWorkbookOpen(() => new XLWorkbook(closedXmlPackageStream)));
         }
         catch (Exception ex)
         {
@@ -908,56 +927,101 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 closedXmlPackageStream.Dispose();
 
             if (IsClosedXmlConditionalFormattingLoadFailure(ex))
-                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(
-                    packageStream,
-                    styleOnlyWorksheetPathsToStrip,
-                    sanitizationHints);
+                return OpenConditionalFormattingStripped();
 
             packageStream.Position = 0;
-            var fallbackPackageStream = CreateClosedXmlParsePackage(
+            var fallbackPackageStream = MeasurePackagePreparation(() => CreateClosedXmlParsePackage(
                 packageStream,
                 styleOnlyWorksheetPathsToStrip,
                 sanitizationHints,
                 removeUnsupportedConditionalFormatting: true,
-                removeAllConditionalFormatting: false);
+                removeAllConditionalFormatting: false));
             try
             {
-                return (fallbackPackageStream, new XLWorkbook(fallbackPackageStream));
+                return Complete(fallbackPackageStream, MeasureWorkbookOpen(() => new XLWorkbook(fallbackPackageStream)));
             }
             catch
             {
                 if (!ReferenceEquals(fallbackPackageStream, packageStream))
                     fallbackPackageStream.Dispose();
 
-                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(
-                    packageStream,
-                    styleOnlyWorksheetPathsToStrip,
-                    sanitizationHints);
+                return OpenConditionalFormattingStripped();
             }
         }
-    }
 
-    private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithConditionalFormattingStripped(
-        MemoryStream packageStream,
-        IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip,
-        XlsxClosedXmlLoadSanitizationHints sanitizationHints)
-    {
-        packageStream.Position = 0;
-        var conditionalFormattingStrippedPackageStream = CreateClosedXmlParsePackage(
-            packageStream,
-            styleOnlyWorksheetPathsToStrip,
-            sanitizationHints,
-            removeUnsupportedConditionalFormatting: true,
-            removeAllConditionalFormatting: true);
-        try
+        ClosedXmlLoadResult OpenConditionalFormattingStripped()
         {
-            return (conditionalFormattingStrippedPackageStream, new XLWorkbook(conditionalFormattingStrippedPackageStream));
+            packageStream.Position = 0;
+            var conditionalFormattingStrippedPackageStream = MeasurePackagePreparation(() => CreateClosedXmlParsePackage(
+                packageStream,
+                styleOnlyWorksheetPathsToStrip,
+                sanitizationHints,
+                removeUnsupportedConditionalFormatting: true,
+                removeAllConditionalFormatting: true));
+            try
+            {
+                return Complete(
+                    conditionalFormattingStrippedPackageStream,
+                    MeasureWorkbookOpen(() => new XLWorkbook(conditionalFormattingStrippedPackageStream)));
+            }
+            catch
+            {
+                if (!ReferenceEquals(conditionalFormattingStrippedPackageStream, packageStream))
+                    conditionalFormattingStrippedPackageStream.Dispose();
+                throw;
+            }
         }
-        catch
+
+        T MeasurePackagePreparation<T>(Func<T> action)
         {
-            if (!ReferenceEquals(conditionalFormattingStrippedPackageStream, packageStream))
-                conditionalFormattingStrippedPackageStream.Dispose();
-            throw;
+            var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                stopwatch.Stop();
+                packagePreparationDiagnostics = AddLoadPhaseDiagnostics(
+                    packagePreparationDiagnostics,
+                    new XlsxLoadPhaseDiagnostics(
+                        stopwatch.Elapsed.TotalMilliseconds,
+                        GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore));
+            }
+        }
+
+        T MeasureWorkbookOpen<T>(Func<T> action)
+        {
+            var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                stopwatch.Stop();
+                workbookOpenDiagnostics = AddLoadPhaseDiagnostics(
+                    workbookOpenDiagnostics,
+                    new XlsxLoadPhaseDiagnostics(
+                        stopwatch.Elapsed.TotalMilliseconds,
+                        GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore));
+            }
+        }
+
+        ClosedXmlLoadResult Complete(MemoryStream closedXmlPackageStream, XLWorkbook workbook)
+        {
+            totalStopwatch.Stop();
+            return new ClosedXmlLoadResult(
+                closedXmlPackageStream,
+                workbook,
+                new XlsxClosedXmlLoadDiagnostics(
+                    new XlsxLoadPhaseDiagnostics(
+                        totalStopwatch.Elapsed.TotalMilliseconds,
+                        GC.GetTotalAllocatedBytes(precise: true) - totalAllocatedBefore),
+                    packagePreparationDiagnostics,
+                    workbookOpenDiagnostics));
         }
     }
 
@@ -1004,5 +1068,22 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             throw;
         }
     }
+
+    private static XlsxLoadPhaseDiagnostics AddLoadPhaseDiagnostics(
+        XlsxLoadPhaseDiagnostics left,
+        XlsxLoadPhaseDiagnostics right) =>
+        new(
+            left.ElapsedMilliseconds + right.ElapsedMilliseconds,
+            left.AllocatedBytes + right.AllocatedBytes);
+
+    private readonly record struct ClosedXmlLoadResult(
+        MemoryStream PackageStream,
+        XLWorkbook Workbook,
+        XlsxClosedXmlLoadDiagnostics Diagnostics);
+
+    private readonly record struct XlsxClosedXmlLoadDiagnostics(
+        XlsxLoadPhaseDiagnostics Total,
+        XlsxLoadPhaseDiagnostics PackagePreparation,
+        XlsxLoadPhaseDiagnostics WorkbookOpen);
 
 }
