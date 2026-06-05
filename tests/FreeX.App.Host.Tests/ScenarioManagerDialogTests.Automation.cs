@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.Core.Model;
-using System.IO;
 using System.Windows.Controls;
 
 namespace FreeX.App.Host.Tests;
@@ -98,7 +97,7 @@ public sealed partial class ScenarioManagerDialogTests
             }
         });
 
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
+        var source = ReadScenarioManagerDialogSource();
         source.Should().Contain("AutomationProperties.SetName(button, GetActionAutomationName(action));");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, $\"ScenarioManager{action}Button\");");
         source.Should().Contain("ScenarioManagerAction.List => UiText.Get(\"ScenarioManager_ListScenariosAutomationName\")");
