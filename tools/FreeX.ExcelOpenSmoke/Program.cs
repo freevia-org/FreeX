@@ -460,6 +460,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomPropertyPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSingleXmlCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -670,6 +671,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomPropertyPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSingleXmlCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3403,6 +3405,117 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet scenario metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetPhoneticPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetPhoneticPropertiesMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetPhoneticPropertiesMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetPhoneticPropertiesMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var phoneticProperties = root.Elements(SpreadsheetNs + "phoneticPr").ToArray();
+        if (phoneticProperties.Length > 1)
+            issues.Add($"{worksheetPart} has {phoneticProperties.Length} phoneticPr elements; expected at most one");
+
+        foreach (var phoneticPr in phoneticProperties.Select((element, index) => new WorksheetPhoneticPropertiesReference(index + 1, element)))
+        {
+            AddWorksheetPhoneticPropertyIssues(worksheetPart, root, phoneticPr, issues);
+        }
+    }
+
+    private static void AddWorksheetPhoneticPropertyIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetPhoneticPropertiesReference phoneticPropertiesReference,
+        List<string> issues)
+    {
+        var phoneticPr = phoneticPropertiesReference.Element;
+        var description = $"phoneticPr #{phoneticPropertiesReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            phoneticPr,
+            description,
+            [
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "fontId", phoneticPr.Attribute("fontId")?.Value, issues);
+
+        var type = phoneticPr.Attribute("type")?.Value;
+        if (!string.IsNullOrWhiteSpace(type) && !IsKnownPhoneticType(type))
+            issues.Add($"{worksheetPart} {description} has invalid type value '{type}'");
+
+        var alignment = phoneticPr.Attribute("alignment")?.Value;
+        if (!string.IsNullOrWhiteSpace(alignment) && !IsKnownPhoneticAlignment(alignment))
+            issues.Add($"{worksheetPart} {description} has invalid alignment value '{alignment}'");
+
+        if (phoneticPr.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool IsKnownPhoneticType(string value) =>
+        value.Trim() is "halfwidthKatakana" or "fullwidthKatakana" or "hiragana" or "noConversion";
+
+    private static bool IsKnownPhoneticAlignment(string value) =>
+        value.Trim() is "noControl" or "left" or "center" or "distributed";
+
+    private static void ThrowInvalidWorksheetPhoneticPropertiesMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet phoneticPr metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetSortAndDataConsolidationMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -10501,6 +10614,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetScenarioInputCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetPhoneticPropertiesReference(
         int Ordinal,
         XElement Element);
 
