@@ -27,57 +27,50 @@ public sealed class RepositoryPreflightTests
     public void RepositoryPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-RepositoryPreflight.ps1");
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-repository-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            var jsonScript = CreatePassingPreflightScript(tempDirectory, "Test-JsonFiles.ps1");
-            var xmlScript = CreatePassingPreflightScript(tempDirectory, "Test-XmlFiles.ps1");
-            var toolScriptsScript = CreatePassingPreflightScript(tempDirectory, "Test-ToolScripts.ps1");
-            var workflowsScript = CreatePassingPreflightScript(tempDirectory, "Test-GitHubWorkflows.ps1");
-            var sdkScript = CreatePassingPreflightScript(tempDirectory, "Test-DotNetSdkReadiness.ps1");
-            var projectReferencesScript = CreatePassingPreflightScript(tempDirectory, "Test-DotNetProjectReferences.ps1");
-            var solutionProjectsScript = CreatePassingPreflightScript(tempDirectory, "Test-SolutionProjects.ps1");
-            var generatedDocsScript = CreatePassingPreflightScript(tempDirectory, "Test-GeneratedDocs.ps1");
-            var conflictMarkersScript = CreatePassingPreflightScript(tempDirectory, "Test-ConflictMarkers.ps1");
+        var jsonScript = CreatePassingPreflightScript(temp.Path, "Test-JsonFiles.ps1");
+        var xmlScript = CreatePassingPreflightScript(temp.Path, "Test-XmlFiles.ps1");
+        var toolScriptsScript = CreatePassingPreflightScript(temp.Path, "Test-ToolScripts.ps1");
+        var workflowsScript = CreatePassingPreflightScript(temp.Path, "Test-GitHubWorkflows.ps1");
+        var sdkScript = CreatePassingPreflightScript(temp.Path, "Test-DotNetSdkReadiness.ps1");
+        var projectReferencesScript = CreatePassingPreflightScript(temp.Path, "Test-DotNetProjectReferences.ps1");
+        var solutionProjectsScript = CreatePassingPreflightScript(temp.Path, "Test-SolutionProjects.ps1");
+        var generatedDocsScript = CreatePassingPreflightScript(temp.Path, "Test-GeneratedDocs.ps1");
+        var conflictMarkersScript = CreatePassingPreflightScript(temp.Path, "Test-ConflictMarkers.ps1");
 
-            var result = PowerShellScriptRunner.Run(
-                scriptPath,
-                Path.GetTempPath(),
-                $"-JsonFilesScriptPath \"{jsonScript}\" " +
-                $"-XmlFilesScriptPath \"{xmlScript}\" " +
-                $"-ToolScriptsScriptPath \"{toolScriptsScript}\" " +
-                $"-GitHubWorkflowsScriptPath \"{workflowsScript}\" " +
-                $"-DotNetSdkReadinessScriptPath \"{sdkScript}\" " +
-                $"-DotNetProjectReferencesScriptPath \"{projectReferencesScript}\" " +
-                $"-SolutionProjectsScriptPath \"{solutionProjectsScript}\" " +
-                $"-GeneratedDocsScriptPath \"{generatedDocsScript}\" " +
-                $"-ConflictMarkersScriptPath \"{conflictMarkersScript}\"");
+        var result = PowerShellScriptRunner.Run(
+            scriptPath,
+            Path.GetTempPath(),
+            $"-JsonFilesScriptPath \"{jsonScript}\" " +
+            $"-XmlFilesScriptPath \"{xmlScript}\" " +
+            $"-ToolScriptsScriptPath \"{toolScriptsScript}\" " +
+            $"-GitHubWorkflowsScriptPath \"{workflowsScript}\" " +
+            $"-DotNetSdkReadinessScriptPath \"{sdkScript}\" " +
+            $"-DotNetProjectReferencesScriptPath \"{projectReferencesScript}\" " +
+            $"-SolutionProjectsScriptPath \"{solutionProjectsScript}\" " +
+            $"-GeneratedDocsScriptPath \"{generatedDocsScript}\" " +
+            $"-ConflictMarkersScriptPath \"{conflictMarkersScript}\"");
 
-            result.ExitCode.Should().Be(0, result.Error);
-            result.Output.Should().Contain("Running JSON files preflight...");
-            result.Output.Should().Contain("Running XML files preflight...");
-            result.Output.Should().Contain("Running PowerShell tools preflight...");
-            result.Output.Should().Contain("Running GitHub workflows preflight...");
-            result.Output.Should().Contain("Running .NET SDK readiness preflight...");
-            result.Output.Should().Contain("Running .NET project references preflight...");
-            result.Output.Should().Contain("Running solution projects preflight...");
-            result.Output.Should().Contain("Running generated docs preflight...");
-            result.Output.Should().Contain("Running Git conflict markers preflight...");
-            result.Output.Should().Contain("Repository preflight checks passed.");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("Running JSON files preflight...");
+        result.Output.Should().Contain("Running XML files preflight...");
+        result.Output.Should().Contain("Running PowerShell tools preflight...");
+        result.Output.Should().Contain("Running GitHub workflows preflight...");
+        result.Output.Should().Contain("Running .NET SDK readiness preflight...");
+        result.Output.Should().Contain("Running .NET project references preflight...");
+        result.Output.Should().Contain("Running solution projects preflight...");
+        result.Output.Should().Contain("Running generated docs preflight...");
+        result.Output.Should().Contain("Running Git conflict markers preflight...");
+        result.Output.Should().Contain("Repository preflight checks passed.");
     }
 
     [Fact]
     public void RepositoryPreflight_FailsWhenChildPreflightScriptIsMissing()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-RepositoryPreflight.ps1");
-        var missingScriptPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.ps1");
+        using var temp = new TestTemporaryDirectory();
+        var missingScriptPath = Path.Combine(temp.Path, "missing.ps1");
 
         var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-XmlFilesScriptPath \"{missingScriptPath}\"");
 
@@ -88,122 +81,107 @@ public sealed class RepositoryPreflightTests
     [Fact]
     public void DotNetSdkReadinessPreflight_FailsWhenWorkflowSdkBandIsMissing()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-dotnet-sdk-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".github", "workflows"));
 
-        try
-        {
-            var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
-            File.WriteAllText(workflowPath, "name: Tester Release");
+        var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
+        File.WriteAllText(workflowPath, "name: Tester Release");
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("missing a dotnet-version SDK band");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("missing a dotnet-version SDK band");
     }
 
     [Fact]
     public void DotNetSdkReadinessPreflight_IgnoresNestedClaudeWorktreeProjects()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-dotnet-sdk-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".github", "workflows"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Current"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Future"));
 
-        try
-        {
-            var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
-            File.WriteAllText(
-                workflowPath,
-                """
-                name: Tester Release
-                jobs:
-                  build:
-                    steps:
-                      - uses: actions/setup-dotnet@v5
-                        with:
-                          dotnet-version: 10.0.x
-                """);
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "src", "Current", "Current.csproj"),
-                """
-                <Project>
-                  <PropertyGroup>
-                    <TargetFramework>net10.0</TargetFramework>
-                  </PropertyGroup>
-                </Project>
-                """);
-            File.WriteAllText(
-                Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Future", "Future.csproj"),
-                """
-                <Project>
-                  <PropertyGroup>
-                    <TargetFramework>net11.0</TargetFramework>
-                  </PropertyGroup>
-                </Project>
-                """);
+        var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
+        File.WriteAllText(
+            workflowPath,
+            """
+            name: Tester Release
+            jobs:
+              build:
+                steps:
+                  - uses: actions/setup-dotnet@v5
+                    with:
+                      dotnet-version: 10.0.x
+            """);
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "src", "Current", "Current.csproj"),
+            """
+            <Project>
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Future", "Future.csproj"),
+            """
+            <Project>
+              <PropertyGroup>
+                <TargetFramework>net11.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
-            result.ExitCode.Should().Be(0, result.Error);
-            result.Output.Should().Contain("across 1 project file(s).");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("across 1 project file(s).");
     }
 
     [Fact]
     public void DotNetSdkReadinessPreflight_FailsWhenProjectTargetsNewerFrameworkThanWorkflowSdk()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-dotnet-sdk-preflight-" + Guid.NewGuid().ToString("N"));
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = temp.Path;
+
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".github", "workflows"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Future"));
 
-        try
-        {
-            var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
-            File.WriteAllText(
-                workflowPath,
-                """
-                name: Tester Release
-                jobs:
-                  build:
-                    steps:
-                      - uses: actions/setup-dotnet@v5
-                        with:
-                          dotnet-version: 10.0.x
-                """);
-            File.WriteAllText(
-                Path.Combine(tempDirectory, "src", "Future", "Future.csproj"),
-                """
-                <Project>
-                  <PropertyGroup>
-                    <TargetFramework>net11.0</TargetFramework>
-                  </PropertyGroup>
-                </Project>
-                """);
+        var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
+        File.WriteAllText(
+            workflowPath,
+            """
+            name: Tester Release
+            jobs:
+              build:
+                steps:
+                  - uses: actions/setup-dotnet@v5
+                    with:
+                      dotnet-version: 10.0.x
+            """);
+        File.WriteAllText(
+            Path.Combine(tempDirectory, "src", "Future", "Future.csproj"),
+            """
+            <Project>
+              <PropertyGroup>
+                <TargetFramework>net11.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
 
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
-            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
-            result.ExitCode.Should().NotBe(0);
-            combinedOutput.Should().Contain("newer than workflow SDK 10.0.x");
-            combinedOutput.Should().Contain("src/Future/Future.csproj: net11.0");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+        result.ExitCode.Should().NotBe(0);
+        combinedOutput.Should().Contain("newer than workflow SDK 10.0.x");
+        combinedOutput.Should().Contain("src/Future/Future.csproj: net11.0");
     }
 
     private static string CreatePassingPreflightScript(string directory, string fileName)
