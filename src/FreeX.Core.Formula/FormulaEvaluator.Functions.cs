@@ -18,8 +18,8 @@ public sealed partial class FormulaEvaluator
         if (lambdaBinding is not null)
             return ErrorValue.Value;
 
-        // LET and LAMBDA are AST-aware special forms not in the built-in registry.
-        if (functionName is "LET" or "LAMBDA")
+        // LET, LAMBDA, and SINGLE are AST-aware special forms not in the built-in registry.
+        if (functionName is "LET" or "LAMBDA" or "SINGLE")
             return EvaluateAstAware(node, context);
 
         if (!BuiltInFunctions.TryGet(functionName, out var entry))
@@ -365,8 +365,20 @@ public sealed partial class FormulaEvaluator
             "OFFSET"       => EvaluateOffset(node, context),
             "LET"          => EvaluateLet(node, context),
             "LAMBDA"       => EvaluateLambda(node, context),
+            "SINGLE"       => EvaluateSingle(node, context),
             _              => ErrorValue.Value
         };
+    }
+
+    private ScalarValue EvaluateSingle(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count != 1)
+            return ErrorValue.Value;
+
+        var value = EvaluateArrayOperand(node.Arguments[0], context);
+        return value is ErrorValue error
+            ? error
+            : ImplicitIntersectionOp(value, context);
     }
 
 }

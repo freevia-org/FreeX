@@ -610,7 +610,7 @@ public static partial class BuiltInFunctions
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
-    private static readonly string[] SpecialFunctionNames = ["LET", "LAMBDA"];
+    private static readonly string[] SpecialFunctionNames = ["LET", "LAMBDA", "SINGLE"];
     private static readonly IReadOnlyCollection<string> FunctionNames =
         Array.AsReadOnly(Functions.Keys.Concat(SpecialFunctionNames).ToArray());
 
