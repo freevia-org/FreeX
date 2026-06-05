@@ -1,13 +1,30 @@
+using FreeX.Core.Calc;
+using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 internal static class FreeXInspector
 {
-    public static void Inspect(string path, FileResult result)
+    public static void Inspect(string path, FileResult result, bool recalc)
     {
         Workbook workbook;
         using (var stream = File.OpenRead(path))
             workbook = new XlsxFileAdapter().Load(stream);
+
+        if (recalc)
+        {
+            // Compute-fidelity: recompute every formula through FreeX's engine (RecalculateAllFormulas passes
+            // each cell's address as currentCell, so COLUMN()/ROW()/relative refs resolve correctly), then
+            // compare FreeX's computed values to Excel's live values instead of the file's cached results.
+            try
+            {
+                new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()).RecalculateAllFormulas(workbook);
+            }
+            catch (Exception ex)
+            {
+                result.FreeXRecalcError = $"{ex.GetType().Name}: {ex.Message}";
+            }
+        }
 
         var inv = new Inventory { Sheets = workbook.SheetCount };
         try { inv.NamedRanges = workbook.NamedRanges.Count; } catch { /* optional */ }
