@@ -1598,6 +1598,63 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeEquivalentTo(["electric cargo bike"], o => o.WithStrictOrdering());
     }
 
+    [Fact]
+    public void Fill_UrlFragmentValueTitle_TitleizesDecodedFragmentIdentifier()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://docs.example.com/help#powder-skis", "Powder Skis"),
+                ("https://docs.example.com/help#trail_running", "Trail Running")
+            ],
+            ["https://docs.example.com/help#road-bike"]);
+
+        result.Should().BeEquivalentTo(["Road Bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlFragmentValueTitle_TitleizesDecodedPlusPercentAndCamelFragments()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://docs.example.com/help#powder+skis", "Powder Skis"),
+                ("https://docs.example.com/help#trail%20running", "Trail Running")
+            ],
+            [
+                "https://docs.example.com/help#roadBike",
+                "https://docs.example.com/help#electric%20cargo-bike"
+            ]);
+
+        result.Should().BeEquivalentTo(["Road Bike", "Electric Cargo Bike"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("https://docs.example.com/help")]
+    [InlineData("https://docs.example.com/help#")]
+    public void Fill_UrlFragmentValueTitle_ReturnsNullForMissingOrEmptyRemainingFragment(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://docs.example.com/help#powder-skis", "Powder Skis"),
+                ("https://docs.example.com/help#trail_running", "Trail Running")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_UrlFragmentValueTitle_LeavesRawFragmentExtractionPrecedence()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://docs.example.com/help#powder+skis", "powder skis"),
+                ("https://docs.example.com/help#trail%20running", "trail running")
+            ],
+            ["https://docs.example.com/help#road-bike"]);
+
+        result.Should().BeEquivalentTo(["road-bike"], o => o.WithStrictOrdering());
+    }
+
     [Theory]
     [InlineData("https://northwind.test/page")]
     [InlineData("https://northwind.test/page#")]

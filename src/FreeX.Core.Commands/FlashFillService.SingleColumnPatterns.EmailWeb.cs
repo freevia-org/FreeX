@@ -374,7 +374,8 @@ public static partial class FlashFillService
             ?? TryUrlLastQueryParameterValue(examples)
             ?? TryUrlLastRepeatedQueryParameterValue(examples)
             ?? TryUrlQueryParameterValueTitle(examples)
-            ?? TryUrlFragmentValue(examples);
+            ?? TryUrlFragmentValue(examples)
+            ?? TryUrlFragmentValueTitle(examples);
     }
 
     private static Func<string, string?>? TryUrlLastQueryParameterName(
@@ -538,6 +539,22 @@ public static partial class FlashFillService
             return null;
 
         return source => TryGetDecodedUrlFragment(source, out var fragment) ? fragment : null;
+    }
+
+    private static Func<string, string?>? TryUrlFragmentValueTitle(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => e.Expected.Length > 0 &&
+                               TryGetDecodedUrlFragment(e.Source, out var fragment) &&
+                               TryFormatSlugStemAsTitle(fragment, out var title) &&
+                               title == e.Expected))
+        {
+            return null;
+        }
+
+        return source => TryGetDecodedUrlFragment(source, out var fragment) &&
+                         TryFormatSlugStemAsTitle(fragment, out var title)
+            ? title
+            : null;
     }
 
     private static bool TryGetFinalUrlPathSegmentStem(string source, out string stem)
