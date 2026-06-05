@@ -149,7 +149,8 @@ public sealed partial class XlsxFileAdapter
         XlsxCellPatchBaselineFacts? CellPatchBaselineFacts = null,
         bool IsCellPatchBaselineLazy = false,
         bool IsCellPatchEligibilityLazy = false,
-        bool SourceHasCustomViews = false)
+        bool SourceHasCustomViews = false,
+        bool? SourceNeedsPackageGraphNormalization = null)
     {
         private const int FingerprintCellLimit = 25_000;
         private const int CellPatchBaselineLimit = 2_000_000;
@@ -280,7 +281,8 @@ public sealed partial class XlsxFileAdapter
             IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
             bool? hasUnsupportedConditionalFormatting,
             IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout,
-            bool sourceHasWorkbookCustomViews = false)
+            bool sourceHasWorkbookCustomViews = false,
+            bool? sourceNeedsPackageGraphNormalization = null)
             => Capture(
                 stream,
                 workbook,
@@ -289,7 +291,8 @@ public sealed partial class XlsxFileAdapter
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting,
                 sheetXmlLayout,
-                sourceHasWorkbookCustomViews);
+                sourceHasWorkbookCustomViews,
+                sourceNeedsPackageGraphNormalization);
 
         private static XlsxSourcePackage Capture(
             MemoryStream stream,
@@ -312,7 +315,8 @@ public sealed partial class XlsxFileAdapter
             IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
             bool? hasUnsupportedConditionalFormatting,
             IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null,
-            bool sourceHasWorkbookCustomViews = false)
+            bool sourceHasWorkbookCustomViews = false,
+            bool? sourceNeedsPackageGraphNormalization = null)
         {
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var cellPatchBaselineFacts = XlsxCellPatchBaselineFacts.Capture(workbook, sheetXmlLayout);
@@ -342,7 +346,8 @@ public sealed partial class XlsxFileAdapter
                         CellPatchBaselineFacts: cellPatchBaselineFacts,
                         IsCellPatchBaselineLazy: true,
                         IsCellPatchEligibilityLazy: true,
-                        SourceHasCustomViews: sourceHasCustomViews);
+                        SourceHasCustomViews: sourceHasCustomViews,
+                        SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization);
                 }
 
                 var copiedBytes = buffer.Array is not null &&
@@ -365,7 +370,8 @@ public sealed partial class XlsxFileAdapter
                     CellPatchBaselineFacts: cellPatchBaselineFacts,
                     IsCellPatchBaselineLazy: true,
                     IsCellPatchEligibilityLazy: true,
-                    SourceHasCustomViews: sourceHasCustomViews);
+                    SourceHasCustomViews: sourceHasCustomViews,
+                    SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization);
             }
 
             var bytes = ReadBytes(stream);
@@ -383,7 +389,8 @@ public sealed partial class XlsxFileAdapter
                 CellPatchBaselineFacts: cellPatchBaselineFacts,
                 IsCellPatchBaselineLazy: true,
                 IsCellPatchEligibilityLazy: true,
-                SourceHasCustomViews: sourceHasCustomViews);
+                SourceHasCustomViews: sourceHasCustomViews,
+                SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization);
         }
 
         private static bool SourcePackageHasCustomViews(
@@ -617,6 +624,19 @@ public sealed partial class XlsxFileAdapter
                     if (worksheetEntry is null)
                         return Fail("patch_apply_missing_worksheet", out diagnostics);
 
+                    if (cellChangesByWorksheet.TryGetValue(worksheetPath, out var streamingCellChanges) &&
+                        !dimensionChangesByWorksheet.ContainsKey(worksheetPath) &&
+                        !mergeRegionChangesByWorksheet.ContainsKey(worksheetPath) &&
+                        !hyperlinkChangesByWorksheet.ContainsKey(worksheetPath) &&
+                        !worksheetViewChangesByWorksheet.ContainsKey(worksheetPath) &&
+                        XlsxCellPatchBaseline.TryApplySimpleExistingCellChangesStreaming(
+                            archive,
+                            worksheetPath,
+                            streamingCellChanges))
+                    {
+                        continue;
+                    }
+
                     var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
                     if (cellChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetCellChanges) &&
                         !XlsxCellPatchBaseline.ApplyChanges(worksheetXml, worksheetCellChanges))
@@ -671,7 +691,8 @@ public sealed partial class XlsxFileAdapter
                     XlsxExcelCompatibilityNormalizer.RemoveCalcChain(archive);
                 }
 
-                XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
+                if (SourceNeedsPackageGraphNormalization != false)
+                    XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
             }
 
             patchedPackage.Position = 0;
@@ -709,7 +730,8 @@ public sealed partial class XlsxFileAdapter
                         worksheetViewChanges,
                         patchedPatchValidationFingerprint),
                     CellPatchBaselineBlockReason,
-                    SourceHasCustomViews: workbook.CustomViews.Count > 0));
+                    SourceHasCustomViews: workbook.CustomViews.Count > 0,
+                    SourceNeedsPackageGraphNormalization: false));
             }
             else
             {
@@ -719,7 +741,10 @@ public sealed partial class XlsxFileAdapter
                     workbook,
                     patchedSourceModelFingerprint,
                     WorksheetsWithPreservableSourceMetadata,
-                    HasUnsupportedConditionalFormatting));
+                    HasUnsupportedConditionalFormatting) with
+                    {
+                        SourceNeedsPackageGraphNormalization = false
+                    });
             }
 
             diagnostics = XlsxSaveDiagnostics.SourcePatch(
@@ -2995,6 +3020,187 @@ public sealed partial class XlsxFileAdapter
             changes.All(change =>
                 change.Kind != XlsxCellValuePatchKind.InsertedLiteralValue &&
                 change.Kind != XlsxCellValuePatchKind.DeletedCell);
+
+        public static bool TryApplySimpleExistingCellChangesStreaming(
+            ZipArchive archive,
+            string worksheetPath,
+            IReadOnlyList<XlsxCellValuePatch> changes)
+        {
+            if (!CanStreamSimpleExistingCellChanges(changes))
+                return false;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                return false;
+
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var changesByReference = new Dictionary<string, XlsxCellValuePatch>(
+                changes.Count,
+                StringComparer.OrdinalIgnoreCase);
+            foreach (var change in changes)
+            {
+                var reference = ToReference(change.Row, change.Col);
+                if (!changesByReference.TryAdd(reference, change))
+                    return false;
+            }
+
+            using var patchedWorksheet = new MemoryStream();
+            var found = 0;
+            try
+            {
+                using (var source = worksheetEntry.Open())
+                using (var reader = XmlReader.Create(source, SecureXmlReaderSettings.Create()))
+                using (var writer = XmlWriter.Create(patchedWorksheet, CreatePatchXmlWriterSettings()))
+                {
+                    var hasNode = reader.Read();
+                    while (hasNode)
+                    {
+                        if (reader.NodeType == XmlNodeType.Element &&
+                            reader.LocalName == "c" &&
+                            string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal) &&
+                            changesByReference.TryGetValue(reader.GetAttribute("r") ?? "", out var change))
+                        {
+                            var cell = XElement.ReadFrom(reader) as XElement;
+                            if (cell is null)
+                                return false;
+
+                            if (!ApplySimpleExistingCellChange(cell, worksheetNs, change))
+                                return false;
+
+                            cell.WriteTo(writer);
+                            found++;
+                            hasNode = reader.ReadState != ReadState.EndOfFile;
+                            continue;
+                        }
+
+                        WriteCurrentXmlNode(reader, writer);
+                        hasNode = reader.Read();
+                    }
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (found != changes.Count)
+                return false;
+
+            worksheetEntry.Delete();
+            var replacement = archive.CreateEntry(worksheetPath, CompressionLevel.Optimal);
+            patchedWorksheet.Position = 0;
+            using var replacementStream = replacement.Open();
+            patchedWorksheet.CopyTo(replacementStream);
+            return true;
+        }
+
+        private static XmlWriterSettings CreatePatchXmlWriterSettings() => new()
+        {
+            Encoding = new UTF8Encoding(false),
+            OmitXmlDeclaration = false,
+            CloseOutput = false
+        };
+
+        private static bool CanStreamSimpleExistingCellChanges(IReadOnlyList<XlsxCellValuePatch> changes)
+        {
+            if (changes.Count == 0)
+                return false;
+
+            foreach (var change in changes)
+            {
+                if (change.Kind is not (
+                    XlsxCellValuePatchKind.LiteralValue or
+                    XlsxCellValuePatchKind.FormulaCachedValue or
+                    XlsxCellValuePatchKind.CellStyle))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool ApplySimpleExistingCellChange(
+            XElement cell,
+            XNamespace worksheetNs,
+            XlsxCellValuePatch change)
+        {
+            if (change.Kind == XlsxCellValuePatchKind.LiteralValue)
+            {
+                RewriteLiteralCellValue(cell, worksheetNs, change.NewValue);
+            }
+            else if (change.Kind == XlsxCellValuePatchKind.FormulaCachedValue)
+            {
+                if (!RewriteFormulaCachedCellValue(cell, worksheetNs, change.NewValue))
+                    return false;
+            }
+
+            if (change.HasStyleChange)
+                ApplyCellStyle(cell, change.NewSourceStyleIndex);
+
+            return true;
+        }
+
+        private static void WriteCurrentXmlNode(XmlReader reader, XmlWriter writer)
+        {
+            switch (reader.NodeType)
+            {
+                case XmlNodeType.Element:
+                    writer.WriteStartElement(reader.Prefix, reader.LocalName, reader.NamespaceURI);
+                    if (reader.HasAttributes)
+                    {
+                        while (reader.MoveToNextAttribute())
+                        {
+                            writer.WriteStartAttribute(reader.Prefix, reader.LocalName, reader.NamespaceURI);
+                            writer.WriteString(reader.Value);
+                            writer.WriteEndAttribute();
+                        }
+
+                        reader.MoveToElement();
+                    }
+
+                    if (reader.IsEmptyElement)
+                        writer.WriteEndElement();
+                    break;
+
+                case XmlNodeType.EndElement:
+                    writer.WriteFullEndElement();
+                    break;
+
+                case XmlNodeType.Text:
+                    writer.WriteString(reader.Value);
+                    break;
+
+                case XmlNodeType.CDATA:
+                    writer.WriteCData(reader.Value);
+                    break;
+
+                case XmlNodeType.Whitespace:
+                case XmlNodeType.SignificantWhitespace:
+                    writer.WriteWhitespace(reader.Value);
+                    break;
+
+                case XmlNodeType.Comment:
+                    writer.WriteComment(reader.Value);
+                    break;
+
+                case XmlNodeType.ProcessingInstruction:
+                    writer.WriteProcessingInstruction(reader.Name, reader.Value);
+                    break;
+
+                case XmlNodeType.XmlDeclaration:
+                    writer.WriteProcessingInstruction(reader.Name, reader.Value);
+                    break;
+
+                case XmlNodeType.DocumentType:
+                    writer.WriteDocType(reader.Name, reader.GetAttribute("PUBLIC"), reader.GetAttribute("SYSTEM"), reader.Value);
+                    break;
+
+                case XmlNodeType.EntityReference:
+                    writer.WriteEntityRef(reader.Name);
+                    break;
+            }
+        }
 
         public static bool ApplyChanges(XDocument worksheetXml, IEnumerable<XlsxCellValuePatch> changes)
         {

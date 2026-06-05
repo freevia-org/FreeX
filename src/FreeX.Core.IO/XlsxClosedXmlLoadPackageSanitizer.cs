@@ -367,6 +367,11 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return false;
         }
 
+        if (requirements.HasDrawingPackageParts && IsChartsheetXml(sourceEntry))
+        {
+            return WriteTransformedChartsheetEntry(sourceEntry, targetArchive);
+        }
+
         if (requirements.HasPivotPackageMetadata &&
             string.Equals(normalizedPath, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
         {
@@ -413,7 +418,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return true;
 
         if (requirements.HasDrawingPackageParts && removedParts.Count > 0)
-            return GetWorksheetPathFromRelationshipPath(normalizedPath) is not null;
+            return GetWorksheetPathFromRelationshipPath(normalizedPath) is not null ||
+                GetChartsheetPathFromRelationshipPath(normalizedPath) is not null;
 
         return requirements.HasChartExChartParts &&
             chartExParts.Count > 0 &&
@@ -498,6 +504,24 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             changed |= RemoveElements(root.Elements(worksheetNs + "mergeCells"));
 
         return changed;
+    }
+
+    private static bool WriteTransformedChartsheetEntry(
+        ZipArchiveEntry sourceEntry,
+        ZipArchive targetArchive)
+    {
+        XNamespace spreadsheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var chartsheetXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        var root = chartsheetXml.Root;
+        if (root is null)
+            return false;
+
+        var changed = RemoveElements(root.Elements(spreadsheetNs + "drawing"));
+        if (!changed)
+            return false;
+
+        WriteXmlEntry(sourceEntry, targetArchive, chartsheetXml);
+        return true;
     }
 
     private static bool ShouldStripMergeCells(
@@ -643,6 +667,10 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsChartsheetXml(ZipArchiveEntry entry) =>
+        entry.FullName.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) &&
+        entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsDrawingRelationshipEntry(string normalizedPath) =>
         normalizedPath.StartsWith("xl/drawings/_rels/", StringComparison.OrdinalIgnoreCase) &&
         normalizedPath.EndsWith(".xml.rels", StringComparison.OrdinalIgnoreCase);
@@ -752,6 +780,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
         RemoveWorksheetDrawingReferences(archive);
         RemoveWorksheetDrawingRelationships(archive, removedParts);
+        RemoveChartsheetDrawingReferences(archive);
+        RemoveChartsheetDrawingRelationships(archive, removedParts);
         RemoveContentTypeOverrides(archive, removedParts);
     }
 
@@ -840,6 +870,77 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
 
         return "xl/worksheets/" + normalized[prefix.Length..^suffix.Length];
+    }
+
+    private static void RemoveChartsheetDrawingReferences(ZipArchive archive)
+    {
+        XNamespace spreadsheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var chartsheetEntry in archive.Entries
+                     .Where(entry =>
+                         entry.FullName.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var chartsheetXml = XlsxPackageXmlEditor.LoadXml(chartsheetEntry);
+            var root = chartsheetXml.Root;
+            if (root is null)
+                continue;
+
+            var drawingReferences = root
+                .Elements()
+                .Where(element => element.Name == spreadsheetNs + "drawing")
+                .ToList();
+            if (drawingReferences.Count == 0)
+                continue;
+
+            drawingReferences.Remove();
+            XlsxPackageXmlEditor.ReplaceXml(archive, chartsheetEntry.FullName, chartsheetXml);
+        }
+    }
+
+    private static void RemoveChartsheetDrawingRelationships(
+        ZipArchive archive,
+        IReadOnlySet<string> removedParts)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        foreach (var relsEntry in archive.Entries
+                     .Where(entry =>
+                         entry.FullName.StartsWith("xl/chartsheets/_rels/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml.rels", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var chartsheetPath = GetChartsheetPathFromRelationshipPath(relsEntry.FullName);
+            if (chartsheetPath is null)
+                continue;
+
+            var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+            var relationships = relsXml.Root?
+                .Elements(packageRelNs + "Relationship")
+                .Where(relationship =>
+                    relationship.Attribute("Target")?.Value is { Length: > 0 } target &&
+                    removedParts.Contains(XlsxPackagePath.ResolveRelationshipTarget(chartsheetPath, target)))
+                .ToList()
+                ?? [];
+            if (relationships.Count == 0)
+                continue;
+
+            relationships.Remove();
+            XlsxPackageXmlEditor.ReplaceXml(archive, relsEntry.FullName, relsXml);
+        }
+    }
+
+    private static string? GetChartsheetPathFromRelationshipPath(string relsPath)
+    {
+        const string prefix = "xl/chartsheets/_rels/";
+        const string suffix = ".rels";
+        var normalized = NormalizeEntryPath(relsPath);
+        if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+            !normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return "xl/chartsheets/" + normalized[prefix.Length..^suffix.Length];
     }
 
     private static void RemoveContentTypeOverrides(
