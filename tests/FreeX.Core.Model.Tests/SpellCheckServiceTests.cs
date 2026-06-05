@@ -2236,6 +2236,59 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversPublicSafetyWeatherEmergencyVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "EMERGNCY Evacuaton sheltr RESPNSE hazrd Wildifre floodng Stormm smokee Alertt drilll Sirenn rescuee OUTBREK quarantne Sanitaton dispatchr Weathr forcast Advisry warningg. Keep emergency, evacuation, shelter, response, hazard, wildfire, flooding, storm, smoke, alert, drill, siren, rescue, outbreak, quarantine, sanitation, dispatcher, weather, forecast, advisory, warning, preemergncy, emergncy_id, https://emergncy.example.com/floodng, safety@weathr.example.com, \"C:\\stormm folder\\warningg file.xlsx\", and [C:\\dispatchr folder\\quarantne file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "emergncy EMERGNCY Emergncy https://emergncy.example.com/emergncy safety@emergncy.example.com emergncy_id preemergncy \"C:\\emergncy folder\\emergncy file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "emergency");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("EMERGNCY", "EMERGENCY"),
+            ("Evacuaton", "Evacuation"),
+            ("sheltr", "shelter"),
+            ("RESPNSE", "RESPONSE"),
+            ("hazrd", "hazard"),
+            ("Wildifre", "Wildfire"),
+            ("floodng", "flooding"),
+            ("Stormm", "Storm"),
+            ("smokee", "smoke"),
+            ("Alertt", "Alert"),
+            ("drilll", "drill"),
+            ("Sirenn", "Siren"),
+            ("rescuee", "rescue"),
+            ("OUTBREK", "OUTBREAK"),
+            ("quarantne", "quarantine"),
+            ("Sanitaton", "Sanitation"),
+            ("dispatchr", "dispatcher"),
+            ("Weathr", "Weather"),
+            ("forcast", "forecast"),
+            ("Advisry", "Advisory"),
+            ("warningg", "warning"));
+        plan.IssueCount.Should().Be(21);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "EMERGENCY Evacuation shelter RESPONSE hazard Wildfire flooding Storm smoke Alert drill Siren rescue OUTBREAK quarantine Sanitation dispatcher Weather forecast Advisory warning. Keep emergency, evacuation, shelter, response, hazard, wildfire, flooding, storm, smoke, alert, drill, siren, rescue, outbreak, quarantine, sanitation, dispatcher, weather, forecast, advisory, warning, preemergncy, emergncy_id, https://emergncy.example.com/floodng, safety@weathr.example.com, \"C:\\stormm folder\\warningg file.xlsx\", and [C:\\dispatchr folder\\quarantne file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(21);
+        replaceAllCorrected.Should().Be(
+            "emergency EMERGENCY Emergency https://emergncy.example.com/emergncy safety@emergncy.example.com emergncy_id preemergncy \"C:\\emergncy folder\\emergncy file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");

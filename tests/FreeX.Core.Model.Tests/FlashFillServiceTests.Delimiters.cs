@@ -222,6 +222,50 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_RemoveLeadingDottedToken_DropsLeftmostTokenAcrossVariableCounts()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Region.East.001", "East.001"),
+                ("Market.West.002", "West.002")
+            ],
+            ["Area.South.003", "Global.North.America.004"]);
+
+        result.Should().BeEquivalentTo(["South.003", "North.America.004"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_RemoveLeadingDottedToken_TrimsOuterWhitespaceAndPreservesInternalDots()
+    {
+        var result = FlashFillService.Fill(
+            [
+                (" Region . East . 001 ", "East . 001"),
+                (" Market . West . 002 ", "West . 002")
+            ],
+            [" Area . South . 003 "]);
+
+        result.Should().BeEquivalentTo(["South . 003"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("AreaSouth003")]
+    [InlineData(".South.003")]
+    [InlineData("Area.")]
+    [InlineData("Area.   ")]
+    [InlineData("   .South.003")]
+    public void Fill_RemoveLeadingDottedToken_ReturnsNullWhenRemainingCannotSatisfyPattern(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Region.East.001", "East.001"),
+                ("Market.West.002", "West.002")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(
         @"C:\Reports\Q1.xlsx",
