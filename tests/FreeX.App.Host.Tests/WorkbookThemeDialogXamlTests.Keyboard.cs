@@ -1,4 +1,3 @@
-using System.IO;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -9,7 +8,7 @@ public sealed partial class WorkbookThemeDialogXamlTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesThemeNameBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookThemeDialog.xaml.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -21,7 +20,7 @@ public sealed partial class WorkbookThemeDialogXamlTests
     [Fact]
     public void DialogInvalidThemeColor_FocusesInvalidColorBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookThemeDialog.xaml.cs");
 
         source.Should().Contain("WorkbookThemeDialogPlanner.TryCreateTheme");
         source.Should().Contain("private void ShowInvalidThemeColor(WorkbookThemeDialogValidationError error)");
