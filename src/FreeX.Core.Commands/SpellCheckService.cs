@@ -1497,12 +1497,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "retenton"))
-                {
-                    suggestion = "retention";
-                    return true;
-                }
-
                 if (first == 'o' && EqualAsciiWordIgnoreCase(word, "occured"))
                 {
                     suggestion = "occurred";
@@ -1760,6 +1754,12 @@ public static partial class SpellCheckService
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "relevent"))
                 {
                     suggestion = "relevant";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "retenton"))
+                {
+                    suggestion = "retention";
                     return true;
                 }
 
