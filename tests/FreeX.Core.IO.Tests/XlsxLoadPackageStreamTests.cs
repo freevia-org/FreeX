@@ -211,6 +211,34 @@ public sealed class XlsxLoadPackageStreamTests
         }
     }
 
+    [Fact]
+    public void ClosedXmlLoadSanitizer_CanMutateOwnedTransientPackageWithoutSecondCopy()
+    {
+        using var package = CreatePackageWithDrawingReferences();
+        var hints = new XlsxClosedXmlLoadSanitizationHints(
+            HasPivotPackageMetadata: false,
+            HasChartExChartParts: false,
+            HasDrawingPackageParts: true,
+            HasConditionalFormattingBlocks: false,
+            HasUnsupportedConditionalFormattingBlocks: false,
+            HasWorksheetDynamicFilters: false);
+
+        var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
+            package,
+            removeUnsupportedConditionalFormatting: false,
+            removeAllConditionalFormatting: false,
+            hints,
+            mutateSourcePackage: true);
+
+        sanitized.Should().BeSameAs(package);
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/drawings/drawing1.xml").Should().BeNull();
+        archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels").Should().BeNull();
+        archive.GetEntry("xl/charts/chart1.xml").Should().BeNull();
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull();
+        archive.GetEntry("xl/media/image1.png").Should().NotBeNull();
+    }
+
     [BenchmarkFact]
     public void Benchmark_StyleOnlyCellStripper_DuplicateWorksheetReportsTimingAndAllocatedBytes()
     {

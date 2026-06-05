@@ -1310,6 +1310,57 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData("", "alant@contoso.com")]
+    [InlineData(".", "alan.t@contoso.com")]
+    [InlineData("_", "alan_t@contoso.com")]
+    [InlineData("-", "alan-t@contoso.com")]
+    public void Fill_FullNamesToFirstLastInitialEmail_LearnsSeparatorAndSharedDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", $"ada{separator}l@contoso.com"),
+                ("Grace Hopper", $"grace{separator}h@contoso.com")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("", "turinga@contoso.com")]
+    [InlineData(".", "turing.a@contoso.com")]
+    [InlineData("_", "turing_a@contoso.com")]
+    [InlineData("-", "turing-a@contoso.com")]
+    public void Fill_FullNamesToLastFirstInitialEmail_LearnsSeparatorAndSharedDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", $"lovelace{separator}a@contoso.com"),
+                ("Grace Hopper", $"hopper{separator}g@contoso.com")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToFirstLastInitialEmail_UsesFirstAndLastAcrossMiddleNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "ada.l@contoso.com"),
+                ("Grace Brewster Hopper", "grace.h@contoso.com")
+            ],
+            ["Katherine Coleman Johnson"]);
+
+        result.Should().BeEquivalentTo(["katherine.j@contoso.com"], o => o.WithStrictOrdering());
+    }
+
     [Fact]
     public void Fill_FullNamesToEmail_ReturnsNullWhenExampleDomainsDiffer()
     {

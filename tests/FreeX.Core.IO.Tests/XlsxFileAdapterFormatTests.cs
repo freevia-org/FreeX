@@ -169,6 +169,7 @@ public sealed class XlsxFileAdapterFormatTests
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
         sanitizerSource.Should().Contain("GetSanitizationRequirements(");
         sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints? hints = null");
+        sanitizerSource.Should().Contain("bool mutateSourcePackage = false");
         sanitizerSource.Should().Contain("RemoveDrawingPackageParts(archive)");
         sanitizerSource.Should().Contain("RemoveWorksheetDrawingReferences(archive)");
         sanitizerSource.Should().Contain("RemoveWorksheetDrawingRelationships(archive, removedParts)");
@@ -192,6 +193,7 @@ public sealed class XlsxFileAdapterFormatTests
         tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");
         adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)");
         adapterSource.Should().Contain("styleOnlyWorksheetPathsToStrip is not { Count: 0 }");
+        adapterSource.Should().Contain("mutateSourcePackage: canMutateStyleOptimizedPackage");
         styleOnlyStripperSource.Should().Contain("XmlWriter.Create(outputStream, writerSettings)");
         styleOnlyStripperSource.Should().Contain("reader.IsEmptyElement");
         styleOnlyStripperSource.Should().Contain("XNode.ReadFrom(reader)");
