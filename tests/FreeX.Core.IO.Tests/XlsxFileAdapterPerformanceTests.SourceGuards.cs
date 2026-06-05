@@ -157,6 +157,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
         adapterSource.Should().Contain("packageParts = XlsxLoadPackageParts.Inspect(packageArchive);");
         adapterSource.Should().Contain("if (packageParts.HasPivotPackageParts)");
+        adapterSource.Should().Contain("packageParts.HasChartExChartParts");
+        adapterSource.Should().Contain("InspectChartExChartParts(archive)");
         adapterSource.Should().Contain("if (packageParts.HasSlicerTimelinePackageParts)");
         adapterSource.Should().Contain("if (packageParts.HasExternalLinks)");
         adapterSource.Should().Contain("if (packageParts.HasStructuredTables)");
@@ -200,7 +202,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sheetStyleOnlySource.Should().Contain("_styleOnly.EnsureCapacity(capacity)");
 
         sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints");
+        sanitizerSource.Should().Contain("TryCreateSanitizationRequirementsFromHints(");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasPivotPackageMetadata");
+        sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasChartExChartParts");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters");
 

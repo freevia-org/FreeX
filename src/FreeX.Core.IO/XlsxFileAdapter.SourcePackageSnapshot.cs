@@ -2161,8 +2161,10 @@ public sealed partial class XlsxFileAdapter
 
                     var sourceHyperlinks = ReadSourceHyperlinks(archive, worksheetPath, sheet);
                     var sourceComments = ReadSourceComments(archive, worksheetPath, sheet);
-                    var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(sheet.CellCount);
-                    foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+                    var occupiedCells = sheet.GetOccupiedCellMap();
+                    var cells = new XlsxPatchCellEntry[occupiedCells.Count];
+                    var cellIndex = 0;
+                    foreach (var ((row, col), cell) in occupiedCells)
                     {
                         var hasExplicitSourceStyleIndex = sourceCellStyleIndexes.TryGetValue((row, col), out var sourceStyleIndex);
                         if (cell.StyleId == StyleId.Default || hasExplicitSourceStyleIndex)
@@ -2174,14 +2176,18 @@ public sealed partial class XlsxFileAdapter
                                 sourceStyleIndex);
                         }
 
-                        cells[(row, col)] = new XlsxPatchCell(
-                            cell.Value,
-                            cell.FormulaText,
-                            cell.StyleId,
-                            sourceStyleIndex,
-                            cell.IgnoreFormulaError);
+                        cells[cellIndex++] = new XlsxPatchCellEntry(
+                            row,
+                            col,
+                            new XlsxPatchCell(
+                                cell.Value,
+                                cell.FormulaText,
+                                cell.StyleId,
+                                sourceStyleIndex,
+                                cell.IgnoreFormulaError));
                     }
 
+                    Array.Sort(cells, XlsxPatchCellEntry.Compare);
                     worksheets.Add(new XlsxWorksheetCellPatchBaseline(
                         sheet.Id,
                         sheet.Name,
@@ -2228,24 +2234,30 @@ public sealed partial class XlsxFileAdapter
                     return this;
                 }
 
-                var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(sheet.CellCount);
-                foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+                var occupiedCells = sheet.GetOccupiedCellMap();
+                var cells = new XlsxPatchCellEntry[occupiedCells.Count];
+                var cellIndex = 0;
+                foreach (var ((row, col), cell) in occupiedCells)
                 {
                     string? sourceStyleIndex = null;
-                    if (baseline.Cells.TryGetValue((row, col), out var original) &&
+                    if (baseline.TryGetCell(row, col, out var original) &&
                         original.StyleId == cell.StyleId)
                     {
                         sourceStyleIndex = original.SourceStyleIndex;
                     }
 
-                    cells[(row, col)] = new XlsxPatchCell(
-                        cell.Value,
-                        cell.FormulaText,
-                        cell.StyleId,
-                        sourceStyleIndex,
-                        cell.IgnoreFormulaError);
+                    cells[cellIndex++] = new XlsxPatchCellEntry(
+                        row,
+                        col,
+                        new XlsxPatchCell(
+                            cell.Value,
+                            cell.FormulaText,
+                            cell.StyleId,
+                            sourceStyleIndex,
+                            cell.IgnoreFormulaError));
                 }
 
+                Array.Sort(cells, XlsxPatchCellEntry.Compare);
                 worksheets.Add(baseline with
                 {
                     CellCount = sheet.CellCount,
@@ -2405,7 +2417,7 @@ public sealed partial class XlsxFileAdapter
                 var currentCells = sheet.GetOccupiedCellMap();
                 foreach (var ((row, col), cell) in currentCells)
                 {
-                    if (!baseline.Cells.TryGetValue((row, col), out var original))
+                    if (!baseline.TryGetCell(row, col, out var original))
                     {
                         if (_chartSourceRanges.Contains(baseline.SheetId, row, col))
                             return Fail("change_chart_source_cell", out blockReason);
@@ -2528,11 +2540,14 @@ public sealed partial class XlsxFileAdapter
                 }
 
                 var deletedCells = 0;
-                foreach (var ((row, col), original) in baseline.Cells)
+                foreach (var entry in baseline.Cells)
                 {
+                    var row = entry.Row;
+                    var col = entry.Col;
                     if (currentCells.ContainsKey((row, col)))
                         continue;
 
+                    var original = entry.Cell;
                     if (baseline.Tables.HasTables)
                         return Fail("change_table_deleted_cell", out blockReason);
 
@@ -3239,46 +3254,9 @@ public sealed partial class XlsxFileAdapter
                     continue;
                 }
 
-                var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(baseline.Cells);
-                var inserted = 0;
-                var deleted = 0;
-                foreach (var change in sheetChanges ?? [])
-                {
-                    var key = (change.Row, change.Col);
-                    if (change.Kind == XlsxCellValuePatchKind.InsertedLiteralValue)
-                    {
-                        cells[key] = new XlsxPatchCell(
-                            change.NewValue,
-                            null,
-                            change.NewStyleId,
-                            change.NewSourceStyleIndex,
-                            false);
-                        inserted++;
-                        continue;
-                    }
-
-                    if (change.Kind == XlsxCellValuePatchKind.DeletedCell)
-                    {
-                        if (cells.Remove(key))
-                            deleted++;
-                        continue;
-                    }
-
-                    if (!cells.TryGetValue(key, out var original))
-                        continue;
-
-                    cells[key] = original with
-                    {
-                        Value = change.NewValue,
-                        FormulaText = change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue
-                            ? change.NewFormulaText
-                            : original.FormulaText,
-                        StyleId = change.NewStyleId,
-                        SourceStyleIndex = change.HasStyleChange
-                            ? change.NewSourceStyleIndex
-                            : original.SourceStyleIndex
-                    };
-                }
+                var cells = baseline.WithAppliedCellChanges(sheetChanges ?? []);
+                var inserted = CountCellPatchChanges(sheetChanges, XlsxCellValuePatchKind.InsertedLiteralValue);
+                var deleted = CountCellPatchChanges(sheetChanges, XlsxCellValuePatchKind.DeletedCell);
 
                 worksheets.Add(baseline with
                 {
@@ -5439,7 +5417,135 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetCommentBaseline Comments,
         IReadOnlyDictionary<CellAddress, XlsxSourceComment> SourceComments,
         XlsxWorksheetTablePatchBaseline Tables,
-        IReadOnlyDictionary<(uint Row, uint Col), XlsxPatchCell> Cells);
+        XlsxPatchCellEntry[] Cells)
+    {
+        public bool TryGetCell(uint row, uint col, out XlsxPatchCell cell)
+        {
+            var low = 0;
+            var high = Cells.Length - 1;
+            while (low <= high)
+            {
+                var mid = low + ((high - low) / 2);
+                ref readonly var entry = ref Cells[mid];
+                var compare = entry.CompareTo(row, col);
+                if (compare < 0)
+                {
+                    low = mid + 1;
+                    continue;
+                }
+
+                if (compare > 0)
+                {
+                    high = mid - 1;
+                    continue;
+                }
+
+                cell = entry.Cell;
+                return true;
+            }
+
+            cell = default;
+            return false;
+        }
+
+        public XlsxPatchCellEntry[] WithAppliedCellChanges(IReadOnlyList<XlsxCellValuePatch> changes)
+        {
+            if (changes.Count == 0)
+                return Cells;
+
+            var cells = new XlsxPatchCellEntry[checked(Cells.Length + CountCellPatchChanges(changes, XlsxCellValuePatchKind.InsertedLiteralValue))];
+            var writeIndex = 0;
+            foreach (var entry in Cells)
+            {
+                var current = entry.Cell;
+                var deleted = false;
+                foreach (var change in changes)
+                {
+                    if (change.Row != entry.Row || change.Col != entry.Col)
+                        continue;
+
+                    if (change.Kind == XlsxCellValuePatchKind.DeletedCell)
+                    {
+                        deleted = true;
+                        break;
+                    }
+
+                    current = current with
+                    {
+                        Value = change.NewValue,
+                        FormulaText = change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue
+                            ? change.NewFormulaText
+                            : current.FormulaText,
+                        StyleId = change.NewStyleId,
+                        SourceStyleIndex = change.HasStyleChange
+                            ? change.NewSourceStyleIndex
+                            : current.SourceStyleIndex
+                    };
+                }
+
+                if (!deleted)
+                    cells[writeIndex++] = entry with { Cell = current };
+            }
+
+            foreach (var change in changes)
+            {
+                if (change.Kind != XlsxCellValuePatchKind.InsertedLiteralValue)
+                    continue;
+
+                cells[writeIndex++] = new XlsxPatchCellEntry(
+                    change.Row,
+                    change.Col,
+                    new XlsxPatchCell(
+                        change.NewValue,
+                        null,
+                        change.NewStyleId,
+                        change.NewSourceStyleIndex,
+                        false));
+            }
+
+            if (writeIndex != cells.Length)
+                Array.Resize(ref cells, writeIndex);
+
+            Array.Sort(cells, XlsxPatchCellEntry.Compare);
+            return cells;
+        }
+    }
+
+    private static int CountCellPatchChanges(
+        IReadOnlyList<XlsxCellValuePatch>? changes,
+        XlsxCellValuePatchKind kind)
+    {
+        if (changes is null || changes.Count == 0)
+            return 0;
+
+        var count = 0;
+        foreach (var change in changes)
+        {
+            if (change.Kind == kind)
+                count++;
+        }
+
+        return count;
+    }
+
+    private readonly record struct XlsxPatchCellEntry(uint Row, uint Col, XlsxPatchCell Cell)
+    {
+        public static int Compare(XlsxPatchCellEntry left, XlsxPatchCellEntry right)
+        {
+            var rowCompare = left.Row.CompareTo(right.Row);
+            return rowCompare != 0
+                ? rowCompare
+                : left.Col.CompareTo(right.Col);
+        }
+
+        public int CompareTo(uint row, uint col)
+        {
+            var rowCompare = Row.CompareTo(row);
+            return rowCompare != 0
+                ? rowCompare
+                : Col.CompareTo(col);
+        }
+    }
 
     private readonly record struct XlsxPatchCell(
         ScalarValue Value,

@@ -72,10 +72,19 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool scanAllConditionalFormatting = false,
         XlsxClosedXmlLoadSanitizationHints? hints = null)
     {
+        var knownHints = hints.GetValueOrDefault();
+        if (TryCreateSanitizationRequirementsFromHints(
+                knownHints,
+                scanUnsupportedConditionalFormatting,
+                scanAllConditionalFormatting,
+                out var knownRequirements))
+        {
+            return knownRequirements;
+        }
+
         try
         {
             using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
-            var knownHints = hints.GetValueOrDefault();
             return new SanitizationRequirements(
                 ResolveKnownOrScan(knownHints.HasPivotPackageMetadata, archive, HasPivotPackageMetadata),
                 ResolveKnownOrScan(knownHints.HasChartExChartParts, archive, HasChartExChartParts),
@@ -94,6 +103,41 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             if (sourcePackage.CanSeek)
                 sourcePackage.Position = 0;
         }
+    }
+
+    private static bool TryCreateSanitizationRequirementsFromHints(
+        XlsxClosedXmlLoadSanitizationHints hints,
+        bool scanUnsupportedConditionalFormatting,
+        bool scanAllConditionalFormatting,
+        out SanitizationRequirements requirements)
+    {
+        requirements = default;
+        if (hints.HasPivotPackageMetadata is not { } hasPivotPackageMetadata ||
+            hints.HasChartExChartParts is not { } hasChartExChartParts ||
+            hints.HasWorksheetDynamicFilters is not { } hasWorksheetDynamicFilters)
+        {
+            return false;
+        }
+
+        if (scanAllConditionalFormatting &&
+            hints.HasConditionalFormattingBlocks is not { })
+        {
+            return false;
+        }
+
+        if (scanUnsupportedConditionalFormatting &&
+            hints.HasUnsupportedConditionalFormattingBlocks is not { })
+        {
+            return false;
+        }
+
+        requirements = new SanitizationRequirements(
+            hasPivotPackageMetadata,
+            hasChartExChartParts,
+            scanAllConditionalFormatting && hints.HasConditionalFormattingBlocks.GetValueOrDefault(),
+            scanUnsupportedConditionalFormatting && hints.HasUnsupportedConditionalFormattingBlocks.GetValueOrDefault(),
+            hasWorksheetDynamicFilters);
+        return true;
     }
 
     private static bool ResolveKnownOrScan(
