@@ -57,7 +57,7 @@ internal static class XlsxWorksheetDataConsolidationMapper
 
             if (ToXml(dataConsolidationModel) is { } dataConsolidate)
             {
-                root.Add(dataConsolidate);
+                InsertDataConsolidate(root, dataConsolidate);
                 changed = true;
             }
 
@@ -120,5 +120,45 @@ internal static class XlsxWorksheetDataConsolidationMapper
         element.SetAttributeValue("sheet", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Sheet));
         element.SetAttributeValue("name", XlsxWorksheetNativeMetadataHelpers.NullIfWhiteSpace(model.Name));
         return element;
+    }
+
+    private static void InsertDataConsolidate(XElement root, XElement dataConsolidate)
+    {
+        var insertionPoint = root.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == WorksheetNs &&
+                new[]
+                {
+                    "customSheetViews",
+                    "mergeCells",
+                    "phoneticPr",
+                    "conditionalFormatting",
+                    "dataValidations",
+                    "hyperlinks",
+                    "printOptions",
+                    "pageMargins",
+                    "pageSetup",
+                    "headerFooter",
+                    "rowBreaks",
+                    "colBreaks",
+                    "customProperties",
+                    "cellWatches",
+                    "ignoredErrors",
+                    "singleXmlCells",
+                    "smartTags",
+                    "drawing",
+                    "legacyDrawing",
+                    "legacyDrawingHF",
+                    "picture",
+                    "oleObjects",
+                    "controls",
+                    "webPublishItems",
+                    "tableParts",
+                    "extLst"
+                }.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        if (insertionPoint is null)
+            root.Add(dataConsolidate);
+        else
+            insertionPoint.AddBeforeSelf(dataConsolidate);
     }
 }

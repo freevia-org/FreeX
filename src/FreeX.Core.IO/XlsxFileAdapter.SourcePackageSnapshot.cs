@@ -457,6 +457,7 @@ public sealed partial class XlsxFileAdapter
                     out var mergeRegionChanges,
                     out var hyperlinkChanges,
                     out var commentChanges,
+                    out var currentPatchValidationModelFingerprint,
                     out var changeBlockReason))
                 return Fail(changeBlockReason ?? "patch_blocked_changes_not_patchable", out diagnostics);
 
@@ -473,7 +474,8 @@ public sealed partial class XlsxFileAdapter
 
             currentModelFingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var patchedSourceModelFingerprint = currentModelFingerprint;
-            var patchedPatchValidationFingerprint = CreatePatchValidationModelFingerprint(workbook);
+            var patchedPatchValidationFingerprint =
+                currentPatchValidationModelFingerprint ?? CreatePatchValidationModelFingerprint(workbook);
 
             using var patchedPackage = new MemoryStream(Count + 4096);
             patchedPackage.Write(Buffer, Offset, Count);
@@ -2118,6 +2120,7 @@ public sealed partial class XlsxFileAdapter
             out List<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
             out List<XlsxWorksheetHyperlinkPatch> hyperlinkChanges,
             out List<XlsxWorksheetCommentPatch> commentChanges,
+            out string? currentPatchValidationModelFingerprint,
             out string? blockReason)
         {
             static bool Fail(string reason, out string? blockReason)
@@ -2131,6 +2134,7 @@ public sealed partial class XlsxFileAdapter
             mergeRegionChanges = [];
             hyperlinkChanges = [];
             commentChanges = [];
+            currentPatchValidationModelFingerprint = null;
             blockReason = null;
             if (workbook.SheetCount != _worksheets.Count)
                 return Fail("change_sheet_count", out blockReason);
@@ -2407,22 +2411,55 @@ public sealed partial class XlsxFileAdapter
                     return Fail("change_cell_count_mismatch", out blockReason);
             }
 
-            var modelMatches = changes.Count == 0 &&
-                   dimensionChanges.Count == 0 &&
-                   mergeRegionChanges.Count == 0 &&
-                   hyperlinkChanges.Count == 0 &&
-                   commentChanges.Count == 0 &&
-                   currentModelFingerprint is not null
-                ? string.Equals(_modelFingerprint, currentModelFingerprint, StringComparison.Ordinal)
-                : ModelMatchesWithOriginalValues(
-                    workbook,
+            bool modelMatches;
+            if (ChangesOnlyExistingCells(
                     changes,
                     dimensionChanges,
                     mergeRegionChanges,
                     hyperlinkChanges,
-                    commentChanges);
+                    commentChanges))
+            {
+                currentPatchValidationModelFingerprint = CreatePatchValidationModelFingerprint(workbook);
+                modelMatches = string.Equals(
+                    _modelFingerprint,
+                    currentPatchValidationModelFingerprint,
+                    StringComparison.Ordinal);
+            }
+            else
+            {
+                modelMatches = changes.Count == 0 &&
+                       dimensionChanges.Count == 0 &&
+                       mergeRegionChanges.Count == 0 &&
+                       hyperlinkChanges.Count == 0 &&
+                       commentChanges.Count == 0 &&
+                       currentModelFingerprint is not null
+                    ? string.Equals(_modelFingerprint, currentModelFingerprint, StringComparison.Ordinal)
+                    : ModelMatchesWithOriginalValues(
+                        workbook,
+                        changes,
+                        dimensionChanges,
+                        mergeRegionChanges,
+                        hyperlinkChanges,
+                        commentChanges);
+            }
+
             return modelMatches || Fail("change_unsupported_model_delta", out blockReason);
         }
+
+        private static bool ChangesOnlyExistingCells(
+            IReadOnlyList<XlsxCellValuePatch> changes,
+            IReadOnlyList<XlsxWorksheetDimensionPatch> dimensionChanges,
+            IReadOnlyList<XlsxWorksheetMergeRegionPatch> mergeRegionChanges,
+            IReadOnlyList<XlsxWorksheetHyperlinkPatch> hyperlinkChanges,
+            IReadOnlyList<XlsxWorksheetCommentPatch> commentChanges) =>
+            changes.Count > 0 &&
+            dimensionChanges.Count == 0 &&
+            mergeRegionChanges.Count == 0 &&
+            hyperlinkChanges.Count == 0 &&
+            commentChanges.Count == 0 &&
+            changes.All(change =>
+                change.Kind != XlsxCellValuePatchKind.InsertedLiteralValue &&
+                change.Kind != XlsxCellValuePatchKind.DeletedCell);
 
         public static bool ApplyChanges(XDocument worksheetXml, IEnumerable<XlsxCellValuePatch> changes)
         {
