@@ -17,6 +17,7 @@ public sealed partial class XlsxFileAdapter
         string? ProtectionPasswordHash,
         NativeXmlPreserveBag? ProtectionMetadata,
         IReadOnlyList<GridRange> AllowEditRanges,
+        IReadOnlyList<GridRange> MergedRegions,
         WorksheetViewMode ViewMode,
         bool ShowGridlines,
         bool ShowHeadings,
@@ -260,6 +261,7 @@ public sealed partial class XlsxFileAdapter
             protection?.Attribute("hashValue")?.Value;
         var protectionMetadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetProtectionMetadata(protection);
         var allowEditRanges = XlsxAllowEditRangeMapper.Read(worksheetXml, worksheetNs);
+        var mergedRegions = ReadMergedRegions(worksheetXml, worksheetNs);
 
         var sheetView = worksheetXml.Root?
             .Element(worksheetNs + "sheetViews")?
@@ -330,6 +332,7 @@ public sealed partial class XlsxFileAdapter
             passwordHash,
             protectionMetadata,
             allowEditRanges,
+            mergedRegions,
             ParseWorksheetViewMode(sheetView?.Attribute("view")?.Value),
             !IsFalse(sheetView?.Attribute("showGridLines")?.Value),
             !IsFalse(sheetView?.Attribute("showRowColHeaders")?.Value),
@@ -433,6 +436,33 @@ public sealed partial class XlsxFileAdapter
 
             result ??= [];
             result.Add(relId);
+        }
+
+        return result ?? [];
+    }
+
+    private static IReadOnlyList<GridRange> ReadMergedRegions(
+        XDocument worksheetXml,
+        XNamespace worksheetNs)
+    {
+        var mergeCells = worksheetXml.Root?.Element(worksheetNs + "mergeCells");
+        if (mergeCells is null)
+            return [];
+
+        var tempSheet = SheetId.New();
+        List<GridRange>? result = null;
+        foreach (var mergeCell in mergeCells.Elements(worksheetNs + "mergeCell"))
+        {
+            var reference = mergeCell.Attribute("ref")?.Value;
+            if (string.IsNullOrWhiteSpace(reference) ||
+                !TryParseSqrefToken(reference, tempSheet, out var range) ||
+                range.CellCount <= 1)
+            {
+                continue;
+            }
+
+            result ??= [];
+            result.Add(range);
         }
 
         return result ?? [];
