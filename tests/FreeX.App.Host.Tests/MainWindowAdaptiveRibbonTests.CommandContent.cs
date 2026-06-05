@@ -188,7 +188,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             var window = ShowStandaloneRibbonButton(button, 38, 24);
             try
             {
-                var icon = EnumerateSelfAndVisualDescendants(button)
+                var icon = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
                     .OfType<FrameworkElement>()
                     .First(element => RibbonMetadata.IsCommandIcon(element));
                 var iconBounds = icon.TransformToAncestor(button)

@@ -52,9 +52,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         return (Rect)args[1];
     }
 
-    private static IEnumerable<DependencyObject> EnumerateSelfAndVisualDescendants(DependencyObject root) =>
-        WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(root);
-
     private sealed class MainWindowHarness : IDisposable
     {
         private static MainWindow? SharedWindow;
@@ -110,7 +107,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
-                .Where(button => EnumerateSelfAndVisualDescendants(button)
+                .Where(button => WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
                     .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
                     .OfType<TextBlock>()
                     .Any(textBlock =>
@@ -125,7 +122,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
                 .Where(IsVisibleCollapsedGroupButton)
-                .SelectMany(button => EnumerateSelfAndVisualDescendants(button)
+                .SelectMany(button => WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
                     .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
                     .OfType<TextBlock>()
                     .Where(RibbonMetadata.IsCommandLabel)
@@ -241,7 +238,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         public Button? VisibleOrCollapsedRibbonButton(string title) =>
             HomeRibbonChildren
                 .OfType<DependencyObject>()
-                .SelectMany(EnumerateSelfAndVisualDescendants)
+                .SelectMany(WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>)
                 .Concat(HomeRibbonChildren.OfType<DependencyObject>().SelectMany(WpfTestTree.FindLogicalDescendants<DependencyObject>))
                 .OfType<Button>()
                 .Distinct()
@@ -292,7 +289,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .ToList();
 
         private IReadOnlyList<Button> ActiveRibbonMenuButtons =>
-            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
                 .OfType<Button>()
                 .Distinct()
@@ -315,7 +312,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             var dropdownBounds = (Rect)args[1];
             dropdownBounds.Y.Should().BeGreaterThan(0, "this check is only for horizontal tall-button split zones");
 
-            var labelBottom = EnumerateSelfAndVisualDescendants(button!)
+            var labelBottom = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button!)
                 .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button!))
                 .OfType<TextBlock>()
                 .Distinct()
@@ -331,14 +328,14 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         }
 
         private Button? ActiveRibbonButton(string title) =>
-            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
                 .OfType<Button>()
                 .Distinct()
                 .FirstOrDefault(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal));
 
         private static int DropdownChevronCount(ButtonBase button) =>
-            EnumerateSelfAndVisualDescendants(button)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
                 .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
                 .Distinct()
                 .Count(RibbonMetadata.IsDropdownChevron);
@@ -385,7 +382,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         public IReadOnlyList<string> VisibleRibbonCommandLabels =>
             (SelectedRibbonTab is null
                 ? []
-                : EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                : WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                     .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
                     .OfType<Button>()
                     .Distinct()
@@ -397,7 +394,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         public IReadOnlyList<string> TallLargeRibbonCommandLabels =>
             (SelectedRibbonTab is null
                 ? []
-                : EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                : WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                     .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
                     .OfType<Button>()
                     .Distinct()
@@ -411,7 +408,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         public IReadOnlyList<int> VisibleRibbonButtonContentIdentityHashCodes =>
             (SelectedRibbonTab is null
                 ? []
-                : EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                : WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                     .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
                     .OfType<Button>()
                     .Distinct()
@@ -423,7 +420,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<int> VisibleRibbonTabHeaderRows =>
             _window.FindName("RibbonTabs") is TabControl tabs
-                ? EnumerateSelfAndVisualDescendants(tabs)
+                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(tabs)
                     .OfType<TabItem>()
                     .Where(item => item.Visibility == Visibility.Visible && item.ActualHeight > 0)
                     .Select(item => (int)Math.Round(item.TransformToAncestor(tabs).Transform(new Point(0, 0)).Y))
@@ -433,7 +430,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 : [];
 
         public IReadOnlyList<double> DenseColumnButtonHeights =>
-            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .OfType<UniformGrid>()
                 .Where(grid => grid.Rows == 3 && grid.Children.OfType<Button>().Count() > 3)
                 .SelectMany(grid => grid.Children.OfType<Button>())
@@ -453,7 +450,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .DefaultIfEmpty(group.ActualHeight)
                 .Min();
 
-            var maxCommandBottom = EnumerateSelfAndVisualDescendants(group)
+            var maxCommandBottom = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(group)
                 .OfType<Button>()
                 .Where(IsEffectivelyVisible)
                 .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
@@ -470,7 +467,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<int> ActiveRibbonGroupDenseCommandRows(string groupName) =>
             FindActiveRibbonGroup(groupName) is { } group
-                ? EnumerateSelfAndVisualDescendants(group)
+                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(group)
                     .OfType<UniformGrid>()
                     .Where(grid => grid.Children.OfType<Button>().Count() > 3)
                     .Select(grid => grid.Rows)
@@ -479,7 +476,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<DenseCommandPlacement> ActiveRibbonGroupDenseCommandPlacements(string groupName) =>
             FindActiveRibbonGroup(groupName) is { } group
-                ? EnumerateSelfAndVisualDescendants(group)
+                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(group)
                     .OfType<UniformGrid>()
                     .Where(grid => grid.Rows > 0 && grid.Children.OfType<Button>().Count() > 3)
                     .SelectMany(GetDenseCommandPlacements)
@@ -488,7 +485,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<string> ActiveRibbonGroupClippedCommandLabels(string groupName) =>
             FindActiveRibbonGroup(groupName) is { } group
-                ? EnumerateSelfAndVisualDescendants(group)
+                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(group)
                     .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(group))
                     .OfType<TextBlock>()
                     .Distinct()
@@ -502,7 +499,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<string> ActiveRibbonGroupCommandLabelsWithoutIconSlots(string groupName) =>
             FindActiveRibbonGroup(groupName) is { } group
-                ? EnumerateSelfAndVisualDescendants(group)
+                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(group)
                     .OfType<Button>()
                     .Where(IsEffectivelyVisible)
                     .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
@@ -513,27 +510,27 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 : [];
 
         public IReadOnlyList<RibbonIconStackOffsets> VerticallyStackedRibbonIconOffsets =>
-            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .OfType<Panel>()
                 .SelectMany(GetVerticalIconStacks)
                 .ToList();
 
         public IReadOnlyList<RibbonIconStackOffsets> DirectVerticalButtonStackIconOffsets =>
-            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .OfType<StackPanel>()
                 .Where(panel => panel.Orientation == Orientation.Vertical)
                 .SelectMany(GetDirectVerticalButtonStacks)
                 .ToList();
 
         public IReadOnlyList<RibbonIconStackOffsets> StackedRibbonRowColumnIconOffsets =>
-            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .OfType<StackPanel>()
                 .Where(panel => panel.Orientation == Orientation.Vertical)
                 .SelectMany(GetStackedRowColumnIconOffsets)
                 .ToList();
 
         public IReadOnlyList<RibbonIconStackOffsets> GridRibbonColumnIconOffsets =>
-            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .OfType<Grid>()
                 .Where(grid => !RibbonMetadata.IsRibbonGroup(grid) &&
                                !RibbonMetadata.TryGetCommandContentLayout(grid, out _))
@@ -563,7 +560,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
             _window.FindName("RibbonTabs") is TabControl tabs
-                ? EnumerateSelfAndVisualDescendants(tabs)
+                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(tabs)
                     .OfType<ScrollViewer>()
                     .Where(IsEffectivelyVisible)
                     .Select(scrollViewer => scrollViewer.HorizontalScrollBarVisibility)
@@ -575,7 +572,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<string> ActiveRibbonVisibleHorizontalScrollBars =>
             ActiveRibbonScrollViewer is { } scrollViewer
-                ? EnumerateSelfAndVisualDescendants(scrollViewer)
+                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(scrollViewer)
                     .OfType<ScrollBar>()
                     .Where(scrollBar => scrollBar.Orientation == Orientation.Horizontal)
                     .Where(IsEffectivelyVisible)
@@ -633,7 +630,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         private StackPanel? ActiveRibbonPanel =>
             SelectedRibbonTab is { } tabItem
-                ? EnumerateSelfAndVisualDescendants(tabItem.Content as DependencyObject ?? tabItem)
+                ? WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(tabItem.Content as DependencyObject ?? tabItem)
                     .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(tabItem.Content as DependencyObject ?? tabItem))
                     .OfType<StackPanel>()
                     .Distinct()
@@ -716,7 +713,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public void ClickActiveRibbonButton(string title)
         {
-            var button = EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+            var button = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
                 .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
                 .OfType<Button>()
                 .Distinct()
@@ -798,7 +795,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             if (button.Content is string text)
                 return text;
 
-            return EnumerateSelfAndVisualDescendants(button)
+            return WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
                 .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
                 .OfType<TextBlock>()
                 .FirstOrDefault(RibbonMetadata.IsCommandLabel)
@@ -939,7 +936,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             RibbonMetadata.TryGetCommandContentLayout(content, out var layout) &&
             layout == RibbonCommandContentLayout.Small &&
             TryGetCommandIconSlot(button, out _) &&
-            EnumerateSelfAndVisualDescendants(content)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(content)
                 .OfType<TextBlock>()
                 .Any(textBlock => RibbonMetadata.IsCommandLabel(textBlock) &&
                                   IsEffectivelyVisible(textBlock));
@@ -949,7 +946,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             RibbonMetadata.TryGetCommandContentLayout(content, out var layout) &&
             layout == RibbonCommandContentLayout.Large &&
             (button.ActualHeight >= 64 || button.Height >= 64) &&
-            EnumerateSelfAndVisualDescendants(content)
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(content)
                 .OfType<TextBlock>()
                 .Any(textBlock => RibbonMetadata.IsCommandLabel(textBlock) &&
                                   IsEffectivelyVisible(textBlock));
@@ -990,7 +987,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         {
             iconSlot = null!;
             var contentRoot = button.Content as DependencyObject ?? button;
-            iconSlot = EnumerateSelfAndVisualDescendants(contentRoot)
+            iconSlot = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(contentRoot)
                 .OfType<FrameworkElement>()
                 .FirstOrDefault(element => RibbonMetadata.IsCommandIcon(element) &&
                                            !RibbonMetadata.IsCollapsedChevron(element))!;
@@ -1016,7 +1013,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         private static bool HasVisibleCollapsedGroupDropdownGlyph(Button button) =>
             System.Windows.Documents.AdornerLayer.GetAdornerLayer(button)
                 ?.GetAdorners(button)
-                ?.SelectMany(EnumerateSelfAndVisualDescendants)
+                ?.SelectMany(WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>)
                 .OfType<TextBlock>()
                 .Any(textBlock => RibbonMetadata.IsCollapsedChevron(textBlock) &&
                                   textBlock.Visibility == Visibility.Visible &&
@@ -1024,7 +1021,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         private static double GetCheckBoxLabelOffset(CheckBox checkBox)
         {
-            var presenter = EnumerateSelfAndVisualDescendants(checkBox)
+            var presenter = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(checkBox)
                 .OfType<ContentPresenter>()
                 .FirstOrDefault(contentPresenter => Equals(contentPresenter.Content, checkBox.Content));
             presenter.Should().NotBeNull($"the {checkBox.Name} checkbox should expose a content presenter for its label");

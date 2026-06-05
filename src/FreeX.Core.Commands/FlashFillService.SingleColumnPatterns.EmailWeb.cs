@@ -374,6 +374,7 @@ public static partial class FlashFillService
             ?? TryUrlLastQueryParameterValue(examples)
             ?? TryUrlLastRepeatedQueryParameterValue(examples)
             ?? TryUrlQueryParameterValueTitle(examples)
+            ?? TryUrlQueryParameterNameTitle(examples)
             ?? TryUrlFragmentValue(examples)
             ?? TryUrlFragmentValueTitle(examples);
     }
@@ -531,6 +532,21 @@ public static partial class FlashFillService
                         TryFormatSlugStemAsTitle(value, out var title)
                 ? title
                 : null;
+    }
+
+    private static Func<string, string?>? TryUrlQueryParameterNameTitle(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => e.Expected.Length > 0 &&
+                               TryGetSingleTitleizedQueryParameterName(e.Source, e.Expected, out _)))
+        {
+            return null;
+        }
+
+        return source => TryGetFirstTitleizableQueryParameterName(source, out var name) &&
+                         TryFormatSlugStemAsTitle(name, out var title)
+            ? title
+            : null;
     }
 
     private static Func<string, string?>? TryUrlFragmentValue(IReadOnlyList<(string Source, string Expected)> examples)
@@ -1067,6 +1083,54 @@ public static partial class FlashFillService
         }
 
         return true;
+    }
+
+    private static bool TryGetSingleTitleizedQueryParameterName(
+        string source,
+        string expected,
+        out string parameterName)
+    {
+        parameterName = string.Empty;
+        if (!TryGetFirstDecodedQueryParameterName(source, out var firstName) ||
+            !TryFormatSlugStemAsTitle(firstName, out var firstTitle) ||
+            firstTitle != expected ||
+            !TryGetDecodedQueryParameters(source, out var parameters))
+        {
+            return false;
+        }
+
+        foreach (var name in parameters.Select(p => p.Name).Distinct(StringComparer.Ordinal))
+        {
+            if (name == firstName)
+                continue;
+
+            if (!TryFormatSlugStemAsTitle(name, out var title))
+                continue;
+
+            if (title != expected)
+                continue;
+
+            parameterName = string.Empty;
+            return false;
+        }
+
+        parameterName = firstName;
+        return true;
+    }
+
+    private static bool TryGetFirstTitleizableQueryParameterName(string source, out string parameterName)
+    {
+        parameterName = string.Empty;
+        if (!TryGetFirstDecodedQueryParameterName(source, out var name))
+            return false;
+
+        if (TryFormatSlugStemAsTitle(name, out _))
+        {
+            parameterName = name;
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryGetFirstNonEmptyQueryParameterValue(

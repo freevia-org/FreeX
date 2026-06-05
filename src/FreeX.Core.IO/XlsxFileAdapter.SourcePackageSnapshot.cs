@@ -820,11 +820,6 @@ public sealed partial class XlsxFileAdapter
                     return true;
                 }
 
-                if (sheet.Sparklines.Count > 0)
-                {
-                    blockReason = "workbook_postprocessing_sparklines";
-                    return true;
-                }
             }
 
             return false;
