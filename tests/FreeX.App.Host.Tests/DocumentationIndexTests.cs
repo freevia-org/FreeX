@@ -226,8 +226,7 @@ public sealed partial class DocumentationIndexTests
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var catalog = File.ReadAllText(Path.Combine(docsDirectory, "testing/ui-test-catalog.md"));
-        var mainWindow = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var clickWiredCount = XamlClickHandler().Matches(mainWindow).Count;
+        var clickWiredCount = RibbonXamlCatalogSnapshotReader.ReadMainWindowSnapshot().ClickHandlerCount;
         var declaredCount = int.Parse(UiCatalogXamlClickWiredCount().Match(catalog).Groups["count"].Value);
 
         declaredCount.Should().Be(clickWiredCount);
@@ -426,6 +425,4 @@ public sealed partial class DocumentationIndexTests
     [GeneratedRegex(@"\| XAML click-wired controls \| (?<count>\d+) \|")]
     private static partial Regex UiCatalogXamlClickWiredCount();
 
-    [GeneratedRegex(@"Click=""[^""]+""")]
-    private static partial Regex XamlClickHandler();
 }

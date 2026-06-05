@@ -219,29 +219,62 @@ public partial class MainWindow
     private string GetSelectedFontSizeText() =>
         FontSizeBox.SelectedItem as string ?? FontSizeBox.Text;
 
-    private void FontColorBtn_Click(object sender, RoutedEventArgs e)
+    private void FontColorBtn_Click(object sender, RoutedEventArgs e) => ApplySelectedFontColor();
+
+    private void FontColorPickerBtn_Click(object sender, RoutedEventArgs e)
     {
-        var initial = GetCurrentCellStyle().FontColor;
-        if (TryShowColorPicker("Font Color", initial, allowNoColor: false, out var color) && color is { } selected)
-            ApplyStyleDiff(new StyleDiff(FontColor: selected));
+        if (!TryShowColorPicker("Font Color", _selectedFontColor, allowNoColor: false, out var color) ||
+            color is not { } selected)
+        {
+            return;
+        }
+
+        _selectedFontColor = selected;
+        UpdateFontColorButtonSwatch();
+        ApplySelectedFontColor();
     }
 
-    private void FillColorBtn_Click(object sender, RoutedEventArgs e)
+    private void ApplySelectedFontColor()
     {
-        var initial = GetCurrentCellStyle().FillColor;
-        if (!TryShowColorPicker("Fill Color", initial, allowNoColor: true, out var color))
+        ApplyStyleDiff(new StyleDiff(FontColor: _selectedFontColor));
+    }
+
+    private void FillColorBtn_Click(object sender, RoutedEventArgs e) => ApplySelectedFillColor();
+
+    private void FillColorPickerBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryShowColorPicker("Fill Color", _selectedFillColor, allowNoColor: true, out var color))
             return;
 
-        ApplyStyleDiff(color is { } selected
+        _selectedFillColor = color;
+        UpdateFillColorButtonSwatch();
+        ApplySelectedFillColor();
+    }
+
+    private void ApplySelectedFillColor()
+    {
+        ApplyStyleDiff(_selectedFillColor is { } selected
             ? new StyleDiff(FillColor: selected)
             : new StyleDiff(FillColor: null, ClearFill: true));
     }
 
-    private CellStyle GetCurrentCellStyle()
+    private void UpdateFontColorButtonSwatch()
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var address = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
-        return _workbook.GetStyle(sheet?.GetCell(address)?.StyleId ?? StyleId.Default);
+        FontColorBar.Fill = CreateCellColorBrush(_selectedFontColor);
+    }
+
+    private void UpdateFillColorButtonSwatch()
+    {
+        FillColorBar.Fill = _selectedFillColor is { } color
+            ? CreateCellColorBrush(color)
+            : Brushes.Transparent;
+    }
+
+    private static SolidColorBrush CreateCellColorBrush(CellColor color)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+        brush.Freeze();
+        return brush;
     }
 
     private bool TryShowColorPicker(string title, CellColor? initialColor, bool allowNoColor, out CellColor? color)
