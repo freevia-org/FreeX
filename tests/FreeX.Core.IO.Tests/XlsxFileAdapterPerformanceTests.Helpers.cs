@@ -36,6 +36,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     private const int GeneratedStyleHeavyValueColumnsPerSheet = 12;
     private const int GeneratedStyleHeavyStyleOnlyColumnsPerSheet = 160;
     private const int GeneratedStyleHeavyStyleOnlyStartColumn = GeneratedStyleHeavyValueColumnsPerSheet + 2;
+    private const int LargePatchBaselineRows = 260_000;
 
     private static byte[] CreateDenseXlsxPackage()
     {
@@ -487,6 +488,81 @@ public sealed partial class XlsxFileAdapterPerformanceTests
               </tableColumns>
               <tableStyleInfo name="TableStyleMedium2" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>
             </table>
+            """);
+    }
+
+    private static byte[] CreateLargePatchBaselineXlsxPackage()
+    {
+        using var stream = new MemoryStream(capacity: 8 * 1024 * 1024);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteTextEntry(archive, "[Content_Types].xml", WriteLargePatchBaselineContentTypes);
+            WriteTextEntry(archive, "_rels/.rels", WriteGeneratedStyleHeavyRootRelationships);
+            WriteTextEntry(archive, "xl/workbook.xml", WriteLargePatchBaselineWorkbook);
+            WriteTextEntry(archive, "xl/_rels/workbook.xml.rels", WriteLargePatchBaselineWorkbookRelationships);
+            WriteTextEntry(archive, "xl/styles.xml", WriteGeneratedStyleHeavyStyles);
+            WriteTextEntry(archive, "xl/worksheets/sheet1.xml", WriteLargePatchBaselineWorksheet);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static void WriteLargePatchBaselineContentTypes(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+              <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+              <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+            </Types>
+            """);
+
+    private static void WriteLargePatchBaselineWorkbook(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <bookViews>
+                <workbookView activeTab="0"/>
+              </bookViews>
+              <sheets>
+                <sheet name="Large Data" sheetId="1" r:id="rId1"/>
+              </sheets>
+              <calcPr calcId="191029"/>
+            </workbook>
+            """);
+
+    private static void WriteLargePatchBaselineWorkbookRelationships(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+              <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+            </Relationships>
+            """);
+
+    private static void WriteLargePatchBaselineWorksheet(TextWriter writer)
+    {
+        writer.Write($"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <dimension ref="A1:A{LargePatchBaselineRows}"/>
+              <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+              <sheetFormatPr defaultRowHeight="15"/>
+              <sheetData>
+            """);
+
+        for (var row = 1; row <= LargePatchBaselineRows; row++)
+            writer.WriteLine($"""    <row r="{row}"><c r="A{row}"><v>{row}</v></c></row>""");
+
+        writer.Write(
+            """
+              </sheetData>
+            </worksheet>
             """);
     }
 

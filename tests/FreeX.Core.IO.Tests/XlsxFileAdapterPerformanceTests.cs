@@ -374,6 +374,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("TryEnsureCellPatchBaseline(");
         snapshotSource.Should().Contain("XlsxCellPatchBaselineFacts.Capture(workbook, sheetXmlLayout)");
         snapshotSource.Should().Contain("baselineFacts: CellPatchBaselineFacts");
+        snapshotSource.Should().Contain("private const int CellPatchBaselineLimit = 2_000_000;");
+        snapshotSource.Should().Contain("private const int CellPatchChangeLimit = 4_096;");
         snapshotSource.Should().Contain("retainedBaselineFacts.TryGetSheetFacts");
         snapshotSource.Should().Contain("retainedChartSourceRanges.Matches(workbook)");
         snapshotSource.Should().Contain("CellPatchBaselineFacts = null");

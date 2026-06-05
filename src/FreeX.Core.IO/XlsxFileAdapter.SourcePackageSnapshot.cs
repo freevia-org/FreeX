@@ -149,8 +149,8 @@ public sealed partial class XlsxFileAdapter
         bool IsCellPatchEligibilityLazy = false)
     {
         private const int FingerprintCellLimit = 25_000;
-        private const int CellPatchBaselineLimit = 250_000;
-        private const int CellPatchChangeLimit = 256;
+        private const int CellPatchBaselineLimit = 2_000_000;
+        private const int CellPatchChangeLimit = 4_096;
         private const string DrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
         private const string ChartRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
         private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";

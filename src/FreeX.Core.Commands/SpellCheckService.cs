@@ -2177,6 +2177,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "catlogue"))
+                {
+                    suggestion = "catalog";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "checkuot"))
+                {
+                    suggestion = "checkout";
+                    return true;
+                }
+
                 if (first == 'e' && EqualAsciiWordIgnoreCase(word, "excelent"))
                 {
                     suggestion = "excellent";
@@ -2650,18 +2662,6 @@ public static partial class SpellCheckService
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "curriculm"))
                 {
                     suggestion = "curriculum";
-                    return true;
-                }
-
-                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "catlogue"))
-                {
-                    suggestion = "catalog";
-                    return true;
-                }
-
-                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "checkuot"))
-                {
-                    suggestion = "checkout";
                     return true;
                 }
 
