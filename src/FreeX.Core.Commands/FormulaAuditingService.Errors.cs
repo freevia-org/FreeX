@@ -1349,7 +1349,7 @@ public static partial class FormulaAuditingService
     }
 
     private static bool IsSupportedCurrencySymbol(char value) =>
-        value is '$' or '\uFF04' or '\u20AC' or '\u00A3' or '\uFFE1' or '\u00A5' or '\uFFE5'
+        value is '$' or '\uFE69' or '\uFF04' or '\u20AC' or '\u00A3' or '\uFFE1' or '\u00A5' or '\uFFE5'
             or '\u20B9' or '\u20A9' or '\uFFE6' or '\u20AA' or '\u0E3F' or '\u20BD' or '\u20BA'
             or '\u20B1' or '\u20AB' or '\u20A6' or '\u20B4' or '\u20B8' or '\u20A1';
 
