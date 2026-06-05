@@ -285,6 +285,24 @@ public static partial class FlashFillService
         return source => TryGetFirstUrlPathSegment(source, out var segment) ? segment : null;
     }
 
+    private static Func<string, string?>? TryExtractParentUrlPathSegmentTitle(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetParentUrlPathSegmentTitle(e.Source, out var title) && title == e.Expected))
+            return null;
+
+        return source => TryGetParentUrlPathSegmentTitle(source, out var title) ? title : null;
+    }
+
+    private static Func<string, string?>? TryExtractFirstUrlPathSegmentTitle(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFirstUrlPathSegmentTitle(e.Source, out var title) && title == e.Expected))
+            return null;
+
+        return source => TryGetFirstUrlPathSegmentTitle(source, out var title) ? title : null;
+    }
+
     private static Func<string, string?>? TryUrlFirstQueryParameterName(
         IReadOnlyList<(string Source, string Expected)> examples)
     {
@@ -636,6 +654,20 @@ public static partial class FlashFillService
         }
 
         return segment.Length > 0;
+    }
+
+    private static bool TryGetParentUrlPathSegmentTitle(string source, out string title)
+    {
+        title = string.Empty;
+        return TryGetParentUrlPathSegment(source, out var segment) &&
+               TryFormatSlugStemAsTitle(segment, out title);
+    }
+
+    private static bool TryGetFirstUrlPathSegmentTitle(string source, out string title)
+    {
+        title = string.Empty;
+        return TryGetFirstUrlPathSegment(source, out var segment) &&
+               TryFormatSlugStemAsTitle(segment, out title);
     }
 
     private static bool TryGetFinalUrlPathSegmentSlugStem(
