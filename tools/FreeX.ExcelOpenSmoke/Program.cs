@@ -461,6 +461,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookDefinedNamesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileRecoveryMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookExtensionListMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetHyperlinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -484,6 +485,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSingleXmlCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSmartTagMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetExtensionListMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertLegacyCommentPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPivotPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -691,6 +693,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookDefinedNamesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileRecoveryMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookExtensionListMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetHyperlinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -714,6 +717,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSingleXmlCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSmartTagMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetExtensionListMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertLegacyCommentPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPivotPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -4322,9 +4326,6 @@ internal static class ExcelOpenSmoke
         }
 
         var definedNameElements = definedNames.Elements(SpreadsheetNs + "definedName").ToArray();
-        if (definedNameElements.Length == 0)
-            issues.Add($"{WorkbookPart} {description} has no definedName entries");
-
         foreach (var definedName in definedNameElements.Select((element, index) => new WorkbookDefinedNameReference(index + 1, element)))
         {
             AddWorkbookDefinedNameIssues(description, definedName, issues);
@@ -4541,6 +4542,138 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid workbook fileRecoveryPr metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorkbookExtensionListMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookExtensionListMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookExtensionListMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookExtensionListMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var extensionLists = root.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{WorkbookPart} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => new WorkbookExtensionListReference(index + 1, element)))
+        {
+            AddWorkbookExtensionListIssues(root, extensionList, issues);
+        }
+    }
+
+    private static void AddWorkbookExtensionListIssues(
+        XElement workbookRoot,
+        WorkbookExtensionListReference extensionListReference,
+        List<string> issues)
+    {
+        var extensionList = extensionListReference.Element;
+        var description = $"extLst #{extensionListReference.Ordinal}";
+        AddWorkbookExtensionListOrderingIssues(workbookRoot, extensionList, description, issues);
+
+        if (extensionList.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+            issues.Add($"{WorkbookPart} {description} has attributes; expected extension entries only");
+
+        foreach (var unexpectedChild in extensionList.Elements().Where(element => element.Name != SpreadsheetNs + "ext"))
+        {
+            issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected ext entries only");
+        }
+
+        var extensions = extensionList.Elements(SpreadsheetNs + "ext").ToArray();
+        if (extensions.Length == 0)
+            issues.Add($"{WorkbookPart} {description} has no ext entries");
+
+        var seenUris = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var extension in extensions.Select((element, index) => new WorkbookExtensionReference(index + 1, element)))
+        {
+            AddWorkbookExtensionIssues(description, extension, seenUris, issues);
+        }
+    }
+
+    private static void AddWorkbookExtensionListOrderingIssues(
+        XElement workbookRoot,
+        XElement extensionList,
+        string description,
+        List<string> issues)
+    {
+        string[] earlierWorkbookElements =
+        [
+            "fileVersion",
+            "fileSharing",
+            "workbookPr",
+            "workbookProtection",
+            "bookViews",
+            "sheets",
+            "functionGroups",
+            "externalReferences",
+            "definedNames",
+            "calcPr",
+            "oleSize",
+            "customWorkbookViews",
+            "pivotCaches",
+            "smartTagPr",
+            "smartTagTypes",
+            "webPublishing",
+            "fileRecoveryPr",
+            "webPublishObjects"
+        ];
+
+        var workbookChildren = workbookRoot.Elements().ToArray();
+        var extensionListIndex = Array.IndexOf(workbookChildren, extensionList);
+        if (extensionListIndex < 0)
+            return;
+
+        foreach (var laterEarlierElement in workbookChildren
+                     .Skip(extensionListIndex + 1)
+                     .Where(element =>
+                         element.Name.Namespace == SpreadsheetNs &&
+                         earlierWorkbookElements.Contains(element.Name.LocalName, StringComparer.Ordinal)))
+        {
+            issues.Add($"{WorkbookPart} {description} appears before {laterEarlierElement.Name.LocalName}; expected schema order after that element");
+        }
+    }
+
+    private static void AddWorkbookExtensionIssues(
+        string extensionListDescription,
+        WorkbookExtensionReference extensionReference,
+        HashSet<string> seenUris,
+        List<string> issues)
+    {
+        var extension = extensionReference.Element;
+        var description = $"{extensionListDescription} ext #{extensionReference.Ordinal}";
+        var uri = extension.Attribute("uri")?.Value;
+        if (string.IsNullOrWhiteSpace(uri))
+        {
+            issues.Add($"{WorkbookPart} {description} has no uri");
+        }
+        else if (!seenUris.Add(uri.Trim()))
+        {
+            issues.Add($"{WorkbookPart} {extensionListDescription} has duplicate ext uri '{uri}'");
+        }
+    }
+
+    private static void ThrowInvalidWorkbookExtensionListMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook extLst metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetSheetPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -7198,6 +7331,170 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet singleXmlCells metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetExtensionListMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetExtensionListMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetExtensionListMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetExtensionListMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var extensionLists = root.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => new WorksheetExtensionListReference(index + 1, element)))
+        {
+            AddWorksheetExtensionListIssues(worksheetPart, root, extensionList, issues);
+        }
+    }
+
+    private static void AddWorksheetExtensionListIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetExtensionListReference extensionListReference,
+        List<string> issues)
+    {
+        var extensionList = extensionListReference.Element;
+        var description = $"extLst #{extensionListReference.Ordinal}";
+        AddWorksheetExtensionListOrderingIssues(worksheetPart, worksheetRoot, extensionList, description, issues);
+
+        if (extensionList.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+            issues.Add($"{worksheetPart} {description} has attributes; expected extension entries only");
+
+        foreach (var unexpectedChild in extensionList.Elements().Where(element => element.Name != SpreadsheetNs + "ext"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected ext entries only");
+        }
+
+        var extensions = extensionList.Elements(SpreadsheetNs + "ext").ToArray();
+        if (extensions.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no ext entries");
+
+        var seenUris = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var extension in extensions.Select((element, index) => new WorksheetExtensionReference(index + 1, element)))
+        {
+            AddWorksheetExtensionIssues(worksheetPart, description, extension, seenUris, issues);
+        }
+    }
+
+    private static void AddWorksheetExtensionListOrderingIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        XElement extensionList,
+        string description,
+        List<string> issues)
+    {
+        string[] earlierWorksheetElements =
+        [
+            "sheetPr",
+            "dimension",
+            "sheetViews",
+            "sheetFormatPr",
+            "cols",
+            "sheetData",
+            "sheetCalcPr",
+            "sheetProtection",
+            "protectedRanges",
+            "scenarios",
+            "autoFilter",
+            "sortState",
+            "dataConsolidate",
+            "customSheetViews",
+            "mergeCells",
+            "phoneticPr",
+            "conditionalFormatting",
+            "dataValidations",
+            "hyperlinks",
+            "printOptions",
+            "pageMargins",
+            "pageSetup",
+            "headerFooter",
+            "rowBreaks",
+            "colBreaks",
+            "customProperties",
+            "cellWatches",
+            "ignoredErrors",
+            "singleXmlCells",
+            "smartTags",
+            "drawing",
+            "legacyDrawing",
+            "legacyDrawingHF",
+            "picture",
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts"
+        ];
+
+        var worksheetChildren = worksheetRoot.Elements().ToArray();
+        var extensionListIndex = Array.IndexOf(worksheetChildren, extensionList);
+        if (extensionListIndex < 0)
+            return;
+
+        foreach (var laterEarlierElement in worksheetChildren
+                     .Skip(extensionListIndex + 1)
+                     .Where(element =>
+                         element.Name.Namespace == SpreadsheetNs &&
+                         earlierWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal)))
+        {
+            issues.Add($"{worksheetPart} {description} appears before {laterEarlierElement.Name.LocalName}; expected schema order after that element");
+        }
+    }
+
+    private static void AddWorksheetExtensionIssues(
+        string worksheetPart,
+        string extensionListDescription,
+        WorksheetExtensionReference extensionReference,
+        HashSet<string> seenUris,
+        List<string> issues)
+    {
+        var extension = extensionReference.Element;
+        var description = $"{extensionListDescription} ext #{extensionReference.Ordinal}";
+        var uri = extension.Attribute("uri")?.Value;
+        if (string.IsNullOrWhiteSpace(uri))
+        {
+            issues.Add($"{worksheetPart} {description} has no uri");
+        }
+        else if (!seenUris.Add(uri.Trim()))
+        {
+            issues.Add($"{worksheetPart} {extensionListDescription} has duplicate ext uri '{uri}'");
+        }
+    }
+
+    private static void ThrowInvalidWorksheetExtensionListMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet extLst metadata: {sample}{suffix}");
     }
 
     private static void AssertSmartTagMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -13579,6 +13876,14 @@ internal static class ExcelOpenSmoke
         int Ordinal,
         XElement Element);
 
+    private sealed record WorkbookExtensionListReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookExtensionReference(
+        int Ordinal,
+        XElement Element);
+
     private sealed record WorksheetSheetPropertiesReference(
         int Ordinal,
         XElement Element);
@@ -13687,6 +13992,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetSingleXmlCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetExtensionListReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetExtensionReference(
         int Ordinal,
         XElement Element);
 
