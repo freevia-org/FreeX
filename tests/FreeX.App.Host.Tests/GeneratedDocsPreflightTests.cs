@@ -19,8 +19,9 @@ public sealed class GeneratedDocsPreflightTests
     public void GeneratedDocsPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GeneratedDocs.ps1");
+        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath());
+        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path);
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Checking command inventory generated docs...");
