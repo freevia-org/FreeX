@@ -2336,6 +2336,54 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversSubscriptionLicensingRenewalVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "SUBSCRPTION Subscribtion licnse Licensng renewl Renewel expiraton Expirng cancelation CANCELLATON entitlment Overagee prorateed SEATSS triall Billngcycle. Keep subscription, license, licensing, renewal, expiration, expiring, cancellation, entitlement, overage, prorated, seats, trial, billing cycle, presubscrption, subscrption_id, https://subscrption.example.com/licensng, renewals@expiraton.example.com, \"C:\\licnse folder\\renewl file.xlsx\", and [C:\\triall folder\\billngcycle file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "subscrption SUBSCRPTION Subscrption https://subscrption.example.com/subscrption billing@subscrption.example.com subscrption_id presubscrption \"C:\\subscrption folder\\subscrption file.xlsx\" [C:\\subscrption folder\\subscrption file.xlsx].")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "subscription");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("SUBSCRPTION", "SUBSCRIPTION"),
+            ("Subscribtion", "Subscription"),
+            ("licnse", "license"),
+            ("Licensng", "Licensing"),
+            ("renewl", "renewal"),
+            ("Renewel", "Renewal"),
+            ("expiraton", "expiration"),
+            ("Expirng", "Expiring"),
+            ("cancelation", "cancellation"),
+            ("CANCELLATON", "CANCELLATION"),
+            ("entitlment", "entitlement"),
+            ("Overagee", "Overage"),
+            ("prorateed", "prorated"),
+            ("SEATSS", "SEATS"),
+            ("triall", "trial"),
+            ("Billngcycle", "Billing cycle"));
+        plan.IssueCount.Should().Be(16);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "SUBSCRIPTION Subscription license Licensing renewal Renewal expiration Expiring cancellation CANCELLATION entitlement Overage prorated SEATS trial Billing cycle. Keep subscription, license, licensing, renewal, expiration, expiring, cancellation, entitlement, overage, prorated, seats, trial, billing cycle, presubscrption, subscrption_id, https://subscrption.example.com/licensng, renewals@expiraton.example.com, \"C:\\licnse folder\\renewl file.xlsx\", and [C:\\triall folder\\billngcycle file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(16);
+        replaceAllCorrected.Should().Be(
+            "subscription SUBSCRIPTION Subscription https://subscrption.example.com/subscrption billing@subscrption.example.com subscrption_id presubscrption \"C:\\subscrption folder\\subscrption file.xlsx\" [C:\\subscrption folder\\subscrption file.xlsx].");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");
