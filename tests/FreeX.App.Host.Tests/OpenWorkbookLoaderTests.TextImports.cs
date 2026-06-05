@@ -14,34 +14,26 @@ public sealed partial class OpenWorkbookLoaderTests
     [InlineData(".tab")]
     public async Task LoadAsync_RenamesSingleSheetTextWorkbooksToExcelCompatibleFileName(string extension)
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
         var fileNameWithoutExtension = "Very Long Sales [Draft] Import Name 2026";
-        var tempPath = Path.Combine(tempDirectory, $"{fileNameWithoutExtension}{extension}");
+        var tempPath = Path.Combine(temp.Path, $"{fileNameWithoutExtension}{extension}");
         await File.WriteAllTextAsync(tempPath, "payload");
-        try
-        {
-            var adapter = new TestFileAdapter(_ =>
-            {
-                var workbook = new Workbook("Loaded");
-                workbook.AddSheet("Sheet1");
-                return workbook;
-            });
-            var loader = new OpenWorkbookLoader(_ => { });
 
-            var result = await loader.LoadAsync(
-                tempPath,
-                adapter,
-                extension,
-                new FileFormatDescriptor(extension, "Text", CanOpen: true, CanSave: false),
-                new TestProgress<OpenProgressUpdate>(_ => { }));
-
-            result.Workbook.Sheets.Single().Name.Should().Be("Very Long Sales _Draft_ Import");
-        }
-        finally
+        var adapter = new TestFileAdapter(_ =>
         {
-            File.Delete(tempPath);
-            Directory.Delete(tempDirectory);
-        }
+            var workbook = new Workbook("Loaded");
+            workbook.AddSheet("Sheet1");
+            return workbook;
+        });
+        var loader = new OpenWorkbookLoader(_ => { });
+
+        var result = await loader.LoadAsync(
+            tempPath,
+            adapter,
+            extension,
+            new FileFormatDescriptor(extension, "Text", CanOpen: true, CanSave: false),
+            new TestProgress<OpenProgressUpdate>(_ => { }));
+
+        result.Workbook.Sheets.Single().Name.Should().Be("Very Long Sales _Draft_ Import");
     }
 }

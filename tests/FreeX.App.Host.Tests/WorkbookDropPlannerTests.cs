@@ -93,23 +93,18 @@ public sealed class WorkbookDropPlannerTests
     [Fact]
     public void SelectOpenableFile_SkipsSupportedExtensionDirectories()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+        using var temp = new TestTemporaryDirectory();
+        var tempDirectory = Path.Combine(temp.Path, "dropped.xlsx");
         Directory.CreateDirectory(tempDirectory);
-        try
-        {
-            var selected = WorkbookDropPlanner.SelectOpenableFile(
-                [
-                    tempDirectory,
-                    @"C:\Temp\Book.xlsb"
-                ],
-                [new XlsxFileAdapter(), new LegacyXlsFileAdapter()]);
 
-            selected.Should().Be(@"C:\Temp\Book.xlsb");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory);
-        }
+        var selected = WorkbookDropPlanner.SelectOpenableFile(
+            [
+                tempDirectory,
+                @"C:\Temp\Book.xlsb"
+            ],
+            [new XlsxFileAdapter(), new LegacyXlsFileAdapter()]);
+
+        selected.Should().Be(@"C:\Temp\Book.xlsb");
     }
 
 }
