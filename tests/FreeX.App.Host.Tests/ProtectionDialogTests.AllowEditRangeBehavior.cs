@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -55,7 +54,7 @@ public sealed partial class ProtectionDialogTests
             var sheetId = SheetId.New();
             var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2));
             var dialog = new AllowEditRangeDialog(sheetId, "C3:D4", [range]);
-            var existingRangesBox = GetPrivateField<ListBox>(dialog, "_existingRangesBox");
+            var existingRangesBox = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_existingRangesBox");
 
             dialog.Dispatcher.BeginInvoke(() =>
             {
@@ -87,7 +86,7 @@ public sealed partial class ProtectionDialogTests
             var sheetId = SheetId.New();
             var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2));
             var dialog = new AllowEditRangeDialog(sheetId, "C3:D4", [range]);
-            var existingRangesBox = GetPrivateField<ListBox>(dialog, "_existingRangesBox");
+            var existingRangesBox = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_existingRangesBox");
 
             existingRangesBox.SelectedItem = null;
             var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
@@ -123,7 +122,7 @@ public sealed partial class ProtectionDialogTests
 
                 requests.Should().Equal(new AllowEditRangeSelectionRequest("$A$1:$C$10", CollapseDialog: true));
                 dialog.RangeSelectionRequest.Should().Be(requests[0]);
-                GetPrivateField<TextBox>(dialog, "_rangeBox").SelectionLength.Should().Be("$A$1:$C$10".Length + 2);
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_rangeBox").SelectionLength.Should().Be("$A$1:$C$10".Length + 2);
             }
             finally
             {
@@ -142,7 +141,7 @@ public sealed partial class ProtectionDialogTests
             {
                 dialog.ApplyRangeSelection("$B$2:$D$8");
 
-                var rangeBox = GetPrivateField<TextBox>(dialog, "_rangeBox");
+                var rangeBox = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_rangeBox");
                 rangeBox.Text.Should().Be("$B$2:$D$8");
                 rangeBox.SelectionLength.Should().Be("$B$2:$D$8".Length);
             }
