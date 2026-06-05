@@ -99,7 +99,8 @@ public sealed class ViewCommandSourceTests
     [Fact]
     public void ViewWindowCommands_AreAllLiveAndNeverDeferredRibbonPlaceholders()
     {
-        var xaml = ExtractViewWindowGroup(ReadMainWindowXaml());
+        var xaml = ReadMainWindowXaml()
+            .ExtractElementByAttributeValue("Grid", "local:RibbonMetadata.CatalogId", "ViewWindowGroup");
 
         // Hide / Unhide / Reset Window Position / View Side by Side / Synchronous Scrolling are now
         // live commands with dedicated handlers — present in the ribbon, never deferred stubs.
@@ -214,15 +215,6 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("private void ViewSynchronousScrollingBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("_windowRegistry.SetSynchronousScroll(");
         source.Should().Contain("_windowRegistry?.BroadcastScrollOffset(this, GetScrollOffset())");
-    }
-
-    private static string ExtractViewWindowGroup(string xaml)
-    {
-        var start = xaml.IndexOf("local:RibbonMetadata.CatalogId=\"ViewWindowGroup\"", StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, "the View Window group should be present");
-        var end = xaml.IndexOf("<!-- TABLE DESIGN -->", start, StringComparison.Ordinal);
-        end.Should().BeGreaterThan(start, "the View Window group should end before the Table Design tab");
-        return xaml[start..end];
     }
 
 }
