@@ -851,6 +851,39 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversEducationAcademicVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "STUDNT studnts Clasroom curriculm assignmnt syllbus registrr enrollmnt attendence gradution. Keep studnt_id, https://studnt.example.com/syllbus, academic@assignmnt.example.com, \"C:\\curriculm folder\\registrr file.xlsx\", and [C:\\enrollmnt folder\\gradution file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("STUDNT", "STUDENT"),
+            ("studnts", "students"),
+            ("Clasroom", "Classroom"),
+            ("curriculm", "curriculum"),
+            ("assignmnt", "assignment"),
+            ("syllbus", "syllabus"),
+            ("registrr", "registrar"),
+            ("enrollmnt", "enrollment"),
+            ("attendence", "attendance"),
+            ("gradution", "graduation"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "STUDENT students Classroom curriculum assignment syllabus registrar enrollment attendance graduation. Keep studnt_id, https://studnt.example.com/syllbus, academic@assignmnt.example.com, \"C:\\curriculm folder\\registrr file.xlsx\", and [C:\\enrollmnt folder\\gradution file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
