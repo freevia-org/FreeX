@@ -17,11 +17,19 @@ internal static class PowerShellScriptRunner
 
     private static PowerShellResult RunWithPowerShellArguments(string workingDirectory, string powerShellArguments)
     {
+        return TestProcessRunner.Run("powershell.exe", powerShellArguments, workingDirectory);
+    }
+}
+
+internal static class TestProcessRunner
+{
+    public static PowerShellResult Run(string fileName, string arguments, string workingDirectory)
+    {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
-            FileName = "powershell.exe",
-            Arguments = powerShellArguments,
+            FileName = fileName,
+            Arguments = arguments,
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
