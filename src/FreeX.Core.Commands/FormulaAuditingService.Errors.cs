@@ -1616,6 +1616,12 @@ public static partial class FormulaAuditingService
 
     private static char NormalizeSupportedTextDateCharacter(char value)
     {
+        if (value is >= '\uFF21' and <= '\uFF3A')
+            return (char)('A' + value - '\uFF21');
+
+        if (value is >= '\uFF41' and <= '\uFF5A')
+            return (char)('a' + value - '\uFF41');
+
         if (value is >= '\uFF10' and <= '\uFF19')
             return (char)('0' + value - '\uFF10');
 
