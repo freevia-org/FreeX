@@ -802,6 +802,45 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesAdditionalInternationalLegalSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Sdn", "Northwind"),
+                ("Adventure Works Bhd", "Adventure Works")
+            ],
+            [
+                "Contoso Berhad",
+                "Fabrikam UAB",
+                "Litware Zrt",
+                "Tailspin Nyrt",
+                "Wingtip EURL",
+                "Blue Yonder E.U.R.L.",
+                "Coho SL",
+                "A Datum S.L.",
+                "Fourth Coffee SLU",
+                "Graphic Design S.L.U.",
+                "Proseware UG"
+            ]);
+
+        result.Should().BeEquivalentTo(
+            [
+                "Contoso",
+                "Fabrikam",
+                "Litware",
+                "Tailspin",
+                "Wingtip",
+                "Blue Yonder",
+                "Coho",
+                "A Datum",
+                "Fourth Coffee",
+                "Graphic Design",
+                "Proseware"
+            ],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownOrganizationSuffixes_RemovesStackedLegalSuffixes()
     {
         var result = FlashFillService.Fill(
@@ -842,6 +881,31 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesAdditionalStackedLegalSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Sdn Bhd", "Northwind"),
+                ("Adventure Works EURL UG", "Adventure Works")
+            ],
+            [
+                "Contoso Analytics S.L. SLU",
+                "Fabrikam Labs E.U.R.L. UG",
+                "Tailspin Zrt Nyrt",
+                "Proseware UAB Bhd"
+            ]);
+
+        result.Should().BeEquivalentTo(
+            [
+                "Contoso Analytics",
+                "Fabrikam Labs",
+                "Tailspin",
+                "Proseware"
+            ],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownOrganizationSuffixes_RemovesCommaAttachedLegalSuffixes()
     {
         var result = FlashFillService.Fill(
@@ -852,6 +916,21 @@ public sealed partial class FlashFillServiceTests
             ["Contoso,Ltd", "Fabrikam Research,Corporation"]);
 
         result.Should().BeEquivalentTo(["Contoso", "Fabrikam Research"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesAdditionalCommaAttachedLegalSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders,Sdn", "Northwind Traders"),
+                ("Adventure Works,EURL", "Adventure Works")
+            ],
+            ["Contoso,Bhd", "Fabrikam Research,E.U.R.L.", "Litware,S.L.U."]);
+
+        result.Should().BeEquivalentTo(
+            ["Contoso", "Fabrikam Research", "Litware"],
+            o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -868,6 +947,21 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesAdditionalCommaAttachedStackedLegalSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders,Sdn,Bhd", "Northwind Traders"),
+                ("Adventure Works,EURL,UG", "Adventure Works")
+            ],
+            ["Fabrikam Labs,S.L.,SLU", "Contoso Analytics,Zrt,Nyrt"]);
+
+        result.Should().BeEquivalentTo(
+            ["Fabrikam Labs", "Contoso Analytics"],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownOrganizationSuffixes_ReturnsNullForUnsuffixedRemainingNames()
     {
         var result = FlashFillService.Fill(
@@ -876,6 +970,19 @@ public sealed partial class FlashFillServiceTests
                 ("Adventure Works Inc.", "Adventure Works")
             ],
             ["Contoso Retail"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_KnownOrganizationSuffixes_ReturnsNullForUnsuffixedRemainingNamesAfterAdditionalLegalSuffixExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders Sdn Bhd", "Northwind Traders"),
+                ("Adventure Works E.U.R.L.", "Adventure Works")
+            ],
+            ["Contoso Analytics"]);
 
         result.Should().BeNull();
     }
