@@ -698,11 +698,14 @@ public static partial class AccessibilityCheckerService
         return true;
     }
 
+    private const ulong MaxFormulaAggregateRangeCells = 10_000;
+
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
-        ast is BooleanNode
+        ast is (BooleanNode
             or CellRefNode
             or NumberNode
-            or UnaryOpNode { Operator: UnaryOperator.Negate or UnaryOperator.Percent, Operand: NumberNode };
+            or UnaryOpNode { Operator: UnaryOperator.Negate or UnaryOperator.Percent, Operand: NumberNode })
+            || ast is FunctionCallNode function && IsFormulaAggregateFunction(function.FunctionName);
 
     private static bool TryCreateFormulaComparison(FormulaNode ast, out ConditionalFormulaComparison comparison)
     {
@@ -761,6 +764,8 @@ public static partial class AccessibilityCheckerService
             case UnaryOpNode { Operator: UnaryOperator.Percent, Operand: NumberNode number }:
                 operand = LiteralFormulaOperand(new NumberValue(number.Value / 100d));
                 return true;
+            case FunctionCallNode function when TryCreateFormulaAggregateOperand(function, out operand):
+                return true;
             default:
                 return false;
         }
@@ -768,6 +773,142 @@ public static partial class AccessibilityCheckerService
 
     private static ConditionalFormulaOperand LiteralFormulaOperand(ScalarValue value) =>
         new(ConditionalFormulaOperandKind.Literal, value, 0, 0, true, true, null);
+
+    private static bool TryCreateFormulaAggregateOperand(
+        FunctionCallNode function,
+        out ConditionalFormulaOperand operand)
+    {
+        operand = default;
+        if (!TryGetFormulaAggregateKind(function.FunctionName, out var aggregateKind) ||
+            function.Arguments.Count == 0)
+        {
+            return false;
+        }
+
+        var arguments = new ConditionalFormulaAggregateArgument[function.Arguments.Count];
+        for (var i = 0; i < function.Arguments.Count; i++)
+        {
+            if (!TryCreateFormulaAggregateArgument(function.Arguments[i], out arguments[i]))
+                return false;
+        }
+
+        operand = new ConditionalFormulaOperand(
+            ConditionalFormulaOperandKind.Aggregate,
+            null,
+            0,
+            0,
+            true,
+            true,
+            null,
+            aggregateKind,
+            arguments);
+        return true;
+    }
+
+    private static bool IsFormulaAggregateFunction(string functionName) =>
+        TryGetFormulaAggregateKind(functionName, out _);
+
+    private static bool TryGetFormulaAggregateKind(
+        string functionName,
+        out ConditionalFormulaAggregateKind kind)
+    {
+        switch (functionName.ToUpperInvariant())
+        {
+            case "SUM":
+                kind = ConditionalFormulaAggregateKind.Sum;
+                return true;
+            case "AVERAGE":
+                kind = ConditionalFormulaAggregateKind.Average;
+                return true;
+            case "MIN":
+                kind = ConditionalFormulaAggregateKind.Min;
+                return true;
+            case "MAX":
+                kind = ConditionalFormulaAggregateKind.Max;
+                return true;
+            case "COUNT":
+                kind = ConditionalFormulaAggregateKind.Count;
+                return true;
+            case "COUNTA":
+                kind = ConditionalFormulaAggregateKind.CountA;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
+    }
+
+    private static bool TryCreateFormulaAggregateArgument(
+        FormulaNode node,
+        out ConditionalFormulaAggregateArgument argument)
+    {
+        argument = default;
+        switch (node)
+        {
+            case CellRefNode cell:
+                argument = new ConditionalFormulaAggregateArgument(
+                    ConditionalFormulaAggregateArgumentKind.Reference,
+                    null,
+                    cell.Row,
+                    cell.ColumnNumber,
+                    cell.IsRowAbsolute,
+                    cell.IsColAbsolute,
+                    0,
+                    0,
+                    true,
+                    true,
+                    cell.SheetName);
+                return true;
+            case RangeRefNode range:
+                argument = new ConditionalFormulaAggregateArgument(
+                    ConditionalFormulaAggregateArgumentKind.Range,
+                    null,
+                    range.Start.Row,
+                    range.Start.ColumnNumber,
+                    range.Start.IsRowAbsolute,
+                    range.Start.IsColAbsolute,
+                    range.End.Row,
+                    range.End.ColumnNumber,
+                    range.End.IsRowAbsolute,
+                    range.End.IsColAbsolute,
+                    range.SheetName ?? range.Start.SheetName);
+                return true;
+            case NumberNode number:
+                argument = LiteralFormulaAggregateArgument(new NumberValue(number.Value));
+                return true;
+            case StringNode text:
+                argument = LiteralFormulaAggregateArgument(new TextValue(text.Value));
+                return true;
+            case BooleanNode boolean:
+                argument = LiteralFormulaAggregateArgument(new BoolValue(boolean.Value));
+                return true;
+            case ErrorNode error:
+                argument = LiteralFormulaAggregateArgument(error.Error);
+                return true;
+            case UnaryOpNode { Operator: UnaryOperator.Negate, Operand: NumberNode number }:
+                argument = LiteralFormulaAggregateArgument(new NumberValue(-number.Value));
+                return true;
+            case UnaryOpNode { Operator: UnaryOperator.Percent, Operand: NumberNode number }:
+                argument = LiteralFormulaAggregateArgument(new NumberValue(number.Value / 100d));
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static ConditionalFormulaAggregateArgument LiteralFormulaAggregateArgument(ScalarValue value) =>
+        new(
+            ConditionalFormulaAggregateArgumentKind.Literal,
+            value,
+            0,
+            0,
+            true,
+            true,
+            0,
+            0,
+            true,
+            true,
+            null);
 
     private static int CompareFormulaValues(ScalarValue left, ScalarValue right)
     {
@@ -1056,12 +1197,45 @@ public static partial class AccessibilityCheckerService
         uint Col,
         bool IsRowAbsolute,
         bool IsColAbsolute,
-        string? SheetName);
+        string? SheetName,
+        ConditionalFormulaAggregateKind AggregateKind = default,
+        IReadOnlyList<ConditionalFormulaAggregateArgument>? AggregateArguments = null);
 
     private enum ConditionalFormulaOperandKind
     {
         Literal,
-        Reference
+        Reference,
+        Aggregate
+    }
+
+    private enum ConditionalFormulaAggregateKind
+    {
+        Sum,
+        Average,
+        Min,
+        Max,
+        Count,
+        CountA
+    }
+
+    private readonly record struct ConditionalFormulaAggregateArgument(
+        ConditionalFormulaAggregateArgumentKind Kind,
+        ScalarValue? Literal,
+        uint Row,
+        uint Col,
+        bool IsRowAbsolute,
+        bool IsColAbsolute,
+        uint EndRow,
+        uint EndCol,
+        bool IsEndRowAbsolute,
+        bool IsEndColAbsolute,
+        string? SheetName);
+
+    private enum ConditionalFormulaAggregateArgumentKind
+    {
+        Literal,
+        Reference,
+        Range
     }
 
     private sealed class ConditionalFormatEvaluationCache(
@@ -1265,7 +1439,7 @@ public static partial class AccessibilityCheckerService
             int rowOffset,
             int colOffset)
         {
-            if (operand.Kind == ConditionalFormulaOperandKind.Literal)
+            if (operand.Kind != ConditionalFormulaOperandKind.Reference)
                 return false;
 
             return TryResolveFormulaReference(operand, rowOffset, colOffset, out _, out _, out _)
@@ -1278,7 +1452,7 @@ public static partial class AccessibilityCheckerService
             int rowOffset,
             int colOffset)
         {
-            if (operand.Kind == ConditionalFormulaOperandKind.Literal)
+            if (operand.Kind != ConditionalFormulaOperandKind.Reference)
                 return null;
 
             return TryResolveFormulaReference(operand, rowOffset, colOffset, out var targetSheet, out var row, out var col)
@@ -1373,6 +1547,9 @@ public static partial class AccessibilityCheckerService
                 return true;
             }
 
+            if (operand.Kind == ConditionalFormulaOperandKind.Aggregate)
+                return TryEvaluateFormulaAggregate(operand, rowOffset, colOffset, out value);
+
             if (!TryResolveFormulaReference(operand, rowOffset, colOffset, out var targetSheet, out var row, out var col))
             {
                 value = ErrorValue.Ref;
@@ -1382,6 +1559,186 @@ public static partial class AccessibilityCheckerService
             value = targetSheet.GetValue(row, col);
             return true;
         }
+
+        private bool TryEvaluateFormulaAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: > 0 } arguments)
+                return false;
+
+            var numericValues = new List<double>();
+            var nonBlankCount = 0;
+            for (var i = 0; i < arguments.Count; i++)
+            {
+                if (!AppendFormulaAggregateValues(
+                        arguments[i],
+                        operand.AggregateKind,
+                        rowOffset,
+                        colOffset,
+                        numericValues,
+                        ref nonBlankCount))
+                {
+                    return false;
+                }
+            }
+
+            value = operand.AggregateKind switch
+            {
+                ConditionalFormulaAggregateKind.Sum => new NumberValue(numericValues.Sum()),
+                ConditionalFormulaAggregateKind.Average when numericValues.Count > 0 => new NumberValue(numericValues.Average()),
+                ConditionalFormulaAggregateKind.Min when numericValues.Count > 0 => new NumberValue(numericValues.Min()),
+                ConditionalFormulaAggregateKind.Max when numericValues.Count > 0 => new NumberValue(numericValues.Max()),
+                ConditionalFormulaAggregateKind.Count => new NumberValue(numericValues.Count),
+                ConditionalFormulaAggregateKind.CountA => new NumberValue(nonBlankCount),
+                _ => ErrorValue.Value
+            };
+
+            return value is not ErrorValue && TryGetNumber(value, out var number) && double.IsFinite(number);
+        }
+
+        private bool AppendFormulaAggregateValues(
+            ConditionalFormulaAggregateArgument argument,
+            ConditionalFormulaAggregateKind aggregateKind,
+            int rowOffset,
+            int colOffset,
+            List<double> numericValues,
+            ref int nonBlankCount)
+        {
+            switch (argument.Kind)
+            {
+                case ConditionalFormulaAggregateArgumentKind.Literal:
+                    return AppendFormulaAggregateValue(
+                        argument.Literal ?? BlankValue.Instance,
+                        aggregateKind,
+                        isDirectArgument: true,
+                        numericValues,
+                        ref nonBlankCount);
+                case ConditionalFormulaAggregateArgumentKind.Reference:
+                    if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
+                        return false;
+
+                    return AppendFormulaAggregateValue(
+                        targetSheet.GetValue(row, col),
+                        aggregateKind,
+                        isDirectArgument: false,
+                        numericValues,
+                        ref nonBlankCount);
+                case ConditionalFormulaAggregateArgumentKind.Range:
+                    if (!TryResolveFormulaAggregateRange(
+                            argument,
+                            rowOffset,
+                            colOffset,
+                            out var rangeSheet,
+                            out var startRow,
+                            out var startCol,
+                            out var endRow,
+                            out var endCol))
+                    {
+                        return false;
+                    }
+
+                    for (var currentRow = startRow; currentRow <= endRow; currentRow++)
+                    {
+                        for (var currentCol = startCol; currentCol <= endCol; currentCol++)
+                        {
+                            if (!AppendFormulaAggregateValue(
+                                    rangeSheet.GetValue(currentRow, currentCol),
+                                    aggregateKind,
+                                    isDirectArgument: false,
+                                    numericValues,
+                                    ref nonBlankCount))
+                            {
+                                return false;
+                            }
+                        }
+                    }
+
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool AppendFormulaAggregateValue(
+            ScalarValue value,
+            ConditionalFormulaAggregateKind aggregateKind,
+            bool isDirectArgument,
+            List<double> numericValues,
+            ref int nonBlankCount)
+        {
+            if (value is ErrorValue)
+                return false;
+
+            if (value is not BlankValue)
+                nonBlankCount++;
+
+            if (isDirectArgument &&
+                IsFormulaNumericAggregate(aggregateKind) &&
+                value is TextValue directText &&
+                !double.TryParse(
+                    directText.Value,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out _))
+            {
+                return false;
+            }
+
+            if (TryGetFormulaAggregateNumber(
+                    value,
+                    aggregateKind,
+                    isDirectArgument,
+                    out var number))
+            {
+                numericValues.Add(number);
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaAggregateNumber(
+            ScalarValue value,
+            ConditionalFormulaAggregateKind aggregateKind,
+            bool isDirectArgument,
+            out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    break;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    break;
+                case BoolValue boolean when isDirectArgument:
+                    number = boolean.Value ? 1 : 0;
+                    break;
+                case TextValue text when isDirectArgument &&
+                    double.TryParse(
+                        text.Value,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var parsed):
+                    number = parsed;
+                    break;
+                default:
+                    number = 0;
+                    return false;
+            }
+
+            return double.IsFinite(number);
+        }
+
+        private static bool IsFormulaNumericAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+            aggregateKind is
+                ConditionalFormulaAggregateKind.Sum or
+                ConditionalFormulaAggregateKind.Average or
+                ConditionalFormulaAggregateKind.Min or
+                ConditionalFormulaAggregateKind.Max;
 
         private bool TryResolveFormulaReference(
             ConditionalFormulaOperand operand,
@@ -1410,6 +1767,69 @@ public static partial class AccessibilityCheckerService
             targetSheet = resolvedSheet;
             row = shiftedRow.Value;
             col = shiftedCol.Value;
+            return true;
+        }
+
+        private bool TryResolveFormulaAggregateReference(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out Sheet targetSheet,
+            out uint row,
+            out uint col)
+        {
+            targetSheet = default!;
+            row = 0;
+            col = 0;
+
+            var shiftedRow = ShiftFormulaRow(argument.Row, argument.IsRowAbsolute, rowOffset);
+            var shiftedCol = ShiftFormulaColumn(argument.Col, argument.IsColAbsolute, colOffset);
+            if (!shiftedRow.HasValue || !shiftedCol.HasValue)
+                return false;
+
+            var resolvedSheet = argument.SheetName is null ? sheet : workbook.GetSheet(argument.SheetName);
+            if (resolvedSheet is null)
+                return false;
+
+            targetSheet = resolvedSheet;
+            row = shiftedRow.Value;
+            col = shiftedCol.Value;
+            return true;
+        }
+
+        private bool TryResolveFormulaAggregateRange(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out Sheet targetSheet,
+            out uint startRow,
+            out uint startCol,
+            out uint endRow,
+            out uint endCol)
+        {
+            targetSheet = default!;
+            startRow = 0;
+            startCol = 0;
+            endRow = 0;
+            endCol = 0;
+
+            if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out targetSheet, out var firstRow, out var firstCol))
+                return false;
+
+            var shiftedEndRow = ShiftFormulaRow(argument.EndRow, argument.IsEndRowAbsolute, rowOffset);
+            var shiftedEndCol = ShiftFormulaColumn(argument.EndCol, argument.IsEndColAbsolute, colOffset);
+            if (!shiftedEndRow.HasValue || !shiftedEndCol.HasValue)
+                return false;
+
+            startRow = Math.Min(firstRow, shiftedEndRow.Value);
+            startCol = Math.Min(firstCol, shiftedEndCol.Value);
+            endRow = Math.Max(firstRow, shiftedEndRow.Value);
+            endCol = Math.Max(firstCol, shiftedEndCol.Value);
+            var rowCount = (ulong)endRow - startRow + 1UL;
+            var colCount = (ulong)endCol - startCol + 1UL;
+            if (rowCount * colCount > MaxFormulaAggregateRangeCells)
+                return false;
+
             return true;
         }
 

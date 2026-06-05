@@ -457,6 +457,58 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateComparison()
+    {
+        AssertFormulaAggregateContrastLocations("SUM($A1)>100", "B4");
+        AssertFormulaAggregateContrastLocations("SUM($A1:$A3)>250", "B2");
+        AssertFormulaAggregateContrastLocations("SUM(25,$A1)>=100", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(\"5\",$A1)>80", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateLogicalWrappers()
+    {
+        AssertFormulaAggregateContrastLocations("AND(SUM($A1)>100,$C1=\"Open\")", "B4");
+        AssertFormulaAggregateContrastLocations("OR(SUM($A1)>100,$C1=\"Open\")", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("NOT(SUM($A1)>100)", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("XOR(SUM($A1)>100,$C1=\"Open\")", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateIfWrappers()
+    {
+        AssertFormulaAggregateContrastLocations("IF(SUM($A1)>100,TRUE,FALSE)", "B4");
+        AssertFormulaAggregateContrastLocations("IF($A1>=100,SUM($A1),FALSE)", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregatePredicates()
+    {
+        AssertFormulaAggregateContrastLocations("ISNUMBER(SUM($A1))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISEVEN(SUM($A1))", "B2");
+        AssertFormulaAggregateContrastLocations("ISODD(SUM($A1))", "B1", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCommonAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("AVERAGE($A1:$A3)>80", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MIN($A1:$A3)>=75", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MAX($A1:$A3)>=125", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("COUNT($A1:$A3)>=2", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("COUNT($D1:$D3)>=1", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUM($D1:$D3)>0", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("COUNTA($D1:$D3)>=2", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatAggregateForOversizedRangeOrInvalidDirectText()
+    {
+        AssertFormulaAggregateContrastLocations("SUM($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("SUM(\"n/a\",$A1)>0");
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatBooleanFunctionsWithArguments()
     {
         AssertFormulaBooleanContrastLocations("=TRUE(1)");
@@ -529,7 +581,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideLogicalWrapper()
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
-        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,SUM($A1)>0)");
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,MEDIAN($A1)>0)");
 
         FindLowContrastCellTextIssues(workbook).Should().BeEmpty();
     }
@@ -537,26 +589,26 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideIfWrapper()
     {
-        AssertFormulaIfContrastLocations("IF(SUM($A1)>0,TRUE,FALSE)");
-        AssertFormulaIfContrastLocations("IF($A1>=100,SUM($A1),FALSE)");
+        AssertFormulaIfContrastLocations("IF(MEDIAN($A1)>0,TRUE,FALSE)");
+        AssertFormulaIfContrastLocations("IF($A1>=100,MEDIAN($A1),FALSE)");
     }
 
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideXorWrapper()
     {
-        AssertFormulaXorContrastLocations("XOR($A1>=100,SUM($A1)>0)");
+        AssertFormulaXorContrastLocations("XOR($A1>=100,MEDIAN($A1)>0)");
         AssertFormulaXorContrastLocations("XOR()");
     }
 
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideIsPredicate()
     {
-        AssertFormulaPredicateContrastLocations("ISNUMBER(SUM($A1))");
-        AssertFormulaParityContrastLocations("ISEVEN(SUM($A1))");
-        AssertFormulaParityContrastLocations("ISODD(SUM($A1))");
-        AssertFormulaReferencePredicateContrastLocations("ISREF(SUM($A1))");
-        AssertFormulaReferencePredicateContrastLocations("ISFORMULA(SUM($A1))");
-        AssertFormulaPredicateContrastLocations("SUM($A1)>0");
+        AssertFormulaPredicateContrastLocations("ISNUMBER(MEDIAN($A1))");
+        AssertFormulaParityContrastLocations("ISEVEN(MEDIAN($A1))");
+        AssertFormulaParityContrastLocations("ISODD(MEDIAN($A1))");
+        AssertFormulaReferencePredicateContrastLocations("ISREF(MEDIAN($A1))");
+        AssertFormulaReferencePredicateContrastLocations("ISFORMULA(MEDIAN($A1))");
+        AssertFormulaPredicateContrastLocations("MEDIAN($A1)>0");
     }
 
     [Fact]
@@ -801,6 +853,40 @@ public sealed partial class AccessibilityCheckerServiceTests
             sheet.SetCell(new CellAddress(sheet.Id, row, 4), nonNumericSource);
     }
 
+    private static Workbook CreateFormulaAggregateContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        SetFormulaAggregateContrastRow(sheet, 1, 75, "Closed", "Below closed", new TextValue("East"));
+        SetFormulaAggregateContrastRow(sheet, 2, 100, "Closed", "Threshold closed", new NumberValue(12));
+        SetFormulaAggregateContrastRow(sheet, 3, 75, "Open", "Below open", BlankValue.Instance);
+        SetFormulaAggregateContrastRow(sheet, 4, 125, "Open", "Escalated open", new TextValue("West"));
+
+        return workbook;
+    }
+
+    private static void SetFormulaAggregateContrastRow(
+        Sheet sheet,
+        uint row,
+        double amount,
+        string status,
+        string label,
+        ScalarValue optionalValue)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(amount));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue(status));
+
+        if (optionalValue is not BlankValue)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), optionalValue);
+    }
+
     private static Workbook CreateFormulaReferencePredicateContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -870,6 +956,17 @@ public sealed partial class AccessibilityCheckerServiceTests
     private static void AssertFormulaParityContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaParityContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaAggregateContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
