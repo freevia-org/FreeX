@@ -80,7 +80,7 @@ public sealed class XlsxWorksheetIgnoredErrorsPerformanceTests
     [Fact]
     public void SaveIgnoredErrors_BuildsRectangularRunsWithoutAddressListOrLinqFlagScan()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src", "FreeX.Core.IO", "XlsxWorksheetDiagnosticsMapper.IgnoredErrors.cs"));
 
         source.Should().Contain("new List<(uint Row, uint Col)>(ignoredCellCount)");
@@ -98,6 +98,4 @@ public sealed class XlsxWorksheetIgnoredErrorsPerformanceTests
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
         => XlsxPackageTestFixtures.LoadPackageXml(entry);
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }

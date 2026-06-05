@@ -57,7 +57,7 @@ public sealed class XlsxWorksheetPageBreaksMetadataWriterPerformanceTests
     [Fact]
     public void Save_UsesSingleBreakLookupForModeledBreaksAndNativeAttributes()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src", "FreeX.Core.IO", "XlsxWorksheetPageBreaksMetadataWriter.cs"));
 
         source.Should().Contain("BuildBreaksById(pageBreaks)");
@@ -160,5 +160,4 @@ public sealed class XlsxWorksheetPageBreaksMetadataWriterPerformanceTests
         return stream;
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }

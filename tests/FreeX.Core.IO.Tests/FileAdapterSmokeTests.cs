@@ -13986,6 +13986,27 @@ public partial class FileAdapterSmokeTests
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.Entries
+            .Select(entry => entry.FullName)
+            .Should()
+            .NotContain(entryName => entryName.StartsWith("package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase));
+        var rootRelationships = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        rootRelationships.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" &&
+                relationship.Attribute("Target")?.Value == "docProps/core.xml")
+            .Should()
+            .ContainSingle();
+        rootRelationships.Root
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" &&
+                relationship.Attribute("Target")?.Value == "docProps/app.xml")
+            .Should()
+            .ContainSingle();
+
         var coreProperties = LoadPackageXml(archive.GetEntry("docProps/core.xml")!);
         XNamespace dcNs = "http://purl.org/dc/elements/1.1/";
         XNamespace cpNs = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
@@ -14033,6 +14054,15 @@ public partial class FileAdapterSmokeTests
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var rootRelationships = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        rootRelationships.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" &&
+                relationship.Attribute("Target")?.Value == "docProps/custom.xml")
+            .Should()
+            .ContainSingle();
         var customProperties = LoadPackageXml(archive.GetEntry("docProps/custom.xml")!);
         XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
         XNamespace docPropsVtNs = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";

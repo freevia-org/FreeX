@@ -14,7 +14,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [BenchmarkFact]
     public void Benchmark_StructuredTableWriterTrailingNumber_AvoidsReverseIteratorAllocation()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableWriter.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableWriter.cs"));
         var methodStart = source.IndexOf("private static int ExtractTrailingNumber", StringComparison.Ordinal);
         var methodEnd = source.IndexOf("private static void TrySetNativeAttributeIfMissing", methodStart, StringComparison.Ordinal);
         var method = source[methodStart..methodEnd];
@@ -30,7 +30,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SavePostProcessing_DetectsPivotCustomNumberFormatsWithoutNestedLinq()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
 
         source.Should().Contain("featurePlan.HasPivotCustomNumberFormats");
         source.Should().Contain("private static bool HasPivotCustomNumberFormats(Sheet sheet)");
@@ -42,7 +42,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SavePostProcessing_BatchesWorkbookFeatureDetection()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
 
         source.Should().Contain("var featurePlan = XlsxPostProcessingFeaturePlan.Create(workbook);");
         source.Should().Contain("private struct XlsxPostProcessingFeaturePlan");
@@ -59,7 +59,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void PackageXmlEditor_RewritesXmlWithoutFormattingWhitespace()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxPackageXmlEditor.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxPackageXmlEditor.cs"));
 
         source.Should().Contain("document.Save(stream, SaveOptions.DisableFormatting);");
         source.Should().NotContain("document.Save(stream);");
@@ -68,7 +68,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void StylesheetMetadataPreserver_PreflightsPlainStylesheetBeforeLoadingXml()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStylesheetMetadataPreserver.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxStylesheetMetadataPreserver.cs"));
 
         source.Should().Contain("HasPreservableStylesheetMetadata(sourceStylesEntry)");
         source.Should().Contain("case \"colors\":");
@@ -83,7 +83,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void NumberFormatCatalogWriter_BuildsPivotCustomFormatCatalogWithoutNestedLinq()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxNumberFormatCatalogWriter.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxNumberFormatCatalogWriter.cs"));
 
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
         source.Should().Contain("foreach (var pivot in sheet.PivotTables)");
@@ -99,8 +99,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadCore_ReadsWorkbookMetadataInSinglePackagePass()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
-        var metadataSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataReader.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var metadataSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataReader.cs"));
 
         adapterSource.Should().Contain("workbookMetadata = packageParts.HasWorkbook");
         adapterSource.Should().Contain("XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageArchive)");
@@ -133,7 +133,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadCore_ReusesSingleStylesheetParseForLoadMetadata()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
 
         adapterSource.Should().Contain("stylesXml = packageParts.HasStyles");
         adapterSource.Should().Contain("XlsxStylesheetReader.Load(packageArchive)");
@@ -153,7 +153,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadCore_UsesPackagePartSummaryToSkipOptionalMetadataReaders()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
 
         adapterSource.Should().Contain("packageParts = XlsxLoadPackageParts.Inspect(packageArchive);");
         adapterSource.Should().Contain("if (packageParts.HasPivotPackageParts)");
@@ -173,11 +173,11 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadCore_ReusesSheetXmlLayoutFactsForClosedXmlPackagePreparation()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
-        var layoutSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
-        var sheetStyleOnlySource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Model", "Sheet.StyleOnly.cs"));
-        var sanitizerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
-        var stripperSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var layoutSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+        var sheetStyleOnlySource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.Model", "Sheet.StyleOnly.cs"));
+        var sanitizerSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
+        var stripperSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
 
         adapterSource.Should().Contain("GetClosedXmlStyleOnlyWorksheetPathsToStrip(");
         adapterSource.Should().Contain("CreateClosedXmlLoadSanitizationHints(");
@@ -212,7 +212,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void Save_UsesSaveScopedStyleCacheForStyleLookup()
     {
-        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
 
         saveSource.Should().Contain("var styleCache = new Dictionary<StyleId, CellStyle>(workbook.StyleCount);");
         saveSource.Should().Contain("GetCachedStyle(workbook, styleCache, cell.StyleId)");
@@ -225,9 +225,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void Save_ExpandsStyleOnlyCellsInPostProcessingAfterClosedXmlStyleSeeding()
     {
-        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
-        var postProcessingSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var writerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStyleOnlyCellWriter.cs"));
+        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+        var postProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var writerSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxStyleOnlyCellWriter.cs"));
 
         saveSource.Should().Contain("ApplyStyleOnlySeedCells");
         saveSource.Should().Contain("XlsxStyleOnlyCellWriter.GetSeedCells(sheet)");
@@ -252,8 +252,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SavePostProcessing_BatchesWorkbookMetadataXmlWrites()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var writerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataWriter.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var writerSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataWriter.cs"));
 
         adapterSource.Should().Contain("XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);");
         adapterSource.Should().Contain("if (featurePlan.HasWorkbookPostProcessingMetadata)");
@@ -272,18 +272,18 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SavePostProcessing_BatchesWorksheetNativeMetadataXmlWrites()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
-        var batchSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetNativeMetadataBatchWriter.cs"));
-        var sourceIndependentBatchSource = File.ReadAllText(FindRepoFile(
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+        var batchSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetNativeMetadataBatchWriter.cs"));
+        var sourceIndependentBatchSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "XlsxWorksheetSourceIndependentMetadataBatchWriter.cs"));
-        var dataValidationNativeSource = File.ReadAllText(FindRepoFile(
+        var dataValidationNativeSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "XlsxDataValidationNativeMetadataMapper.cs"));
-        var sessionSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetXmlEditSession.cs"));
+        var sessionSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetXmlEditSession.cs"));
 
         adapterSource.Should().Contain("XlsxWorksheetSourceIndependentMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
         adapterSource.Should().Contain("XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata");
@@ -324,7 +324,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void DataValidationNativeMetadataSave_UsesCachedXmlNamesAndDirectAnchorScan()
     {
-        var source = File.ReadAllText(FindRepoFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "XlsxDataValidationNativeMetadataMapper.cs"));
@@ -347,8 +347,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SavePostProcessing_BatchesSourcePackageReplayWorksheetMetadataXmlWrites()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var batchSource = File.ReadAllText(FindRepoFile(
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var batchSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "XlsxWorksheetPostProcessingMetadataBatchWriter.cs"));
@@ -378,7 +378,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void AdvancedConditionalFormatDifferentialStyles_NormalizeOrderWithoutEagerLinqSort()
     {
-        var source = File.ReadAllText(FindRepoFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "XlsxAdvancedConditionalFormatWriter.DifferentialStyles.cs"));
