@@ -596,7 +596,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
         return new XlsxClosedXmlLoadSanitizationHints(
             packageParts.HasInspected ? packageParts.HasPivotPackageParts : null,
-            null,
+            packageParts.HasInspected ? packageParts.HasChartExChartParts : null,
             hasConditionalFormattingBlocks,
             hasClosedXmlUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters);
@@ -691,6 +691,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             bool hasStyles,
             bool hasTheme,
             bool hasPivotPackageParts,
+            bool? hasChartExChartParts,
             bool hasSlicerTimelinePackageParts,
             bool hasExternalLinks,
             bool hasStructuredTables)
@@ -700,6 +701,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             HasStyles = hasStyles;
             HasTheme = hasTheme;
             HasPivotPackageParts = hasPivotPackageParts;
+            HasChartExChartParts = hasChartExChartParts;
             HasSlicerTimelinePackageParts = hasSlicerTimelinePackageParts;
             HasExternalLinks = hasExternalLinks;
             HasStructuredTables = hasStructuredTables;
@@ -711,6 +713,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         public bool HasStyles { get; }
         public bool HasTheme { get; }
         public bool HasPivotPackageParts { get; }
+        public bool? HasChartExChartParts { get; }
         public bool HasSlicerTimelinePackageParts { get; }
         public bool HasExternalLinks { get; }
         public bool HasStructuredTables { get; }
@@ -760,9 +763,35 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 hasStyles,
                 hasTheme,
                 hasPivotPackageParts,
+                InspectChartExChartParts(archive),
                 hasSlicerTimelinePackageParts,
                 hasExternalLinks,
                 hasStructuredTables);
+        }
+
+        private static bool? InspectChartExChartParts(ZipArchive archive)
+        {
+            const string chartExContentType = "application/vnd.ms-office.chartex+xml";
+            XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+            if (contentTypesEntry is null)
+                return null;
+
+            try
+            {
+                var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+                return contentTypesXml.Root?
+                    .Elements(contentTypesNs + "Override")
+                    .Any(element => string.Equals(
+                        element.Attribute("ContentType")?.Value,
+                        chartExContentType,
+                        StringComparison.OrdinalIgnoreCase)) == true;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static bool EntryPathEquals(string path, string expectedPath) =>

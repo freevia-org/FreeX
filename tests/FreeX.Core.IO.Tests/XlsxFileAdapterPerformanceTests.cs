@@ -381,6 +381,11 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("retainedBaselineFacts.TryGetSheetFacts");
         snapshotSource.Should().Contain("retainedChartSourceRanges.Matches(workbook)");
         snapshotSource.Should().Contain("CellPatchBaselineFacts = null");
+        snapshotSource.Should().Contain("XlsxPatchCellEntry[] Cells");
+        snapshotSource.Should().Contain("baseline.TryGetCell(row, col, out var original)");
+        snapshotSource.Should().Contain("baseline.WithAppliedCellChanges(sheetChanges ?? [])");
+        snapshotSource.Should().Contain("Array.Sort(cells, XlsxPatchCellEntry.Compare)");
+        snapshotSource.Should().NotContain("new Dictionary<(uint Row, uint Col), XlsxPatchCell>");
         snapshotSource.Should().Contain("IsCellPatchBaselineLazy: true");
         snapshotSource.Should().Contain("patch_blocked_deferred_baseline_not_materialized");
         snapshotSource.Should().Contain("patchedPackage.TryGetBuffer");
