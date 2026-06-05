@@ -36,6 +36,7 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     [Theory]
     [InlineData("Picture 1")]
+    [InlineData("Picture1")]
     [InlineData("Drawing")]
     [InlineData("Drawing 1")]
     [InlineData("AutoShape")]
@@ -60,6 +61,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Group 1")]
     [InlineData("Image")]
     [InlineData("Image 2.")]
+    [InlineData("Image_2")]
     [InlineData("IMG_0001.jpg")]
     [InlineData("Object")]
     [InlineData("Object 1")]
@@ -69,6 +71,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Diagram 3")]
     [InlineData("Screenshot")]
     [InlineData("Screenshot 4")]
+    [InlineData("Screenshot-4")]
     [InlineData("Screenshot 2026-06-04")]
     [InlineData("Photo")]
     [InlineData("Photo 5")]
@@ -78,7 +81,9 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Shape")]
     [InlineData("SmartArt")]
     [InlineData("SmartArt 9")]
+    [InlineData("SmartArt_9")]
     [InlineData("Text box")]
+    [InlineData("TextBox7")]
     [InlineData("WordArt")]
     [InlineData("WordArt 10")]
     public void FindIssues_FlagsObjectsWithGenericAltText(string altText)
@@ -114,7 +119,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
             Text = "Q1 revenue rose 8%",
-            AltText = "Q1 revenue summary annotation"
+            AltText = "Picture Q1 revenue trend"
         });
 
         AccessibilityCheckerService.FindIssues(workbook)
@@ -200,6 +205,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Theory]
     [InlineData("Drawing")]
     [InlineData("Drawing 1")]
+    [InlineData("Drawing_1")]
     [InlineData("AutoShape")]
     [InlineData("AutoShape 3")]
     [InlineData("Arrow")]
@@ -222,8 +228,10 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Group 1")]
     [InlineData("SmartArt")]
     [InlineData("SmartArt 9")]
+    [InlineData("SmartArt_9")]
     [InlineData("WordArt")]
     [InlineData("WordArt 10")]
+    [InlineData("WordArt-10")]
     public void FindIssues_FlagsAdditionalDefaultDrawingObjectTitleOrNameWithoutDescriptiveAltText(string accessibleText)
     {
         var workbook = new Workbook("Accessibility");
