@@ -80,6 +80,7 @@ public static partial class FlashFillService
             ?? TryExtractFileParentDirectoryTitle(examples)
             ?? TryRemoveFinalDottedToken(examples)
             ?? TryExtractFinalDottedToken(examples)
+            ?? TryRemoveLeadingDottedToken(examples)
             ?? TryRemoveLeadingDelimitedToken(examples)
             ?? TryRemoveFinalDelimitedToken(examples)
             ?? TryExtractFinalDelimitedToken(examples)
