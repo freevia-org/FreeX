@@ -161,6 +161,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;
     private CellColor _borderPickerColor = CellColor.Black;
     private BorderStyle _borderPickerStyle = BorderStyle.Thin;
+    private RibbonBorderPreset _selectedBorderPreset = RibbonBorderPreset.All;
     private BorderDrawMode _borderDrawMode;
     private static readonly CellColor RibbonDefaultFillColor = new(255, 255, 0);
     private static readonly CellColor RibbonDefaultFontColor = new(255, 0, 0);

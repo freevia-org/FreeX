@@ -81,6 +81,10 @@ public sealed class HomeBorderCommandSourceTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
 
+        SourceMethodExtractor.ExtractMethodSource(source, "private void BorderPickerBtn_Click(")
+            .Should().Contain("ApplySelectedBorderPreset();");
+        source.Should().Contain("private enum RibbonBorderPreset");
+        source.Should().Contain("_selectedBorderPreset = preset;");
         source.Should().Contain("BorderShortcutService.GetAllBorderDiff(_borderPickerStyle, _borderPickerColor)");
         source.Should().Contain("BorderShortcutService.GetClearBorderDiff()");
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, _borderPickerStyle, _borderPickerColor)");

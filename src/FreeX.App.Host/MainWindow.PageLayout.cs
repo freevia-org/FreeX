@@ -103,8 +103,7 @@ public partial class MainWindow
 
     private void BackgroundBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-            OpenRibbonContextMenu(btn, cm);
+        BackgroundChooseMenuItem_Click(sender, e);
     }
 
     private void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)
@@ -246,8 +245,7 @@ public partial class MainWindow
 
     private void PrintAreaBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-            OpenRibbonContextMenu(btn, cm);
+        PrintAreaSetMenuItem_Click(sender, e);
     }
     private void PrintAreaSetMenuItem_Click(object sender, RoutedEventArgs e)
     {
