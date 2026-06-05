@@ -27,6 +27,36 @@ public sealed partial class XlsxFileAdapter
         return true;
     }
 
+    public static bool TryPrepareLoadedPackageSnapshotForEdit(Workbook workbook, out string? blockReason)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        blockReason = null;
+        if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
+        {
+            blockReason = "no_source_package";
+            return false;
+        }
+
+        if (!sourcePackage.TryEnsureCellPatchBaseline(workbook, out var preparedPackage, out blockReason))
+        {
+            if (!ReferenceEquals(preparedPackage, sourcePackage))
+            {
+                SourcePackages.Remove(workbook);
+                SourcePackages.Add(workbook, preparedPackage);
+            }
+
+            return false;
+        }
+
+        if (!ReferenceEquals(preparedPackage, sourcePackage))
+        {
+            SourcePackages.Remove(workbook);
+            SourcePackages.Add(workbook, preparedPackage);
+        }
+
+        return true;
+    }
+
     private static string CreateSourceModelFingerprint(Workbook workbook)
         => CreateModelFingerprint(workbook, forPatchValidation: false);
 
@@ -114,6 +144,7 @@ public sealed partial class XlsxFileAdapter
         string? CellPatchEligibilityBlockReason,
         XlsxCellPatchBaseline? CellPatchBaseline,
         string? CellPatchBaselineBlockReason,
+        bool IsCellPatchBaselineLazy = false,
         bool IsCellPatchEligibilityLazy = false)
     {
         private const int FingerprintCellLimit = 25_000;
@@ -200,13 +231,6 @@ public sealed partial class XlsxFileAdapter
 
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var bytes = ReadBytes(stream);
-            var cellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
-                bytes,
-                0,
-                bytes.Length,
-                workbook,
-                CellPatchBaselineLimit,
-                out var cellPatchBaselineBlockReason);
             return new XlsxSourcePackage(
                 bytes,
                 0,
@@ -216,8 +240,9 @@ public sealed partial class XlsxFileAdapter
                 hasUnsupportedConditionalFormatting,
                 AllowsCellPatchSave: false,
                 CellPatchEligibilityBlockReason: null,
-                cellPatchBaseline,
-                cellPatchBaselineBlockReason,
+                CellPatchBaseline: null,
+                CellPatchBaselineBlockReason: null,
+                IsCellPatchBaselineLazy: true,
                 IsCellPatchEligibilityLazy: true);
         }
 
@@ -288,14 +313,6 @@ public sealed partial class XlsxFileAdapter
                     buffer.Offset >= 0 &&
                     buffer.Offset + (int)stream.Length <= buffer.Array.Length)
                 {
-                    var reusedCellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
-                        buffer.Array,
-                        buffer.Offset,
-                        (int)stream.Length,
-                        workbook,
-                        CellPatchBaselineLimit,
-                        out var reusedCellPatchBaselineBlockReason,
-                        sheetXmlLayout);
                     return new XlsxSourcePackage(
                         buffer.Array,
                         buffer.Offset,
@@ -305,8 +322,9 @@ public sealed partial class XlsxFileAdapter
                         hasUnsupportedConditionalFormatting,
                         AllowsCellPatchSave: false,
                         CellPatchEligibilityBlockReason: null,
-                        reusedCellPatchBaseline,
-                        reusedCellPatchBaselineBlockReason,
+                        CellPatchBaseline: null,
+                        CellPatchBaselineBlockReason: null,
+                        IsCellPatchBaselineLazy: true,
                         IsCellPatchEligibilityLazy: true);
                 }
 
@@ -316,14 +334,6 @@ public sealed partial class XlsxFileAdapter
                     buffer.Offset + (int)stream.Length <= buffer.Array.Length
                     ? buffer.Array.AsSpan(buffer.Offset, (int)stream.Length).ToArray()
                     : ReadBytes(stream);
-                var copiedCellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
-                    copiedBytes,
-                    0,
-                    copiedBytes.Length,
-                    workbook,
-                    CellPatchBaselineLimit,
-                    out var copiedCellPatchBaselineBlockReason,
-                    sheetXmlLayout);
                 return new XlsxSourcePackage(
                     copiedBytes,
                     0,
@@ -333,20 +343,13 @@ public sealed partial class XlsxFileAdapter
                     hasUnsupportedConditionalFormatting,
                     AllowsCellPatchSave: false,
                     CellPatchEligibilityBlockReason: null,
-                    copiedCellPatchBaseline,
-                    copiedCellPatchBaselineBlockReason,
+                    CellPatchBaseline: null,
+                    CellPatchBaselineBlockReason: null,
+                    IsCellPatchBaselineLazy: true,
                     IsCellPatchEligibilityLazy: true);
             }
 
             var bytes = ReadBytes(stream);
-            var cellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
-                bytes,
-                0,
-                bytes.Length,
-                workbook,
-                CellPatchBaselineLimit,
-                out var cellPatchBaselineBlockReason,
-                sheetXmlLayout);
             return new XlsxSourcePackage(
                 bytes,
                 0,
@@ -356,8 +359,9 @@ public sealed partial class XlsxFileAdapter
                 hasUnsupportedConditionalFormatting,
                 AllowsCellPatchSave: false,
                 CellPatchEligibilityBlockReason: null,
-                cellPatchBaseline,
-                cellPatchBaselineBlockReason,
+                CellPatchBaseline: null,
+                CellPatchBaselineBlockReason: null,
+                IsCellPatchBaselineLazy: true,
                 IsCellPatchEligibilityLazy: true);
         }
 
@@ -390,7 +394,9 @@ public sealed partial class XlsxFileAdapter
         public XlsxSourcePackage Rebase(Workbook workbook)
         {
             if (CellPatchBaseline is null)
-                return this;
+                return IsCellPatchBaselineLazy
+                    ? this with { ModelFingerprint = null }
+                    : this;
 
             return this with
             {
@@ -398,6 +404,32 @@ public sealed partial class XlsxFileAdapter
                 CellPatchBaseline = CellPatchBaseline.Rebase(workbook, CreatePatchValidationModelFingerprint(workbook)),
                 CellPatchBaselineBlockReason = null
             };
+        }
+
+        public bool TryEnsureCellPatchBaseline(
+            Workbook workbook,
+            out XlsxSourcePackage preparedPackage,
+            out string? blockReason)
+        {
+            preparedPackage = this;
+            blockReason = CellPatchBaselineBlockReason;
+            if (!IsCellPatchBaselineLazy)
+                return CellPatchBaseline is not null;
+
+            var cellPatchBaseline = XlsxCellPatchBaseline.TryCreate(
+                Buffer,
+                Offset,
+                Count,
+                workbook,
+                CellPatchBaselineLimit,
+                out blockReason);
+            preparedPackage = this with
+            {
+                CellPatchBaseline = cellPatchBaseline,
+                CellPatchBaselineBlockReason = blockReason,
+                IsCellPatchBaselineLazy = false
+            };
+            return cellPatchBaseline is not null;
         }
 
         public bool Matches(Workbook workbook) => Matches(workbook, out _);
@@ -446,7 +478,11 @@ public sealed partial class XlsxFileAdapter
                 return Fail(cellPatchEligibilityBlockReason ?? "patch_blocked_package_or_workbook_requires_full_save", out diagnostics);
 
             if (CellPatchBaseline is null)
-                return Fail(CellPatchBaselineBlockReason ?? "patch_blocked_baseline_unavailable", out diagnostics);
+                return Fail(
+                    IsCellPatchBaselineLazy
+                        ? "patch_blocked_deferred_baseline_not_materialized"
+                        : CellPatchBaselineBlockReason ?? "patch_blocked_baseline_unavailable",
+                    out diagnostics);
 
             if (!CellPatchBaseline.TryGetPatchableValueChanges(
                     workbook,

@@ -36,6 +36,18 @@ public sealed class CommandBusUndoSafetyTests
         public void Revert(ICommandContext ctx) => throw new InvalidOperationException("simulated revert failure");
     }
 
+    private sealed class ObservingCommand(Action onApply, Action onRevert) : IWorkbookCommand
+    {
+        public string Label => "Observing";
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            onApply();
+            return new(true);
+        }
+
+        public void Revert(ICommandContext ctx) => onRevert();
+    }
+
     // ── happy path ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -47,6 +59,40 @@ public sealed class CommandBusUndoSafetyTests
         var outcome = bus.Undo(WbId);
 
         outcome.Success.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExecuteUndoRedo_RunBeforeMutationCallbackBeforeCommandMutation()
+    {
+        var workbook = new Workbook("hook-test");
+        var callbackRan = false;
+        var applySawCallback = false;
+        var revertSawCallback = false;
+        var redoSawCallback = false;
+        var applyCount = 0;
+        var bus = new CommandBus(
+            _ => new TestCommandContext(workbook),
+            (_, _) => callbackRan = true);
+        var command = new ObservingCommand(
+            () =>
+            {
+                applyCount++;
+                if (applyCount == 1)
+                    applySawCallback = callbackRan;
+                else
+                    redoSawCallback = callbackRan;
+            },
+            () => revertSawCallback = callbackRan);
+
+        bus.Execute(WbId, command);
+        callbackRan = false;
+        bus.Undo(WbId);
+        callbackRan = false;
+        bus.Redo(WbId);
+
+        applySawCallback.Should().BeTrue();
+        revertSawCallback.Should().BeTrue();
+        redoSawCallback.Should().BeTrue();
     }
 
     [Fact]
