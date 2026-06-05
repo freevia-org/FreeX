@@ -13976,6 +13976,7 @@ public partial class FileAdapterSmokeTests
         adapter.Save(workbook, source);
         source.Position = 0;
         AddStableDocumentProperties(source);
+        AddMalformedCorePropertiesRelationship(source);
 
         source.Position = 0;
         var loaded = adapter.Load(source);
@@ -13997,6 +13998,14 @@ public partial class FileAdapterSmokeTests
             .Where(relationship =>
                 relationship.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" &&
                 relationship.Attribute("Target")?.Value == "docProps/core.xml")
+            .Should()
+            .ContainSingle();
+        rootRelationships.Root
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship => string.Equals(
+                relationship.Attribute("Target")?.Value?.TrimStart('/'),
+                "docProps/core.xml",
+                StringComparison.OrdinalIgnoreCase))
             .Should()
             .ContainSingle();
         rootRelationships.Root
@@ -22226,6 +22235,23 @@ public partial class FileAdapterSmokeTests
 
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
         }
+    }
+
+    private static void AddMalformedCorePropertiesRelationship(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relationshipsXml = LoadPackageXml(archive.GetEntry("_rels/.rels")!);
+            relationshipsXml.Root!.Add(new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdMalformedCoreProperties"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/package/2006/relationships/meatadata/core-properties"),
+                new XAttribute("Target", "/docProps/core.xml")));
+            ReplacePackageXml(archive, "_rels/.rels", relationshipsXml);
+        }
+
+        packageStream.Position = 0;
     }
 
     private static void AddCustomDocumentProperties(MemoryStream packageStream)

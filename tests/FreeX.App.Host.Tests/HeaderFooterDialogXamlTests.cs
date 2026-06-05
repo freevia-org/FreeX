@@ -244,17 +244,17 @@ public sealed class HeaderFooterDialogXamlTests
             var dialog = new HeaderFooterPictureFormatDialog(picture);
             try
             {
-                var widthBox = GetPrivateField<TextBox>(dialog, "_widthBox");
+                var widthBox = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_widthBox");
                 AutomationProperties.GetName(widthBox).Should().Be("Header/footer picture width");
                 AutomationProperties.GetAutomationId(widthBox).Should().Be("HeaderFooterPictureWidthBox");
                 AutomationProperties.GetHelpText(widthBox).Should().Be("Enter the header or footer picture width.");
 
-                var heightBox = GetPrivateField<TextBox>(dialog, "_heightBox");
+                var heightBox = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_heightBox");
                 AutomationProperties.GetName(heightBox).Should().Be("Header/footer picture height");
                 AutomationProperties.GetAutomationId(heightBox).Should().Be("HeaderFooterPictureHeightBox");
                 AutomationProperties.GetHelpText(heightBox).Should().Be("Enter the header or footer picture height.");
 
-                var lockAspectRatioBox = GetPrivateField<CheckBox>(dialog, "_lockAspectRatioBox");
+                var lockAspectRatioBox = DialogSourceTestSupport.GetPrivateField<CheckBox>(dialog, "_lockAspectRatioBox");
                 AutomationProperties.GetName(lockAspectRatioBox).Should().Be("Lock aspect ratio");
                 AutomationProperties.GetAutomationId(lockAspectRatioBox).Should().Be("HeaderFooterPictureLockAspectRatioCheckBox");
                 AutomationProperties.GetHelpText(lockAspectRatioBox).Should().Be("Keep the header or footer picture width and height proportional.");
@@ -392,14 +392,6 @@ public sealed class HeaderFooterDialogXamlTests
         var field = typeof(HeaderFooterDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
-
-    private static T GetPrivateField<T>(object instance, string name)
-        where T : class
-    {
-        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
     }
 
     private static string ReadHeaderFooterDialogSource() =>

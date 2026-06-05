@@ -2796,6 +2796,7 @@ internal static class ExcelOpenSmoke
             issues.Add("xl/styles.xml has no cellXfs xf entries");
 
         AddStyleCountAttributeIssues(issues, "cellXfs", cellXfs, cellFormatCount);
+        AddStylesheetMetadataIssues(stylesXml.Root, issues);
         foreach (var styleReference in styleReferences)
         {
             if (string.IsNullOrWhiteSpace(styleReference.ValueText))
@@ -2892,6 +2893,443 @@ internal static class ExcelOpenSmoke
 
         if (declaredCount != actualCount)
             issues.Add($"xl/styles.xml {elementName} count is {declaredCount}, but contains {actualCount} child entries");
+    }
+
+    private static void AddStylesheetMetadataIssues(XElement stylesheetRoot, List<string> issues)
+    {
+        AddStylesheetRootChildOrderingIssues(stylesheetRoot, issues);
+        AddStylesheetSingleChildIssues(stylesheetRoot, "colors", issues);
+        AddStylesheetSingleChildIssues(stylesheetRoot, "dxfs", issues);
+        AddStylesheetSingleChildIssues(stylesheetRoot, "tableStyles", issues);
+        AddStylesheetSingleChildIssues(stylesheetRoot, "extLst", issues);
+
+        var differentialStyleCount = 0;
+        foreach (var differentialStyles in stylesheetRoot.Elements(SpreadsheetNs + "dxfs").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            differentialStyleCount = Math.Max(
+                differentialStyleCount,
+                AddStylesheetDifferentialStyleIssues(differentialStyles.Ordinal, differentialStyles.Element, issues));
+        }
+
+        foreach (var colors in stylesheetRoot.Elements(SpreadsheetNs + "colors").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddStylesheetColorsIssues(colors.Ordinal, colors.Element, issues);
+        }
+
+        foreach (var tableStyles in stylesheetRoot.Elements(SpreadsheetNs + "tableStyles").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddStylesheetTableStylesIssues(tableStyles.Ordinal, tableStyles.Element, differentialStyleCount, issues);
+        }
+
+        foreach (var extensionList in stylesheetRoot.Elements(SpreadsheetNs + "extLst").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues("xl/styles.xml", "styleSheet", extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddStylesheetRootChildOrderingIssues(XElement stylesheetRoot, List<string> issues)
+    {
+        var previousKnownChildOrder = -1;
+        foreach (var child in stylesheetRoot.Elements())
+        {
+            var childOrder = GetStylesheetRootChildOrder(child);
+            if (childOrder < 0)
+                continue;
+
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"xl/styles.xml child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+        }
+    }
+
+    private static int GetStylesheetRootChildOrder(XElement child)
+    {
+        if (child.Name.Namespace != SpreadsheetNs)
+            return -1;
+
+        return child.Name.LocalName switch
+        {
+            "numFmts" => 0,
+            "fonts" => 1,
+            "fills" => 2,
+            "borders" => 3,
+            "cellStyleXfs" => 4,
+            "cellXfs" => 5,
+            "cellStyles" => 6,
+            "dxfs" => 7,
+            "tableStyles" => 8,
+            "colors" => 9,
+            "extLst" => 10,
+            _ => -1
+        };
+    }
+
+    private static void AddStylesheetSingleChildIssues(XElement stylesheetRoot, string childName, List<string> issues)
+    {
+        var elements = stylesheetRoot.Elements(SpreadsheetNs + childName).ToArray();
+        if (elements.Length > 1)
+            issues.Add($"xl/styles.xml has {elements.Length} {childName} elements; expected at most one");
+    }
+
+    private static int AddStylesheetDifferentialStyleIssues(
+        int ordinal,
+        XElement differentialStyles,
+        List<string> issues)
+    {
+        var description = $"dxfs #{ordinal}";
+        var styles = differentialStyles.Elements(SpreadsheetNs + "dxf").ToArray();
+        AddStyleCountAttributeIssues(issues, description, differentialStyles, styles.Length);
+
+        var extensionLists = differentialStyles.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"xl/styles.xml {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var unexpectedChild in differentialStyles.Elements().Where(child =>
+                     child.Name.Namespace == SpreadsheetNs &&
+                     child.Name != SpreadsheetNs + "dxf" &&
+                     child.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"xl/styles.xml {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var children = differentialStyles.Elements().ToArray();
+        var firstExtensionListIndex = Array.FindIndex(children, child => child.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children.Skip(firstExtensionListIndex + 1).Any(child => child.Name == SpreadsheetNs + "dxf"))
+        {
+            issues.Add($"xl/styles.xml {description} has dxf entries after extLst; expected extLst last");
+        }
+
+        foreach (var style in styles.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddStylesheetDifferentialStyleEntryIssues(description, style.Ordinal, style.Element, issues);
+        }
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues("xl/styles.xml", description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+
+        return styles.Length;
+    }
+
+    private static void AddStylesheetDifferentialStyleEntryIssues(
+        string differentialStylesDescription,
+        int ordinal,
+        XElement differentialStyle,
+        List<string> issues)
+    {
+        var description = $"{differentialStylesDescription} dxf #{ordinal}";
+        AddStylesheetDifferentialStyleChildOrderingIssues(description, differentialStyle, issues);
+
+        var extensionLists = differentialStyle.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"xl/styles.xml {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues("xl/styles.xml", description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddStylesheetDifferentialStyleChildOrderingIssues(
+        string description,
+        XElement differentialStyle,
+        List<string> issues)
+    {
+        var previousKnownChildOrder = -1;
+        foreach (var child in differentialStyle.Elements())
+        {
+            var childOrder = GetStylesheetDifferentialStyleChildOrder(child);
+            if (childOrder < 0)
+                continue;
+
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"xl/styles.xml {description} child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+        }
+    }
+
+    private static int GetStylesheetDifferentialStyleChildOrder(XElement child)
+    {
+        if (child.Name.Namespace != SpreadsheetNs)
+            return -1;
+
+        return child.Name.LocalName switch
+        {
+            "font" => 0,
+            "numFmt" => 1,
+            "fill" => 2,
+            "alignment" => 3,
+            "border" => 4,
+            "protection" => 5,
+            "extLst" => 6,
+            _ => -1
+        };
+    }
+
+    private static void AddStylesheetColorsIssues(int ordinal, XElement colors, List<string> issues)
+    {
+        var description = $"colors #{ordinal}";
+        var indexedColorContainers = colors.Elements(SpreadsheetNs + "indexedColors").ToArray();
+        var mruColorContainers = colors.Elements(SpreadsheetNs + "mruColors").ToArray();
+        if (indexedColorContainers.Length > 1)
+            issues.Add($"xl/styles.xml {description} has {indexedColorContainers.Length} indexedColors elements; expected at most one");
+        if (mruColorContainers.Length > 1)
+            issues.Add($"xl/styles.xml {description} has {mruColorContainers.Length} mruColors elements; expected at most one");
+
+        foreach (var unexpectedChild in colors.Elements().Where(child =>
+                     child.Name.Namespace == SpreadsheetNs &&
+                     child.Name != SpreadsheetNs + "indexedColors" &&
+                     child.Name != SpreadsheetNs + "mruColors"))
+        {
+            issues.Add($"xl/styles.xml {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var previousKnownChildOrder = -1;
+        foreach (var child in colors.Elements())
+        {
+            var childOrder = child.Name == SpreadsheetNs + "indexedColors"
+                ? 0
+                : child.Name == SpreadsheetNs + "mruColors"
+                    ? 1
+                    : -1;
+            if (childOrder < 0)
+                continue;
+
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"xl/styles.xml {description} child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+        }
+
+        foreach (var indexedColors in indexedColorContainers.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddStylesheetColorContainerIssues(
+                $"{description} indexedColors #{indexedColors.Ordinal}",
+                indexedColors.Element,
+                "rgbColor",
+                requireRgb: true,
+                issues);
+        }
+
+        foreach (var mruColors in mruColorContainers.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddStylesheetColorContainerIssues(
+                $"{description} mruColors #{mruColors.Ordinal}",
+                mruColors.Element,
+                "color",
+                requireRgb: false,
+                issues);
+        }
+    }
+
+    private static void AddStylesheetColorContainerIssues(
+        string description,
+        XElement colorContainer,
+        string colorElementName,
+        bool requireRgb,
+        List<string> issues)
+    {
+        var colorName = SpreadsheetNs + colorElementName;
+        var colors = colorContainer.Elements(colorName).ToArray();
+
+        foreach (var unexpectedChild in colorContainer.Elements().Where(child => child.Name != colorName))
+        {
+            issues.Add($"xl/styles.xml {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        foreach (var color in colors.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            var colorDescription = $"{description} {colorElementName} #{color.Ordinal}";
+            var hasKnownColorAttribute =
+                color.Element.Attribute("rgb") is not null ||
+                color.Element.Attribute("indexed") is not null ||
+                color.Element.Attribute("theme") is not null ||
+                color.Element.Attribute("auto") is not null;
+            if (!hasKnownColorAttribute)
+                issues.Add($"xl/styles.xml {colorDescription} has no color attribute");
+
+            var rgb = color.Element.Attribute("rgb")?.Value;
+            if (string.IsNullOrWhiteSpace(rgb))
+            {
+                if (requireRgb)
+                    issues.Add($"xl/styles.xml {colorDescription} has no rgb");
+            }
+            else if (!IsValidPackageHexColor(rgb))
+            {
+                issues.Add($"xl/styles.xml {colorDescription} has invalid rgb value '{rgb}'");
+            }
+
+            AddOptionalPackageNonNegativeIntIssue("xl/styles.xml", colorDescription, "indexed", color.Element.Attribute("indexed")?.Value, issues);
+            AddOptionalPackageNonNegativeIntIssue("xl/styles.xml", colorDescription, "theme", color.Element.Attribute("theme")?.Value, issues);
+            AddOptionalPackageBooleanIssue("xl/styles.xml", colorDescription, "auto", color.Element.Attribute("auto")?.Value, issues);
+
+            if (color.Element.Elements().Any())
+                issues.Add($"xl/styles.xml {colorDescription} has child elements; expected attributes only");
+        }
+    }
+
+    private static void AddStylesheetTableStylesIssues(
+        int ordinal,
+        XElement tableStyles,
+        int differentialStyleCount,
+        List<string> issues)
+    {
+        var description = $"tableStyles #{ordinal}";
+        var styleElements = tableStyles.Elements(SpreadsheetNs + "tableStyle").ToArray();
+        AddStyleCountAttributeIssues(issues, description, tableStyles, styleElements.Length);
+        AddOptionalPackageStringAttributeIssue("xl/styles.xml", description, "defaultTableStyle", tableStyles.Attribute("defaultTableStyle")?.Value, issues);
+        AddOptionalPackageStringAttributeIssue("xl/styles.xml", description, "defaultPivotStyle", tableStyles.Attribute("defaultPivotStyle")?.Value, issues);
+
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tableStyle in styleElements.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddStylesheetTableStyleIssues(description, tableStyle.Ordinal, tableStyle.Element, differentialStyleCount, seenNames, issues);
+        }
+    }
+
+    private static void AddStylesheetTableStyleIssues(
+        string tableStylesDescription,
+        int ordinal,
+        XElement tableStyle,
+        int differentialStyleCount,
+        HashSet<string> seenNames,
+        List<string> issues)
+    {
+        var description = $"{tableStylesDescription} tableStyle #{ordinal}";
+        var name = tableStyle.Attribute("name")?.Value;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            issues.Add($"xl/styles.xml {description} has no name");
+        }
+        else if (!seenNames.Add(name.Trim()))
+        {
+            issues.Add($"xl/styles.xml {tableStylesDescription} has duplicate tableStyle name '{name}'");
+        }
+
+        AddOptionalPackageBooleanIssue("xl/styles.xml", description, "pivot", tableStyle.Attribute("pivot")?.Value, issues);
+        AddOptionalPackageBooleanIssue("xl/styles.xml", description, "table", tableStyle.Attribute("table")?.Value, issues);
+
+        var elements = tableStyle.Elements(SpreadsheetNs + "tableStyleElement").ToArray();
+        AddStyleCountAttributeIssues(issues, description, tableStyle, elements.Length);
+
+        foreach (var unexpectedChild in tableStyle.Elements().Where(child =>
+                     child.Name.Namespace == SpreadsheetNs &&
+                     child.Name != SpreadsheetNs + "tableStyleElement" &&
+                     child.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"xl/styles.xml {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var extensionLists = tableStyle.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"xl/styles.xml {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        var children = tableStyle.Elements().ToArray();
+        var firstExtensionListIndex = Array.FindIndex(children, child => child.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children.Skip(firstExtensionListIndex + 1).Any(child => child.Name == SpreadsheetNs + "tableStyleElement"))
+        {
+            issues.Add($"xl/styles.xml {description} has tableStyleElement entries after extLst; expected extLst last");
+        }
+
+        foreach (var element in elements.Select((child, index) => (Ordinal: index + 1, Element: child)))
+        {
+            AddStylesheetTableStyleElementIssues(description, element.Ordinal, element.Element, differentialStyleCount, issues);
+        }
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues("xl/styles.xml", description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddStylesheetTableStyleElementIssues(
+        string tableStyleDescription,
+        int ordinal,
+        XElement element,
+        int differentialStyleCount,
+        List<string> issues)
+    {
+        var description = $"{tableStyleDescription} tableStyleElement #{ordinal}";
+        AddRequiredKnownPackageValueIssue(
+            "xl/styles.xml",
+            description,
+            "type",
+            element.Attribute("type")?.Value,
+            [
+                "wholeTable",
+                "headerRow",
+                "totalRow",
+                "firstColumn",
+                "lastColumn",
+                "firstRowStripe",
+                "secondRowStripe",
+                "firstColumnStripe",
+                "secondColumnStripe",
+                "firstHeaderCell",
+                "lastHeaderCell",
+                "firstTotalCell",
+                "lastTotalCell",
+                "firstSubtotalColumn",
+                "secondSubtotalColumn",
+                "thirdSubtotalColumn",
+                "firstSubtotalRow",
+                "secondSubtotalRow",
+                "thirdSubtotalRow",
+                "blankRow",
+                "firstColumnSubheading",
+                "secondColumnSubheading",
+                "thirdColumnSubheading",
+                "firstRowSubheading",
+                "secondRowSubheading",
+                "thirdRowSubheading",
+                "pageFieldLabels",
+                "pageFieldValues"
+            ],
+            issues);
+
+        AddOptionalPositivePackageIntIssue("xl/styles.xml", description, "size", element.Attribute("size")?.Value, issues);
+
+        var dxfIdText = element.Attribute("dxfId")?.Value;
+        if (!string.IsNullOrWhiteSpace(dxfIdText))
+        {
+            if (!TryParseNonNegativePackageInt(dxfIdText, out var dxfId))
+            {
+                issues.Add($"xl/styles.xml {description} has invalid dxfId value '{dxfIdText}'");
+            }
+            else if (differentialStyleCount == 0)
+            {
+                issues.Add($"xl/styles.xml {description} references dxfId {dxfId}, but dxfs is missing or empty");
+            }
+            else if (dxfId >= differentialStyleCount)
+            {
+                issues.Add($"xl/styles.xml {description} references dxfId {dxfId}, but dxfs contains {differentialStyleCount} entries");
+            }
+        }
+
+        if (element.Elements().Any())
+            issues.Add($"xl/styles.xml {description} has child elements; expected attributes only");
+    }
+
+    private static void AddRequiredKnownPackageValueIssue(
+        string packagePart,
+        string description,
+        string attributeName,
+        string? value,
+        IReadOnlyCollection<string> knownValues,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            issues.Add($"{packagePart} {description} has no {attributeName}");
+            return;
+        }
+
+        AddOptionalKnownPackageValueIssue(packagePart, description, attributeName, value, knownValues, issues);
     }
 
     private static void ThrowInvalidStylesPackage(string label, string sourcePath, IReadOnlyList<string> issues)
