@@ -401,6 +401,32 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIfBooleanBranches()
+    {
+        AssertFormulaIfContrastLocations("IF($A1>=100,TRUE,FALSE)", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIfNumericBranches()
+    {
+        AssertFormulaIfContrastLocations("IF($A1>=100,1,0)", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIfInvertedBranches()
+    {
+        AssertFormulaIfContrastLocations("IF($A1>=100,FALSE,TRUE)", "B1", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIfInsideLogicalWrappers()
+    {
+        AssertFormulaIfContrastLocations("AND(IF($A1>=100,TRUE,FALSE),$C1=\"Open\")", "B4");
+        AssertFormulaIfContrastLocations("OR(IF($A1>=100,FALSE,TRUE),$C1=\"Open\")", "B1", "B3", "B4");
+        AssertFormulaIfContrastLocations("NOT(IF($A1>=100,TRUE,FALSE))", "B1", "B3");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAnd()
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -440,6 +466,13 @@ public sealed partial class AccessibilityCheckerServiceTests
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,SUM($A1)>0)");
 
         FindLowContrastCellTextIssues(workbook).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideIfWrapper()
+    {
+        AssertFormulaIfContrastLocations("IF(SUM($A1)>0,TRUE,FALSE)");
+        AssertFormulaIfContrastLocations("IF($A1>=100,SUM($A1),FALSE)");
     }
 
     [Fact]
@@ -729,6 +762,17 @@ public sealed partial class AccessibilityCheckerServiceTests
     private static void AssertFormulaParityContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaParityContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaIfContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
