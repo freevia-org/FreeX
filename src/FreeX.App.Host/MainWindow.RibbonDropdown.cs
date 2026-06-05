@@ -392,7 +392,6 @@ public partial class MainWindow
     {
         if (e.Handled ||
             sender is not ButtonBase button ||
-            button.ContextMenu is not { } menu ||
             !button.IsEnabled ||
             !IsRibbonDropdownZoneClick(button, e.GetPosition(button)))
         {
@@ -400,7 +399,14 @@ public partial class MainWindow
         }
 
         e.Handled = true;
-        OpenRibbonContextMenu(button, menu);
+        if (button.ContextMenu is { } menu)
+        {
+            OpenRibbonContextMenu(button, menu);
+            return;
+        }
+
+        if (RibbonMetadata.IsDropdownMenuButton(button))
+            button.RaiseEvent(new RoutedEventArgs(RibbonMetadata.DropdownClickEvent, button));
     }
 
     private static bool IsRibbonDropdownZoneClick(ButtonBase button, Point position)

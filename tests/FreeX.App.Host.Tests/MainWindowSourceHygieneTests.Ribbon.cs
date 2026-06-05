@@ -21,6 +21,17 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void RibbonSplitButtons_CanRouteDropdownZoneToADirectAction()
+    {
+        var ribbonDropdownSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonDropdown.cs"));
+        var metadataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonMetadata.cs"));
+
+        metadataSource.Should().Contain("public static readonly RoutedEvent DropdownClickEvent");
+        metadataSource.Should().Contain("public static void AddDropdownClickHandler(DependencyObject element, RoutedEventHandler handler)");
+        ribbonDropdownSource.Should().Contain("button.RaiseEvent(new RoutedEventArgs(RibbonMetadata.DropdownClickEvent, button))");
+    }
+
+    [Fact]
     public void StandaloneAltKeyTips_DoNotRouteAltKeyChords()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));

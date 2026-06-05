@@ -162,6 +162,10 @@ public partial class MainWindow : Window, IWorkbookWindow
     private CellColor _borderPickerColor = CellColor.Black;
     private BorderStyle _borderPickerStyle = BorderStyle.Thin;
     private BorderDrawMode _borderDrawMode;
+    private static readonly CellColor RibbonDefaultFillColor = new(255, 255, 0);
+    private static readonly CellColor RibbonDefaultFontColor = new(255, 0, 0);
+    private CellColor? _selectedFillColor = RibbonDefaultFillColor;
+    private CellColor _selectedFontColor = RibbonDefaultFontColor;
     private readonly IReadOnlyList<System.Windows.Media.Brush> _formulaReferenceBrushes =
     [
         new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(32, 112, 214)),
