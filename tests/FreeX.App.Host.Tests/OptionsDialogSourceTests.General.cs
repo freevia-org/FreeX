@@ -11,54 +11,46 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_RoundTripsPersistedGeneralUiOptions()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "FreeXOptionsDialogTests", Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(tempDirectory, "options.json");
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "options.json");
         using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
 
-        try
+        StaTestRunner.Run(() =>
         {
-            StaTestRunner.Run(() =>
+            var dialog = new OptionsDialog(new FreeXOptions
             {
-                var dialog = new OptionsDialog(new FreeXOptions
-                {
-                    CollapseRibbonAutomatically = true,
-                    ShowScreenTips = false,
-                    SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
-                });
-                dialog.Show();
-                try
-                {
-                    var collapseRibbon = GetControl<CheckBox>(dialog, "OptCollapseRibbon");
-                    var showScreenTips = GetControl<CheckBox>(dialog, "OptShowScreenTips");
-
-                    collapseRibbon.IsChecked.Should().BeTrue();
-                    showScreenTips.IsChecked.Should().BeFalse();
-
-                    collapseRibbon.IsChecked = false;
-                    showScreenTips.IsChecked = true;
-
-                    ClickOkAllowingNonModalDialogResult(dialog);
-
-                    dialog.Result.CollapseRibbonAutomatically.Should().BeFalse();
-                    dialog.Result.ShowScreenTips.Should().BeTrue();
-                    dialog.Result.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
-                }
-                finally
-                {
-                    dialog.Close();
-                }
+                CollapseRibbonAutomatically = true,
+                ShowScreenTips = false,
+                SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
             });
+            dialog.Show();
+            try
+            {
+                var collapseRibbon = GetControl<CheckBox>(dialog, "OptCollapseRibbon");
+                var showScreenTips = GetControl<CheckBox>(dialog, "OptShowScreenTips");
 
-            var reloaded = FreeXOptions.LoadFromPath(path);
-            reloaded.CollapseRibbonAutomatically.Should().BeFalse();
-            reloaded.ShowScreenTips.Should().BeTrue();
-            reloaded.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
-        }
-        finally
-        {
-            if (Directory.Exists(tempDirectory))
-                Directory.Delete(tempDirectory, recursive: true);
-        }
+                collapseRibbon.IsChecked.Should().BeTrue();
+                showScreenTips.IsChecked.Should().BeFalse();
+
+                collapseRibbon.IsChecked = false;
+                showScreenTips.IsChecked = true;
+
+                ClickOkAllowingNonModalDialogResult(dialog);
+
+                dialog.Result.CollapseRibbonAutomatically.Should().BeFalse();
+                dialog.Result.ShowScreenTips.Should().BeTrue();
+                dialog.Result.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+
+        var reloaded = FreeXOptions.LoadFromPath(path);
+        reloaded.CollapseRibbonAutomatically.Should().BeFalse();
+        reloaded.ShowScreenTips.Should().BeTrue();
+        reloaded.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
     }
 
     [Fact]

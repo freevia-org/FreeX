@@ -92,31 +92,24 @@ public sealed class QuickAccessToolbarCustomizationFileTests
     [Fact]
     public void TrySaveAndTryLoad_RoundTripThroughLocalJsonFile()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "FreeXQatCustomizationTests", Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(directory, "toolbar.freex-qat.json");
-        try
-        {
-            QuickAccessToolbarCustomizationFile.TrySave(
-                path,
-                [QuickAccessToolbarCommandIds.Open, QuickAccessToolbarCommandIds.Save],
-                quickAccessToolbarBelowRibbon: false,
-                out var errorMessage)
-                .Should()
-                .BeTrue(errorMessage);
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "toolbar.freex-qat.json");
 
-            var result = QuickAccessToolbarCustomizationFile.TryLoad(path);
+        QuickAccessToolbarCustomizationFile.TrySave(
+            path,
+            [QuickAccessToolbarCommandIds.Open, QuickAccessToolbarCommandIds.Save],
+            quickAccessToolbarBelowRibbon: false,
+            out var errorMessage)
+            .Should()
+            .BeTrue(errorMessage);
 
-            result.Success.Should().BeTrue();
-            result.Customization.Should().NotBeNull();
-            result.Customization!.QuickAccessToolbarBelowRibbon.Should().BeFalse();
-            result.Customization.CommandIds.Should().Equal(
-                QuickAccessToolbarCommandIds.Open,
-                QuickAccessToolbarCommandIds.Save);
-        }
-        finally
-        {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
-        }
+        var result = QuickAccessToolbarCustomizationFile.TryLoad(path);
+
+        result.Success.Should().BeTrue();
+        result.Customization.Should().NotBeNull();
+        result.Customization!.QuickAccessToolbarBelowRibbon.Should().BeFalse();
+        result.Customization.CommandIds.Should().Equal(
+            QuickAccessToolbarCommandIds.Open,
+            QuickAccessToolbarCommandIds.Save);
     }
 }
