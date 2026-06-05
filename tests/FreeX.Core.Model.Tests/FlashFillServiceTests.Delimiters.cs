@@ -169,6 +169,60 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Theory]
+    [InlineData("US-East-001", "East-001", "EU-West-002", "West-002", "APAC-South-003", "South-003")]
+    [InlineData("Region,East,001", "East,001", "Market,West,002", "West,002", "Area,South,003", "South,003")]
+    [InlineData("Region;East;001", "East;001", "Market;West;002", "West;002", "Area;South;003", "South;003")]
+    [InlineData("Region:East:001", "East:001", "Market:West:002", "West:002", "Area:South:003", "South:003")]
+    [InlineData("Region|East|001", "East|001", "Market|West|002", "West|002", "Area|South|003", "South|003")]
+    [InlineData("Region_East_001", "East_001", "Market_West_002", "West_002", "Area_South_003", "South_003")]
+    [InlineData("Region/East/001", "East/001", "Market/West/002", "West/002", "Area/South/003", "South/003")]
+    [InlineData("Region\\East\\001", "East\\001", "Market\\West\\002", "West\\002", "Area\\South\\003", "South\\003")]
+    public void Fill_RemoveLeadingDelimitedToken_DropsLeftmostTokenAcrossSupportedDelimiters(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_RemoveLeadingDelimitedToken_TrimsOuterWhitespaceAndPreservesInternalDelimiters()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("US - East - 001", "East - 001"),
+                ("EU - West - 002", "West - 002")
+            ],
+            ["EMEA - North - 003"]);
+
+        result.Should().BeEquivalentTo(["North - 003"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("APACSouth003")]
+    [InlineData("-South-003")]
+    [InlineData("APAC-")]
+    [InlineData("APAC-   ")]
+    public void Fill_RemoveLeadingDelimitedToken_ReturnsNullWhenRemainingCannotSatisfyPattern(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("US-East-001", "East-001"),
+                ("EU-West-002", "West-002")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Theory]
     [InlineData(
         @"C:\Reports\Q1.xlsx",
         "Q1",
