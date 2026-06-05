@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -38,34 +37,35 @@ public sealed partial class ConditionalFormatDialogTests
     }
 
     private static TextBlock? FindText(object? root, string text) =>
-        FindLogicalSelfAndDescendants<TextBlock>(root).FirstOrDefault(block => Equals(block.Text, text));
+        root is DependencyObject dependencyObject
+            ? WpfTestTree.FindLogicalSelfAndDescendants<TextBlock>(dependencyObject)
+                .FirstOrDefault(block => Equals(block.Text, text))
+            : null;
 
     private static Label? FindLabel(object? root, string content) =>
-        FindLogicalSelfAndDescendants<Label>(root).FirstOrDefault(label => Equals(label.Content, content));
+        root is DependencyObject dependencyObject
+            ? WpfTestTree.FindLogicalSelfAndDescendants<Label>(dependencyObject)
+                .FirstOrDefault(label => Equals(label.Content, content))
+            : null;
 
     private static T? FindControl<T>(object? root)
         where T : DependencyObject =>
-        FindLogicalSelfAndDescendants<T>(root).FirstOrDefault();
+        root is DependencyObject dependencyObject
+            ? WpfTestTree.FindLogicalSelfAndDescendants<T>(dependencyObject).FirstOrDefault()
+            : null;
 
     private static T? FindNamedControl<T>(object? root, string name)
         where T : FrameworkElement =>
-        FindLogicalSelfAndDescendants<T>(root).FirstOrDefault(element => element.Name == name);
+        root is DependencyObject dependencyObject
+            ? WpfTestTree.FindLogicalSelfAndDescendants<T>(dependencyObject)
+                .FirstOrDefault(element => element.Name == name)
+            : null;
 
     private static Button? FindButton(object? root, string content) =>
-        FindLogicalSelfAndDescendants<Button>(root).FirstOrDefault(button => Equals(button.Content, content));
-
-    private static IEnumerable<T> FindLogicalSelfAndDescendants<T>(object? root)
-        where T : DependencyObject
-    {
-        if (root is not DependencyObject dependencyObject)
-            yield break;
-
-        if (dependencyObject is T match)
-            yield return match;
-
-        foreach (var descendant in WpfTestTree.FindLogicalDescendants<T>(dependencyObject))
-            yield return descendant;
-    }
+        root is DependencyObject dependencyObject
+            ? WpfTestTree.FindLogicalSelfAndDescendants<Button>(dependencyObject)
+                .FirstOrDefault(button => Equals(button.Content, content))
+            : null;
 
     private static void ClickOkForTest(ConditionalFormatDialog dialog)
     {
