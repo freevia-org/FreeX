@@ -1,7 +1,5 @@
 using System.IO;
-using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -19,20 +17,6 @@ public sealed partial class AutoFilterDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialogCriteriaPlanner.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialog.State.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialogModel.cs")));
-    }
-
-    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
-        where T : DependencyObject
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T match)
-                yield return match;
-
-            foreach (var descendant in FindVisualChildren<T>(child))
-                yield return descendant;
-        }
     }
 
 }

@@ -1159,6 +1159,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversReliabilityMaintenanceVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "RELABILITY reliablity Incidentt outtage DOWNTME uptme Availablity MAINTNANCE Recoverey failoverr Redundncy RESILIENC. Keep reliability, incident, outage, downtime, uptime, availability, maintenance, recovery, failover, redundancy, resilience, prerelability, relability_id, https://relability.example.com/outtage, sre@maintnance.example.com, and \"C:\\maintnance folder\\failoverr file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("RELABILITY", "RELIABILITY"),
+            ("reliablity", "reliability"),
+            ("Incidentt", "Incident"),
+            ("outtage", "outage"),
+            ("DOWNTME", "DOWNTIME"),
+            ("uptme", "uptime"),
+            ("Availablity", "Availability"),
+            ("MAINTNANCE", "MAINTENANCE"),
+            ("Recoverey", "Recovery"),
+            ("failoverr", "failover"),
+            ("Redundncy", "Redundancy"),
+            ("RESILIENC", "RESILIENCE"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "RELIABILITY reliability Incident outage DOWNTIME uptime Availability MAINTENANCE Recovery failover Redundancy RESILIENCE. Keep reliability, incident, outage, downtime, uptime, availability, maintenance, recovery, failover, redundancy, resilience, prerelability, relability_id, https://relability.example.com/outtage, sre@maintnance.example.com, and \"C:\\maintnance folder\\failoverr file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversInvoiceSupplyChainVocabularyTypos()
     {
         var wb = new Workbook("test");

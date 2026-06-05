@@ -140,7 +140,7 @@ public sealed partial class AutoFilterDialogTests
             dialog.Show();
             try
             {
-                var colorButtons = FindVisualChildren<Button>(dialog)
+                var colorButtons = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Where(button => AutomationProperties.GetName(button).StartsWith("Filter by ", StringComparison.Ordinal))
                     .ToDictionary(AutomationProperties.GetName);
 

@@ -1383,8 +1383,39 @@ public static partial class FormulaAuditingService
         if (TryParseFiniteNumberTextCore(text))
             return true;
 
-        return TryNormalizeSupportedNumberText(text, out var normalizedText) &&
+        if (TryNormalizeSupportedNumberText(text, out var normalizedText) &&
+            TryParseFiniteNumberTextCore(normalizedText))
+        {
+            return true;
+        }
+
+        if (!TryNormalizeTrailingSignNumberText(text, out var trailingSignText))
+            return false;
+
+        if (TryParseFiniteNumberTextCore(trailingSignText))
+            return true;
+
+        return TryNormalizeSupportedNumberText(trailingSignText, out normalizedText) &&
                TryParseFiniteNumberTextCore(normalizedText);
+    }
+
+    private static bool TryNormalizeTrailingSignNumberText(string text, out string normalizedText)
+    {
+        normalizedText = string.Empty;
+        if (text.Length <= 1 || !TryGetSupportedLeadingSign(text[^1], out var asciiSign))
+            return false;
+
+        var numberText = text[..^1];
+        if (numberText.Length == 0 ||
+            char.IsWhiteSpace(numberText[^1]) ||
+            TryGetSupportedLeadingSign(numberText[0], out _) ||
+            TryGetSupportedLeadingSign(numberText[^1], out _))
+        {
+            return false;
+        }
+
+        normalizedText = string.Concat(asciiSign, numberText);
+        return true;
     }
 
     private static bool TryNormalizeSupportedNumberText(string text, out string normalizedText)
