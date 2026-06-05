@@ -196,6 +196,9 @@ public static partial class FlashFillService
         if (TryThreeColumnFirstLastEmailPattern(exampleSources, exampleOutputs) is { } emailPattern)
             emailPatterns.Add(emailPattern);
 
+        if (TryThreeColumnFirstMiddleInitialLastEmailPattern(exampleSources, exampleOutputs) is { } middleInitialEmailPattern)
+            emailPatterns.Add(middleInitialEmailPattern);
+
         if (TryThreeColumnFirstInitialLastEmailPattern(exampleSources, exampleOutputs) is { } initialLastEmailPattern)
             emailPatterns.Add(initialLastEmailPattern);
 
@@ -255,6 +258,37 @@ public static partial class FlashFillService
             if (pattern is not null)
                 return pattern;
         }
+
+        return null;
+    }
+
+    private static Func<IReadOnlyList<string>, string>? TryThreeColumnFirstMiddleInitialLastEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs)
+    {
+        foreach (var separator in EmailSeparators)
+        {
+            var pattern = TrySharedDomainEmailPattern(
+                exampleSources,
+                exampleOutputs,
+                s => GetEmailNameToken(s, 0) + separator + GetEmailNameInitial(s, 1) + separator + GetEmailNameToken(s, 2));
+            if (pattern is not null)
+                return pattern;
+        }
+
+        var firstMiddleInitialLastPattern = TrySharedDomainEmailPattern(
+            exampleSources,
+            exampleOutputs,
+            s => GetEmailNameToken(s, 0) + GetEmailNameInitial(s, 1) + GetEmailNameToken(s, 2));
+        if (firstMiddleInitialLastPattern is not null)
+            return firstMiddleInitialLastPattern;
+
+        var firstInitialMiddleInitialLastPattern = TrySharedDomainEmailPattern(
+            exampleSources,
+            exampleOutputs,
+            s => GetEmailNameInitial(s, 0) + GetEmailNameInitial(s, 1) + GetEmailNameToken(s, 2));
+        if (firstInitialMiddleInitialLastPattern is not null)
+            return firstInitialMiddleInitialLastPattern;
 
         return null;
     }
