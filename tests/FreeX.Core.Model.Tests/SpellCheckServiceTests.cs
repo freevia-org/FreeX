@@ -789,6 +789,39 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversProductEngineeringPlanningVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Requirment REQUIRMENTS roadmp backlogg sprintt relase releasee Featre featuers bugfixx. Keep requirement, requirements, roadmap, backlog, sprint, release, feature, features, bugfix, prerequirment, sprintt_id, https://roadmp.example.com/relase, planner@featuers.example.com, and \"C:\\backlogg folder\\bugfixx file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Requirment", "Requirement"),
+            ("REQUIRMENTS", "REQUIREMENTS"),
+            ("roadmp", "roadmap"),
+            ("backlogg", "backlog"),
+            ("sprintt", "sprint"),
+            ("relase", "release"),
+            ("releasee", "release"),
+            ("Featre", "Feature"),
+            ("featuers", "features"),
+            ("bugfixx", "bugfix"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Requirement REQUIREMENTS roadmap backlog sprint release release Feature features bugfix. Keep requirement, requirements, roadmap, backlog, sprint, release, feature, features, bugfix, prerequirment, sprintt_id, https://roadmp.example.com/relase, planner@featuers.example.com, and \"C:\\backlogg folder\\bugfixx file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCalendarStatusVocabularyTypos()
     {
         var wb = new Workbook("test");

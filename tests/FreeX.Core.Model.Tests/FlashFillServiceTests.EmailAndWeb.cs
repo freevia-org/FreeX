@@ -541,6 +541,64 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_UrlFirstQueryParameterName_ExtractsDecodedFirstParameterName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.com/search?campaign=spring&source=email", "campaign"),
+                ("https://fabrikam.example/items?region=west;sort=asc", "region")
+            ],
+            ["https://northwind.test/page?product=bike&ref=nav"]);
+
+        result.Should().BeEquivalentTo(["product"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlFirstQueryParameterName_DecodesEncodedParameterName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?utm%5Fcampaign=spring&source=email", "utm_campaign"),
+                ("https://fabrikam.example/items?region%5Fcode=west;sort=asc", "region_code")
+            ],
+            ["https://northwind.test/page?product%5Fid=bike&ref=nav"]);
+
+        result.Should().BeEquivalentTo(["product_id"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlFirstQueryParameterName_DecodesPlusInParameterName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?utm+campaign=spring&source=email", "utm campaign"),
+                ("https://fabrikam.example/items?region+code=west;sort=asc", "region code")
+            ],
+            ["https://northwind.test/page?product+id=bike&ref=nav"]);
+
+        result.Should().BeEquivalentTo(["product id"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("https://northwind.test/page")]
+    [InlineData("https://northwind.test/page?=bike&ref=nav")]
+    [InlineData("ftp://northwind.test/page?product=bike&ref=nav")]
+    [InlineData("https://user@northwind.test/page?product=bike&ref=nav")]
+    [InlineData("https://localhost/page?product=bike&ref=nav")]
+    [InlineData("northwind.test/page?product=bike&ref=nav")]
+    public void Fill_UrlFirstQueryParameterName_ReturnsNullForUnsupportedRemainingUrl(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.com/search?campaign=spring&source=email", "campaign"),
+                ("https://fabrikam.example/items?region=west;sort=asc", "region")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_UrlQueryParameterValue_ExtractsSemicolonSeparatedDecodedParameterValue()
     {
         var result = FlashFillService.Fill(
