@@ -480,6 +480,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetSheetFormatMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetCustomSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -713,6 +714,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetSheetFormatMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetCustomSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -5905,6 +5907,533 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet sheetViews metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetCustomSheetViewsMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetCustomSheetViewsMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetCustomSheetViewsMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetCustomSheetViewsMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var customSheetViewsContainers = root.Elements(SpreadsheetNs + "customSheetViews").ToArray();
+        if (customSheetViewsContainers.Length > 1)
+            issues.Add($"{worksheetPart} has {customSheetViewsContainers.Length} customSheetViews elements; expected at most one");
+
+        foreach (var customSheetViews in customSheetViewsContainers.Select((element, index) => new WorksheetCustomSheetViewsReference(index + 1, element)))
+        {
+            AddWorksheetCustomSheetViewsIssues(worksheetPart, root, customSheetViews, issues);
+        }
+    }
+
+    private static void AddWorksheetCustomSheetViewsIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetCustomSheetViewsReference customSheetViewsReference,
+        List<string> issues)
+    {
+        var customSheetViews = customSheetViewsReference.Element;
+        var description = $"customSheetViews #{customSheetViewsReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            customSheetViews,
+            description,
+            [
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            customSheetViews,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in customSheetViews.Elements().Where(element => element.Name != SpreadsheetNs + "customSheetView"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected customSheetView entries only");
+        }
+
+        var customSheetViewElements = customSheetViews.Elements(SpreadsheetNs + "customSheetView").ToArray();
+        if (customSheetViewElements.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no customSheetView entries");
+
+        var seenGuids = new HashSet<Guid>();
+        foreach (var customSheetView in customSheetViewElements.Select((element, index) => new WorksheetCustomSheetViewReference(index + 1, element)))
+        {
+            AddWorksheetCustomSheetViewIssues(worksheetPart, description, customSheetView, seenGuids, issues);
+        }
+    }
+
+    private static void AddWorksheetCustomSheetViewIssues(
+        string worksheetPart,
+        string containerDescription,
+        WorksheetCustomSheetViewReference customSheetViewReference,
+        HashSet<Guid> seenGuids,
+        List<string> issues)
+    {
+        var customSheetView = customSheetViewReference.Element;
+        var description = $"{containerDescription} customSheetView #{customSheetViewReference.Ordinal}";
+
+        var guid = customSheetView.Attribute("guid")?.Value;
+        if (string.IsNullOrWhiteSpace(guid))
+        {
+            issues.Add($"{worksheetPart} {description} has no guid");
+        }
+        else if (!Guid.TryParse(guid, out var parsedGuid))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid guid value '{guid}'");
+        }
+        else if (!seenGuids.Add(parsedGuid))
+        {
+            issues.Add($"{worksheetPart} {containerDescription} has duplicate customSheetView guid '{guid}'");
+        }
+
+        foreach (var attribute in customSheetView.Attributes().Where(attribute => IsKnownCustomSheetViewBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        foreach (var attributeName in new[] { "scale", "colorId" })
+        {
+            AddOptionalNonNegativePackageIntIssue(worksheetPart, description, attributeName, customSheetView.Attribute(attributeName)?.Value, issues);
+        }
+
+        var view = customSheetView.Attribute("view")?.Value;
+        if (!string.IsNullOrWhiteSpace(view) && !IsKnownSheetViewMode(view))
+            issues.Add($"{worksheetPart} {description} has invalid view value '{view}'");
+
+        var state = customSheetView.Attribute("state")?.Value;
+        if (!string.IsNullOrWhiteSpace(state) && !IsKnownWorkbookViewVisibility(state))
+            issues.Add($"{worksheetPart} {description} has invalid state value '{state}'");
+
+        var topLeftCell = customSheetView.Attribute("topLeftCell")?.Value;
+        if (!string.IsNullOrWhiteSpace(topLeftCell) && !IsValidLocalCellReference(topLeftCell))
+            issues.Add($"{worksheetPart} {description} has invalid topLeftCell reference '{topLeftCell}'");
+
+        AddWorksheetCustomSheetViewChildOrderingIssues(worksheetPart, description, customSheetView, issues);
+
+        var singletonChildNames = new[]
+        {
+            "pane",
+            "rowBreaks",
+            "colBreaks",
+            "pageMargins",
+            "printOptions",
+            "pageSetup",
+            "headerFooter",
+            "autoFilter",
+            "extLst"
+        };
+        foreach (var childName in singletonChildNames)
+        {
+            var childCount = customSheetView.Elements(SpreadsheetNs + childName).Count();
+            if (childCount > 1)
+                issues.Add($"{worksheetPart} {description} has {childCount} {childName} elements; expected at most one");
+        }
+
+        foreach (var pane in customSheetView.Elements(SpreadsheetNs + "pane").Select((element, index) => new WorksheetSheetViewPaneReference(index + 1, element)))
+        {
+            AddWorksheetSheetViewPaneIssues(worksheetPart, description, pane, issues);
+        }
+
+        foreach (var selection in customSheetView.Elements(SpreadsheetNs + "selection").Select((element, index) => new WorksheetSheetViewSelectionReference(index + 1, element)))
+        {
+            AddWorksheetSheetViewSelectionIssues(worksheetPart, description, selection, issues);
+        }
+
+        foreach (var rowBreaks in customSheetView.Elements(SpreadsheetNs + "rowBreaks").Select((element, index) => new WorksheetPageBreaksReference(
+                     index + 1,
+                     element,
+                     "rowBreaks",
+                     (int)CellAddress.MaxRow,
+                     (int)CellAddress.MaxCol - 1)))
+        {
+            AddWorksheetCustomSheetViewPageBreaksIssues(worksheetPart, description, rowBreaks, issues);
+        }
+
+        foreach (var columnBreaks in customSheetView.Elements(SpreadsheetNs + "colBreaks").Select((element, index) => new WorksheetPageBreaksReference(
+                     index + 1,
+                     element,
+                     "colBreaks",
+                     (int)CellAddress.MaxCol,
+                     (int)CellAddress.MaxRow - 1)))
+        {
+            AddWorksheetCustomSheetViewPageBreaksIssues(worksheetPart, description, columnBreaks, issues);
+        }
+
+        foreach (var pageMargins in customSheetView.Elements(SpreadsheetNs + "pageMargins").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetCustomSheetViewPageMarginsIssues(worksheetPart, description, pageMargins.Ordinal, pageMargins.Element, issues);
+        }
+
+        foreach (var printOptions in customSheetView.Elements(SpreadsheetNs + "printOptions").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetCustomSheetViewPrintOptionsIssues(worksheetPart, description, printOptions.Ordinal, printOptions.Element, issues);
+        }
+
+        foreach (var pageSetup in customSheetView.Elements(SpreadsheetNs + "pageSetup").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetCustomSheetViewPageSetupIssues(worksheetPart, description, pageSetup.Ordinal, pageSetup.Element, issues);
+        }
+
+        foreach (var headerFooter in customSheetView.Elements(SpreadsheetNs + "headerFooter").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetCustomSheetViewHeaderFooterIssues(worksheetPart, description, headerFooter.Ordinal, headerFooter.Element, issues);
+        }
+
+        foreach (var autoFilter in customSheetView.Elements(SpreadsheetNs + "autoFilter").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetCustomSheetViewAutoFilterIssues(worksheetPart, description, autoFilter.Ordinal, autoFilter.Element, issues);
+        }
+
+        foreach (var unexpectedChild in customSheetView.Elements().Where(element => !IsKnownCustomSheetViewChild(element)))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+    }
+
+    private static bool IsKnownCustomSheetViewBooleanAttribute(string name) =>
+        name is "showPageBreaks" or
+            "showFormulas" or
+            "showGridLines" or
+            "showRowCol" or
+            "outlineSymbols" or
+            "zeroValues" or
+            "fitToPage" or
+            "printArea" or
+            "filter" or
+            "showAutoFilter" or
+            "hiddenRows" or
+            "hiddenColumns" or
+            "filterUnique" or
+            "showRuler";
+
+    private static void AddWorksheetCustomSheetViewChildOrderingIssues(
+        string worksheetPart,
+        string description,
+        XElement customSheetView,
+        List<string> issues)
+    {
+        var previousKnownChildOrder = -1;
+        foreach (var child in customSheetView.Elements())
+        {
+            var childOrder = GetCustomSheetViewChildOrder(child);
+            if (childOrder < 0)
+                continue;
+
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"{worksheetPart} {description} child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+        }
+    }
+
+    private static bool IsKnownCustomSheetViewChild(XElement child) =>
+        GetCustomSheetViewChildOrder(child) >= 0;
+
+    private static int GetCustomSheetViewChildOrder(XElement child)
+    {
+        if (child.Name.Namespace != SpreadsheetNs)
+            return -1;
+
+        return child.Name.LocalName switch
+        {
+            "pane" => 0,
+            "selection" => 1,
+            "rowBreaks" => 2,
+            "colBreaks" => 3,
+            "pageMargins" => 4,
+            "printOptions" => 5,
+            "pageSetup" => 6,
+            "headerFooter" => 7,
+            "autoFilter" => 8,
+            "extLst" => 9,
+            _ => -1
+        };
+    }
+
+    private static void AddWorksheetCustomSheetViewPageBreaksIssues(
+        string worksheetPart,
+        string customSheetViewDescription,
+        WorksheetPageBreaksReference pageBreaksReference,
+        List<string> issues)
+    {
+        var pageBreaks = pageBreaksReference.Element;
+        var description = $"{customSheetViewDescription} {pageBreaksReference.ElementName} #{pageBreaksReference.Ordinal}";
+        var breakElements = pageBreaks.Elements(SpreadsheetNs + "brk").ToArray();
+        AddOptionalPackageCountIssue(worksheetPart, description, "count", pageBreaks.Attribute("count")?.Value, breakElements.Length, issues);
+        AddOptionalWorksheetPageBreakManualCountIssue(worksheetPart, description, pageBreaks.Attribute("manualBreakCount")?.Value, breakElements.Length, issues);
+
+        foreach (var unexpectedChild in pageBreaks.Elements().Where(element => element.Name != SpreadsheetNs + "brk"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var seenBreakIds = new HashSet<int>();
+        foreach (var breakElement in breakElements.Select((element, index) => new WorksheetPageBreakReference(index + 1, element)))
+        {
+            AddWorksheetPageBreakIssues(
+                worksheetPart,
+                description,
+                breakElement,
+                pageBreaksReference.MaxBreakId,
+                pageBreaksReference.MaxBreakSpan,
+                seenBreakIds,
+                issues);
+        }
+    }
+
+    private static void AddWorksheetCustomSheetViewPageMarginsIssues(
+        string worksheetPart,
+        string customSheetViewDescription,
+        int ordinal,
+        XElement pageMargins,
+        List<string> issues)
+    {
+        var description = $"{customSheetViewDescription} pageMargins #{ordinal}";
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "left", pageMargins.Attribute("left")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "right", pageMargins.Attribute("right")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "top", pageMargins.Attribute("top")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "bottom", pageMargins.Attribute("bottom")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "header", pageMargins.Attribute("header")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "footer", pageMargins.Attribute("footer")?.Value, issues);
+
+        if (pageMargins.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetCustomSheetViewPrintOptionsIssues(
+        string worksheetPart,
+        string customSheetViewDescription,
+        int ordinal,
+        XElement printOptions,
+        List<string> issues)
+    {
+        var description = $"{customSheetViewDescription} printOptions #{ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "horizontalCentered", printOptions.Attribute("horizontalCentered")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "verticalCentered", printOptions.Attribute("verticalCentered")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "headings", printOptions.Attribute("headings")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "gridLines", printOptions.Attribute("gridLines")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "gridLinesSet", printOptions.Attribute("gridLinesSet")?.Value, issues);
+
+        if (printOptions.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetCustomSheetViewPageSetupIssues(
+        string worksheetPart,
+        string customSheetViewDescription,
+        int ordinal,
+        XElement pageSetup,
+        List<string> issues)
+    {
+        var description = $"{customSheetViewDescription} pageSetup #{ordinal}";
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "paperSize", pageSetup.Attribute("paperSize")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "scale", pageSetup.Attribute("scale")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "firstPageNumber", pageSetup.Attribute("firstPageNumber")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "fitToWidth", pageSetup.Attribute("fitToWidth")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "fitToHeight", pageSetup.Attribute("fitToHeight")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "horizontalDpi", pageSetup.Attribute("horizontalDpi")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "verticalDpi", pageSetup.Attribute("verticalDpi")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "copies", pageSetup.Attribute("copies")?.Value, issues);
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "usePrinterDefaults", pageSetup.Attribute("usePrinterDefaults")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "blackAndWhite", pageSetup.Attribute("blackAndWhite")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "draft", pageSetup.Attribute("draft")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "useFirstPageNumber", pageSetup.Attribute("useFirstPageNumber")?.Value, issues);
+
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "pageOrder",
+            pageSetup.Attribute("pageOrder")?.Value,
+            ["downThenOver", "overThenDown"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "orientation",
+            pageSetup.Attribute("orientation")?.Value,
+            ["default", "portrait", "landscape"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "cellComments",
+            pageSetup.Attribute("cellComments")?.Value,
+            ["none", "asDisplayed", "atEnd"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "errors",
+            pageSetup.Attribute("errors")?.Value,
+            ["displayed", "blank", "dash", "NA"],
+            issues);
+
+        if (pageSetup.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetCustomSheetViewHeaderFooterIssues(
+        string worksheetPart,
+        string customSheetViewDescription,
+        int ordinal,
+        XElement headerFooter,
+        List<string> issues)
+    {
+        var description = $"{customSheetViewDescription} headerFooter #{ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "differentOddEven", headerFooter.Attribute("differentOddEven")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "differentFirst", headerFooter.Attribute("differentFirst")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "scaleWithDoc", headerFooter.Attribute("scaleWithDoc")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "alignWithMargins", headerFooter.Attribute("alignWithMargins")?.Value, issues);
+
+        var seenChildNames = new HashSet<string>(StringComparer.Ordinal);
+        var previousKnownChildOrder = -1;
+        foreach (var child in headerFooter.Elements())
+        {
+            if (child.Name.Namespace != SpreadsheetNs || !IsKnownWorksheetHeaderFooterChild(child.Name.LocalName))
+            {
+                issues.Add($"{worksheetPart} {description} has unexpected child element {child.Name.LocalName}");
+                continue;
+            }
+
+            if (!seenChildNames.Add(child.Name.LocalName))
+                issues.Add($"{worksheetPart} {description} has duplicate {child.Name.LocalName} elements");
+
+            var childOrder = GetWorksheetHeaderFooterChildOrder(child.Name.LocalName);
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"{worksheetPart} {description} child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+
+            if (child.Elements().Any())
+                issues.Add($"{worksheetPart} {description} child {child.Name.LocalName} has child elements; expected text only");
+        }
+    }
+
+    private static void AddWorksheetCustomSheetViewAutoFilterIssues(
+        string worksheetPart,
+        string customSheetViewDescription,
+        int ordinal,
+        XElement autoFilter,
+        List<string> issues)
+    {
+        var description = $"{customSheetViewDescription} autoFilter #{ordinal}";
+        var reference = autoFilter.Attribute("ref")?.Value;
+        if (!string.IsNullOrWhiteSpace(reference) && !IsValidLocalWorksheetReference(reference))
+            issues.Add($"{worksheetPart} {description} has invalid ref value '{reference}'");
+
+        foreach (var unexpectedChild in autoFilter.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "filterColumn" &&
+                     element.Name != SpreadsheetNs + "sortState" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var seenFilterColumns = new HashSet<int>();
+        foreach (var filterColumn in autoFilter.Elements(SpreadsheetNs + "filterColumn").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            var filterDescription = $"{description} filterColumn #{filterColumn.Ordinal}";
+            if (TryParseNonNegativePackageInt(filterColumn.Element.Attribute("colId")?.Value, out var colId))
+            {
+                if (!seenFilterColumns.Add(colId))
+                    issues.Add($"{worksheetPart} {description} has duplicate filterColumn colId {colId}");
+            }
+            else if (!string.IsNullOrWhiteSpace(filterColumn.Element.Attribute("colId")?.Value))
+            {
+                issues.Add($"{worksheetPart} {filterDescription} has invalid colId value '{filterColumn.Element.Attribute("colId")?.Value}'");
+            }
+
+            foreach (var unexpectedFilterChild in filterColumn.Element.Elements().Where(element =>
+                         element.Name != SpreadsheetNs + "filters" &&
+                         element.Name != SpreadsheetNs + "top10" &&
+                         element.Name != SpreadsheetNs + "customFilters" &&
+                         element.Name != SpreadsheetNs + "dynamicFilter" &&
+                         element.Name != SpreadsheetNs + "colorFilter" &&
+                         element.Name != SpreadsheetNs + "iconFilter" &&
+                         element.Name != SpreadsheetNs + "extLst"))
+            {
+                issues.Add($"{worksheetPart} {filterDescription} has unexpected child element {unexpectedFilterChild.Name.LocalName}");
+            }
+        }
+    }
+
+    private static void ThrowInvalidWorksheetCustomSheetViewsMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet customSheetViews metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetPhoneticPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -14308,6 +14837,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetSheetViewPivotSelectionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetCustomSheetViewsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetCustomSheetViewReference(
         int Ordinal,
         XElement Element);
 
