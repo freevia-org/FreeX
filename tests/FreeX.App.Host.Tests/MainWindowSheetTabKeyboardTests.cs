@@ -215,8 +215,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
             var leftNavBounds = BoundsRelativeToWindow((FrameworkElement)window.FindName("SheetNavLeftBtn"), window);
             var rightNavBounds = BoundsRelativeToWindow((FrameworkElement)window.FindName("SheetNavRightBtn"), window);
-            var horizontalScrollArrow = EnumerateVisualDescendants(horizontalScroll)
-                .OfType<RepeatButton>()
+            var horizontalScrollArrow = WpfTestTree.FindVisualDescendants<RepeatButton>(horizontalScroll)
                 .Where(button => button.ActualWidth > 0 && button.ActualHeight > 0)
                 .OrderBy(button => BoundsRelativeToWindow(button, window).Left)
                 .FirstOrDefault();
@@ -736,8 +735,8 @@ public sealed class MainWindowSheetTabKeyboardTests
                 if (_window.FindName("SheetTabsControl") is not ItemsControl tabs)
                     return [];
 
-                return EnumerateVisualDescendants(tabs)
-                    .Concat(EnumerateLogicalDescendants(tabs))
+                return WpfTestTree.FindVisualDescendants<DependencyObject>(tabs)
+                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(tabs))
                     .OfType<FrameworkElement>()
                     .Distinct()
                     .Where(element =>
@@ -753,32 +752,6 @@ public sealed class MainWindowSheetTabKeyboardTests
         private static string? GetStringProperty(object source, string propertyName) =>
             source.GetType().GetProperty(propertyName)?.GetValue(source)?.ToString();
 
-        private static IEnumerable<DependencyObject> EnumerateVisualDescendants(DependencyObject root)
-        {
-            var count = VisualTreeHelper.GetChildrenCount(root);
-            for (var i = 0; i < count; i++)
-            {
-                var child = VisualTreeHelper.GetChild(root, i);
-                yield return child;
-
-                foreach (var descendant in EnumerateVisualDescendants(child))
-                    yield return descendant;
-            }
-        }
-
-        private static IEnumerable<DependencyObject> EnumerateLogicalDescendants(DependencyObject root)
-        {
-            foreach (var child in LogicalTreeHelper.GetChildren(root))
-            {
-                if (child is not DependencyObject dependencyObject)
-                    continue;
-
-                yield return dependencyObject;
-
-                foreach (var descendant in EnumerateLogicalDescendants(dependencyObject))
-                    yield return descendant;
-            }
-        }
     }
 
     private static void PumpDispatcher()
@@ -796,19 +769,6 @@ public sealed class MainWindowSheetTabKeyboardTests
     private static double HorizontalCenter(Rect rect) => rect.Left + rect.Width / 2.0;
 
     private static double VerticalCenter(Rect rect) => rect.Top + rect.Height / 2.0;
-
-    private static IEnumerable<DependencyObject> EnumerateVisualDescendants(DependencyObject root)
-    {
-        var count = VisualTreeHelper.GetChildrenCount(root);
-        for (var i = 0; i < count; i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            yield return child;
-
-            foreach (var descendant in EnumerateVisualDescendants(child))
-                yield return descendant;
-        }
-    }
 
     private static void CaptureSheetTabLowerBandIfRequested(
         Window window,
