@@ -9,28 +9,23 @@ public sealed class ShareWorkbookPlannerTests
     [Fact]
     public void CreatePlan_UsesCurrentFilePath_WhenWorkbookIsSaved()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "budget.xlsx");
         File.WriteAllText(path, "workbook");
 
-        try
-        {
-            var plan = ShareWorkbookPlanner.CreatePlan(path);
+        var plan = ShareWorkbookPlanner.CreatePlan(path);
 
-            plan.Kind.Should().Be(ShareWorkbookPlanKind.ShareExistingFile);
-            plan.Path.Should().Be(path);
-            plan.SaveAsReason.Should().Be(ShareWorkbookSaveAsReason.None);
-            plan.CandidatePath.Should().BeNull();
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        plan.Kind.Should().Be(ShareWorkbookPlanKind.ShareExistingFile);
+        plan.Path.Should().Be(path);
+        plan.SaveAsReason.Should().Be(ShareWorkbookSaveAsReason.None);
+        plan.CandidatePath.Should().BeNull();
     }
 
     [Fact]
     public void CreatePlan_RequiresSaveAs_WhenCurrentFilePathNoLongerExists()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "missing.xlsx");
 
         var plan = ShareWorkbookPlanner.CreatePlan(path);
 
