@@ -385,7 +385,7 @@ theme for gallery swatches and Format as Table materialization.
 Flash Fill remains a deterministic pattern service, not an Excel-like ML inference engine. It supports conservative
 single-column transforms including dotted-token extraction with variable dot counts for final-token patterns,
 dotted/underscored/hyphenated email display-name cleanup, plus-address email local-part tag removal,
-spaced or compact colon/equal, slash, pipe, ASCII/Unicode arrow, and hyphen/en dash/em dash label-value splitting, semicolon-separated URL query-parameter first-name, last-name, first-value, last-value, same-name first-value, and same-name last repeated-value extraction, URL fragment extraction, decoded parent URL path segment extraction, digit-mask formatting
+spaced or compact colon/equal, slash, pipe, ASCII/Unicode arrow, and hyphen/en dash/em dash label-value splitting, semicolon-separated URL query-parameter first-name, last-name, first-value, last-value, same-name first-value, and same-name last repeated-value extraction, URL fragment extraction, decoded first and parent URL path segment extraction, digit-mask formatting
 such as phone-number punctuation copied from examples, calendar-valid embedded-date extraction/normalization from
 labeled text with ambiguous multi-date sources rejected, weekday-prefixed and embedded numeric and English month-name date
 component extraction that preserves raw month tokens while normalizing ordinal day tokens, pure and embedded time component extraction for hour, minute, second, and
@@ -412,7 +412,7 @@ Accessibility Checker remains a deterministic model-backed audit in `Core.Comman
 engine. It reports issues supported by current workbook state, including merged cells, blank structured-table headers,
 low-contrast cell text against base, workbook theme/tint, and patterned fills, low-contrast text boxes against
 explicit, theme, and workbook object-default fills, missing or generic object alternate/title/name text including common default object labels and compact/separator-numbered defaults, hidden sheets/rows/columns with
-modeled content including hyperlinks, blank, generic, URL-like, or unclear hyperlink display text, and charts whose title or axis title is missing or generic as the current accessible label.
+modeled content including hyperlinks, blank, generic action-phrase, URL-like, or unclear hyperlink display text, and charts whose title or axis title is missing or generic as the current accessible label.
 
 Native JSON persists the local threaded-comment model, including author, replies, created/modified UTC activity
 metadata, and resolved state, so FreeX's in-app comment threads survive native save/load. Comment navigation and
