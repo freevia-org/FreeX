@@ -1357,7 +1357,7 @@ public static partial class FormulaAuditingService
     {
         asciiSign = value switch
         {
-            '+' or '\uFF0B' => '+',
+            '+' or '\uFF0B' or '\uFE62' => '+',
             '-' or '\u2212' or '\uFF0D' or '\uFE63' => '-',
             _ => '\0'
         };
@@ -1447,11 +1447,15 @@ public static partial class FormulaAuditingService
         return value switch
         {
             '\uFF0C' => ',',
+            '\uFE50' => ',',
             '\uFF0E' => '.',
+            '\uFE52' => '.',
             '\uFF25' => 'E',
             '\uFF45' => 'e',
             '\uFF0B' => '+',
+            '\uFE62' => '+',
             '\uFF0D' => '-',
+            '\uFE63' => '-',
             _ => value
         };
     }
