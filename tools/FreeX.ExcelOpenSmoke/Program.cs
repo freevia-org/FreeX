@@ -458,6 +458,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookViewMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFunctionGroupsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookDefinedNamesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileRecoveryMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -687,6 +688,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookViewMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFunctionGroupsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookDefinedNamesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileRecoveryMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -4256,6 +4258,119 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid workbook functionGroups metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorkbookDefinedNamesMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookDefinedNamesMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookDefinedNamesMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookDefinedNamesMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var definedNamesElements = root.Elements(SpreadsheetNs + "definedNames").ToArray();
+        if (definedNamesElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {definedNamesElements.Length} definedNames elements; expected at most one");
+
+        foreach (var definedNames in definedNamesElements.Select((element, index) => new WorkbookDefinedNamesReference(index + 1, element)))
+        {
+            AddWorkbookDefinedNamesIssues(root, definedNames, issues);
+        }
+    }
+
+    private static void AddWorkbookDefinedNamesIssues(
+        XElement workbookRoot,
+        WorkbookDefinedNamesReference definedNamesReference,
+        List<string> issues)
+    {
+        var definedNames = definedNamesReference.Element;
+        var description = $"definedNames #{definedNamesReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            definedNames,
+            description,
+            [
+                "calcPr",
+                "oleSize",
+                "customWorkbookViews",
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in definedNames.Elements().Where(element => element.Name != SpreadsheetNs + "definedName"))
+        {
+            issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected definedName entries only");
+        }
+
+        var definedNameElements = definedNames.Elements(SpreadsheetNs + "definedName").ToArray();
+        if (definedNameElements.Length == 0)
+            issues.Add($"{WorkbookPart} {description} has no definedName entries");
+
+        foreach (var definedName in definedNameElements.Select((element, index) => new WorkbookDefinedNameReference(index + 1, element)))
+        {
+            AddWorkbookDefinedNameIssues(description, definedName, issues);
+        }
+    }
+
+    private static void AddWorkbookDefinedNameIssues(
+        string definedNamesDescription,
+        WorkbookDefinedNameReference definedNameReference,
+        List<string> issues)
+    {
+        var definedName = definedNameReference.Element;
+        var description = $"{definedNamesDescription} definedName #{definedNameReference.Ordinal}";
+
+        if (string.IsNullOrWhiteSpace(definedName.Attribute("name")?.Value))
+            issues.Add($"{WorkbookPart} {description} has no name");
+
+        foreach (var attribute in definedName.Attributes().Where(attribute => IsKnownWorkbookDefinedNameBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "localSheetId", definedName.Attribute("localSheetId")?.Value, issues);
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "functionGroupId", definedName.Attribute("functionGroupId")?.Value, issues);
+
+        if (definedName.Elements().Any())
+            issues.Add($"{WorkbookPart} {description} has child elements; expected formula text only");
+    }
+
+    private static bool IsKnownWorkbookDefinedNameBooleanAttribute(string name) =>
+        name is "hidden" or
+            "function" or
+            "vbProcedure" or
+            "xlm" or
+            "publishToServer" or
+            "workbookParameter";
+
+    private static void ThrowInvalidWorkbookDefinedNamesMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook definedNames metadata: {sample}{suffix}");
     }
 
     private static void AssertWorkbookCalculationPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -13445,6 +13560,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookFunctionGroupReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookDefinedNamesReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookDefinedNameReference(
         int Ordinal,
         XElement Element);
 
