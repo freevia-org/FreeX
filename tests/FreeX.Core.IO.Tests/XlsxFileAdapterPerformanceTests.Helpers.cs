@@ -117,7 +117,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         bool internalHyperlinkMarker = false,
         bool legacyCommentMarker = false,
         bool structuredTableMarker = false,
-        bool filteredStructuredTableMarker = false)
+        bool filteredStructuredTableMarker = false,
+        bool sparklineMarker = false)
     {
         var hasStructuredTable = structuredTableMarker || filteredStructuredTableMarker;
         using var stream = new MemoryStream(capacity: 8 * 1024 * 1024);
@@ -146,7 +147,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                         formulaMarker,
                         internalHyperlinkMarker,
                         legacyCommentMarker,
-                        hasStructuredTable));
+                        hasStructuredTable,
+                        sparklineMarker));
             }
 
             if (legacyCommentMarker || hasStructuredTable)
@@ -329,13 +331,17 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         bool formulaMarker,
         bool internalHyperlinkMarker,
         bool legacyCommentMarker,
-        bool structuredTableMarker)
+        bool structuredTableMarker,
+        bool sparklineMarker)
     {
         var lastColumn = GeneratedStyleHeavyStyleOnlyStartColumn + GeneratedStyleHeavyStyleOnlyColumnsPerSheet - 1;
         var lastReference = $"{CellAddress.NumberToColumnName((uint)lastColumn)}{GeneratedStyleHeavyRowsPerSheet}";
+        var worksheetExtensionNamespaces = sparklineMarker && sheetIndex == 1
+            ? " xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\""
+            : "";
         writer.Write($"""
             <?xml version="1.0" encoding="UTF-8"?>
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"{worksheetExtensionNamespaces}>
               <dimension ref="A1:{lastReference}"/>
               <sheetViews><sheetView workbookViewId="0"/></sheetViews>
               <sheetFormatPr defaultRowHeight="15"/>
@@ -396,6 +402,27 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             var tableRelId = legacyCommentMarker ? "rId3" : "rId1";
             writer.Write($"""
                   <tableParts count="1"><tablePart r:id="{tableRelId}"/></tableParts>
+                """);
+        }
+
+        if (sparklineMarker && sheetIndex == 1)
+        {
+            writer.Write(
+                """
+                  <extLst>
+                    <ext uri="{05C60535-1F16-4fd2-B633-F4F36F0B64E0}">
+                      <x14:sparklineGroups>
+                        <x14:sparklineGroup type="column">
+                          <x14:sparklines>
+                            <x14:sparkline>
+                              <xm:f>'Generated 1'!A1:L1</xm:f>
+                              <xm:sqref>M1</xm:sqref>
+                            </x14:sparkline>
+                          </x14:sparklines>
+                        </x14:sparklineGroup>
+                      </x14:sparklineGroups>
+                    </ext>
+                  </extLst>
                 """);
         }
 
@@ -669,6 +696,14 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sheet.SetCell(
             new CellAddress(sheet.Id, 2, 2),
             new NumberValue(1_000_000 + iteration));
+    }
+
+    private static void ApplyGeneratedStyleHeavySparklineMutation(Workbook workbook, int iteration)
+    {
+        var sheet = workbook.Sheets[0];
+        sheet.SetCell(
+            new CellAddress(sheet.Id, 2, 2),
+            new NumberValue(2_000_000 + iteration));
     }
 
     private static void ReplaceZipEntryXml(ZipArchive archive, string entryName, XDocument document)
