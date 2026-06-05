@@ -170,7 +170,7 @@ public sealed class XlsxFileAdapterFormatTests
         sanitizerSource.Should().Contain("GetSanitizationRequirements(");
         sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints? hints = null");
         adapterSource.Should().Contain("var sheetXmlLayoutWarningCount = warnings.Count;");
-        adapterSource.Should().Contain("var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);");
+        adapterSource.Should().Contain("sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);");
         adapterSource.Should().Contain("warnings.Count != sheetXmlLayoutWarningCount");
         adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(");
         adapterSource.Should().Contain("styleOnlyWorksheetPathsToStrip");
