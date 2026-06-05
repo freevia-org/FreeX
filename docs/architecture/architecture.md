@@ -450,9 +450,9 @@ Error Checking remains a deterministic model-backed audit in `Core.Commands`, no
 engine. It reports cached formula error values (`#DIV/0!`, `#VALUE!`, `#REF!`, `#NAME?`, `#N/A`, `#NUM!`, `#NULL!`, `#SPILL!`, `#CALC!`, and `#CIRCULAR!`), text cells that parse as finite invariant-culture numbers including
 fullwidth digit/comma/decimal/scientific-notation forms with normalized exponent signs including Unicode minus plus small comma/decimal/sign, ordinary-space and no-break/thin-space group separators, trailing-sign number text, and Arabic-Indic/extended Arabic-Indic digit/decimal/thousands/percent variants, supported currency including fullwidth dollar/pound/yen/won and small dollar symbols, ASCII/fullwidth/small/Arabic percent, accounting-parentheses, and Unicode/fullwidth leading-sign forms, formulas
 stored as text including apostrophe-prefixed and fullwidth-equals imports, two-digit-year text dates including fullwidth digit/Latin-letter/separator/comma variants, formulas whose direct parser-extracted precedents include missing or blank cells, table calculated
-column formulas that differ from the column formula, and common aggregate formulas (`SUM`, `AVERAGE`, `AVERAGEA`,
-`COUNT`, `COUNTA`, `MEDIAN`, `MIN`, `MINA`, `MAX`, `MAXA`, `PRODUCT`, `STDEV`, `STDEVP`, `STDEV.S`, `STDEV.P`, `VAR`, `VARP`,
-`VAR.S`, `VAR.P`, `SUBTOTAL`, `AGGREGATE`) that omit valued adjacent cells, including through same-sheet named-range
+column formulas that differ from the column formula, and common aggregate formulas (`SUM`, `SUMSQ`, `AVEDEV`, `AVERAGE`,
+`AVERAGEA`, `COUNT`, `COUNTA`, `DEVSQ`, `GEOMEAN`, `HARMEAN`, `MEDIAN`, `MIN`, `MINA`, `MAX`, `MAXA`, `PRODUCT`, `STDEV`,
+`STDEVP`, `STDEV.S`, `STDEV.P`, `VAR`, `VARP`, `VAR.S`, `VAR.P`, `SUBTOTAL`, `AGGREGATE`) that omit valued adjacent cells, including through same-sheet named-range
 arguments or valued gaps between separate arguments. It also reports literal cells whose values fail applied
 data-validation rules. Rule toggles use
 `Workbook.DisabledFormulaErrorCodes`, and per-cell ignore state reuses `Cell.IgnoreFormulaError` for both formula-error

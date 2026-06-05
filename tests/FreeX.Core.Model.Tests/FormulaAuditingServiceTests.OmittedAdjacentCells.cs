@@ -45,16 +45,21 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Theory]
+    [InlineData("AVEDEV")]
     [InlineData("AVERAGE")]
     [InlineData("AVERAGEA")]
     [InlineData("COUNT")]
     [InlineData("COUNTA")]
+    [InlineData("DEVSQ")]
+    [InlineData("GEOMEAN")]
+    [InlineData("HARMEAN")]
     [InlineData("MEDIAN")]
     [InlineData("MIN")]
     [InlineData("MINA")]
     [InlineData("MAX")]
     [InlineData("MAXA")]
     [InlineData("PRODUCT")]
+    [InlineData("SUMSQ")]
     [InlineData("STDEV")]
     [InlineData("STDEVP")]
     [InlineData("STDEV.S")]
@@ -78,6 +83,19 @@ public sealed partial class FormulaAuditingServiceTests
 
         issue.Cell.Should().Be("A4");
         issue.FormulaText.Should().Be("=" + formula);
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_DoesNotTreatCountblankAsGenericAggregateOmission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula("COUNTBLANK(A1:A2)"));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
     }
 
     [Theory]

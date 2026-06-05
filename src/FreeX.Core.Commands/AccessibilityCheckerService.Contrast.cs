@@ -625,6 +625,12 @@ public static partial class AccessibilityCheckerService
             case "ISNA":
                 kind = ConditionalFormulaPredicateKind.IsNa;
                 return true;
+            case "ISEVEN":
+                kind = ConditionalFormulaPredicateKind.IsEven;
+                return true;
+            case "ISODD":
+                kind = ConditionalFormulaPredicateKind.IsOdd;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -982,7 +988,9 @@ public static partial class AccessibilityCheckerService
         IsLogical,
         IsError,
         IsErr,
-        IsNa
+        IsNa,
+        IsEven,
+        IsOdd
     }
 
     private readonly record struct ConditionalFormulaOperand(
@@ -1149,12 +1157,34 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaPredicateKind.IsError => value is ErrorValue,
                 ConditionalFormulaPredicateKind.IsErr => value is ErrorValue error && !IsNaError(error),
                 ConditionalFormulaPredicateKind.IsNa => value is ErrorValue error && IsNaError(error),
+                ConditionalFormulaPredicateKind.IsEven => EvaluateFormulaParityPredicate(value, expectEven: true),
+                ConditionalFormulaPredicateKind.IsOdd => EvaluateFormulaParityPredicate(value, expectEven: false),
                 _ => null
             };
         }
 
         private static bool IsNaError(ErrorValue error) =>
             string.Equals(error.Code, ErrorValue.NA.Code, StringComparison.OrdinalIgnoreCase);
+
+        private static bool? EvaluateFormulaParityPredicate(ScalarValue value, bool expectEven)
+        {
+            var number = value switch
+            {
+                NumberValue numeric => numeric.Value,
+                DateTimeValue dateTime => dateTime.Value,
+                _ => (double?)null
+            };
+
+            if (!number.HasValue || !double.IsFinite(number.Value))
+                return null;
+
+            var truncated = Math.Truncate(number.Value);
+            if (truncated < long.MinValue || truncated > long.MaxValue)
+                return null;
+
+            var isEven = ((long)truncated) % 2 == 0;
+            return expectEven ? isEven : !isEven;
+        }
 
         private bool? EvaluateFormulaComparison(
             ConditionalFormulaComparison comparison,

@@ -63,7 +63,21 @@ public sealed partial class XlsxFileAdapter
 
                 if (cell.HasFormula)
                 {
-                    xlCell.FormulaA1 = XlsxClosedXmlCellMapper.NormalizeFormulaText(cell.FormulaText!);
+                    var formula = XlsxClosedXmlCellMapper.NormalizeFormulaText(cell.FormulaText!);
+                    if (cell.ArrayMode == FormulaArrayMode.Dynamic &&
+                        sheet.TryGetSpillExtent(new CellAddress(sheet.Id, row, col), out var spillRows, out var spillCols) &&
+                        (long)spillRows * spillCols > 1)
+                    {
+                        // A dynamic array that spills is written as an array formula over its spill range, so it
+                        // reloads as Dynamic (spilling) instead of being mis-detected as a legacy
+                        // implicit-intersection (plain) formula.
+                        xlSheet.Range((int)row, (int)col, (int)(row + spillRows - 1), (int)(col + spillCols - 1))
+                            .FormulaArrayA1 = formula;
+                    }
+                    else
+                    {
+                        xlCell.FormulaA1 = formula;
+                    }
                 }
                 else if (cell.Value is not BlankValue)
                 {

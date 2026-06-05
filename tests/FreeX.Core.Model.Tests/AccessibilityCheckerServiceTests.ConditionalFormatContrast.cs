@@ -367,6 +367,40 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIsEvenIsOddReferences()
+    {
+        AssertFormulaParityContrastLocations("ISEVEN($A1)", "B1", "B3", "B5");
+        AssertFormulaParityContrastLocations("ISODD($A1)", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIsEvenIsOddLiterals()
+    {
+        AssertFormulaParityContrastLocations("ISEVEN(2.9)", FormulaParityAllLocations);
+        AssertFormulaParityContrastLocations("ISODD(-3.2)", FormulaParityAllLocations);
+        AssertFormulaParityContrastLocations("ISEVEN(3)");
+        AssertFormulaParityContrastLocations("ISODD(4)");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNestedIsEvenIsOddPredicates()
+    {
+        AssertFormulaParityContrastLocations("AND(ISEVEN($A1),$C1)", "B1", "B5");
+        AssertFormulaParityContrastLocations("OR(ISODD($A1),$C1)", "B1", "B2", "B4", "B5");
+        AssertFormulaParityContrastLocations("NOT(ISODD($A1))", "B1", "B3", "B5");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatIsEvenIsOddForNonNumericOperands()
+    {
+        AssertFormulaParityContrastLocations("ISEVEN($D1)");
+        AssertFormulaParityContrastLocations("ISODD($D1)");
+        AssertFormulaParityContrastLocations("ISEVEN(\"2\")");
+        AssertFormulaParityContrastLocations("ISODD(TRUE)");
+        AssertFormulaParityContrastLocations("ISEVEN(#VALUE!)");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAnd()
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -412,6 +446,8 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideIsPredicate()
     {
         AssertFormulaPredicateContrastLocations("ISNUMBER(SUM($A1))");
+        AssertFormulaParityContrastLocations("ISEVEN(SUM($A1))");
+        AssertFormulaParityContrastLocations("ISODD(SUM($A1))");
         AssertFormulaPredicateContrastLocations("SUM($A1)>0");
     }
 
@@ -616,6 +652,47 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new BoolValue(flag));
     }
 
+    private static Workbook CreateFormulaParityContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 9, 2);
+
+        SetFormulaParityContrastRow(sheet, 1, new NumberValue(2), flag: true, "Even source", new TextValue("Text source"));
+        SetFormulaParityContrastRow(sheet, 2, new NumberValue(3), flag: true, "Odd source", new BoolValue(true));
+        SetFormulaParityContrastRow(sheet, 3, new NumberValue(2.9), flag: false, "Truncated even source", BlankValue.Instance);
+        SetFormulaParityContrastRow(sheet, 4, new NumberValue(-3.2), flag: false, "Negative odd source", ErrorValue.Value);
+        SetFormulaParityContrastRow(sheet, 5, new DateTimeValue(45000), flag: true, "Even date serial source", new TextValue("45000"));
+        SetFormulaParityContrastRow(sheet, 6, new TextValue("2"), flag: false, "Numeric text source", new TextValue("2"));
+        SetFormulaParityContrastRow(sheet, 7, new BoolValue(true), flag: false, "Logical source", new BoolValue(false));
+        SetFormulaParityContrastRow(sheet, 8, BlankValue.Instance, flag: false, "Blank source", BlankValue.Instance);
+        SetFormulaParityContrastRow(sheet, 9, ErrorValue.Value, flag: false, "Error source", ErrorValue.NA);
+
+        return workbook;
+    }
+
+    private static void SetFormulaParityContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue source,
+        bool flag,
+        string label,
+        ScalarValue nonNumericSource)
+    {
+        if (source is not BlankValue)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), source);
+
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new BoolValue(flag));
+
+        if (nonNumericSource is not BlankValue)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), nonNumericSource);
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -648,6 +725,20 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Should()
             .Equal(expectedLocations);
     }
+
+    private static void AssertFormulaParityContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaParityContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static string[] FormulaParityAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"];
 
     private static string[] FormulaPredicateAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];

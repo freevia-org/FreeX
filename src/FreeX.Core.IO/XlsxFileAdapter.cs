@@ -277,6 +277,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 if (xlCell.HasFormula)
                 {
                     cell = Cell.FromFormula(XlsxClosedXmlCellMapper.NormalizeFormulaText(xlCell.FormulaA1));
+                    // A plain (non-array) formula uses Excel's legacy implicit intersection; an array
+                    // formula (CSE or dynamic) spills. Cell.FromFormula defaults to Dynamic.
+                    if (!xlCell.HasArrayFormula)
+                        cell.ArrayMode = FormulaArrayMode.Implicit;
                     // Preserve the cached formula result so callers see the last-calculated value
                     // without needing to recalculate immediately.
                     var cached = XlsxClosedXmlCellMapper.MapFormulaValue(xlCell);
