@@ -13,7 +13,7 @@ internal static class FidelityReport
     private static void WriteCsv(string path, IReadOnlyList<FileResult> results)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("file,status,freexLoaded,excelOpened,sheetsF,sheetsE,cellsCompared,valueMismatches,mismatchPct,chartsF,chartsE,pivotsF,pivotsE,tablesF,tablesE,hyperlinksF,hyperlinksE,commentsF,commentsE,cfF,dvF,namedF,namedE,inventoryDiffs,freexError,excelError");
+        sb.AppendLine("file,status,freexLoaded,excelOpened,sheetsF,sheetsE,cellsCompared,valueMismatches,mismatchPct,chartsF,chartsE,pivotsF,pivotsE,tablesF,tablesE,hyperlinksF,hyperlinksE,commentsF,commentsE,cfF,dvF,namedF,namedE,inventoryDiffs,freexError,freexRecalcError,excelError");
         foreach (var r in results)
         {
             var f = r.FreeX; var e = r.Excel;
@@ -24,7 +24,7 @@ internal static class FidelityReport
                 f?.Charts, e?.Charts, f?.PivotTables, e?.PivotTables, f?.Tables, e?.Tables,
                 f?.Hyperlinks, e?.Hyperlinks, f?.Comments, e?.Comments,
                 f?.ConditionalFormats, f?.DataValidations, f?.NamedRanges, e?.NamedRanges,
-                Csv(string.Join("; ", r.InventoryDiffs)), Csv(r.FreeXError), Csv(r.ExcelError)));
+                Csv(string.Join("; ", r.InventoryDiffs)), Csv(r.FreeXError), Csv(r.FreeXRecalcError), Csv(r.ExcelError)));
         }
         File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
     }
@@ -32,9 +32,10 @@ internal static class FidelityReport
     private static void WriteMismatches(string path, IReadOnlyList<FileResult> results)
     {
         var sb = new StringBuilder();
-        foreach (var r in results.Where(r => r.MismatchSamples.Count > 0 || r.InventoryDiffs.Count > 0))
+        foreach (var r in results.Where(r => r.MismatchSamples.Count > 0 || r.InventoryDiffs.Count > 0 || r.FreeXRecalcError is not null))
         {
             sb.AppendLine($"### {r.File}  [{r.Status}]");
+            if (r.FreeXRecalcError is not null) sb.AppendLine($"  recalc     FreeX recalculation threw: {r.FreeXRecalcError}");
             foreach (var d in r.InventoryDiffs) sb.AppendLine($"  inventory  {d}");
             foreach (var m in r.MismatchSamples) sb.AppendLine($"  value      {m}");
             if (r.ValueMismatches > r.MismatchSamples.Count)
@@ -54,6 +55,7 @@ internal static class FidelityReport
         sb.AppendLine("# FreeX ↔ Excel functional fidelity run");
         sb.AppendLine();
         sb.AppendLine($"- Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"- Mode: {(options.Recalc ? "compute-fidelity (FreeX formulas recalculated, vs Excel live values)" : "load-fidelity (FreeX cached values, vs Excel live values)")}");
         sb.AppendLine($"- Files: {results.Count}  →  **Pass {pass}, Fail {fail}, Skipped {skip}**");
         sb.AppendLine($"- Value-mismatch tolerance: {options.ValueMismatchTolerancePercent}% of compared cells");
         sb.AppendLine();
