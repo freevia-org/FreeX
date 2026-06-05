@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -15,7 +14,7 @@ public sealed class SheetNameDialogTests
             var dialog = new SheetNameDialog("Sheet1");
             try
             {
-                var nameBox = GetPrivateField<TextBox>(dialog, "_nameBox");
+                var nameBox = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_nameBox");
 
                 AutomationProperties.GetName(nameBox).Should().Be("Sheet name");
                 AutomationProperties.GetAutomationId(nameBox).Should().Be("SheetNameBox");
@@ -28,11 +27,4 @@ public sealed class SheetNameDialogTests
         });
     }
 
-    private static T GetPrivateField<T>(object instance, string name)
-        where T : class
-    {
-        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
-    }
 }
