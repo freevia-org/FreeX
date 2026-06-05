@@ -1,9 +1,24 @@
 using System.Windows;
+using System.Windows.Media;
 
 namespace FreeX.App.Host.Tests;
 
 internal static class WpfTestTree
 {
+    internal static IEnumerable<T> FindVisualDescendants<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindVisualDescendants<T>(child))
+                yield return descendant;
+        }
+    }
+
     internal static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
         where T : DependencyObject
     {
