@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -121,9 +120,5 @@ public sealed class CellShiftDialogTests
         DialogSourceTestSupport.ReadHostSources("CellShiftDialog.cs");
 
     private static IReadOnlyList<RadioButton> GetButtons(CellShiftDialog dialog)
-    {
-        var field = typeof(CellShiftDialog).GetField("_buttons", BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeAssignableTo<IReadOnlyList<RadioButton>>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<List<RadioButton>>(dialog, "_buttons");
 }
