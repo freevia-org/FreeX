@@ -950,6 +950,40 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversRetailEcommerceVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "MERCHANDISNG checkuot Catlog catlogue shpping refundd promotn couponn fulfilmnt curbsidee wishlistt. Valid skuunit. Keep merchandisng_id, https://merchandisng.example.com/checkuot, store@fulfilmnt.example.com, \"C:\\catlogue folder\\wishlistt file.xlsx\", and [C:\\shpping folder\\curbsidee file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("MERCHANDISNG", "MERCHANDISING"),
+            ("checkuot", "checkout"),
+            ("Catlog", "Catalog"),
+            ("catlogue", "catalog"),
+            ("shpping", "shipping"),
+            ("refundd", "refund"),
+            ("promotn", "promotion"),
+            ("couponn", "coupon"),
+            ("fulfilmnt", "fulfillment"),
+            ("curbsidee", "curbside"),
+            ("wishlistt", "wishlist"));
+        plan.IssueCount.Should().Be(11);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "MERCHANDISING checkout Catalog catalog shipping refund promotion coupon fulfillment curbside wishlist. Valid skuunit. Keep merchandisng_id, https://merchandisng.example.com/checkuot, store@fulfilmnt.example.com, \"C:\\catlogue folder\\wishlistt file.xlsx\", and [C:\\shpping folder\\curbsidee file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(11);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
