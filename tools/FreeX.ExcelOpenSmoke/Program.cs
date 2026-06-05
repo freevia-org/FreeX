@@ -453,6 +453,7 @@ internal static class ExcelOpenSmoke
                 AssertDocumentPropertiesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileVersionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetHyperlinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -675,6 +676,7 @@ internal static class ExcelOpenSmoke
             AssertDocumentPropertiesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileVersionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetHyperlinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3535,6 +3537,18 @@ internal static class ExcelOpenSmoke
         issues.Add($"{WorkbookPart} {description} has invalid {attributeName} value '{value}'");
     }
 
+    private static void AddOptionalWorkbookMetadataBooleanIssue(
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) || IsValidPackageBoolean(value))
+            return;
+
+        issues.Add($"{WorkbookPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
     private static void ThrowInvalidWorkbookFileVersionMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
     {
         var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
@@ -3545,6 +3559,120 @@ internal static class ExcelOpenSmoke
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid workbook fileVersion metadata: {sample}{suffix}");
     }
+
+    private static void AssertWorkbookPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookPropertiesMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookPropertiesMetadata(label, sourcePath, issues);
+    }
+
+    private static void ThrowInvalidWorkbookPropertiesMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbookPr metadata: {sample}{suffix}");
+    }
+
+    private static void AddWorkbookPropertiesMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var workbookPropertiesElements = root.Elements(SpreadsheetNs + "workbookPr").ToArray();
+        if (workbookPropertiesElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {workbookPropertiesElements.Length} workbookPr elements; expected at most one");
+
+        foreach (var workbookProperties in workbookPropertiesElements.Select((element, index) => new WorkbookPropertiesReference(index + 1, element)))
+        {
+            AddWorkbookPropertiesIssues(root, workbookProperties, issues);
+        }
+    }
+
+    private static void AddWorkbookPropertiesIssues(
+        XElement workbookRoot,
+        WorkbookPropertiesReference workbookPropertiesReference,
+        List<string> issues)
+    {
+        var workbookProperties = workbookPropertiesReference.Element;
+        var description = $"workbookPr #{workbookPropertiesReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            workbookProperties,
+            description,
+            [
+                "workbookProtection",
+                "bookViews",
+                "sheets",
+                "functionGroups",
+                "externalReferences",
+                "definedNames",
+                "calcPr",
+                "oleSize",
+                "customWorkbookViews",
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var attribute in workbookProperties.Attributes().Where(attribute => IsKnownWorkbookPropertiesBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        AddOptionalWorkbookMetadataNonNegativeIntIssue(description, "defaultThemeVersion", workbookProperties.Attribute("defaultThemeVersion")?.Value, issues);
+
+        var showObjects = workbookProperties.Attribute("showObjects")?.Value;
+        if (!string.IsNullOrWhiteSpace(showObjects) && !IsKnownWorkbookPropertiesShowObjectsValue(showObjects))
+            issues.Add($"{WorkbookPart} {description} has invalid showObjects value '{showObjects}'");
+
+        var updateLinks = workbookProperties.Attribute("updateLinks")?.Value;
+        if (!string.IsNullOrWhiteSpace(updateLinks) && !IsKnownWorkbookPropertiesUpdateLinksValue(updateLinks))
+            issues.Add($"{WorkbookPart} {description} has invalid updateLinks value '{updateLinks}'");
+
+        if (workbookProperties.Elements().Any())
+            issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool IsKnownWorkbookPropertiesBooleanAttribute(string name) =>
+        name is "date1904" or
+            "showBorderUnselectedTables" or
+            "filterPrivacy" or
+            "promptedSolutions" or
+            "showInkAnnotation" or
+            "backupFile" or
+            "saveExternalLinkValues" or
+            "hidePivotFieldList" or
+            "showPivotChartFilter" or
+            "allowRefreshQuery" or
+            "publishItems" or
+            "checkCompatibility" or
+            "autoCompressPictures" or
+            "refreshAllConnections";
+
+    private static bool IsKnownWorkbookPropertiesShowObjectsValue(string value) =>
+        value is "all" or "placeholders" or "none";
+
+    private static bool IsKnownWorkbookPropertiesUpdateLinksValue(string value) =>
+        value is "userSet" or "never" or "always";
 
     private static void AssertWorksheetSheetPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
     {
@@ -12527,6 +12655,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookFileVersionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookPropertiesReference(
         int Ordinal,
         XElement Element);
 

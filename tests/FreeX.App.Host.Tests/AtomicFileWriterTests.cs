@@ -8,45 +8,24 @@ public sealed class AtomicFileWriterTests
     [Fact]
     public void WriteAllText_CreatesFileWithContentIncludingMissingDirectories()
     {
-        var root = CreateTempDirectory();
-        try
-        {
-            var path = Path.Combine(root, "nested", "recent.json");
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "nested", "recent.json");
 
-            AtomicFileWriter.WriteAllText(path, "payload");
+        AtomicFileWriter.WriteAllText(path, "payload");
 
-            File.ReadAllText(path).Should().Be("payload");
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        File.ReadAllText(path).Should().Be("payload");
     }
 
     [Fact]
     public void WriteAllText_OverwritesExistingFileAndLeavesNoTempArtifact()
     {
-        var root = CreateTempDirectory();
-        try
-        {
-            var path = Path.Combine(root, "recent.json");
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "recent.json");
 
-            AtomicFileWriter.WriteAllText(path, "first");
-            AtomicFileWriter.WriteAllText(path, "second");
+        AtomicFileWriter.WriteAllText(path, "first");
+        AtomicFileWriter.WriteAllText(path, "second");
 
-            File.ReadAllText(path).Should().Be("second");
-            Directory.GetFiles(root).Should().ContainSingle().Which.Should().Be(path);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    private static string CreateTempDirectory()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        return dir;
+        File.ReadAllText(path).Should().Be("second");
+        Directory.GetFiles(temp.Path).Should().ContainSingle().Which.Should().Be(path);
     }
 }
