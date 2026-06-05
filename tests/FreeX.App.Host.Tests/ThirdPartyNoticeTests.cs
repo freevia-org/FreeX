@@ -40,7 +40,7 @@ public sealed class ThirdPartyNoticeTests
 
     private static IReadOnlyCollection<(string Name, string Version)> FindRestoredPackages()
     {
-        var root = FindWorkspaceRoot();
+        var root = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
         var packages = new SortedSet<(string Name, string Version)>();
         foreach (var assetsPath in Directory.EnumerateFiles(root, "project.assets.json", SearchOption.AllDirectories))
         {
@@ -61,12 +61,6 @@ public sealed class ThirdPartyNoticeTests
         }
 
         return packages;
-    }
-
-    private static string FindWorkspaceRoot()
-    {
-        var marker = WorkspaceFileLocator.Find("FreeX.slnx");
-        return Path.GetDirectoryName(marker)!;
     }
 
     private static bool IsUnder(string root, string path, string segment)
