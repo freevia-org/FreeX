@@ -731,6 +731,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "seasn"))
+                {
+                    suggestion = "season";
+                    return true;
+                }
+
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "agnda"))
                 {
                     suggestion = "agenda";
@@ -934,6 +940,30 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "sampel"))
                 {
                     suggestion = "sample";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fitnes"))
+                {
+                    suggestion = "fitness";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "regimn"))
+                {
+                    suggestion = "regimen";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "scorng"))
+                {
+                    suggestion = "scoring";
+                    return true;
+                }
+
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "workot"))
+                {
+                    suggestion = "workout";
                     return true;
                 }
 
@@ -1632,6 +1662,24 @@ public static partial class SpellCheckService
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acheive"))
                 {
                     suggestion = "achieve";
+                    return true;
+                }
+
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "athleet"))
+                {
+                    suggestion = "athlete";
+                    return true;
+                }
+
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "leaguee"))
+                {
+                    suggestion = "league";
+                    return true;
+                }
+
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "wellnes"))
+                {
+                    suggestion = "wellness";
                     return true;
                 }
 
@@ -2465,6 +2513,42 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "athelete"))
+                {
+                    suggestion = "athlete";
+                    return true;
+                }
+
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "equpment"))
+                {
+                    suggestion = "equipment";
+                    return true;
+                }
+
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "exercize"))
+                {
+                    suggestion = "exercise";
+                    return true;
+                }
+
+                if (first == 'h' && EqualAsciiWordIgnoreCase(word, "hydraton"))
+                {
+                    suggestion = "hydration";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pracitce"))
+                {
+                    suggestion = "practice";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "schedual"))
+                {
+                    suggestion = "schedule";
+                    return true;
+                }
+
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "airfaire"))
                 {
                     suggestion = "airfare";
@@ -3175,9 +3259,33 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "competion"))
+                {
+                    suggestion = "competition";
+                    return true;
+                }
+
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "confernce"))
                 {
                     suggestion = "conference";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "membrship"))
+                {
+                    suggestion = "membership";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "scorebord"))
+                {
+                    suggestion = "scoreboard";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "tournment"))
+                {
+                    suggestion = "tournament";
                     return true;
                 }
 
@@ -3783,6 +3891,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'o' && EqualAsciiWordIgnoreCase(word, "officiatng"))
+                {
+                    suggestion = "officiating";
+                    return true;
+                }
+
                 if (first == 'd' && EqualAsciiWordIgnoreCase(word, "deductable"))
                 {
                     suggestion = "deductible";
@@ -4277,6 +4391,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "conditoning"))
+                {
+                    suggestion = "conditioning";
+                    return true;
+                }
+
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "registraton"))
                 {
                     suggestion = "registration";
@@ -4662,6 +4782,12 @@ public static partial class SpellCheckService
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "advertisments"))
                 {
                     suggestion = "advertisements";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "rehabilitaton"))
+                {
+                    suggestion = "rehabilitation";
                     return true;
                 }
 
