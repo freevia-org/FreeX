@@ -426,6 +426,39 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversFormulaFunctionLookupVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "vlookp vloookup xlookp xloookup pivottabel formla argment argments functon functons. Keep vlookp_path, https://xlookp.example.com/vloookup, analyst@argment.example.com, and \"C:\\functon folder\\pivottabel file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("vlookp", "vlookup"),
+            ("vloookup", "vlookup"),
+            ("xlookp", "xlookup"),
+            ("xloookup", "xlookup"),
+            ("pivottabel", "pivot table"),
+            ("formla", "formula"),
+            ("argment", "argument"),
+            ("argments", "arguments"),
+            ("functon", "function"),
+            ("functons", "functions"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "vlookup vlookup xlookup xlookup pivot table formula argument arguments function functions. Keep vlookp_path, https://xlookp.example.com/vloookup, analyst@argment.example.com, and \"C:\\functon folder\\pivottabel file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversChartPivotWorkbookVocabularyTypos()
     {
         var wb = new Workbook("test");
