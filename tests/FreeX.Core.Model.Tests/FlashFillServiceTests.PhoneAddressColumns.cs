@@ -281,15 +281,18 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Theory]
-    [InlineData("Unit # 5")]
-    [InlineData("5")]
-    [InlineData("400 Oak Ave")]
-    public void Fill_AddressUnits_ExtractsUnitDesignatorWithSpacedHashParts(string remainingExpected)
+    [InlineData("Apt # 4B", "Suite # 200", "Unit # 5")]
+    [InlineData("4B", "200", "5")]
+    [InlineData("123 Pine St", "55 Burnside Ave", "400 Oak Ave")]
+    public void Fill_AddressUnits_ExtractsUnitDesignatorWithSpacedHashParts(
+        string firstExpected,
+        string secondExpected,
+        string remainingExpected)
     {
         var result = FlashFillService.Fill(
             [
-                ("123 Pine St Apt # 4B, Seattle, WA 98101", "Apt # 4B"),
-                ("55 Burnside Ave Suite # 200, Portland, OR 97209", "Suite # 200")
+                ("123 Pine St Apt # 4B, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave Suite # 200, Portland, OR 97209", secondExpected)
             ],
             ["400 Oak Ave Unit # 5, Tacoma, WA 98402"]);
 
