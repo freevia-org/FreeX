@@ -8,8 +8,8 @@ public sealed class HomeCellStyleCommandSourceTests
     [Fact]
     public void CellStylesRibbonButton_ExposesMenuWithExpectedKeyTip()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var button = ExtractButtonElementByClickHandler(xaml, "CellStylesBtn_Click");
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var button = xaml.ExtractButtonElementByClickHandler("CellStylesBtn_Click");
 
         button.ShouldContainInvariantCommandName("Cell Styles");
         button.Should().Contain("local:RibbonTooltip.KeyTip=\"J\"");
@@ -56,9 +56,9 @@ public sealed class HomeCellStyleCommandSourceTests
         string handler,
         string preset)
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
-        var menuItem = ExtractMenuItemElementByClickHandler(xaml, handler);
+        var menuItem = xaml.ExtractMenuItemElementByClickHandler(handler);
 
         menuItem.ShouldContainLocalizedAttribute("Header", header);
         menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -75,31 +75,5 @@ public sealed class HomeCellStyleCommandSourceTests
         formattingSource.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
         formattingSource.Should().Contain("ApplyStyleDiff(CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme))");
         workbookUiStateSource.Should().Contain("TryExecuteRepeatableApplyStyle(diff, \"Apply Style\")");
-    }
-
-    private static string ExtractButtonElementByClickHandler(string xaml, string clickHandler)
-    {
-        var clickIndex = xaml.IndexOf($"Click=\"{clickHandler}\"", StringComparison.Ordinal);
-        clickIndex.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} button should be present");
-
-        var start = xaml.LastIndexOf("<Button", clickIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} button should have a Button start tag");
-
-        var end = xaml.IndexOf("</Button>", clickIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThanOrEqualTo(clickIndex, $"the {clickHandler} button should have an end tag");
-        return xaml.Substring(start, end - start + "</Button>".Length);
-    }
-
-    private static string ExtractMenuItemElementByClickHandler(string xaml, string clickHandler)
-    {
-        var clickIndex = xaml.IndexOf($"Click=\"{clickHandler}\"", StringComparison.Ordinal);
-        clickIndex.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} menu item should be present");
-
-        var start = xaml.LastIndexOf("<MenuItem", clickIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} menu item should have a start tag");
-
-        var end = xaml.IndexOf("/>", clickIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThanOrEqualTo(clickIndex, $"the {clickHandler} menu item should be self-closing");
-        return xaml.Substring(start, end - start + 2);
     }
 }
