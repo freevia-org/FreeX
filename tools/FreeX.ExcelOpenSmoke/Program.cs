@@ -480,6 +480,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetSheetFormatMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetAutoFilterMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetMergeCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -716,6 +717,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetSheetFormatMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetAutoFilterMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetMergeCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -5954,6 +5956,672 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet protection metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetAutoFilterMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetAutoFilterMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetAutoFilterMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetAutoFilterMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var autoFilterElements = root.Elements(SpreadsheetNs + "autoFilter").ToArray();
+        if (autoFilterElements.Length > 1)
+            issues.Add($"{worksheetPart} has {autoFilterElements.Length} autoFilter elements; expected at most one");
+
+        foreach (var autoFilter in autoFilterElements.Select((element, index) => new WorksheetAutoFilterReference(index + 1, element)))
+        {
+            AddWorksheetAutoFilterIssues(worksheetPart, root, autoFilter, issues);
+        }
+    }
+
+    private static void AddWorksheetAutoFilterIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetAutoFilterReference autoFilterReference,
+        List<string> issues)
+    {
+        var autoFilter = autoFilterReference.Element;
+        var description = $"autoFilter #{autoFilterReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            autoFilter,
+            description,
+            [
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            autoFilter,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios"
+            ],
+            issues);
+
+        var reference = autoFilter.Attribute("ref")?.Value;
+        if (autoFilter.Attribute("ref") is not null && string.IsNullOrWhiteSpace(reference))
+            issues.Add($"{worksheetPart} {description} has blank ref attribute");
+        else if (!string.IsNullOrWhiteSpace(reference) && !IsValidLocalWorksheetReference(reference))
+            issues.Add($"{worksheetPart} {description} has invalid ref value '{reference}'");
+
+        AddWorksheetAutoFilterChildOrderingIssues(worksheetPart, description, autoFilter, issues);
+
+        foreach (var unexpectedChild in autoFilter.Elements().Where(element => !IsKnownWorksheetAutoFilterChild(element)))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var seenFilterColumns = new HashSet<int>();
+        foreach (var filterColumn in autoFilter.Elements(SpreadsheetNs + "filterColumn").Select((element, index) => new WorksheetAutoFilterColumnReference(index + 1, element)))
+        {
+            AddWorksheetAutoFilterColumnIssues(worksheetPart, description, filterColumn, seenFilterColumns, issues);
+        }
+
+        var nestedSortStates = autoFilter.Elements(SpreadsheetNs + "sortState").ToArray();
+        if (nestedSortStates.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {nestedSortStates.Length} sortState elements; expected at most one");
+
+        foreach (var nestedSortState in nestedSortStates.Select((element, index) => new WorksheetSortStateReference(index + 1, element)))
+        {
+            AddWorksheetAutoFilterSortStateIssues(worksheetPart, description, nestedSortState, issues);
+        }
+
+        var extensionLists = autoFilter.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetAutoFilterColumnIssues(
+        string worksheetPart,
+        string autoFilterDescription,
+        WorksheetAutoFilterColumnReference filterColumnReference,
+        HashSet<int> seenFilterColumns,
+        List<string> issues)
+    {
+        var filterColumn = filterColumnReference.Element;
+        var description = $"{autoFilterDescription} filterColumn #{filterColumnReference.Ordinal}";
+        var colIdValue = filterColumn.Attribute("colId")?.Value;
+        if (string.IsNullOrWhiteSpace(colIdValue))
+        {
+            issues.Add($"{worksheetPart} {description} has no colId");
+        }
+        else if (TryParseNonNegativePackageInt(colIdValue, out var colId))
+        {
+            if (!seenFilterColumns.Add(colId))
+                issues.Add($"{worksheetPart} {autoFilterDescription} has duplicate filterColumn colId {colId}");
+        }
+        else
+        {
+            issues.Add($"{worksheetPart} {description} has invalid colId value '{colIdValue}'");
+        }
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "hiddenButton", filterColumn.Attribute("hiddenButton")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showButton", filterColumn.Attribute("showButton")?.Value, issues);
+        AddWorksheetAutoFilterColumnChildOrderingIssues(worksheetPart, description, filterColumn, issues);
+
+        foreach (var unexpectedFilterChild in filterColumn.Elements().Where(element => !IsKnownWorksheetAutoFilterColumnChild(element)))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedFilterChild.Name.LocalName}");
+        }
+
+        AddWorksheetAutoFilterColumnChildCountIssues(worksheetPart, description, filterColumn, issues);
+
+        foreach (var filters in filterColumn.Elements(SpreadsheetNs + "filters").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetAutoFilterFiltersIssues(worksheetPart, description, filters.Ordinal, filters.Element, issues);
+        }
+
+        foreach (var customFilters in filterColumn.Elements(SpreadsheetNs + "customFilters").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetAutoFilterCustomFiltersIssues(worksheetPart, description, customFilters.Ordinal, customFilters.Element, issues);
+        }
+
+        foreach (var top10 in filterColumn.Elements(SpreadsheetNs + "top10").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetAutoFilterTop10Issues(worksheetPart, description, top10.Ordinal, top10.Element, issues);
+        }
+
+        foreach (var dynamicFilter in filterColumn.Elements(SpreadsheetNs + "dynamicFilter").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetAutoFilterDynamicFilterIssues(worksheetPart, description, dynamicFilter.Ordinal, dynamicFilter.Element, issues);
+        }
+
+        foreach (var colorFilter in filterColumn.Elements(SpreadsheetNs + "colorFilter").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetAutoFilterColorFilterIssues(worksheetPart, description, colorFilter.Ordinal, colorFilter.Element, issues);
+        }
+
+        foreach (var iconFilter in filterColumn.Elements(SpreadsheetNs + "iconFilter").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetAutoFilterIconFilterIssues(worksheetPart, description, iconFilter.Ordinal, iconFilter.Element, issues);
+        }
+
+        var extensionLists = filterColumn.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetAutoFilterColumnChildCountIssues(
+        string worksheetPart,
+        string filterColumnDescription,
+        XElement filterColumn,
+        List<string> issues)
+    {
+        string[] childNames =
+        [
+            "filters",
+            "top10",
+            "customFilters",
+            "dynamicFilter",
+            "colorFilter",
+            "iconFilter",
+            "extLst"
+        ];
+
+        foreach (var childName in childNames)
+        {
+            var count = filterColumn.Elements(SpreadsheetNs + childName).Count();
+            if (count > 1)
+                issues.Add($"{worksheetPart} {filterColumnDescription} has {count} {childName} elements; expected at most one");
+        }
+    }
+
+    private static void AddWorksheetAutoFilterFiltersIssues(
+        string worksheetPart,
+        string filterColumnDescription,
+        int ordinal,
+        XElement filters,
+        List<string> issues)
+    {
+        var description = $"{filterColumnDescription} filters #{ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "blank", filters.Attribute("blank")?.Value, issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "calendarType",
+            filters.Attribute("calendarType")?.Value,
+            [
+                "none",
+                "gregorian",
+                "gregorianUs",
+                "gregorianMeFrench",
+                "gregorianArabic",
+                "hijri",
+                "hebrew",
+                "taiwan",
+                "japan",
+                "thai",
+                "korea",
+                "saka",
+                "gregorianXlitEnglish",
+                "gregorianXlitFrench"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in filters.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "filter" &&
+                     element.Name != SpreadsheetNs + "dateGroupItem"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        foreach (var filter in filters.Elements(SpreadsheetNs + "filter").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            var filterDescription = $"{description} filter #{filter.Ordinal}";
+            if (filter.Element.Attribute("val") is null)
+                issues.Add($"{worksheetPart} {filterDescription} has no val attribute");
+
+            if (filter.Element.Elements().Any())
+                issues.Add($"{worksheetPart} {filterDescription} has child elements; expected attributes only");
+        }
+
+        foreach (var dateGroup in filters.Elements(SpreadsheetNs + "dateGroupItem").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetAutoFilterDateGroupItemIssues(worksheetPart, description, dateGroup.Ordinal, dateGroup.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetAutoFilterDateGroupItemIssues(
+        string worksheetPart,
+        string filtersDescription,
+        int ordinal,
+        XElement dateGroup,
+        List<string> issues)
+    {
+        var description = $"{filtersDescription} dateGroupItem #{ordinal}";
+        if (string.IsNullOrWhiteSpace(dateGroup.Attribute("dateTimeGrouping")?.Value))
+        {
+            issues.Add($"{worksheetPart} {description} has no dateTimeGrouping");
+        }
+        else
+        {
+            AddOptionalKnownWorksheetMetadataValueIssue(
+                worksheetPart,
+                description,
+                "dateTimeGrouping",
+                dateGroup.Attribute("dateTimeGrouping")?.Value,
+                ["year", "month", "day", "hour", "minute", "second"],
+                issues);
+        }
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "year", dateGroup.Attribute("year")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "month", dateGroup.Attribute("month")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "day", dateGroup.Attribute("day")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "hour", dateGroup.Attribute("hour")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "minute", dateGroup.Attribute("minute")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "second", dateGroup.Attribute("second")?.Value, issues);
+
+        if (dateGroup.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetAutoFilterCustomFiltersIssues(
+        string worksheetPart,
+        string filterColumnDescription,
+        int ordinal,
+        XElement customFilters,
+        List<string> issues)
+    {
+        var description = $"{filterColumnDescription} customFilters #{ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "and", customFilters.Attribute("and")?.Value, issues);
+
+        foreach (var unexpectedChild in customFilters.Elements().Where(element => element.Name != SpreadsheetNs + "customFilter"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var customFilterElements = customFilters.Elements(SpreadsheetNs + "customFilter").ToArray();
+        if (customFilterElements.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no customFilter entries");
+        if (customFilterElements.Length > 2)
+            issues.Add($"{worksheetPart} {description} has {customFilterElements.Length} customFilter entries; expected at most two");
+
+        foreach (var customFilter in customFilterElements.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            var customFilterDescription = $"{description} customFilter #{customFilter.Ordinal}";
+            var operatorValue = customFilter.Element.Attribute("operator")?.Value;
+            if (!string.IsNullOrWhiteSpace(operatorValue) && !IsKnownAutoFilterCustomFilterOperator(operatorValue))
+                issues.Add($"{worksheetPart} {customFilterDescription} has unknown operator value '{operatorValue}'");
+
+            if (customFilter.Element.Attribute("val") is null)
+                issues.Add($"{worksheetPart} {customFilterDescription} has no val attribute");
+
+            if (customFilter.Element.Elements().Any())
+                issues.Add($"{worksheetPart} {customFilterDescription} has child elements; expected attributes only");
+        }
+    }
+
+    private static bool IsKnownAutoFilterCustomFilterOperator(string value) =>
+        value.Trim() is "equal" or
+            "lessThan" or
+            "lessThanOrEqual" or
+            "notEqual" or
+            "greaterThanOrEqual" or
+            "greaterThan";
+
+    private static void AddWorksheetAutoFilterTop10Issues(
+        string worksheetPart,
+        string filterColumnDescription,
+        int ordinal,
+        XElement top10,
+        List<string> issues)
+    {
+        var description = $"{filterColumnDescription} top10 #{ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "top", top10.Attribute("top")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "percent", top10.Attribute("percent")?.Value, issues);
+        AddRequiredNonNegativePackageDecimalIssue(worksheetPart, description, "val", top10.Attribute("val")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "filterVal", top10.Attribute("filterVal")?.Value, issues);
+
+        if (top10.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetAutoFilterDynamicFilterIssues(
+        string worksheetPart,
+        string filterColumnDescription,
+        int ordinal,
+        XElement dynamicFilter,
+        List<string> issues)
+    {
+        var description = $"{filterColumnDescription} dynamicFilter #{ordinal}";
+        if (string.IsNullOrWhiteSpace(dynamicFilter.Attribute("type")?.Value))
+        {
+            issues.Add($"{worksheetPart} {description} has no type");
+        }
+        else
+        {
+            AddOptionalKnownWorksheetMetadataValueIssue(
+                worksheetPart,
+                description,
+                "type",
+                dynamicFilter.Attribute("type")?.Value,
+                [
+                    "aboveAverage",
+                    "belowAverage",
+                    "tomorrow",
+                    "today",
+                    "yesterday",
+                    "nextWeek",
+                    "thisWeek",
+                    "lastWeek",
+                    "nextMonth",
+                    "thisMonth",
+                    "lastMonth",
+                    "nextQuarter",
+                    "thisQuarter",
+                    "lastQuarter",
+                    "nextYear",
+                    "thisYear",
+                    "lastYear",
+                    "yearToDate",
+                    "Q1",
+                    "Q2",
+                    "Q3",
+                    "Q4",
+                    "M1",
+                    "M2",
+                    "M3",
+                    "M4",
+                    "M5",
+                    "M6",
+                    "M7",
+                    "M8",
+                    "M9",
+                    "M10",
+                    "M11",
+                    "M12"
+                ],
+                issues);
+        }
+
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "val", dynamicFilter.Attribute("val")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "maxVal", dynamicFilter.Attribute("maxVal")?.Value, issues);
+
+        if (dynamicFilter.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetAutoFilterColorFilterIssues(
+        string worksheetPart,
+        string filterColumnDescription,
+        int ordinal,
+        XElement colorFilter,
+        List<string> issues)
+    {
+        var description = $"{filterColumnDescription} colorFilter #{ordinal}";
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "dxfId", colorFilter.Attribute("dxfId")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "cellColor", colorFilter.Attribute("cellColor")?.Value, issues);
+
+        if (colorFilter.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetAutoFilterIconFilterIssues(
+        string worksheetPart,
+        string filterColumnDescription,
+        int ordinal,
+        XElement iconFilter,
+        List<string> issues)
+    {
+        var description = $"{filterColumnDescription} iconFilter #{ordinal}";
+        if (iconFilter.Attribute("iconSet") is not null && string.IsNullOrWhiteSpace(iconFilter.Attribute("iconSet")?.Value))
+            issues.Add($"{worksheetPart} {description} has blank iconSet attribute");
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "iconId", iconFilter.Attribute("iconId")?.Value, issues);
+
+        if (iconFilter.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetAutoFilterSortStateIssues(
+        string worksheetPart,
+        string autoFilterDescription,
+        WorksheetSortStateReference sortStateReference,
+        List<string> issues)
+    {
+        var sortState = sortStateReference.Element;
+        var description = $"{autoFilterDescription} sortState #{sortStateReference.Ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "columnSort", sortState.Attribute("columnSort")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "caseSensitive", sortState.Attribute("caseSensitive")?.Value, issues);
+
+        var reference = sortState.Attribute("ref")?.Value;
+        if (!string.IsNullOrWhiteSpace(reference) && !IsValidLocalWorksheetReference(reference))
+            issues.Add($"{worksheetPart} {description} has invalid local ref reference '{reference}'");
+
+        foreach (var unexpectedChild in sortState.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "sortCondition" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var conditions = sortState.Elements(SpreadsheetNs + "sortCondition").ToArray();
+        if (conditions.Length > 64)
+            issues.Add($"{worksheetPart} {description} has {conditions.Length} sortCondition entries; expected at most 64");
+
+        foreach (var condition in conditions.Select((element, index) => new WorksheetSortConditionReference(index + 1, element)))
+        {
+            AddWorksheetSortConditionIssues(worksheetPart, description, condition, issues);
+        }
+
+        var extensionLists = sortState.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetAutoFilterChildOrderingIssues(
+        string worksheetPart,
+        string description,
+        XElement autoFilter,
+        List<string> issues)
+    {
+        var previousKnownChildOrder = -1;
+        foreach (var child in autoFilter.Elements())
+        {
+            var childOrder = GetWorksheetAutoFilterChildOrder(child);
+            if (childOrder < 0)
+                continue;
+
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"{worksheetPart} {description} child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+        }
+    }
+
+    private static void AddWorksheetAutoFilterColumnChildOrderingIssues(
+        string worksheetPart,
+        string description,
+        XElement filterColumn,
+        List<string> issues)
+    {
+        var previousKnownChildOrder = -1;
+        foreach (var child in filterColumn.Elements())
+        {
+            var childOrder = GetWorksheetAutoFilterColumnChildOrder(child);
+            if (childOrder < 0)
+                continue;
+
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"{worksheetPart} {description} child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+        }
+    }
+
+    private static bool IsKnownWorksheetAutoFilterChild(XElement child) =>
+        GetWorksheetAutoFilterChildOrder(child) >= 0;
+
+    private static int GetWorksheetAutoFilterChildOrder(XElement child)
+    {
+        if (child.Name.Namespace != SpreadsheetNs)
+            return -1;
+
+        return child.Name.LocalName switch
+        {
+            "filterColumn" => 0,
+            "sortState" => 1,
+            "extLst" => 2,
+            _ => -1
+        };
+    }
+
+    private static bool IsKnownWorksheetAutoFilterColumnChild(XElement child) =>
+        GetWorksheetAutoFilterColumnChildOrder(child) >= 0;
+
+    private static int GetWorksheetAutoFilterColumnChildOrder(XElement child)
+    {
+        if (child.Name.Namespace != SpreadsheetNs)
+            return -1;
+
+        return child.Name.LocalName switch
+        {
+            "filters" => 0,
+            "top10" => 1,
+            "customFilters" => 2,
+            "dynamicFilter" => 3,
+            "colorFilter" => 4,
+            "iconFilter" => 5,
+            "extLst" => 6,
+            _ => -1
+        };
+    }
+
+    private static void AddRequiredNonNegativePackageDecimalIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            issues.Add($"{worksheetPart} {description} has no {attributeName}");
+            return;
+        }
+
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, attributeName, value, issues);
+    }
+
+    private static void AddWorksheetNestedExtensionListIssues(
+        string worksheetPart,
+        string ownerDescription,
+        int ordinal,
+        XElement extensionList,
+        List<string> issues)
+    {
+        var description = $"{ownerDescription} extLst #{ordinal}";
+        if (extensionList.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+            issues.Add($"{worksheetPart} {description} has attributes; expected extension entries only");
+
+        foreach (var unexpectedChild in extensionList.Elements().Where(element => element.Name != SpreadsheetNs + "ext"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected ext entries only");
+        }
+
+        var extensions = extensionList.Elements(SpreadsheetNs + "ext").ToArray();
+        if (extensions.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no ext entries");
+
+        var seenUris = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var extension in extensions.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            var extensionDescription = $"{description} ext #{extension.Ordinal}";
+            var uri = extension.Element.Attribute("uri")?.Value;
+            if (string.IsNullOrWhiteSpace(uri))
+                issues.Add($"{worksheetPart} {extensionDescription} has no uri");
+            else if (!seenUris.Add(uri.Trim()))
+                issues.Add($"{worksheetPart} {description} has duplicate ext uri '{uri}'");
+        }
+    }
+
+    private static void ThrowInvalidWorksheetAutoFilterMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet autoFilter metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetSheetViewsMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -15384,6 +16052,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetProtectedRangeReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetAutoFilterReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetAutoFilterColumnReference(
         int Ordinal,
         XElement Element);
 
