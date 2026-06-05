@@ -459,6 +459,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetBackgroundImagePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomPropertyPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertLegacyCommentPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPivotPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -664,6 +665,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetBackgroundImagePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomPropertyPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertLegacyCommentPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPivotPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3198,6 +3200,186 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet custom-property package graph: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetScenarioPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            foreach (var scenarios in worksheetXml.Root?.Elements(SpreadsheetNs + "scenarios") ?? [])
+            {
+                AddWorksheetScenariosIssues(worksheetPart, scenarios, issues);
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetScenarioPackage(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetScenariosIssues(
+        string worksheetPart,
+        XElement scenarios,
+        List<string> issues)
+    {
+        var scenarioElements = scenarios.Elements(SpreadsheetNs + "scenario").ToArray();
+        if (scenarioElements.Length == 0)
+        {
+            issues.Add($"{worksheetPart} scenarios element has no scenario entries");
+            return;
+        }
+
+        AddWorksheetScenariosIndexIssue(worksheetPart, "current", scenarios.Attribute("current")?.Value, scenarioElements.Length, issues);
+        AddWorksheetScenariosIndexIssue(worksheetPart, "show", scenarios.Attribute("show")?.Value, scenarioElements.Length, issues);
+
+        foreach (var scenario in scenarioElements.Select((element, index) => new WorksheetScenarioReference(index + 1, element)))
+        {
+            AddWorksheetScenarioIssues(worksheetPart, scenario, issues);
+        }
+    }
+
+    private static void AddWorksheetScenariosIndexIssue(
+        string worksheetPart,
+        string attributeName,
+        string? value,
+        int scenarioCount,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!TryParseNonNegativePackageInt(value, out var index))
+        {
+            issues.Add($"{worksheetPart} scenarios has invalid {attributeName} index '{value}'");
+            return;
+        }
+
+        if (index >= scenarioCount)
+            issues.Add($"{worksheetPart} scenarios {attributeName} index {index} is outside {scenarioCount} scenario entries");
+    }
+
+    private static void AddWorksheetScenarioIssues(
+        string worksheetPart,
+        WorksheetScenarioReference scenarioReference,
+        List<string> issues)
+    {
+        var scenario = scenarioReference.Element;
+        var scenarioName = scenario.Attribute("name")?.Value;
+        var description = string.IsNullOrWhiteSpace(scenarioName)
+            ? $"scenario #{scenarioReference.Ordinal}"
+            : $"scenario '{scenarioName}'";
+
+        if (string.IsNullOrWhiteSpace(scenarioName))
+            issues.Add($"{worksheetPart} {description} has no name");
+
+        AddWorksheetScenarioBooleanIssue(worksheetPart, description, "hidden", scenario.Attribute("hidden")?.Value, issues);
+        AddWorksheetScenarioBooleanIssue(worksheetPart, description, "locked", scenario.Attribute("locked")?.Value, issues);
+
+        var inputCells = scenario.Elements(SpreadsheetNs + "inputCells").ToArray();
+        if (inputCells.Length == 0)
+        {
+            issues.Add($"{worksheetPart} {description} has no inputCells entries");
+        }
+
+        var countText = scenario.Attribute("count")?.Value;
+        if (!string.IsNullOrWhiteSpace(countText))
+        {
+            if (!TryParseNonNegativePackageInt(countText, out var declaredCount))
+            {
+                issues.Add($"{worksheetPart} {description} has invalid count '{countText}'");
+            }
+            else if (declaredCount != inputCells.Length)
+            {
+                issues.Add($"{worksheetPart} {description} count is {declaredCount}, but contains {inputCells.Length} inputCells entries");
+            }
+        }
+
+        foreach (var inputCell in inputCells.Select((element, index) => new WorksheetScenarioInputCellReference(index + 1, element)))
+        {
+            AddWorksheetScenarioInputCellIssues(worksheetPart, description, inputCell, issues);
+        }
+    }
+
+    private static void AddWorksheetScenarioBooleanIssue(
+        string worksheetPart,
+        string scenarioDescription,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) || IsValidPackageBoolean(value))
+            return;
+
+        issues.Add($"{worksheetPart} {scenarioDescription} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void AddWorksheetScenarioInputCellIssues(
+        string worksheetPart,
+        string scenarioDescription,
+        WorksheetScenarioInputCellReference inputCellReference,
+        List<string> issues)
+    {
+        var inputCell = inputCellReference.Element;
+        var reference = inputCell.Attribute("r")?.Value;
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            issues.Add($"{worksheetPart} {scenarioDescription} inputCells #{inputCellReference.Ordinal} has no r reference");
+        }
+        else if (!IsValidLocalScenarioReference(reference))
+        {
+            issues.Add($"{worksheetPart} {scenarioDescription} inputCells #{inputCellReference.Ordinal} has invalid local r reference '{reference}'");
+        }
+
+        if (inputCell.Attribute("val") is null)
+            issues.Add($"{worksheetPart} {scenarioDescription} inputCells #{inputCellReference.Ordinal} has no val attribute");
+    }
+
+    private static bool IsValidLocalScenarioReference(string reference)
+    {
+        reference = reference.Trim();
+        if (reference.Length == 0 ||
+            reference.Contains('!', StringComparison.Ordinal) ||
+            reference.Contains('[', StringComparison.Ordinal) ||
+            reference.Contains(']', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var sheet = SheetId.New();
+        if (CellAddress.TryParse(reference, sheet, out _))
+            return true;
+
+        var rangeParts = reference.Split(':', StringSplitOptions.TrimEntries);
+        return rangeParts.Length == 2 &&
+            CellAddress.TryParse(rangeParts[0], sheet, out _) &&
+            CellAddress.TryParse(rangeParts[1], sheet, out _);
+    }
+
+    private static bool IsValidPackageBoolean(string value)
+    {
+        value = value.Trim();
+        return value is "0" or "1" ||
+            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ThrowInvalidWorksheetScenarioPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet scenario metadata: {sample}{suffix}");
     }
 
     private static void AssertLegacyCommentPackageComplete(string xlsxPath, string label, string sourcePath)
@@ -9326,6 +9508,14 @@ internal static class ExcelOpenSmoke
         string? Name,
         string? LegacyId,
         string? RelationshipId);
+
+    private sealed record WorksheetScenarioReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetScenarioInputCellReference(
+        int Ordinal,
+        XElement Element);
 
     private sealed record DocumentPropertyPackageDefinition(
         string Label,
