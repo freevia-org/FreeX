@@ -2131,6 +2131,58 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversTravelEventVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "TRAVELL Itinery bookng FLIGTH airlnie Departue arival PASSPRT bagage Lugage boardng Airfaire shuttel VENEU confernce Registraton sessoin Speker exhbit Bootth. Keep travel, itinerary, booking, flight, airline, departure, arrival, passport, baggage, luggage, boarding, airfare, shuttle, venue, conference, registration, session, speaker, exhibit, booth, pretravell, travell_id, https://travell.example.com/confernce, events@airlnie.example.com, \"C:\\departue folder\\boardng file.xlsx\", and [C:\\veneu folder\\registraton file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "travell TRAVELL Travell https://travell.example.com/travell events@travell.example.com travell_id pretravell \"C:\\travell folder\\travell file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "travel");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("TRAVELL", "TRAVEL"),
+            ("Itinery", "Itinerary"),
+            ("bookng", "booking"),
+            ("FLIGTH", "FLIGHT"),
+            ("airlnie", "airline"),
+            ("Departue", "Departure"),
+            ("arival", "arrival"),
+            ("PASSPRT", "PASSPORT"),
+            ("bagage", "baggage"),
+            ("Lugage", "Luggage"),
+            ("boardng", "boarding"),
+            ("Airfaire", "Airfare"),
+            ("shuttel", "shuttle"),
+            ("VENEU", "VENUE"),
+            ("confernce", "conference"),
+            ("Registraton", "Registration"),
+            ("sessoin", "session"),
+            ("Speker", "Speaker"),
+            ("exhbit", "exhibit"),
+            ("Bootth", "Booth"));
+        plan.IssueCount.Should().Be(20);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "TRAVEL Itinerary booking FLIGHT airline Departure arrival PASSPORT baggage Luggage boarding Airfare shuttle VENUE conference Registration session Speaker exhibit Booth. Keep travel, itinerary, booking, flight, airline, departure, arrival, passport, baggage, luggage, boarding, airfare, shuttle, venue, conference, registration, session, speaker, exhibit, booth, pretravell, travell_id, https://travell.example.com/confernce, events@airlnie.example.com, \"C:\\departue folder\\boardng file.xlsx\", and [C:\\veneu folder\\registraton file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(20);
+        replaceAllCorrected.Should().Be(
+            "travel TRAVEL Travel https://travell.example.com/travell events@travell.example.com travell_id pretravell \"C:\\travell folder\\travell file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");
