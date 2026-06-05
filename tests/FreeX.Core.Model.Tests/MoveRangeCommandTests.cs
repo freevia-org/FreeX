@@ -32,7 +32,7 @@ public sealed class MoveRangeCommandTests
         sheet.GetCell(sourceEnd).Should().BeNull();
         sheet.GetCell(destination)!.Value.Should().Be(new TextValue("left"));
         var movedFormula = sheet.GetCell(new CellAddress(sheet.Id, 3, 4))!;
-        movedFormula.FormulaText.Should().Be("A1&\"!\"");
+        movedFormula.FormulaText.Should().Be("C3&\"!\"");
         movedFormula.Value.Should().Be(new TextValue("left!"));
 
         command.Revert(context);
@@ -41,6 +41,54 @@ public sealed class MoveRangeCommandTests
         sheet.GetCell(sourceEnd)!.FormulaText.Should().Be("A1&\"!\"");
         sheet.GetCell(destination)!.Value.Should().Be(new TextValue("old"));
         sheet.GetCell(new CellAddress(sheet.Id, 3, 4)).Should().BeNull();
+    }
+
+    [Fact]
+    public void Apply_RewritesMovedFormulaReferencesLikePasteOffset()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(
+            source,
+            Cell.FromFormula("B1+$B$1+$B1+B$1+SUM(B1:C2)"));
+
+        var command = new MoveRangeCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            destination);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetCell(destination)!.FormulaText
+            .Should()
+            .Be("D3+$B$1+$B3+D$1+SUM(D3:E4)");
+    }
+
+    [Fact]
+    public void Apply_InvalidatesMovedFormulaCachedAstEvenWhenTextDoesNotChange()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 3, 3);
+        var formula = Cell.FromFormula("$B$2");
+        formula.CachedAst = new object();
+        sheet.SetCell(source, formula);
+
+        var command = new MoveRangeCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            destination);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        var movedFormula = sheet.GetCell(destination)!;
+        movedFormula.FormulaText.Should().Be("$B$2");
+        movedFormula.CachedAst.Should().BeNull();
     }
 
     [Fact]
