@@ -443,6 +443,11 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\uFF12/Jan/\uFF12\uFF16")]
     [InlineData("Mon \uFF11/\uFF12/\uFF12\uFF16")]
     [InlineData("Jan\uFF0F\uFF12\uFF0F\uFF12\uFF16")]
+    [InlineData("\uFF2A\uFF41\uFF4E \uFF12, \uFF12\uFF16")]
+    [InlineData("\uFF2A\uFF41\uFF4E\uFF0F\uFF12\uFF0F\uFF12\uFF16")]
+    [InlineData("\uFF12\uFF0F\uFF2A\uFF41\uFF4E\uFF0F\uFF12\uFF16")]
+    [InlineData("\uFF12\uFF16-\uFF2A\uFF41\uFF4E-\uFF12")]
+    [InlineData("\uFF26\uFF52\uFF49 \uFF2A\uFF41\uFF4E \uFF12nd, \uFF12\uFF16")]
     public void FindFormulaErrorIssues_ReturnsFullwidthTextDatesWithTwoDigitYears(string value)
     {
         var wb = new Workbook("test");
@@ -463,7 +468,9 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\uFF12\uFF16/\uFF11\uFF13/\uFF12")]
     [InlineData("\uFF12\uFF16\uFF0E\uFF12\uFF0E\uFF13\uFF10")]
     [InlineData("Jan \uFF13\uFF12, \uFF12\uFF16")]
-    [InlineData("\uFF2A\uFF41\uFF4E \uFF12, \uFF12\uFF16")]
+    [InlineData("\uFF2A\uFF41\uFF4E \uFF13\uFF12, \uFF12\uFF16")]
+    [InlineData("\uFF2A\uFF41\uFF58 \uFF12, \uFF12\uFF16")]
+    [InlineData("\u30B8\u30E3 \uFF12, \uFF12\uFF16")]
     [InlineData("\uFF11\uFF0F\uFF0F\uFF12\uFF0F\uFF12\uFF16")]
     [InlineData("\uFF11\uFF12\uFF13")]
     [InlineData("\uFF11\uFF0C\uFF12\uFF13\uFF14\uFF0E\uFF15\uFF10")]
