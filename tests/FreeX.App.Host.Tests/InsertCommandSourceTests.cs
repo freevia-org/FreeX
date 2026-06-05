@@ -22,7 +22,8 @@ public sealed class InsertCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -42,7 +43,8 @@ public sealed class InsertCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -58,23 +60,26 @@ public sealed class InsertCommandSourceTests
     [InlineData("Object")]
     public void InsertOutOfScopeCommands_AreNotSurfacedAsDisabledRibbonButtons(string title)
     {
-        ReadMainWindowXaml().Should().NotContain($"local:RibbonMetadata.CommandName=\"{LocalizedXamlTestSupport.EscapeAttribute(title)}\"");
+        LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .Should()
+            .NotContain($"local:RibbonMetadata.CommandName=\"{LocalizedXamlTestSupport.EscapeAttribute(title)}\"");
     }
 
     [Fact]
     public void InsertShapesButton_ExposesExpectedShapeMenuRoutes()
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), "Shapes");
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName("Shapes");
 
-        var rectangle = ExtractMenuItemElementByClickHandler(button, "DrawRectBtn_Click");
+        var rectangle = button.ExtractMenuItemElementByClickHandler("DrawRectBtn_Click");
         rectangle.ShouldContainLocalizedAttribute("Header", "Rectangle");
         rectangle.Should().Contain("local:RibbonTooltip.KeyTip=\"R\"");
 
-        var ellipse = ExtractMenuItemElementByClickHandler(button, "DrawEllipseBtn_Click");
+        var ellipse = button.ExtractMenuItemElementByClickHandler("DrawEllipseBtn_Click");
         ellipse.ShouldContainLocalizedAttribute("Header", "Ellipse");
         ellipse.Should().Contain("local:RibbonTooltip.KeyTip=\"E\"");
 
-        var line = ExtractMenuItemElementByClickHandler(button, "DrawLineBtn_Click");
+        var line = button.ExtractMenuItemElementByClickHandler("DrawLineBtn_Click");
         line.ShouldContainLocalizedAttribute("Header", "Line");
         line.Should().Contain("local:RibbonTooltip.KeyTip=\"L\"");
     }
@@ -141,36 +146,4 @@ public sealed class InsertCommandSourceTests
         drawingSource.Should().Contain("new AddTextBoxCommand(");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
-    private static string ExtractButtonElementByTitle(string xaml, string title, string? handler = null) =>
-        xaml.ExtractElementByInvariantCommandName(
-            "Button",
-            title,
-            handler is null ? null : $"Click=\"{handler}\"");
-
-    private static string ExtractMenuItemElementByClickHandler(string xaml, string clickHandler)
-    {
-        var searchIndex = 0;
-        while (true)
-        {
-            var handlerIndex = xaml.IndexOf($"Click=\"{clickHandler}\"", searchIndex, StringComparison.Ordinal);
-            handlerIndex.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} menu item should be present");
-
-            var start = xaml.LastIndexOf("<MenuItem", handlerIndex, StringComparison.Ordinal);
-            if (start >= 0)
-            {
-                var startTagEnd = xaml.IndexOf(">", start, StringComparison.Ordinal);
-                if (startTagEnd > handlerIndex)
-                {
-                    var end = xaml.IndexOf("/>", handlerIndex, StringComparison.Ordinal);
-                    end.Should().BeGreaterThan(handlerIndex);
-                    return xaml[start..(end + 2)];
-                }
-            }
-
-            searchIndex = handlerIndex + clickHandler.Length;
-        }
-    }
 }

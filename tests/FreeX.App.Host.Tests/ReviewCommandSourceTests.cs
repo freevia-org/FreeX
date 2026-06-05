@@ -16,7 +16,8 @@ public sealed class ReviewCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -42,7 +43,8 @@ public sealed class ReviewCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -60,7 +62,8 @@ public sealed class ReviewCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName(title, $"Click=\"{handler}\"");
 
         button.ShouldContainLocalizedAttribute("Content", title);
         button.ShouldContainInvariantCommandName(title);
@@ -104,31 +107,4 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
-    private static string ExtractButtonElementByTitle(string xaml, string title, string? clickHandler = null)
-    {
-        var matches = new List<string>();
-        var searchIndex = 0;
-        while (true)
-        {
-            var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", searchIndex, StringComparison.Ordinal);
-            if (titleIndex < 0)
-                break;
-
-            var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
-            start.Should().BeGreaterThanOrEqualTo(0, $"the {title} review command should be a Button");
-
-            var end = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-            end.Should().BeGreaterThanOrEqualTo(titleIndex, $"the {title} review button should be self-closing");
-            matches.Add(xaml.Substring(start, end - start + 2));
-            searchIndex = end + 2;
-        }
-
-        matches.Should().NotBeEmpty($"the {title} review button should be present");
-        return clickHandler is null
-            ? matches[0]
-            : matches.LastOrDefault(button => button.Contains($"Click=\"{clickHandler}\"", StringComparison.Ordinal)) ?? matches[0];
-    }
 }
