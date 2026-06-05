@@ -2289,6 +2289,53 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversHelpdeskSlaVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "HELPDESKK Escalaton incidnt Workarond prioroty Severty outagee ticketng QUEU Breachd servcelevel Supportdesk triagee Callbackk chatbottt. Keep helpdesk, escalation, incident, workaround, priority, severity, outage, ticketing, queue, breached, service level, support desk, triage, callback, chatbot, prehelpdeskk, helpdeskk_id, https://helpdeskk.example.com/ticketng, desk@severty.example.com, \"C:\\incidnt folder\\workarond file.xlsx\", and [C:\\callbackk folder\\servcelevel file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "helpdeskk HELPDESKK Helpdeskk https://helpdeskk.example.com/helpdeskk desk@helpdeskk.example.com helpdeskk_id prehelpdeskk \"C:\\helpdeskk folder\\helpdeskk file.xlsx\" [C:\\helpdeskk folder\\helpdeskk file.xlsx].")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "helpdesk");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("HELPDESKK", "HELPDESK"),
+            ("Escalaton", "Escalation"),
+            ("incidnt", "incident"),
+            ("Workarond", "Workaround"),
+            ("prioroty", "priority"),
+            ("Severty", "Severity"),
+            ("outagee", "outage"),
+            ("ticketng", "ticketing"),
+            ("QUEU", "QUEUE"),
+            ("Breachd", "Breached"),
+            ("servcelevel", "service level"),
+            ("Supportdesk", "Support desk"),
+            ("triagee", "triage"),
+            ("Callbackk", "Callback"),
+            ("chatbottt", "chatbot"));
+        plan.IssueCount.Should().Be(15);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "HELPDESK Escalation incident Workaround priority Severity outage ticketing QUEUE Breached service level Support desk triage Callback chatbot. Keep helpdesk, escalation, incident, workaround, priority, severity, outage, ticketing, queue, breached, service level, support desk, triage, callback, chatbot, prehelpdeskk, helpdeskk_id, https://helpdeskk.example.com/ticketng, desk@severty.example.com, \"C:\\incidnt folder\\workarond file.xlsx\", and [C:\\callbackk folder\\servcelevel file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(15);
+        replaceAllCorrected.Should().Be(
+            "helpdesk HELPDESK Helpdesk https://helpdeskk.example.com/helpdeskk desk@helpdeskk.example.com helpdeskk_id prehelpdeskk \"C:\\helpdeskk folder\\helpdeskk file.xlsx\" [C:\\helpdeskk folder\\helpdeskk file.xlsx].");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");
