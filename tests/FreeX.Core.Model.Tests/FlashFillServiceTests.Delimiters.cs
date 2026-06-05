@@ -210,6 +210,87 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(
+        @"C:\Reports\North\Revenue.xlsx",
+        "North",
+        @"D:\Archive\South\Sales.final.csv",
+        "South",
+        @"E:\Finance\West\Budget.v2.txt",
+        "West")]
+    [InlineData(
+        "/mnt/reports/North/revenue.xlsx",
+        "North",
+        "/mnt/archive/South/sales.final.csv",
+        "South",
+        "/mnt/finance/West/budget.v2.txt",
+        "West")]
+    [InlineData(
+        @"\\server\share\Finance\Budget.xlsx",
+        "Finance",
+        @"\\server\share\Legal\Contracts.csv",
+        "Legal",
+        @"\\server\share\Operations\Plan.txt",
+        "Operations")]
+    public void Fill_ExtractFileParentDirectoryName_ExtractsDirectoryBeforeFinalFileSegment(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractFileParentDirectoryTitle_TitleizesParentDirectorySlug()
+    {
+        var result = FlashFillService.Fill(
+            [
+                (@"C:\Reports\north-america\Revenue.xlsx", "North America"),
+                (@"D:\Archive\south_america\Sales.final.csv", "South America")
+            ],
+            [@"E:\Finance\west-europe\Budget.v2.txt"]);
+
+        result.Should().BeEquivalentTo(["West Europe"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractFileParentDirectoryTitle_TitleizesParentDirectoryWithSpaces()
+    {
+        var result = FlashFillService.Fill(
+            [
+                (@"/mnt/reports/north america/revenue.xlsx", "North America"),
+                (@"/mnt/archive/south america/sales.final.csv", "South America")
+            ],
+            [@"/mnt/finance/west europe/budget.v2.txt"]);
+
+        result.Should().BeEquivalentTo(["West Europe"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("Revenue.xlsx")]
+    [InlineData(@"C:\Revenue.xlsx")]
+    [InlineData(@"C:\Reports\")]
+    [InlineData(@"C:\Reports\README")]
+    [InlineData("/revenue.xlsx")]
+    public void Fill_ExtractFileParentDirectoryName_ReturnsNullWhenRemainingHasNoParentDirectoryAndFile(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                (@"C:\Reports\North\Revenue.xlsx", "North"),
+                (@"D:\Archive\South\Sales.final.csv", "South")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_ExtractSemicolonDelimitedToken_ExtractsConsistentPart()
     {

@@ -74,6 +74,8 @@ public static partial class FlashFillService
             ?? TryDelimitedPartReorder(examples)
             ?? TryFinalWhitespaceToken(examples)
             ?? TryExtractFinalPathSegmentStem(examples)
+            ?? TryExtractFileParentDirectoryName(examples)
+            ?? TryExtractFileParentDirectoryTitle(examples)
             ?? TryRemoveFinalDottedToken(examples)
             ?? TryExtractFinalDottedToken(examples)
             ?? TryRemoveFinalDelimitedToken(examples)
