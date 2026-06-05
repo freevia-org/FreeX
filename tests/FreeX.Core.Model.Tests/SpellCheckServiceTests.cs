@@ -1094,6 +1094,39 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversGovernmentNonprofitVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "MUNICIPL constituant Grantt appropreation compliace Donaton donorrr fundraisin sponsorshipp volunter. Valid government regulation. Keep municipl_id, https://municipl.example.com/donaton, donorrr@fundraisin.example.com, \"C:\\appropreation folder\\sponsorshipp file.xlsx\", and [C:\\volunter folder\\compliace file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("MUNICIPL", "MUNICIPAL"),
+            ("constituant", "constituent"),
+            ("Grantt", "Grant"),
+            ("appropreation", "appropriation"),
+            ("compliace", "compliance"),
+            ("Donaton", "Donation"),
+            ("donorrr", "donor"),
+            ("fundraisin", "fundraising"),
+            ("sponsorshipp", "sponsorship"),
+            ("volunter", "volunteer"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "MUNICIPAL constituent Grant appropriation compliance Donation donor fundraising sponsorship volunteer. Valid government regulation. Keep municipl_id, https://municipl.example.com/donaton, donorrr@fundraisin.example.com, \"C:\\appropreation folder\\sponsorshipp file.xlsx\", and [C:\\volunter folder\\compliace file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
