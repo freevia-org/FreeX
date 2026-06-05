@@ -45,26 +45,19 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                var bytes = File.ReadAllBytes(path);
-                Encoding.ASCII.GetString(bytes[..Math.Min(bytes.Length, 8)]).Should().StartWith("%PDF-");
-                Encoding.ASCII.GetString(bytes).Should().Contain("%%EOF");
+            var bytes = File.ReadAllBytes(path);
+            Encoding.ASCII.GetString(bytes[..Math.Min(bytes.Length, 8)]).Should().StartWith("%PDF-");
+            Encoding.ASCII.GetString(bytes).Should().Contain("%%EOF");
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.PageCount.Should().Be(1);
-                pdf.Pages[0].Width.Point.Should().BeApproximately(120, 0.01);
-                pdf.Pages[0].Height.Point.Should().BeApproximately(90, 0.01);
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.PageCount.Should().Be(1);
+            pdf.Pages[0].Width.Point.Should().BeApproximately(120, 0.01);
+            pdf.Pages[0].Height.Point.Should().BeApproximately(90, 0.01);
         });
     }
 
@@ -73,7 +66,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
             var properties = new PdfDocumentProperties(
                 Title: "Quarterly Review",
@@ -81,23 +74,16 @@ public partial class ExportPlannerTests
                 Subject: "Workbook export",
                 Keywords: "FreeX, spreadsheet");
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, properties);
+            PdfDocumentExporter.Save(document, path, properties);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.Info.Title.Should().Be("Quarterly Review");
-                pdf.Info.Author.Should().Be("Finance Team");
-                pdf.Info.Subject.Should().Be("Workbook export");
-                pdf.Info.Keywords.Should().Be("FreeX, spreadsheet");
-                pdf.Info.Creator.Should().Be("FreeX");
-                ReadDisplayDocTitle(pdf).Should().BeTrue();
-                ReadPrintScaling(pdf).Should().Be("/None");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.Info.Title.Should().Be("Quarterly Review");
+            pdf.Info.Author.Should().Be("Finance Team");
+            pdf.Info.Subject.Should().Be("Workbook export");
+            pdf.Info.Keywords.Should().Be("FreeX, spreadsheet");
+            pdf.Info.Creator.Should().Be("FreeX");
+            ReadDisplayDocTitle(pdf).Should().BeTrue();
+            ReadPrintScaling(pdf).Should().Be("/None");
         });
     }
 
@@ -106,7 +92,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
             var properties = new PdfDocumentProperties(
                 Title: "   ",
@@ -114,18 +100,11 @@ public partial class ExportPlannerTests
                 Subject: "Workbook export",
                 Keywords: "FreeX, spreadsheet");
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, properties);
+            PdfDocumentExporter.Save(document, path, properties);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.Info.Title.Should().BeEmpty();
-                ReadDisplayDocTitle(pdf).Should().BeFalse();
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.Info.Title.Should().BeEmpty();
+            ReadDisplayDocTitle(pdf).Should().BeFalse();
         });
     }
 
@@ -134,20 +113,13 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                ReadPrintScaling(pdf).Should().Be("/None");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            ReadPrintScaling(pdf).Should().Be("/None");
         });
     }
 
@@ -156,20 +128,13 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateDocument(pageCount: 2);
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                ReadPageLayout(pdf).Should().Be("/SinglePage");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            ReadPageLayout(pdf).Should().Be("/SinglePage");
         });
     }
 
@@ -178,22 +143,15 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                ReadViewerPreference(pdf, "/FitWindow").Should().BeTrue();
-                ReadViewerPreference(pdf, "/CenterWindow").Should().BeTrue();
-                ReadViewerPreference(pdf, "/PickTrayByPDFSize").Should().BeTrue();
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            ReadViewerPreference(pdf, "/FitWindow").Should().BeTrue();
+            ReadViewerPreference(pdf, "/CenterWindow").Should().BeTrue();
+            ReadViewerPreference(pdf, "/PickTrayByPDFSize").Should().BeTrue();
         });
     }
 
@@ -202,20 +160,13 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.Internals.Catalog.Elements.GetString("/Lang").Should().Be("en-US");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.Internals.Catalog.Elements.GetString("/Lang").Should().Be("en-US");
         });
     }
 
@@ -224,20 +175,13 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, pdfLanguage: "uk-UA");
+            PdfDocumentExporter.Save(document, path, pdfLanguage: "uk-UA");
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.Internals.Catalog.Elements.GetString("/Lang").Should().Be("uk-UA");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.Internals.Catalog.Elements.GetString("/Lang").Should().Be("uk-UA");
         });
     }
 
@@ -246,20 +190,13 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateDocument(pageCount: 3);
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2));
+            PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2));
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.PageCount.Should().Be(1);
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.PageCount.Should().Be(1);
         });
     }
 
@@ -268,7 +205,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateDocument(pageCount: 3);
             var bookmarks = new[]
             {
@@ -277,19 +214,12 @@ public partial class ExportPlannerTests
                 new PdfBookmark("Hidden", PageIndex: 2)
             };
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2), bookmarks: bookmarks);
+            PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2), bookmarks: bookmarks);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.PageCount.Should().Be(1);
-                pdf.Outlines.Count.Should().Be(1);
-                pdf.Outlines[0].Title.Should().Be("Details");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.PageCount.Should().Be(1);
+            pdf.Outlines.Count.Should().Be(1);
+            pdf.Outlines[0].Title.Should().Be("Details");
         });
     }
 
@@ -298,23 +228,16 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
             var bookmarks = new[] { new PdfBookmark("Summary", PageIndex: 0) };
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, null, null, bookmarks: bookmarks);
+            PdfDocumentExporter.Save(document, path, null, null, bookmarks: bookmarks);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.PageMode.Should().Be(PdfPageMode.UseOutlines);
-                pdf.Internals.Catalog.Elements.GetName("/NonFullScreenPageMode")
-                    .Should().Be("/UseOutlines");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.PageMode.Should().Be(PdfPageMode.UseOutlines);
+            pdf.Internals.Catalog.Elements.GetName("/NonFullScreenPageMode")
+                .Should().Be("/UseOutlines");
         });
     }
 
@@ -323,27 +246,20 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(
-                    document,
-                    path,
-                    null,
-                    null,
-                    initialView: PdfInitialView.OneColumn,
-                    openMode: PdfOpenMode.FullScreen);
+            PdfDocumentExporter.Save(
+                document,
+                path,
+                null,
+                null,
+                initialView: PdfInitialView.OneColumn,
+                openMode: PdfOpenMode.FullScreen);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                ReadPageLayout(pdf).Should().Be("/OneColumn");
-                pdf.PageMode.Should().Be(PdfPageMode.FullScreen);
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            ReadPageLayout(pdf).Should().Be("/OneColumn");
+            pdf.PageMode.Should().Be(PdfPageMode.FullScreen);
         });
     }
 
@@ -352,25 +268,18 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(
-                    document,
-                    path,
-                    null,
-                    null,
-                    includeSelectableText: true);
+            PdfDocumentExporter.Save(
+                document,
+                path,
+                null,
+                null,
+                includeSelectableText: true);
 
-                var bytes = File.ReadAllBytes(path);
-                Encoding.ASCII.GetString(bytes).Should().Contain("FreeX PDF 1");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            var bytes = File.ReadAllBytes(path);
+            Encoding.ASCII.GetString(bytes).Should().Contain("FreeX PDF 1");
         });
     }
 
@@ -379,30 +288,23 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateVectorGeometryDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(
-                    document,
-                    path,
-                    null,
-                    null,
-                    includeSelectableText: true);
+            PdfDocumentExporter.Save(
+                document,
+                path,
+                null,
+                null,
+                includeSelectableText: true);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                var content = ReadDecodedPageContent(pdf.Pages[0]);
-                content.Should().Contain("15 72 m");
-                content.Should().Contain("45 57 l");
-                content.Should().Contain("B*");
-                content.Should().Contain("1 0 0 rg");
-                content.Should().Contain("0 0 1 RG");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            var content = ReadDecodedPageContent(pdf.Pages[0]);
+            content.Should().Contain("15 72 m");
+            content.Should().Contain("45 57 l");
+            content.Should().Contain("B*");
+            content.Should().Contain("1 0 0 rg");
+            content.Should().Contain("0 0 1 RG");
         });
     }
 
@@ -411,27 +313,20 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateTransformedVectorGeometryDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(
-                    document,
-                    path,
-                    null,
-                    null,
-                    includeSelectableText: true);
+            PdfDocumentExporter.Save(
+                document,
+                path,
+                null,
+                null,
+                includeSelectableText: true);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                var content = ReadDecodedPageContent(pdf.Pages[0]);
-                content.Should().Contain("18 63 m");
-                content.Should().Contain("48 40.5 l");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            var content = ReadDecodedPageContent(pdf.Pages[0]);
+            content.Should().Contain("18 63 m");
+            content.Should().Contain("48 40.5 l");
         });
     }
 
@@ -440,29 +335,22 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateGradientVectorGeometryDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(
-                    document,
-                    path,
-                    null,
-                    null,
-                    includeSelectableText: true);
+            PdfDocumentExporter.Save(
+                document,
+                path,
+                null,
+                null,
+                includeSelectableText: true);
 
-                var pdfBytes = Encoding.ASCII.GetString(File.ReadAllBytes(path));
-                pdfBytes.Should().Contain("/ShadingType 2");
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                var content = ReadDecodedPageContent(pdf.Pages[0]);
-                content.Should().Contain("/Pattern cs");
-                content.Should().Contain(" scn");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            var pdfBytes = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+            pdfBytes.Should().Contain("/ShadingType 2");
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            var content = ReadDecodedPageContent(pdf.Pages[0]);
+            content.Should().Contain("/Pattern cs");
+            content.Should().Contain(" scn");
         });
     }
 
@@ -471,7 +359,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var workbook = new Workbook("Hyperlink annotation export");
             var sheet = workbook.AddSheet("Sheet1");
             var webAddress = new CellAddress(sheet.Id, 1, 1);
@@ -493,29 +381,22 @@ public partial class ExportPlannerTests
             sheet.Hyperlinks[uncAddress] = @"\\server\share\book.xlsx";
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
 
-            try
-            {
-                PdfDocumentExporter.Save(
-                    document,
-                    path,
-                    null,
-                    null,
-                    includeSelectableText: false);
+            PdfDocumentExporter.Save(
+                document,
+                path,
+                null,
+                null,
+                includeSelectableText: false);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                ReadLinkAnnotationUris(pdf.Pages[0])
-                    .Should()
-                    .BeEquivalentTo(
-                        "https://example.com/freex",
-                        "mailto:review@example.com",
-                        "mailto:bare@example.com",
-                        "file:///C:/Reports/Book 1.xlsx",
-                        "file://server/share/book.xlsx");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            ReadLinkAnnotationUris(pdf.Pages[0])
+                .Should()
+                .BeEquivalentTo(
+                    "https://example.com/freex",
+                    "mailto:review@example.com",
+                    "mailto:bare@example.com",
+                    "file:///C:/Reports/Book 1.xlsx",
+                    "file://server/share/book.xlsx");
         });
     }
 
@@ -524,7 +405,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var workbook = new Workbook("Hyperlink page range export");
             var sheet = workbook.AddSheet("Sheet1");
             var firstPageAddress = new CellAddress(sheet.Id, 1, 1);
@@ -536,20 +417,13 @@ public partial class ExportPlannerTests
             sheet.PrintArea = new GridRange(firstPageAddress, secondPageAddress);
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2));
+            PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2));
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.PageCount.Should().Be(1);
-                ReadLinkAnnotationUris(pdf.Pages[0])
-                    .Should()
-                    .Equal("https://example.com/second");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.PageCount.Should().Be(1);
+            ReadLinkAnnotationUris(pdf.Pages[0])
+                .Should()
+                .Equal("https://example.com/second");
         });
     }
 
@@ -558,7 +432,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = new FixedDocument();
             var page = new FixedPage { Width = 200, Height = 100 };
             page.Children.Add(new VisualHost
@@ -579,18 +453,11 @@ public partial class ExportPlannerTests
             document.Pages.Add(content);
             document.DocumentPaginator.PageSize = new Size(200, 100);
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                var rect = ReadLinkAnnotationRects(pdf.Pages[0]).Should().ContainSingle().Subject;
-                rect.Should().Equal(72, 48, 108, 57);
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            var rect = ReadLinkAnnotationRects(pdf.Pages[0]).Should().ContainSingle().Subject;
+            rect.Should().Equal(72, 48, 108, 57);
         });
     }
 
@@ -599,7 +466,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = new FixedDocument();
             var page = new FixedPage { Width = 200, Height = 100 };
             page.Children.Add(new VisualHost
@@ -620,21 +487,14 @@ public partial class ExportPlannerTests
             document.Pages.Add(content);
             document.DocumentPaginator.PageSize = new Size(200, 100);
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                var annotation = ReadLinkAnnotations(pdf.Pages[0]).Should().ContainSingle().Subject;
-                annotation.Elements.GetName("/H").Should().Be("/I");
-                annotation.Elements.GetInteger("/F").Should().Be(4);
-                annotation.Elements.GetString("/Contents").Should().Be("https://example.com/metadata");
-                ReadLinkAnnotationBorder(annotation).Should().Equal(0, 0, 0);
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            var annotation = ReadLinkAnnotations(pdf.Pages[0]).Should().ContainSingle().Subject;
+            annotation.Elements.GetName("/H").Should().Be("/I");
+            annotation.Elements.GetInteger("/F").Should().Be(4);
+            annotation.Elements.GetString("/Contents").Should().Be("https://example.com/metadata");
+            ReadLinkAnnotationBorder(annotation).Should().Equal(0, 0, 0);
         });
     }
 
@@ -643,7 +503,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = new FixedDocument();
             var page = new FixedPage { Width = 200, Height = 100 };
             page.Children.Add(new VisualHost
@@ -664,18 +524,11 @@ public partial class ExportPlannerTests
             document.Pages.Add(content);
             document.DocumentPaginator.PageSize = new Size(200, 100);
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                var rect = ReadLinkAnnotationRects(pdf.Pages[0]).Should().ContainSingle().Subject;
-                rect.Should().Equal(0, 0, 150, 75);
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            var rect = ReadLinkAnnotationRects(pdf.Pages[0]).Should().ContainSingle().Subject;
+            rect.Should().Equal(0, 0, 150, 75);
         });
     }
 
@@ -684,36 +537,29 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var sheetId = new SheetId(Guid.NewGuid());
             var sourceAddress = new CellAddress(sheetId, 1, 1);
             var targetAddress = new CellAddress(sheetId, 10, 1);
             var document = CreateInternalWorkbookLinkDocument(sourceAddress, targetAddress);
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.PageCount.Should().Be(2);
-                var annotation = ReadLinkAnnotations(pdf.Pages[0]).Should().ContainSingle().Subject;
-                annotation.Elements.GetDictionary("/A").Should().BeNull();
-                annotation.Elements.GetString("/Contents").Should().Be("Sheet1!A10");
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.PageCount.Should().Be(2);
+            var annotation = ReadLinkAnnotations(pdf.Pages[0]).Should().ContainSingle().Subject;
+            annotation.Elements.GetDictionary("/A").Should().BeNull();
+            annotation.Elements.GetString("/Contents").Should().Be("Sheet1!A10");
 
-                var destination = annotation.Elements.GetArray("/Dest");
-                destination.Should().NotBeNull();
-                destination!.Elements.GetReference(0)!.ObjectNumber
-                    .Should()
-                    .Be(pdf.Pages[1].ReferenceNotNull.ObjectNumber);
-                destination.Elements.GetName(1).Should().Be("/XYZ");
-                destination.Elements.GetReal(2).Should().BeApproximately(30, 0.01);
-                destination.Elements.GetReal(3).Should().BeApproximately(60, 0.01);
-                destination.Elements[4].Should().Be(PdfNull.Value);
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            var destination = annotation.Elements.GetArray("/Dest");
+            destination.Should().NotBeNull();
+            destination!.Elements.GetReference(0)!.ObjectNumber
+                .Should()
+                .Be(pdf.Pages[1].ReferenceNotNull.ObjectNumber);
+            destination.Elements.GetName(1).Should().Be("/XYZ");
+            destination.Elements.GetReal(2).Should().BeApproximately(30, 0.01);
+            destination.Elements.GetReal(3).Should().BeApproximately(60, 0.01);
+            destination.Elements[4].Should().Be(PdfNull.Value);
         });
     }
 
@@ -722,24 +568,17 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var sheetId = new SheetId(Guid.NewGuid());
             var sourceAddress = new CellAddress(sheetId, 1, 1);
             var targetAddress = new CellAddress(sheetId, 10, 1);
             var document = CreateInternalWorkbookLinkDocument(sourceAddress, targetAddress);
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 1));
+            PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 1));
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.PageCount.Should().Be(1);
-                ReadLinkAnnotations(pdf.Pages[0]).Should().BeEmpty();
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.PageCount.Should().Be(1);
+            ReadLinkAnnotations(pdf.Pages[0]).Should().BeEmpty();
         });
     }
 
@@ -748,21 +587,14 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateDocument(pageCount: 2);
 
-            try
-            {
-                var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(3, 3));
+            var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(3, 3));
 
-                action.Should().Throw<InvalidOperationException>()
-                    .WithMessage(UiText.Format("Export_PageRangeStartsAfterLastPage", 2));
-                File.Exists(path).Should().BeFalse();
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            action.Should().Throw<InvalidOperationException>()
+                .WithMessage(UiText.Format("Export_PageRangeStartsAfterLastPage", 2));
+            File.Exists(path).Should().BeFalse();
         });
     }
 
@@ -771,21 +603,14 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateDocument(pageCount: 2);
 
-            try
-            {
-                var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 3));
+            var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 3));
 
-                action.Should().Throw<InvalidOperationException>()
-                    .WithMessage(UiText.Format("Export_PageRangeEndsAfterLastPage", 2));
-                File.Exists(path).Should().BeFalse();
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            action.Should().Throw<InvalidOperationException>()
+                .WithMessage(UiText.Format("Export_PageRangeEndsAfterLastPage", 2));
+            File.Exists(path).Should().BeFalse();
         });
     }
 
@@ -794,24 +619,17 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path);
+            PdfDocumentExporter.Save(document, path);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.Info.Title.Should().BeEmpty();
-                pdf.Info.Author.Should().BeEmpty();
-                pdf.Info.Subject.Should().BeEmpty();
-                pdf.Info.Keywords.Should().BeEmpty();
-                pdf.Info.Creator.Should().Be("FreeX");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.Info.Title.Should().BeEmpty();
+            pdf.Info.Author.Should().BeEmpty();
+            pdf.Info.Subject.Should().BeEmpty();
+            pdf.Info.Keywords.Should().BeEmpty();
+            pdf.Info.Creator.Should().Be("FreeX");
         });
     }
 
@@ -820,7 +638,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
             var properties = new PdfDocumentProperties(
                 Title: " ",
@@ -828,21 +646,14 @@ public partial class ExportPlannerTests
                 Subject: "",
                 Keywords: "\t");
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, properties);
+            PdfDocumentExporter.Save(document, path, properties);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.Info.Title.Should().BeEmpty();
-                pdf.Info.Author.Should().BeEmpty();
-                pdf.Info.Subject.Should().BeEmpty();
-                pdf.Info.Keywords.Should().BeEmpty();
-                pdf.Info.Creator.Should().Be("FreeX");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.Info.Title.Should().BeEmpty();
+            pdf.Info.Author.Should().BeEmpty();
+            pdf.Info.Subject.Should().BeEmpty();
+            pdf.Info.Keywords.Should().BeEmpty();
+            pdf.Info.Creator.Should().Be("FreeX");
         });
     }
 
@@ -851,7 +662,7 @@ public partial class ExportPlannerTests
     {
         StaTestRunner.Run(() =>
         {
-            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            using var temp = CreateTemporaryPdfPath(out var path);
             var document = CreateOnePageDocument();
             var properties = new PdfDocumentProperties(
                 Title: "  Quarterly Review  ",
@@ -859,20 +670,13 @@ public partial class ExportPlannerTests
                 Subject: "  Workbook export",
                 Keywords: "FreeX, spreadsheet  ");
 
-            try
-            {
-                PdfDocumentExporter.Save(document, path, properties);
+            PdfDocumentExporter.Save(document, path, properties);
 
-                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                pdf.Info.Title.Should().Be("Quarterly Review");
-                pdf.Info.Author.Should().Be("Finance Team");
-                pdf.Info.Subject.Should().Be("Workbook export");
-                pdf.Info.Keywords.Should().Be("FreeX, spreadsheet");
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+            pdf.Info.Title.Should().Be("Quarterly Review");
+            pdf.Info.Author.Should().Be("Finance Team");
+            pdf.Info.Subject.Should().Be("Workbook export");
+            pdf.Info.Keywords.Should().Be("FreeX, spreadsheet");
         });
     }
 
@@ -986,6 +790,13 @@ public partial class ExportPlannerTests
         package.PackageProperties.Creator.Should().Be("Finance Team");
         package.PackageProperties.Subject.Should().BeNull();
         package.PackageProperties.Keywords.Should().Be("FreeX, spreadsheet");
+    }
+
+    private static TestTemporaryDirectory CreateTemporaryPdfPath(out string path)
+    {
+        var temp = new TestTemporaryDirectory();
+        path = Path.Combine(temp.Path, "export.pdf");
+        return temp;
     }
 
     private static FixedDocument CreateOnePageDocument()
