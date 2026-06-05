@@ -575,7 +575,7 @@ public static partial class FlashFillService
             return false;
 
         var query = uri.Query[1..];
-        foreach (var segment in query.Split('&', StringSplitOptions.None))
+        foreach (var segment in query.Split(['&', ';'], StringSplitOptions.None))
         {
             if (segment.Length == 0)
                 continue;
