@@ -33,6 +33,7 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Num.Code, "Formulas with invalid numbers", "Flag formulas that result in #NUM!."),
         new(ErrorValue.Null.Code, "Formulas with invalid intersections", "Flag formulas that result in #NULL!."),
         new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
+        new(ErrorValue.Calc.Code, "Formulas with calculation errors", "Flag formulas that result in #CALC!."),
         new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
         new(FormulaAuditingService.FormulaStoredAsTextErrorCode, "Formulas stored as text", "Flag text cells that begin with an equals sign instead of calculating as formulas."),
         new(FormulaAuditingService.InconsistentCalculatedColumnFormulaErrorCode, "Inconsistent calculated column formula in tables", "Flag table calculated-column formulas that differ from the column formula."),

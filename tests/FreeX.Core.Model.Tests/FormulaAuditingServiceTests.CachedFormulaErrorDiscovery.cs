@@ -75,6 +75,30 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorsAndIssues_ReturnCachedCalcErrors()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        var cell = Cell.FromFormula("CALC()");
+        cell.Value = ErrorValue.Calc;
+        sheet.SetCell(address, cell);
+
+        var error = FormulaAuditingService.FindFormulaErrors(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+        error.Address.Should().Be(address);
+        error.Error.Should().Be(ErrorValue.Calc);
+        error.FormulaText.Should().Be("CALC()");
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+        issue.Cell.Should().Be("B2");
+        issue.ErrorCode.Should().Be(ErrorValue.Calc.Code);
+        issue.FormulaText.Should().Be("=CALC()");
+        issue.Description.Should().Be("The formula contains a calculation error.");
+    }
+
+    [Fact]
     public void FindFormulaErrors_SkipsIgnoredFormulaErrors()
     {
         var wb = new Workbook("test");
