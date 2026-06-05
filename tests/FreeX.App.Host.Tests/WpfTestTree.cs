@@ -19,6 +19,16 @@ internal static class WpfTestTree
         }
     }
 
+    internal static IEnumerable<T> FindVisualSelfAndDescendants<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        if (root is T match)
+            yield return match;
+
+        foreach (var descendant in FindVisualDescendants<T>(root))
+            yield return descendant;
+    }
+
     internal static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
         where T : DependencyObject
     {
