@@ -1,5 +1,4 @@
 using System.IO;
-using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -129,7 +128,11 @@ public sealed partial class DocumentationIndexTests
         var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
         var metrics = ReadMetricTable(report);
-        var trackedFiles = RunGitLines(repositoryRoot, "ls-files");
+        var gitResult = TestProcessRunner.Run("git", "ls-files", repositoryRoot);
+
+        gitResult.ExitCode.Should().Be(0, gitResult.Error);
+        IReadOnlyList<string> trackedFiles = gitResult.Output
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         var sourceFiles = trackedFiles.Where(path => path.StartsWith("src/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
         var testFiles = trackedFiles.Where(path => path.StartsWith("tests/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
         var docsFiles = trackedFiles.Where(path => path.StartsWith("docs/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal)).ToArray();
@@ -358,26 +361,6 @@ public sealed partial class DocumentationIndexTests
                 match => match.Groups["metric"].Value,
                 match => int.Parse(match.Groups["count"].Value.Replace(",", string.Empty), CultureInfo.InvariantCulture),
                 StringComparer.Ordinal);
-
-    private static IReadOnlyList<string> RunGitLines(string workingDirectory, string arguments)
-    {
-        using var process = Process.Start(new ProcessStartInfo("git", arguments)
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        }) ?? throw new InvalidOperationException("Could not start git.");
-
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        process.ExitCode.Should().Be(0, error);
-        return output
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-            .ToArray();
-    }
 
     private static int CountLines(string repositoryRoot, IEnumerable<string> relativePaths) =>
         relativePaths.Sum(file => File.ReadLines(Path.Combine(repositoryRoot, ToPlatformPath(file))).Count());
