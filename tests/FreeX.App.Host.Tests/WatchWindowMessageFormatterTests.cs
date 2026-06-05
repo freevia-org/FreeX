@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 
@@ -28,7 +27,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void WatchWindowDialog_ExposesKeyboardAccessKeysForCommandButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
+        var source = ReadWatchWindowSource();
 
         source.Should().Contain("Content = UiText.Get(\"WatchWindow_AddWatch\")");
         source.Should().Contain("IsEnabled = _addWatch is not null");
@@ -46,7 +45,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void WatchWindowDialog_DeleteKeyAndSelectionStateMirrorDeleteWatchButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
+        var source = ReadWatchWindowSource();
 
         source.Should().Contain("private readonly Button _deleteButton");
         source.Should().Contain("_listView.SelectionChanged += (_, _) => UpdateDeleteButtonState();");
@@ -61,8 +60,8 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void WatchWindowDialog_WiresAddWatchToCurrentSelectionWorkflow()
     {
-        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
-        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs"));
+        var dialogSource = ReadWatchWindowSource();
+        var mainWindowSource = ReadMainWindowFormulaCommandsSource();
 
         dialogSource.Should().Contain("Action? addWatch");
         dialogSource.Should().Contain("Func<string>? getSelectionText");
@@ -74,8 +73,8 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void AddWatchDialog_ExposesSelectedRangePreview()
     {
-        var watchWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AddWatchDialog.cs"));
+        var watchWindowSource = ReadWatchWindowSource();
+        var source = ReadAddWatchSource();
 
         watchWindowSource.Should().NotContain("public sealed class AddWatchDialog");
         source.Should().Contain("public sealed class AddWatchDialog");
@@ -90,7 +89,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void AddWatchDialog_SelectedRangePreviewExposesAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AddWatchDialog.cs"));
+        var source = ReadAddWatchSource();
 
         source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"AddWatch_SelectedRangeAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_rangeBox, \"AddWatchSelectedRangeBox\");");
@@ -101,7 +100,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void AddWatchDialog_CommandButtonsExposeExcelStyleAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AddWatchDialog.cs"));
+        var source = ReadAddWatchSource();
 
         source.Should().Contain("AutomationProperties.SetName(add, UiText.Get(\"AddWatch_AddAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(add, \"AddWatchAddButton\");");
@@ -148,7 +147,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void AddWatchDialogOpenedFromKeyboard_FocusesSelectedRangePreview()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AddWatchDialog.cs"));
+        var source = ReadAddWatchSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -158,7 +157,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void WatchWindowDialog_ExposesExcelLikeWatchColumns()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
+        var source = ReadWatchWindowSource();
 
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Book\")");
         source.Should().Contain("Header = UiText.Get(\"WatchWindow_Sheet\")");
@@ -171,7 +170,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void WatchWindowDialogOpenedFromKeyboard_FocusesWatchList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
+        var source = ReadWatchWindowSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -183,7 +182,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void WatchWindowDialog_LabelsWatchListWithAccessKeyAndAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
+        var source = ReadWatchWindowSource();
 
         source.Should().Contain("new Label { Content = UiText.Get(\"WatchWindow_Watches\"), Target = _listView");
         source.Should().Contain("AutomationProperties.SetName(_listView, UiText.Get(\"WatchWindow_Watches2\"));");
@@ -194,7 +193,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void WatchWindowDialog_RefreshPreservesSelectedWatchRows()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
+        var source = ReadWatchWindowSource();
 
         source.Should().Contain("_listView.SelectedItems");
         source.Should().Contain(".Select(row => row.Address)");
@@ -206,7 +205,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void WatchWindowDialog_DoubleClickNavigateHandlesMouseEvent()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
+        var source = ReadWatchWindowSource();
         var doubleClick = source[
             source.IndexOf("private void ListView_MouseDoubleClick", StringComparison.Ordinal)..
             source.IndexOf("private void ListView_KeyDown", StringComparison.Ordinal)];
@@ -217,4 +216,13 @@ public sealed class WatchWindowMessageFormatterTests
             .Should()
             .BeLessThan(doubleClick.IndexOf("e.Handled = true;", StringComparison.Ordinal));
     }
+
+    private static string ReadWatchWindowSource() =>
+        DialogSourceTestSupport.ReadHostSources("WatchWindowDialog.cs");
+
+    private static string ReadAddWatchSource() =>
+        DialogSourceTestSupport.ReadHostSources("AddWatchDialog.cs");
+
+    private static string ReadMainWindowFormulaCommandsSource() =>
+        DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaCommands.cs");
 }

@@ -20,6 +20,7 @@ public sealed partial class FormulaAuditingServiceTests
                 (ErrorValue.Num.Code, "Formulas with invalid numbers"),
                 (ErrorValue.Null.Code, "Formulas with invalid intersections"),
                 (ErrorValue.Spill.Code, "Formulas with blocked spill ranges"),
+                (ErrorValue.Calc.Code, "Formulas with calculation errors"),
                 (ErrorValue.Circular.Code, "Formulas with circular references"),
                 (FormulaAuditingService.FormulaStoredAsTextErrorCode, "Formulas stored as text"),
                 (FormulaAuditingService.InconsistentCalculatedColumnFormulaErrorCode, "Inconsistent calculated column formula in tables"),
@@ -30,6 +31,9 @@ public sealed partial class FormulaAuditingServiceTests
                 (FormulaAuditingService.DataValidationErrorCode, "Data entered in cells is invalid"),
                 (FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits"),
                 (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
+
+        FormulaErrorCheckingRuleCatalog.SupportedRules.Single(rule => rule.ErrorCode == ErrorValue.Calc.Code)
+            .Description.Should().Be("Flag formulas that result in #CALC!.");
     }
 
     [BenchmarkFact]
