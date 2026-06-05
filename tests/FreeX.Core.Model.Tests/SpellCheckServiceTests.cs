@@ -2183,6 +2183,59 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversSportsFitnessWellnessVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "ATHLEET Athelete competion TOURNMENT pracitce Equpment fitnes Wellnes exercize workot Leaguee SEASN scorebord scorng Officiatng conditoning Hydraton membrship Schedual regimn Rehabilitaton. Keep athlete, competition, tournament, practice, equipment, fitness, wellness, exercise, workout, league, season, scoreboard, scoring, officiating, conditioning, hydration, membership, schedule, regimen, rehabilitation, preathleet, athleet_id, https://athleet.example.com/scorebord, coach@wellnes.example.com, \"C:\\fitnes folder\\workot file.xlsx\", and [C:\\leaguee folder\\rehabilitaton file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "athleet ATHLEET Athleet https://athleet.example.com/athleet coach@athleet.example.com athleet_id preathleet \"C:\\athleet folder\\athleet file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "athlete");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("ATHLEET", "ATHLETE"),
+            ("Athelete", "Athlete"),
+            ("competion", "competition"),
+            ("TOURNMENT", "TOURNAMENT"),
+            ("pracitce", "practice"),
+            ("Equpment", "Equipment"),
+            ("fitnes", "fitness"),
+            ("Wellnes", "Wellness"),
+            ("exercize", "exercise"),
+            ("workot", "workout"),
+            ("Leaguee", "League"),
+            ("SEASN", "SEASON"),
+            ("scorebord", "scoreboard"),
+            ("scorng", "scoring"),
+            ("Officiatng", "Officiating"),
+            ("conditoning", "conditioning"),
+            ("Hydraton", "Hydration"),
+            ("membrship", "membership"),
+            ("Schedual", "Schedule"),
+            ("regimn", "regimen"),
+            ("Rehabilitaton", "Rehabilitation"));
+        plan.IssueCount.Should().Be(21);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "ATHLETE Athlete competition TOURNAMENT practice Equipment fitness Wellness exercise workout League SEASON scoreboard scoring Officiating conditioning Hydration membership Schedule regimen Rehabilitation. Keep athlete, competition, tournament, practice, equipment, fitness, wellness, exercise, workout, league, season, scoreboard, scoring, officiating, conditioning, hydration, membership, schedule, regimen, rehabilitation, preathleet, athleet_id, https://athleet.example.com/scorebord, coach@wellnes.example.com, \"C:\\fitnes folder\\workot file.xlsx\", and [C:\\leaguee folder\\rehabilitaton file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(21);
+        replaceAllCorrected.Should().Be(
+            "athlete ATHLETE Athlete https://athleet.example.com/athleet coach@athleet.example.com athleet_id preathleet \"C:\\athleet folder\\athleet file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");
