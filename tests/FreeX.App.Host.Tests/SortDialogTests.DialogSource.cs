@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,8 +7,9 @@ public sealed partial class SortDialogTests
     [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SortDialog.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SortDialog.Planning.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "SortDialog.cs",
+            "SortDialog.Planning.cs");
 
         foreach (var content in new[]
         {
@@ -29,7 +29,7 @@ public sealed partial class SortDialogTests
     public void DialogLayout_ExposesExcelCustomSortFields()
     {
         var source = ReadSortDialogSource();
-        var planningSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SortDialog.Planning.cs"));
+        var planningSource = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
 
         source.Should().Contain("UiText.Get(\"Sort_MyDataHasHeaders\")");
         source.Should().Contain("IsChecked = hasHeaders");
