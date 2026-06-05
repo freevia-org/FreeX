@@ -7,7 +7,7 @@ public sealed class XlsxWorksheetProtectionMetadataWriterPerformanceTests
     [Fact]
     public void Save_SkipsSheetsWithoutProtectionMetadataWithoutLinqFiltering()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src", "FreeX.Core.IO", "XlsxWorksheetProtectionMetadataWriter.cs"));
 
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
@@ -18,5 +18,4 @@ public sealed class XlsxWorksheetProtectionMetadataWriterPerformanceTests
             "worksheet protection metadata saving should avoid allocating a LINQ filter iterator over workbook sheets");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }
