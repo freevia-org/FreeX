@@ -57,7 +57,8 @@ public sealed class ViewCommandSourceTests
     {
         var source = ReadHostSourceFile("MainWindow.ViewCommands.cs");
 
-        source.Should().Contain("OpenRibbonContextMenu(btn, cm)");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void ZoomPickerBtn_Click(")
+            .Should().Contain("ZoomCustomMenuItem_Click(sender, e);");
         source.Should().Contain("FreeX.App.UI.ZoomLevelMapper.TryParseZoomPercent(tag, out var zoomPercent)");
         source.Should().Contain("new ZoomDialog(current) { Owner = this }");
         source.Should().Contain("ZoomSelectionPlanner.CalculateDialogZoomPercent(");
@@ -176,6 +177,8 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("AutomationProperties.SetHelpText(button, description)");
         source.Should().NotContain("ViewWindowCommandPlanner");
         source.Should().NotContain("ViewWindowCommandBtn_Click");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void FreezePanesPickerBtn_Click(")
+            .Should().Contain("FreezeAtSelectionMenuItem_Click(sender, e);");
         source.Should().Contain("new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols)");
         source.Should().Contain("private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("private void UnfreezeAllMenuItem_Click(object sender, RoutedEventArgs e)");

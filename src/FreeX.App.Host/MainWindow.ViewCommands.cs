@@ -254,8 +254,7 @@ public partial class MainWindow
 
     private void FreezePanesPickerBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-            OpenRibbonContextMenu(btn, cm);
+        FreezeAtSelectionMenuItem_Click(sender, e);
     }
     private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -356,8 +355,7 @@ public partial class MainWindow
     }
     private void ZoomPickerBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-            OpenRibbonContextMenu(btn, cm);
+        ZoomCustomMenuItem_Click(sender, e);
     }
     private void ZoomPresetMenuItem_Click(object sender, RoutedEventArgs e)
     {

@@ -28,7 +28,10 @@ public sealed partial class MainWindowSourceHygieneTests
 
         metadataSource.Should().Contain("public static readonly RoutedEvent DropdownClickEvent");
         metadataSource.Should().Contain("public static void AddDropdownClickHandler(DependencyObject element, RoutedEventHandler handler)");
-        ribbonDropdownSource.Should().Contain("button.RaiseEvent(new RoutedEventArgs(RibbonMetadata.DropdownClickEvent, button))");
+        ribbonDropdownSource.Should().Contain("var dropdownArgs = new RoutedEventArgs(RibbonMetadata.DropdownClickEvent, button);");
+        ribbonDropdownSource.Should().Contain("button.RaiseEvent(dropdownArgs);");
+        ribbonDropdownSource.Should().Contain("if (!dropdownArgs.Handled)");
+        ribbonDropdownSource.Should().Contain("button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));");
     }
 
     [Fact]
