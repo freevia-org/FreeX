@@ -37,6 +37,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     private const int GeneratedStyleHeavyStyleOnlyColumnsPerSheet = 160;
     private const int GeneratedStyleHeavyStyleOnlyStartColumn = GeneratedStyleHeavyValueColumnsPerSheet + 2;
     private const int GeneratedStyleHeavyDrawingShapePairs = 24;
+    private const int GeneratedStyleHeavyChartExSourceRows = 24;
     private const int LargePatchBaselineRows = 260_000;
 
     private static byte[] CreateDenseXlsxPackage()
@@ -290,6 +291,77 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         return stream.ToArray();
     }
 
+    private static byte[] AddGeneratedStyleHeavyChartExPackage(byte[] package)
+    {
+        using var stream = new MemoryStream(capacity: package.Length + 16 * 1024);
+        stream.Write(package, 0, package.Length);
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            archive.GetEntry("xl/drawings/drawing1.xml")?.Delete();
+            WriteTextEntry(archive, "xl/drawings/drawing1.xml", WriteGeneratedStyleHeavyChartExDrawing);
+            ReplaceZipEntryXml(archive, "xl/drawings/_rels/drawing1.xml.rels", new XDocument(
+                new XElement(
+                    packageRelNs + "Relationships",
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdGeneratedChartEx1"),
+                        new XAttribute("Type", "http://schemas.microsoft.com/office/2014/relationships/chartEx"),
+                        new XAttribute("Target", "../charts/chart1.xml")))));
+
+            archive.GetEntry("xl/charts/chart1.xml")?.Delete();
+            WriteTextEntry(archive, "xl/charts/chart1.xml", WriteGeneratedStyleHeavyChartExChart);
+            ReplaceZipEntryXml(archive, "xl/charts/_rels/chart1.xml.rels", new XDocument(
+                new XElement(
+                    packageRelNs + "Relationships",
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdGeneratedChartExStyle1"),
+                        new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/chartStyle"),
+                        new XAttribute("Target", "style1.xml")),
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdGeneratedChartExColors1"),
+                        new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle"),
+                        new XAttribute("Target", "colors1.xml")))));
+            WriteTextEntry(archive, "xl/charts/style1.xml", WriteGeneratedStyleHeavyChartExStyle);
+            WriteTextEntry(archive, "xl/charts/colors1.xml", WriteGeneratedStyleHeavyChartExColors);
+
+            const string worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadZipEntryXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdGeneratedChartExDrawing1"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+                new XAttribute("Target", "../drawings/drawing1.xml")));
+            ReplaceZipEntryXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var worksheetXml = LoadZipEntryXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "drawing",
+                new XAttribute(relNs + "id", "rIdGeneratedChartExDrawing1")));
+            ReplaceZipEntryXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var contentTypesXml = LoadZipEntryXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/drawings/drawing1.xml",
+                "application/vnd.openxmlformats-officedocument.drawing+xml");
+            AddContentTypeOverride(contentTypesXml, "/xl/charts/chart1.xml", "application/vnd.ms-office.chartex+xml");
+            AddContentTypeOverride(contentTypesXml, "/xl/charts/style1.xml", "application/vnd.ms-office.chartstyle+xml");
+            AddContentTypeOverride(contentTypesXml, "/xl/charts/colors1.xml", "application/vnd.ms-office.chartcolorstyle+xml");
+            ReplaceZipEntryXml(archive, "[Content_Types].xml", contentTypesXml);
+        }
+
+        return stream.ToArray();
+    }
+
     private static void WriteGeneratedStyleHeavyDrawingShapes(TextWriter writer)
     {
         writer.Write(
@@ -340,6 +412,93 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             </xdr:wsDr>
             """);
     }
+
+    private static void WriteGeneratedStyleHeavyChartExDrawing(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                      xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"
+                      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+              <xdr:twoCellAnchor>
+                <xdr:from><xdr:col>14</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                <xdr:to><xdr:col>22</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>18</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+                <mc:AlternateContent>
+                  <mc:Choice Requires="cx1" xmlns:cx1="http://schemas.microsoft.com/office/drawing/2015/9/8/chartex">
+                    <xdr:graphicFrame macro="">
+                      <xdr:nvGraphicFramePr>
+                        <xdr:cNvPr id="2" name="Generated ChartEx"/>
+                        <xdr:cNvGraphicFramePr/>
+                      </xdr:nvGraphicFramePr>
+                      <xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
+                      <a:graphic>
+                        <a:graphicData uri="http://schemas.microsoft.com/office/drawing/2014/chartex">
+                          <cx:chart r:id="rIdGeneratedChartEx1"/>
+                        </a:graphicData>
+                      </a:graphic>
+                    </xdr:graphicFrame>
+                  </mc:Choice>
+                  <mc:Fallback>
+                    <xdr:sp macro="" textlink="">
+                      <xdr:nvSpPr><xdr:cNvPr id="0" name=""/><xdr:cNvSpPr><a:spLocks noTextEdit="1"/></xdr:cNvSpPr></xdr:nvSpPr>
+                      <xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></xdr:spPr>
+                      <xdr:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>This chart isn't available.</a:t></a:r></a:p></xdr:txBody>
+                    </xdr:sp>
+                  </mc:Fallback>
+                </mc:AlternateContent>
+                <xdr:clientData/>
+              </xdr:twoCellAnchor>
+            </xdr:wsDr>
+            """);
+
+    private static void WriteGeneratedStyleHeavyChartExChart(TextWriter writer) =>
+        writer.Write($"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"
+                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <cx:chartData>
+                <cx:data id="data0">
+                  <cx:strDim type="cat"><cx:f>'Generated 1'!$A$2:$A${GeneratedStyleHeavyChartExSourceRows}</cx:f></cx:strDim>
+                  <cx:numDim type="val"><cx:f>'Generated 1'!$B$2:$B${GeneratedStyleHeavyChartExSourceRows}</cx:f><cx:nf>'Generated 1'!$B$1</cx:nf></cx:numDim>
+                </cx:data>
+              </cx:chartData>
+              <cx:chart>
+                <cx:title><cx:tx><cx:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Generated Histogram</a:t></a:r></a:p></cx:rich></cx:tx></cx:title>
+                <cx:plotArea>
+                  <cx:plotAreaRegion>
+                    <cx:series layoutId="clusteredColumn"><cx:dataId val="data0"/><cx:layoutPr><cx:binning intervalClosed="r"/></cx:layoutPr></cx:series>
+                  </cx:plotAreaRegion>
+                  <cx:axis id="0"><cx:catScaling gapWidth="2.19000006"/><cx:tickLabels/></cx:axis>
+                  <cx:axis id="1"><cx:valScaling/><cx:majorGridlines/><cx:tickLabels/></cx:axis>
+                </cx:plotArea>
+              </cx:chart>
+            </cx:chartSpace>
+            """);
+
+    private static void WriteGeneratedStyleHeavyChartExStyle(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <cs:chartStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle"
+                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                           id="201"/>
+            """);
+
+    private static void WriteGeneratedStyleHeavyChartExColors(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <cs:colorStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle"
+                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                           meth="cycle"
+                           id="10">
+              <a:schemeClr val="accent1"/>
+              <a:schemeClr val="accent2"/>
+              <a:schemeClr val="accent3"/>
+            </cs:colorStyle>
+            """);
 
     private static void WriteTextEntry(ZipArchive archive, string path, Action<TextWriter> write)
     {

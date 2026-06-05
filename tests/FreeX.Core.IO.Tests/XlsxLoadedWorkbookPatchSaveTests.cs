@@ -829,6 +829,80 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithChartExAndOutsideCellEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateChartExSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Charts.Should().ContainSingle().Which.Type.Should().Be(ChartType.Histogram);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("chartEx outside patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/drawing1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/drawing1.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/drawing1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/drawing1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/charts/chart1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/charts/chart1.xml"));
+        ReadPackageEntry(savedBytes, "xl/charts/_rels/chart1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/charts/_rels/chart1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/charts/style1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/charts/style1.xml"));
+        ReadPackageEntry(savedBytes, "xl/charts/colors1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/charts/colors1.xml"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("chartEx outside patched");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new TextValue("chartEx outside patched"));
+        reloadedSheet.Charts.Should().ContainSingle().Which.Type.Should().Be(ChartType.Histogram);
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithChartExSourceCellEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateChartExSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Charts.Should().ContainSingle().Which.Type.Should().Be(ChartType.Histogram);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(99));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        saved.Length.Should().BeGreaterThan(0);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_chart_source_cell");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithDrawingShapesAndUnrelatedCellEdit_PatchesSourcePackage()
     {
         var sourceBytes = CreateDrawingShapeSourcePackage();
@@ -1973,6 +2047,33 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                 """));
 
         return package.ToArray();
+    }
+
+    private static byte[] CreateChartExSourcePackage()
+    {
+        var workbook = new Workbook("ChartExPatch");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("outside"));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Histogram,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2)),
+            Title = "Sales Histogram"
+        });
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+        return stream.ToArray();
     }
 
     private static byte[] CreateDrawingShapeSourcePackage()
