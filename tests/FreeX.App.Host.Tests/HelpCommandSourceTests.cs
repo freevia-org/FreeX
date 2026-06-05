@@ -18,7 +18,9 @@ public sealed class HelpCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), commandName);
+        var elementName = commandName == "Copy Diagnostics" ? "Button" : "local:AutomationInvokeButton";
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractElementByInvariantCommandName(elementName, commandName, $"Click=\"{handler}\"");
 
         button.ShouldContainLocalizedAttribute("Content", UiText.Get(contentKey));
         button.ShouldContainInvariantCommandName(commandName);
@@ -32,7 +34,9 @@ public sealed class HelpCommandSourceTests
     [InlineData("What's New")]
     public void HelpOutOfScopeCommands_AreNotSurfacedAsDisabledRibbonButtons(string title)
     {
-        ReadMainWindowXaml().Should().NotContain($"local:RibbonMetadata.CommandName=\"{LocalizedXamlTestSupport.EscapeAttribute(title)}\"");
+        LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .Should()
+            .NotContain($"local:RibbonMetadata.CommandName=\"{LocalizedXamlTestSupport.EscapeAttribute(title)}\"");
     }
 
     [Fact]
@@ -62,27 +66,4 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHelp, HelpOnlineBtn_Click);");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
-    private static string ExtractButtonElementByTitle(string xaml, string title)
-    {
-        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} help command should be present");
-
-        var start = xaml.LastIndexOf('<', titleIndex);
-        while (start >= 0 && !xaml[start..].StartsWith("<Button", StringComparison.Ordinal) && !xaml[start..].StartsWith("<local:AutomationInvokeButton", StringComparison.Ordinal))
-            start = xaml.LastIndexOf('<', start - 1);
-
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} help command should be a Button or AutomationInvokeButton");
-
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + "</Button>".Length
-            : selfClosingEnd + 2;
-
-        end.Should().BeGreaterThan(titleIndex, $"the {title} help button should have a closing marker");
-        return xaml[start..end];
-    }
 }

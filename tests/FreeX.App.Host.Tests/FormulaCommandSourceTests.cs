@@ -21,7 +21,9 @@ public sealed class FormulaCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractCommandElementByTitle(ReadFormulasTabXaml(), title, handler);
+        var elementName = title == "Insert Function" ? "local:AutomationInvokeButton" : "Button";
+        var button = ReadFormulasTabXaml()
+            .ExtractElementByInvariantCommandName(elementName, title, $"Click=\"{handler}\"");
 
         button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -38,7 +40,8 @@ public sealed class FormulaCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractCommandElementByTitle(ReadMainWindowXaml(), title);
+        var button = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractButtonElementByInvariantCommandName(title);
 
         button.ShouldContainLocalizedAttribute("Content", title);
         button.ShouldContainInvariantCommandName(title);
@@ -59,7 +62,8 @@ public sealed class FormulaCommandSourceTests
         string keyTip,
         string handler)
     {
-        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header);
+        var item = LocalizedXamlTestSupport.ReadMainWindowXaml()
+            .ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header);
 
         item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -85,12 +89,9 @@ public sealed class FormulaCommandSourceTests
         source.Should().Contain("private void BeginFormulaBarFormulaEdit(string text, int? caretIndex = null)");
     }
 
-    private static string ReadMainWindowXaml() =>
-        LocalizedXamlTestSupport.ReadMainWindowXaml();
-
     private static string ReadFormulasTabXaml()
     {
-        var xaml = ReadMainWindowXaml();
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
         var start = xaml.IndexOf("<TabItem Header=\"{local:Loc Key=MainWindow_Header_Formulas}\"", StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0, "the Formulas ribbon tab should be present");
 
@@ -98,41 +99,4 @@ public sealed class FormulaCommandSourceTests
         end.Should().BeGreaterThan(start, "the Data ribbon tab should follow the Formulas ribbon tab");
         return xaml[start..end];
     }
-
-    private static string ExtractCommandElementByTitle(string xaml, string title, string? handler = null)
-    {
-        var searchIndex = 0;
-        while (true)
-        {
-            var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", searchIndex, StringComparison.Ordinal);
-            titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} formula command should be present");
-
-            var start = xaml.LastIndexOf('<', titleIndex);
-            while (start >= 0 &&
-                   !xaml[start..].StartsWith("<Button", StringComparison.Ordinal) &&
-                   !xaml[start..].StartsWith("<local:AutomationInvokeButton", StringComparison.Ordinal))
-            {
-                start = xaml.LastIndexOf('<', start - 1);
-            }
-
-            start.Should().BeGreaterThanOrEqualTo(0, $"the {title} formula command should be a Button or AutomationInvokeButton");
-
-            var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-            var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-            var nextButton = xaml.IndexOf("<Button", titleIndex + 1, StringComparison.Ordinal);
-            var end = closingEnd >= 0 && (nextButton < 0 || closingEnd < nextButton)
-                ? closingEnd + "</Button>".Length
-                : selfClosingEnd + 2;
-
-            end.Should().BeGreaterThan(titleIndex, $"the {title} formula command should have a closing marker");
-            var element = xaml[start..end];
-            if (handler is null || element.Contains($"Click=\"{handler}\"", StringComparison.Ordinal))
-                return element;
-
-            searchIndex = end;
-        }
-    }
-
-    private static string ExtractMenuItemElementByHeader(string xaml, string header) =>
-        xaml.ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header);
 }
