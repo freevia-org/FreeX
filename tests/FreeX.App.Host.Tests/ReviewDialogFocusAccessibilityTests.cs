@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -143,8 +142,8 @@ public sealed class ReviewDialogFocusAccessibilityTests
                 ShowAndPump(dialog);
 
                 Keyboard.FocusedElement.Should().Match<Button>(button => button.IsDefault && Equals(button.Content, "_OK"));
-                var summary = FindVisualChild<TextBlock>(dialog, element =>
-                    AutomationProperties.GetAutomationId(element) == "WorkbookStatisticsSummary");
+                var summary = WpfTestTree.FindVisualSelfAndDescendants<TextBlock>(dialog)
+                    .FirstOrDefault(element => AutomationProperties.GetAutomationId(element) == "WorkbookStatisticsSummary");
                 summary.Should().NotBeNull();
                 AutomationProperties.GetHelpText(summary!).Should().Be("Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
             }
@@ -163,25 +162,10 @@ public sealed class ReviewDialogFocusAccessibilityTests
 
     private static Button FindButton(DependencyObject root, string content)
     {
-        var button = FindVisualChild<Button>(root, element => Equals(element.Content?.ToString()?.Replace("_", string.Empty), content));
+        var button = WpfTestTree.FindVisualSelfAndDescendants<Button>(root)
+            .FirstOrDefault(element => Equals(element.Content?.ToString()?.Replace("_", string.Empty), content));
         button.Should().NotBeNull();
         return button!;
-    }
-
-    private static T? FindVisualChild<T>(DependencyObject root, Func<T, bool> predicate)
-        where T : DependencyObject
-    {
-        if (root is T current && predicate(current))
-            return current;
-
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var found = FindVisualChild(VisualTreeHelper.GetChild(root, i), predicate);
-            if (found is not null)
-                return found;
-        }
-
-        return null;
     }
 
     private static T GetField<T>(object instance, string name)
