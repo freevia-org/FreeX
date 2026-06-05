@@ -32,4 +32,13 @@ public class TextFormatCodeTests
     [InlineData("=TEXT(0.25,\"0%\")", "25%")]
     public void Text_CommonFormats_StillWork(string formula, string expected) =>
         Eval(formula).Should().Be(new TextValue(expected));
+
+    // A single-section format applied to a negative formats the magnitude and prepends '-' to the WHOLE
+    // result, so the minus sits before any prefix (Excel: -$1,234.50, not $-1,234.50).
+    [Theory]
+    [InlineData("=TEXT(-1234.5,\"$#,##0.00\")", "-$1,234.50")]
+    [InlineData("=TEXT(1234.5,\"$#,##0.00\")", "$1,234.50")]
+    [InlineData("=TEXT(-0.5,\"0.0%\")", "-50.0%")]
+    public void Text_SingleSectionNegative_PrependsMinusBeforePrefix(string formula, string expected) =>
+        Eval(formula).Should().Be(new TextValue(expected));
 }

@@ -2080,6 +2080,57 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversAgricultureFieldOperationsVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "HARVST Irrigaton fertilzer PESTICDE croping Seedlng greenhous Livestok pasturee ORCHRD vinyard grazng Fencng manuree sprayng Nurseryy pollinaton RIPENES grainn. Keep harvest, irrigation, fertilizer, pesticide, cropping, seedling, greenhouse, livestock, pasture, orchard, vineyard, grazing, fencing, manure, spraying, nursery, pollination, ripeness, grain, preharvst, harvst_id, https://harvst.example.com/irrigaton, farm@fertilzer.example.com, \"C:\\greenhous folder\\sprayng file.xlsx\", and [C:\\vinyard folder\\pollinaton file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "harvst HARVST Harvst https://harvst.example.com/harvst farm@harvst.example.com harvst_id preharvst \"C:\\harvst folder\\harvst file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "harvest");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("HARVST", "HARVEST"),
+            ("Irrigaton", "Irrigation"),
+            ("fertilzer", "fertilizer"),
+            ("PESTICDE", "PESTICIDE"),
+            ("croping", "cropping"),
+            ("Seedlng", "Seedling"),
+            ("greenhous", "greenhouse"),
+            ("Livestok", "Livestock"),
+            ("pasturee", "pasture"),
+            ("ORCHRD", "ORCHARD"),
+            ("vinyard", "vineyard"),
+            ("grazng", "grazing"),
+            ("Fencng", "Fencing"),
+            ("manuree", "manure"),
+            ("sprayng", "spraying"),
+            ("Nurseryy", "Nursery"),
+            ("pollinaton", "pollination"),
+            ("RIPENES", "RIPENESS"),
+            ("grainn", "grain"));
+        plan.IssueCount.Should().Be(19);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "HARVEST Irrigation fertilizer PESTICIDE cropping Seedling greenhouse Livestock pasture ORCHARD vineyard grazing Fencing manure spraying Nursery pollination RIPENESS grain. Keep harvest, irrigation, fertilizer, pesticide, cropping, seedling, greenhouse, livestock, pasture, orchard, vineyard, grazing, fencing, manure, spraying, nursery, pollination, ripeness, grain, preharvst, harvst_id, https://harvst.example.com/irrigaton, farm@fertilzer.example.com, \"C:\\greenhous folder\\sprayng file.xlsx\", and [C:\\vinyard folder\\pollinaton file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(19);
+        replaceAllCorrected.Should().Be(
+            "harvest HARVEST Harvest https://harvst.example.com/harvst farm@harvst.example.com harvst_id preharvst \"C:\\harvst folder\\harvst file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");

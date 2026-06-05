@@ -1537,6 +1537,36 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fencng"))
+                {
+                    suggestion = "fencing";
+                    return true;
+                }
+
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "grainn"))
+                {
+                    suggestion = "grain";
+                    return true;
+                }
+
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "grazng"))
+                {
+                    suggestion = "grazing";
+                    return true;
+                }
+
+                if (first == 'h' && EqualAsciiWordIgnoreCase(word, "harvst"))
+                {
+                    suggestion = "harvest";
+                    return true;
+                }
+
+                if (first == 'o' && EqualAsciiWordIgnoreCase(word, "orchrd"))
+                {
+                    suggestion = "orchard";
+                    return true;
+                }
+
                 if (first == 'x' && EqualAsciiWordIgnoreCase(word, "xlookp"))
                 {
                     suggestion = "xlookup";
@@ -2295,6 +2325,42 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "croping"))
+                {
+                    suggestion = "cropping";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "manuree"))
+                {
+                    suggestion = "manure";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "ripenes"))
+                {
+                    suggestion = "ripeness";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "seedlng"))
+                {
+                    suggestion = "seedling";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sprayng"))
+                {
+                    suggestion = "spraying";
+                    return true;
+                }
+
+                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "vinyard"))
+                {
+                    suggestion = "vineyard";
+                    return true;
+                }
+
                 break;
             case 8:
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "reagentt"))
@@ -2969,6 +3035,30 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "livestok"))
+                {
+                    suggestion = "livestock";
+                    return true;
+                }
+
+                if (first == 'n' && EqualAsciiWordIgnoreCase(word, "nurseryy"))
+                {
+                    suggestion = "nursery";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pasturee"))
+                {
+                    suggestion = "pasture";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pesticde"))
+                {
+                    suggestion = "pesticide";
+                    return true;
+                }
+
                 break;
             case 9:
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "analaysis"))
@@ -3553,6 +3643,24 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fertilzer"))
+                {
+                    suggestion = "fertilizer";
+                    return true;
+                }
+
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "greenhous"))
+                {
+                    suggestion = "greenhouse";
+                    return true;
+                }
+
+                if (first == 'i' && EqualAsciiWordIgnoreCase(word, "irrigaton"))
+                {
+                    suggestion = "irrigation";
+                    return true;
+                }
+
                 break;
             case 10:
                 if (first == 'd' && EqualAsciiWordIgnoreCase(word, "definately"))
@@ -4038,6 +4146,12 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "specimennt"))
                 {
                     suggestion = "specimen";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pollinaton"))
+                {
+                    suggestion = "pollination";
                     return true;
                 }
 
