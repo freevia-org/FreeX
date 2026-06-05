@@ -9,6 +9,12 @@ using FreeX.Core.Model;
 
 internal static class Program
 {
+    private const int PrewarmSheetCount = 3;
+    private const int PrewarmRowsPerSheet = 160;
+    private const int PrewarmValueColumnsPerSheet = 12;
+    private const int PrewarmStyleOnlyColumnsPerSheet = 80;
+    private const int PrewarmStyleOnlyStartColumn = PrewarmValueColumnsPerSheet + 2;
+
     [STAThread]
     public static async Task<int> Main(string[] args)
     {
@@ -49,8 +55,26 @@ internal static class Program
 
     private static async Task RunAsync(AppIoBenchOptions options)
     {
+        if (options.PrewarmXlsx)
+            RunXlsxPrewarm(options);
+
         for (var iteration = 1; iteration <= options.RepeatCount; iteration++)
             await RunIterationAsync(options, iteration);
+    }
+
+    private static void RunXlsxPrewarm(AppIoBenchOptions options)
+    {
+        ForceFullCollection();
+        var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+        var stopwatch = Stopwatch.StartNew();
+        PrewarmXlsxLoadSavePaths();
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore;
+
+        WritePerf(
+            options,
+            "PERF APP_XLSX_PREWARM " +
+            $"mode=xlsx elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes:N0}");
     }
 
     private static async Task RunIterationAsync(AppIoBenchOptions options, int iteration)
@@ -225,6 +249,77 @@ internal static class Program
         return workbook => engine.RecalculateAllFormulas(workbook);
     }
 
+    private static void PrewarmXlsxLoadSavePaths()
+    {
+        var adapter = new XlsxFileAdapter();
+        using var initialPackage = new MemoryStream();
+        adapter.Save(CreateRepresentativeWorkbook(), initialPackage);
+
+        initialPackage.Position = 0;
+        var loaded = adapter.LoadWithWarnings(initialPackage, inspectFeatures: true).Workbook;
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(loaded, out _);
+
+        var sheet = loaded.Sheets[0];
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("patched"));
+
+        using var patchedPackage = new MemoryStream();
+        adapter.Save(loaded, patchedPackage);
+    }
+
+    private static Workbook CreateRepresentativeWorkbook()
+    {
+        var workbook = new Workbook("XLSX Prewarm");
+        var prewarmStyleId = CreatePrewarmStyleId(workbook);
+        for (var sheetIndex = 1; sheetIndex <= PrewarmSheetCount; sheetIndex++)
+            PopulatePrewarmSheet(workbook.AddSheet($"Sheet{sheetIndex}"), sheetIndex, prewarmStyleId);
+
+        return workbook;
+    }
+
+    private static StyleId CreatePrewarmStyleId(Workbook workbook)
+    {
+        var style = CellStyle.Default.Clone();
+        style.FillColor = CellColor.FromArgb(221, 235, 247);
+        style.FillPatternStyle = CellFillPatternStyle.Solid;
+        style.NumberFormat = "#,##0.00";
+        style.BorderBottom = new CellBorder(BorderStyle.Thin, CellColor.FromArgb(91, 155, 213));
+        return workbook.RegisterStyle(style);
+    }
+
+    private static void PopulatePrewarmSheet(Sheet sheet, int sheetIndex, StyleId prewarmStyleId)
+    {
+        var styleOnlyRuns = new List<StyleOnlyRun>(PrewarmRowsPerSheet);
+        for (var row = 1u; row <= PrewarmRowsPerSheet; row++)
+        {
+            for (var col = 1u; col <= PrewarmValueColumnsPerSheet; col++)
+            {
+                var address = new CellAddress(sheet.Id, row, col);
+                if (col == 1)
+                {
+                    sheet.SetCell(address, new TextValue($"S{sheetIndex}-R{row}"));
+                    continue;
+                }
+
+                var value = sheetIndex * 1_000_000 + row * 1_000 + col;
+                var cell = col == PrewarmValueColumnsPerSheet && row % 16 == 0
+                    ? Cell.FromFormula($"B{row}+C{row}")
+                    : Cell.FromValue(new NumberValue(value));
+                cell.Value = new NumberValue(value);
+                if (col % 4 == 0)
+                    cell.StyleId = prewarmStyleId;
+                sheet.SetCell(address, cell);
+            }
+
+            styleOnlyRuns.Add(new StyleOnlyRun(
+                row,
+                (uint)PrewarmStyleOnlyStartColumn,
+                (uint)(PrewarmStyleOnlyStartColumn + PrewarmStyleOnlyColumnsPerSheet - 1),
+                prewarmStyleId));
+        }
+
+        sheet.SetStyleOnlyRuns(styleOnlyRuns);
+    }
+
     private static Sheet? ResolveSheet(Workbook workbook, string? requestedSheet)
     {
         if (string.IsNullOrWhiteSpace(requestedSheet))
@@ -373,6 +468,7 @@ internal static class Program
               --log <txt>
               --open-only
               --repeat <count>
+              --prewarm xlsx
               --help
             """);
     }
@@ -446,6 +542,8 @@ internal static class Program
 
         public int RepeatCount { get; private init; } = 1;
 
+        public bool PrewarmXlsx { get; private init; }
+
         public bool ShowHelp { get; private init; }
 
         public static AppIoBenchOptions Parse(string[] args)
@@ -492,6 +590,9 @@ internal static class Program
                         break;
                     case "--repeat":
                         options = options with { RepeatCount = ParseRepeatCount(ReadValue(args, ref index, "--repeat")) };
+                        break;
+                    case "--prewarm":
+                        options = options with { PrewarmXlsx = ParsePrewarmMode(ReadValue(args, ref index, "--prewarm")) };
                         break;
                     default:
                         if (options.Path is null && !args[index].StartsWith("-", StringComparison.Ordinal))
@@ -544,6 +645,14 @@ internal static class Program
 
             return count;
         }
+
+        private static bool ParsePrewarmMode(string value) =>
+            value.Trim().ToLowerInvariant() switch
+            {
+                "xlsx" => true,
+                "none" => false,
+                _ => throw new ArgumentException($"Unsupported prewarm mode: {value}")
+            };
     }
 
     private enum AppIoBenchEditMode
