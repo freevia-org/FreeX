@@ -1067,45 +1067,43 @@ public sealed partial class XlsxFileAdapter
                     return false;
                 }
 
-                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                var root = worksheetXml.Root;
-                if (root is null)
+                if (!TryReadWorksheetPackageGuardInfo(
+                        worksheetEntry,
+                        workbookNs,
+                        relNs,
+                        out var worksheetGuardInfo))
                 {
                     blockReason = "package_guard_worksheet_xml";
                     return false;
                 }
 
-                if (root.Element(workbookNs + "customProperties") is not null)
+                if (worksheetGuardInfo.HasCustomProperties)
                 {
                     blockReason = "package_guard_worksheet_custom_properties";
                     return false;
                 }
 
-                var drawingElements = root.Elements(workbookNs + "drawing").ToList();
-                if (drawingElements.Count > 1 ||
-                    (drawingElements.Count == 1 &&
+                if (worksheetGuardInfo.DrawingRelationshipIds.Count > 1 ||
+                    (worksheetGuardInfo.DrawingRelationshipIds.Count == 1 &&
                      !TryAddPatchSafeDrawingPackagePaths(
                          archive,
                          worksheetPath,
-                         drawingElements[0],
+                         worksheetGuardInfo.DrawingRelationshipIds[0],
                          sheet,
                          allowedDrawingPackagePaths,
                          allowedChartPaths,
-                         relNs,
                          packageRelNs)))
                 {
                     blockReason = "package_guard_drawing";
                     return false;
                 }
 
-                var headerFooterVmlDrawings = root.Elements(workbookNs + "legacyDrawingHF").ToList();
-                if (headerFooterVmlDrawings.Count > 1 ||
-                    (headerFooterVmlDrawings.Count == 1 &&
+                if (worksheetGuardInfo.HeaderFooterVmlRelationshipIds.Count > 1 ||
+                    (worksheetGuardInfo.HeaderFooterVmlRelationshipIds.Count == 1 &&
                      !TryAddPatchSafeHeaderFooterVmlDrawingPaths(
                          archive,
                          worksheetPath,
-                         worksheetXml,
-                         headerFooterVmlDrawings[0],
+                         worksheetGuardInfo.HeaderFooterVmlRelationshipIds[0],
                          sheet,
                          allowedVmlDrawingPaths)))
                 {
@@ -1113,13 +1111,13 @@ public sealed partial class XlsxFileAdapter
                     return false;
                 }
 
-                if (root.Element(workbookNs + "queryTableParts") is not null)
+                if (worksheetGuardInfo.HasQueryTableParts)
                 {
                     blockReason = "package_guard_query_table";
                     return false;
                 }
 
-                if (HasUnsupportedWorksheetTableParts(archive, worksheetPath, root, workbookNs, sheet))
+                if (HasUnsupportedWorksheetTableParts(archive, worksheetPath, worksheetGuardInfo, workbookNs, sheet))
                 {
                     blockReason = "package_guard_table_parts";
                     return false;
@@ -1144,18 +1142,19 @@ public sealed partial class XlsxFileAdapter
                     return false;
                 }
 
-                if (HasOfficeRevisionAttributes(root))
+                if (worksheetGuardInfo.HasOfficeRevisionAttributes)
                 {
                     blockReason = "package_guard_worksheet_revisions";
                     return false;
                 }
 
-                if (root.Element(workbookNs + "legacyDrawing") is { } legacyDrawing &&
+                if (worksheetGuardInfo.LegacyDrawingRelationshipIds.Count > 1 ||
+                    (worksheetGuardInfo.LegacyDrawingRelationshipIds.Count == 1 &&
                     !TryAddPatchSafeLegacyNoteVmlDrawingPath(
                         archive,
                         worksheetPath,
-                        legacyDrawing,
-                        allowedVmlDrawingPaths))
+                        worksheetGuardInfo.LegacyDrawingRelationshipIds[0],
+                        allowedVmlDrawingPaths)))
                 {
                     blockReason = "package_guard_legacy_drawing_vml";
                     return false;
@@ -1284,6 +1283,28 @@ public sealed partial class XlsxFileAdapter
             if (string.IsNullOrWhiteSpace(relationshipId))
                 return false;
 
+            return TryAddPatchSafeDrawingPackagePaths(
+                archive,
+                worksheetPath,
+                relationshipId,
+                sheet,
+                allowedDrawingPackagePaths,
+                allowedChartPaths,
+                packageRelNs);
+        }
+
+        private static bool TryAddPatchSafeDrawingPackagePaths(
+            ZipArchive archive,
+            string worksheetPath,
+            string relationshipId,
+            Sheet sheet,
+            HashSet<string> allowedDrawingPackagePaths,
+            HashSet<string> allowedChartPaths,
+            XNamespace packageRelNs)
+        {
+            if (string.IsNullOrWhiteSpace(relationshipId))
+                return false;
+
             var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
             if (relationshipsEntry is null)
                 return false;
@@ -1315,6 +1336,7 @@ public sealed partial class XlsxFileAdapter
             if (drawingEntry is null)
                 return false;
 
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             var drawingXml = XlsxPackageXmlEditor.LoadXml(drawingEntry);
             var drawingRoot = drawingXml.Root;
             if (drawingRoot is null)
@@ -1878,11 +1900,27 @@ public sealed partial class XlsxFileAdapter
             HashSet<string> allowedVmlDrawingPaths)
         {
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
             var relationshipId = legacyDrawing.Attribute(relNs + "id")?.Value;
             if (string.IsNullOrWhiteSpace(relationshipId))
                 return false;
 
+            return TryAddPatchSafeLegacyNoteVmlDrawingPath(
+                archive,
+                worksheetPath,
+                relationshipId,
+                allowedVmlDrawingPaths);
+        }
+
+        private static bool TryAddPatchSafeLegacyNoteVmlDrawingPath(
+            ZipArchive archive,
+            string worksheetPath,
+            string relationshipId,
+            HashSet<string> allowedVmlDrawingPaths)
+        {
+            if (string.IsNullOrWhiteSpace(relationshipId))
+                return false;
+
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
             var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
             if (relationshipsEntry is null)
                 return false;
@@ -1931,15 +1969,35 @@ public sealed partial class XlsxFileAdapter
             Sheet sheet,
             HashSet<string> allowedVmlDrawingPaths)
         {
-            if (!XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet))
-                return false;
-
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
             var relationshipId = legacyDrawing.Attribute(relNs + "id")?.Value;
             if (string.IsNullOrWhiteSpace(relationshipId))
                 return false;
 
+            return TryAddPatchSafeHeaderFooterVmlDrawingPaths(
+                archive,
+                worksheetPath,
+                relationshipId,
+                sheet,
+                allowedVmlDrawingPaths,
+                worksheetXml);
+        }
+
+        private static bool TryAddPatchSafeHeaderFooterVmlDrawingPaths(
+            ZipArchive archive,
+            string worksheetPath,
+            string relationshipId,
+            Sheet sheet,
+            HashSet<string> allowedVmlDrawingPaths,
+            XDocument? worksheetXml = null)
+        {
+            if (!XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet) ||
+                string.IsNullOrWhiteSpace(relationshipId))
+            {
+                return false;
+            }
+
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
             var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
             if (relationshipsEntry is null)
                 return false;
@@ -1969,6 +2027,15 @@ public sealed partial class XlsxFileAdapter
                 !IsValidRelationshipPart(vmlRelsEntry))
             {
                 return false;
+            }
+
+            if (worksheetXml is null)
+            {
+                var worksheetEntry = archive.GetEntry(worksheetPath);
+                if (worksheetEntry is null)
+                    return false;
+
+                worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
             }
 
             var sourcePictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
@@ -2124,6 +2191,180 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
+        private sealed record XlsxWorksheetPackageGuardInfo(
+            bool HasCustomProperties,
+            bool HasQueryTableParts,
+            bool HasOfficeRevisionAttributes,
+            IReadOnlyList<string> DrawingRelationshipIds,
+            IReadOnlyList<string> HeaderFooterVmlRelationshipIds,
+            IReadOnlyList<string> LegacyDrawingRelationshipIds,
+            bool HasTableParts,
+            int? TablePartDeclaredCount,
+            IReadOnlyList<string> TablePartRelationshipIds,
+            bool HasInvalidTablePartRelationship);
+
+        private static bool TryReadWorksheetPackageGuardInfo(
+            ZipArchiveEntry worksheetEntry,
+            XNamespace worksheetNs,
+            XNamespace relNs,
+            out XlsxWorksheetPackageGuardInfo info)
+        {
+            info = new XlsxWorksheetPackageGuardInfo(
+                false,
+                false,
+                false,
+                [],
+                [],
+                [],
+                false,
+                null,
+                [],
+                false);
+
+            try
+            {
+                using var stream = worksheetEntry.Open();
+                using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+                if (reader.NodeType == XmlNodeType.None)
+                    reader.Read();
+                if (reader.NodeType != XmlNodeType.Element)
+                    reader.MoveToContent();
+                if (reader.NodeType != XmlNodeType.Element)
+                    return false;
+
+                var rootDepth = reader.Depth;
+                var hasCustomProperties = false;
+                var hasQueryTableParts = false;
+                var hasOfficeRevisionAttributes = HasOfficeRevisionAttribute(reader);
+                var drawingRelationshipIds = new List<string>();
+                var headerFooterVmlRelationshipIds = new List<string>();
+                var legacyDrawingRelationshipIds = new List<string>();
+                var hasTableParts = false;
+                int? tablePartDeclaredCount = null;
+                var tablePartRelationshipIds = new List<string>();
+                var hasInvalidTablePartRelationship = false;
+                var tablePartsDepth = -1;
+
+                if (!reader.IsEmptyElement)
+                {
+                    while (reader.Read())
+                    {
+                        if (reader.NodeType == XmlNodeType.EndElement)
+                        {
+                            if (reader.Depth == tablePartsDepth)
+                                tablePartsDepth = -1;
+
+                            if (reader.Depth == rootDepth)
+                                break;
+
+                            continue;
+                        }
+
+                        if (reader.NodeType != XmlNodeType.Element)
+                            continue;
+
+                        hasOfficeRevisionAttributes |= HasOfficeRevisionAttribute(reader);
+                        if (reader.Depth == rootDepth + 1 &&
+                            string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal))
+                        {
+                            switch (reader.LocalName)
+                            {
+                                case "customProperties":
+                                    hasCustomProperties = true;
+                                    break;
+                                case "queryTableParts":
+                                    hasQueryTableParts = true;
+                                    break;
+                                case "drawing":
+                                    AddRelationshipId(reader, relNs, drawingRelationshipIds);
+                                    break;
+                                case "legacyDrawingHF":
+                                    AddRelationshipId(reader, relNs, headerFooterVmlRelationshipIds);
+                                    break;
+                                case "legacyDrawing":
+                                    AddRelationshipId(reader, relNs, legacyDrawingRelationshipIds);
+                                    break;
+                                case "tableParts":
+                                    hasTableParts = true;
+                                    if (int.TryParse(
+                                            reader.GetAttribute("count"),
+                                            NumberStyles.Integer,
+                                            CultureInfo.InvariantCulture,
+                                            out var declaredCount))
+                                    {
+                                        tablePartDeclaredCount = declaredCount;
+                                    }
+
+                                    tablePartsDepth = reader.IsEmptyElement ? -1 : reader.Depth;
+                                    break;
+                            }
+
+                            continue;
+                        }
+
+                        if (tablePartsDepth >= 0 &&
+                            reader.Depth == tablePartsDepth + 1 &&
+                            string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal) &&
+                            string.Equals(reader.LocalName, "tablePart", StringComparison.Ordinal))
+                        {
+                            if (!AddRelationshipId(reader, relNs, tablePartRelationshipIds))
+                                hasInvalidTablePartRelationship = true;
+                        }
+                    }
+                }
+
+                info = new XlsxWorksheetPackageGuardInfo(
+                    hasCustomProperties,
+                    hasQueryTableParts,
+                    hasOfficeRevisionAttributes,
+                    drawingRelationshipIds,
+                    headerFooterVmlRelationshipIds,
+                    legacyDrawingRelationshipIds,
+                    hasTableParts,
+                    tablePartDeclaredCount,
+                    tablePartRelationshipIds,
+                    hasInvalidTablePartRelationship);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+
+            static bool AddRelationshipId(XmlReader reader, XNamespace relNs, List<string> relationshipIds)
+            {
+                var relationshipId = reader.GetAttribute("id", relNs.NamespaceName);
+                if (string.IsNullOrWhiteSpace(relationshipId))
+                {
+                    relationshipIds.Add(string.Empty);
+                    return false;
+                }
+
+                relationshipIds.Add(relationshipId);
+                return true;
+            }
+
+            static bool HasOfficeRevisionAttribute(XmlReader reader)
+            {
+                if (!reader.HasAttributes)
+                    return false;
+
+                for (var index = 0; index < reader.AttributeCount; index++)
+                {
+                    reader.MoveToAttribute(index);
+                    if (string.Equals(reader.LocalName, "uid", StringComparison.Ordinal) &&
+                        reader.NamespaceURI.Contains("/revision", StringComparison.Ordinal))
+                    {
+                        reader.MoveToElement();
+                        return true;
+                    }
+                }
+
+                reader.MoveToElement();
+                return false;
+            }
+        }
+
         private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
         {
             var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
@@ -2138,6 +2379,78 @@ public sealed partial class XlsxFileAdapter
                 .Any(attribute =>
                     string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
                     attribute.Name.NamespaceName.Contains("/revision", StringComparison.Ordinal));
+
+        private static bool HasUnsupportedWorksheetTableParts(
+            ZipArchive archive,
+            string worksheetPath,
+            XlsxWorksheetPackageGuardInfo worksheetGuardInfo,
+            XNamespace workbookNs,
+            Sheet sheet)
+        {
+            if (!worksheetGuardInfo.HasTableParts)
+                return false;
+
+            if (worksheetGuardInfo.TablePartRelationshipIds.Count == 0)
+                return worksheetGuardInfo.TablePartDeclaredCount != 0;
+
+            if (worksheetGuardInfo.HasInvalidTablePartRelationship ||
+                worksheetGuardInfo.TablePartDeclaredCount != worksheetGuardInfo.TablePartRelationshipIds.Count ||
+                sheet.StructuredTables.Count != worksheetGuardInfo.TablePartRelationshipIds.Count)
+            {
+                return true;
+            }
+
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (relationshipsEntry is null)
+                return true;
+
+            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            var relationshipsRoot = relationshipsXml.Root;
+            if (relationshipsRoot is null)
+                return true;
+
+            var tableModelsByPath = sheet.StructuredTables
+                .Where(table => !string.IsNullOrWhiteSpace(table.PackagePart))
+                .ToDictionary(
+                    table => XlsxPackagePath.NormalizeZipPath(table.PackagePart.TrimStart('/').Replace('\\', '/')),
+                    table => table,
+                    StringComparer.OrdinalIgnoreCase);
+            if (tableModelsByPath.Count != sheet.StructuredTables.Count)
+                return true;
+
+            var seenTablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var relationshipId in worksheetGuardInfo.TablePartRelationshipIds)
+            {
+                var relationship = relationshipsRoot
+                    .Elements(packageRelNs + "Relationship")
+                    .SingleOrDefault(candidate =>
+                        string.Equals(candidate.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal) &&
+                        string.Equals(
+                            candidate.Attribute("Type")?.Value,
+                            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table",
+                            StringComparison.OrdinalIgnoreCase));
+                var target = relationship?.Attribute("Target")?.Value;
+                if (string.IsNullOrWhiteSpace(target))
+                    return true;
+
+                var tablePath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
+                if (!tablePath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) ||
+                    !tablePath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                    !seenTablePaths.Add(tablePath) ||
+                    !tableModelsByPath.TryGetValue(tablePath, out var tableModel) ||
+                    archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(tablePath)) is not null)
+                {
+                    return true;
+                }
+
+                var tableEntry = archive.GetEntry(tablePath);
+                if (tableEntry is null || HasUnsupportedTablePart(tableEntry, workbookNs, tableModel))
+                    return true;
+            }
+
+            return false;
+        }
 
         private static bool HasUnsupportedWorksheetTableParts(
             ZipArchive archive,
@@ -2528,7 +2841,7 @@ public sealed partial class XlsxFileAdapter
                     var cellIndex = 0;
                     foreach (var ((row, col), cell) in occupiedCells)
                     {
-                        var hasExplicitSourceStyleIndex = sourceCellStyleIndexes.TryGetValue((row, col), out var sourceStyleIndex);
+                        var hasExplicitSourceStyleIndex = sourceCellStyleIndexes.TryGetValue(row, col, out var sourceStyleIndex);
                         if (cell.StyleId == StyleId.Default || hasExplicitSourceStyleIndex)
                         {
                             AddSourceStyleIndex(
@@ -2567,12 +2880,14 @@ public sealed partial class XlsxFileAdapter
                         cells));
                 }
 
+                var fingerprint = CreatePatchValidationModelFingerprint(workbook);
+
                 return new XlsxCellPatchBaseline(
                     worksheets,
                     sourceStyleIndexesByStyleId,
                     chartSourceRanges,
                     pivotSourceRanges,
-                    CreatePatchValidationModelFingerprint(workbook));
+                    fingerprint);
             }
             catch
             {
@@ -4107,7 +4422,104 @@ public sealed partial class XlsxFileAdapter
             ambiguousStyleIds.Add(styleId);
         }
 
-        private static Dictionary<(uint Row, uint Col), string?>? ReadSourceCellStyleIndexes(
+        private abstract class XlsxSourceCellStyleIndexLookup
+        {
+            public abstract bool TryGetValue(uint row, uint col, out string? sourceStyleIndex);
+        }
+
+        private sealed class XlsxExplicitSourceCellStyleIndexLookup : XlsxSourceCellStyleIndexLookup
+        {
+            private readonly IReadOnlyList<(uint Row, uint Col, int StyleIndex)> _sourceEntries;
+            private readonly (uint Row, uint Col, int StyleIndex)[]? _sortedSourceEntries;
+            private readonly Dictionary<int, string?> _sourceStyleIndexCache;
+
+            public XlsxExplicitSourceCellStyleIndexLookup(
+                IReadOnlyList<(uint Row, uint Col, int StyleIndex)> sourceEntries,
+                Dictionary<int, string?> sourceStyleIndexCache)
+            {
+                _sourceEntries = sourceEntries;
+                _sourceStyleIndexCache = sourceStyleIndexCache;
+                if (!IsSorted(sourceEntries))
+                {
+                    _sortedSourceEntries = sourceEntries.ToArray();
+                    Array.Sort(_sortedSourceEntries, CompareSourceStyleEntries);
+                }
+            }
+
+            public override bool TryGetValue(uint row, uint col, out string? sourceStyleIndex)
+            {
+                var low = 0;
+                var high = (_sortedSourceEntries?.Length ?? _sourceEntries.Count) - 1;
+                while (low <= high)
+                {
+                    var mid = low + ((high - low) / 2);
+                    var entry = _sortedSourceEntries is null ? _sourceEntries[mid] : _sortedSourceEntries[mid];
+                    var rowCompare = entry.Row.CompareTo(row);
+                    var compare = rowCompare != 0 ? rowCompare : entry.Col.CompareTo(col);
+                    if (compare < 0)
+                    {
+                        low = mid + 1;
+                        continue;
+                    }
+
+                    if (compare > 0)
+                    {
+                        high = mid - 1;
+                        continue;
+                    }
+
+                    if (entry.StyleIndex < 0)
+                    {
+                        sourceStyleIndex = null;
+                        return false;
+                    }
+
+                    sourceStyleIndex = GetCachedSourceStyleIndex(_sourceStyleIndexCache, entry.StyleIndex);
+                    return true;
+                }
+
+                sourceStyleIndex = null;
+                return false;
+            }
+
+            private static bool IsSorted(IReadOnlyList<(uint Row, uint Col, int StyleIndex)> entries)
+            {
+                if (entries.Count < 2)
+                    return true;
+
+                var previous = entries[0];
+                for (var index = 1; index < entries.Count; index++)
+                {
+                    var current = entries[index];
+                    if (CompareSourceStyleEntries(previous, current) > 0)
+                        return false;
+
+                    previous = current;
+                }
+
+                return true;
+            }
+        }
+
+        private sealed class XlsxDictionarySourceCellStyleIndexLookup(
+            Dictionary<(uint Row, uint Col), string?> sourceCellStyleIndexes)
+            : XlsxSourceCellStyleIndexLookup
+        {
+            public override bool TryGetValue(uint row, uint col, out string? sourceStyleIndex) =>
+                sourceCellStyleIndexes.TryGetValue((row, col), out sourceStyleIndex);
+        }
+
+        private static int CompareSourceStyleEntries(
+            (uint Row, uint Col, int StyleIndex) left,
+            (uint Row, uint Col, int StyleIndex) right)
+        {
+            var rowCompare = left.Row.CompareTo(right.Row);
+            return rowCompare != 0
+                ? rowCompare
+                : left.Col.CompareTo(right.Col);
+        }
+
+        private static XlsxSourceCellStyleIndexLookup? ReadSourceCellStyleIndexes(
             SheetXmlLayout layout,
             Sheet sheet,
             Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
@@ -4119,7 +4531,7 @@ public sealed partial class XlsxFileAdapter
                 sourceStyleIndexesByStyleId,
                 ambiguousStyleIds);
 
-        private static Dictionary<(uint Row, uint Col), string?>? ReadSourceCellStyleIndexes(
+        private static XlsxSourceCellStyleIndexLookup? ReadSourceCellStyleIndexes(
             XlsxCellPatchBaselineSheetFacts sheetFacts,
             Sheet sheet,
             Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
@@ -4131,14 +4543,13 @@ public sealed partial class XlsxFileAdapter
                 sourceStyleIndexesByStyleId,
                 ambiguousStyleIds);
 
-        private static Dictionary<(uint Row, uint Col), string?>? ReadSourceCellStyleIndexes(
+        private static XlsxSourceCellStyleIndexLookup? ReadSourceCellStyleIndexes(
             IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitPopulatedCellStyles,
             IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
             Sheet sheet,
             Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
             HashSet<StyleId> ambiguousStyleIds)
         {
-            var result = new Dictionary<(uint Row, uint Col), string?>(Math.Min(sheet.CellCount, explicitPopulatedCellStyles.Count));
             var sourceStyleIndexCache = new Dictionary<int, string?>();
             foreach (var (row, col, styleIndex) in explicitPopulatedCellStyles)
             {
@@ -4149,7 +4560,6 @@ public sealed partial class XlsxFileAdapter
                     continue;
 
                 var sourceStyleIndex = GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex);
-                result[(row, col)] = sourceStyleIndex;
                 AddSourceStyleIndex(
                     sourceStyleIndexesByStyleId,
                     ambiguousStyleIds,
@@ -4172,7 +4582,9 @@ public sealed partial class XlsxFileAdapter
                     GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex));
             }
 
-            return result;
+            return new XlsxExplicitSourceCellStyleIndexLookup(
+                explicitPopulatedCellStyles,
+                sourceStyleIndexCache);
         }
 
         private static string? GetCachedSourceStyleIndex(Dictionary<int, string?> cache, int styleIndex)
@@ -4185,7 +4597,7 @@ public sealed partial class XlsxFileAdapter
             return sourceStyleIndex;
         }
 
-        private static Dictionary<(uint Row, uint Col), string?>? ReadSourceCellStyleIndexes(
+        private static XlsxSourceCellStyleIndexLookup? ReadSourceCellStyleIndexes(
             ZipArchive archive,
             string worksheetPath,
             Sheet sheet,
@@ -4236,7 +4648,7 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
-            return result;
+            return new XlsxDictionarySourceCellStyleIndexLookup(result);
         }
 
         private static IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> ReadSourceHyperlinks(
@@ -4255,20 +4667,56 @@ public sealed partial class XlsxFileAdapter
             {
                 var result = new Dictionary<CellAddress, XlsxSourceHyperlink>();
                 var ambiguous = new HashSet<CellAddress>();
-                var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
-                var root = worksheetXml.Root;
-                if (root is null)
-                    return result;
-
-                var worksheetNs = root.Name.Namespace;
                 XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-                var hyperlinks = root.Element(worksheetNs + "hyperlinks");
-                if (hyperlinks is null)
+                using var stream = entry.Open();
+                using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+                if (reader.NodeType == XmlNodeType.None)
+                    reader.Read();
+                if (reader.NodeType != XmlNodeType.Element)
+                    reader.MoveToContent();
+                if (reader.NodeType != XmlNodeType.Element)
                     return result;
 
-                foreach (var hyperlink in hyperlinks.Elements(worksheetNs + "hyperlink"))
+                var worksheetNamespace = reader.NamespaceURI;
+                var rootDepth = reader.Depth;
+                var hyperlinksDepth = -1;
+                if (reader.IsEmptyElement)
+                    return result;
+
+                while (reader.Read())
                 {
-                    var reference = hyperlink.Attribute("ref")?.Value;
+                    if (reader.NodeType == XmlNodeType.EndElement)
+                    {
+                        if (reader.Depth == hyperlinksDepth)
+                            hyperlinksDepth = -1;
+
+                        if (reader.Depth == rootDepth)
+                            break;
+
+                        continue;
+                    }
+
+                    if (reader.NodeType != XmlNodeType.Element ||
+                        !string.Equals(reader.NamespaceURI, worksheetNamespace, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (reader.Depth == rootDepth + 1 &&
+                        string.Equals(reader.LocalName, "hyperlinks", StringComparison.Ordinal))
+                    {
+                        hyperlinksDepth = reader.IsEmptyElement ? -1 : reader.Depth;
+                        continue;
+                    }
+
+                    if (hyperlinksDepth < 0 ||
+                        reader.Depth != hyperlinksDepth + 1 ||
+                        !string.Equals(reader.LocalName, "hyperlink", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var reference = reader.GetAttribute("ref");
                     if (!TryParseSingleCellReference(reference, sheet.Id, out var address) ||
                         ambiguous.Contains(address))
                     {
@@ -4278,14 +4726,14 @@ public sealed partial class XlsxFileAdapter
                     var source = new XlsxSourceHyperlink(
                         address,
                         reference!,
-                        hyperlink.Attribute(relNs + "id") is not null,
-                        hyperlink.Attribute("location")?.Value,
-                        hyperlink.Attribute("tooltip")?.Value);
-                    if (result.TryAdd(address, source))
-                        continue;
-
-                    result.Remove(address);
-                    ambiguous.Add(address);
+                        reader.GetAttribute("id", relNs.NamespaceName) is not null,
+                        reader.GetAttribute("location"),
+                        reader.GetAttribute("tooltip"));
+                    if (!result.TryAdd(address, source))
+                    {
+                        result.Remove(address);
+                        ambiguous.Add(address);
+                    }
                 }
 
                 return result;
