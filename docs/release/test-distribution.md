@@ -21,7 +21,16 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x
 
 https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix
 
-The `Tester Release` GitHub Actions workflow runs repository preflight, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
+Latest verified tester release:
+
+- Release: [FreeX (Test Release) v0.8.79](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-79-2026-06-05-22-07-09-run79-attempt1%2B7cba5e3f)
+- Tag: `v0-8-79-2026-06-05-22-07-09-run79-attempt1+7cba5e3f`
+- GitHub Actions run: [27042285396](https://github.com/tony-xmelon/FreeX/actions/runs/27042285396), run number 79, completed successfully
+- Target commit: `7cba5e3f47c25777e590530a3373bebc2bcf129e`
+- Release posture: internal-only latest tester build; not a public-preview candidate because live accessibility gate evidence was not recorded
+- Asset check: stable latest `.exe`, `.exe.sha256`, MSIX, and MSIX checksum links returned HTTP 200 after publication
+
+The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
 
 - `FreeX-latest-win-x64.exe`
 - `FreeX-latest-win-x64.exe.sha256`
