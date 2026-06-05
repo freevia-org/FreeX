@@ -77,6 +77,86 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_DateLikeComponents_ExtractsMonthTokenFromWeekdayPrefixedMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [("Mon Jan 2, 2024", "Jan"), ("Tuesday 3 February 2023", "February")],
+            ["Wed 2022 Mar 7th", "Thursday APR 8th, 2021"]);
+
+        result.Should().BeEquivalentTo(["Mar", "APR"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ExtractsDayTokenFromWeekdayPrefixedMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [("Monday 2 Jan 2024", "2"), ("Tue February 3, 2023", "3")],
+            ["Wed 2022 Mar 7th", "Thursday APR 8th, 2021"]);
+
+        result.Should().BeEquivalentTo(["7", "8"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ExtractsYearTokenFromWeekdayPrefixedMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [("Tue 2024 Jan 2", "2024"), ("Wednesday 2023 February 3", "2023")],
+            ["Thu 2022 Mar 7th", "Friday 2021 APR 8th"]);
+
+        result.Should().BeEquivalentTo(["2022", "2021"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ExtractsMonthTokenFromWeekdayPrefixedNumericDates()
+    {
+        var result = FlashFillService.Fill(
+            [("Mon 1/2/2024", "1"), ("Tuesday 03-4-2023", "03")],
+            ["Wed 11/5/2022", "Thursday 06.07.2021"]);
+
+        result.Should().BeEquivalentTo(["11", "06"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ExtractsYearTokenFromWeekdayPrefixedNumericDates()
+    {
+        var result = FlashFillService.Fill(
+            [("Mon 1/2/2024", "2024"), ("Tuesday 03-4-2023", "2023")],
+            ["Wed 11/5/2022", "Thursday 06.07.2021"]);
+
+        result.Should().BeEquivalentTo(["2022", "2021"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ReturnsNullWhenWeekdayPrefixedNumericRemainingIsInvalidDate()
+    {
+        var result = FlashFillService.Fill(
+            [("Mon 1/2/2024", "1"), ("Tue 3/4/2023", "3")],
+            ["Wed 2/30/2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ReturnsNullWhenWeekdayPrefixedMonthNameRemainingIsInvalidDate()
+    {
+        var result = FlashFillService.Fill(
+            [("Mon Jan 2, 2024", "Jan"), ("Tue February 3, 2023", "February")],
+            ["Wed February 30, 2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ReturnsNullWhenWeekdayPrefixedNumericExamplesAreAmbiguous()
+    {
+        var result = FlashFillService.Fill(
+            [("Mon 1/1/2024", "1"), ("Tue 02-02-2023", "02")],
+            ["Wed 03/03/2022"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_DateNormalization_FormatsMixedSeparatorsWithPadding()
     {
         var result = FlashFillService.Fill(
