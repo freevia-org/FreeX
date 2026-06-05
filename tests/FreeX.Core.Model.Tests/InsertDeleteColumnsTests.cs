@@ -53,7 +53,4 @@ public partial class InsertDeleteColumnsTests
         return (workbook, sheet, new TestCommandContext(workbook));
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
-
 }

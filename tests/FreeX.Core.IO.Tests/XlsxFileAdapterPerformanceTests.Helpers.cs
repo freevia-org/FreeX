@@ -1177,5 +1177,4 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             extension.Equals(".xltm", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string FindRepoFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }
