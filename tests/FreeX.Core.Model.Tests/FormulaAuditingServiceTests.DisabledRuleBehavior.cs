@@ -193,4 +193,37 @@ public sealed partial class FormulaAuditingServiceTests
 
         wb.DisabledFormulaErrorCodes.Should().BeEmpty();
     }
+
+    [Fact]
+    public void SetFormulaErrorCheckingRuleCommand_TogglesCalcRuleAndSuppressesCachedCalcErrors()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromFormula("CALC()");
+        cell.Value = ErrorValue.Calc;
+        sheet.SetCell(address, cell);
+        var ctx = new TestCommandContext(wb);
+
+        FormulaAuditingService.FindFormulaErrors(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.Error.Should().Be(ErrorValue.Calc);
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(ErrorValue.Calc.Code);
+
+        var command = new SetFormulaErrorCheckingRuleCommand(ErrorValue.Calc.Code, enabled: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        wb.DisabledFormulaErrorCodes.Should().Contain(ErrorValue.Calc.Code);
+        FormulaAuditingService.FindFormulaErrors(wb, sheet.Id).Should().BeEmpty();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        wb.DisabledFormulaErrorCodes.Should().BeEmpty();
+        FormulaAuditingService.FindFormulaErrors(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.Error.Should().Be(ErrorValue.Calc);
+    }
 }

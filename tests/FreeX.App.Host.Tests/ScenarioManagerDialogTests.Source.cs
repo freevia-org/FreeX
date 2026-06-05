@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -48,7 +47,7 @@ public sealed partial class ScenarioManagerDialogTests
     [Fact]
     public void DialogSource_ScenarioListExposesAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
+        var source = ReadScenarioManagerDialogSource();
 
         source.Should().Contain("AutomationProperties.SetName(_scenarioList, UiText.Get(\"ScenarioManager_Scenarios2\"));");
     }
@@ -76,7 +75,7 @@ public sealed partial class ScenarioManagerDialogTests
     public void DialogSource_ReturnsChangingCellsAndCommentFields()
     {
         var source = ReadScenarioManagerDialogSources();
-        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs"));
+        var handlerSource = ReadMainWindowScenarioCommandsSource();
 
         source.Should().Contain("public string? ChangingCellsText");
         source.Should().Contain("public string? ResultCellsText");
@@ -123,7 +122,7 @@ public sealed partial class ScenarioManagerDialogTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesScenarioListOrNewNameField()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
+        var source = ReadScenarioManagerDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -134,7 +133,7 @@ public sealed partial class ScenarioManagerDialogTests
     [Fact]
     public void DialogSource_MakesShowTheDefaultSelectedScenarioAction()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
+        var source = ReadScenarioManagerDialogSource();
 
         source.Should().Contain("_scenarioList.MouseDoubleClick += ScenarioList_MouseDoubleClick;");
         source.Should().Contain("_showButton = AddActionButton(sideButtons, UiText.Get(\"ScenarioManager_Show\"), ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);");
@@ -148,7 +147,7 @@ public sealed partial class ScenarioManagerDialogTests
     [Fact]
     public void DialogSource_MakesAddTheDefaultActionWhenNoScenariosExist()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
+        var source = ReadScenarioManagerDialogSource();
 
         source.Should().Contain("private Button? _addButton;");
         source.Should().Contain("_addButton = AddActionButton(sideButtons, UiText.Get(\"ScenarioManager_Add\"), ScenarioManagerAction.Add, isDefault: _scenarioList.Items.Count == 0);");

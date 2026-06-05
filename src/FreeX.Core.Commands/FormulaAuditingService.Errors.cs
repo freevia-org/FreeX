@@ -1898,6 +1898,7 @@ public static partial class FormulaAuditingService
         "#NUM!" => "The formula contains an invalid number or numeric result.",
         "#NULL!" => "The formula specifies an invalid intersection.",
         "#SPILL!" => "The formula result cannot spill into the requested cells.",
+        "#CALC!" => "The formula contains a calculation error.",
         "#CIRCULAR!" => "The formula contains a circular reference.",
         _ => "The formula or cell contains an error value."
     };
