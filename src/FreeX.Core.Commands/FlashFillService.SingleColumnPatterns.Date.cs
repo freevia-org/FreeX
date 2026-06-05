@@ -82,6 +82,34 @@ public static partial class FlashFillService
             : null;
     }
 
+    private static Func<string, string?>? TryEmbeddedDateComponentExtraction(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        DatePartKind? partKind = null;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (!TryFindEmbeddedDateComponentTokens(source, out var components) ||
+                !TryMatchDateComponent(components, expected, out var currentPartKind))
+            {
+                return null;
+            }
+
+            if (partKind is null)
+                partKind = currentPartKind;
+            else if (partKind.Value != currentPartKind)
+                return null;
+        }
+
+        if (partKind is null)
+            return null;
+
+        var kind = partKind.Value;
+        return source => TryFindEmbeddedDateComponentTokens(source, out var components)
+            ? GetDateComponent(components, kind)
+            : null;
+    }
+
     private static bool TrySplitDateLikeComponents(string source, out string[] components)
     {
         var dateText = StripOptionalEnglishWeekdayPrefix(source);
@@ -115,6 +143,40 @@ public static partial class FlashFillService
 
         components = [];
         return false;
+    }
+
+    private readonly record struct DateComponentTokens(string Year, string Month, string Day);
+
+    private static string GetDateComponent(DateComponentTokens components, DatePartKind kind) =>
+        kind switch
+        {
+            DatePartKind.Year => components.Year,
+            DatePartKind.Month => components.Month,
+            _ => components.Day
+        };
+
+    private static bool TryMatchDateComponent(
+        DateComponentTokens components,
+        string expected,
+        out DatePartKind kind)
+    {
+        kind = default;
+        var matches = new List<DatePartKind>(1);
+
+        if (components.Year == expected)
+            matches.Add(DatePartKind.Year);
+
+        if (components.Month == expected)
+            matches.Add(DatePartKind.Month);
+
+        if (components.Day == expected)
+            matches.Add(DatePartKind.Day);
+
+        if (matches.Count != 1)
+            return false;
+
+        kind = matches[0];
+        return true;
     }
 
     private readonly record struct MonthNameDateComponents(string Year, string Month, string Day);
@@ -402,6 +464,126 @@ public static partial class FlashFillService
         }
 
         return found;
+    }
+
+    private static bool TryFindEmbeddedDateComponentTokens(string source, out DateComponentTokens components)
+    {
+        components = default;
+
+        var found = false;
+        for (var start = 0; start < source.Length; start++)
+        {
+            if (TryFindEmbeddedNumericDateComponentTokensAt(source, start, out var currentComponents, out var endExclusive) ||
+                TryFindEmbeddedMonthNameDateComponentTokensAt(source, start, out currentComponents, out endExclusive))
+            {
+                if (!HasEmbeddedDateContext(source, start, endExclusive))
+                    continue;
+
+                if (found)
+                    return false;
+
+                components = currentComponents;
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
+    private static bool TryFindEmbeddedNumericDateComponentTokensAt(
+        string source,
+        int start,
+        out DateComponentTokens components,
+        out int endExclusive)
+    {
+        components = default;
+        endExclusive = start;
+
+        if (!char.IsDigit(source[start]) ||
+            (start > 0 && char.IsDigit(source[start - 1])))
+        {
+            return false;
+        }
+
+        foreach (var separator in DateComponentSeparators)
+        {
+            if (!TryReadDateTokenAt(source, start, separator, out endExclusive) ||
+                !HasDateTokenBoundary(source, start, endExclusive, separator))
+            {
+                continue;
+            }
+
+            var token = source[start..endExclusive];
+            if (!TryParseDateOutputValue(token, out _, out var pattern) ||
+                !TrySplitDateLikeText(token, out var parts, out _))
+            {
+                continue;
+            }
+
+            components = CreateDateComponentTokens(parts, pattern);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryFindEmbeddedMonthNameDateComponentTokensAt(
+        string source,
+        int start,
+        out DateComponentTokens components,
+        out int endExclusive)
+    {
+        components = default;
+        endExclusive = start;
+
+        if (!char.IsLetterOrDigit(source[start]) ||
+            (start > 0 && char.IsLetterOrDigit(source[start - 1])) ||
+            !TryReadMonthNameDateTokenAt(source, start, out endExclusive) ||
+            !HasMonthNameDateTokenBoundary(source, start, endExclusive) ||
+            !TrySplitMonthNameDateComponents(source[start..endExclusive], out var monthNameComponents))
+        {
+            return false;
+        }
+
+        components = new DateComponentTokens(
+            monthNameComponents.Year,
+            monthNameComponents.Month,
+            monthNameComponents.Day);
+        return true;
+    }
+
+    private static DateComponentTokens CreateDateComponentTokens(string[] parts, DateOutputPattern pattern) =>
+        new(
+            GetDateOutputToken(parts, pattern, DatePartKind.Year),
+            GetDateOutputToken(parts, pattern, DatePartKind.Month),
+            GetDateOutputToken(parts, pattern, DatePartKind.Day));
+
+    private static string GetDateOutputToken(string[] parts, DateOutputPattern pattern, DatePartKind kind)
+    {
+        if (pattern.First == kind)
+            return parts[0];
+
+        if (pattern.Second == kind)
+            return parts[1];
+
+        return parts[2];
+    }
+
+    private static bool HasEmbeddedDateContext(string source, int start, int endExclusive)
+    {
+        for (var i = 0; i < start; i++)
+        {
+            if (char.IsLetterOrDigit(source[i]))
+                return true;
+        }
+
+        for (var i = endExclusive; i < source.Length; i++)
+        {
+            if (char.IsLetterOrDigit(source[i]))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool TryFindEmbeddedNumericDateLikeValueAt(
