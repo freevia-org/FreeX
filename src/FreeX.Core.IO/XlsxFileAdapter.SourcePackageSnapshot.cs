@@ -885,8 +885,11 @@ public sealed partial class XlsxFileAdapter
 
         private static bool SheetHasPatchUnsafeDrawingObjects(Sheet sheet)
         {
-            if (sheet.TextBoxes.Count > 0 || sheet.DrawingShapes.Count > 0)
+            if (sheet.TextBoxes.Any(textBox => !IsPatchSafeSourceTextBox(textBox)) ||
+                sheet.DrawingShapes.Any(shape => !IsPatchSafeSourceDrawingShape(shape)))
+            {
                 return true;
+            }
 
             foreach (var picture in sheet.Pictures)
             {
@@ -1223,8 +1226,8 @@ public sealed partial class XlsxFileAdapter
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
             XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+            XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
             if (drawingRoot.Name != spreadsheetDrawingNs + "wsDr" ||
-                drawingXml.Descendants(spreadsheetDrawingNs + "sp").Any() ||
                 drawingXml.Descendants(spreadsheetDrawingNs + "cxnSp").Any() ||
                 drawingXml.Descendants(spreadsheetDrawingNs + "grpSp").Any() ||
                 drawingXml.Descendants(chartExNs + "chart").Any())
@@ -1234,9 +1237,19 @@ public sealed partial class XlsxFileAdapter
 
             var chartElements = drawingXml.Descendants(chartNs + "chart").ToList();
             var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
+            var sourceShapeElements = drawingXml
+                .Descendants(spreadsheetDrawingNs + "sp")
+                .Where(element => !element.Ancestors(markupCompatNs + "Fallback").Any())
+                .ToList();
+            var (sourceTextBoxes, sourceShapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
             if (chartElements.Count != sheet.Charts.Count ||
                 pictureElements.Count != sheet.Pictures.Count ||
-                sheet.Pictures.Any(picture => !IsPatchSafeSourcePicture(picture)))
+                sourceShapeElements.Count != sourceTextBoxes.Count + sourceShapes.Count ||
+                sourceTextBoxes.Count != sheet.TextBoxes.Count ||
+                sourceShapes.Count != sheet.DrawingShapes.Count ||
+                sheet.Pictures.Any(picture => !IsPatchSafeSourcePicture(picture)) ||
+                !SourceTextBoxesMatchSheet(sourceTextBoxes, sheet) ||
+                !SourceDrawingShapesMatchSheet(sourceShapes, sheet))
             {
                 return false;
             }
@@ -1259,7 +1272,10 @@ public sealed partial class XlsxFileAdapter
             {
                 var chartCount = anchor.Descendants(chartNs + "chart").Count();
                 var pictureCount = anchor.Descendants(spreadsheetDrawingNs + "pic").Count();
-                if (chartCount + pictureCount == 0 ||
+                var shapeCount = anchor
+                    .Descendants(spreadsheetDrawingNs + "sp")
+                    .Count(element => !element.Ancestors(markupCompatNs + "Fallback").Any());
+                if (chartCount + pictureCount + shapeCount == 0 ||
                     anchor.Descendants(spreadsheetDrawingNs + "graphicFrame").Count() != chartCount)
                 {
                     return false;
@@ -1568,6 +1584,90 @@ public sealed partial class XlsxFileAdapter
             picture.Kind == PictureKind.Image &&
             !picture.IsLinkedToSourceRange &&
             picture.LinkedSourceRange is null;
+
+        private static bool IsPatchSafeSourceTextBox(TextBoxModel textBox) =>
+            textBox.IsSourceLoaded;
+
+        private static bool IsPatchSafeSourceDrawingShape(DrawingShapeModel shape) =>
+            shape.IsSourceLoaded;
+
+        private static bool SourceTextBoxesMatchSheet(
+            IReadOnlyList<XlsxTextBoxPackagePart> sourceTextBoxes,
+            Sheet sheet)
+        {
+            if (sourceTextBoxes.Count != sheet.TextBoxes.Count)
+                return false;
+
+            for (var index = 0; index < sourceTextBoxes.Count; index++)
+            {
+                var source = sourceTextBoxes[index];
+                var current = sheet.TextBoxes[index];
+                if (!IsPatchSafeSourceTextBox(current) ||
+                    !StringEquals(source.Name, current.Name) ||
+                    !StringEquals(source.Text, current.Text) ||
+                    !StringEquals(source.Title, current.Title) ||
+                    !StringEquals(source.AltText, current.AltText) ||
+                    !DrawingAnchorMatchesCell(source.Anchor, current.Anchor) ||
+                    !ApproximatelyEquals(source.RotationDegrees, current.RotationDegrees) ||
+                    source.FillColor != current.FillColor ||
+                    source.OutlineColor != current.OutlineColor ||
+                    source.FillThemeColor != current.FillThemeColor ||
+                    source.OutlineThemeColor != current.OutlineThemeColor)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool SourceDrawingShapesMatchSheet(
+            IReadOnlyList<XlsxShapePackagePart> sourceShapes,
+            Sheet sheet)
+        {
+            if (sourceShapes.Count != sheet.DrawingShapes.Count)
+                return false;
+
+            for (var index = 0; index < sourceShapes.Count; index++)
+            {
+                var source = sourceShapes[index];
+                var current = sheet.DrawingShapes[index];
+                if (!IsPatchSafeSourceDrawingShape(current) ||
+                    source.Kind != current.Kind ||
+                    !StringEquals(source.Name, current.Name) ||
+                    !StringEquals(source.Title, current.Title) ||
+                    !StringEquals(source.AltText, current.AltText) ||
+                    !DrawingAnchorMatchesCell(source.Anchor, current.Anchor) ||
+                    !ApproximatelyEquals(source.RotationDegrees, current.RotationDegrees) ||
+                    source.FillColor != current.FillColor ||
+                    source.OutlineColor != current.OutlineColor ||
+                    source.GradientFillEndColor != current.GradientFillEndColor ||
+                    source.GradientFillDirection != current.GetEffectiveGradientFillDirection() ||
+                    source.FillThemeColor != current.FillThemeColor ||
+                    source.OutlineThemeColor != current.OutlineThemeColor ||
+                    source.EffectPreset != current.GetEffectiveEffectPreset())
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool DrawingAnchorMatchesCell(XlsxDrawingAnchor? sourceAnchor, CellAddress currentAnchor)
+        {
+            if (sourceAnchor is null)
+                return currentAnchor.Row == 1 && currentAnchor.Col == 1;
+
+            return sourceAnchor.FromRowZeroBased + 1 == currentAnchor.Row &&
+                   sourceAnchor.FromColumnZeroBased + 1 == currentAnchor.Col;
+        }
+
+        private static bool StringEquals(string? source, string? current) =>
+            string.Equals(source, current, StringComparison.Ordinal);
+
+        private static bool ApproximatelyEquals(double source, double current) =>
+            Math.Abs(source - current) < 0.0001;
 
         private static bool TryGetRelationship(
             IReadOnlyList<XElement> relationships,
