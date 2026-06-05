@@ -2038,6 +2038,107 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeEquivalentTo(["amturing@contoso.com", "kcjohnson@contoso.com"], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData(".", "turing.alan.m@contoso.com", "johnson.katherine.c@contoso.com")]
+    [InlineData("_", "turing_alan_m@contoso.com", "johnson_katherine_c@contoso.com")]
+    [InlineData("-", "turing-alan-m@contoso.com", "johnson-katherine-c@contoso.com")]
+    public void Fill_FullNamesToReversedMiddleInitialEmail_LearnsSeparatedAliasAndSharedDomain(
+        string separator,
+        string expectedFirst,
+        string expectedSecond)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", $"lovelace{separator}ada{separator}b@contoso.com"),
+                ("Grace Brewster Hopper", $"hopper{separator}grace{separator}b@contoso.com")
+            ],
+            [
+                "Alan Mathison Turing",
+                "Katherine Coleman Johnson"
+            ]);
+
+        result.Should().BeEquivalentTo([expectedFirst, expectedSecond], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToReversedMiddleInitialEmail_LearnsCompactLastFirstInitialMiddleInitialAndSharedDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "lovelaceab@contoso.com"),
+                ("Grace Brewster Hopper", "hoppergb@contoso.com")
+            ],
+            [
+                "Alan Mathison Turing",
+                "Katherine Coleman Johnson"
+            ]);
+
+        result.Should().BeEquivalentTo(["turingam@contoso.com", "johnsonkc@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToReversedMiddleInitialEmail_LearnsCompactLastMiddleInitialFirstInitialAndSharedDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "lovelaceba@contoso.com"),
+                ("Grace Brewster Hopper", "hopperbg@contoso.com")
+            ],
+            [
+                "Alan Mathison Turing",
+                "Katherine Coleman Johnson"
+            ]);
+
+        result.Should().BeEquivalentTo(["turingma@contoso.com", "johnsonck@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToReversedMiddleInitialEmail_ReturnsNullWhenExampleDomainsDiffer()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "lovelace.ada.b@contoso.com"),
+                ("Grace Brewster Hopper", "hopper.grace.b@example.org")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_FullNamesToReversedMiddleInitialEmail_ReturnsNullWhenRemainingNameDoesNotHaveExactlyThreeTokens()
+    {
+        var tooFewResult = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "lovelace.ada.b@contoso.com"),
+                ("Grace Brewster Hopper", "hopper.grace.b@contoso.com")
+            ],
+            ["Alan Turing"]);
+
+        var tooManyResult = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "lovelace.ada.b@contoso.com"),
+                ("Grace Brewster Hopper", "hopper.grace.b@contoso.com")
+            ],
+            ["Alan Mathison M. Turing"]);
+
+        tooFewResult.Should().BeNull();
+        tooManyResult.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_FullNamesToReversedMiddleInitialEmail_ReturnsNullWhenExampleNameDoesNotHaveExactlyThreeTokens()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Augusta Byron Lovelace", "lovelace.ada.b@contoso.com"),
+                ("Grace Brewster Hopper", "hopper.grace.b@contoso.com")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_FullNamesToMiddleInitialEmail_ReturnsNullWhenExampleDomainsDiffer()
     {

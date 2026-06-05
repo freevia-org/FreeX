@@ -426,6 +426,27 @@ public static partial class FlashFillService
         if (firstInitialMiddleInitialLastPattern is not null)
             return firstInitialMiddleInitialLastPattern;
 
+        foreach (var separator in EmailSeparators)
+        {
+            var pattern = TrySharedDomainThreeTokenFullNameEmailPattern(
+                examples,
+                tokens => (tokens[2] + separator + tokens[0] + separator + GetFirstInitial(tokens[1])).ToLowerInvariant());
+            if (pattern is not null)
+                return pattern;
+        }
+
+        var lastFirstInitialMiddleInitialPattern = TrySharedDomainThreeTokenFullNameEmailPattern(
+            examples,
+            tokens => (tokens[2] + GetFirstInitial(tokens[0]) + GetFirstInitial(tokens[1])).ToLowerInvariant());
+        if (lastFirstInitialMiddleInitialPattern is not null)
+            return lastFirstInitialMiddleInitialPattern;
+
+        var lastMiddleInitialFirstInitialPattern = TrySharedDomainThreeTokenFullNameEmailPattern(
+            examples,
+            tokens => (tokens[2] + GetFirstInitial(tokens[1]) + GetFirstInitial(tokens[0])).ToLowerInvariant());
+        if (lastMiddleInitialFirstInitialPattern is not null)
+            return lastMiddleInitialFirstInitialPattern;
+
         return null;
     }
 
