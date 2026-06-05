@@ -456,6 +456,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookFileSharingMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookFunctionGroupsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileRecoveryMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -683,6 +684,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookFileSharingMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookFunctionGroupsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileRecoveryMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3900,6 +3902,104 @@ internal static class ExcelOpenSmoke
 
     private static bool IsKnownWorkbookProtectionBooleanAttribute(string name) =>
         name is "lockStructure" or "lockWindows" or "lockRevision";
+
+    private static void AssertWorkbookFunctionGroupsMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookFunctionGroupsMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookFunctionGroupsMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookFunctionGroupsMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var functionGroupsElements = root.Elements(SpreadsheetNs + "functionGroups").ToArray();
+        if (functionGroupsElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {functionGroupsElements.Length} functionGroups elements; expected at most one");
+
+        foreach (var functionGroups in functionGroupsElements.Select((element, index) => new WorkbookFunctionGroupsReference(index + 1, element)))
+        {
+            AddWorkbookFunctionGroupsIssues(root, functionGroups, issues);
+        }
+    }
+
+    private static void AddWorkbookFunctionGroupsIssues(
+        XElement workbookRoot,
+        WorkbookFunctionGroupsReference functionGroupsReference,
+        List<string> issues)
+    {
+        var functionGroups = functionGroupsReference.Element;
+        var description = $"functionGroups #{functionGroupsReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            functionGroups,
+            description,
+            [
+                "externalReferences",
+                "definedNames",
+                "calcPr",
+                "oleSize",
+                "customWorkbookViews",
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "builtInGroupCount", functionGroups.Attribute("builtInGroupCount")?.Value, issues);
+
+        foreach (var unexpectedChild in functionGroups.Elements().Where(element => element.Name != SpreadsheetNs + "functionGroup"))
+        {
+            issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected functionGroup entries only");
+        }
+
+        foreach (var functionGroup in functionGroups
+                     .Elements(SpreadsheetNs + "functionGroup")
+                     .Select((element, index) => new WorkbookFunctionGroupReference(index + 1, element)))
+        {
+            AddWorkbookFunctionGroupIssues(description, functionGroup, issues);
+        }
+    }
+
+    private static void AddWorkbookFunctionGroupIssues(
+        string functionGroupsDescription,
+        WorkbookFunctionGroupReference functionGroupReference,
+        List<string> issues)
+    {
+        var functionGroup = functionGroupReference.Element;
+        var description = $"{functionGroupsDescription} functionGroup #{functionGroupReference.Ordinal}";
+        if (string.IsNullOrWhiteSpace(functionGroup.Attribute("name")?.Value))
+            issues.Add($"{WorkbookPart} {description} has no name");
+
+        if (functionGroup.Elements().Any())
+            issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void ThrowInvalidWorkbookFunctionGroupsMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook functionGroups metadata: {sample}{suffix}");
+    }
 
     private static void AssertWorkbookCalculationPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
     {
@@ -13064,6 +13164,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookProtectionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookFunctionGroupsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookFunctionGroupReference(
         int Ordinal,
         XElement Element);
 
