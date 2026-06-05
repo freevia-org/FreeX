@@ -1345,12 +1345,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 't' && EqualAsciiWordIgnoreCase(word, "treasry"))
-                {
-                    suggestion = "treasury";
-                    return true;
-                }
-
                 if (first == 'v' && EqualAsciiWordIgnoreCase(word, "vendro"))
                 {
                     suggestion = "vendor";
@@ -1758,6 +1752,12 @@ public static partial class SpellCheckService
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "thruput"))
                 {
                     suggestion = "throughput";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "treasry"))
+                {
+                    suggestion = "treasury";
                     return true;
                 }
 
