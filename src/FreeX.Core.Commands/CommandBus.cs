@@ -35,7 +35,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
         if (outcome.Success)
         {
             var stack = GetOrCreateStack(workbookId);
-            stack.Push(command, EstimateBytes(command));
+            stack.Push(command, EstimateBytes(command), GetAffectedCells(command, outcome));
             NotifyStackChanged(workbookId);
         }
 
@@ -73,7 +73,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
         }
 
         NotifyStackChanged(workbookId);
-        return new CommandOutcome(true, AffectedCells: GetAffectedCells(command));
+        return new CommandOutcome(true, AffectedCells: entry.AffectedCells ?? GetAffectedCells(command));
     }
 
     public CommandOutcome Redo(WorkbookId workbookId)
@@ -97,15 +97,19 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
             return new CommandOutcome(false, $"Redo failed: {ex.Message}");
         }
 
+        var affectedCells = outcome.Success
+            ? GetAffectedCells(command, outcome) ?? entry.AffectedCells
+            : null;
+
         if (outcome.Success)
-            stack.PushWithoutClearingRedo(entry);
+            stack.PushWithoutClearingRedo(entry with { AffectedCells = affectedCells });
         else
             stack.PushRedo(entry); // restore so the user can retry
 
         if (outcome.Success)
             NotifyStackChanged(workbookId);
 
-        return outcome with { AffectedCells = outcome.AffectedCells ?? GetAffectedCells(command) };
+        return outcome with { AffectedCells = affectedCells };
     }
 
     public bool CanUndo(WorkbookId workbookId) =>
@@ -153,10 +157,16 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
             ? affectedCellsCommand.AffectedCells
             : null;
 
+    private static IReadOnlyList<CellAddress>? GetAffectedCells(IWorkbookCommand command, CommandOutcome outcome) =>
+        outcome.AffectedCells ?? GetAffectedCells(command);
+
     private static int EstimateBytes(IWorkbookCommand command) =>
         command is IEstimatesMemory mem ? mem.EstimatedBytes : DefaultCommandBytes;
 
-    private readonly record struct CommandStackEntry(IWorkbookCommand Command, int Bytes);
+    private readonly record struct CommandStackEntry(
+        IWorkbookCommand Command,
+        int Bytes,
+        IReadOnlyList<CellAddress>? AffectedCells);
 
     private sealed class CommandStack
     {
@@ -178,9 +188,12 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
         public bool CanUndo => _undoStack.Count > 0;
         public bool CanRedo => _redoStack.Count > 0;
 
-        public void Push(IWorkbookCommand command, int bytes)
+        public void Push(
+            IWorkbookCommand command,
+            int bytes,
+            IReadOnlyList<CellAddress>? affectedCells)
         {
-            PushUndoEntry(new CommandStackEntry(command, bytes));
+            PushUndoEntry(new CommandStackEntry(command, bytes, affectedCells));
             _redoStack.Clear(); // New action invalidates redo history
 
             TrimUndoStack();

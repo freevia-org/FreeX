@@ -48,6 +48,29 @@ public sealed class CommandBusUndoSafetyTests
         public void Revert(ICommandContext ctx) => onRevert();
     }
 
+    private sealed class OutcomeAffectedCellsCommand(
+        IReadOnlyList<CellAddress> firstApplyAffectedCells,
+        IReadOnlyList<CellAddress>? redoAffectedCells = null) : IWorkbookCommand
+    {
+        private int _applyCount;
+
+        public string Label => "OutcomeAffectedCells";
+
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            _applyCount++;
+            return new CommandOutcome(
+                true,
+                AffectedCells: _applyCount == 1
+                    ? firstApplyAffectedCells
+                    : redoAffectedCells ?? firstApplyAffectedCells);
+        }
+
+        public void Revert(ICommandContext ctx)
+        {
+        }
+    }
+
     // ── happy path ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -93,6 +116,38 @@ public sealed class CommandBusUndoSafetyTests
         applySawCallback.Should().BeTrue();
         revertSawCallback.Should().BeTrue();
         redoSawCallback.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Undo_ReturnsApplyAffectedCells_WhenCommandDoesNotImplementAffectedCellsCommand()
+    {
+        var bus = MakeBus(out _);
+        var sheetId = SheetId.New();
+        var affectedCells = new[]
+        {
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 1, 2)
+        };
+
+        bus.Execute(WbId, new OutcomeAffectedCellsCommand(affectedCells));
+
+        bus.Undo(WbId).AffectedCells.Should().Equal(affectedCells);
+    }
+
+    [Fact]
+    public void Redo_RefreshesStoredAffectedCells_ForNextUndo()
+    {
+        var bus = MakeBus(out _);
+        var sheetId = SheetId.New();
+        var firstApplyAffectedCells = new[] { new CellAddress(sheetId, 1, 1) };
+        var redoAffectedCells = new[] { new CellAddress(sheetId, 2, 1) };
+
+        bus.Execute(WbId, new OutcomeAffectedCellsCommand(firstApplyAffectedCells, redoAffectedCells));
+        bus.Undo(WbId).AffectedCells.Should().Equal(firstApplyAffectedCells);
+
+        bus.Redo(WbId).AffectedCells.Should().Equal(redoAffectedCells);
+
+        bus.Undo(WbId).AffectedCells.Should().Equal(redoAffectedCells);
     }
 
     [Fact]
