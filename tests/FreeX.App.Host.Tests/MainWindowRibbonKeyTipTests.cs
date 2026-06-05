@@ -871,9 +871,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
     private sealed class TempRecentFiles : IDisposable
     {
-        private readonly string _directory;
+        private readonly TestTemporaryDirectory _directory;
 
-        private TempRecentFiles(string directory, IReadOnlyList<string> paths)
+        private TempRecentFiles(TestTemporaryDirectory directory, IReadOnlyList<string> paths)
         {
             _directory = directory;
             Paths = paths;
@@ -883,23 +883,29 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public static TempRecentFiles Create(int count)
         {
-            var directory = Path.Combine(Path.GetTempPath(), "FreeXRecentKeyTips", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(directory);
-            var paths = Enumerable.Range(1, count)
-                .Select(index =>
-                {
-                    var path = Path.Combine(directory, $"Book{index}.xlsx");
-                    File.WriteAllText(path, "");
-                    return path;
-                })
-                .ToList();
-            return new TempRecentFiles(directory, paths);
+            var directory = new TestTemporaryDirectory();
+            try
+            {
+                var paths = Enumerable.Range(1, count)
+                    .Select(index =>
+                    {
+                        var path = Path.Combine(directory.Path, $"Book{index}.xlsx");
+                        File.WriteAllText(path, "");
+                        return path;
+                    })
+                    .ToList();
+                return new TempRecentFiles(directory, paths);
+            }
+            catch
+            {
+                directory.Dispose();
+                throw;
+            }
         }
 
         public void Dispose()
         {
-            if (Directory.Exists(_directory))
-                Directory.Delete(_directory, recursive: true);
+            _directory.Dispose();
         }
     }
 

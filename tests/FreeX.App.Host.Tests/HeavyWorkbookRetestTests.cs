@@ -35,28 +35,22 @@ public sealed class HeavyWorkbookRetestTests
         openProgress.Should().Contain(update => update.Percent == 98);
         openStopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(60));
 
-        var savePath = Path.Combine(Path.GetTempPath(), $"freex-heavy-retest-{Guid.NewGuid():N}.xlsx");
-        try
-        {
-            var saveProgress = new List<SaveProgressUpdate>();
-            var saveStopwatch = Stopwatch.StartNew();
-            await new SaveWorkbookWriter().SaveAsync(
-                savePath,
-                adapter,
-                openResult.Workbook,
-                new TestProgress<SaveProgressUpdate>(saveProgress.Add));
-            saveStopwatch.Stop();
+        using var temp = new TestTemporaryDirectory();
+        var savePath = Path.Combine(temp.Path, "heavy-retest.xlsx");
+        var saveProgress = new List<SaveProgressUpdate>();
+        var saveStopwatch = Stopwatch.StartNew();
+        await new SaveWorkbookWriter().SaveAsync(
+            savePath,
+            adapter,
+            openResult.Workbook,
+            new TestProgress<SaveProgressUpdate>(saveProgress.Add));
+        saveStopwatch.Stop();
 
-            File.Exists(savePath).Should().BeTrue();
-            new FileInfo(savePath).Length.Should().BeGreaterThan(0);
-            saveProgress.Should().Contain(update => update.Detail.StartsWith("Saving file (writing)", StringComparison.Ordinal));
-            saveProgress.Should().Contain(update => update.Percent == 100);
-            saveStopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(90));
-        }
-        finally
-        {
-            File.Delete(savePath);
-        }
+        File.Exists(savePath).Should().BeTrue();
+        new FileInfo(savePath).Length.Should().BeGreaterThan(0);
+        saveProgress.Should().Contain(update => update.Detail.StartsWith("Saving file (writing)", StringComparison.Ordinal));
+        saveProgress.Should().Contain(update => update.Percent == 100);
+        saveStopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(90));
     }
 
     private static string? ResolveHeavyWorkbookPath()
