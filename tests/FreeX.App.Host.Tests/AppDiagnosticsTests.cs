@@ -21,7 +21,7 @@ public sealed class AppDiagnosticsTests
     [Fact]
     public void FileStore_RecordEvent_WritesJsonLineWithoutWorkbookContent()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory();
         var store = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true));
         var metadata = new AppDiagnosticsMetadata(
             AppVersion: "Version Test",
@@ -50,7 +50,7 @@ public sealed class AppDiagnosticsTests
     [Fact]
     public void FileStore_RecordEvent_AllowsPhaseSixUsageMetadataButDropsDocumentDetails()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory();
         var store = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true));
         var metadata = new AppDiagnosticsMetadata(
             AppVersion: "Version Test",
@@ -83,7 +83,7 @@ public sealed class AppDiagnosticsTests
     [Fact]
     public void FileStore_RecordCrash_WritesCrashReportAndEvent()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory();
         var store = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true));
         var metadata = new AppDiagnosticsMetadata(
             AppVersion: "Version Test",
@@ -112,7 +112,7 @@ public sealed class AppDiagnosticsTests
     [Fact]
     public void FileStore_WhenDisabled_DoesNotCreateDiagnosticsFiles()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory();
         var store = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: false));
         var metadata = AppDiagnosticsMetadata.Create("Version Test");
 
@@ -143,19 +143,4 @@ public sealed class AppDiagnosticsTests
         File.Delete(blockerPath);
     }
 
-    private sealed class TemporaryDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public TemporaryDirectory()
-        {
-            Directory.CreateDirectory(Path);
-        }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
 }

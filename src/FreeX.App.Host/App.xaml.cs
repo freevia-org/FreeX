@@ -117,7 +117,9 @@ public partial class App : Application
         services.AddSingleton<ICommandBus>(sp =>
         {
             var wbRef = sp.GetRequiredService<WorkbookRef>();
-            return new CommandBus(_ => new WorkbookCommandContext(wbRef.Current));
+            return new CommandBus(
+                _ => new WorkbookCommandContext(wbRef.Current),
+                (id, ctx) => XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(ctx.Workbook, out _));
         });
 
         // Message service

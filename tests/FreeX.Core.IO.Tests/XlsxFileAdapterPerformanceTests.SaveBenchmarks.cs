@@ -236,7 +236,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
         using (var loadStream = new MemoryStream(package, writable: false))
+        {
             workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
+        }
 
         var sheet = workbook.Sheets[0];
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(42));
@@ -285,7 +288,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
         using (var loadStream = new MemoryStream(package, writable: false))
+        {
             workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
+        }
 
         AssertGeneratedStyleHeavyWorkbook(workbook);
         var sheet = workbook.Sheets[0];
@@ -343,6 +349,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(package, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             AssertGeneratedStyleHeavyWorkbook(workbook);
             ApplyGeneratedStyleHeavyExistingStyleMutation(workbook);
             workbooks.Add(workbook);
@@ -399,6 +406,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(package, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             AssertGeneratedStyleHeavyWorkbook(workbook);
             ApplyGeneratedStyleHeavyDimensionMutation(workbook, i);
             workbooks.Add(workbook);
@@ -454,6 +462,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(package, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             AssertGeneratedStyleHeavyWorkbook(workbook);
             ApplyGeneratedStyleHeavyMergeRegionMutation(workbook, i);
             workbooks.Add(workbook);
@@ -509,6 +518,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(package, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             AssertGeneratedStyleHeavyWorkbook(workbook);
             ApplyGeneratedStyleHeavyInternalHyperlinkMutation(workbook, i);
             workbooks.Add(workbook);
@@ -564,6 +574,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(package, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             AssertGeneratedStyleHeavyWorkbook(workbook);
             workbook.Sheets[0].Comments[new CellAddress(workbook.Sheets[0].Id, 1, 1)]
                 .Should()
@@ -622,6 +633,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(package, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             AssertGeneratedStyleHeavyWorkbook(workbook);
             workbook.Sheets[0].StructuredTables.Should().ContainSingle();
             ApplyGeneratedStyleHeavyStructuredTableMutation(workbook, i);
@@ -676,7 +688,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
         using (var loadStream = new MemoryStream(package, writable: false))
+        {
             workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
+        }
 
         AssertGeneratedStyleHeavyWorkbook(workbook);
         var markerCell = workbook.Sheets[0].GetCell(1, 1);
@@ -731,7 +746,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
         using (var loadStream = new MemoryStream(package, writable: false))
+        {
             workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
+        }
 
         AssertGeneratedStyleHeavyWorkbook(workbook);
         var markerCell = workbook.Sheets[0].GetCell(1, 1);
@@ -791,6 +809,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(package, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             AssertGeneratedStyleHeavyWorkbook(workbook);
             var sheet = workbook.Sheets[0];
             sheet.SetCell(
@@ -849,6 +868,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(package, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             AssertGeneratedStyleHeavyWorkbook(workbook);
             workbook.Sheets[0].ClearCell((uint)(i + 1), 1);
             workbooks.Add(workbook);
@@ -904,6 +924,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(package, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             AssertGeneratedStyleHeavyWorkbook(workbook);
             ApplyGeneratedStyleHeavyFallbackMutation(workbook, i);
             workbooks.Add(workbook);
@@ -957,7 +978,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
         using (var loadStream = new MemoryStream(package, writable: false))
+        {
             workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
+        }
 
         var sheet = workbook.Sheets[0];
         var markerAddress = new CellAddress(sheet.Id, 1, 1);
@@ -1011,6 +1035,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         {
             using var loadStream = new MemoryStream(sourcePackage, writable: false);
             var workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
             workbook.Sheets[0].SetCell(new CellAddress(workbook.Sheets[0].Id, 1, 1), new NumberValue(42 + i));
             workbooks.Add(workbook);
         }
@@ -1275,7 +1300,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
         using (var loadStream = new MemoryStream(package, writable: false))
+        {
             workbook = adapter.Load(loadStream);
+            PrepareLoadedWorkbookForEdit(workbook);
+        }
         ApplyWorksheetReplayMetadata(workbook);
 
         var markerAddress = new CellAddress(workbook.Sheets[0].Id, 1, 2);
