@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -109,7 +108,7 @@ public sealed partial class CustomViewsDialogXamlTests
     [Fact]
     public void DialogSelectionGuards_FocusViewsListWhenNoViewIsSelected()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CustomViewsDialog.xaml.cs");
 
         source.Should().Contain("if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }");
     }
@@ -117,10 +116,9 @@ public sealed partial class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewsDialog_ThreadsAddViewIncludeOptionsIntoCommandAndIndicators()
     {
-        var source = string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.Planning.cs")));
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "CustomViewsDialog.xaml.cs",
+            "CustomViewsDialog.Planning.cs");
 
         source.Should().Contain("dialog.Result.IncludePrintSettings");
         source.Should().Contain("dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings");
