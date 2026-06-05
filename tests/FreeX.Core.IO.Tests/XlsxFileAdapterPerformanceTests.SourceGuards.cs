@@ -190,8 +190,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("layout.HasDuplicateStyleOnlyCellStyleIndexes");
         adapterSource.Should().Contain("layout.HasClosedXmlUnsupportedConditionalFormatting");
         adapterSource.Should().Contain("layout.HasWorksheetDynamicFilters");
-        adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)");
-        adapterSource.Should().Contain("mutateSourcePackage: canMutateStyleOptimizedPackage");
+        adapterSource.Should().Contain("XlsxClosedXmlLoadPackageSanitizer.Create(");
+        adapterSource.Should().Contain("styleOnlyWorksheetPathsToStrip,");
+        adapterSource.Should().NotContain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)");
+        adapterSource.Should().NotContain("mutateSourcePackage: canMutateStyleOptimizedPackage");
         adapterSource.Should().Contain("sanitizationHints");
 
         layoutSource.Should().Contain("cellLayout.HasDuplicateStyleOnlyCellStyleIndexes");
@@ -205,6 +207,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
         sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints");
         sanitizerSource.Should().Contain("bool mutateSourcePackage = false");
+        sanitizerSource.Should().Contain("IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip");
+        sanitizerSource.Should().Contain("CreateFusedTransientPackage(");
+        sanitizerSource.Should().Contain("TryWriteFusedEntry(");
+        sanitizerSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.StripRedundantStyleOnlyCells");
         sanitizerSource.Should().Contain("TryCreateSanitizationRequirementsFromHints(");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasPivotPackageMetadata");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasChartExChartParts");
@@ -216,6 +222,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters");
 
         stripperSource.Should().Contain("IReadOnlySet<string>? worksheetPathsToStrip");
+        stripperSource.Should().Contain("internal static bool ShouldStripWorksheet");
+        stripperSource.Should().Contain("internal static void StripRedundantStyleOnlyCells");
         stripperSource.Should().Contain("worksheetPathsToStrip.Contains(NormalizeEntryPath(sourceEntry.FullName))");
         stripperSource.Should().Contain("ContainsDuplicateStyleOnlyCells(scanStream)");
     }

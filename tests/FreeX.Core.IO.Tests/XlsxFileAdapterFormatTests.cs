@@ -170,6 +170,8 @@ public sealed class XlsxFileAdapterFormatTests
         sanitizerSource.Should().Contain("GetSanitizationRequirements(");
         sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints? hints = null");
         sanitizerSource.Should().Contain("bool mutateSourcePackage = false");
+        sanitizerSource.Should().Contain("IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip");
+        sanitizerSource.Should().Contain("CreateFusedTransientPackage(");
         sanitizerSource.Should().Contain("RemoveDrawingPackageParts(archive)");
         sanitizerSource.Should().Contain("RemoveWorksheetDrawingReferences(archive)");
         sanitizerSource.Should().Contain("RemoveWorksheetDrawingRelationships(archive, removedParts)");
@@ -191,9 +193,10 @@ public sealed class XlsxFileAdapterFormatTests
         pivotReferencePreserverSource.Should().Contain("GetWorksheetPathsWithPivotTableRelationships(sourceArchive, context)");
         pivotReferencePreserverSource.Should().Contain("PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths)");
         tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");
-        adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)");
-        adapterSource.Should().Contain("styleOnlyWorksheetPathsToStrip is not { Count: 0 }");
-        adapterSource.Should().Contain("mutateSourcePackage: canMutateStyleOptimizedPackage");
+        adapterSource.Should().Contain("XlsxClosedXmlLoadPackageSanitizer.Create(");
+        sanitizerSource.Should().Contain("styleOnlyWorksheetPathsToStrip is not { Count: 0 }");
+        adapterSource.Should().NotContain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)");
+        adapterSource.Should().NotContain("mutateSourcePackage: canMutateStyleOptimizedPackage");
         styleOnlyStripperSource.Should().Contain("XmlWriter.Create(outputStream, writerSettings)");
         styleOnlyStripperSource.Should().Contain("reader.IsEmptyElement");
         styleOnlyStripperSource.Should().Contain("XNode.ReadFrom(reader)");
