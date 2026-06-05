@@ -173,8 +173,8 @@ public sealed class XlsxFileAdapterFormatTests
         sanitizerSource.Should().Contain("IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip");
         sanitizerSource.Should().Contain("CreateFusedTransientPackage(");
         sanitizerSource.Should().Contain("RemoveDrawingPackageParts(archive)");
-        sanitizerSource.Should().Contain("RemoveWorksheetDrawingReferences(archive)");
-        sanitizerSource.Should().Contain("RemoveWorksheetDrawingRelationships(archive, removedParts)");
+        sanitizerSource.Should().Contain("RemoveSheetDrawingReferences(archive)");
+        sanitizerSource.Should().Contain("RemoveSheetDrawingRelationships(archive, removedParts)");
         adapterSource.Should().Contain("var sheetXmlLayoutWarningCount = warnings.Count;");
         adapterSource.Should().Contain("sheetXmlLayout = LoadSheetXmlLayout(");
         adapterSource.Should().Contain("packageParts.HasStructuredTables,");
