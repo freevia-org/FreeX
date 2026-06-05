@@ -750,6 +750,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversBankingTreasuryVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "TREASRY cashflw Liqudity collaterl princpal intrest maturty escroww disbursemnt settlemnt transacton bankng. Keep treasry_id, https://treasry.example.com/cashflw, treasury@collaterl.example.com, and \"C:\\settlemnt folder\\transacton file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("TREASRY", "TREASURY"),
+            ("cashflw", "cashflow"),
+            ("Liqudity", "Liquidity"),
+            ("collaterl", "collateral"),
+            ("princpal", "principal"),
+            ("intrest", "interest"),
+            ("maturty", "maturity"),
+            ("escroww", "escrow"),
+            ("disbursemnt", "disbursement"),
+            ("settlemnt", "settlement"),
+            ("transacton", "transaction"),
+            ("bankng", "banking"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "TREASURY cashflow Liquidity collateral principal interest maturity escrow disbursement settlement transaction banking. Keep treasry_id, https://treasry.example.com/cashflw, treasury@collaterl.example.com, and \"C:\\settlemnt folder\\transacton file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
