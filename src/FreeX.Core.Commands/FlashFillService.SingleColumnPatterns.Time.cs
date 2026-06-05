@@ -18,6 +18,12 @@ public static partial class FlashFillService
         Unpadded
     }
 
+    private enum TimeRangeEndpointKind
+    {
+        First,
+        Second
+    }
+
     private readonly record struct TimeLikeComponents(
         string HourText,
         string UnpaddedHourText,
@@ -197,6 +203,44 @@ public static partial class FlashFillService
             : null;
     }
 
+    private static Func<string, string?>? TryEmbeddedTimeRangeEndpointExtraction(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        TimeRangeEndpointKind? endpointKind = null;
+        var sawEndpointCandidate = false;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (!TryGetExactlyTwoEmbeddedTimeTokenRanges(source, out var first, out var second))
+                return null;
+
+            var matchesFirst = TimeTokenEquals(source, first, expected);
+            var matchesSecond = TimeTokenEquals(source, second, expected);
+            if (matchesFirst == matchesSecond)
+                return TryParseTimeLikeValue(expected, out _, out _) ? _ => null : null;
+
+            sawEndpointCandidate = true;
+            var currentKind = matchesFirst
+                ? TimeRangeEndpointKind.First
+                : TimeRangeEndpointKind.Second;
+            if (endpointKind is null)
+                endpointKind = currentKind;
+            else if (endpointKind.Value != currentKind)
+                return _ => null;
+        }
+
+        if (!sawEndpointCandidate || endpointKind is null)
+            return null;
+
+        var kind = endpointKind.Value;
+        var cache = new ExtractedSegmentCache();
+        return source =>
+            TryGetExactlyTwoEmbeddedTimeTokenRanges(source, out var first, out var second)
+                ? cache.GetOrAdd(source, kind == TimeRangeEndpointKind.First ? first.Start : second.Start,
+                    kind == TimeRangeEndpointKind.First ? first.EndExclusive : second.EndExclusive)
+                : null;
+    }
+
     private static bool TryParseTimeLikeValue(
         string source,
         out TimeParts time,
@@ -351,6 +395,65 @@ public static partial class FlashFillService
         }
 
         return count;
+    }
+
+    private static bool TryGetExactlyTwoEmbeddedTimeTokenRanges(
+        string source,
+        out (int Start, int EndExclusive) first,
+        out (int Start, int EndExclusive) second)
+    {
+        first = default;
+        second = default;
+
+        var count = 0;
+        for (var start = 0; start < source.Length; start++)
+        {
+            if (!IsEmbeddedTimeCandidateStart(source, start))
+                continue;
+
+            if (!TryReadTimeTokenAt(source, start, out var endExclusive, out _, out _) ||
+                !HasTimeTokenBoundary(source, start, endExclusive))
+            {
+                return false;
+            }
+
+            count++;
+            if (count == 1)
+                first = (start, endExclusive);
+            else if (count == 2)
+                second = (start, endExclusive);
+            else
+                return false;
+
+            start = endExclusive - 1;
+        }
+
+        return count == 2;
+    }
+
+    private static bool IsEmbeddedTimeCandidateStart(string source, int start)
+    {
+        if (!char.IsDigit(source[start]) ||
+            (start > 0 && (char.IsDigit(source[start - 1]) || source[start - 1] == ':')))
+        {
+            return false;
+        }
+
+        var index = start + 1;
+        if (index < source.Length && char.IsDigit(source[index]))
+            index++;
+
+        return index < source.Length && source[index] == ':';
+    }
+
+    private static bool TimeTokenEquals(
+        string source,
+        (int Start, int EndExclusive) range,
+        string expected)
+    {
+        var length = range.EndExclusive - range.Start;
+        return length == expected.Length &&
+               source.AsSpan(range.Start, length).SequenceEqual(expected.AsSpan());
     }
 
     private static bool HasAnyEmbeddedTimeComponentMatch(string source, string expected)

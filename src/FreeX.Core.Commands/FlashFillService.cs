@@ -50,6 +50,7 @@ public static partial class FlashFillService
             ?? TryEmbeddedDateExtraction(examples)
             ?? TryEmbeddedDateComponentExtraction(examples)
             ?? TryTimeNormalization(examples)
+            ?? TryEmbeddedTimeRangeEndpointExtraction(examples)
             ?? TryEmbeddedTimeExtraction(examples)
             ?? TryPhoneNumberNormalization(examples)
             ?? TryUsAddressComponentExtraction(examples)

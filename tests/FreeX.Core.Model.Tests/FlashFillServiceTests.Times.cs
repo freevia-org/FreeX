@@ -221,6 +221,89 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ExtractsFirstEndpoint()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 9:15 AM to 10:45 AM", "9:15 AM"),
+                ("Shift 08:05 pm - 09:30 pm", "08:05 pm")
+            ],
+            ["Run 07:30 to 08:45"]);
+
+        result.Should().BeEquivalentTo(["07:30"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ExtractsSecondEndpointPreservingSourceStyle()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 9:15 AM to 10:45 AM", "10:45 AM"),
+                ("Run 07:30 to 08:45", "08:45")
+            ],
+            ["Shift 08:05 pm - 09:30 Pm"]);
+
+        result.Should().BeEquivalentTo(["09:30 Pm"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_PreservesSelectedEndpointSeconds()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 9:15 AM to 10:45 AM", "9:15 AM"),
+                ("Shift 08:05 pm - 09:30 pm", "08:05 pm")
+            ],
+            ["Run 07:30:09 to 08:00:00"]);
+
+        result.Should().BeEquivalentTo(["07:30:09"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("Run soon")]
+    [InlineData("Run 07:30")]
+    [InlineData("Run 07:30 to 08:45 to 09:30")]
+    [InlineData("Run 07:30 to 24:05")]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ReturnsNullForInvalidOrNonRangeRemainingRows(
+        string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 9:15 AM to 10:45 AM", "9:15 AM"),
+                ("Shift 08:05 pm - 09:30 pm", "08:05 pm")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ReturnsNullForAmbiguousEndpointExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 09:30 to 09:30", "09:30"),
+                ("Shift 08:05 to 09:30", "08:05")
+            ],
+            ["Run 07:30 to 08:45"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ReturnsNullForMixedEndpointExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 09:30 to 10:45", "09:30"),
+                ("Shift 08:05 to 09:30", "09:30")
+            ],
+            ["Run 07:30 to 08:45"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_EmbeddedTimeExtraction_ExtractsLabeledTwelveHourTime()
     {
         var result = FlashFillService.Fill(
