@@ -391,7 +391,7 @@ labeled text with ambiguous multi-date sources rejected, weekday-prefixed and em
 component extraction that preserves raw month tokens while normalizing ordinal day tokens, pure and embedded time component extraction for hour, minute, second, and
 meridiem from time-like values or labeled text with ambiguous component examples rejected, embedded time extraction/normalization plus supported two-time range endpoint extraction, including same-label ranges when endpoint examples are unambiguous, with
 ambiguous multi-time sources rejected, US address component extraction including street unit suffixes/identifiers with spaced hash unit forms, known title/honorific, credential, and organization legal-suffix cleanup,
-and two-part full-name reordering such as `Ada Lovelace` to `Lovelace, Ada`, plus a small multi-column pattern set. First/last-name,
+and two-part full-name reordering such as `Ada Lovelace` to `Lovelace, Ada`, plus a small multi-column pattern set for adjacent first/last and first/middle/last name columns. First/last-name,
 first-initial/last-name, and last-name/first-initial email generation learn constant
 domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/last-initial aliases. Domain/public-suffix extraction
 recognizes bounded common multi-label suffixes such as `co.uk`, `com.au`, and `co.nz`, including root-domain stem and suffix outputs.
@@ -400,7 +400,7 @@ It returns no result when the examples are ambiguous.
 Spell Check remains a deterministic known-corrections service in `Core.Commands`, not dictionary-backed proofing. It
 scans literal text cells, notes, threaded comment roots, and threaded comment replies in deterministic sheet/address order
 and plans undoable replacement edits while leaving formula cells alone. The known-corrections catalog covers bounded
-office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, quality/testing, documentation/support, reliability/maintenance, operations/planning, budget/stakeholder/project-control, procurement/inventory/supplier, finance/accounting/ledger, tax/audit/billing, banking/treasury, insurance/actuarial, healthcare/clinical, education/academic, facilities/real-estate, manufacturing/production, retail/e-commerce, energy/utilities, transport/logistics, hospitality/food-service, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
+office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, quality/testing, documentation/support, reliability/maintenance, operations/planning, budget/stakeholder/project-control, procurement/inventory/supplier, finance/accounting/ledger, tax/audit/billing, banking/treasury, insurance/actuarial, healthcare/clinical, education/academic, facilities/real-estate, manufacturing/production, retail/e-commerce, energy/utilities, transport/logistics, hospitality/food-service, government/public-sector, nonprofit/fundraising, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
 file path, identifier, and prefixed-word spans.
 The host workflow keeps Ignore All case-insensitive for the current pass and persists Add to Dictionary custom words
 through `FreeXOptions` so matching scanner results stay suppressed across sessions/workbooks without introducing a full
@@ -411,7 +411,7 @@ normalized add/remove/clear changes and Cancel leaves the original options objec
 Accessibility Checker remains a deterministic model-backed audit in `Core.Commands`, not a full WCAG or screen-reader
 engine. It reports issues supported by current workbook state, including merged cells, blank structured-table headers,
 low-contrast cell text against base, workbook theme/tint, and patterned fills, low-contrast text boxes against
-explicit, theme, and workbook object-default fills, missing or generic object alternate/title/name text including common default object labels, compact/separator-numbered defaults, dated screenshot/photo variants, camera/phone default filenames, and copied image filename defaults, hidden sheets/rows/columns with
+explicit, theme, and workbook object-default fills, missing or generic object alternate/title/name text including common default object labels, compact/separator-numbered defaults, dated screenshot/photo variants including date/time screen-capture filename forms, camera/phone default filenames, and copied image filename defaults, hidden sheets/rows/columns with
 modeled content including hyperlinks, blank, expanded generic action-phrase, commerce CTA, and signup/support CTA phrases, URL-like, or unclear hyperlink display text, and charts whose title or axis title is missing or generic as the current accessible label.
 
 Native JSON persists the local threaded-comment model, including author, replies, created/modified UTC activity
@@ -448,7 +448,7 @@ through Save As, and hands Windows Share the normalized local path.
 Error Checking remains a deterministic model-backed audit in `Core.Commands`, not a full Excel heuristic inference
 engine. It reports cached formula error values, text cells that parse as finite invariant-culture numbers including
 fullwidth digit/comma/decimal/scientific-notation forms plus small comma/decimal/sign, ordinary-space and no-break/thin-space group separators, trailing-sign number text, and Arabic-Indic/extended Arabic-Indic digit/decimal/thousands/percent variants, supported currency including fullwidth dollar/pound/yen/won and small dollar symbols, ASCII/fullwidth/small/Arabic percent, accounting-parentheses, and Unicode/fullwidth leading-sign forms, formulas
-stored as text, two-digit-year text dates including fullwidth digit/Latin-letter/separator variants, formulas whose direct parser-extracted precedents include missing or blank cells, table calculated
+stored as text including apostrophe-prefixed and fullwidth-equals imports, two-digit-year text dates including fullwidth digit/Latin-letter/separator variants, formulas whose direct parser-extracted precedents include missing or blank cells, table calculated
 column formulas that differ from the column formula, and common aggregate formulas (`SUM`, `AVERAGE`, `AVERAGEA`,
 `COUNT`, `COUNTA`, `MEDIAN`, `MIN`, `MINA`, `MAX`, `MAXA`, `PRODUCT`, `STDEV`, `STDEVP`, `STDEV.S`, `STDEV.P`, `VAR`, `VARP`,
 `VAR.S`, `VAR.P`, `SUBTOTAL`, `AGGREGATE`) that omit valued adjacent cells, including through same-sheet named-range

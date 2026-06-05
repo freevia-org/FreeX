@@ -461,6 +461,89 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void FillFromColumns_FirstMiddleLast_CombinesThreeSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["Ada Byron Lovelace", "Grace Brewster Hopper"],
+            [
+                ["Alan", "Mathison", "Turing"],
+                ["Katherine", "Coleman", "Johnson"]
+            ]);
+
+        result.Should().BeEquivalentTo(
+            ["Alan Mathison Turing", "Katherine Coleman Johnson"],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_LastFirstMiddle_CombinesThreeSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["Lovelace, Ada Byron", "Hopper, Grace Brewster"],
+            [
+                ["Alan", "Mathison", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["Turing, Alan Mathison"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstMiddleInitialLast_CombinesThreeSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["Ada B. Lovelace", "Grace B. Hopper"],
+            [
+                ["Alan", "Mathison", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["Alan M. Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstMiddleInitialsLast_CombinesThreeSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["A. B. Lovelace", "G. B. Hopper"],
+            [
+                ["Alan", "Mathison", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["A. M. Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_ThreeSourceNamePattern_ReturnsNullWhenRemainingMissingThirdSource()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["Ada Byron Lovelace", "Grace Brewster Hopper"],
+            [
+                ["Alan", "Mathison"]
+            ]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void FillFromColumns_FirstInitialLastLowercase_CombinesSourceColumns()
     {
         var result = FlashFillService.FillFromColumns(

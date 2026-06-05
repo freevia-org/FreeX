@@ -477,6 +477,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDimensionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetCellStructureMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetFormatMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -486,6 +487,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetMergeCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetConditionalFormattingMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDataValidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageMarginsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -715,6 +717,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDimensionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetCellStructureMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetFormatMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -724,6 +727,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetMergeCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetConditionalFormattingMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDataValidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageMarginsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -5370,6 +5374,584 @@ internal static class ExcelOpenSmoke
             $"{label} for '{sourcePath}' has invalid worksheet dimension metadata: {sample}{suffix}");
     }
 
+    private static void AssertWorksheetCellStructureMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetCellStructureMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetCellStructureMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetCellStructureMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        foreach (var columns in root.Elements(SpreadsheetNs + "cols").Select((element, index) => new WorksheetColumnsReference(index + 1, element)))
+        {
+            AddWorksheetColumnsIssues(worksheetPart, root, columns, issues);
+        }
+
+        var sheetDataContainers = root.Elements(SpreadsheetNs + "sheetData").ToArray();
+        if (sheetDataContainers.Length == 0)
+            issues.Add($"{worksheetPart} has no sheetData element");
+        else if (sheetDataContainers.Length > 1)
+            issues.Add($"{worksheetPart} has {sheetDataContainers.Length} sheetData elements; expected one");
+
+        foreach (var sheetData in sheetDataContainers.Select((element, index) => new WorksheetSheetDataReference(index + 1, element)))
+        {
+            AddWorksheetSheetDataIssues(worksheetPart, root, sheetData, issues);
+        }
+    }
+
+    private static void AddWorksheetColumnsIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetColumnsReference columnsReference,
+        List<string> issues)
+    {
+        var columns = columnsReference.Element;
+        var description = $"cols #{columnsReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            columns,
+            description,
+            [
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            columns,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in columns.Elements().Where(element => element.Name != SpreadsheetNs + "col"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected col entries only");
+        }
+
+        var columnElements = columns.Elements(SpreadsheetNs + "col").ToArray();
+        if (columnElements.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no col entries");
+
+        foreach (var column in columnElements.Select((element, index) => new WorksheetColumnReference(index + 1, element)))
+        {
+            AddWorksheetColumnIssues(worksheetPart, description, column, issues);
+        }
+    }
+
+    private static void AddWorksheetColumnIssues(
+        string worksheetPart,
+        string columnsDescription,
+        WorksheetColumnReference columnReference,
+        List<string> issues)
+    {
+        var column = columnReference.Element;
+        var description = $"{columnsDescription} col #{columnReference.Ordinal}";
+        var minIsValid = TryParsePositivePackageInt(column.Attribute("min")?.Value, out var min);
+        var maxIsValid = TryParsePositivePackageInt(column.Attribute("max")?.Value, out var max);
+        if (!minIsValid)
+            issues.Add($"{worksheetPart} {description} has invalid min value '{column.Attribute("min")?.Value ?? string.Empty}'");
+        if (!maxIsValid)
+            issues.Add($"{worksheetPart} {description} has invalid max value '{column.Attribute("max")?.Value ?? string.Empty}'");
+        if (minIsValid && maxIsValid && max < min)
+            issues.Add($"{worksheetPart} {description} has max {max} before min {min}");
+
+        AddOptionalNonNegativePackageDoubleIssue(worksheetPart, description, "width", column.Attribute("width")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "style", column.Attribute("style")?.Value, issues);
+        AddOptionalWorksheetMetadataOutlineLevelIssue(worksheetPart, description, "outlineLevel", column.Attribute("outlineLevel")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "hidden", column.Attribute("hidden")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "bestFit", column.Attribute("bestFit")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "customWidth", column.Attribute("customWidth")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "phonetic", column.Attribute("phonetic")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "collapsed", column.Attribute("collapsed")?.Value, issues);
+
+        if (column.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetSheetDataIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetSheetDataReference sheetDataReference,
+        List<string> issues)
+    {
+        var sheetData = sheetDataReference.Element;
+        var description = $"sheetData #{sheetDataReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            sheetData,
+            description,
+            [
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            sheetData,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols"
+            ],
+            issues);
+
+        if (sheetData.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration && attribute.Name.NamespaceName.Length == 0))
+            issues.Add($"{worksheetPart} {description} has attributes; expected row children only");
+
+        foreach (var unexpectedChild in sheetData.Elements().Where(element => element.Name != SpreadsheetNs + "row"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected row entries only");
+        }
+
+        var seenRows = new HashSet<int>();
+        var seenCells = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int? previousRowNumber = null;
+        foreach (var row in sheetData.Elements(SpreadsheetNs + "row").Select((element, index) => new WorksheetRowReference(index + 1, element)))
+        {
+            AddWorksheetRowIssues(worksheetPart, description, row, seenRows, seenCells, ref previousRowNumber, issues);
+        }
+    }
+
+    private static void AddWorksheetRowIssues(
+        string worksheetPart,
+        string sheetDataDescription,
+        WorksheetRowReference rowReference,
+        HashSet<int> seenRows,
+        HashSet<string> seenCells,
+        ref int? previousRowNumber,
+        List<string> issues)
+    {
+        var row = rowReference.Element;
+        var description = $"{sheetDataDescription} row #{rowReference.Ordinal}";
+        int? rowNumber = null;
+        var rowNumberText = row.Attribute("r")?.Value;
+        if (!string.IsNullOrWhiteSpace(rowNumberText))
+        {
+            if (!TryParsePositivePackageInt(rowNumberText, out var parsedRow))
+            {
+                issues.Add($"{worksheetPart} {description} has invalid r value '{rowNumberText}'");
+            }
+            else
+            {
+                rowNumber = parsedRow;
+                if (!seenRows.Add(parsedRow))
+                    issues.Add($"{worksheetPart} {sheetDataDescription} has duplicate row r '{parsedRow}'");
+
+                if (previousRowNumber is { } previous && parsedRow < previous)
+                    issues.Add($"{worksheetPart} {description} appears after row {previous}; expected ascending row order");
+
+                previousRowNumber = parsedRow;
+            }
+        }
+
+        AddWorksheetRowSpansIssue(worksheetPart, description, row.Attribute("spans")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "s", row.Attribute("s")?.Value, issues);
+        AddOptionalNonNegativePackageDoubleIssue(worksheetPart, description, "ht", row.Attribute("ht")?.Value, issues);
+        AddOptionalNonNegativePackageDoubleIssue(worksheetPart, description, "dyDescent", row.Attribute("dyDescent")?.Value, issues);
+        AddOptionalWorksheetMetadataOutlineLevelIssue(worksheetPart, description, "outlineLevel", row.Attribute("outlineLevel")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "customFormat", row.Attribute("customFormat")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "hidden", row.Attribute("hidden")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "customHeight", row.Attribute("customHeight")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "collapsed", row.Attribute("collapsed")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "thickTop", row.Attribute("thickTop")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "thickBot", row.Attribute("thickBot")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "ph", row.Attribute("ph")?.Value, issues);
+
+        foreach (var unexpectedChild in row.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "c" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected c/extLst children only");
+        }
+
+        var extensionLists = row.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        AddWorksheetCellStructureChildOrderingIssues(worksheetPart, description, row, "c", issues);
+
+        foreach (var cell in row.Elements(SpreadsheetNs + "c").Select((element, index) => new WorksheetCellReference(index + 1, element)))
+        {
+            AddWorksheetCellIssues(worksheetPart, description, cell, rowNumber, seenCells, issues);
+        }
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetCellIssues(
+        string worksheetPart,
+        string rowDescription,
+        WorksheetCellReference cellReference,
+        int? rowNumber,
+        HashSet<string> seenCells,
+        List<string> issues)
+    {
+        var cell = cellReference.Element;
+        var description = $"{rowDescription} c #{cellReference.Ordinal}";
+        var reference = cell.Attribute("r")?.Value;
+        if (!string.IsNullOrWhiteSpace(reference))
+        {
+            if (!TryParseLocalCellReference(reference, out var address))
+            {
+                issues.Add($"{worksheetPart} {description} has invalid local r reference '{reference}'");
+            }
+            else
+            {
+                if (!seenCells.Add(address.ToA1()))
+                    issues.Add($"{worksheetPart} has duplicate cell reference '{address.ToA1()}'");
+
+                if (rowNumber is { } row && address.Row != row)
+                    issues.Add($"{worksheetPart} {description} reference '{address.ToA1()}' does not match row {row}");
+            }
+        }
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "s", cell.Attribute("s")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "cm", cell.Attribute("cm")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "vm", cell.Attribute("vm")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "ph", cell.Attribute("ph")?.Value, issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "t",
+            cell.Attribute("t")?.Value,
+            ["b", "d", "e", "inlineStr", "n", "s", "str"],
+            issues);
+
+        foreach (var unexpectedChild in cell.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "f" &&
+                     element.Name != SpreadsheetNs + "v" &&
+                     element.Name != SpreadsheetNs + "is" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected f/v/is/extLst children only");
+        }
+
+        var formulas = cell.Elements(SpreadsheetNs + "f").ToArray();
+        if (formulas.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {formulas.Length} f elements; expected at most one");
+
+        var values = cell.Elements(SpreadsheetNs + "v").ToArray();
+        if (values.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {values.Length} v elements; expected at most one");
+
+        var inlineStrings = cell.Elements(SpreadsheetNs + "is").ToArray();
+        if (inlineStrings.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {inlineStrings.Length} is elements; expected at most one");
+        if (values.Length > 0 && inlineStrings.Length > 0)
+            issues.Add($"{worksheetPart} {description} has both v and is children");
+
+        var extensionLists = cell.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        AddWorksheetCellChildOrderingIssues(worksheetPart, description, cell, issues);
+
+        foreach (var formula in formulas.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetFormulaIssues(worksheetPart, description, formula.Ordinal, formula.Element, issues);
+        }
+
+        foreach (var value in values.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetValueIssues(worksheetPart, description, value.Ordinal, value.Element, issues);
+        }
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetFormulaIssues(
+        string worksheetPart,
+        string cellDescription,
+        int ordinal,
+        XElement formula,
+        List<string> issues)
+    {
+        var description = $"{cellDescription} f #{ordinal}";
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "t",
+            formula.Attribute("t")?.Value,
+            ["normal", "array", "dataTable", "shared"],
+            issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "aca", formula.Attribute("aca")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "ca", formula.Attribute("ca")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "bx", formula.Attribute("bx")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "dt2D", formula.Attribute("dt2D")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "dtr", formula.Attribute("dtr")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "del1", formula.Attribute("del1")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "del2", formula.Attribute("del2")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "si", formula.Attribute("si")?.Value, issues);
+        AddOptionalLocalWorksheetReferenceIssue(worksheetPart, description, "ref", formula.Attribute("ref")?.Value, issues);
+        AddOptionalLocalWorksheetReferenceIssue(worksheetPart, description, "r1", formula.Attribute("r1")?.Value, issues);
+        AddOptionalLocalWorksheetReferenceIssue(worksheetPart, description, "r2", formula.Attribute("r2")?.Value, issues);
+
+        if (formula.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected formula text only");
+    }
+
+    private static void AddWorksheetValueIssues(
+        string worksheetPart,
+        string cellDescription,
+        int ordinal,
+        XElement value,
+        List<string> issues)
+    {
+        var description = $"{cellDescription} v #{ordinal}";
+        if (value.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+            issues.Add($"{worksheetPart} {description} has attributes; expected value text only");
+
+        if (value.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected value text only");
+    }
+
+    private static void AddWorksheetRowSpansIssue(
+        string worksheetPart,
+        string description,
+        string? spans,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(spans))
+            return;
+
+        foreach (var span in spans.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = span.Split(':', StringSplitOptions.TrimEntries);
+            if (parts.Length != 2 ||
+                !TryParsePositivePackageInt(parts[0], out var start) ||
+                !TryParsePositivePackageInt(parts[1], out var end) ||
+                end < start)
+            {
+                issues.Add($"{worksheetPart} {description} has invalid spans value '{spans}'");
+                return;
+            }
+        }
+    }
+
+    private static void AddWorksheetCellStructureChildOrderingIssues(
+        string worksheetPart,
+        string description,
+        XElement element,
+        string preExtensionChildName,
+        List<string> issues)
+    {
+        var children = element.Elements().ToArray();
+        var firstExtensionListIndex = Array.FindIndex(children, child => child.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children
+                .Skip(firstExtensionListIndex + 1)
+                .Any(child => child.Name == SpreadsheetNs + preExtensionChildName))
+        {
+            issues.Add($"{worksheetPart} {description} has {preExtensionChildName} entries after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetCellChildOrderingIssues(
+        string worksheetPart,
+        string description,
+        XElement cell,
+        List<string> issues)
+    {
+        var children = cell.Elements().ToArray();
+        var firstValueIndex = Array.FindIndex(children, element =>
+            element.Name == SpreadsheetNs + "v" ||
+            element.Name == SpreadsheetNs + "is");
+        if (firstValueIndex >= 0 &&
+            children
+                .Skip(firstValueIndex + 1)
+                .Any(element => element.Name == SpreadsheetNs + "f"))
+        {
+            issues.Add($"{worksheetPart} {description} has f after v/is; expected formula before value children");
+        }
+
+        var firstInlineStringIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "is");
+        if (firstInlineStringIndex >= 0 &&
+            children
+                .Skip(firstInlineStringIndex + 1)
+                .Any(element => element.Name == SpreadsheetNs + "v"))
+        {
+            issues.Add($"{worksheetPart} {description} has v after is; expected value children before inline string children");
+        }
+
+        AddWorksheetCellStructureChildOrderingIssues(worksheetPart, description, cell, "f", issues);
+        AddWorksheetCellStructureChildOrderingIssues(worksheetPart, description, cell, "v", issues);
+        AddWorksheetCellStructureChildOrderingIssues(worksheetPart, description, cell, "is", issues);
+    }
+
+    private static void AddOptionalLocalWorksheetReferenceIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!IsValidLocalWorksheetReference(value))
+            issues.Add($"{worksheetPart} {description} has invalid local {attributeName} reference '{value}'");
+    }
+
+    private static bool TryParseLocalCellReference(string reference, out CellAddress address)
+    {
+        address = default;
+        reference = reference.Trim();
+        if (reference.Length == 0 ||
+            reference.Contains('!', StringComparison.Ordinal) ||
+            reference.Contains('[', StringComparison.Ordinal) ||
+            reference.Contains(']', StringComparison.Ordinal) ||
+            reference.Contains(':', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return CellAddress.TryParse(reference, SheetId.New(), out address);
+    }
+
+    private static bool TryParsePositivePackageInt(string? text, out int value)
+    {
+        if (TryParseNonNegativePackageInt(text, out value) && value > 0)
+            return true;
+
+        value = -1;
+        return false;
+    }
+
+    private static void AddOptionalNonNegativePackageDoubleIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedValue) &&
+            !double.IsNaN(parsedValue) &&
+            !double.IsInfinity(parsedValue) &&
+            parsedValue >= 0)
+        {
+            return;
+        }
+
+        issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void ThrowInvalidWorksheetCellStructureMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet cell-structure metadata: {sample}{suffix}");
+    }
+
     private static void AssertWorksheetCalculationPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
     {
         using var archive = ZipFile.OpenRead(xlsxPath);
@@ -8129,6 +8711,661 @@ internal static class ExcelOpenSmoke
             $"{label} for '{sourcePath}' has invalid worksheet sort/data-consolidation metadata: {sample}{suffix}");
     }
 
+    private static void AssertWorksheetConditionalFormattingMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+        var differentialStyleCount = GetPackageDifferentialStyleCount(archive);
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetConditionalFormattingMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                differentialStyleCount,
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetConditionalFormattingMetadata(label, sourcePath, issues);
+    }
+
+    private static int? GetPackageDifferentialStyleCount(ZipArchive archive)
+    {
+        var stylesEntry = FindPackageEntry(archive, "xl/styles.xml");
+        if (stylesEntry is null)
+            return null;
+
+        var stylesXml = LoadPackageXml(stylesEntry);
+        if (stylesXml.Root?.Name != SpreadsheetNs + "styleSheet")
+            return null;
+
+        return stylesXml.Root.Element(SpreadsheetNs + "dxfs")?.Elements(SpreadsheetNs + "dxf").Count() ?? 0;
+    }
+
+    private static void AddWorksheetConditionalFormattingMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        int? differentialStyleCount,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        foreach (var conditionalFormatting in root
+                     .Elements(SpreadsheetNs + "conditionalFormatting")
+                     .Select((element, index) => new WorksheetConditionalFormattingReference(index + 1, element)))
+        {
+            AddWorksheetConditionalFormattingIssues(worksheetPart, root, conditionalFormatting, differentialStyleCount, issues);
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetConditionalFormattingReference conditionalFormattingReference,
+        int? differentialStyleCount,
+        List<string> issues)
+    {
+        var conditionalFormatting = conditionalFormattingReference.Element;
+        var description = $"conditionalFormatting #{conditionalFormattingReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            conditionalFormatting,
+            description,
+            [
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            conditionalFormatting,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr"
+            ],
+            issues);
+
+        var sqref = conditionalFormatting.Attribute("sqref")?.Value;
+        if (string.IsNullOrWhiteSpace(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has no sqref");
+        }
+        else if (!IsValidPackageSqref(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid local sqref '{sqref}'");
+        }
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "pivot", conditionalFormatting.Attribute("pivot")?.Value, issues);
+
+        foreach (var unexpectedChild in conditionalFormatting.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "cfRule" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var rules = conditionalFormatting.Elements(SpreadsheetNs + "cfRule").ToArray();
+        if (rules.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no cfRule entries");
+
+        var extensionLists = conditionalFormatting.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+
+        AddWorksheetConditionalFormattingChildOrderingIssues(worksheetPart, description, conditionalFormatting, issues);
+
+        foreach (var rule in rules.Select((element, index) => new WorksheetConditionalFormattingRuleReference(index + 1, element)))
+        {
+            AddWorksheetConditionalFormattingRuleIssues(worksheetPart, description, rule, differentialStyleCount, issues);
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingChildOrderingIssues(
+        string worksheetPart,
+        string conditionalFormattingDescription,
+        XElement conditionalFormatting,
+        List<string> issues)
+    {
+        var children = conditionalFormatting.Elements().ToArray();
+        var firstExtensionListIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children
+                .Skip(firstExtensionListIndex + 1)
+                .Any(element => element.Name == SpreadsheetNs + "cfRule"))
+        {
+            issues.Add($"{worksheetPart} {conditionalFormattingDescription} has cfRule entries after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingRuleIssues(
+        string worksheetPart,
+        string conditionalFormattingDescription,
+        WorksheetConditionalFormattingRuleReference ruleReference,
+        int? differentialStyleCount,
+        List<string> issues)
+    {
+        var rule = ruleReference.Element;
+        var description = $"{conditionalFormattingDescription} cfRule #{ruleReference.Ordinal}";
+        var type = rule.Attribute("type")?.Value;
+        if (string.IsNullOrWhiteSpace(type))
+            issues.Add($"{worksheetPart} {description} has no type");
+
+        AddRequiredPositivePackageIntIssue(worksheetPart, description, "priority", rule.Attribute("priority")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "stopIfTrue", rule.Attribute("stopIfTrue")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "aboveAverage", rule.Attribute("aboveAverage")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "bottom", rule.Attribute("bottom")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "percent", rule.Attribute("percent")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "equalAverage", rule.Attribute("equalAverage")?.Value, issues);
+        AddOptionalPositivePackageIntIssue(worksheetPart, description, "rank", rule.Attribute("rank")?.Value, issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "operator",
+            rule.Attribute("operator")?.Value,
+            ["lessThan", "lessThanOrEqual", "equal", "notEqual", "greaterThanOrEqual", "greaterThan", "between", "notBetween", "containsText", "notContains", "beginsWith", "endsWith"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "timePeriod",
+            rule.Attribute("timePeriod")?.Value,
+            ["yesterday", "today", "tomorrow", "last7Days", "thisMonth", "lastMonth", "nextMonth", "thisWeek", "lastWeek", "nextWeek"],
+            issues);
+        AddWorksheetConditionalFormattingDxfReferenceIssues(
+            worksheetPart,
+            description,
+            rule.Attribute("dxfId")?.Value,
+            differentialStyleCount,
+            issues);
+
+        foreach (var unexpectedChild in rule.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "formula" &&
+                     element.Name != SpreadsheetNs + "colorScale" &&
+                     element.Name != SpreadsheetNs + "dataBar" &&
+                     element.Name != SpreadsheetNs + "iconSet" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var payloadElements = rule.Elements()
+            .Where(element =>
+                element.Name == SpreadsheetNs + "colorScale" ||
+                element.Name == SpreadsheetNs + "dataBar" ||
+                element.Name == SpreadsheetNs + "iconSet")
+            .ToArray();
+        if (payloadElements.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {payloadElements.Length} conditional-format payload elements; expected at most one");
+
+        var extensionLists = rule.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        AddWorksheetConditionalFormattingRuleChildOrderingIssues(worksheetPart, description, rule, issues);
+
+        foreach (var formula in rule.Elements(SpreadsheetNs + "formula").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingFormulaIssues(worksheetPart, description, formula.Ordinal, formula.Element, issues);
+        }
+
+        foreach (var colorScale in rule.Elements(SpreadsheetNs + "colorScale").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetColorScaleIssues(worksheetPart, description, colorScale.Ordinal, colorScale.Element, issues);
+        }
+
+        foreach (var dataBar in rule.Elements(SpreadsheetNs + "dataBar").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetDataBarIssues(worksheetPart, description, dataBar.Ordinal, dataBar.Element, issues);
+        }
+
+        foreach (var iconSet in rule.Elements(SpreadsheetNs + "iconSet").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetIconSetIssues(worksheetPart, description, iconSet.Ordinal, iconSet.Element, issues);
+        }
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingDxfReferenceIssues(
+        string worksheetPart,
+        string description,
+        string? dxfIdText,
+        int? differentialStyleCount,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(dxfIdText))
+            return;
+
+        if (!TryParseNonNegativePackageInt(dxfIdText, out var dxfId))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid dxfId value '{dxfIdText}'");
+            return;
+        }
+
+        if (differentialStyleCount is null)
+        {
+            issues.Add($"{worksheetPart} {description} references dxfId {dxfId}, but xl/styles.xml is missing or invalid");
+        }
+        else if (dxfId >= differentialStyleCount)
+        {
+            issues.Add($"{worksheetPart} {description} references dxfId {dxfId}, but xl/styles.xml dxfs contains {differentialStyleCount.Value} entries");
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingRuleChildOrderingIssues(
+        string worksheetPart,
+        string description,
+        XElement rule,
+        List<string> issues)
+    {
+        var children = rule.Elements().ToArray();
+        var firstPayloadIndex = Array.FindIndex(children, element =>
+            element.Name == SpreadsheetNs + "colorScale" ||
+            element.Name == SpreadsheetNs + "dataBar" ||
+            element.Name == SpreadsheetNs + "iconSet");
+        if (firstPayloadIndex >= 0 &&
+            children
+                .Skip(firstPayloadIndex + 1)
+                .Any(element => element.Name == SpreadsheetNs + "formula"))
+        {
+            issues.Add($"{worksheetPart} {description} has formula after a conditional-format payload; expected formulas before payloads");
+        }
+
+        var firstExtensionListIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children
+                .Skip(firstExtensionListIndex + 1)
+                .Any(element =>
+                    element.Name == SpreadsheetNs + "formula" ||
+                    element.Name == SpreadsheetNs + "colorScale" ||
+                    element.Name == SpreadsheetNs + "dataBar" ||
+                    element.Name == SpreadsheetNs + "iconSet"))
+        {
+            issues.Add($"{worksheetPart} {description} has child payloads after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingFormulaIssues(
+        string worksheetPart,
+        string ruleDescription,
+        int ordinal,
+        XElement formula,
+        List<string> issues)
+    {
+        var description = $"{ruleDescription} formula #{ordinal}";
+        if (formula.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+            issues.Add($"{worksheetPart} {description} has attributes; expected formula text only");
+
+        if (formula.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected formula text only");
+    }
+
+    private static void AddWorksheetColorScaleIssues(
+        string worksheetPart,
+        string ruleDescription,
+        int ordinal,
+        XElement colorScale,
+        List<string> issues)
+    {
+        var description = $"{ruleDescription} colorScale #{ordinal}";
+        if (colorScale.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+            issues.Add($"{worksheetPart} {description} has attributes; expected cfvo/color children only");
+
+        foreach (var unexpectedChild in colorScale.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "cfvo" &&
+                     element.Name != SpreadsheetNs + "color" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var thresholds = colorScale.Elements(SpreadsheetNs + "cfvo").ToArray();
+        if (thresholds.Length is < 2 or > 3)
+            issues.Add($"{worksheetPart} {description} has {thresholds.Length} cfvo entries; expected 2 or 3");
+
+        var colors = colorScale.Elements(SpreadsheetNs + "color").ToArray();
+        if (colors.Length != thresholds.Length)
+            issues.Add($"{worksheetPart} {description} has {colors.Length} color entries for {thresholds.Length} cfvo entries");
+
+        AddWorksheetConditionalFormattingPayloadOrderingIssues(worksheetPart, description, colorScale, "cfvo", "color", issues);
+        foreach (var threshold in thresholds.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingThresholdIssues(worksheetPart, description, threshold.Ordinal, threshold.Element, issues);
+        }
+
+        foreach (var color in colors.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingColorIssues(worksheetPart, description, $"color #{color.Ordinal}", color.Element, issues);
+        }
+
+        AddWorksheetConditionalFormattingPayloadExtensionListIssues(worksheetPart, description, colorScale, issues);
+    }
+
+    private static void AddWorksheetDataBarIssues(
+        string worksheetPart,
+        string ruleDescription,
+        int ordinal,
+        XElement dataBar,
+        List<string> issues)
+    {
+        var description = $"{ruleDescription} dataBar #{ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showValue", dataBar.Attribute("showValue")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "border", dataBar.Attribute("border")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "minLength", dataBar.Attribute("minLength")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "maxLength", dataBar.Attribute("maxLength")?.Value, issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "axisPosition",
+            dataBar.Attribute("axisPosition")?.Value,
+            ["automatic", "middle", "none"],
+            issues);
+
+        foreach (var unexpectedChild in dataBar.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "cfvo" &&
+                     element.Name != SpreadsheetNs + "color" &&
+                     element.Name != SpreadsheetNs + "negativeFillColor" &&
+                     element.Name != SpreadsheetNs + "negativeBorderColor" &&
+                     element.Name != SpreadsheetNs + "axisColor" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var thresholds = dataBar.Elements(SpreadsheetNs + "cfvo").ToArray();
+        if (thresholds.Length != 2)
+            issues.Add($"{worksheetPart} {description} has {thresholds.Length} cfvo entries; expected 2");
+
+        var colors = dataBar.Elements(SpreadsheetNs + "color").ToArray();
+        if (colors.Length != 1)
+            issues.Add($"{worksheetPart} {description} has {colors.Length} color entries; expected 1");
+
+        AddWorksheetConditionalFormattingPayloadOrderingIssues(worksheetPart, description, dataBar, "cfvo", "color", issues);
+        foreach (var threshold in thresholds.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingThresholdIssues(worksheetPart, description, threshold.Ordinal, threshold.Element, issues);
+        }
+
+        foreach (var color in colors.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingColorIssues(worksheetPart, description, $"color #{color.Ordinal}", color.Element, issues);
+        }
+
+        foreach (var nativeColor in dataBar
+                     .Elements()
+                     .Where(element =>
+                         element.Name == SpreadsheetNs + "negativeFillColor" ||
+                         element.Name == SpreadsheetNs + "negativeBorderColor" ||
+                         element.Name == SpreadsheetNs + "axisColor")
+                     .Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingColorIssues(worksheetPart, description, $"{nativeColor.Element.Name.LocalName} #{nativeColor.Ordinal}", nativeColor.Element, issues);
+        }
+
+        AddWorksheetConditionalFormattingPayloadExtensionListIssues(worksheetPart, description, dataBar, issues);
+    }
+
+    private static void AddWorksheetIconSetIssues(
+        string worksheetPart,
+        string ruleDescription,
+        int ordinal,
+        XElement iconSet,
+        List<string> issues)
+    {
+        var description = $"{ruleDescription} iconSet #{ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showValue", iconSet.Attribute("showValue")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "reverse", iconSet.Attribute("reverse")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "percent", iconSet.Attribute("percent")?.Value, issues);
+
+        foreach (var unexpectedChild in iconSet.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "cfvo" &&
+                     element.Name != SpreadsheetNs + "cfIcon" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var thresholds = iconSet.Elements(SpreadsheetNs + "cfvo").ToArray();
+        if (thresholds.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no cfvo entries");
+
+        AddWorksheetConditionalFormattingPayloadOrderingIssues(worksheetPart, description, iconSet, "cfvo", "cfIcon", issues);
+        foreach (var threshold in thresholds.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingThresholdIssues(worksheetPart, description, threshold.Ordinal, threshold.Element, issues);
+        }
+
+        foreach (var icon in iconSet.Elements(SpreadsheetNs + "cfIcon").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingIconIssues(worksheetPart, description, icon.Ordinal, icon.Element, issues);
+        }
+
+        AddWorksheetConditionalFormattingPayloadExtensionListIssues(worksheetPart, description, iconSet, issues);
+    }
+
+    private static void AddWorksheetConditionalFormattingPayloadExtensionListIssues(
+        string worksheetPart,
+        string payloadDescription,
+        XElement payload,
+        List<string> issues)
+    {
+        var extensionLists = payload.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {payloadDescription} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, payloadDescription, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingPayloadOrderingIssues(
+        string worksheetPart,
+        string description,
+        XElement payload,
+        string firstChildName,
+        string laterChildName,
+        List<string> issues)
+    {
+        var children = payload.Elements().ToArray();
+        var firstLaterChildIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + laterChildName);
+        if (firstLaterChildIndex >= 0 &&
+            children
+                .Skip(firstLaterChildIndex + 1)
+                .Any(element => element.Name == SpreadsheetNs + firstChildName))
+        {
+            issues.Add($"{worksheetPart} {description} has {firstChildName} entries after {laterChildName}; expected {firstChildName} before {laterChildName}");
+        }
+
+        var firstExtensionListIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children
+                .Skip(firstExtensionListIndex + 1)
+                .Any(element => element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has child entries after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingThresholdIssues(
+        string worksheetPart,
+        string payloadDescription,
+        int ordinal,
+        XElement threshold,
+        List<string> issues)
+    {
+        var description = $"{payloadDescription} cfvo #{ordinal}";
+        var type = threshold.Attribute("type")?.Value;
+        if (string.IsNullOrWhiteSpace(type))
+        {
+            issues.Add($"{worksheetPart} {description} has no type");
+        }
+        else
+        {
+            AddOptionalKnownWorksheetMetadataValueIssue(
+                worksheetPart,
+                description,
+                "type",
+                type,
+                ["num", "percent", "max", "min", "formula", "percentile", "autoMin", "autoMax"],
+                issues);
+        }
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "gte", threshold.Attribute("gte")?.Value, issues);
+
+        if (threshold.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetConditionalFormattingColorIssues(
+        string worksheetPart,
+        string payloadDescription,
+        string colorDescription,
+        XElement color,
+        List<string> issues)
+    {
+        var description = $"{payloadDescription} {colorDescription}";
+        var hasKnownColorAttribute =
+            color.Attribute("rgb") is not null ||
+            color.Attribute("indexed") is not null ||
+            color.Attribute("theme") is not null ||
+            color.Attribute("auto") is not null;
+        if (!hasKnownColorAttribute)
+            issues.Add($"{worksheetPart} {description} has no color attribute");
+
+        var rgb = color.Attribute("rgb")?.Value;
+        if (!string.IsNullOrWhiteSpace(rgb) && !IsValidPackageHexColor(rgb))
+            issues.Add($"{worksheetPart} {description} has invalid rgb value '{rgb}'");
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "indexed", color.Attribute("indexed")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "theme", color.Attribute("theme")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "auto", color.Attribute("auto")?.Value, issues);
+
+        if (color.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetConditionalFormattingIconIssues(
+        string worksheetPart,
+        string iconSetDescription,
+        int ordinal,
+        XElement icon,
+        List<string> issues)
+    {
+        var description = $"{iconSetDescription} cfIcon #{ordinal}";
+        if (icon.Attribute("iconSet") is not null && string.IsNullOrWhiteSpace(icon.Attribute("iconSet")?.Value))
+            issues.Add($"{worksheetPart} {description} has blank iconSet");
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "iconId", icon.Attribute("iconId")?.Value, issues);
+
+        if (icon.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddRequiredPositivePackageIntIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            issues.Add($"{worksheetPart} {description} has no {attributeName}");
+            return;
+        }
+
+        if (!TryParseNonNegativePackageInt(value, out var parsedValue) || parsedValue <= 0)
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void AddOptionalPositivePackageIntIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!TryParseNonNegativePackageInt(value, out var parsedValue) || parsedValue <= 0)
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static bool IsValidPackageHexColor(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length is 6 or 8 &&
+            trimmed.All(character =>
+                character is >= '0' and <= '9' ||
+                character is >= 'A' and <= 'F' ||
+                character is >= 'a' and <= 'f');
+    }
+
+    private static void ThrowInvalidWorksheetConditionalFormattingMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet conditionalFormatting metadata: {sample}{suffix}");
+    }
+
     private static void AssertWorksheetDataValidationMetadataComplete(string xlsxPath, string label, string sourcePath)
     {
         using var archive = ZipFile.OpenRead(xlsxPath);
@@ -10524,7 +11761,12 @@ internal static class ExcelOpenSmoke
 
                     var tableXml = LoadPackageXml(tableEntry);
                     if (tableXml.Root?.Name != SpreadsheetNs + "table")
+                    {
                         issues.Add($"{tablePart} has an invalid table root element");
+                        continue;
+                    }
+
+                    AddWorksheetTableMetadataIssues(tablePart, tableXml.Root, issues);
                 }
             }
         }
@@ -10553,6 +11795,472 @@ internal static class ExcelOpenSmoke
 
         if (declaredCount != actualCount)
             issues.Add($"{worksheetPart} tableParts count is {declaredCount}, but contains {actualCount} tablePart entries");
+    }
+
+    private static void AddWorksheetTableMetadataIssues(
+        string tablePart,
+        XElement table,
+        List<string> issues)
+    {
+        AddRequiredPositivePackageIntIssue(tablePart, "table", "id", table.Attribute("id")?.Value, issues);
+
+        var reference = table.Attribute("ref")?.Value;
+        if (string.IsNullOrWhiteSpace(reference))
+            issues.Add($"{tablePart} table has no ref");
+        else if (!IsValidLocalWorksheetReference(reference))
+            issues.Add($"{tablePart} table has invalid local ref reference '{reference}'");
+
+        AddRequiredPackageStringAttributeIssue(tablePart, "table", "displayName", table.Attribute("displayName")?.Value, issues);
+        AddOptionalPackageStringAttributeIssue(tablePart, "table", "name", table.Attribute("name")?.Value, issues);
+        AddOptionalKnownPackageValueIssue(
+            tablePart,
+            "table",
+            "tableType",
+            table.Attribute("tableType")?.Value,
+            ["worksheet", "xml", "queryTable"],
+            issues);
+        AddOptionalPackageBooleanIssue(tablePart, "table", "published", table.Attribute("published")?.Value, issues);
+        AddOptionalPackageBooleanIssue(tablePart, "table", "insertRow", table.Attribute("insertRow")?.Value, issues);
+        AddOptionalPackageBooleanIssue(tablePart, "table", "insertRowShift", table.Attribute("insertRowShift")?.Value, issues);
+        AddOptionalPackageBooleanIssue(tablePart, "table", "totalsRowShown", table.Attribute("totalsRowShown")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, "table", "headerRowCount", table.Attribute("headerRowCount")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, "table", "totalsRowCount", table.Attribute("totalsRowCount")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, "table", "connectionId", table.Attribute("connectionId")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, "table", "headerRowDxfId", table.Attribute("headerRowDxfId")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, "table", "dataDxfId", table.Attribute("dataDxfId")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, "table", "totalsRowDxfId", table.Attribute("totalsRowDxfId")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, "table", "headerRowBorderDxfId", table.Attribute("headerRowBorderDxfId")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, "table", "tableBorderDxfId", table.Attribute("tableBorderDxfId")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, "table", "totalsRowBorderDxfId", table.Attribute("totalsRowBorderDxfId")?.Value, issues);
+
+        AddWorksheetTableChildOrderingIssues(tablePart, table, issues);
+        AddWorksheetTableSingleChildIssues(tablePart, table, "autoFilter", issues);
+        AddWorksheetTableSingleChildIssues(tablePart, table, "sortState", issues);
+        AddWorksheetTableSingleChildIssues(tablePart, table, "tableColumns", issues);
+        AddWorksheetTableSingleChildIssues(tablePart, table, "tableStyleInfo", issues);
+        AddWorksheetTableSingleChildIssues(tablePart, table, "extLst", issues);
+
+        if (!table.Elements(SpreadsheetNs + "tableColumns").Any())
+            issues.Add($"{tablePart} table has no tableColumns element");
+
+        foreach (var unexpectedChild in table.Elements().Where(child => !IsKnownWorksheetTableChild(child)))
+        {
+            issues.Add($"{tablePart} table has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        foreach (var autoFilter in table.Elements(SpreadsheetNs + "autoFilter").Select((element, index) => new WorksheetAutoFilterReference(index + 1, element)))
+        {
+            AddWorksheetTableAutoFilterIssues(tablePart, autoFilter, issues);
+        }
+
+        foreach (var sortState in table.Elements(SpreadsheetNs + "sortState").Select((element, index) => new WorksheetSortStateReference(index + 1, element)))
+        {
+            AddWorksheetAutoFilterSortStateIssues(tablePart, "table", sortState, issues);
+        }
+
+        foreach (var tableColumns in table.Elements(SpreadsheetNs + "tableColumns").Select((element, index) => new TableColumnsReference(index + 1, element)))
+        {
+            AddWorksheetTableColumnsIssues(tablePart, tableColumns, issues);
+        }
+
+        foreach (var styleInfo in table.Elements(SpreadsheetNs + "tableStyleInfo").Select((element, index) => new TableStyleInfoReference(index + 1, element)))
+        {
+            AddWorksheetTableStyleInfoIssues(tablePart, styleInfo, issues);
+        }
+
+        foreach (var extensionList in table.Elements(SpreadsheetNs + "extLst").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(tablePart, "table", extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetTableColumnsIssues(
+        string tablePart,
+        TableColumnsReference tableColumnsReference,
+        List<string> issues)
+    {
+        var tableColumns = tableColumnsReference.Element;
+        var description = $"tableColumns #{tableColumnsReference.Ordinal}";
+        var columns = tableColumns.Elements(SpreadsheetNs + "tableColumn").ToArray();
+
+        if (columns.Length == 0)
+            issues.Add($"{tablePart} {description} has no tableColumn entries");
+
+        AddRequiredNonNegativePackageIntIssue(tablePart, description, "count", tableColumns.Attribute("count")?.Value, issues);
+        if (TryParseNonNegativePackageInt(tableColumns.Attribute("count")?.Value, out var declaredCount) &&
+            declaredCount != columns.Length)
+        {
+            issues.Add($"{tablePart} {description} count is {declaredCount}, but contains {columns.Length} tableColumn entries");
+        }
+
+        AddWorksheetTableColumnsChildOrderingIssues(tablePart, description, tableColumns, issues);
+
+        foreach (var unexpectedChild in tableColumns.Elements().Where(child =>
+                     child.Name != SpreadsheetNs + "tableColumn" &&
+                     child.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{tablePart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var extensionLists = tableColumns.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{tablePart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(tablePart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+
+        var seenColumnIds = new HashSet<int>();
+        var seenColumnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var column in columns.Select((element, index) => new TableColumnReference(index + 1, element)))
+        {
+            AddWorksheetTableColumnIssues(tablePart, description, column, seenColumnIds, seenColumnNames, issues);
+        }
+    }
+
+    private static void AddWorksheetTableAutoFilterIssues(
+        string tablePart,
+        WorksheetAutoFilterReference autoFilterReference,
+        List<string> issues)
+    {
+        var autoFilter = autoFilterReference.Element;
+        var description = $"table autoFilter #{autoFilterReference.Ordinal}";
+        var reference = autoFilter.Attribute("ref")?.Value;
+        if (autoFilter.Attribute("ref") is not null && string.IsNullOrWhiteSpace(reference))
+            issues.Add($"{tablePart} {description} has blank ref attribute");
+        else if (!string.IsNullOrWhiteSpace(reference) && !IsValidLocalWorksheetReference(reference))
+            issues.Add($"{tablePart} {description} has invalid ref value '{reference}'");
+
+        AddWorksheetAutoFilterChildOrderingIssues(tablePart, description, autoFilter, issues);
+
+        foreach (var unexpectedChild in autoFilter.Elements().Where(element => !IsKnownWorksheetAutoFilterChild(element)))
+        {
+            issues.Add($"{tablePart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var seenFilterColumns = new HashSet<int>();
+        foreach (var filterColumn in autoFilter.Elements(SpreadsheetNs + "filterColumn").Select((element, index) => new WorksheetAutoFilterColumnReference(index + 1, element)))
+        {
+            AddWorksheetAutoFilterColumnIssues(tablePart, description, filterColumn, seenFilterColumns, issues);
+        }
+
+        var nestedSortStates = autoFilter.Elements(SpreadsheetNs + "sortState").ToArray();
+        if (nestedSortStates.Length > 1)
+            issues.Add($"{tablePart} {description} has {nestedSortStates.Length} sortState elements; expected at most one");
+
+        foreach (var nestedSortState in nestedSortStates.Select((element, index) => new WorksheetSortStateReference(index + 1, element)))
+        {
+            AddWorksheetAutoFilterSortStateIssues(tablePart, description, nestedSortState, issues);
+        }
+
+        var extensionLists = autoFilter.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{tablePart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(tablePart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetTableColumnIssues(
+        string tablePart,
+        string containerDescription,
+        TableColumnReference columnReference,
+        HashSet<int> seenColumnIds,
+        HashSet<string> seenColumnNames,
+        List<string> issues)
+    {
+        var column = columnReference.Element;
+        var description = $"{containerDescription} tableColumn #{columnReference.Ordinal}";
+
+        if (!TryParsePositivePackageInt(column.Attribute("id")?.Value, out var columnId))
+        {
+            issues.Add($"{tablePart} {description} has invalid id '{column.Attribute("id")?.Value}'");
+        }
+        else if (!seenColumnIds.Add(columnId))
+        {
+            issues.Add($"{tablePart} {containerDescription} has duplicate tableColumn id {columnId}");
+        }
+
+        var columnName = column.Attribute("name")?.Value;
+        if (string.IsNullOrWhiteSpace(columnName))
+        {
+            issues.Add($"{tablePart} {description} has no name");
+        }
+        else if (!seenColumnNames.Add(columnName.Trim()))
+        {
+            issues.Add($"{tablePart} {containerDescription} has duplicate tableColumn name '{columnName}'");
+        }
+
+        AddOptionalPackageNonNegativeIntIssue(tablePart, description, "dataDxfId", column.Attribute("dataDxfId")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, description, "queryTableFieldId", column.Attribute("queryTableFieldId")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, description, "headerRowDxfId", column.Attribute("headerRowDxfId")?.Value, issues);
+        AddOptionalPackageNonNegativeIntIssue(tablePart, description, "totalsRowDxfId", column.Attribute("totalsRowDxfId")?.Value, issues);
+        AddOptionalPackageStringAttributeIssue(tablePart, description, "headerRowCellStyle", column.Attribute("headerRowCellStyle")?.Value, issues);
+        AddOptionalPackageStringAttributeIssue(tablePart, description, "dataCellStyle", column.Attribute("dataCellStyle")?.Value, issues);
+        AddOptionalPackageStringAttributeIssue(tablePart, description, "totalsRowCellStyle", column.Attribute("totalsRowCellStyle")?.Value, issues);
+        AddOptionalKnownPackageValueIssue(
+            tablePart,
+            description,
+            "totalsRowFunction",
+            column.Attribute("totalsRowFunction")?.Value,
+            ["none", "sum", "min", "max", "average", "count", "countNums", "stdDev", "var", "custom"],
+            issues);
+
+        AddWorksheetTableColumnChildOrderingIssues(tablePart, description, column, issues);
+
+        foreach (var unexpectedChild in column.Elements().Where(child =>
+                     child.Name != SpreadsheetNs + "calculatedColumnFormula" &&
+                     child.Name != SpreadsheetNs + "totalsRowFormula" &&
+                     child.Name != SpreadsheetNs + "xmlColumnPr" &&
+                     child.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{tablePart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        AddWorksheetTableSingleChildIssues(tablePart, column, description, "calculatedColumnFormula", issues);
+        AddWorksheetTableSingleChildIssues(tablePart, column, description, "totalsRowFormula", issues);
+        AddWorksheetTableSingleChildIssues(tablePart, column, description, "xmlColumnPr", issues);
+        AddWorksheetTableSingleChildIssues(tablePart, column, description, "extLst", issues);
+
+        foreach (var formula in column.Elements()
+                     .Where(element =>
+                         element.Name == SpreadsheetNs + "calculatedColumnFormula" ||
+                         element.Name == SpreadsheetNs + "totalsRowFormula")
+                     .Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetTableFormulaIssues(tablePart, description, formula.Ordinal, formula.Element, issues);
+        }
+
+        foreach (var xmlColumnPr in column.Elements(SpreadsheetNs + "xmlColumnPr").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetTableXmlColumnPropertyIssues(tablePart, description, xmlColumnPr.Ordinal, xmlColumnPr.Element, issues);
+        }
+
+        foreach (var extensionList in column.Elements(SpreadsheetNs + "extLst").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(tablePart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetTableFormulaIssues(
+        string tablePart,
+        string columnDescription,
+        int ordinal,
+        XElement formula,
+        List<string> issues)
+    {
+        var description = $"{columnDescription} {formula.Name.LocalName} #{ordinal}";
+        AddOptionalPackageBooleanIssue(tablePart, description, "array", formula.Attribute("array")?.Value, issues);
+
+        if (formula.Elements().Any())
+            issues.Add($"{tablePart} {description} has child elements; expected text only");
+    }
+
+    private static void AddWorksheetTableXmlColumnPropertyIssues(
+        string tablePart,
+        string columnDescription,
+        int ordinal,
+        XElement xmlColumnPr,
+        List<string> issues)
+    {
+        var description = $"{columnDescription} xmlColumnPr #{ordinal}";
+        AddRequiredNonNegativePackageIntIssue(tablePart, description, "mapId", xmlColumnPr.Attribute("mapId")?.Value, issues);
+        AddRequiredPackageStringAttributeIssue(tablePart, description, "xpath", xmlColumnPr.Attribute("xpath")?.Value, issues);
+        AddOptionalPackageBooleanIssue(tablePart, description, "denormalized", xmlColumnPr.Attribute("denormalized")?.Value, issues);
+
+        if (xmlColumnPr.Elements().Any())
+            issues.Add($"{tablePart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetTableStyleInfoIssues(
+        string tablePart,
+        TableStyleInfoReference styleInfoReference,
+        List<string> issues)
+    {
+        var styleInfo = styleInfoReference.Element;
+        var description = $"tableStyleInfo #{styleInfoReference.Ordinal}";
+        AddOptionalPackageBooleanIssue(tablePart, description, "showFirstColumn", styleInfo.Attribute("showFirstColumn")?.Value, issues);
+        AddOptionalPackageBooleanIssue(tablePart, description, "showLastColumn", styleInfo.Attribute("showLastColumn")?.Value, issues);
+        AddOptionalPackageBooleanIssue(tablePart, description, "showRowStripes", styleInfo.Attribute("showRowStripes")?.Value, issues);
+        AddOptionalPackageBooleanIssue(tablePart, description, "showColumnStripes", styleInfo.Attribute("showColumnStripes")?.Value, issues);
+
+        if (styleInfo.Elements().Any())
+            issues.Add($"{tablePart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetTableSingleChildIssues(
+        string tablePart,
+        XElement parent,
+        string childName,
+        List<string> issues) =>
+        AddWorksheetTableSingleChildIssues(tablePart, parent, "table", childName, issues);
+
+    private static void AddWorksheetTableSingleChildIssues(
+        string tablePart,
+        XElement parent,
+        string parentDescription,
+        string childName,
+        List<string> issues)
+    {
+        var children = parent.Elements(SpreadsheetNs + childName).ToArray();
+        if (children.Length > 1)
+            issues.Add($"{tablePart} {parentDescription} has {children.Length} {childName} elements; expected at most one");
+    }
+
+    private static void AddWorksheetTableChildOrderingIssues(
+        string tablePart,
+        XElement table,
+        List<string> issues)
+    {
+        var previousKnownChildOrder = -1;
+        foreach (var child in table.Elements())
+        {
+            var childOrder = GetWorksheetTableChildOrder(child);
+            if (childOrder < 0)
+                continue;
+
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"{tablePart} table child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+        }
+    }
+
+    private static bool IsKnownWorksheetTableChild(XElement child) =>
+        GetWorksheetTableChildOrder(child) >= 0;
+
+    private static int GetWorksheetTableChildOrder(XElement child)
+    {
+        if (child.Name.Namespace != SpreadsheetNs)
+            return -1;
+
+        return child.Name.LocalName switch
+        {
+            "autoFilter" => 0,
+            "sortState" => 1,
+            "tableColumns" => 2,
+            "tableStyleInfo" => 3,
+            "extLst" => 4,
+            _ => -1
+        };
+    }
+
+    private static void AddWorksheetTableColumnsChildOrderingIssues(
+        string tablePart,
+        string description,
+        XElement tableColumns,
+        List<string> issues)
+    {
+        var children = tableColumns.Elements().ToArray();
+        var firstExtensionListIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children.Skip(firstExtensionListIndex + 1).Any(element => element.Name == SpreadsheetNs + "tableColumn"))
+        {
+            issues.Add($"{tablePart} {description} has tableColumn entries after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetTableColumnChildOrderingIssues(
+        string tablePart,
+        string description,
+        XElement tableColumn,
+        List<string> issues)
+    {
+        var previousKnownChildOrder = -1;
+        foreach (var child in tableColumn.Elements())
+        {
+            var childOrder = GetWorksheetTableColumnChildOrder(child);
+            if (childOrder < 0)
+                continue;
+
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"{tablePart} {description} child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+        }
+    }
+
+    private static int GetWorksheetTableColumnChildOrder(XElement child)
+    {
+        if (child.Name.Namespace != SpreadsheetNs)
+            return -1;
+
+        return child.Name.LocalName switch
+        {
+            "calculatedColumnFormula" => 0,
+            "totalsRowFormula" => 1,
+            "xmlColumnPr" => 2,
+            "extLst" => 3,
+            _ => -1
+        };
+    }
+
+    private static void AddRequiredPackageStringAttributeIssue(
+        string packagePart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            issues.Add($"{packagePart} {description} has no {attributeName}");
+    }
+
+    private static void AddOptionalPackageStringAttributeIssue(
+        string packagePart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (value is not null && string.IsNullOrWhiteSpace(value))
+            issues.Add($"{packagePart} {description} has blank {attributeName}");
+    }
+
+    private static void AddOptionalKnownPackageValueIssue(
+        string packagePart,
+        string description,
+        string attributeName,
+        string? value,
+        IReadOnlyCollection<string> knownValues,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) ||
+            knownValues.Contains(value.Trim(), StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        issues.Add($"{packagePart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void AddOptionalPackageBooleanIssue(
+        string packagePart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) || IsValidPackageBoolean(value))
+            return;
+
+        issues.Add($"{packagePart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void AddOptionalPackageNonNegativeIntIssue(
+        string packagePart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) || TryParseNonNegativePackageInt(value, out _))
+            return;
+
+        issues.Add($"{packagePart} {description} has invalid {attributeName} value '{value}'");
     }
 
     private static void ThrowInvalidWorksheetTablePackage(string label, string sourcePath, IReadOnlyList<string> issues)
@@ -16342,6 +18050,26 @@ internal static class ExcelOpenSmoke
         int Ordinal,
         XElement Element);
 
+    private sealed record WorksheetColumnsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetColumnReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSheetDataReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetRowReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetCellReference(
+        int Ordinal,
+        XElement Element);
+
     private sealed record WorksheetCalculationPropertiesReference(
         int Ordinal,
         XElement Element);
@@ -16434,6 +18162,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetDataRefReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetConditionalFormattingReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetConditionalFormattingRuleReference(
         int Ordinal,
         XElement Element);
 
@@ -16530,6 +18266,18 @@ internal static class ExcelOpenSmoke
     private sealed record TablePartReference(
         int Ordinal,
         string? RelationshipId);
+
+    private sealed record TableColumnsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record TableColumnReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record TableStyleInfoReference(
+        int Ordinal,
+        XElement Element);
 
     private sealed record LegacyDrawingReference(
         string ElementName,

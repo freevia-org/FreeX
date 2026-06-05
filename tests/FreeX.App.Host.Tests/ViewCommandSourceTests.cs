@@ -33,7 +33,8 @@ public sealed class ViewCommandSourceTests
         string keyTip,
         string tag)
     {
-        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, "ZoomPresetMenuItem_Click");
+        var item = ReadMainWindowXaml()
+            .ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header, "Click=\"ZoomPresetMenuItem_Click\"");
 
         item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"Tag=\"{tag}\"");
@@ -44,7 +45,8 @@ public sealed class ViewCommandSourceTests
     [Fact]
     public void ViewZoomCustomMenuItem_OpensZoomDialog()
     {
-        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), "Custom...");
+        var item = ReadMainWindowXaml()
+            .ExtractElementByLocalizedAttributeValue("MenuItem", "Header", "Custom...");
 
         item.Should().Contain("local:RibbonTooltip.KeyTip=\"C\"");
         item.Should().Contain("Click=\"ZoomCustomMenuItem_Click\"");
@@ -83,7 +85,10 @@ public sealed class ViewCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractCommandElementByTitle(ReadMainWindowXaml(), title);
+        var xaml = ReadMainWindowXaml();
+        var button = title is "Split" or "View Side by Side" or "Synchronous Scrolling"
+            ? xaml.ExtractElementByInvariantCommandName("ToggleButton", title)
+            : xaml.ExtractButtonElementByInvariantCommandName(title);
 
         button.ShouldContainLocalizedAttribute("Content", title);
         button.ShouldContainInvariantCommandName(title);
@@ -94,7 +99,8 @@ public sealed class ViewCommandSourceTests
     [Fact]
     public void ViewWindowCommands_AreAllLiveAndNeverDeferredRibbonPlaceholders()
     {
-        var xaml = ExtractViewWindowGroup(ReadMainWindowXaml());
+        var xaml = ReadMainWindowXaml()
+            .ExtractElementByAttributeValue("Grid", "local:RibbonMetadata.CatalogId", "ViewWindowGroup");
 
         // Hide / Unhide / Reset Window Position / View Side by Side / Synchronous Scrolling are now
         // live commands with dedicated handlers — present in the ribbon, never deferred stubs.
@@ -127,7 +133,8 @@ public sealed class ViewCommandSourceTests
         string keyTip,
         string tag)
     {
-        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, "ArrangeAllMenuItem_Click");
+        var item = ReadMainWindowXaml()
+            .ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header, "Click=\"ArrangeAllMenuItem_Click\"");
 
         item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"Tag=\"{tag}\"");
@@ -146,7 +153,8 @@ public sealed class ViewCommandSourceTests
         string keyTip,
         string handler)
     {
-        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header);
+        var item = ReadMainWindowXaml()
+            .ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header);
 
         item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -209,27 +217,4 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("_windowRegistry?.BroadcastScrollOffset(this, GetScrollOffset())");
     }
 
-    private static string ExtractViewWindowGroup(string xaml)
-    {
-        var start = xaml.IndexOf("local:RibbonMetadata.CatalogId=\"ViewWindowGroup\"", StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, "the View Window group should be present");
-        var end = xaml.IndexOf("<!-- TABLE DESIGN -->", start, StringComparison.Ordinal);
-        end.Should().BeGreaterThan(start, "the View Window group should end before the Table Design tab");
-        return xaml[start..end];
-    }
-
-    private static string ExtractCommandElementByTitle(string xaml, string title)
-    {
-        if (title is "Split" or "View Side by Side" or "Synchronous Scrolling")
-            return xaml.ExtractElementByInvariantCommandName("ToggleButton", title);
-
-        return xaml.ExtractButtonElementByInvariantCommandName(title);
-    }
-
-    private static string ExtractMenuItemElementByHeader(string xaml, string header, string? clickHandler = null)
-        => xaml.ExtractElementByLocalizedAttributeValue(
-            "MenuItem",
-            "Header",
-            header,
-            clickHandler is null ? null : $"Click=\"{clickHandler}\"");
 }

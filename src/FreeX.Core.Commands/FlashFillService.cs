@@ -122,6 +122,9 @@ public static partial class FlashFillService
                 return null;
         }
 
+        if (TryFillFromThreeNameColumns(exampleSources, exampleOutputs, remainingSources) is { } threeColumnResults)
+            return threeColumnResults;
+
         var patterns = new List<Func<IReadOnlyList<string>, string>>
         {
             s => s[0] + " " + s[1],
@@ -179,6 +182,67 @@ public static partial class FlashFillService
     }
 
     // ── Pattern detectors ─────────────────────────────────────────────────────
+
+    private static IReadOnlyList<string>? TryFillFromThreeNameColumns(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs,
+        IReadOnlyList<IReadOnlyList<string>> remainingSources)
+    {
+        if (!HasThreeNameSources(exampleSources) || !HasThreeNameSources(remainingSources))
+            return null;
+
+        var patterns = new List<Func<IReadOnlyList<string>, string>>
+        {
+            s => GetNameToken(s, 0) + " " + GetNameToken(s, 1) + " " + GetNameToken(s, 2),
+            s => GetNameToken(s, 2) + ", " + GetNameToken(s, 0) + " " + GetNameToken(s, 1),
+            s => GetNameToken(s, 0) + " " + GetNameInitial(s, 1) + ". " + GetNameToken(s, 2),
+            s => GetNameInitial(s, 0) + ". " + GetNameInitial(s, 1) + ". " + GetNameToken(s, 2)
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var allExamplesMatch = true;
+            for (var i = 0; i < exampleSources.Count; i++)
+            {
+                if (pattern(exampleSources[i]) != exampleOutputs[i])
+                {
+                    allExamplesMatch = false;
+                    break;
+                }
+            }
+
+            if (!allExamplesMatch)
+                continue;
+
+            var results = new List<string>(remainingSources.Count);
+            for (var i = 0; i < remainingSources.Count; i++)
+                results.Add(pattern(remainingSources[i]));
+
+            return results;
+        }
+
+        return null;
+    }
+
+    private static bool HasThreeNameSources(IReadOnlyList<IReadOnlyList<string>> sources)
+    {
+        for (var i = 0; i < sources.Count; i++)
+        {
+            if (sources[i].Count < 3 ||
+                string.IsNullOrWhiteSpace(sources[i][0]) ||
+                string.IsNullOrWhiteSpace(sources[i][1]) ||
+                string.IsNullOrWhiteSpace(sources[i][2]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static string GetNameToken(IReadOnlyList<string> source, int index) =>
+        source[index].Trim();
+
+    private static string GetNameInitial(IReadOnlyList<string> source, int index) =>
+        GetFirstInitial(GetNameToken(source, index));
 
     private static Func<string, string?>? TryFullNameEmailPattern(
         IReadOnlyList<(string Source, string Expected)> examples)

@@ -1020,6 +1020,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversEnvironmentSustainabilityVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "EMISIONS Decarbonizaton renewble biodiveristy conservaton recyling compostng greenhose disclousre EFFICENCY climte Stewardhsip. Keep emissions, decarbonization, renewable, biodiversity, conservation, recycling, composting, greenhouse, disclosure, efficiency, climate, stewardship, preemisions, emisions_id, https://emisions.example.com/recyling, esg@greenhose.example.com, \"C:\\climte folder\\stewardhsip file.xlsx\", and [C:\\disclousre folder\\compostng file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("EMISIONS", "EMISSIONS"),
+            ("Decarbonizaton", "Decarbonization"),
+            ("renewble", "renewable"),
+            ("biodiveristy", "biodiversity"),
+            ("conservaton", "conservation"),
+            ("recyling", "recycling"),
+            ("compostng", "composting"),
+            ("greenhose", "greenhouse"),
+            ("disclousre", "disclosure"),
+            ("EFFICENCY", "EFFICIENCY"),
+            ("climte", "climate"),
+            ("Stewardhsip", "Stewardship"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "EMISSIONS Decarbonization renewable biodiversity conservation recycling composting greenhouse disclosure EFFICIENCY climate Stewardship. Keep emissions, decarbonization, renewable, biodiversity, conservation, recycling, composting, greenhouse, disclosure, efficiency, climate, stewardship, preemisions, emisions_id, https://emisions.example.com/recyling, esg@greenhose.example.com, \"C:\\climte folder\\stewardhsip file.xlsx\", and [C:\\disclousre folder\\compostng file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversTransportLogisticsVocabularyTypos()
     {
         var wb = new Workbook("test");
@@ -1091,6 +1126,39 @@ public sealed class SpellCheckServiceTests
         plan.Edits[0].CorrectedText.Should().Be(
             "RESTAURANT restaurant Catering reservation hospitality menu ingredient ingredients allergens nutrition beverage banquet room service housekeeping concierge. Valid allergen. Keep resturant_id, https://resturant.example.com/caterng, chef@ingredent.example.com, \"C:\\reservaton folder\\conciergee file.xlsx\", and [C:\\housekeepng folder\\banquettt file.xlsx].");
         plan.Edits[0].ReplacementCount.Should().Be(15);
+    }
+
+    [Fact]
+    public void PlanKnownCorrections_CoversGovernmentNonprofitVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "MUNICIPL constituant Grantt appropreation compliace Donaton donorrr fundraisin sponsorshipp volunter. Valid government regulation. Keep municipl_id, https://municipl.example.com/donaton, donorrr@fundraisin.example.com, \"C:\\appropreation folder\\sponsorshipp file.xlsx\", and [C:\\volunter folder\\compliace file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("MUNICIPL", "MUNICIPAL"),
+            ("constituant", "constituent"),
+            ("Grantt", "Grant"),
+            ("appropreation", "appropriation"),
+            ("compliace", "compliance"),
+            ("Donaton", "Donation"),
+            ("donorrr", "donor"),
+            ("fundraisin", "fundraising"),
+            ("sponsorshipp", "sponsorship"),
+            ("volunter", "volunteer"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "MUNICIPAL constituent Grant appropriation compliance Donation donor fundraising sponsorship volunteer. Valid government regulation. Keep municipl_id, https://municipl.example.com/donaton, donorrr@fundraisin.example.com, \"C:\\appropreation folder\\sponsorshipp file.xlsx\", and [C:\\volunter folder\\compliace file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
     }
 
     [Fact]
