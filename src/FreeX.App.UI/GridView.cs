@@ -576,8 +576,8 @@ public partial class GridView : FrameworkElement
     private PageBreakLookupCache? _rowPageBreakLookupCache;
     private PageBreakLookupCache? _columnPageBreakLookupCache;
 
-    private static double ToDisplayFontSize(double pointSize) =>
-        Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));
+    internal static double ToDisplayFontSize(double pointSize) =>
+        Math.Max(1.0, pointSize * (96.0 / 72.0));
 
     private sealed class CellStyleReferenceComparer : IEqualityComparer<CellStyle>
     {

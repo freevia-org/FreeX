@@ -183,6 +183,21 @@ internal static class XlsxDocumentPropertiesPreserver
         }
 
         var changed = false;
+        changed |= RemoveMismatchedRootRelationships(
+            relationshipsXml,
+            relationshipNs,
+            CorePropertiesPart,
+            CorePropertiesRelationshipType);
+        changed |= RemoveMismatchedRootRelationships(
+            relationshipsXml,
+            relationshipNs,
+            ExtendedPropertiesPart,
+            ExtendedPropertiesRelationshipType);
+        changed |= RemoveMismatchedRootRelationships(
+            relationshipsXml,
+            relationshipNs,
+            CustomPropertiesPart,
+            CustomPropertiesRelationshipType);
         changed |= NormalizeRootRelationship(
             archive,
             relationshipsXml,
@@ -206,6 +221,28 @@ internal static class XlsxDocumentPropertiesPreserver
             XlsxPackageXmlEditor.ReplaceXml(archive, "_rels/.rels", relationshipsXml);
 
         return changed;
+    }
+
+    private static bool RemoveMismatchedRootRelationships(
+        XDocument relationshipsXml,
+        XNamespace relationshipNs,
+        string partName,
+        string relationshipType)
+    {
+        var relationships = relationshipsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship =>
+                RelationshipTargetsPart(relationship, partName) &&
+                !string.Equals(
+                    relationship.Attribute("Type")?.Value?.Trim(),
+                    relationshipType,
+                    StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (relationships.Count == 0)
+            return false;
+
+        relationships.Remove();
+        return true;
     }
 
     private static bool NormalizeRootRelationship(

@@ -131,7 +131,7 @@ public partial class GridView
     private static bool UsesDefaultTextLayoutStyleCore(CellStyle style)
     {
         var usesDefaultFontName = string.IsNullOrWhiteSpace(style.FontName) ||
-            string.Equals(style.FontName, "Calibri", StringComparison.OrdinalIgnoreCase);
+            string.Equals(ResolveCellFontNameForDisplay(style.FontName), "Calibri", StringComparison.OrdinalIgnoreCase);
         var usesDefaultFontSize = style.FontSize <= 0 ||
             Math.Abs(style.FontSize - DefaultCellFontSizePoints) < 0.001;
 
