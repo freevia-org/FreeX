@@ -542,6 +542,9 @@ public static partial class AccessibilityCheckerService
         if (ast is not FunctionCallNode function)
             return false;
 
+        if (TryCreateFormulaBooleanFunctionExpression(function, out expression))
+            return true;
+
         if (string.Equals(function.FunctionName, "NOT", StringComparison.OrdinalIgnoreCase))
         {
             if (function.Arguments.Count != 1 ||
@@ -595,6 +598,29 @@ public static partial class AccessibilityCheckerService
 
         expression = new ConditionalFormulaLogicalExpression(logicalOperator.Value, operands);
         return true;
+    }
+
+    private static bool TryCreateFormulaBooleanFunctionExpression(
+        FunctionCallNode function,
+        out ConditionalFormulaExpression expression)
+    {
+        expression = default!;
+        if (function.Arguments.Count != 0)
+            return false;
+
+        if (string.Equals(function.FunctionName, "TRUE", StringComparison.OrdinalIgnoreCase))
+        {
+            expression = new ConditionalFormulaOperandExpression(LiteralFormulaOperand(new BoolValue(true)));
+            return true;
+        }
+
+        if (string.Equals(function.FunctionName, "FALSE", StringComparison.OrdinalIgnoreCase))
+        {
+            expression = new ConditionalFormulaOperandExpression(LiteralFormulaOperand(new BoolValue(false)));
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryCreateFormulaPredicate(FunctionCallNode function, out ConditionalFormulaPredicate predicate)
