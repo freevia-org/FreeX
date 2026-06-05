@@ -122,7 +122,7 @@ public static partial class FlashFillService
     private static readonly char[] Delimiters = [' ', ',', ';', ':', '|', '-', '_', '@', '.', '/', '\\'];
     private static readonly char[] FinalDelimitedTokenDelimiters = [',', ';', ':', '|', '-', '_', '/', '\\'];
     private static readonly char[] DateComponentSeparators = ['/', '-', '.'];
-    private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "-", "/", "|"];
+    private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "→", "⇒", "-", "–", "—", "/", "|"];
     private static readonly string[] PhoneExtensionMarkers = ["extension", "ext", "x"];
     private static readonly UsAddressComponentKind[] UsAddressComponentKinds =
     [
