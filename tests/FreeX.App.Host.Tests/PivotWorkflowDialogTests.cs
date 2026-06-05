@@ -28,7 +28,4 @@ public sealed partial class PivotWorkflowDialogTests
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)
         => DialogSourceTestSupport.ReadClassSource(fileName, startMarker, endMarker);
 
-    private static T GetPrivateField<T>(object instance, string name)
-        where T : class
-        => DialogSourceTestSupport.GetPrivateField<T>(instance, name);
 }
