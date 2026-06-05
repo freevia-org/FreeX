@@ -1978,6 +1978,57 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversMediaCreativeDesignVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "MOCKP desgin Brandng pallete vectorr rasterr exportt wirefram Prototyp kerningg renderng ANIMATON typograpy storybord compositon photogrphy copywritng iconogrphy Illustation. Keep mockup, design, branding, palette, vector, raster, export, wireframe, prototype, kerning, rendering, animation, typography, storyboard, composition, photography, copywriting, iconography, illustration, premockp, mockp_id, https://mockp.example.com/vectorr, creative@pallete.example.com, \"C:\\renderng folder\\iconogrphy file.xlsx\", and [C:\\storybord folder\\illustation file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "mockp MOCKP Mockp https://mockp.example.com/mockp creative@mockp.example.com mockp_id premockp \"C:\\mockp folder\\mockp file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "mockup");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("MOCKP", "MOCKUP"),
+            ("desgin", "design"),
+            ("Brandng", "Branding"),
+            ("pallete", "palette"),
+            ("vectorr", "vector"),
+            ("rasterr", "raster"),
+            ("exportt", "export"),
+            ("wirefram", "wireframe"),
+            ("Prototyp", "Prototype"),
+            ("kerningg", "kerning"),
+            ("renderng", "rendering"),
+            ("ANIMATON", "ANIMATION"),
+            ("typograpy", "typography"),
+            ("storybord", "storyboard"),
+            ("compositon", "composition"),
+            ("photogrphy", "photography"),
+            ("copywritng", "copywriting"),
+            ("iconogrphy", "iconography"),
+            ("Illustation", "Illustration"));
+        plan.IssueCount.Should().Be(19);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "MOCKUP design Branding palette vector raster export wireframe Prototype kerning rendering ANIMATION typography storyboard composition photography copywriting iconography Illustration. Keep mockup, design, branding, palette, vector, raster, export, wireframe, prototype, kerning, rendering, animation, typography, storyboard, composition, photography, copywriting, iconography, illustration, premockp, mockp_id, https://mockp.example.com/vectorr, creative@pallete.example.com, \"C:\\renderng folder\\iconogrphy file.xlsx\", and [C:\\storybord folder\\illustation file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(19);
+        replaceAllCorrected.Should().Be(
+            "mockup MOCKUP Mockup https://mockp.example.com/mockp creative@mockp.example.com mockp_id premockp \"C:\\mockp folder\\mockp file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");
