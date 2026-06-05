@@ -199,9 +199,17 @@ internal static partial class AccessibilityTextRules
     {
         foreach (var prefix in GenericNumberedAltTextPrefixes)
         {
-            var prefixWithSpace = prefix + " ";
-            if (text.StartsWith(prefixWithSpace, StringComparison.OrdinalIgnoreCase) &&
-                IsNumberSuffix(text, prefixWithSpace))
+            if (!text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var suffix = text.AsSpan(prefix.Length);
+            if (suffix.Length > 0 &&
+                (suffix[0] == ' ' || suffix[0] == '-' || suffix[0] == '_'))
+            {
+                suffix = suffix[1..];
+            }
+
+            if (IsNumberSuffix(suffix))
             {
                 return true;
             }
@@ -213,8 +221,8 @@ internal static partial class AccessibilityTextRules
     private static bool LooksLikeScreenshotOrPhotoDateDefault(string text) =>
         ScreenshotOrPhotoDateDefaultRegex().IsMatch(text);
 
-    private static bool IsNumberSuffix(string text, string prefix) =>
-        int.TryParse(text[prefix.Length..], out _);
+    private static bool IsNumberSuffix(ReadOnlySpan<char> suffix) =>
+        suffix.Length > 0 && int.TryParse(suffix, out _);
 
     [GeneratedRegex(@"(?i)^Chart\s*\d+$")]
     private static partial Regex ChartNumberTitleRegex();
