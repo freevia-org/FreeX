@@ -40,7 +40,9 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_PassesForInternalTesterBuild()
     {
-        var result = RunReadinessPreflight("-RunNumber 42");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
+        var repoRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
+        var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Tester release readiness preflight passed.");
@@ -52,7 +54,9 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_BlocksPublicPreviewWhenAccessibilityGateIsIncomplete()
     {
-        var result = RunReadinessPreflight("-RunNumber 42 -PublicPreviewCandidate");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
+        var repoRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
+        var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42 -PublicPreviewCandidate");
 
         result.ExitCode.Should().NotBe(0);
         result.Error.Should().Contain("Public-preview preflight requires completed accessibility gate inputs");
@@ -65,7 +69,9 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_AllowsPublicPreviewWhenAccessibilityGateIsComplete()
     {
-        var result = RunReadinessPreflight("-RunNumber 42 -PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
+        var repoRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
+        var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42 -PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Tester release readiness preflight passed.");
@@ -74,11 +80,4 @@ public sealed class TesterReleaseReadinessPreflightTests
         result.Output.Should().Contain("Promotion status: public-preview eligible");
     }
 
-    private static PowerShellResult RunReadinessPreflight(string arguments)
-    {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
-        var repoRoot = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(scriptPath)!, ".."));
-
-        return PowerShellScriptRunner.Run(scriptPath, repoRoot, arguments);
-    }
 }
