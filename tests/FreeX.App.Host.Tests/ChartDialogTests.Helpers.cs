@@ -1,8 +1,6 @@
-using System.Reflection;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -27,11 +25,7 @@ public sealed partial class ChartDialogTests
 
     private static T GetPrivateField<T>(object instance, string name)
         where T : class
-    {
-        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(instance, name);
 
     private static MouseButtonEventArgs CreateMouseDoubleClickEvent() =>
         new(Mouse.PrimaryDevice, 0, MouseButton.Left)
