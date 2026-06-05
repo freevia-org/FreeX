@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,7 +7,7 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
     [Fact]
     public void IgnoreSelected_RemovesAllIssuesForIgnoredCell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var source = ReadErrorCheckingDialogSource();
 
         source.Should().Contain("var sameCellIssues = _issues");
         source.Should().Contain(".Where(candidate =>");
@@ -21,7 +20,7 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingIssueList_EnterKeyNavigatesSelectedIssue()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var source = ReadErrorCheckingDialogSource();
 
         source.Should().Contain("_listView.KeyDown += ListView_KeyDown;");
         source.Should().Contain("private void ListView_KeyDown(object sender, KeyEventArgs e)");
@@ -33,7 +32,7 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
     [Fact]
     public void EvaluateFormulaDialog_ExposesExcelLikeStepRestartAndHelpControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "EvaluateFormulaDialog.cs"));
+        var source = ReadEvaluateFormulaDialogSource();
 
         source.Should().Contain("UiText.Get(\"EvaluateFormula_EvaluationLabel\")");
         source.Should().Contain("UiText.Get(\"EvaluateFormula_StepInButton\")");
@@ -50,7 +49,7 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
     [Fact]
     public void EvaluateFormulaDialog_UsesEvaluateAsDefaultAndCloseAsCancel()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "EvaluateFormulaDialog.cs"));
+        var source = ReadEvaluateFormulaDialogSource();
 
         source.Should().Contain("Content = UiText.Get(\"EvaluateFormula_EvaluateButton\"), Width = 80, Height = 26, IsDefault = true");
         source.Should().Contain("Content = UiText.Get(\"EvaluateFormula_CloseButton\"), Width = 80, Height = 26, IsCancel = true");
@@ -60,7 +59,7 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
     [Fact]
     public void EvaluateFormulaDialog_DisablesStepInWithEvaluateAndFocusesEnabledCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "EvaluateFormulaDialog.cs"));
+        var source = ReadEvaluateFormulaDialogSource();
 
         source.Should().Contain("private readonly Button _stepInButton;");
         source.Should().Contain("_stepInButton = new Button { Content = UiText.Get(\"EvaluateFormula_StepInButton\")");
@@ -72,4 +71,10 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
         source.Should().Contain("_nextButton.IsEnabled ? _nextButton");
         source.Should().Contain("Keyboard.Focus(target);");
     }
+
+    private static string ReadErrorCheckingDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("ErrorCheckingDialog.cs");
+
+    private static string ReadEvaluateFormulaDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("EvaluateFormulaDialog.cs");
 }
