@@ -1641,12 +1641,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "deducton"))
-                {
-                    suggestion = "deduction";
-                    return true;
-                }
-
                 if (first == 'd' && EqualAsciiWordIgnoreCase(word, "deadlne"))
                 {
                     suggestion = "deadline";
@@ -2180,6 +2174,12 @@ public static partial class SpellCheckService
                 if (first == 'd' && EqualAsciiWordIgnoreCase(word, "databsae"))
                 {
                     suggestion = "database";
+                    return true;
+                }
+
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "deducton"))
+                {
+                    suggestion = "deduction";
                     return true;
                 }
 
