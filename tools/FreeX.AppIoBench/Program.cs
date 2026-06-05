@@ -49,18 +49,25 @@ internal static class Program
 
     private static async Task RunAsync(AppIoBenchOptions options)
     {
+        for (var iteration = 1; iteration <= options.RepeatCount; iteration++)
+            await RunIterationAsync(options, iteration);
+    }
+
+    private static async Task RunIterationAsync(AppIoBenchOptions options, int iteration)
+    {
         var adapter = new XlsxFileAdapter();
         var loader = new OpenWorkbookLoader(CreateRecalculationAction(options));
         var fileInfo = new FileInfo(options.Path!);
         var openProgress = new ThrottledProgress<OpenProgressUpdate>(
             options,
+            iteration,
             "open",
             update => (update.Detail, update.Percent));
 
         WritePerf(
             options,
             "PERF APP_XLSX_STAGE " +
-            $"stage=open_start file=\"{fileInfo.Name}\" bytes={fileInfo.Length:N0}");
+            $"{FormatIteration(options, iteration)}stage=open_start file=\"{fileInfo.Name}\" bytes={fileInfo.Length:N0}");
         ForceFullCollection();
         var openAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
         var openStopwatch = Stopwatch.StartNew();
@@ -77,16 +84,25 @@ internal static class Program
         WritePerf(
             options,
             "PERF APP_XLSX_OPEN " +
-            $"file=\"{fileInfo.Name}\" bytes={fileInfo.Length:N0} sheets={workbook.SheetCount} " +
+            $"{FormatIteration(options, iteration)}file=\"{fileInfo.Name}\" bytes={fileInfo.Length:N0} sheets={workbook.SheetCount} " +
             $"cells={workbook.Sheets.Sum(sheet => sheet.CellCount):N0} " +
             $"warnings={openResult.LoadWarnings?.Count ?? 0} unsupported_features={openResult.FeatureReport?.Features.Count ?? 0} " +
             $"progress_updates={openProgress.Count} elapsed_ms={openStopwatch.Elapsed.TotalMilliseconds:F2} " +
             $"allocated_bytes={openAllocatedBytes:N0} {FormatLoadDiagnostics(adapter.LastLoadDiagnostics)}");
 
+        if (options.OpenOnly)
+        {
+            WritePerf(
+                options,
+                "PERF APP_XLSX_STAGE " +
+                $"{FormatIteration(options, iteration)}stage=open_only_done");
+            return;
+        }
+
         WritePerf(
             options,
             "PERF APP_XLSX_STAGE " +
-            $"stage=edit_start edit={options.EditMode}");
+            $"{FormatIteration(options, iteration)}stage=edit_start edit={options.EditMode}");
         if (options.EditMode != AppIoBenchEditMode.None)
         {
             ForceFullCollection();
@@ -98,7 +114,7 @@ internal static class Program
             WritePerf(
                 options,
                 "PERF APP_XLSX_PREPARE_EDIT " +
-                $"prepared={prepared.ToString().ToLowerInvariant()} " +
+                $"{FormatIteration(options, iteration)}prepared={prepared.ToString().ToLowerInvariant()} " +
                 $"reason=\"{prepareReason ?? ""}\" elapsed_ms={prepareStopwatch.Elapsed.TotalMilliseconds:F2} " +
                 $"allocated_bytes={prepareAllocatedBytes:N0}");
         }
@@ -109,7 +125,7 @@ internal static class Program
             WritePerf(
                 options,
                 "PERF APP_XLSX_EDIT " +
-                $"edit={options.EditMode} applied=false reason=\"{editResult.Reason}\"");
+                $"{FormatIteration(options, iteration)}edit={options.EditMode} applied=false reason=\"{editResult.Reason}\"");
             return;
         }
 
@@ -119,6 +135,7 @@ internal static class Program
         var deleteSavePath = options.OutputPath is null;
         var saveProgress = new ThrottledProgress<SaveProgressUpdate>(
             options,
+            iteration,
             "save",
             update => (update.Detail, update.Percent));
 
@@ -127,7 +144,7 @@ internal static class Program
             WritePerf(
                 options,
                 "PERF APP_XLSX_STAGE " +
-                $"stage=save_start edit={editResult.Label}");
+                $"{FormatIteration(options, iteration)}stage=save_start edit={editResult.Label}");
             ForceFullCollection();
             var saveAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
             var saveStopwatch = Stopwatch.StartNew();
@@ -143,7 +160,7 @@ internal static class Program
             WritePerf(
                 options,
                 "PERF APP_XLSX_SAVE " +
-                $"file=\"{fileInfo.Name}\" edit={editResult.Label} output_bytes={saveInfo.Length:N0} " +
+                $"{FormatIteration(options, iteration)}file=\"{fileInfo.Name}\" edit={editResult.Label} output_bytes={saveInfo.Length:N0} " +
                 $"progress_updates={saveProgress.Count} elapsed_ms={saveStopwatch.Elapsed.TotalMilliseconds:F2} " +
                 $"allocated_bytes={saveAllocatedBytes:N0} {FormatSaveDiagnostics(adapter.LastSaveDiagnostics)}");
         }
@@ -315,6 +332,9 @@ internal static class Program
     private static string FormatLoadPhase(string name, XlsxLoadPhaseDiagnostics diagnostics) =>
         $"load_{name}_ms={diagnostics.ElapsedMilliseconds:F2} load_{name}_allocated_bytes={diagnostics.AllocatedBytes:N0}";
 
+    private static string FormatIteration(AppIoBenchOptions options, int iteration) =>
+        options.RepeatCount > 1 ? $"iteration={iteration} " : string.Empty;
+
     private static void WritePerf(AppIoBenchOptions options, string line)
     {
         Console.WriteLine(line);
@@ -351,12 +371,15 @@ internal static class Program
               --recalc none|real
               --out <xlsx>
               --log <txt>
+              --open-only
+              --repeat <count>
               --help
             """);
     }
 
     private sealed class ThrottledProgress<T>(
         AppIoBenchOptions options,
+        int iteration,
         string kind,
         Func<T, (string Detail, double? Percent)> format) : IProgress<T>
     {
@@ -389,7 +412,7 @@ internal static class Program
             WritePerf(
                 options,
                 "PERF APP_XLSX_PROGRESS " +
-                $"kind={kind} elapsed_ms={_stopwatch.Elapsed.TotalMilliseconds:F2} " +
+                $"{FormatIteration(options, iteration)}kind={kind} elapsed_ms={_stopwatch.Elapsed.TotalMilliseconds:F2} " +
                 $"percent={FormatNullablePercent(percent)} detail=\"{EscapeField(detail)}\"");
         }
     }
@@ -418,6 +441,10 @@ internal static class Program
         public string? Value { get; private init; }
 
         public bool RecalculateFormulas { get; private init; }
+
+        public bool OpenOnly { get; private init; }
+
+        public int RepeatCount { get; private init; } = 1;
 
         public bool ShowHelp { get; private init; }
 
@@ -460,6 +487,12 @@ internal static class Program
                             RecalculateFormulas = ParseRecalcMode(ReadValue(args, ref index, "--recalc"))
                         };
                         break;
+                    case "--open-only":
+                        options = options with { OpenOnly = true };
+                        break;
+                    case "--repeat":
+                        options = options with { RepeatCount = ParseRepeatCount(ReadValue(args, ref index, "--repeat")) };
+                        break;
                     default:
                         if (options.Path is null && !args[index].StartsWith("-", StringComparison.Ordinal))
                         {
@@ -500,6 +533,17 @@ internal static class Program
                 "real" => true,
                 _ => throw new ArgumentException($"Unsupported recalc mode: {value}")
             };
+
+        private static int ParseRepeatCount(string value)
+        {
+            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var count) ||
+                count < 1)
+            {
+                throw new ArgumentException($"Invalid repeat count: {value}");
+            }
+
+            return count;
+        }
     }
 
     private enum AppIoBenchEditMode
