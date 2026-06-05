@@ -153,46 +153,36 @@ internal static class Program
             return;
         }
 
-        var savePath = options.OutputPath ?? Path.Combine(
-            Path.GetTempPath(),
-            $"freex-app-io-bench-{Guid.NewGuid():N}.xlsx");
-        var deleteSavePath = options.OutputPath is null;
+        using var temporaryOutput = options.OutputPath is null ? TemporaryOutputFile.Create(".xlsx") : null;
+        var savePath = options.OutputPath ?? temporaryOutput!.Path;
         var saveProgress = new ThrottledProgress<SaveProgressUpdate>(
             options,
             iteration,
             "save",
             update => (update.Detail, update.Percent));
 
-        try
-        {
-            WritePerf(
-                options,
-                "PERF APP_XLSX_STAGE " +
-                $"{FormatIteration(options, iteration)}stage=save_start edit={editResult.Label}");
-            ForceFullCollection();
-            var saveAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
-            var saveStopwatch = Stopwatch.StartNew();
-            await new SaveWorkbookWriter().SaveAsync(
-                savePath,
-                adapter,
-                workbook,
-                saveProgress);
-            saveStopwatch.Stop();
-            var saveAllocatedBytes = GC.GetTotalAllocatedBytes(precise: true) - saveAllocatedBefore;
+        WritePerf(
+            options,
+            "PERF APP_XLSX_STAGE " +
+            $"{FormatIteration(options, iteration)}stage=save_start edit={editResult.Label}");
+        ForceFullCollection();
+        var saveAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+        var saveStopwatch = Stopwatch.StartNew();
+        await new SaveWorkbookWriter().SaveAsync(
+            savePath,
+            adapter,
+            workbook,
+            saveProgress);
+        saveStopwatch.Stop();
+        var saveAllocatedBytes = GC.GetTotalAllocatedBytes(precise: true) - saveAllocatedBefore;
 
-            var saveInfo = new FileInfo(savePath);
-            WritePerf(
-                options,
-                "PERF APP_XLSX_SAVE " +
-                $"{FormatIteration(options, iteration)}file=\"{fileInfo.Name}\" edit={editResult.Label} output_bytes={saveInfo.Length:N0} " +
-                $"progress_updates={saveProgress.Count} elapsed_ms={saveStopwatch.Elapsed.TotalMilliseconds:F2} " +
-                $"allocated_bytes={saveAllocatedBytes:N0} {FormatSaveDiagnostics(adapter.LastSaveDiagnostics)}");
-        }
-        finally
-        {
-            if (deleteSavePath)
-                File.Delete(savePath);
-        }
+        var saveInfo = new FileInfo(savePath);
+        WritePerf(
+            options,
+            "PERF APP_XLSX_SAVE " +
+            $"{FormatIteration(options, iteration)}file=\"{fileInfo.Name}\" edit={editResult.Label} output_bytes={saveInfo.Length:N0} " +
+            $"progress_updates={saveProgress.Count} elapsed_ms={saveStopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={saveAllocatedBytes:N0} {FormatSaveDiagnostics(adapter.LastSaveDiagnostics)}");
     }
 
     private static AppIoBenchEditResult ApplyEdit(Workbook workbook, AppIoBenchOptions options)
@@ -653,6 +643,34 @@ internal static class Program
                 "none" => false,
                 _ => throw new ArgumentException($"Unsupported prewarm mode: {value}")
             };
+    }
+
+    private sealed class TemporaryOutputFile : IDisposable
+    {
+        private readonly string _directory;
+
+        private TemporaryOutputFile(string directory, string path)
+        {
+            _directory = directory;
+            Path = path;
+        }
+
+        public string Path { get; }
+
+        public static TemporaryOutputFile Create(string extension)
+        {
+            var directory = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                $"freex-app-io-bench-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(directory);
+            return new TemporaryOutputFile(directory, System.IO.Path.Combine(directory, $"output{extension}"));
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(_directory))
+                Directory.Delete(_directory, recursive: true);
+        }
     }
 
     private enum AppIoBenchEditMode
