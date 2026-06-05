@@ -460,6 +460,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomPropertyPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetSheetPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDimensionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetFormatMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -680,6 +681,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomPropertyPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetSheetPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDimensionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetFormatMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3423,6 +3425,184 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet scenario metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetSheetPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetSheetPropertiesMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetSheetPropertiesMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetSheetPropertiesMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var sheetPropertiesElements = root.Elements(SpreadsheetNs + "sheetPr").ToArray();
+        if (sheetPropertiesElements.Length > 1)
+            issues.Add($"{worksheetPart} has {sheetPropertiesElements.Length} sheetPr elements; expected at most one");
+
+        foreach (var sheetProperties in sheetPropertiesElements.Select((element, index) => new WorksheetSheetPropertiesReference(index + 1, element)))
+        {
+            AddWorksheetSheetPropertiesIssues(worksheetPart, root, sheetProperties, issues);
+        }
+    }
+
+    private static void AddWorksheetSheetPropertiesIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetSheetPropertiesReference sheetPropertiesReference,
+        List<string> issues)
+    {
+        var sheetProperties = sheetPropertiesReference.Element;
+        var description = $"sheetPr #{sheetPropertiesReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            sheetProperties,
+            description,
+            [
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "syncHorizontal", sheetProperties.Attribute("syncHorizontal")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "syncVertical", sheetProperties.Attribute("syncVertical")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "transitionEvaluation", sheetProperties.Attribute("transitionEvaluation")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "transitionEntry", sheetProperties.Attribute("transitionEntry")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "published", sheetProperties.Attribute("published")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "filterMode", sheetProperties.Attribute("filterMode")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "enableFormatConditionsCalculation", sheetProperties.Attribute("enableFormatConditionsCalculation")?.Value, issues);
+
+        var syncRef = sheetProperties.Attribute("syncRef")?.Value;
+        if (!string.IsNullOrWhiteSpace(syncRef) && !IsValidLocalWorksheetReference(syncRef))
+            issues.Add($"{worksheetPart} {description} has invalid syncRef value '{syncRef}'");
+
+        var seenChildNames = new HashSet<string>(StringComparer.Ordinal);
+        var previousKnownChildOrder = -1;
+        foreach (var child in sheetProperties.Elements())
+        {
+            if (child.Name.Namespace != SpreadsheetNs || !IsKnownWorksheetSheetPropertiesChild(child.Name.LocalName))
+            {
+                issues.Add($"{worksheetPart} {description} has unexpected child element {child.Name.LocalName}");
+                continue;
+            }
+
+            if (!seenChildNames.Add(child.Name.LocalName))
+                issues.Add($"{worksheetPart} {description} has duplicate {child.Name.LocalName} elements");
+
+            var childOrder = GetWorksheetSheetPropertiesChildOrder(child.Name.LocalName);
+            if (childOrder < previousKnownChildOrder)
+                issues.Add($"{worksheetPart} {description} child {child.Name.LocalName} appears out of schema order");
+            else
+                previousKnownChildOrder = childOrder;
+
+            if (child.Elements().Any())
+                issues.Add($"{worksheetPart} {description} child {child.Name.LocalName} has child elements; expected attributes only");
+
+            AddWorksheetSheetPropertiesChildIssues(worksheetPart, description, child, issues);
+        }
+    }
+
+    private static void AddWorksheetSheetPropertiesChildIssues(
+        string worksheetPart,
+        string sheetPropertiesDescription,
+        XElement child,
+        List<string> issues)
+    {
+        var description = $"{sheetPropertiesDescription} child {child.Name.LocalName}";
+        switch (child.Name.LocalName)
+        {
+            case "outlinePr":
+                AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "applyStyles", child.Attribute("applyStyles")?.Value, issues);
+                AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "summaryBelow", child.Attribute("summaryBelow")?.Value, issues);
+                AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "summaryRight", child.Attribute("summaryRight")?.Value, issues);
+                AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showOutlineSymbols", child.Attribute("showOutlineSymbols")?.Value, issues);
+                break;
+            case "pageSetUpPr":
+                AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "autoPageBreaks", child.Attribute("autoPageBreaks")?.Value, issues);
+                AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "fitToPage", child.Attribute("fitToPage")?.Value, issues);
+                break;
+        }
+    }
+
+    private static bool IsKnownWorksheetSheetPropertiesChild(string name) =>
+        GetWorksheetSheetPropertiesChildOrder(name) >= 0;
+
+    private static int GetWorksheetSheetPropertiesChildOrder(string name) =>
+        name switch
+        {
+            "tabColor" => 0,
+            "outlinePr" => 1,
+            "pageSetUpPr" => 2,
+            _ => -1
+        };
+
+    private static void ThrowInvalidWorksheetSheetPropertiesMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet sheetPr metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetDimensionMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -12224,6 +12404,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetScenarioInputCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSheetPropertiesReference(
         int Ordinal,
         XElement Element);
 
