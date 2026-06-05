@@ -44,16 +44,17 @@ public sealed class MoveRangeCommandTests
     }
 
     [Fact]
-    public void Apply_RewritesMovedFormulaReferencesLikePasteOffset()
+    public void Apply_KeepsMovedFormulaReferencesOutsideMovedRange()
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         var context = new TestCommandContext(workbook);
-        var source = new CellAddress(sheet.Id, 1, 1);
+        var source = new CellAddress(sheet.Id, 1, 2);
         var destination = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
         sheet.SetCell(
             source,
-            Cell.FromFormula("B1+$B$1+$B1+B$1+SUM(B1:C2)"));
+            Cell.FromFormula("A1+$A$1+$A1+A$1+SUM(A1:A2)"));
 
         var command = new MoveRangeCommand(
             sheet.Id,
@@ -64,7 +65,55 @@ public sealed class MoveRangeCommandTests
 
         sheet.GetCell(destination)!.FormulaText
             .Should()
-            .Be("D3+$B$1+$B3+D$1+SUM(D3:E4)");
+            .Be("A1+$A$1+$A1+A$1+SUM(A1:A2)");
+    }
+
+    [Fact]
+    public void Apply_RetargetsFormulaReferencesToCellsMovedWithSelection()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var otherSheet = workbook.AddSheet("Other");
+        var context = new TestCommandContext(workbook);
+        var sourceStart = new CellAddress(sheet.Id, 1, 1);
+        var sourceEnd = new CellAddress(sheet.Id, 1, 2);
+        var destination = new CellAddress(sheet.Id, 3, 3);
+        var outsideFormula = new CellAddress(sheet.Id, 5, 5);
+        var crossSheetFormula = new CellAddress(otherSheet.Id, 1, 1);
+
+        sheet.SetCell(sourceStart, Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(
+            sourceEnd,
+            Cell.FromFormula("A1+$A$1+SUM(A1:B1)"));
+        sheet.SetCell(
+            outsideFormula,
+            Cell.FromFormula("A1+$A$1+SUM(A1:B1)"));
+        otherSheet.SetCell(
+            crossSheetFormula,
+            Cell.FromFormula("Sheet1!A1+$A$1"));
+
+        var command = new MoveRangeCommand(
+            sheet.Id,
+            new GridRange(sourceStart, sourceEnd),
+            destination);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetCell(new CellAddress(sheet.Id, 3, 4))!.FormulaText
+            .Should()
+            .Be("C3+$C$3+SUM(C3:D3)");
+        sheet.GetCell(outsideFormula)!.FormulaText
+            .Should()
+            .Be("C3+$C$3+SUM(C3:D3)");
+        otherSheet.GetCell(crossSheetFormula)!.FormulaText
+            .Should()
+            .Be("Sheet1!C3+$A$1");
+
+        command.Revert(context);
+
+        sheet.GetCell(sourceEnd)!.FormulaText.Should().Be("A1+$A$1+SUM(A1:B1)");
+        sheet.GetCell(outsideFormula)!.FormulaText.Should().Be("A1+$A$1+SUM(A1:B1)");
+        otherSheet.GetCell(crossSheetFormula)!.FormulaText.Should().Be("Sheet1!A1+$A$1");
     }
 
     [Fact]
