@@ -2,7 +2,6 @@ using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 using System.Diagnostics;
-using System.IO;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -203,6 +202,4 @@ public sealed partial class GridViewSplitPaneLayoutTests
                 [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
                 [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)]));
 
-    private static string FindWorkspaceFile(params string[] relativeParts) =>
-        WorkspaceFileLocator.Find(relativeParts);
 }

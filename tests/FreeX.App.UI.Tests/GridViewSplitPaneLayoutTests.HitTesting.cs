@@ -60,7 +60,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void HitTestViewportCell_StopsMetricScansOnceSortedEdgesPassPointer()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
         var hitTestMetrics = source[
             source.IndexOf("private static CellAddress? HitTestMetrics", StringComparison.Ordinal)..
@@ -76,7 +76,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void HitTestViewportCell_ReusesRowHeaderWidthWithinHitTest()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
         var hitTestViewportCell = source[
             source.IndexOf("public static CellAddress? HitTestViewportCell", StringComparison.Ordinal)..
@@ -98,7 +98,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void HitTestViewportCell_ReusesSplitDividerLayoutForRegionClassification()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
         var hitTestViewportCell = source[
             source.IndexOf("public static CellAddress? HitTestViewportCell", StringComparison.Ordinal)..
