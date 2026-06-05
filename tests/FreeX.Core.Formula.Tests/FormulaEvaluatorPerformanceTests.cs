@@ -587,6 +587,10 @@ public sealed class FormulaEvaluatorPerformanceTests
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
+        // A full blocking GC can trim ArrayPool.Shared; warm once after collection
+        // so this assertion measures steady-state pooled-buffer reuse.
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
         var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
         var stopwatch = Stopwatch.StartNew();
         var result = evaluator.Evaluate(formula, sheet);
@@ -609,6 +613,10 @@ public sealed class FormulaEvaluatorPerformanceTests
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
+
+        // A full blocking GC can trim ArrayPool.Shared; warm once after collection
+        // so this assertion measures steady-state pooled-buffer reuse.
+        ((NumberValue)evaluator.Evaluate(formula, sheet)).Value.Should().BeApproximately(expected, 1e-10);
 
         var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
         var stopwatch = Stopwatch.StartNew();
