@@ -181,7 +181,7 @@ public sealed partial class ChartDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new InsertChartDialog();
-            var recommendedGallery = GetPrivateField<ListBox>(dialog, "_recommendedGallery");
+            var recommendedGallery = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_recommendedGallery");
             var doubleClick = CreateMouseDoubleClickEvent();
 
             dialog.Dispatcher.BeginInvoke(() => recommendedGallery.RaiseEvent(doubleClick));
@@ -200,7 +200,7 @@ public sealed partial class ChartDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new ChangeChartTypeDialog(ChartType.Bar);
-            var subtypeGallery = GetPrivateField<ListBox>(dialog, "_subtypeGallery");
+            var subtypeGallery = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_subtypeGallery");
             var selectedChoice = subtypeGallery.Items
                 .OfType<ChartTypeGalleryChoice>()
                 .First();
