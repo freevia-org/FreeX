@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace FreeX.Core.Calc;
+namespace FreeX.Core.Formula;
 
 public static partial class NumberFormatter
 {

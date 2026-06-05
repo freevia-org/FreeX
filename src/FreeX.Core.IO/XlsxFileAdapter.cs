@@ -109,12 +109,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         });
         featureReport = inspectedFeatureReport;
 
-        var (styleMetadata, styleMetadataDiagnostics) = MeasureLoadPhase(() => (
-            IndexedColors: XlsxIndexedColorPaletteMapper.Load(stylesXml),
-            PivotTableStyles: XlsxPivotTableStyleMetadataReader.Load(stylesXml),
-            StructuredTableStyles: XlsxStructuredTableStyleMetadataReader.Load(stylesXml),
-            CustomViews: workbookMetadata.CustomViews));
+        var (styleMetadata, styleMetadataDiagnostics) = MeasureLoadPhase(() =>
+        {
+            var loadedIndexedColors = XlsxIndexedColorPaletteMapper.Load(stylesXml);
+            return (
+                IndexedColors: loadedIndexedColors,
+                CellBorderStyles: XlsxCellBorderStyleReader.Read(stylesXml, workbookTheme, loadedIndexedColors),
+                PivotTableStyles: XlsxPivotTableStyleMetadataReader.Load(stylesXml),
+                StructuredTableStyles: XlsxStructuredTableStyleMetadataReader.Load(stylesXml),
+                CustomViews: workbookMetadata.CustomViews);
+        });
         var indexedColors = styleMetadata.IndexedColors;
+        var cellBorderStyles = styleMetadata.CellBorderStyles;
         var pivotTableStyleMetadata = styleMetadata.PivotTableStyles;
         var structuredTableStyleMetadata = styleMetadata.StructuredTableStyles;
         var xlsxCustomViews = styleMetadata.CustomViews;
@@ -189,7 +195,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheetXmlLayout,
             sheetXmlLayoutHadWarnings,
             xlWorkbook.Worksheets.Count);
-        var workbook = new Workbook("Untitled");
+        var workbook = new Workbook("Untitled", XlsxClosedXmlCellMapper.MapStyle(xlWorkbook.Style, workbookTheme));
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
         workbook.Properties = workbookMetadata.WorkbookProperties;
@@ -242,11 +248,15 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var loadedScenarioNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var customViewStatesById = new Dictionary<string, List<WorksheetCustomViewState>>(StringComparer.OrdinalIgnoreCase);
         var explicitStyleOnlyStyleIdsByXlsxStyleIndex = new Dictionary<int, StyleId?>();
+        var styleIdsByNativeBorderStyleIndex = new Dictionary<int, StyleId?>();
         var styleIdsByXlsxStyleValue = new Dictionary<object, StyleId?>();
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
             var sheet = workbook.AddSheet(xlSheet.Name);
             sheetXmlLayout.TryGetValue(xlSheet.Name, out var xmlLayout);
+            var populatedCellStyleIndexes = cellBorderStyles.HasVisibleBorders
+                ? BuildCellStyleIndexLookup(xmlLayout?.ExplicitPopulatedCellStyles)
+                : null;
             if (xmlLayout is { PopulatedCellCount: > 0 } layoutWithCells)
                 sheet.EnsureCellCapacity(layoutWithCells.PopulatedCellCount);
             if (xmlLayout is { ExplicitStyleOnlyCells.Count: > 0 } layoutWithStyleOnlyCells)
@@ -280,8 +290,21 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     cell = Cell.FromValue(XlsxClosedXmlCellMapper.MapValue(xlCell));
                 }
 
-                if (GetRegisteredStyleId(xlCell, workbook, workbook.Theme, styleIdsByXlsxStyleValue) is { } styleId)
+                int? xlsxStyleIndex = populatedCellStyleIndexes is not null &&
+                    populatedCellStyleIndexes.TryGetValue((addr.Row, addr.Col), out var parsedStyleIndex)
+                        ? parsedStyleIndex
+                        : null;
+                if (GetRegisteredStyleId(
+                        xlCell,
+                        workbook,
+                        workbook.Theme,
+                        styleIdsByXlsxStyleValue,
+                        cellBorderStyles,
+                        xlsxStyleIndex,
+                        styleIdsByNativeBorderStyleIndex) is { } styleId)
+                {
                     cell.StyleId = styleId;
+                }
 
                 if (cell.Value is BlankValue && !cell.HasFormula)
                 {
@@ -303,7 +326,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 if (!explicitStyleOnlyStyleIdsByXlsxStyleIndex.TryGetValue(styleIndex, out var styleId))
                 {
                     var xlCell = xlSheet.Cell((int)row, (int)col);
-                    var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
+                    var style = MapStyleWithNativeBorders(xlCell.Style, workbook.Theme, cellBorderStyles, styleIndex);
                     styleId = style.Equals(CellStyle.Default)
                         ? null
                         : workbook.RegisterStyle(style);
@@ -585,6 +608,19 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         runs.Add(new StyleOnlyRun(row, col, col, styleId));
     }
 
+    private static Dictionary<(uint Row, uint Col), int>? BuildCellStyleIndexLookup(
+        IReadOnlyList<(uint Row, uint Col, int StyleIndex)>? styles)
+    {
+        if (styles is not { Count: > 0 })
+            return null;
+
+        var lookup = new Dictionary<(uint Row, uint Col), int>(styles.Count);
+        foreach (var (row, col, styleIndex) in styles)
+            lookup[(row, col)] = styleIndex;
+
+        return lookup;
+    }
+
     private static IReadOnlySet<string>? GetClosedXmlStyleOnlyWorksheetPathsToStrip(
         IReadOnlyDictionary<string, SheetXmlLayout> sheetXmlLayout,
         bool sheetXmlLayoutHadWarnings)
@@ -700,8 +736,25 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         IXLCell xlCell,
         Workbook workbook,
         WorkbookTheme theme,
-        Dictionary<object, StyleId?> styleIdsByStyleValue)
+        Dictionary<object, StyleId?> styleIdsByStyleValue,
+        XlsxCellBorderStyleTable cellBorderStyles,
+        int? xlsxStyleIndex,
+        Dictionary<int, StyleId?> styleIdsByNativeBorderStyleIndex)
     {
+        if (xlsxStyleIndex is { } styleIndex &&
+            cellBorderStyles.TryGetVisibleBorders(styleIndex, out _))
+        {
+            if (styleIdsByNativeBorderStyleIndex.TryGetValue(styleIndex, out var cachedNativeStyleId))
+                return cachedNativeStyleId;
+
+            var nativeStyle = MapStyleWithNativeBorders(xlCell.Style, theme, cellBorderStyles, styleIndex);
+            StyleId? nativeStyleId = nativeStyle.Equals(CellStyle.Default)
+                ? null
+                : workbook.RegisterStyle(nativeStyle);
+            styleIdsByNativeBorderStyleIndex[styleIndex] = nativeStyleId;
+            return nativeStyleId;
+        }
+
         var styleValue = XlCellStyleValueAccessor is not null
             ? XlCellStyleValueAccessor(xlCell)
             : null;
@@ -715,6 +768,22 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         if (styleValue is not null)
             styleIdsByStyleValue[styleValue] = styleId;
         return styleId;
+    }
+
+    private static CellStyle MapStyleWithNativeBorders(
+        IXLStyle xlStyle,
+        WorkbookTheme theme,
+        XlsxCellBorderStyleTable cellBorderStyles,
+        int? xlsxStyleIndex)
+    {
+        var style = XlsxClosedXmlCellMapper.MapStyle(xlStyle, theme);
+        if (xlsxStyleIndex is { } styleIndex &&
+            cellBorderStyles.TryGetVisibleBorders(styleIndex, out var nativeBorders))
+        {
+            nativeBorders.ApplyTo(style);
+        }
+
+        return style;
     }
 
     private static Func<IXLCell, object?>? CreateXlCellStyleValueAccessor()

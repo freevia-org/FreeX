@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using FreeX.Core.Calc;
+using FreeX.Core.Formula;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.Core.Calc;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Calc.Tests;
