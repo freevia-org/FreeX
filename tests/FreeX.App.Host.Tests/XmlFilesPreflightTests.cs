@@ -32,47 +32,31 @@ public sealed class XmlFilesPreflightTests
     [Fact]
     public void XmlFilesPreflight_FailsWhenSolutionXmlIsMalformed()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-xml-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(Path.Combine(tempDirectory, "broken.slnx"), "<Solution><Folder></Solution>");
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
+        File.WriteAllText(Path.Combine(temp.Path, "broken.slnx"), "<Solution><Folder></Solution>");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-XmlRoots \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-XmlRoots \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("XML validation failed");
-            (result.Output + result.Error).Should().Contain("broken.slnx");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("XML validation failed");
+        (result.Output + result.Error).Should().Contain("broken.slnx");
     }
 
     [Fact]
     public void XmlFilesPreflight_FailsWhenXmlIsMalformed()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-xml-preflight-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            File.WriteAllText(Path.Combine(tempDirectory, "broken.xaml"), "<Window><Grid></Window>");
-            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
+        File.WriteAllText(Path.Combine(temp.Path, "broken.xaml"), "<Window><Grid></Window>");
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
 
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-XmlRoots \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-XmlRoots \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("XML validation failed");
-            (result.Output + result.Error).Should().Contain("broken.xaml");
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("XML validation failed");
+        (result.Output + result.Error).Should().Contain("broken.xaml");
     }
 
 }
