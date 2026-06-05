@@ -88,6 +88,49 @@ internal static class LocalizedXamlTestSupport
         string? requiredSubstring = null) =>
         xaml.ExtractElementByInvariantCommandName("Button", commandName, requiredSubstring);
 
+    public static string ExtractElementByAttributeValue(
+        this string xaml,
+        string elementName,
+        string attributeName,
+        string expectedValue,
+        string? requiredSubstring = null)
+    {
+        var escapedValue = EscapeAttribute(WebUtility.HtmlDecode(expectedValue));
+        var needle = $"{attributeName}=\"{escapedValue}\"";
+        var searchIndex = 0;
+
+        while (true)
+        {
+            var attributeIndex = xaml.IndexOf(needle, searchIndex, StringComparison.Ordinal);
+            attributeIndex.Should().BeGreaterThanOrEqualTo(
+                0,
+                $"the {expectedValue} {elementName} should be present with {attributeName}");
+
+            var start = xaml.LastIndexOf($"<{elementName}", attributeIndex, StringComparison.Ordinal);
+            if (start >= 0)
+            {
+                var startTagEnd = xaml.IndexOf(">", start, StringComparison.Ordinal);
+                if (startTagEnd > attributeIndex)
+                {
+                    var element = ExtractElement(xaml, elementName, start, startTagEnd);
+                    if (requiredSubstring is null || element.Contains(requiredSubstring, StringComparison.Ordinal))
+                        return element;
+                }
+            }
+
+            searchIndex = attributeIndex + needle.Length;
+        }
+    }
+
+    public static string ExtractElementByName(this string xaml, string elementName, string name) =>
+        xaml.ExtractElementByAttributeValue(elementName, "x:Name", name);
+
+    public static string ExtractButtonElementByClickHandler(this string xaml, string clickHandler) =>
+        xaml.ExtractElementByAttributeValue("Button", "Click", clickHandler);
+
+    public static string ExtractMenuItemElementByClickHandler(this string xaml, string clickHandler) =>
+        xaml.ExtractElementByAttributeValue("MenuItem", "Click", clickHandler);
+
     public static string ExtractElementByLocalizedAttributeValue(
         this string xaml,
         string elementName,
