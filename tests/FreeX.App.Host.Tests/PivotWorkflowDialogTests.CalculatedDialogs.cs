@@ -90,8 +90,8 @@ public sealed partial class PivotWorkflowDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new PivotCalculatedFieldDialog(formula: "Sales+", fieldNames: ["Region"]);
-            var fieldList = GetPrivateField<ListBox>(dialog, "_fieldList");
-            var formulaBox = GetPrivateField<TextBox>(dialog, "_formulaBox");
+            var fieldList = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_fieldList");
+            var formulaBox = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_formulaBox");
 
             fieldList.SelectedItem = "Region";
             formulaBox.SelectionStart = formulaBox.Text.Length;
@@ -183,8 +183,8 @@ public sealed partial class PivotWorkflowDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new PivotCalculatedItemDialog(["Region", "Product"], formula: "East+");
-            var fieldList = GetPrivateField<ListBox>(dialog, "_fieldList");
-            var formulaBox = GetPrivateField<TextBox>(dialog, "_formulaBox");
+            var fieldList = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_fieldList");
+            var formulaBox = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_formulaBox");
 
             fieldList.SelectedIndex = 1;
             formulaBox.SelectionStart = formulaBox.Text.Length;
@@ -213,8 +213,8 @@ public sealed partial class PivotWorkflowDialogTests
                 {
                     [0] = ["East", "West"]
                 });
-            var itemList = GetPrivateField<ListBox>(dialog, "_itemList");
-            var formulaBox = GetPrivateField<TextBox>(dialog, "_formulaBox");
+            var itemList = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_itemList");
+            var formulaBox = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_formulaBox");
 
             itemList.SelectedIndex = 1;
             formulaBox.SelectionStart = formulaBox.Text.Length;
