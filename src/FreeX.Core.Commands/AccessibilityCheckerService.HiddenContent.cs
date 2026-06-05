@@ -55,6 +55,12 @@ public static partial class AccessibilityCheckerService
             MarkHiddenContentRange(sheet, pivot.TargetRange, ref hasContent, ref hiddenRows, ref hiddenCols);
         }
 
+        foreach (var chart in sheet.Charts)
+        {
+            if (chart.IsVisible)
+                MarkHiddenContentRange(sheet, chart.DataRange, ref hasContent, ref hiddenRows, ref hiddenCols);
+        }
+
         foreach (var sparkline in sheet.Sparklines)
         {
             MarkHiddenContentAddress(sheet, sparkline.Location, ref hasContent, ref hiddenRows, ref hiddenCols);
