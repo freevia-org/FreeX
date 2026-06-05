@@ -400,6 +400,14 @@ public static partial class FlashFillService
         return source => TryGetMiddleDottedToken(source, out var token) ? token : null;
     }
 
+    private static Func<string, string?>? TryExtractFirstDottedToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFirstDottedToken(e.Source, out var token) && token == e.Expected))
+            return null;
+
+        return source => TryGetFirstDottedToken(source, out var token) ? token : null;
+    }
+
     private static Func<string, string?>? TryRemoveFinalDelimitedToken(IReadOnlyList<(string Source, string Expected)> examples)
     {
         foreach (var delimiter in FinalDelimitedTokenDelimiters)
@@ -504,6 +512,31 @@ public static partial class FlashFillService
             return false;
 
         token = middle;
+        return true;
+    }
+
+    private static bool TryGetFirstDottedToken(string source, out string token)
+    {
+        token = string.Empty;
+        var trimmed = source.Trim();
+        var firstDotIndex = trimmed.IndexOf('.');
+        if (firstDotIndex <= 0)
+            return false;
+
+        var secondDotIndex = trimmed.IndexOf('.', firstDotIndex + 1);
+        if (secondDotIndex < 0 || secondDotIndex == trimmed.Length - 1)
+            return false;
+
+        if (trimmed.IndexOf('.', secondDotIndex + 1) >= 0)
+            return false;
+
+        var first = trimmed[..firstDotIndex].Trim();
+        var middle = trimmed[(firstDotIndex + 1)..secondDotIndex].Trim();
+        var last = trimmed[(secondDotIndex + 1)..].Trim();
+        if (first.Length == 0 || middle.Length == 0 || last.Length == 0)
+            return false;
+
+        token = first;
         return true;
     }
 
