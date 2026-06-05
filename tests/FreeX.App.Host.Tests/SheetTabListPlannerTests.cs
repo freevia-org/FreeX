@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO;
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.Core.Model;
@@ -11,7 +10,7 @@ public sealed class SheetTabListPlannerTests
     [Fact]
     public void Build_AvoidsLinqMaterializationOnSheetTabRefreshPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SheetTabListPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SheetTabListPlanner.cs");
         var buildStart = source.IndexOf("public static SheetTabListPlan Build(", StringComparison.Ordinal);
         var groupedStart = source.IndexOf("public static bool IsWorkbookGrouped(", StringComparison.Ordinal);
         var buildSource = source[buildStart..groupedStart];
