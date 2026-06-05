@@ -375,6 +375,7 @@ public static partial class FlashFillService
             ?? TryUrlLastRepeatedQueryParameterValue(examples)
             ?? TryUrlQueryParameterValueTitle(examples)
             ?? TryUrlQueryParameterNameTitle(examples)
+            ?? TryUrlLastQueryParameterNameTitle(examples)
             ?? TryUrlFragmentValue(examples)
             ?? TryUrlFragmentValueTitle(examples);
     }
@@ -544,6 +545,21 @@ public static partial class FlashFillService
         }
 
         return source => TryGetFirstTitleizableQueryParameterName(source, out var name) &&
+                         TryFormatSlugStemAsTitle(name, out var title)
+            ? title
+            : null;
+    }
+
+    private static Func<string, string?>? TryUrlLastQueryParameterNameTitle(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => e.Expected.Length > 0 &&
+                               TryGetSingleLastTitleizedQueryParameterName(e.Source, e.Expected, out _)))
+        {
+            return null;
+        }
+
+        return source => TryGetLastTitleizableQueryParameterName(source, out var name) &&
                          TryFormatSlugStemAsTitle(name, out var title)
             ? title
             : null;
@@ -1118,12 +1134,63 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static bool TryGetSingleLastTitleizedQueryParameterName(
+        string source,
+        string expected,
+        out string parameterName)
+    {
+        parameterName = string.Empty;
+        if (!TryGetDecodedQueryParameterNameSlots(source, out var names))
+            return false;
+
+        var lastName = names[^1];
+        if (!TryFormatSlugStemAsTitle(lastName, out var lastTitle) ||
+            lastTitle != expected)
+        {
+            return false;
+        }
+
+        foreach (var name in names.Distinct(StringComparer.Ordinal))
+        {
+            if (name == lastName)
+                continue;
+
+            if (!TryFormatSlugStemAsTitle(name, out var title))
+                continue;
+
+            if (title != expected)
+                continue;
+
+            parameterName = string.Empty;
+            return false;
+        }
+
+        parameterName = lastName;
+        return true;
+    }
+
     private static bool TryGetFirstTitleizableQueryParameterName(string source, out string parameterName)
     {
         parameterName = string.Empty;
         if (!TryGetFirstDecodedQueryParameterName(source, out var name))
             return false;
 
+        if (TryFormatSlugStemAsTitle(name, out _))
+        {
+            parameterName = name;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetLastTitleizableQueryParameterName(string source, out string parameterName)
+    {
+        parameterName = string.Empty;
+        if (!TryGetDecodedQueryParameterNameSlots(source, out var names))
+            return false;
+
+        var name = names[^1];
         if (TryFormatSlugStemAsTitle(name, out _))
         {
             parameterName = name;
@@ -1308,6 +1375,40 @@ public static partial class FlashFillService
         }
 
         return found;
+    }
+
+    private static bool TryGetDecodedQueryParameterNameSlots(
+        string source,
+        out List<string> names)
+    {
+        names = [];
+        if (!TryCreateHttpWebUri(source, out _) ||
+            !TryGetRawUrlQuery(source, out var query))
+        {
+            return false;
+        }
+
+        foreach (var segment in query.Split(['&', ';'], StringSplitOptions.None))
+        {
+            if (segment.Length == 0)
+                return false;
+
+            var equalsIndex = segment.IndexOf('=');
+            var rawName = equalsIndex < 0
+                ? segment
+                : segment[..equalsIndex];
+            if (rawName.Length == 0 ||
+                !TryDecodeQueryComponent(rawName, out var decodedName) ||
+                string.IsNullOrWhiteSpace(decodedName))
+            {
+                names = [];
+                return false;
+            }
+
+            names.Add(decodedName);
+        }
+
+        return names.Count > 0;
     }
 
     private static bool TryGetRawUrlQuery(string source, out string query)

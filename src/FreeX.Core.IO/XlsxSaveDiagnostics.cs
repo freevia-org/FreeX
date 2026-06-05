@@ -15,7 +15,8 @@ internal sealed record XlsxSaveDiagnostics(
     int DimensionChangeCount = 0,
     int MergeRegionChangeCount = 0,
     int HyperlinkChangeCount = 0,
-    int CommentChangeCount = 0)
+    int CommentChangeCount = 0,
+    int WorksheetViewChangeCount = 0)
 {
     public static XlsxSaveDiagnostics NotRun { get; } = new(XlsxSavePath.NotRun, "not_run");
 
@@ -24,7 +25,8 @@ internal sealed record XlsxSaveDiagnostics(
         DimensionChangeCount +
         MergeRegionChangeCount +
         HyperlinkChangeCount +
-        CommentChangeCount;
+        CommentChangeCount +
+        WorksheetViewChangeCount;
 
     public string PathLabel => Path switch
     {
@@ -43,7 +45,8 @@ internal sealed record XlsxSaveDiagnostics(
         int dimensionChangeCount,
         int mergeRegionChangeCount,
         int hyperlinkChangeCount,
-        int commentChangeCount) =>
+        int commentChangeCount,
+        int worksheetViewChangeCount = 0) =>
         new(
             XlsxSavePath.SourcePatch,
             reason,
@@ -51,7 +54,8 @@ internal sealed record XlsxSaveDiagnostics(
             dimensionChangeCount,
             mergeRegionChangeCount,
             hyperlinkChangeCount,
-            commentChangeCount);
+            commentChangeCount,
+            worksheetViewChangeCount);
 
     public static XlsxSaveDiagnostics FullSave(string reason) =>
         new(XlsxSavePath.FullSave, reason);
