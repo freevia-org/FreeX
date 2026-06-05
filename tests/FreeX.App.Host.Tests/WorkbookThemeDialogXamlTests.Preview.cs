@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -9,7 +8,7 @@ public sealed partial class WorkbookThemeDialogXamlTests
     public void Dialog_ExposesExcelLikeThemePreviewPane()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("WorkbookThemeDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookThemeDialog.xaml.cs");
 
         xaml.Should().Contain("x:Name=\"ThemePreviewPane\"");
         xaml.Should().Contain("x:Name=\"PreviewHeadingText\"");
@@ -30,7 +29,7 @@ public sealed partial class WorkbookThemeDialogXamlTests
     [Fact]
     public void DialogThemeFieldMap_CoversEveryThemeColorSlot()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.ThemeFields.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookThemeDialog.ThemeFields.cs");
 
         source.Should().Contain("WorkbookThemeColorSlot.Dark1");
         source.Should().Contain("WorkbookThemeColorSlot.Light1");
