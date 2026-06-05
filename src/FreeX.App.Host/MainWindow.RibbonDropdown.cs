@@ -17,7 +17,8 @@ public partial class MainWindow
     private const string RibbonDropdownContentPartName = "PART_RibbonDropdownContent";
     private const double RibbonSplitButtonIconColumnWidth = 24;
     private const double RibbonSplitButtonDropdownColumnWidth = 14;
-    private const double RibbonSplitButtonFallbackDropdownZoneWidth = RibbonSplitButtonDropdownColumnWidth;
+    private const double RibbonSplitButtonLabeledDropdownColumnWidth = 18;
+    private const double RibbonSplitButtonFallbackDropdownZoneWidth = RibbonSplitButtonLabeledDropdownColumnWidth;
     private const double RibbonSplitButtonIconOnlyContentWidth =
         RibbonSplitButtonIconColumnWidth + RibbonSplitButtonDropdownColumnWidth;
 
@@ -51,10 +52,10 @@ public partial class MainWindow
         switch (contentRoot)
         {
             case Grid grid:
-                AddRibbonDropdownChevronToGrid(grid, layout);
+                AddRibbonDropdownChevronToGrid(button, grid, layout);
                 break;
             case StackPanel stack:
-                AddRibbonDropdownChevronToStack(stack, layout);
+                AddRibbonDropdownChevronToStack(button, stack, layout);
                 break;
             case Panel panel:
                 panel.Children.Add(CreateRibbonDropdownChevron(layout));
@@ -116,7 +117,7 @@ public partial class MainWindow
             .Distinct()
             .Any(RibbonMetadata.IsDropdownChevron);
 
-    private static void AddRibbonDropdownChevronToGrid(Grid grid, RibbonCommandContentLayout layout)
+    private static void AddRibbonDropdownChevronToGrid(ButtonBase button, Grid grid, RibbonCommandContentLayout layout)
     {
         var chevron = CreateRibbonDropdownChevron(layout);
         if (layout == RibbonCommandContentLayout.IconOnly ||
@@ -126,7 +127,11 @@ public partial class MainWindow
             return;
         }
 
-        var column = new ColumnDefinition { Width = new GridLength(RibbonSplitButtonDropdownColumnWidth) };
+        EnsureRibbonDropdownContentUsesButtonWidth(button, grid);
+        if (layout == RibbonCommandContentLayout.Small)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var column = new ColumnDefinition { Width = new GridLength(GetRibbonSplitButtonDropdownColumnWidth(layout)) };
         grid.ColumnDefinitions.Add(column);
         Grid.SetColumn(chevron, grid.ColumnDefinitions.Count - 1);
         grid.Children.Add(chevron);
@@ -155,7 +160,7 @@ public partial class MainWindow
         grid.Children.Add(chevron);
     }
 
-    private static void AddRibbonDropdownChevronToStack(StackPanel stack, RibbonCommandContentLayout layout)
+    private static void AddRibbonDropdownChevronToStack(ButtonBase button, StackPanel stack, RibbonCommandContentLayout layout)
     {
         var chevron = CreateRibbonDropdownChevron(layout);
         if (layout is RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium)
@@ -163,9 +168,69 @@ public partial class MainWindow
             chevron.Margin = stack.Orientation == Orientation.Horizontal
                 ? new Thickness(4, 0, 0, 0)
                 : new Thickness(0, 0, 0, 0);
+
+            stack.Children.Add(chevron);
+            return;
+        }
+
+        if (stack.Orientation == Orientation.Horizontal &&
+            button is ContentControl contentControl &&
+            ReferenceEquals(contentControl.Content, stack))
+        {
+            var effectiveLayout = layout == RibbonCommandContentLayout.None ? RibbonCommandContentLayout.Small : layout;
+            var wrapper = new Grid
+            {
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                SnapsToDevicePixels = true,
+                UseLayoutRounding = true
+            };
+            RibbonMetadata.SetCommandContentLayout(wrapper, effectiveLayout);
+            EnsureRibbonDropdownContentUsesButtonWidth(button, wrapper);
+            wrapper.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            wrapper.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            wrapper.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetRibbonSplitButtonDropdownColumnWidth(effectiveLayout)) });
+
+            contentControl.Content = null;
+            Grid.SetColumn(stack, 0);
+            wrapper.Children.Add(stack);
+            Grid.SetColumn(chevron, 2);
+            wrapper.Children.Add(chevron);
+            contentControl.Content = wrapper;
+            return;
         }
 
         stack.Children.Add(chevron);
+    }
+
+    private static double GetRibbonSplitButtonDropdownColumnWidth(RibbonCommandContentLayout layout) =>
+        layout == RibbonCommandContentLayout.IconOnly
+            ? RibbonSplitButtonDropdownColumnWidth
+            : RibbonSplitButtonLabeledDropdownColumnWidth;
+
+    private static void EnsureRibbonDropdownContentUsesButtonWidth(ButtonBase button, FrameworkElement content)
+    {
+        if (button is not FrameworkElement buttonElement)
+            return;
+
+        var buttonWidth = buttonElement.Width is > 0
+            ? buttonElement.Width
+            : buttonElement.ActualWidth;
+        if (buttonWidth <= 0 || double.IsNaN(buttonWidth) || double.IsInfinity(buttonWidth))
+            return;
+
+        var horizontalInset = 0.0;
+        if (button is Control control)
+        {
+            horizontalInset =
+                control.Padding.Left +
+                control.Padding.Right +
+                control.BorderThickness.Left +
+                control.BorderThickness.Right;
+        }
+
+        content.Width = Math.Max(content.Width is > 0 ? content.Width : 0, Math.Max(0, buttonWidth - horizontalInset));
+        content.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
     }
 
     private static FrameworkElement CreateRibbonDropdownChevron(RibbonCommandContentLayout layout)
@@ -431,9 +496,9 @@ public partial class MainWindow
 
         var layout = GetRibbonDropdownZoneLayout(button);
         if (layout is not (RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium) &&
-            TryGetRibbonDropdownChevronBounds(button, out var chevronBounds))
+            TryGetRibbonDropdownChevronBounds(button, out _))
         {
-            bounds = GetRibbonChevronDropdownZoneBounds(chevronBounds, width, height);
+            bounds = GetRibbonTrailingDropdownZoneBounds(width, height, GetRibbonSplitButtonDropdownColumnWidth(layout));
             return bounds is { Width: > 0, Height: > 0 };
         }
 
@@ -480,17 +545,12 @@ public partial class MainWindow
         return new Rect(zoneLeft, 0, Math.Max(0, width - zoneLeft), height);
     }
 
-    private static Rect GetRibbonChevronDropdownZoneBounds(Rect chevronBounds, double buttonWidth, double buttonHeight)
-    {
-        var zoneWidth = Math.Min(RibbonSplitButtonDropdownColumnWidth, buttonWidth);
-        var center = chevronBounds.Left + chevronBounds.Width / 2;
-        var zoneLeft = Math.Clamp(Math.Round(center - zoneWidth / 2), 0, Math.Max(0, buttonWidth - zoneWidth));
-        return new Rect(zoneLeft, 0, zoneWidth, buttonHeight);
-    }
+    private static Rect GetRibbonTrailingDropdownZoneBounds(double buttonWidth, double buttonHeight) =>
+        GetRibbonTrailingDropdownZoneBounds(buttonWidth, buttonHeight, RibbonSplitButtonFallbackDropdownZoneWidth);
 
-    private static Rect GetRibbonTrailingDropdownZoneBounds(double buttonWidth, double buttonHeight)
+    private static Rect GetRibbonTrailingDropdownZoneBounds(double buttonWidth, double buttonHeight, double preferredZoneWidth)
     {
-        var zoneWidth = Math.Min(RibbonSplitButtonFallbackDropdownZoneWidth, buttonWidth);
+        var zoneWidth = Math.Min(preferredZoneWidth, buttonWidth);
         return new Rect(Math.Max(0, buttonWidth - zoneWidth), 0, zoneWidth, buttonHeight);
     }
 
