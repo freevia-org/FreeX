@@ -818,6 +818,39 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversHealthcareClinicalVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "PATINT patints Symptms clinicly treatmnt diagnosys medicaton prescriptn vaccinaton laborotory. Keep patint_id, https://patint.example.com/symptms, clinical@medicaton.example.com, \"C:\\diagnosys folder\\prescriptn file.xlsx\", and [C:\\vaccinaton folder\\laborotory file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("PATINT", "PATIENT"),
+            ("patints", "patients"),
+            ("Symptms", "Symptoms"),
+            ("clinicly", "clinically"),
+            ("treatmnt", "treatment"),
+            ("diagnosys", "diagnosis"),
+            ("medicaton", "medication"),
+            ("prescriptn", "prescription"),
+            ("vaccinaton", "vaccination"),
+            ("laborotory", "laboratory"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "PATIENT patients Symptoms clinically treatment diagnosis medication prescription vaccination laboratory. Keep patint_id, https://patint.example.com/symptms, clinical@medicaton.example.com, \"C:\\diagnosys folder\\prescriptn file.xlsx\", and [C:\\vaccinaton folder\\laborotory file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
