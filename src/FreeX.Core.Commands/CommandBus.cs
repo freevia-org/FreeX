@@ -5,7 +5,7 @@ namespace FreeX.Core.Commands;
 /// <summary>
 /// In-memory implementation of the command bus with undo/redo stacks.
 /// </summary>
-public sealed class CommandBus : ICommandBus
+public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier
 {
     private const int MaxUndoDepth = 100;
     private const int MaxUndoByteBudget = 52_428_800; // 50 MB
@@ -24,6 +24,8 @@ public sealed class CommandBus : ICommandBus
         _beforeMutation = beforeMutation;
     }
 
+    public event EventHandler<CommandStackChangedEventArgs>? StackChanged;
+
     public CommandOutcome Execute(WorkbookId workbookId, IWorkbookCommand command)
     {
         var ctx = _contextFactory(workbookId);
@@ -34,6 +36,7 @@ public sealed class CommandBus : ICommandBus
         {
             var stack = GetOrCreateStack(workbookId);
             stack.Push(command, EstimateBytes(command));
+            NotifyStackChanged(workbookId);
         }
 
         return outcome;
@@ -69,6 +72,7 @@ public sealed class CommandBus : ICommandBus
             return new CommandOutcome(false, $"Undo failed: {ex.Message}");
         }
 
+        NotifyStackChanged(workbookId);
         return new CommandOutcome(true, AffectedCells: GetAffectedCells(command));
     }
 
@@ -98,6 +102,9 @@ public sealed class CommandBus : ICommandBus
         else
             stack.PushRedo(entry); // restore so the user can retry
 
+        if (outcome.Success)
+            NotifyStackChanged(workbookId);
+
         return outcome with { AffectedCells = outcome.AffectedCells ?? GetAffectedCells(command) };
     }
 
@@ -120,6 +127,16 @@ public sealed class CommandBus : ICommandBus
 
     private void RunBeforeMutation(WorkbookId workbookId, ICommandContext context) =>
         _beforeMutation?.Invoke(workbookId, context);
+
+    private void NotifyStackChanged(WorkbookId workbookId)
+    {
+        StackChanged?.Invoke(
+            this,
+            new CommandStackChangedEventArgs(
+                workbookId,
+                CanUndo(workbookId),
+                CanRedo(workbookId)));
+    }
 
     private CommandStack GetOrCreateStack(WorkbookId id)
     {

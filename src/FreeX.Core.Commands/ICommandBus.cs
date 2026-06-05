@@ -33,6 +33,27 @@ public interface ICommandBus
     bool CanRepeat(WorkbookId workbookId);
 }
 
+public interface ICommandStackChangeNotifier
+{
+    event EventHandler<CommandStackChangedEventArgs>? StackChanged;
+}
+
+public sealed class CommandStackChangedEventArgs : EventArgs
+{
+    public CommandStackChangedEventArgs(WorkbookId workbookId, bool canUndo, bool canRedo)
+    {
+        WorkbookId = workbookId;
+        CanUndo = canUndo;
+        CanRedo = canRedo;
+    }
+
+    public WorkbookId WorkbookId { get; }
+
+    public bool CanUndo { get; }
+
+    public bool CanRedo { get; }
+}
+
 /// <summary>A command that can be applied and reverted on a workbook.</summary>
 public interface IWorkbookCommand
 {

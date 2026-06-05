@@ -18,6 +18,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
+        private readonly ICommandBus _commandBus;
         private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _formulaEditCellField;
@@ -36,9 +37,10 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _formulaBarExpandButtonClick;
         private readonly MethodInfo _editActiveCellInFormulaBar;
 
-        private MainWindowHarness(MainWindow window)
+        private MainWindowHarness(MainWindow window, ICommandBus commandBus)
         {
             _window = window;
+            _commandBus = commandBus;
             _workbookField = typeof(MainWindow)
                 .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
@@ -119,6 +121,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public int FormulaBarCaretIndex => ((TextBox)_window.FindName("FormulaBar")).CaretIndex;
 
         public double FormulaBarHeight => ((TextBox)_window.FindName("FormulaBar")).Height;
+
+        public bool UndoQatEnabled => ((Button)_window.FindName("UndoQatBtn")).IsEnabled;
 
         public string FormulaBarExpandButtonAutomationName =>
             System.Windows.Automation.AutomationProperties.GetName((Button)_window.FindName("FormulaBarExpandBtn"));
@@ -323,6 +327,12 @@ public sealed partial class MainWindowFormulaBarSyncTests
             PumpDispatcher();
         }
 
+        public void ExecuteCommandDirectly(IWorkbookCommand command)
+        {
+            _commandBus.Execute(Workbook.Id, command).Success.Should().BeTrue();
+            PumpDispatcher();
+        }
+
         public static MainWindowHarness Create()
         {
             var workbook = new Workbook("Book1");
@@ -330,10 +340,11 @@ public sealed partial class MainWindowFormulaBarSyncTests
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbookRef.Current));
             var window = new MainWindow(
                 NullLogger<MainWindow>.Instance,
                 new ViewportService(),
-                new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
+                commandBus,
                 new RecalcEngine(graph, evaluator),
                 [],
                 workbookRef,
@@ -349,7 +360,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             window.Activate();
             window.UpdateLayout();
             PumpDispatcher();
-            return new MainWindowHarness(window);
+            return new MainWindowHarness(window, commandBus);
         }
 
         private Workbook Workbook =>

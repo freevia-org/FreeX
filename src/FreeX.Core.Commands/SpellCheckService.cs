@@ -1045,6 +1045,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "grantt"))
+                {
+                    suggestion = "grant";
+                    return true;
+                }
+
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "filtre"))
                 {
                     suggestion = "filter";
@@ -1611,6 +1617,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "donaton"))
+                {
+                    suggestion = "donation";
+                    return true;
+                }
+
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "donorrr"))
+                {
+                    suggestion = "donor";
+                    return true;
+                }
+
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "campain"))
                 {
                     suggestion = "campaign";
@@ -1740,6 +1758,12 @@ public static partial class SpellCheckService
                 if (first == 'm' && EqualAsciiWordIgnoreCase(word, "maturty"))
                 {
                     suggestion = "maturity";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "municipl"))
+                {
+                    suggestion = "municipal";
                     return true;
                 }
 
@@ -2285,6 +2309,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "compliace"))
+                {
+                    suggestion = "compliance";
+                    return true;
+                }
+
                 if (first == 'e' && EqualAsciiWordIgnoreCase(word, "excelent"))
                 {
                     suggestion = "excellent";
@@ -2618,6 +2648,12 @@ public static partial class SpellCheckService
                 if (first == 'v' && EqualAsciiWordIgnoreCase(word, "varience"))
                 {
                     suggestion = "variance";
+                    return true;
+                }
+
+                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "volunter"))
+                {
+                    suggestion = "volunteer";
                     return true;
                 }
 
@@ -3345,6 +3381,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fundraisin"))
+                {
+                    suggestion = "fundraising";
+                    return true;
+                }
+
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fulfillmnt"))
                 {
                     suggestion = "fulfillment";
@@ -3629,6 +3671,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "constituant"))
+                {
+                    suggestion = "constituent";
+                    return true;
+                }
+
                 if (first == 'd' && EqualAsciiWordIgnoreCase(word, "depreciaton"))
                 {
                     suggestion = "depreciation";
@@ -3877,6 +3925,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sponsorshipp"))
+                {
+                    suggestion = "sponsorship";
+                    return true;
+                }
+
                 break;
             case 13:
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "advertisments"))
@@ -3900,6 +3954,12 @@ public static partial class SpellCheckService
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "authentcation"))
                 {
                     suggestion = "authentication";
+                    return true;
+                }
+
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "appropreation"))
+                {
+                    suggestion = "appropriation";
                     return true;
                 }
 

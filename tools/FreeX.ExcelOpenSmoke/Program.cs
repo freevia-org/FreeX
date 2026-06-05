@@ -486,6 +486,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetMergeCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetDataValidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageMarginsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageSetupMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -723,6 +724,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetMergeCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetDataValidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageMarginsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageSetupMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -8125,6 +8127,307 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet sort/data-consolidation metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetDataValidationMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetDataValidationMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetDataValidationMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetDataValidationMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var dataValidationsContainers = root.Elements(SpreadsheetNs + "dataValidations").ToArray();
+        if (dataValidationsContainers.Length > 1)
+            issues.Add($"{worksheetPart} has {dataValidationsContainers.Length} dataValidations elements; expected at most one");
+
+        foreach (var dataValidations in dataValidationsContainers.Select((element, index) => new WorksheetDataValidationsReference(index + 1, element)))
+        {
+            AddWorksheetDataValidationsIssues(worksheetPart, root, dataValidations, issues);
+        }
+    }
+
+    private static void AddWorksheetDataValidationsIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetDataValidationsReference dataValidationsReference,
+        List<string> issues)
+    {
+        var dataValidations = dataValidationsReference.Element;
+        var description = $"dataValidations #{dataValidationsReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            dataValidations,
+            description,
+            [
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            dataValidations,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting"
+            ],
+            issues);
+
+        var validations = dataValidations.Elements(SpreadsheetNs + "dataValidation").ToArray();
+        AddOptionalPackageCountIssue(worksheetPart, description, "count", dataValidations.Attribute("count")?.Value, validations.Length, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "disablePrompts", dataValidations.Attribute("disablePrompts")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "xWindow", dataValidations.Attribute("xWindow")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "yWindow", dataValidations.Attribute("yWindow")?.Value, issues);
+
+        foreach (var unexpectedChild in dataValidations.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "dataValidation" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var extensionLists = dataValidations.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+
+        AddWorksheetDataValidationChildOrderingIssues(worksheetPart, description, dataValidations, issues);
+
+        var seenSqrefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dataValidation in validations.Select((element, index) => new WorksheetDataValidationReference(index + 1, element)))
+        {
+            AddWorksheetDataValidationIssues(worksheetPart, description, dataValidation, seenSqrefs, issues);
+        }
+    }
+
+    private static void AddWorksheetDataValidationChildOrderingIssues(
+        string worksheetPart,
+        string containerDescription,
+        XElement dataValidations,
+        List<string> issues)
+    {
+        var children = dataValidations.Elements().ToArray();
+        var firstExtensionListIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex < 0)
+            return;
+
+        if (children
+            .Skip(firstExtensionListIndex + 1)
+            .Any(element => element.Name == SpreadsheetNs + "dataValidation"))
+        {
+            issues.Add($"{worksheetPart} {containerDescription} has dataValidation entries after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetDataValidationIssues(
+        string worksheetPart,
+        string containerDescription,
+        WorksheetDataValidationReference dataValidationReference,
+        HashSet<string> seenSqrefs,
+        List<string> issues)
+    {
+        var dataValidation = dataValidationReference.Element;
+        var description = $"{containerDescription} dataValidation #{dataValidationReference.Ordinal}";
+        var sqref = dataValidation.Attribute("sqref")?.Value;
+        if (string.IsNullOrWhiteSpace(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has no sqref");
+        }
+        else if (!IsValidPackageSqref(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid local sqref '{sqref}'");
+        }
+        else if (!seenSqrefs.Add(NormalizePackageSqref(sqref)))
+        {
+            issues.Add($"{worksheetPart} {containerDescription} has duplicate dataValidation sqref '{sqref}'");
+        }
+
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "type",
+            dataValidation.Attribute("type")?.Value,
+            ["none", "whole", "decimal", "list", "date", "time", "textLength", "custom"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "operator",
+            dataValidation.Attribute("operator")?.Value,
+            ["between", "notBetween", "equal", "notEqual", "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "errorStyle",
+            dataValidation.Attribute("errorStyle")?.Value,
+            ["stop", "warning", "information"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "imeMode",
+            dataValidation.Attribute("imeMode")?.Value,
+            ["noControl", "off", "on", "disabled", "hiragana", "fullKatakana", "halfKatakana", "fullAlpha", "halfAlpha", "fullHangul", "halfHangul"],
+            issues);
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "allowBlank", dataValidation.Attribute("allowBlank")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showDropDown", dataValidation.Attribute("showDropDown")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showInputMessage", dataValidation.Attribute("showInputMessage")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showErrorMessage", dataValidation.Attribute("showErrorMessage")?.Value, issues);
+
+        foreach (var unexpectedChild in dataValidation.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "formula1" &&
+                     element.Name != SpreadsheetNs + "formula2" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var formula1Elements = dataValidation.Elements(SpreadsheetNs + "formula1").ToArray();
+        if (formula1Elements.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {formula1Elements.Length} formula1 elements; expected at most one");
+
+        var formula2Elements = dataValidation.Elements(SpreadsheetNs + "formula2").ToArray();
+        if (formula2Elements.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {formula2Elements.Length} formula2 elements; expected at most one");
+
+        var extensionLists = dataValidation.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        AddWorksheetDataValidationFormulaSlotIssues(worksheetPart, description, dataValidation, issues);
+
+        foreach (var formula1 in formula1Elements.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetDataValidationFormulaIssues(worksheetPart, description, "formula1", formula1.Ordinal, formula1.Element, issues);
+        }
+
+        foreach (var formula2 in formula2Elements.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetDataValidationFormulaIssues(worksheetPart, description, "formula2", formula2.Ordinal, formula2.Element, issues);
+        }
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetDataValidationFormulaSlotIssues(
+        string worksheetPart,
+        string description,
+        XElement dataValidation,
+        List<string> issues)
+    {
+        var children = dataValidation.Elements().ToArray();
+        var firstFormula2Index = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "formula2");
+        if (firstFormula2Index >= 0 &&
+            children
+                .Skip(firstFormula2Index + 1)
+                .Any(element => element.Name == SpreadsheetNs + "formula1"))
+        {
+            issues.Add($"{worksheetPart} {description} has formula1 after formula2; expected formula1 before formula2");
+        }
+
+        var firstExtensionListIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children
+                .Skip(firstExtensionListIndex + 1)
+                .Any(element => element.Name == SpreadsheetNs + "formula1" || element.Name == SpreadsheetNs + "formula2"))
+        {
+            issues.Add($"{worksheetPart} {description} has formula elements after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetDataValidationFormulaIssues(
+        string worksheetPart,
+        string dataValidationDescription,
+        string elementName,
+        int ordinal,
+        XElement formula,
+        List<string> issues)
+    {
+        var description = $"{dataValidationDescription} {elementName} #{ordinal}";
+        if (formula.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+            issues.Add($"{worksheetPart} {description} has attributes; expected formula text only");
+
+        if (formula.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected formula text only");
+    }
+
+    private static void ThrowInvalidWorksheetDataValidationMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet dataValidations metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetPrintOptionsMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -16131,6 +16434,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetDataRefReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetDataValidationsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetDataValidationReference(
         int Ordinal,
         XElement Element);
 
