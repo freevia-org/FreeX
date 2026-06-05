@@ -283,7 +283,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
     [Fact]
     public void SaveValueStreaming_UsesCompactXmlAndSkipsEmptyRowLayoutAllocation()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "SpreadsheetXmlFileAdapter.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "SpreadsheetXmlFileAdapter.cs"));
 
         source.Should().Contain("Indent = false");
         source.Should().Contain("if (sheet.RowHeights.Count == 0 && sheet.HiddenRows.Count == 0)");
@@ -293,7 +293,7 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
     [Fact]
     public void SaveValueStreaming_FormatsNumericHotPathWithoutPerValueStringAllocation()
     {
-        var source = File.ReadAllText(FindRepoFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "SpreadsheetXmlFileAdapter.Write.cs"));

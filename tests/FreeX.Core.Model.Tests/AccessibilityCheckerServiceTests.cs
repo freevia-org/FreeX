@@ -4,9 +4,6 @@ namespace FreeX.Core.Model.Tests;
 
 public sealed partial class AccessibilityCheckerServiceTests
 {
-    private static string FindWorkspaceFile(params string[] parts)
-        => WorkspaceFileLocator.Find(parts);
-
     private static void AddNoBlankContrastRule(
         Sheet sheet,
         CellAddress address,
