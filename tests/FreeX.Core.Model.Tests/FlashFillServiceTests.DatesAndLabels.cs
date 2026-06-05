@@ -544,6 +544,54 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData("Project (Old) (North)", "North", "Task (Archive) (South)", "South", "Case (Draft) (West)", "West")]
+    [InlineData("Project [Old] [North]", "North", "Task [Archive] [South]", "South", "Case [Draft] [West]", "West")]
+    [InlineData("Project {Old} {North}", "North", "Task {Archive} {South}", "South", "Case {Draft} {West}", "West")]
+    [InlineData("Project \"Old\" \"North\"", "North", "Task \"Archive\" \"South\"", "South", "Case \"Draft\" \"West\"", "West")]
+    [InlineData("Project 'Old' 'North'", "North", "Task 'Archive' 'South'", "South", "Case 'Draft' 'West'", "West")]
+    [InlineData("Project <Old> <North>", "North", "Task <Archive> <South>", "South", "Case <Draft> <West>", "West")]
+    public void Fill_PairedDelimiterExtraction_ExtractsLastMatchingQualifierWhenExamplesRequireIt(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PairedDelimiterExtraction_KeepsFirstMatchingQualifierWhenExamplesUseFirstPair()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Project (Old) (North)", "Old"),
+                ("Task (Archive) (South)", "Archive")
+            ],
+            ["Case (Draft) (West)"]);
+
+        result.Should().BeEquivalentTo(["Draft"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PairedDelimiterExtraction_ReturnsNullWhenLastQualifierPatternHasNoNonEmptyPair()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Project (Old) (North)", "North"),
+                ("Task (Archive) (South)", "South")
+            ],
+            ["Case ()"]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_PairedDelimiterExtraction_ReturnsNullWhenRemainingDelimiterIsMissing()
     {
