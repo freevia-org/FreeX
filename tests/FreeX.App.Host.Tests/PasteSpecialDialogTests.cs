@@ -261,8 +261,7 @@ public sealed class PasteSpecialDialogTests
     }
 
     private static string ReadPasteSpecialDialogSources() =>
-        string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PasteSpecialDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PasteSpecialDialog.Controls.cs")));
+        DialogSourceTestSupport.ReadHostSources(
+            "PasteSpecialDialog.cs",
+            "PasteSpecialDialog.Controls.cs");
 }
