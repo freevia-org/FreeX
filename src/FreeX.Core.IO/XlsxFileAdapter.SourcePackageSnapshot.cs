@@ -144,6 +144,7 @@ public sealed partial class XlsxFileAdapter
         string? CellPatchEligibilityBlockReason,
         XlsxCellPatchBaseline? CellPatchBaseline,
         string? CellPatchBaselineBlockReason,
+        XlsxCellPatchBaselineFacts? CellPatchBaselineFacts = null,
         bool IsCellPatchBaselineLazy = false,
         bool IsCellPatchEligibilityLazy = false)
     {
@@ -305,6 +306,7 @@ public sealed partial class XlsxFileAdapter
             IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null)
         {
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
+            var cellPatchBaselineFacts = XlsxCellPatchBaselineFacts.Capture(workbook, sheetXmlLayout);
             if (stream.TryGetBuffer(out var buffer))
             {
                 if (allowBufferReuse &&
@@ -324,6 +326,7 @@ public sealed partial class XlsxFileAdapter
                         CellPatchEligibilityBlockReason: null,
                         CellPatchBaseline: null,
                         CellPatchBaselineBlockReason: null,
+                        CellPatchBaselineFacts: cellPatchBaselineFacts,
                         IsCellPatchBaselineLazy: true,
                         IsCellPatchEligibilityLazy: true);
                 }
@@ -345,6 +348,7 @@ public sealed partial class XlsxFileAdapter
                     CellPatchEligibilityBlockReason: null,
                     CellPatchBaseline: null,
                     CellPatchBaselineBlockReason: null,
+                    CellPatchBaselineFacts: cellPatchBaselineFacts,
                     IsCellPatchBaselineLazy: true,
                     IsCellPatchEligibilityLazy: true);
             }
@@ -361,6 +365,7 @@ public sealed partial class XlsxFileAdapter
                 CellPatchEligibilityBlockReason: null,
                 CellPatchBaseline: null,
                 CellPatchBaselineBlockReason: null,
+                CellPatchBaselineFacts: cellPatchBaselineFacts,
                 IsCellPatchBaselineLazy: true,
                 IsCellPatchEligibilityLazy: true);
         }
@@ -422,11 +427,13 @@ public sealed partial class XlsxFileAdapter
                 Count,
                 workbook,
                 CellPatchBaselineLimit,
-                out blockReason);
+                out blockReason,
+                baselineFacts: CellPatchBaselineFacts);
             preparedPackage = this with
             {
                 CellPatchBaseline = cellPatchBaseline,
                 CellPatchBaselineBlockReason = blockReason,
+                CellPatchBaselineFacts = null,
                 IsCellPatchBaselineLazy = false
             };
             return cellPatchBaseline is not null;
@@ -1922,6 +1929,86 @@ public sealed partial class XlsxFileAdapter
             CreateSourceModelFingerprint(workbook);
     }
 
+    private sealed record XlsxCellPatchBaselineFacts(
+        IReadOnlyDictionary<string, string> SheetPathsByName,
+        IReadOnlyDictionary<string, XlsxCellPatchBaselineSheetFacts> SheetsByName,
+        XlsxChartSourceRangeIndex? ChartSourceRanges)
+    {
+        public static XlsxCellPatchBaselineFacts? Capture(
+            Workbook workbook,
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout)
+        {
+            if (sheetXmlLayout is null || sheetXmlLayout.Count != workbook.SheetCount)
+                return null;
+
+            var sheetPathsByName = new Dictionary<string, string>(workbook.SheetCount, StringComparer.OrdinalIgnoreCase);
+            var sheetsByName = new Dictionary<string, XlsxCellPatchBaselineSheetFacts>(
+                workbook.SheetCount,
+                StringComparer.OrdinalIgnoreCase);
+            foreach (var sheet in workbook.Sheets)
+            {
+                if (!sheetXmlLayout.TryGetValue(sheet.Name, out var layout) ||
+                    string.IsNullOrWhiteSpace(layout.WorksheetPath))
+                {
+                    return null;
+                }
+
+                sheetPathsByName[sheet.Name] = layout.WorksheetPath;
+                sheetsByName[sheet.Name] = new XlsxCellPatchBaselineSheetFacts(
+                    sheet.Name,
+                    layout.WorksheetPath,
+                    layout.ExplicitPopulatedCellStyles,
+                    layout.ExplicitStyleOnlyCells);
+            }
+
+            return new XlsxCellPatchBaselineFacts(
+                sheetPathsByName,
+                sheetsByName,
+                XlsxChartSourceRangeIndex.TryCreate(workbook, sheetXmlLayout, out _));
+        }
+
+        public bool MatchesWorkbookSheets(Workbook workbook)
+        {
+            if (SheetPathsByName.Count != workbook.SheetCount ||
+                SheetsByName.Count != workbook.SheetCount)
+            {
+                return false;
+            }
+
+            foreach (var sheet in workbook.Sheets)
+            {
+                if (!SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath) ||
+                    !TryGetSheetFacts(sheet, worksheetPath, out _))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public bool TryGetSheetFacts(
+            Sheet sheet,
+            string worksheetPath,
+            out XlsxCellPatchBaselineSheetFacts sheetFacts)
+        {
+            if (SheetsByName.TryGetValue(sheet.Name, out sheetFacts!) &&
+                string.Equals(sheetFacts.WorksheetPath, worksheetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            sheetFacts = null!;
+            return false;
+        }
+    }
+
+    private sealed record XlsxCellPatchBaselineSheetFacts(
+        string SheetName,
+        string WorksheetPath,
+        IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitPopulatedCellStyles,
+        IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells);
+
     private sealed class XlsxCellPatchBaseline
     {
         private readonly IReadOnlyList<XlsxWorksheetCellPatchBaseline> _worksheets;
@@ -1950,8 +2037,9 @@ public sealed partial class XlsxFileAdapter
             int count,
             Workbook workbook,
             int cellLimit,
-            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null)
-            => TryCreate(package, offset, count, workbook, cellLimit, out _, sheetXmlLayout);
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null,
+            XlsxCellPatchBaselineFacts? baselineFacts = null)
+            => TryCreate(package, offset, count, workbook, cellLimit, out _, sheetXmlLayout, baselineFacts);
 
         public static XlsxCellPatchBaseline? TryCreate(
             byte[] package,
@@ -1960,7 +2048,8 @@ public sealed partial class XlsxFileAdapter
             Workbook workbook,
             int cellLimit,
             out string? blockReason,
-            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null)
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null,
+            XlsxCellPatchBaselineFacts? baselineFacts = null)
         {
             blockReason = null;
             try
@@ -1976,21 +2065,45 @@ public sealed partial class XlsxFileAdapter
                     }
                 }
 
+                var retainedBaselineFacts = baselineFacts is not null && baselineFacts.MatchesWorkbookSheets(workbook)
+                    ? baselineFacts
+                    : null;
                 using var packageStream = new MemoryStream(package, offset, count, writable: false);
                 using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read);
-                var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
-                if (worksheetPathMap is null)
+                IReadOnlyDictionary<string, string> sheetPathsByName;
+                if (retainedBaselineFacts is not null)
                 {
-                    blockReason = "baseline_worksheet_path_map";
-                    return null;
+                    sheetPathsByName = retainedBaselineFacts.SheetPathsByName;
+                }
+                else
+                {
+                    var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+                    if (worksheetPathMap is null)
+                    {
+                        blockReason = "baseline_worksheet_path_map";
+                        return null;
+                    }
+
+                    sheetPathsByName = worksheetPathMap.SheetPathsByName;
                 }
 
-                var chartSourceRanges = XlsxChartSourceRangeIndex.TryCreate(
-                    archive,
-                    workbook,
-                    worksheetPathMap,
-                    sheetXmlLayout,
-                    out var chartSourceRangeBlockReason);
+                XlsxChartSourceRangeIndex? chartSourceRanges;
+                string? chartSourceRangeBlockReason = null;
+                if (retainedBaselineFacts?.ChartSourceRanges is { } retainedChartSourceRanges &&
+                    retainedChartSourceRanges.Matches(workbook))
+                {
+                    chartSourceRanges = retainedChartSourceRanges;
+                }
+                else
+                {
+                    chartSourceRanges = XlsxChartSourceRangeIndex.TryCreate(
+                        archive,
+                        workbook,
+                        sheetPathsByName,
+                        sheetXmlLayout,
+                        out chartSourceRangeBlockReason);
+                }
+
                 if (chartSourceRanges is null)
                 {
                     blockReason = chartSourceRangeBlockReason ?? "baseline_chart_source_ranges";
@@ -2012,14 +2125,21 @@ public sealed partial class XlsxFileAdapter
                 sourceStyleIndexesByStyleId[StyleId.Default] = null;
                 foreach (var sheet in workbook.Sheets)
                 {
-                    if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+                    if (!sheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                     {
                         blockReason = "baseline_sheet_path_missing";
                         return null;
                     }
 
                     var sourceCellStyleIndexes =
-                        sheetXmlLayout is not null &&
+                        retainedBaselineFacts is not null &&
+                        retainedBaselineFacts.TryGetSheetFacts(sheet, worksheetPath, out var sheetFacts)
+                            ? ReadSourceCellStyleIndexes(
+                                sheetFacts,
+                                sheet,
+                                sourceStyleIndexesByStyleId,
+                                ambiguousSourceStyleIds)
+                            : sheetXmlLayout is not null &&
                         sheetXmlLayout.TryGetValue(sheet.Name, out var layout) &&
                         string.Equals(layout.WorksheetPath, worksheetPath, StringComparison.OrdinalIgnoreCase)
                             ? ReadSourceCellStyleIndexes(
@@ -3414,10 +3534,35 @@ public sealed partial class XlsxFileAdapter
             Sheet sheet,
             Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
             HashSet<StyleId> ambiguousStyleIds)
+            => ReadSourceCellStyleIndexes(
+                layout.ExplicitPopulatedCellStyles,
+                layout.ExplicitStyleOnlyCells,
+                sheet,
+                sourceStyleIndexesByStyleId,
+                ambiguousStyleIds);
+
+        private static Dictionary<(uint Row, uint Col), string?>? ReadSourceCellStyleIndexes(
+            XlsxCellPatchBaselineSheetFacts sheetFacts,
+            Sheet sheet,
+            Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
+            HashSet<StyleId> ambiguousStyleIds)
+            => ReadSourceCellStyleIndexes(
+                sheetFacts.ExplicitPopulatedCellStyles,
+                sheetFacts.ExplicitStyleOnlyCells,
+                sheet,
+                sourceStyleIndexesByStyleId,
+                ambiguousStyleIds);
+
+        private static Dictionary<(uint Row, uint Col), string?>? ReadSourceCellStyleIndexes(
+            IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitPopulatedCellStyles,
+            IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
+            Sheet sheet,
+            Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
+            HashSet<StyleId> ambiguousStyleIds)
         {
-            var result = new Dictionary<(uint Row, uint Col), string?>(Math.Min(sheet.CellCount, layout.ExplicitPopulatedCellStyles.Count));
+            var result = new Dictionary<(uint Row, uint Col), string?>(Math.Min(sheet.CellCount, explicitPopulatedCellStyles.Count));
             var sourceStyleIndexCache = new Dictionary<int, string?>();
-            foreach (var (row, col, styleIndex) in layout.ExplicitPopulatedCellStyles)
+            foreach (var (row, col, styleIndex) in explicitPopulatedCellStyles)
             {
                 if (styleIndex < 0)
                     continue;
@@ -3434,7 +3579,7 @@ public sealed partial class XlsxFileAdapter
                     sourceStyleIndex);
             }
 
-            foreach (var (row, col, styleIndex) in layout.ExplicitStyleOnlyCells)
+            foreach (var (row, col, styleIndex) in explicitStyleOnlyCells)
             {
                 if (styleIndex < 0)
                     continue;
@@ -4729,73 +4874,128 @@ public sealed partial class XlsxFileAdapter
             XlsxWorkbookWorksheetPathMap worksheetPathMap,
             IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout,
             out string? blockReason)
+            => TryCreate(archive, workbook, worksheetPathMap.SheetPathsByName, sheetXmlLayout, out blockReason);
+
+        public static XlsxChartSourceRangeIndex? TryCreate(
+            ZipArchive archive,
+            Workbook workbook,
+            IReadOnlyDictionary<string, string> sheetPathsByName,
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout,
+            out string? blockReason)
         {
-            blockReason = null;
             try
             {
-                var sheetIdsByName = workbook.Sheets.ToDictionary(
-                    sheet => sheet.Name,
-                    sheet => sheet.Id,
-                    StringComparer.OrdinalIgnoreCase);
-                var rangesBySheet = new Dictionary<SheetId, List<GridRange>>();
-                var sheetBaselines = new List<XlsxChartSourceSheetBaseline>(workbook.SheetCount);
-                foreach (var sheet in workbook.Sheets)
-                {
-                    if (sheet.Charts.Any(IsPatchUnsafeChartModel))
+                return TryCreate(
+                    workbook,
+                    sheet =>
                     {
-                        blockReason = "baseline_chart_source_model";
-                        return null;
-                    }
-
-                    if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath) ||
-                        !TryReadWorksheetChartParts(archive, worksheetPath, sheetXmlLayout, sheet, out var chartParts))
-                    {
-                        blockReason = "baseline_chart_source_graph";
-                        return null;
-                    }
-
-                    if (chartParts.Count != sheet.Charts.Count)
-                    {
-                        blockReason = "baseline_chart_source_count";
-                        return null;
-                    }
-
-                    sheetBaselines.Add(new XlsxChartSourceSheetBaseline(sheet.Id, sheet.Name, sheet.Charts.Count));
-                    foreach (var chartPart in chartParts)
-                    {
-                        if (!TryReadChartSourceRanges(
-                                chartPart.Xml,
-                                sheetIdsByName,
-                                out var chartRanges))
+                        if (!sheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath) ||
+                            !TryReadWorksheetChartParts(archive, worksheetPath, sheetXmlLayout, sheet, out var chartParts))
                         {
-                            blockReason = "baseline_chart_source_formula";
-                            return null;
+                            return (false, []);
                         }
 
-                        foreach (var range in chartRanges)
-                        {
-                            if (!rangesBySheet.TryGetValue(range.Start.Sheet, out var ranges))
-                            {
-                                ranges = [];
-                                rangesBySheet[range.Start.Sheet] = ranges;
-                            }
-
-                            ranges.Add(range);
-                        }
-                    }
-                }
-
-                return new XlsxChartSourceRangeIndex(
-                    sheetBaselines,
-                    rangesBySheet.ToDictionary(
-                        pair => pair.Key,
-                        pair => (IReadOnlyList<GridRange>)pair.Value.ToArray()));
+                        return (true, chartParts);
+                    },
+                    out blockReason);
             }
             catch
             {
                 blockReason = "baseline_chart_source_exception";
                 return null;
             }
+        }
+
+        public static XlsxChartSourceRangeIndex? TryCreate(
+            Workbook workbook,
+            IReadOnlyDictionary<string, SheetXmlLayout> sheetXmlLayout,
+            out string? blockReason)
+        {
+            try
+            {
+                return TryCreate(
+                    workbook,
+                    sheet =>
+                    {
+                        if (!sheetXmlLayout.TryGetValue(sheet.Name, out var layout))
+                        {
+                            return (false, []);
+                        }
+
+                        return (true, layout.ChartParts);
+                    },
+                    out blockReason);
+            }
+            catch
+            {
+                blockReason = "baseline_chart_source_exception";
+                return null;
+            }
+        }
+
+        private static XlsxChartSourceRangeIndex? TryCreate(
+            Workbook workbook,
+            Func<Sheet, (bool Success, IReadOnlyList<XlsxChartPackagePart> ChartParts)> readChartParts,
+            out string? blockReason)
+        {
+            blockReason = null;
+            var sheetIdsByName = workbook.Sheets.ToDictionary(
+                sheet => sheet.Name,
+                sheet => sheet.Id,
+                StringComparer.OrdinalIgnoreCase);
+            var rangesBySheet = new Dictionary<SheetId, List<GridRange>>();
+            var sheetBaselines = new List<XlsxChartSourceSheetBaseline>(workbook.SheetCount);
+            foreach (var sheet in workbook.Sheets)
+            {
+                if (sheet.Charts.Any(IsPatchUnsafeChartModel))
+                {
+                    blockReason = "baseline_chart_source_model";
+                    return null;
+                }
+
+                var (success, chartParts) = readChartParts(sheet);
+                if (!success)
+                {
+                    blockReason = "baseline_chart_source_graph";
+                    return null;
+                }
+
+                if (chartParts.Count != sheet.Charts.Count)
+                {
+                    blockReason = "baseline_chart_source_count";
+                    return null;
+                }
+
+                sheetBaselines.Add(new XlsxChartSourceSheetBaseline(sheet.Id, sheet.Name, sheet.Charts.Count));
+                foreach (var chartPart in chartParts)
+                {
+                    if (!TryReadChartSourceRanges(
+                            chartPart.Xml,
+                            sheetIdsByName,
+                            out var chartRanges))
+                    {
+                        blockReason = "baseline_chart_source_formula";
+                        return null;
+                    }
+
+                    foreach (var range in chartRanges)
+                    {
+                        if (!rangesBySheet.TryGetValue(range.Start.Sheet, out var ranges))
+                        {
+                            ranges = [];
+                            rangesBySheet[range.Start.Sheet] = ranges;
+                        }
+
+                        ranges.Add(range);
+                    }
+                }
+            }
+
+            return new XlsxChartSourceRangeIndex(
+                sheetBaselines,
+                rangesBySheet.ToDictionary(
+                    pair => pair.Key,
+                    pair => (IReadOnlyList<GridRange>)pair.Value.ToArray()));
         }
 
         public bool Matches(Workbook workbook)
@@ -5241,7 +5441,7 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetTablePatchBaseline Tables,
         IReadOnlyDictionary<(uint Row, uint Col), XlsxPatchCell> Cells);
 
-    private sealed record XlsxPatchCell(
+    private readonly record struct XlsxPatchCell(
         ScalarValue Value,
         string? FormulaText,
         StyleId StyleId,

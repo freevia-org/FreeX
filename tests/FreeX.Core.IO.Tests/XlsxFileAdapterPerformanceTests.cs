@@ -376,6 +376,11 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("GetModelFingerprint(workbook, currentModelFingerprint)");
         snapshotSource.Should().Contain("TryPrepareLoadedPackageSnapshotForEdit(Workbook workbook, out string? blockReason)");
         snapshotSource.Should().Contain("TryEnsureCellPatchBaseline(");
+        snapshotSource.Should().Contain("XlsxCellPatchBaselineFacts.Capture(workbook, sheetXmlLayout)");
+        snapshotSource.Should().Contain("baselineFacts: CellPatchBaselineFacts");
+        snapshotSource.Should().Contain("retainedBaselineFacts.TryGetSheetFacts");
+        snapshotSource.Should().Contain("retainedChartSourceRanges.Matches(workbook)");
+        snapshotSource.Should().Contain("CellPatchBaselineFacts = null");
         snapshotSource.Should().Contain("IsCellPatchBaselineLazy: true");
         snapshotSource.Should().Contain("patch_blocked_deferred_baseline_not_materialized");
         snapshotSource.Should().Contain("patchedPackage.TryGetBuffer");
