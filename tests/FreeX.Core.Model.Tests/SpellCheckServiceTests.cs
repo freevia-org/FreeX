@@ -917,6 +917,39 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversManufacturingProductionVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "MANUFACTRUING prodction Assembely machinary shiftt yieldd scrapp throughputt downtimee linebalnce. Valid workcenter workcentre. Keep manufactruing_id, https://manufactruing.example.com/prodction, plant@machinary.example.com, \"C:\\throughputt folder\\downtimee file.xlsx\", and [C:\\assembely folder\\linebalnce file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("MANUFACTRUING", "MANUFACTURING"),
+            ("prodction", "production"),
+            ("Assembely", "Assembly"),
+            ("machinary", "machinery"),
+            ("shiftt", "shift"),
+            ("yieldd", "yield"),
+            ("scrapp", "scrap"),
+            ("throughputt", "throughput"),
+            ("downtimee", "downtime"),
+            ("linebalnce", "line balance"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "MANUFACTURING production Assembly machinery shift yield scrap throughput downtime line balance. Valid workcenter workcentre. Keep manufactruing_id, https://manufactruing.example.com/prodction, plant@machinary.example.com, \"C:\\throughputt folder\\downtimee file.xlsx\", and [C:\\assembely folder\\linebalnce file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
