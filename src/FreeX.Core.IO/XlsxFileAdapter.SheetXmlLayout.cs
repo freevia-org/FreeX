@@ -235,7 +235,6 @@ public sealed partial class XlsxFileAdapter
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XDocument worksheetXml;
         XlsxWorksheetSheetDataLayout sheetDataLayout;
-        var loadedPrunedWorksheetXml = false;
         if (TryLoadWorksheetXmlWithoutSheetData(
                 worksheetEntry,
                 worksheetNs,
@@ -243,7 +242,6 @@ public sealed partial class XlsxFileAdapter
                 out var streamedSheetDataLayout))
         {
             worksheetXml = prunedWorksheetXml;
-            loadedPrunedWorksheetXml = true;
             sheetDataLayout = MergeColumnLayout(worksheetXml, worksheetNs, streamedSheetDataLayout);
         }
         else
@@ -315,9 +313,6 @@ public sealed partial class XlsxFileAdapter
         var hasPreservableSourceWorksheetMetadata = HasRetainedWorksheetMetadataElement(worksheetXml.Root, worksheetNs) ||
             XlsxWorksheetMetadataPreserver.HasPreservableSourceWorksheetMetadata(worksheetXml, worksheetNs) ||
             sheetDataLayout.HasPreservableSourceSheetDataMetadata;
-        if (!hasPreservableSourceWorksheetMetadata && loadedPrunedWorksheetXml)
-            hasPreservableSourceWorksheetMetadata =
-                XlsxWorksheetMetadataPreserver.HasPreservableSourceWorksheetMetadata(worksheetEntry, worksheetNs);
         var hasConditionalFormattingBlocks =
             worksheetXml.Root?.Elements(worksheetNs + "conditionalFormatting").Any() == true;
         var hasClosedXmlUnsupportedConditionalFormatting =
@@ -520,7 +515,7 @@ public sealed partial class XlsxFileAdapter
                     sheetDataLayout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(
                         reader,
                         worksheetNs,
-                        detectPreservableSourceSheetDataMetadata: false);
+                        detectPreservableSourceSheetDataMetadata: true);
                     continue;
                 }
 

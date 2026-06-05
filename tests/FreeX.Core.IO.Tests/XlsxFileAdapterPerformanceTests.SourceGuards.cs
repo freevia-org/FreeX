@@ -229,6 +229,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sanitizerSource.Should().Contain("CreateFusedTransientPackage(");
         sanitizerSource.Should().Contain("TryWriteFusedEntry(");
         sanitizerSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.StripRedundantStyleOnlyCells");
+        sanitizerSource.Should().Contain("CompressionLevel.Fastest");
         sanitizerSource.Should().Contain("TryCreateSanitizationRequirementsFromHints(");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasPivotPackageMetadata");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasChartExChartParts");
