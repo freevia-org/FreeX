@@ -247,7 +247,7 @@ internal static partial class AccessibilityTextRules
     [GeneratedRegex(@"(?i)^[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)*\.[A-Z]{2,}(?:[/:?#][^\s]*)?$")]
     private static partial Regex DomainLikeTextRegex();
 
-    [GeneratedRegex(@"(?i)^[\w .-]+\.(?:png|jpe?g|gif|bmp|tiff?|webp)$")]
+    [GeneratedRegex(@"(?i)^[\w .-]+(?:\s+\((?:copy|\d+)\))?\.(?:png|jpe?g|gif|bmp|tiff?|webp)$")]
     private static partial Regex ImageFileNameRegex();
 
     [GeneratedRegex(@"(?i)^(?:Screenshot|Photo)\s+\d{4}-\d{2}-\d{2}$")]
