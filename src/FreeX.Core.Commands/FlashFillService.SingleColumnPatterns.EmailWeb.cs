@@ -4,6 +4,27 @@ namespace FreeX.Core.Commands;
 
 public static partial class FlashFillService
 {
+    private static readonly HashSet<string> KnownMultiLabelPublicSuffixes = new(StringComparer.Ordinal)
+    {
+        "co.uk",
+        "org.uk",
+        "ac.uk",
+        "gov.uk",
+        "com.au",
+        "net.au",
+        "org.au",
+        "co.jp",
+        "com.br",
+        "com.mx",
+        "co.nz",
+        "com.sg",
+        "com.cn",
+        "com.tw",
+        "co.in",
+        "com.tr",
+        "com.pl"
+    };
+
     private static Func<string, string?>? TryEmailDisplayName(IReadOnlyList<(string Source, string Expected)> examples)
     {
         if (!examples.All(e => TryFormatEmailUserNameDisplayName(e.Source, out var displayName) && displayName == e.Expected))
@@ -1158,7 +1179,16 @@ public static partial class FlashFillService
         if (labels.Length < 2)
             return false;
 
-        rootDomainStem = labels[^2];
+        if (labels.Length >= 3 &&
+            KnownMultiLabelPublicSuffixes.Contains(labels[^2] + "." + labels[^1]))
+        {
+            rootDomainStem = labels[^3];
+        }
+        else
+        {
+            rootDomainStem = labels[^2];
+        }
+
         return rootDomainStem.Length > 0;
     }
 
