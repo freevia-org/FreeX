@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace FreeX.Core.Calc;
+namespace FreeX.Core.Formula;
 
 internal static class ExcelDateTimeFormatConverter
 {
