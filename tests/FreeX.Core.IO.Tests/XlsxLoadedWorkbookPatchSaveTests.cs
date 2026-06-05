@@ -1081,7 +1081,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
-    public void Save_LoadedWorkbookWithWorksheetMetadataEdit_FallsBackToFullSave()
+    public void Save_LoadedWorkbookWithWorksheetViewMetadataEdit_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
         var adapter = new XlsxFileAdapter();
@@ -1096,9 +1096,28 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
-        saved.Position = 0;
+        var savedBytes = saved.ToArray();
 
-        var reloaded = adapter.Load(saved).GetSheetAt(0);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        adapter.LastSaveDiagnostics.WorksheetViewChangeCount.Should().Be(1);
+        adapter.LastSaveDiagnostics.TotalPatchChangeCount.Should().Be(2);
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/styles.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
+        ReadPrimarySheetViewAttribute(savedBytes, "xl/worksheets/sheet1.xml", "showGridLines")
+            .Should()
+            .Be("0");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched value");
+
+        using var reload = new MemoryStream(savedBytes, writable: false);
+        var reloaded = adapter.Load(reload).GetSheetAt(0);
         reloaded.ShowGridlines.Should().BeFalse();
         reloaded.GetCell(1, 1)!.Value.Should().Be(new TextValue("patched value"));
     }
@@ -2131,6 +2150,23 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
 
     private static string? ReadCellStyleIndex(byte[] packageBytes, string worksheetPath, string reference) =>
         ReadCellElement(packageBytes, worksheetPath, reference).Attribute("s")?.Value;
+
+    private static string? ReadPrimarySheetViewAttribute(byte[] packageBytes, string worksheetPath, string attributeName)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry(worksheetPath);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        var document = XDocument.Load(entryStream);
+        var ns = document.Root!.Name.Namespace;
+        return document.Root!
+            .Element(ns + "sheetViews")
+            ?.Elements(ns + "sheetView")
+            .FirstOrDefault(view => string.Equals(view.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal))
+            ?.Attribute(attributeName)
+            ?.Value;
+    }
 
     private static string? ReadRowAttribute(byte[] packageBytes, string worksheetPath, uint row, string attributeName)
     {
