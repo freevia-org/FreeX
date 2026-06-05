@@ -96,7 +96,13 @@ public partial class XlsxCorpusRunnerTests
             .ToArray();
     }
 
+    private const string RelationshipPartContentType =
+        "application/vnd.openxmlformats-package.relationships+xml";
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace PackageContentTypeNs =
+        "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace PackageRelationshipNs =
+        "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly string[] ModeledIgnoredErrorFlags =
     [
         "numberStoredAsText",
@@ -367,6 +373,8 @@ public partial class XlsxCorpusRunnerTests
                     .Select(entry => entry.FullName.Replace('\\', '/'))
                     .ToArray();
                 entries.Should().OnlyHaveUniqueItems(because);
+                var packageEntryIssues = FindPackageEntryIssues(archive);
+                packageEntryIssues.Should().BeEmpty($"{because}: OPC package part names should be canonical and unique");
 
                 // OPC part names are compared case-insensitively, so two names differing only by case
                 // (e.g. ClosedXML's xl/drawings/vmldrawing2.vml vs Excel's xl/drawings/vmlDrawing2.vml)
@@ -374,8 +382,20 @@ public partial class XlsxCorpusRunnerTests
                 entries.Select(name => name.ToLowerInvariant())
                     .Should().OnlyHaveUniqueItems($"{because}: OPC part names must be unique case-insensitively");
 
-                var entrySet = entries.ToHashSet(StringComparer.OrdinalIgnoreCase);
-                archive.GetEntry("[Content_Types].xml").Should().NotBeNull(because);
+                var packageParts = archive.Entries
+                    .Where(entry => !string.IsNullOrEmpty(entry.Name))
+                    .Select(entry => NormalizePackagePart(entry.FullName))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+                contentTypesEntry.Should().NotBeNull(because);
+
+                if (contentTypesEntry is not null)
+                {
+                    var contentTypesXml = LoadPackageXml(contentTypesEntry);
+                    var contentTypeIssues = FindPackageContentTypeIssues(contentTypesXml, packageParts);
+                    contentTypeIssues.Should().BeEmpty($"{because}: package content types should be complete and consistent");
+                }
+
                 foreach (var xmlEntry in archive.Entries.Where(entry =>
                              entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
                              entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
@@ -385,30 +405,8 @@ public partial class XlsxCorpusRunnerTests
                     load.Should().NotThrow($"{because}: {xmlEntry.FullName} should be parseable XML");
                 }
 
-                foreach (var relsEntry in archive.Entries.Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
-                {
-                    var sourcePart = RelationshipSourcePart(relsEntry.FullName.Replace('\\', '/'));
-                    var sourceDirectory = Path.GetDirectoryName(sourcePart)?.Replace('\\', '/') ?? string.Empty;
-                    var relsXml = LoadPackageXml(relsEntry);
-                    XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-                    var relationships = relsXml.Root?.Elements(relNs + "Relationship").ToArray() ?? [];
-                    relationships.Should().NotBeEmpty($"{because}: {relsEntry.FullName} should contain at least one relationship");
-                    foreach (var relationship in relationships)
-                    {
-                        if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        var target = relationship.Attribute("Target")?.Value;
-                        if (string.IsNullOrWhiteSpace(target) || target.StartsWith("/", StringComparison.Ordinal))
-                            continue;
-
-                        target = Uri.UnescapeDataString(target);
-                        var resolved = NormalizePackagePath(string.IsNullOrWhiteSpace(sourceDirectory)
-                            ? target
-                            : $"{sourceDirectory}/{target}");
-                        entrySet.Should().Contain(resolved, $"{because}: {relsEntry.FullName} relationship target should exist");
-                    }
-                }
+                var relationshipIssues = FindPackageRelationshipIssues(archive, packageParts);
+                relationshipIssues.Should().BeEmpty($"{because}: package relationships should be well-formed and target existing internal parts");
             }
 
             // The definitive check: the Open XML SDK (same OPC layer Excel uses) must be able to open
@@ -443,6 +441,525 @@ public partial class XlsxCorpusRunnerTests
         var fileName = relsPath[(markerIndex + relsMarker.Length)..^".rels".Length];
         return string.IsNullOrWhiteSpace(prefix) ? fileName : $"{prefix}/{fileName}";
     }
+
+    private static List<string> FindPackageEntryIssues(ZipArchive archive)
+    {
+        var issues = new List<string>();
+        var exactNames = new HashSet<string>(StringComparer.Ordinal);
+        var packagePartNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in archive.Entries.Where(entry => !string.IsNullOrEmpty(entry.Name)))
+        {
+            var rawName = entry.FullName;
+            var normalizedName = rawName.Replace('\\', '/');
+
+            if (rawName.Contains('\\', StringComparison.Ordinal))
+                issues.Add($"{rawName} uses a backslash in the package part name");
+            if (normalizedName.StartsWith("/", StringComparison.Ordinal))
+                issues.Add($"{rawName} starts with '/'");
+            if (normalizedName.Contains("//", StringComparison.Ordinal))
+                issues.Add($"{rawName} has an empty path segment");
+
+            var segments = normalizedName.Split('/', StringSplitOptions.None);
+            if (segments.Any(segment => segment is "." or ".."))
+                issues.Add($"{rawName} has a relative path segment");
+
+            if (!exactNames.Add(normalizedName))
+            {
+                issues.Add($"{rawName} duplicates package part {normalizedName}");
+                continue;
+            }
+
+            if (packagePartNames.TryGetValue(normalizedName, out var existingName))
+                issues.Add($"{rawName} collides with package part {existingName} when compared case-insensitively");
+            else
+                packagePartNames.Add(normalizedName, normalizedName);
+        }
+
+        return issues;
+    }
+
+    private static List<string> FindPackageContentTypeIssues(
+        XDocument contentTypesXml,
+        IReadOnlySet<string> packageParts)
+    {
+        var issues = new List<string>();
+        if (contentTypesXml.Root?.Name != PackageContentTypeNs + "Types")
+        {
+            issues.Add("[Content_Types].xml has an invalid root element");
+            return issues;
+        }
+
+        AddPackageContentTypeDeclarationIssues(contentTypesXml, packageParts, issues);
+
+        foreach (var part in packageParts
+                     .Where(part => !string.Equals(part, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(part => part, StringComparer.OrdinalIgnoreCase))
+        {
+            var contentType = GetEffectivePackageContentType(contentTypesXml, part);
+            if (string.IsNullOrWhiteSpace(contentType))
+            {
+                issues.Add($"{part} has no effective content type");
+                continue;
+            }
+
+            AddPackageContentTypeConsistencyIssues(part, contentType, issues);
+        }
+
+        return issues;
+    }
+
+    private static void AddPackageContentTypeDeclarationIssues(
+        XDocument contentTypesXml,
+        IReadOnlySet<string> packageParts,
+        List<string> issues)
+    {
+        var root = contentTypesXml.Root;
+        if (root is null)
+            return;
+
+        foreach (var element in root.Elements())
+        {
+            if (element.Name != PackageContentTypeNs + "Default" &&
+                element.Name != PackageContentTypeNs + "Override")
+            {
+                issues.Add($"unexpected [Content_Types].xml child element '{element.Name}'");
+            }
+        }
+
+        var defaultExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var element in root.Elements(PackageContentTypeNs + "Default"))
+        {
+            var extension = element.Attribute("Extension")?.Value;
+            var declarationLabel = string.IsNullOrWhiteSpace(extension)
+                ? "Default declaration"
+                : $"Default extension '{extension}'";
+
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                issues.Add("Default declaration missing Extension");
+            }
+            else
+            {
+                var trimmedExtension = extension.Trim();
+                declarationLabel = $"Default extension '{trimmedExtension}'";
+
+                if (!string.Equals(extension, trimmedExtension, StringComparison.Ordinal))
+                    issues.Add($"Default extension '{extension}' has leading or trailing whitespace");
+
+                if (trimmedExtension.IndexOf('/') >= 0 ||
+                    trimmedExtension.IndexOf('\\') >= 0 ||
+                    trimmedExtension.IndexOf('.') >= 0 ||
+                    trimmedExtension.Any(char.IsWhiteSpace))
+                {
+                    issues.Add($"Default extension '{trimmedExtension}' is not a bare package extension");
+                }
+
+                if (!defaultExtensions.Add(trimmedExtension))
+                    issues.Add($"duplicate Default extension '{trimmedExtension}'");
+            }
+
+            AddContentTypeAttributeIssues(element, declarationLabel, issues);
+        }
+
+        var overridePartNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var element in root.Elements(PackageContentTypeNs + "Override"))
+        {
+            var partName = element.Attribute("PartName")?.Value;
+            var declarationLabel = string.IsNullOrWhiteSpace(partName)
+                ? "Override declaration"
+                : $"Override PartName '{partName}'";
+
+            if (string.IsNullOrWhiteSpace(partName))
+            {
+                issues.Add("Override declaration missing PartName");
+            }
+            else
+            {
+                var trimmedPartName = partName.Trim();
+
+                if (!string.Equals(partName, trimmedPartName, StringComparison.Ordinal))
+                    issues.Add($"Override PartName '{partName}' has leading or trailing whitespace");
+
+                if (!trimmedPartName.StartsWith("/", StringComparison.Ordinal))
+                    issues.Add($"Override PartName '{partName}' must start with '/'");
+
+                if (trimmedPartName.IndexOf('\\') >= 0)
+                    issues.Add($"Override PartName '{partName}' must use forward slashes");
+
+                if (trimmedPartName.IndexOf('?') >= 0 || trimmedPartName.IndexOf('#') >= 0)
+                    issues.Add($"Override PartName '{partName}' must not include query or fragment text");
+
+                var pathWithoutRootSlash = trimmedPartName.TrimStart('/');
+                if (!TryNormalizePackagePathSegments(pathWithoutRootSlash, out var overridePart))
+                {
+                    issues.Add($"Override PartName '{partName}' escapes the package root");
+                }
+                else if (string.IsNullOrWhiteSpace(overridePart))
+                {
+                    issues.Add($"Override PartName '{partName}' does not reference a package part");
+                }
+                else
+                {
+                    declarationLabel = $"Override PartName '/{overridePart}'";
+                    var rawNormalizedPart = NormalizePackagePart(trimmedPartName);
+                    if (!string.Equals(overridePart, rawNormalizedPart, StringComparison.Ordinal))
+                        issues.Add($"Override PartName '{partName}' is not canonical");
+
+                    if (!overridePartNames.Add(overridePart))
+                        issues.Add($"duplicate Override PartName '/{overridePart}'");
+
+                    if (!packageParts.Contains(overridePart))
+                        issues.Add($"Override PartName '/{overridePart}' references missing package part");
+                }
+            }
+
+            AddContentTypeAttributeIssues(element, declarationLabel, issues);
+        }
+    }
+
+    private static void AddContentTypeAttributeIssues(
+        XElement element,
+        string declarationLabel,
+        List<string> issues)
+    {
+        var contentType = element.Attribute("ContentType")?.Value;
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            issues.Add($"{declarationLabel} missing ContentType");
+            return;
+        }
+
+        if (!string.Equals(contentType, contentType.Trim(), StringComparison.Ordinal))
+            issues.Add($"{declarationLabel} ContentType has leading or trailing whitespace");
+
+        if (!contentType.Contains("/", StringComparison.Ordinal))
+            issues.Add($"{declarationLabel} ContentType '{contentType}' is not a media type");
+    }
+
+    private static void AddPackageContentTypeConsistencyIssues(
+        string part,
+        string contentType,
+        List<string> issues)
+    {
+        var isRelationshipPart = IsPackageRelationshipPart(part);
+        var hasRelationshipExtension = part.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+        var hasRelationshipContentType = string.Equals(
+            contentType,
+            RelationshipPartContentType,
+            StringComparison.OrdinalIgnoreCase);
+
+        if (isRelationshipPart && !hasRelationshipContentType)
+        {
+            issues.Add($"{part} must use relationship content type {RelationshipPartContentType}; actual {contentType}");
+        }
+        else if (!isRelationshipPart && hasRelationshipContentType)
+        {
+            issues.Add($"{part} uses relationship content type but is not a valid relationship part");
+        }
+
+        if (hasRelationshipExtension && !isRelationshipPart)
+            issues.Add($"{part} has .rels extension outside a valid relationship part location");
+    }
+
+    private static string? GetEffectivePackageContentType(XDocument contentTypesXml, string normalizedPartName)
+    {
+        var normalizedContentTypePartName = $"/{NormalizePackagePart(normalizedPartName)}";
+        var overrideContentType = contentTypesXml.Root?
+            .Elements(PackageContentTypeNs + "Override")
+            .FirstOrDefault(element => string.Equals(
+                NormalizeContentTypePartName(element.Attribute("PartName")?.Value),
+                normalizedContentTypePartName,
+                StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")
+            ?.Value;
+
+        if (!string.IsNullOrWhiteSpace(overrideContentType))
+            return overrideContentType;
+
+        var extension = GetPackagePartExtension(normalizedPartName);
+        if (string.IsNullOrWhiteSpace(extension))
+            return null;
+
+        return contentTypesXml.Root?
+            .Elements(PackageContentTypeNs + "Default")
+            .FirstOrDefault(element => string.Equals(
+                element.Attribute("Extension")?.Value,
+                extension,
+                StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")
+            ?.Value;
+    }
+
+    private static string NormalizeContentTypePartName(string? partName) =>
+        $"/{NormalizePackagePart(partName ?? string.Empty)}";
+
+    private static string GetPackagePartExtension(string partName)
+    {
+        var fileName = NormalizePackagePart(partName);
+        var slashIndex = fileName.LastIndexOf('/');
+        if (slashIndex >= 0)
+            fileName = fileName[(slashIndex + 1)..];
+
+        var dotIndex = fileName.LastIndexOf('.');
+        return dotIndex >= 0 && dotIndex < fileName.Length - 1
+            ? fileName[(dotIndex + 1)..]
+            : string.Empty;
+    }
+
+    private static List<string> FindPackageRelationshipIssues(
+        ZipArchive archive,
+        IReadOnlySet<string> packageParts)
+    {
+        var issues = new List<string>();
+        foreach (var entry in archive.Entries.Where(entry => IsPackageRelationshipPart(entry.FullName)))
+        {
+            var relationshipPart = NormalizePackagePart(entry.FullName);
+            if (!string.Equals(relationshipPart, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
+            {
+                var ownerPart = RelationshipSourcePart(relationshipPart);
+                if (string.IsNullOrWhiteSpace(ownerPart) || !packageParts.Contains(ownerPart))
+                    issues.Add($"{relationshipPart} has no owning package part {ownerPart}");
+            }
+
+            XDocument relationshipsXml;
+            try
+            {
+                relationshipsXml = LoadPackageXml(entry);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.Xml.XmlException)
+            {
+                issues.Add($"{relationshipPart} is not parseable relationship XML: {ex.Message}");
+                continue;
+            }
+
+            if (relationshipsXml.Root?.Name != PackageRelationshipNs + "Relationships")
+            {
+                issues.Add($"{relationshipPart} has an invalid Relationships root element");
+                continue;
+            }
+
+            foreach (var element in relationshipsXml.Root.Elements())
+            {
+                if (element.Name != PackageRelationshipNs + "Relationship")
+                    issues.Add($"{relationshipPart} has unexpected child element '{element.Name}'");
+            }
+
+            var relationships = relationshipsXml.Root
+                .Elements(PackageRelationshipNs + "Relationship")
+                .ToArray();
+            if (relationships.Length == 0)
+            {
+                issues.Add($"{relationshipPart} has no Relationship elements");
+                continue;
+            }
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var relationship in relationships)
+            {
+                AddPackageRelationshipIssues(relationshipPart, relationship, packageParts, ids, issues);
+            }
+        }
+
+        return issues;
+    }
+
+    private static void AddPackageRelationshipIssues(
+        string relationshipPart,
+        XElement relationship,
+        IReadOnlySet<string> packageParts,
+        HashSet<string> ids,
+        List<string> issues)
+    {
+        var id = relationship.Attribute("Id")?.Value;
+        var relationshipLabel = $"{relationshipPart} Relationship {FormatRelationshipIssueId(id)}";
+        if (relationship.Elements().Any())
+            issues.Add($"{relationshipLabel} must not contain child elements");
+
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            issues.Add($"{relationshipPart} has a Relationship without Id");
+        }
+        else if (!string.Equals(id, id.Trim(), StringComparison.Ordinal))
+        {
+            issues.Add($"{relationshipPart} Relationship Id '{id}' has leading or trailing whitespace");
+        }
+        else if (!ids.Add(id))
+        {
+            issues.Add($"{relationshipPart} has duplicate Relationship Id {id}");
+        }
+
+        var type = relationship.Attribute("Type")?.Value;
+        if (string.IsNullOrWhiteSpace(type))
+        {
+            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has no Type");
+        }
+        else
+        {
+            if (!string.Equals(type, type.Trim(), StringComparison.Ordinal))
+                issues.Add($"{relationshipLabel} Type has leading or trailing whitespace");
+
+            if (!Uri.TryCreate(type.Trim(), UriKind.Absolute, out var typeUri) ||
+                string.IsNullOrWhiteSpace(typeUri.Scheme))
+            {
+                issues.Add($"{relationshipLabel} Type '{type}' is not an absolute URI");
+            }
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has no Target");
+            return;
+        }
+
+        if (!string.Equals(target, target.Trim(), StringComparison.Ordinal))
+            issues.Add($"{relationshipLabel} Target has leading or trailing whitespace");
+        target = target.Trim();
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value;
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, targetMode.Trim(), StringComparison.Ordinal))
+        {
+            issues.Add($"{relationshipLabel} TargetMode has leading or trailing whitespace");
+        }
+
+        targetMode = targetMode?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has invalid TargetMode {targetMode}");
+            return;
+        }
+
+        if (target.IndexOf('\\') >= 0)
+            issues.Add($"{relationshipLabel} Target uses backslashes instead of package URI separators");
+
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} targets external URI without TargetMode=External: {target}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(relationshipPart, target, out var resolvedTarget, out var error))
+        {
+            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} has invalid Target {target}: {error}");
+            return;
+        }
+
+        if (!packageParts.Contains(resolvedTarget))
+            issues.Add($"{relationshipPart} Relationship {FormatRelationshipIssueId(id)} targets missing package part {resolvedTarget}");
+    }
+
+    private static string FormatRelationshipIssueId(string? id) =>
+        string.IsNullOrWhiteSpace(id) ? "(no Id)" : id;
+
+    private static bool IsPackageRelationshipPart(string part)
+    {
+        var normalizedPart = NormalizePackagePart(part);
+        return normalizedPart.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
+            (string.Equals(normalizedPart, "_rels/.rels", StringComparison.OrdinalIgnoreCase) ||
+                normalizedPart.Contains("/_rels/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsAbsoluteRelationshipTarget(string target) =>
+        Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
+        !string.IsNullOrWhiteSpace(uri.Scheme);
+
+    private static bool TryResolvePackageRelationshipTarget(
+        string relationshipPart,
+        string target,
+        out string resolvedTarget,
+        out string error)
+    {
+        resolvedTarget = string.Empty;
+        error = string.Empty;
+
+        target = StripRelationshipTargetFragment(target.Replace('\\', '/'));
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            error = "empty internal target";
+            return false;
+        }
+
+        try
+        {
+            target = Uri.UnescapeDataString(target);
+        }
+        catch (UriFormatException ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+
+        string combined;
+        if (target.StartsWith("/", StringComparison.Ordinal))
+        {
+            combined = target.TrimStart('/');
+        }
+        else
+        {
+            var ownerPart = RelationshipSourcePart(relationshipPart);
+            var ownerDirectory = ownerPart.Contains('/', StringComparison.Ordinal)
+                ? ownerPart[..ownerPart.LastIndexOf('/')]
+                : string.Empty;
+            combined = string.IsNullOrWhiteSpace(ownerDirectory)
+                ? target
+                : $"{ownerDirectory}/{target}";
+        }
+
+        if (!TryNormalizePackagePathSegments(combined, out resolvedTarget))
+        {
+            error = "target escapes the package root";
+            return false;
+        }
+
+        return !string.IsNullOrWhiteSpace(resolvedTarget);
+    }
+
+    private static string StripRelationshipTargetFragment(string target)
+    {
+        var fragmentIndex = target.IndexOf('#', StringComparison.Ordinal);
+        var queryIndex = target.IndexOf('?', StringComparison.Ordinal);
+        var endIndex = fragmentIndex < 0
+            ? queryIndex
+            : queryIndex < 0
+                ? fragmentIndex
+                : Math.Min(fragmentIndex, queryIndex);
+        return endIndex < 0 ? target : target[..endIndex];
+    }
+
+    private static bool TryNormalizePackagePathSegments(string path, out string normalizedPath)
+    {
+        var segments = new List<string>();
+        foreach (var segment in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".")
+                continue;
+
+            if (segment == "..")
+            {
+                if (segments.Count == 0)
+                {
+                    normalizedPath = string.Empty;
+                    return false;
+                }
+
+                segments.RemoveAt(segments.Count - 1);
+                continue;
+            }
+
+            segments.Add(segment);
+        }
+
+        normalizedPath = NormalizePackagePart(string.Join("/", segments));
+        return true;
+    }
+
+    private static string NormalizePackagePart(string part) =>
+        part.Replace('\\', '/').TrimStart('/');
 
     private static string NormalizePackagePath(string path)
     {
