@@ -901,6 +901,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formla"))
+                {
+                    suggestion = "formula";
+                    return true;
+                }
+
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "feilds"))
                 {
                     suggestion = "fields";
@@ -1195,6 +1201,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "vlookp"))
+                {
+                    suggestion = "vlookup";
+                    return true;
+                }
+
+                if (first == 'x' && EqualAsciiWordIgnoreCase(word, "xlookp"))
+                {
+                    suggestion = "xlookup";
+                    return true;
+                }
+
                 break;
             case 7:
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acheive"))
@@ -1212,6 +1230,12 @@ public static partial class SpellCheckService
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "analsys"))
                 {
                     suggestion = "analysis";
+                    return true;
+                }
+
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "argment"))
+                {
+                    suggestion = "argument";
                     return true;
                 }
 
@@ -1308,6 +1332,12 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formual"))
                 {
                     suggestion = "formula";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "functon"))
+                {
+                    suggestion = "function";
                     return true;
                 }
 
@@ -1637,6 +1667,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "argments"))
+                {
+                    suggestion = "arguments";
+                    return true;
+                }
+
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "campains"))
                 {
                     suggestion = "campaigns";
@@ -1658,6 +1694,12 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "formular"))
                 {
                     suggestion = "formula";
+                    return true;
+                }
+
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "functons"))
+                {
+                    suggestion = "functions";
                     return true;
                 }
 
@@ -1862,6 +1904,18 @@ public static partial class SpellCheckService
                 if (first == 'v' && EqualAsciiWordIgnoreCase(word, "varience"))
                 {
                     suggestion = "variance";
+                    return true;
+                }
+
+                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "vloookup"))
+                {
+                    suggestion = "vlookup";
+                    return true;
+                }
+
+                if (first == 'x' && EqualAsciiWordIgnoreCase(word, "xloookup"))
+                {
+                    suggestion = "xlookup";
                     return true;
                 }
 
@@ -2316,6 +2370,12 @@ public static partial class SpellCheckService
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "percenatge"))
                 {
                     suggestion = "percentage";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "pivottabel"))
+                {
+                    suggestion = "pivot table";
                     return true;
                 }
 

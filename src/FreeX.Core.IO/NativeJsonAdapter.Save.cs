@@ -14,12 +14,19 @@ public sealed partial class NativeJsonAdapter
     internal static JsonSerializerOptions SaveOptionsForTest => SaveOptions;
 
     public void Save(Workbook workbook, Stream stream) =>
-        Save(workbook, stream, includeStyleOnlyCells: true);
+        Save(workbook, stream, includeCells: true, includeStyleOnlyCells: true);
 
     internal void SaveForFingerprint(Workbook workbook, Stream stream) =>
-        Save(workbook, stream, includeStyleOnlyCells: false);
+        Save(workbook, stream, includeCells: true, includeStyleOnlyCells: false);
 
-    private static void Save(Workbook workbook, Stream stream, bool includeStyleOnlyCells)
+    internal void SaveForPatchValidationFingerprint(Workbook workbook, Stream stream) =>
+        Save(workbook, stream, includeCells: false, includeStyleOnlyCells: false);
+
+    private static void Save(
+        Workbook workbook,
+        Stream stream,
+        bool includeCells,
+        bool includeStyleOnlyCells)
     {
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);
 
@@ -289,7 +296,7 @@ public sealed partial class NativeJsonAdapter
                     .Select(validation => ToDataValidationDto(validation, s.Id))
                     .ToList(),
                 ConditionalFormats = ToConditionalFormatDtos(s.ConditionalFormats, s.Id),
-                Cells = new CellDtoSequence(s),
+                Cells = includeCells ? new CellDtoSequence(s) : CellDtoSequence.Empty,
                 StyleOnlyCells = includeStyleOnlyCells ? new StyleOnlyCellDtoSequence(s) : StyleOnlyCellDtoSequence.Empty
             }).ToList()
         };
