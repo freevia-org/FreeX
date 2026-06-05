@@ -10,12 +10,12 @@ public sealed class AppDiagnosticsTests
     [Fact]
     public void Options_CreateDefault_UsesLocalAppDataDiagnosticsFolder()
     {
-        var localAppData = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        using var temp = new TestTemporaryDirectory();
 
-        var options = AppDiagnosticsOptions.CreateDefault(() => localAppData);
+        var options = AppDiagnosticsOptions.CreateDefault(() => temp.Path);
 
         options.IsEnabled.Should().BeTrue();
-        options.DiagnosticsDirectory.Should().Be(Path.Combine(localAppData, "FreeX", "Diagnostics"));
+        options.DiagnosticsDirectory.Should().Be(Path.Combine(temp.Path, "FreeX", "Diagnostics"));
     }
 
     [Fact]
@@ -127,7 +127,8 @@ public sealed class AppDiagnosticsTests
     [Fact]
     public void AppDiagnostics_WhenStoreCannotWrite_DoesNotThrow()
     {
-        var blockerPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        using var temp = new TestTemporaryDirectory();
+        var blockerPath = Path.Combine(temp.Path, "blocker");
         var invalidDirectory = Path.Combine(blockerPath, "child");
         File.WriteAllText(blockerPath, "not a directory");
         var diagnostics = new AppDiagnostics(
@@ -139,8 +140,6 @@ public sealed class AppDiagnosticsTests
 
         recordEvent.Should().NotThrow();
         recordCrash.Should().NotThrow().Which.Should().BeEmpty();
-
-        File.Delete(blockerPath);
     }
 
 }
