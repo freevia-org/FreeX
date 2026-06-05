@@ -36,6 +36,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     private const int GeneratedStyleHeavyValueColumnsPerSheet = 12;
     private const int GeneratedStyleHeavyStyleOnlyColumnsPerSheet = 160;
     private const int GeneratedStyleHeavyStyleOnlyStartColumn = GeneratedStyleHeavyValueColumnsPerSheet + 2;
+    private const int GeneratedStyleHeavyDrawingShapePairs = 24;
     private const int LargePatchBaselineRows = 260_000;
 
     private static byte[] CreateDenseXlsxPackage()
@@ -241,6 +242,103 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         }
 
         return stream.ToArray();
+    }
+
+    private static byte[] AddGeneratedStyleHeavyDrawingShapePackage(byte[] package)
+    {
+        using var stream = new MemoryStream(capacity: package.Length + 24 * 1024);
+        stream.Write(package, 0, package.Length);
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            archive.GetEntry("xl/drawings/drawing1.xml")?.Delete();
+            WriteTextEntry(archive, "xl/drawings/drawing1.xml", WriteGeneratedStyleHeavyDrawingShapes);
+            ReplaceZipEntryXml(
+                archive,
+                "xl/drawings/_rels/drawing1.xml.rels",
+                new XDocument(new XElement(packageRelNs + "Relationships")));
+
+            const string worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadZipEntryXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdGeneratedDrawingShapes1"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+                new XAttribute("Target", "../drawings/drawing1.xml")));
+            ReplaceZipEntryXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var worksheetXml = LoadZipEntryXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "drawing",
+                new XAttribute(relNs + "id", "rIdGeneratedDrawingShapes1")));
+            ReplaceZipEntryXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var contentTypesXml = LoadZipEntryXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/drawings/drawing1.xml",
+                "application/vnd.openxmlformats-officedocument.drawing+xml");
+            ReplaceZipEntryXml(archive, "[Content_Types].xml", contentTypesXml);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static void WriteGeneratedStyleHeavyDrawingShapes(TextWriter writer)
+    {
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            """);
+
+        for (var index = 0; index < GeneratedStyleHeavyDrawingShapePairs; index++)
+        {
+            var row = 1 + index % 12;
+            var textColumn = 20 + (index / 12) * 4;
+            var shapeColumn = textColumn + 2;
+            var textId = 2 + index * 2;
+            var shapeId = textId + 1;
+            writer.Write($"""
+              <xdr:twoCellAnchor>
+                <xdr:from><xdr:col>{textColumn}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                <xdr:to><xdr:col>{textColumn + 2}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{row + 3}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+                <xdr:sp>
+                  <xdr:nvSpPr>
+                    <xdr:cNvPr id="{textId}" name="Benchmark TextBox {index + 1}"/>
+                    <xdr:cNvSpPr txBox="1"/>
+                  </xdr:nvSpPr>
+                  <xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>
+                  <xdr:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Benchmark note {index + 1}</a:t></a:r></a:p></xdr:txBody>
+                </xdr:sp>
+                <xdr:clientData/>
+              </xdr:twoCellAnchor>
+              <xdr:twoCellAnchor>
+                <xdr:from><xdr:col>{shapeColumn}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                <xdr:to><xdr:col>{shapeColumn + 2}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{row + 3}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+                <xdr:sp>
+                  <xdr:nvSpPr>
+                    <xdr:cNvPr id="{shapeId}" name="Benchmark Shape {index + 1}"/>
+                    <xdr:cNvSpPr/>
+                  </xdr:nvSpPr>
+                  <xdr:spPr><a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom></xdr:spPr>
+                </xdr:sp>
+                <xdr:clientData/>
+              </xdr:twoCellAnchor>
+            """);
+        }
+
+        writer.Write(
+            """
+            </xdr:wsDr>
+            """);
     }
 
     private static void WriteTextEntry(ZipArchive archive, string path, Action<TextWriter> write)
