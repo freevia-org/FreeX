@@ -1,5 +1,4 @@
 id,file,source,license,retrieved_on,url,feature_tags,notes
-poi-charts-123233,123233_charts.xlsx,apache-poi,Apache-2.0,2026-06-04,https://raw.githubusercontent.com/apache/poi/trunk/test-data/spreadsheet/123233_charts.xlsx,charts,Multiple embedded charts
 poi-scatter-chart,SimpleScatterChart.xlsx,apache-poi,Apache-2.0,2026-06-04,https://raw.githubusercontent.com/apache/poi/trunk/test-data/spreadsheet/SimpleScatterChart.xlsx,charts scatter,Scatter chart
 poi-pivot-sample,ExcelPivotTableSample.xlsx,apache-poi,Apache-2.0,2026-06-04,https://raw.githubusercontent.com/apache/poi/trunk/test-data/spreadsheet/ExcelPivotTableSample.xlsx,pivottables,PivotTable sample workbook
 poi-cf-samples,ConditionalFormattingSamples.xlsx,apache-poi,Apache-2.0,2026-06-04,https://raw.githubusercontent.com/apache/poi/trunk/test-data/spreadsheet/ConditionalFormattingSamples.xlsx,conditional-formatting color-scales data-bars icon-sets,Large conditional-formatting sample

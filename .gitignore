@@ -28,8 +28,9 @@ Thumbs.db
 test-corpus/local-private/
 
 # On-demand real-world fidelity corpus: only the manifest + downloader are committed; the
-# downloaded/local workbooks are never committed (third-party files, repo size).
+# downloaded/local workbooks and generated run outputs are never committed.
 fidelity-corpus/files/
+fidelity-corpus/runs/
 
 # Generated icon asset exports
 docs/assets/
