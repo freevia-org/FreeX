@@ -30,7 +30,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
 
         var changedWorkbook = RemoveWorkbookCustomViews(archive);
         changedWorkbook |= NormalizeCorruptPivotCaches(archive);
-        if (changedWorkbook)
+        if (changedWorkbook || plan.RemoveCalcChain)
             RemoveCalcChain(archive);
 
         RemoveInvalidWorkbookExtensionAttributes(archive);
@@ -609,4 +609,6 @@ internal readonly record struct XlsxExcelCompatibilityNormalizationPlan(
         ScanWorksheetCustomViews ||
         ScanWorksheetFormulaText ||
         ScanWorksheetDrawingTargets;
+
+    public bool RemoveCalcChain { get; init; }
 }
