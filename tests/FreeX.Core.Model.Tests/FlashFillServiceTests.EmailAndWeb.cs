@@ -267,6 +267,37 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDomainSuffix_ExtractsSingleAndCuratedMultiLabelPublicSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("alice@contoso.com", "com"),
+                ("bob@northwind.co.uk", "co.uk")
+            ],
+            ["ada@fabrikam.com.au"]);
+
+        result.Should().BeEquivalentTo(["com.au"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("ada@localhost")]
+    [InlineData("ada@intranet.local")]
+    [InlineData("ada@contoso.invalid")]
+    [InlineData("ada@contoso")]
+    [InlineData("ada@contoso.")]
+    public void Fill_EmailDomainSuffix_ReturnsNullForInvalidNoSuffixOrIntranetStyleRemainingDomain(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("alice@contoso.com", "com"),
+                ("bob@northwind.co.uk", "co.uk")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_WebAddressHostWithoutWww_StripsSchemeWwwPathQueryAndFragment()
     {
         var result = FlashFillService.Fill(
@@ -379,6 +410,37 @@ public sealed partial class FlashFillServiceTests
                 ("http://research.fabrikam.org/x", "fabrikam")
             ],
             ["http://localhost/x"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_WebAddressDomainSuffix_ExtractsSingleAndCuratedMultiLabelPublicSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://www.contoso.com/reports", "com"),
+                ("https://shop.northwind.co.uk/path", "co.uk")
+            ],
+            ["https://portal.fabrikam.com.au/a"]);
+
+        result.Should().BeEquivalentTo(["com.au"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("https://localhost/a")]
+    [InlineData("https://intranet.local/a")]
+    [InlineData("https://contoso.invalid/a")]
+    [InlineData("ftp://contoso.com/a")]
+    [InlineData("https://user@contoso.com/a")]
+    public void Fill_WebAddressDomainSuffix_ReturnsNullForInvalidNoSuffixIntranetOrUnsupportedRemainingUrl(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://www.contoso.com/reports", "com"),
+                ("https://shop.northwind.co.uk/path", "co.uk")
+            ],
+            [remaining]);
 
         result.Should().BeNull();
     }

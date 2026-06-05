@@ -152,6 +152,14 @@ public static partial class FlashFillService
         return null;
     }
 
+    private static Func<string, string?>? TryEmailDomainSuffix(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryExtractEmailDomainSuffix(e.Source, out var publicSuffix) && publicSuffix == e.Expected))
+            return null;
+
+        return source => TryExtractEmailDomainSuffix(source, out var publicSuffix) ? publicSuffix : null;
+    }
+
     private static bool TryExtractEmailLocalPartWithoutPlusTag(string source, out string localPart)
     {
         localPart = string.Empty;
@@ -202,12 +210,28 @@ public static partial class FlashFillService
         return TryExtractRootDomainStem(domain, out rootDomainStem);
     }
 
+    private static bool TryExtractEmailDomainSuffix(string source, out string publicSuffix)
+    {
+        publicSuffix = string.Empty;
+
+        var atIndex = source.IndexOf('@', StringComparison.Ordinal);
+        if (atIndex <= 0 || atIndex == source.Length - 1)
+            return false;
+
+        var domain = source[(atIndex + 1)..].Trim();
+        if (domain.Length == 0 || domain.Any(char.IsWhiteSpace))
+            return false;
+
+        return TryExtractPublicSuffix(domain, out publicSuffix);
+    }
+
     private static Func<string, string?>? TryWebAddressCleanup(IReadOnlyList<(string Source, string Expected)> examples)
     {
         var allowHost = true;
         var allowHostWithoutWww = true;
         var allowDomainStem = true;
         var allowRootDomainStem = true;
+        var allowPublicSuffix = true;
 
         foreach (var (source, expected) in examples)
         {
@@ -218,8 +242,10 @@ public static partial class FlashFillService
             allowHostWithoutWww &= expected == parts.HostWithoutWww;
             allowDomainStem &= expected == parts.DomainStem;
             allowRootDomainStem &= expected == parts.RootDomainStem;
+            allowPublicSuffix &= TryExtractPublicSuffix(parts.HostWithoutWww, out var publicSuffix) &&
+                                 expected == publicSuffix;
 
-            if (!allowHost && !allowHostWithoutWww && !allowDomainStem && !allowRootDomainStem)
+            if (!allowHost && !allowHostWithoutWww && !allowDomainStem && !allowRootDomainStem && !allowPublicSuffix)
                 return null;
         }
 
@@ -232,6 +258,11 @@ public static partial class FlashFillService
             kind = WebAddressOutputKind.HostWithoutWww;
         else if (allowHost)
             kind = WebAddressOutputKind.Host;
+        else if (allowPublicSuffix)
+            return source => TryExtractWebAddressParts(source, out var parts) &&
+                             TryExtractPublicSuffix(parts.HostWithoutWww, out var publicSuffix)
+                ? publicSuffix
+                : null;
         else
             return null;
 
@@ -1440,6 +1471,51 @@ public static partial class FlashFillService
         }
 
         return rootDomainStem.Length > 0;
+    }
+
+    private static bool TryExtractPublicSuffix(string host, out string publicSuffix)
+    {
+        publicSuffix = string.Empty;
+
+        if (!TryNormalizeWebHost(host, out var normalized))
+            return false;
+
+        var labels = normalized.Split('.');
+        if (labels.Length < 2)
+            return false;
+
+        if (labels.Length >= 3)
+        {
+            var multiLabelSuffix = labels[^2] + "." + labels[^1];
+            if (KnownMultiLabelPublicSuffixes.Contains(multiLabelSuffix))
+            {
+                publicSuffix = multiLabelSuffix;
+                return true;
+            }
+        }
+
+        var finalLabel = labels[^1];
+        if (!IsRecognizedSingleLabelPublicSuffix(finalLabel))
+            return false;
+
+        publicSuffix = finalLabel;
+        return true;
+    }
+
+    private static bool IsRecognizedSingleLabelPublicSuffix(string suffix)
+    {
+        if (suffix.Length == 2)
+            return suffix.All(char.IsLetter);
+
+        return suffix.Equals("com", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("org", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("net", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("edu", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("gov", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("io", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("co", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("biz", StringComparison.OrdinalIgnoreCase) ||
+               suffix.Equals("info", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetWebAddressOutput(WebAddressParts parts, WebAddressOutputKind kind) =>
