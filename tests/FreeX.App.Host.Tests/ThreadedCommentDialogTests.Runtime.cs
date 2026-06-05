@@ -1,4 +1,3 @@
-using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -21,13 +20,13 @@ public sealed partial class ThreadedCommentDialogTests
 
             try
             {
-                var textBoxes = FindLogicalDescendants<TextBox>(dialog)
+                var textBoxes = WpfTestTree.FindLogicalDescendants<TextBox>(dialog)
                     .ToDictionary(AutomationProperties.GetAutomationId);
-                var buttons = FindLogicalDescendants<Button>(dialog)
+                var buttons = WpfTestTree.FindLogicalDescendants<Button>(dialog)
                     .ToDictionary(AutomationProperties.GetAutomationId);
-                var replySelector = FindLogicalDescendants<ComboBox>(dialog)
+                var replySelector = WpfTestTree.FindLogicalDescendants<ComboBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentReplySelector");
-                var resolvedBox = FindLogicalDescendants<CheckBox>(dialog)
+                var resolvedBox = WpfTestTree.FindLogicalDescendants<CheckBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentResolvedBox");
 
                 AutomationProperties.GetName(textBoxes["ThreadedCommentRootBox"]).Should().Be(UiText.Get("ThreadedComment_EditCommentAutomationName"));
@@ -76,11 +75,11 @@ public sealed partial class ThreadedCommentDialogTests
 
             try
             {
-                var textBoxes = FindLogicalDescendants<TextBox>(dialog)
+                var textBoxes = WpfTestTree.FindLogicalDescendants<TextBox>(dialog)
                     .ToDictionary(AutomationProperties.GetAutomationId);
-                var buttons = FindLogicalDescendants<Button>(dialog)
+                var buttons = WpfTestTree.FindLogicalDescendants<Button>(dialog)
                     .ToDictionary(AutomationProperties.GetAutomationId);
-                var replySelector = FindLogicalDescendants<ComboBox>(dialog)
+                var replySelector = WpfTestTree.FindLogicalDescendants<ComboBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentReplySelector");
 
                 textBoxes["ThreadedCommentSelectedReplyBox"].Text = " ";
@@ -121,13 +120,13 @@ public sealed partial class ThreadedCommentDialogTests
 
             try
             {
-                var headings = FindLogicalDescendants<TextBlock>(dialog)
+                var headings = WpfTestTree.FindLogicalDescendants<TextBlock>(dialog)
                     .Select(block => block.Text)
                     .ToList();
                 headings.Should().Contain("Quinn - 2026-05-31 08:00 UTC");
                 headings.Should().Contain("Codex - 2026-05-31 08:05 UTC");
 
-                var replySelector = FindLogicalDescendants<ComboBox>(dialog)
+                var replySelector = WpfTestTree.FindLogicalDescendants<ComboBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentReplySelector");
                 var replyItem = replySelector.Items.OfType<ComboBoxItem>().Single();
 
@@ -141,17 +140,5 @@ public sealed partial class ThreadedCommentDialogTests
                 dialog.Close();
             }
         });
-    }
-
-    private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
-    {
-        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
-        {
-            if (child is T match)
-                yield return match;
-
-            foreach (var descendant in FindLogicalDescendants<T>(child))
-                yield return descendant;
-        }
     }
 }

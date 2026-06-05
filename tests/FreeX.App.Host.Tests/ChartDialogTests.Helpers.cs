@@ -14,16 +14,7 @@ public sealed partial class ChartDialogTests
 {
     private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
         where T : DependencyObject
-    {
-        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
-        {
-            if (child is T typedChild)
-                yield return typedChild;
-
-            foreach (var descendant in FindLogicalDescendants<T>(child))
-                yield return descendant;
-        }
-    }
+        => WpfTestTree.FindLogicalDescendants<T>(root);
 
     private static string ReadChartDialogSource() =>
         string.Join(Environment.NewLine, new[]
