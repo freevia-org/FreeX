@@ -20,6 +20,8 @@ internal sealed record XlsxSaveDiagnostics(
 {
     public static XlsxSaveDiagnostics NotRun { get; } = new(XlsxSavePath.NotRun, "not_run");
 
+    public bool InvalidatesCalcChain { get; init; }
+
     public int TotalPatchChangeCount =>
         CellChangeCount +
         DimensionChangeCount +
@@ -57,6 +59,9 @@ internal sealed record XlsxSaveDiagnostics(
             commentChangeCount,
             worksheetViewChangeCount);
 
-    public static XlsxSaveDiagnostics FullSave(string reason) =>
-        new(XlsxSavePath.FullSave, reason);
+    public static XlsxSaveDiagnostics FullSave(string reason, bool invalidatesCalcChain = false) =>
+        new(XlsxSavePath.FullSave, reason)
+        {
+            InvalidatesCalcChain = invalidatesCalcChain
+        };
 }

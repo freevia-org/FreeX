@@ -751,9 +751,12 @@ public sealed partial class XlsxFileAdapter
             ref string? currentModelFingerprint,
             out XlsxSaveDiagnostics diagnostics)
         {
-            static bool Fail(string reason, out XlsxSaveDiagnostics diagnostics)
+            static bool Fail(
+                string reason,
+                out XlsxSaveDiagnostics diagnostics,
+                bool invalidatesCalcChain = false)
             {
-                diagnostics = XlsxSaveDiagnostics.FullSave(reason);
+                diagnostics = XlsxSaveDiagnostics.FullSave(reason, invalidatesCalcChain);
                 return false;
             }
 
@@ -789,7 +792,13 @@ public sealed partial class XlsxFileAdapter
                     out var worksheetViewChanges,
                     out var currentPatchValidationModelFingerprint,
                     out var changeBlockReason))
-                return Fail(changeBlockReason ?? "patch_blocked_changes_not_patchable", out diagnostics);
+            {
+                var reason = changeBlockReason ?? "patch_blocked_changes_not_patchable";
+                return Fail(
+                    reason,
+                    out diagnostics,
+                    PatchBlockReasonInvalidatesCalcChain(reason));
+            }
 
             if (changes.Count == 0 &&
                 dimensionChanges.Count == 0 &&
@@ -807,6 +816,7 @@ public sealed partial class XlsxFileAdapter
             var patchedSourceModelFingerprint = currentModelFingerprint;
             var patchedPatchValidationFingerprint =
                 currentPatchValidationModelFingerprint ?? CreatePatchValidationModelFingerprint(workbook);
+            var invalidatesCalcChain = ChangesInvalidateCalcChain(changes);
 
             using var patchedPackage = new MemoryStream(Count + 4096);
             patchedPackage.Write(Buffer, Offset, Count);
@@ -840,7 +850,7 @@ public sealed partial class XlsxFileAdapter
                 {
                     var worksheetEntry = archive.GetEntry(worksheetPath);
                     if (worksheetEntry is null)
-                        return Fail("patch_apply_missing_worksheet", out diagnostics);
+                        return Fail("patch_apply_missing_worksheet", out diagnostics, invalidatesCalcChain);
 
                     if (cellChangesByWorksheet.TryGetValue(worksheetPath, out var streamingCellChanges) &&
                         !dimensionChangesByWorksheet.ContainsKey(worksheetPath) &&
@@ -859,31 +869,31 @@ public sealed partial class XlsxFileAdapter
                     if (cellChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetCellChanges) &&
                         !XlsxCellPatchBaseline.ApplyChanges(worksheetXml, worksheetCellChanges))
                     {
-                        return Fail("patch_apply_cell_values", out diagnostics);
+                        return Fail("patch_apply_cell_values", out diagnostics, invalidatesCalcChain);
                     }
 
                     if (dimensionChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetDimensionPatch) &&
                         !XlsxCellPatchBaseline.ApplyDimensionChanges(worksheetXml, worksheetDimensionPatch))
                     {
-                        return Fail("patch_apply_dimensions", out diagnostics);
+                        return Fail("patch_apply_dimensions", out diagnostics, invalidatesCalcChain);
                     }
 
                     if (mergeRegionChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetMergeRegionPatch) &&
                         !XlsxCellPatchBaseline.ApplyMergeRegionChanges(worksheetXml, worksheetMergeRegionPatch))
                     {
-                        return Fail("patch_apply_merge_regions", out diagnostics);
+                        return Fail("patch_apply_merge_regions", out diagnostics, invalidatesCalcChain);
                     }
 
                     if (hyperlinkChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetHyperlinkPatch) &&
                         !XlsxCellPatchBaseline.ApplyHyperlinkChanges(worksheetXml, worksheetHyperlinkPatch))
                     {
-                        return Fail("patch_apply_hyperlinks", out diagnostics);
+                        return Fail("patch_apply_hyperlinks", out diagnostics, invalidatesCalcChain);
                     }
 
                     if (worksheetViewChangesByWorksheet.TryGetValue(worksheetPath, out var worksheetViewPatch) &&
                         !XlsxCellPatchBaseline.ApplyWorksheetViewChanges(worksheetXml, worksheetViewPatch))
                     {
-                        return Fail("patch_apply_worksheet_view", out diagnostics);
+                        return Fail("patch_apply_worksheet_view", out diagnostics, invalidatesCalcChain);
                     }
 
                     XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
@@ -893,18 +903,16 @@ public sealed partial class XlsxFileAdapter
                 {
                     var commentEntry = archive.GetEntry(commentPartPath);
                     if (commentEntry is null)
-                        return Fail("patch_apply_missing_comment_part", out diagnostics);
+                        return Fail("patch_apply_missing_comment_part", out diagnostics, invalidatesCalcChain);
 
                     var commentsXml = XlsxPackageXmlEditor.LoadXml(commentEntry);
                     if (!XlsxCellPatchBaseline.ApplyCommentChanges(commentsXml, commentPartChanges))
-                        return Fail("patch_apply_comments", out diagnostics);
+                        return Fail("patch_apply_comments", out diagnostics, invalidatesCalcChain);
 
                     XlsxPackageXmlEditor.ReplaceXml(archive, commentPartPath, commentsXml);
                 }
 
-                if (changes.Any(change =>
-                        change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue ||
-                        (change.Kind == XlsxCellValuePatchKind.DeletedCell && change.OriginalFormulaText is not null)))
+                if (invalidatesCalcChain)
                 {
                     XlsxExcelCompatibilityNormalizer.RemoveCalcChain(archive);
                 }
@@ -975,6 +983,14 @@ public sealed partial class XlsxFileAdapter
                 worksheetViewChanges.Count);
             return true;
         }
+
+        private static bool PatchBlockReasonInvalidatesCalcChain(string reason) =>
+            reason is "change_formula_text" or "change_formula_to_literal";
+
+        private static bool ChangesInvalidateCalcChain(IEnumerable<XlsxCellValuePatch> changes) =>
+            changes.Any(change =>
+                change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue ||
+                (change.Kind == XlsxCellValuePatchKind.DeletedCell && change.OriginalFormulaText is not null));
 
         private static void NormalizePatchCustomViews(ZipArchive archive, Workbook workbook, bool sourceHasCustomViews)
         {

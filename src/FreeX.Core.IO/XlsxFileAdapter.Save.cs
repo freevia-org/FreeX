@@ -311,14 +311,22 @@ public sealed partial class XlsxFileAdapter
             stream.Position = 0;
             stream.SetLength(0);
             xlWorkbook.SaveAs(stream);
-            ApplyPackagePostProcessing(workbook, stream, currentModelFingerprint);
+            ApplyPackagePostProcessing(
+                workbook,
+                stream,
+                currentModelFingerprint,
+                removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain);
             stream.Position = stream.Length;
             return;
         }
 
         using var packageStream = new MemoryStream();
         xlWorkbook.SaveAs(packageStream);
-        ApplyPackagePostProcessing(workbook, packageStream, currentModelFingerprint);
+        ApplyPackagePostProcessing(
+            workbook,
+            packageStream,
+            currentModelFingerprint,
+            removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain);
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
     }

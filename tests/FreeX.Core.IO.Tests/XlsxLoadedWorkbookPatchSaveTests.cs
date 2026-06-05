@@ -19,6 +19,12 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         { BlankValue.Instance, null, null }
     };
 
+    public static TheoryData<string> AttributedFormulaElements => new()
+    {
+        """<f t="shared" si="0">1+1</f>""",
+        """<f t="array" ref="A1:A1" ca="1">1+1</f>"""
+    };
+
     private static void PrepareLoadedWorkbookForEdit(Workbook workbook)
     {
         XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
@@ -1384,10 +1390,11 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .BeNull();
     }
 
-    [Fact]
-    public void Save_LoadedWorkbookWithAttributedFormulaTextEdit_FallsBackToFullSave()
+    [Theory]
+    [MemberData(nameof(AttributedFormulaElements))]
+    public void Save_LoadedWorkbookWithAttributedFormulaTextEdit_FallsBackToFullSave(string formulaElement)
     {
-        var sourceBytes = CreateFormulaSourcePackage("""<f t="shared" si="0">1+1</f>""");
+        var sourceBytes = CreateFormulaSourcePackage(formulaElement);
         var adapter = new XlsxFileAdapter();
         Workbook workbook;
         using (var source = new MemoryStream(sourceBytes, writable: false))
@@ -1402,12 +1409,73 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         adapter.Save(workbook, saved);
         var savedBytes = saved.ToArray();
 
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.InvalidatesCalcChain.Should().BeTrue();
         ReadPackageEntry(savedBytes, "xl/workbook.xml")
             .Should()
             .NotEqual(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        PackageHasEntry(savedBytes, "xl/calcChain.xml").Should().BeFalse();
+        ReadContentTypeOverrides(savedBytes).Should().NotContain("/xl/calcChain.xml");
+        ReadWorkbookRelationshipTypes(savedBytes)
+            .Should()
+            .NotContain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain");
         ReadCellFormula(savedBytes, "xl/worksheets/sheet1.xml", "A1")
             .Should()
             .Be("1+2");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithAttributedArrayFormulaCachedValueEdit_PatchesCacheAndPreservesFormulaMetadata()
+    {
+        const string arrayFormula = """<f t="array" ref="A1:A1" ca="1">1+1</f>""";
+        var sourceBytes = CreateFormulaSourcePackage(arrayFormula);
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
+        cell.FormulaText.Should().Be("1+1");
+        cell.Value = new NumberValue(4);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/calcChain.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/calcChain.xml"));
+        ReadContentTypeOverrides(savedBytes).Should().Contain("/xl/calcChain.xml");
+        ReadWorkbookRelationshipTypes(savedBytes)
+            .Should()
+            .Contain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain");
+        ReadCellFormula(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("1+1");
+        ReadCellFormulaAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "t")
+            .Should()
+            .Be("array");
+        ReadCellFormulaAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "ref")
+            .Should()
+            .Be("A1:A1");
+        ReadCellFormulaAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "ca")
+            .Should()
+            .Be("1");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("4");
+
+        using var reload = new MemoryStream(savedBytes, writable: false);
+        var reloadedCell = adapter.Load(reload).GetSheetAt(0).GetCell(1, 1)!;
+        reloadedCell.FormulaText.Should().Be("1+1");
+        reloadedCell.Value.Should().Be(new NumberValue(4));
     }
 
     [Fact]
@@ -2685,6 +2753,17 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         var cell = ReadCellElement(packageBytes, worksheetPath, reference);
         var ns = cell.Name.Namespace;
         return cell.Element(ns + "f")?.Value;
+    }
+
+    private static string? ReadCellFormulaAttribute(
+        byte[] packageBytes,
+        string worksheetPath,
+        string reference,
+        string attributeName)
+    {
+        var cell = ReadCellElement(packageBytes, worksheetPath, reference);
+        var ns = cell.Name.Namespace;
+        return cell.Element(ns + "f")?.Attribute(attributeName)?.Value;
     }
 
     private static string? ReadCellType(byte[] packageBytes, string worksheetPath, string reference) =>
