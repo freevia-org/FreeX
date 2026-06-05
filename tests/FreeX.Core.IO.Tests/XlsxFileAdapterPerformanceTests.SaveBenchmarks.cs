@@ -339,6 +339,53 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [BenchmarkFact]
+    public void Benchmark_SaveLoadedLargeCellBaselineWorkbook_ReportsTiming()
+    {
+        var package = CreateLargePatchBaselineXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var loadStream = new MemoryStream(package, writable: false))
+            workbook = adapter.Load(loadStream);
+
+        workbook.SheetCount.Should().Be(1);
+        workbook.Sheets[0].CellCount.Should().Be(LargePatchBaselineRows);
+
+        var prepareAllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var prepare = Stopwatch.StartNew();
+        var prepared = XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var prepareBlockReason);
+        prepare.Stop();
+        var prepareAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - prepareAllocatedBefore;
+
+        var sheet = workbook.Sheets[0];
+        sheet.SetCell(new CellAddress(sheet.Id, (uint)LargePatchBaselineRows, 1), new NumberValue(42));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        using var stream = new MemoryStream();
+        var saveAllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var save = Stopwatch.StartNew();
+        adapter.Save(workbook, stream);
+        save.Stop();
+        var saveAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - saveAllocatedBefore;
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_LARGE_CELL_BASELINE " +
+            $"rows={LargePatchBaselineRows:N0} source_bytes={package.Length:N0} package_bytes={stream.Length:N0} " +
+            $"prepared={prepared.ToString().ToLowerInvariant()} prepare_reason=\"{prepareBlockReason ?? ""}\" " +
+            $"prepare_ms={prepare.Elapsed.TotalMilliseconds:F2} prepare_allocated_bytes={prepareAllocatedBytes:N0} " +
+            $"save_ms={save.Elapsed.TotalMilliseconds:F2} save_allocated_bytes={saveAllocatedBytes:N0} " +
+            FormatSaveDiagnostics(adapter));
+
+        prepared.Should().BeTrue(prepareBlockReason);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        stream.Length.Should().BeGreaterThan(0);
+    }
+
+    [BenchmarkFact]
     public void Benchmark_SaveLoadedGeneratedStyleHeavyExistingStyleWorkbook_ReportsTiming()
     {
         const int iterations = 5;
