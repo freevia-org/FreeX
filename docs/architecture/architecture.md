@@ -412,7 +412,7 @@ Accessibility Checker remains a deterministic model-backed audit in `Core.Comman
 engine. It reports issues supported by current workbook state, including merged cells, blank structured-table headers,
 low-contrast cell text against base, workbook theme/tint, and patterned fills, low-contrast text boxes against
 explicit, theme, and workbook object-default fills, missing or generic PivotTable alternate title/description text, missing or generic object alternate/title/name text including common default object labels, compact/separator-numbered defaults, dated screenshot/photo variants including date/time screen-capture filename forms, camera/phone default filenames, and copied image filename defaults, hidden sheets/rows/columns with
-modeled content including hyperlinks, blank, expanded generic action-phrase, commerce CTA, and signup/support CTA phrases, URL-like, or unclear hyperlink display text, and charts whose title or axis title is missing or generic as the current accessible label.
+modeled content including hyperlinks, structured tables, PivotTables, visible embedded charts, sparklines, pictures, shapes, and text boxes, hyperlink display text that is blank, an expanded generic action phrase, a commerce CTA, a signup/support CTA, URL-like, or unclear, and charts whose title or axis title is missing or generic as the current accessible label.
 
 Native JSON persists the local threaded-comment model, including author, replies, created/modified UTC activity
 metadata, and resolved state, so FreeX's in-app comment threads survive native save/load. Comment navigation and
@@ -446,7 +446,7 @@ stating that Microsoft 365 sign-in, cloud links, and coauthoring are not impleme
 through Save As, and hands Windows Share the normalized local path.
 
 Error Checking remains a deterministic model-backed audit in `Core.Commands`, not a full Excel heuristic inference
-engine. It reports cached formula error values, text cells that parse as finite invariant-culture numbers including
+engine. It reports cached formula error values (`#DIV/0!`, `#VALUE!`, `#REF!`, `#NAME?`, `#N/A`, `#NUM!`, `#NULL!`, `#SPILL!`, `#CALC!`, and `#CIRCULAR!`), text cells that parse as finite invariant-culture numbers including
 fullwidth digit/comma/decimal/scientific-notation forms with normalized exponent signs including Unicode minus plus small comma/decimal/sign, ordinary-space and no-break/thin-space group separators, trailing-sign number text, and Arabic-Indic/extended Arabic-Indic digit/decimal/thousands/percent variants, supported currency including fullwidth dollar/pound/yen/won and small dollar symbols, ASCII/fullwidth/small/Arabic percent, accounting-parentheses, and Unicode/fullwidth leading-sign forms, formulas
 stored as text including apostrophe-prefixed and fullwidth-equals imports, two-digit-year text dates including fullwidth digit/Latin-letter/separator/comma variants, formulas whose direct parser-extracted precedents include missing or blank cells, table calculated
 column formulas that differ from the column formula, and common aggregate formulas (`SUM`, `AVERAGE`, `AVERAGEA`,
