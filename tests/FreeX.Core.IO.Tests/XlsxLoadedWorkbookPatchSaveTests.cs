@@ -1003,6 +1003,83 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithPivotChartAndOutsideCellEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreatePivotChartSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PivotTables.Should().ContainSingle();
+        sheet.Charts.Should().ContainSingle().Which.IsPivotChart.Should().BeTrue();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("pivot chart outside patched"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/drawing1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/drawing1.xml"));
+        ReadPackageEntry(savedBytes, "xl/drawings/_rels/drawing1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/drawings/_rels/drawing1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/charts/chart1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/charts/chart1.xml"));
+        ReadPackageEntry(savedBytes, "xl/pivotCache/pivotCacheDefinition1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/pivotCache/pivotCacheDefinition1.xml"));
+        ReadPackageEntry(savedBytes, "xl/pivotTables/pivotTable1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/pivotTables/pivotTable1.xml"));
+        ReadPackageEntry(savedBytes, "xl/pivotTables/_rels/pivotTable1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/pivotTables/_rels/pivotTable1.xml.rels"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("pivot chart outside patched");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        reloadedSheet.GetCell(4, 4)!.Value.Should().Be(new TextValue("pivot chart outside patched"));
+        reloadedSheet.PivotTables.Should().ContainSingle();
+        reloadedSheet.Charts.Should().ContainSingle().Which.IsPivotChart.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithPivotChartSourceCellEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreatePivotChartSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PivotTables.Should().ContainSingle();
+        sheet.Charts.Should().ContainSingle().Which.IsPivotChart.Should().BeTrue();
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(99));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        saved.Length.Should().BeGreaterThan(0);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_pivot_source_cell");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithClearedLiteralCell_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
@@ -2241,6 +2318,69 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
         sheet.PivotTables.Add(pivot);
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreatePivotChartSourcePackage()
+    {
+        var workbook = new Workbook("PivotChartPatch");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("outside"));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = sourceRange.ToString(),
+            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml",
+            RecordCount = 2,
+            CreatedVersion = 8,
+            MinRefreshableVersion = 4
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Category"));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", 4));
+        workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = sourceRange,
+            TargetRange = new GridRange(
+                new CellAddress(sheet.Id, 6, 4),
+                new CellAddress(sheet.Id, 9, 5)),
+            PackagePart = "xl/pivotTables/pivotTable1.xml"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
+        sheet.PivotTables.Add(pivot);
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = pivot.TargetRange,
+            IsPivotChart = true,
+            PivotTableName = pivot.Name,
+            PivotCacheId = pivot.CacheId,
+            Title = "Pivot Chart",
+            Left = 20,
+            Top = 20,
+            Width = 420,
+            Height = 280
+        });
 
         using var stream = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, stream);

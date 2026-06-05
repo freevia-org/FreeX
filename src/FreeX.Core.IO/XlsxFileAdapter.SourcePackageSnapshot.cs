@@ -823,7 +823,7 @@ public sealed partial class XlsxFileAdapter
                     return true;
                 }
 
-                if (sheet.Charts.Any(ChartRequiresFullSavePostProcessing))
+                if (sheet.Charts.Any(chart => ChartRequiresFullSavePostProcessing(workbook, sheet, chart)))
                 {
                     blockReason = "workbook_postprocessing_charts";
                     return true;
@@ -879,10 +879,36 @@ public sealed partial class XlsxFileAdapter
             return false;
         }
 
-        private static bool ChartRequiresFullSavePostProcessing(ChartModel chart) =>
-            chart.IsPivotChart ||
+        private static bool ChartRequiresFullSavePostProcessing(Workbook workbook, Sheet sheet, ChartModel chart) =>
             chart.ExternalData is not null ||
-            chart.UserShapes is not null;
+            chart.UserShapes is not null ||
+            (chart.IsPivotChart && !IsPatchSafePivotChartModel(workbook, sheet, chart));
+
+        private static bool IsPatchSafePivotChartModel(Workbook workbook, Sheet chartSheet, ChartModel chart)
+        {
+            if (!chart.IsPivotChart)
+                return true;
+
+            if (string.IsNullOrWhiteSpace(chart.PivotTableName) ||
+                chart.PivotCacheId is not { } pivotCacheId)
+            {
+                return false;
+            }
+
+            var sourceSheetName = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
+                ? chartSheet.Name
+                : chart.PivotSourceSheetName;
+            var sourceSheet = workbook.Sheets.FirstOrDefault(sheet =>
+                string.Equals(sheet.Name, sourceSheetName, StringComparison.OrdinalIgnoreCase));
+            if (sourceSheet is null)
+                return false;
+
+            var pivot = sourceSheet.PivotTables.FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase));
+            return pivot is not null &&
+                   pivot.CacheId == pivotCacheId &&
+                   workbook.PivotCaches.Any(cache => cache.CacheId == pivotCacheId);
+        }
 
         private static bool SheetHasPatchUnsafeDrawingObjects(Sheet sheet)
         {
@@ -5413,7 +5439,6 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static bool IsPatchUnsafeChartModel(ChartModel chart) =>
-            chart.IsPivotChart ||
             chart.ExternalData is not null ||
             chart.UserShapes is not null;
 

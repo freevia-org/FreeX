@@ -38,6 +38,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     private const int GeneratedStyleHeavyStyleOnlyStartColumn = GeneratedStyleHeavyValueColumnsPerSheet + 2;
     private const int GeneratedStyleHeavyDrawingShapePairs = 24;
     private const int GeneratedStyleHeavyChartExSourceRows = 24;
+    private const int GeneratedStyleHeavyPivotChartSourceRows = 24;
     private const int LargePatchBaselineRows = 260_000;
 
     private static byte[] CreateDenseXlsxPackage()
@@ -362,6 +363,114 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         return stream.ToArray();
     }
 
+    private static byte[] AddGeneratedStyleHeavyPivotChartPackage(byte[] package)
+    {
+        using var stream = new MemoryStream(capacity: package.Length + 20 * 1024);
+        stream.Write(package, 0, package.Length);
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            archive.GetEntry("xl/drawings/drawing1.xml")?.Delete();
+            WriteTextEntry(archive, "xl/drawings/drawing1.xml", WriteGeneratedStyleHeavyPivotChartDrawing);
+            ReplaceZipEntryXml(archive, "xl/drawings/_rels/drawing1.xml.rels", new XDocument(
+                new XElement(
+                    packageRelNs + "Relationships",
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdGeneratedPivotChart1"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
+                        new XAttribute("Target", "../charts/chart1.xml")))));
+
+            archive.GetEntry("xl/charts/chart1.xml")?.Delete();
+            WriteTextEntry(archive, "xl/charts/chart1.xml", WriteGeneratedStyleHeavyPivotChart);
+
+            ReplaceZipEntryXml(archive, "xl/pivotTables/_rels/pivotTable1.xml.rels", new XDocument(
+                new XElement(
+                    packageRelNs + "Relationships",
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdGeneratedPivotCache1"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"),
+                        new XAttribute("Target", "../pivotCache/pivotCacheDefinition1.xml")))));
+            WriteTextEntry(archive, "xl/pivotTables/pivotTable1.xml", WriteGeneratedStyleHeavyPivotTable);
+            WriteTextEntry(archive, "xl/pivotCache/pivotCacheDefinition1.xml", WriteGeneratedStyleHeavyPivotCacheDefinition);
+
+            var workbookXml = LoadZipEntryXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Elements(workbookNs + "pivotCaches").Remove();
+            var pivotCaches = new XElement(
+                workbookNs + "pivotCaches",
+                new XElement(
+                    workbookNs + "pivotCache",
+                    new XAttribute("cacheId", "1"),
+                    new XAttribute(relNs + "id", "rIdGeneratedPivotCache1")));
+            if (workbookXml.Root.Element(workbookNs + "sheets") is { } sheets)
+                sheets.AddBeforeSelf(pivotCaches);
+            else
+                workbookXml.Root.Add(pivotCaches);
+            ReplaceZipEntryXml(archive, "xl/workbook.xml", workbookXml);
+
+            var workbookRelsXml = LoadZipEntryXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdGeneratedPivotCache1"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"),
+                new XAttribute("Target", "pivotCache/pivotCacheDefinition1.xml")));
+            ReplaceZipEntryXml(archive, "xl/_rels/workbook.xml.rels", workbookRelsXml);
+
+            const string worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadZipEntryXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(
+                new XElement(
+                    packageRelNs + "Relationship",
+                    new XAttribute("Id", "rIdGeneratedPivotChartDrawing1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+                    new XAttribute("Target", "../drawings/drawing1.xml")),
+                new XElement(
+                    packageRelNs + "Relationship",
+                    new XAttribute("Id", "rIdGeneratedPivotTable1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable"),
+                    new XAttribute("Target", "../pivotTables/pivotTable1.xml")));
+            ReplaceZipEntryXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var worksheetXml = LoadZipEntryXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(
+                new XElement(
+                    workbookNs + "drawing",
+                    new XAttribute(relNs + "id", "rIdGeneratedPivotChartDrawing1")),
+                new XElement(
+                    workbookNs + "pivotTableDefinition",
+                    new XAttribute(relNs + "id", "rIdGeneratedPivotTable1")));
+            ReplaceZipEntryXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var contentTypesXml = LoadZipEntryXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/drawings/drawing1.xml",
+                "application/vnd.openxmlformats-officedocument.drawing+xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/charts/chart1.xml",
+                "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/pivotCache/pivotCacheDefinition1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                "/xl/pivotTables/pivotTable1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml");
+            ReplaceZipEntryXml(archive, "[Content_Types].xml", contentTypesXml);
+        }
+
+        return stream.ToArray();
+    }
+
     private static void WriteGeneratedStyleHeavyDrawingShapes(TextWriter writer)
     {
         writer.Write(
@@ -498,6 +607,110 @@ public sealed partial class XlsxFileAdapterPerformanceTests
               <a:schemeClr val="accent2"/>
               <a:schemeClr val="accent3"/>
             </cs:colorStyle>
+            """);
+
+    private static void WriteGeneratedStyleHeavyPivotChartDrawing(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                      xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <xdr:twoCellAnchor>
+                <xdr:from><xdr:col>14</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                <xdr:to><xdr:col>22</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>18</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+                <xdr:graphicFrame macro="">
+                  <xdr:nvGraphicFramePr>
+                    <xdr:cNvPr id="2" name="Generated Pivot Chart"/>
+                    <xdr:cNvGraphicFramePr/>
+                  </xdr:nvGraphicFramePr>
+                  <xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
+                  <a:graphic>
+                    <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                      <c:chart r:id="rIdGeneratedPivotChart1"/>
+                    </a:graphicData>
+                  </a:graphic>
+                </xdr:graphicFrame>
+                <xdr:clientData/>
+              </xdr:twoCellAnchor>
+            </xdr:wsDr>
+            """);
+
+    private static void WriteGeneratedStyleHeavyPivotChart(TextWriter writer) =>
+        writer.Write($"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:pivotSource>
+                <c:name>'Generated 1'!PivotTable1</c:name>
+                <c:fmtId val="7"/>
+              </c:pivotSource>
+              <c:chart>
+                <c:title><c:tx><c:rich><a:p><a:r><a:t>Generated Pivot Chart</a:t></a:r></a:p></c:rich></c:tx></c:title>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:tx><c:strRef><c:f>'Generated 1'!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>'Generated 1'!$A$2:$A${GeneratedStyleHeavyPivotChartSourceRows}</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>'Generated 1'!$B$2:$B${GeneratedStyleHeavyPivotChartSourceRows}</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+    private static void WriteGeneratedStyleHeavyPivotCacheDefinition(TextWriter writer) =>
+        writer.Write($"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                                  refreshedBy="FreeX Benchmark"
+                                  refreshOnLoad="0"
+                                  recordCount="{GeneratedStyleHeavyPivotChartSourceRows - 1}">
+              <cacheSource type="worksheet">
+                <worksheetSource ref="A1:B{GeneratedStyleHeavyPivotChartSourceRows}" sheet="Generated 1"/>
+              </cacheSource>
+              <cacheFields count="2">
+                <cacheField name="R1C1" numFmtId="0">
+                  <sharedItems count="0"/>
+                </cacheField>
+                <cacheField name="R1C2" numFmtId="0">
+                  <sharedItems containsNumber="1" count="0"/>
+                </cacheField>
+              </cacheFields>
+            </pivotCacheDefinition>
+            """);
+
+    private static void WriteGeneratedStyleHeavyPivotTable(TextWriter writer) =>
+        writer.Write(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                                  name="PivotTable1"
+                                  cacheId="1"
+                                  dataOnRows="0"
+                                  applyNumberFormats="0"
+                                  applyBorderFormats="0"
+                                  applyFontFormats="0"
+                                  applyPatternFormats="0"
+                                  applyAlignmentFormats="0"
+                                  applyWidthHeightFormats="1">
+              <location ref="D30:E32" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
+              <pivotFields count="2">
+                <pivotField axis="axisRow" showAll="0"/>
+                <pivotField dataField="1" showAll="0"/>
+              </pivotFields>
+              <rowFields count="1">
+                <field x="0"/>
+              </rowFields>
+              <dataFields count="1">
+                <dataField name="Sum of R1C2" fld="1" subtotal="sum" numFmtId="0"/>
+              </dataFields>
+            </pivotTableDefinition>
             """);
 
     private static void WriteTextEntry(ZipArchive archive, string path, Action<TextWriter> write)
