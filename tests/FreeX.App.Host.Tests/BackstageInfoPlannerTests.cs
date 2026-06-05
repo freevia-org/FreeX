@@ -74,29 +74,23 @@ public sealed class BackstageInfoPlannerTests
     [Fact]
     public void Build_IncludesSavedFileSizeAndLastModifiedMetadata()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "saved.xlsx");
         File.WriteAllBytes(path, new byte[1536]);
         var workbook = new Workbook("Saved");
         var sheet = workbook.AddSheet("Sheet1");
 
-        try
-        {
-            var lastWrite = new DateTime(2026, 5, 31, 14, 25, 0);
-            File.SetLastWriteTime(path, lastWrite);
-            var expectedLastWrite = File.GetLastWriteTime(path).ToString("g", CultureInfo.InvariantCulture);
+        var lastWrite = new DateTime(2026, 5, 31, 14, 25, 0);
+        File.SetLastWriteTime(path, lastWrite);
+        var expectedLastWrite = File.GetLastWriteTime(path).ToString("g", CultureInfo.InvariantCulture);
 
-            var plan = BackstageInfoPlanner.Build(workbook, path, sheet, CultureInfo.InvariantCulture);
+        var plan = BackstageInfoPlanner.Build(workbook, path, sheet, CultureInfo.InvariantCulture);
 
-            plan.FileSize.Should().Be("1.5 KB (1,536 bytes)");
-            plan.LastModified.Should().Be(expectedLastWrite);
-            plan.SharingStatus.Should().Be($"Ready for Windows Share from {path}.");
-            plan.ExportStatus.Should().Contain("Ready for local PDF/XPS export");
-            plan.Summary.ActiveSheetProtectionSummary.Should().Be("Active sheet unprotected.");
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        plan.FileSize.Should().Be("1.5 KB (1,536 bytes)");
+        plan.LastModified.Should().Be(expectedLastWrite);
+        plan.SharingStatus.Should().Be($"Ready for Windows Share from {path}.");
+        plan.ExportStatus.Should().Contain("Ready for local PDF/XPS export");
+        plan.Summary.ActiveSheetProtectionSummary.Should().Be("Active sheet unprotected.");
     }
 
     [Fact]
