@@ -85,6 +85,24 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Theory]
+    [InlineData("\u0664\u0662")]
+    [InlineData("\u0661\u066C\u0662\u0663\u0664\u066B\u0665\u0660")]
+    [InlineData("\u06F1\u06F2\u06F3\u06F4\u06F5")]
+    [InlineData("\u0662\u0665\u066A")]
+    public void FindFormulaErrorIssues_ReturnsArabicNumberTextStoredAsText(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(value));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.Cell.Should().Be("A1");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.NumberStoredAsTextErrorCode);
+    }
+
+    [Theory]
     [InlineData("$42")]
     [InlineData("'$42")]
     [InlineData("-$42")]
@@ -374,6 +392,7 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("1\uFE50234\uFE5256kg")]
     [InlineData("123\uFE5245kg")]
     [InlineData("1\uFE522\uFE523")]
+    [InlineData("\u066B\u066C")]
     public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidNumberText(string value)
     {
         var wb = new Workbook("test");

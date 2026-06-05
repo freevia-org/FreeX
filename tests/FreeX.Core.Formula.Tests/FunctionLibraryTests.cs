@@ -17,25 +17,6 @@ public partial class FunctionLibraryTests
 {
     private readonly FormulaEvaluator _eval = new();
 
-    private sealed class CultureScope : IDisposable
-    {
-        private readonly System.Globalization.CultureInfo _originalCulture = System.Globalization.CultureInfo.CurrentCulture;
-        private readonly System.Globalization.CultureInfo _originalUiCulture = System.Globalization.CultureInfo.CurrentUICulture;
-
-        public CultureScope(string cultureName)
-        {
-            var culture = System.Globalization.CultureInfo.GetCultureInfo(cultureName);
-            System.Globalization.CultureInfo.CurrentCulture = culture;
-            System.Globalization.CultureInfo.CurrentUICulture = culture;
-        }
-
-        public void Dispose()
-        {
-            System.Globalization.CultureInfo.CurrentCulture = _originalCulture;
-            System.Globalization.CultureInfo.CurrentUICulture = _originalUiCulture;
-        }
-    }
-
     private static Sheet MakeSheet(params (int row, int col, ScalarValue val)[] cells)
     {
         var sheet = new Sheet(SheetId.New(), "S");
