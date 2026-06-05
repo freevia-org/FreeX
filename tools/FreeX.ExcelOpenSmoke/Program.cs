@@ -460,6 +460,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomPropertyPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSingleXmlCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSmartTagMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -669,6 +670,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomPropertyPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSingleXmlCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSmartTagMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3401,6 +3403,359 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet scenario metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetSortAndDataConsolidationMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetSortAndDataConsolidationMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetSortAndDataConsolidationMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetSortAndDataConsolidationMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var sortStates = root.Elements(SpreadsheetNs + "sortState").ToArray();
+        if (sortStates.Length > 1)
+            issues.Add($"{worksheetPart} has {sortStates.Length} sortState elements; expected at most one");
+
+        foreach (var sortState in sortStates.Select((element, index) => new WorksheetSortStateReference(index + 1, element)))
+        {
+            AddWorksheetSortStateIssues(worksheetPart, root, sortState, issues);
+        }
+
+        var dataConsolidates = root.Elements(SpreadsheetNs + "dataConsolidate").ToArray();
+        if (dataConsolidates.Length > 1)
+            issues.Add($"{worksheetPart} has {dataConsolidates.Length} dataConsolidate elements; expected at most one");
+
+        foreach (var dataConsolidate in dataConsolidates.Select((element, index) => new WorksheetDataConsolidationReference(index + 1, element)))
+        {
+            AddWorksheetDataConsolidationIssues(worksheetPart, root, dataConsolidate, issues);
+        }
+    }
+
+    private static void AddWorksheetSortStateIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetSortStateReference sortStateReference,
+        List<string> issues)
+    {
+        var sortState = sortStateReference.Element;
+        var description = $"sortState #{sortStateReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            sortState,
+            description,
+            [
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "columnSort", sortState.Attribute("columnSort")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "caseSensitive", sortState.Attribute("caseSensitive")?.Value, issues);
+
+        var reference = sortState.Attribute("ref")?.Value;
+        if (!string.IsNullOrWhiteSpace(reference) && !IsValidLocalWorksheetReference(reference))
+            issues.Add($"{worksheetPart} {description} has invalid local ref reference '{reference}'");
+
+        foreach (var unexpectedChild in sortState.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "sortCondition" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var conditions = sortState.Elements(SpreadsheetNs + "sortCondition").ToArray();
+        if (conditions.Length > 64)
+            issues.Add($"{worksheetPart} {description} has {conditions.Length} sortCondition entries; expected at most 64");
+
+        foreach (var condition in conditions.Select((element, index) => new WorksheetSortConditionReference(index + 1, element)))
+        {
+            AddWorksheetSortConditionIssues(worksheetPart, description, condition, issues);
+        }
+    }
+
+    private static void AddWorksheetSortConditionIssues(
+        string worksheetPart,
+        string sortStateDescription,
+        WorksheetSortConditionReference conditionReference,
+        List<string> issues)
+    {
+        var condition = conditionReference.Element;
+        var description = $"{sortStateDescription} sortCondition #{conditionReference.Ordinal}";
+        var reference = condition.Attribute("ref")?.Value;
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            issues.Add($"{worksheetPart} {description} has no ref reference");
+        }
+        else if (!IsValidLocalWorksheetReference(reference))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid local ref reference '{reference}'");
+        }
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "descending", condition.Attribute("descending")?.Value, issues);
+
+        var sortBy = condition.Attribute("sortBy")?.Value;
+        if (!string.IsNullOrWhiteSpace(sortBy) && !IsKnownSortByValue(sortBy))
+            issues.Add($"{worksheetPart} {description} has invalid sortBy value '{sortBy}'");
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "dxfId", condition.Attribute("dxfId")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "iconId", condition.Attribute("iconId")?.Value, issues);
+
+        foreach (var unexpectedChild in condition.Elements().Where(element => element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+    }
+
+    private static bool IsKnownSortByValue(string value) =>
+        value.Trim() is "value" or "cellColor" or "fontColor" or "icon";
+
+    private static void AddWorksheetDataConsolidationIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetDataConsolidationReference dataConsolidationReference,
+        List<string> issues)
+    {
+        var dataConsolidate = dataConsolidationReference.Element;
+        var description = $"dataConsolidate #{dataConsolidationReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            dataConsolidate,
+            description,
+            [
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        var function = dataConsolidate.Attribute("function")?.Value;
+        if (!string.IsNullOrWhiteSpace(function) && !IsKnownDataConsolidationFunction(function))
+            issues.Add($"{worksheetPart} {description} has invalid function value '{function}'");
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "leftLabels", dataConsolidate.Attribute("leftLabels")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "topLabels", dataConsolidate.Attribute("topLabels")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "link", dataConsolidate.Attribute("link")?.Value, issues);
+
+        foreach (var unexpectedChild in dataConsolidate.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "dataRefs" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var dataRefsContainers = dataConsolidate.Elements(SpreadsheetNs + "dataRefs").ToArray();
+        if (dataRefsContainers.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {dataRefsContainers.Length} dataRefs elements; expected at most one");
+
+        foreach (var dataRefs in dataRefsContainers.Select((element, index) => new WorksheetDataRefsReference(index + 1, element)))
+        {
+            AddWorksheetDataRefsIssues(worksheetPart, description, dataRefs, issues);
+        }
+    }
+
+    private static bool IsKnownDataConsolidationFunction(string value) =>
+        value.Trim() is "average" or
+            "count" or
+            "countNums" or
+            "max" or
+            "min" or
+            "product" or
+            "stdDev" or
+            "stdDevp" or
+            "sum" or
+            "var" or
+            "varp";
+
+    private static void AddWorksheetDataRefsIssues(
+        string worksheetPart,
+        string dataConsolidationDescription,
+        WorksheetDataRefsReference dataRefsReference,
+        List<string> issues)
+    {
+        var dataRefs = dataRefsReference.Element;
+        var description = $"{dataConsolidationDescription} dataRefs #{dataRefsReference.Ordinal}";
+
+        foreach (var unexpectedChild in dataRefs.Elements().Where(element => element.Name != SpreadsheetNs + "dataRef"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var references = dataRefs.Elements(SpreadsheetNs + "dataRef").ToArray();
+        AddOptionalPackageCountIssue(worksheetPart, description, "count", dataRefs.Attribute("count")?.Value, references.Length, issues);
+
+        var seenReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var reference in references.Select((element, index) => new WorksheetDataRefReference(index + 1, element)))
+        {
+            AddWorksheetDataRefIssues(worksheetPart, description, reference, seenReferences, issues);
+        }
+    }
+
+    private static void AddWorksheetDataRefIssues(
+        string worksheetPart,
+        string dataRefsDescription,
+        WorksheetDataRefReference dataRefReference,
+        HashSet<string> seenReferences,
+        List<string> issues)
+    {
+        var dataRef = dataRefReference.Element;
+        var description = $"{dataRefsDescription} dataRef #{dataRefReference.Ordinal}";
+        var reference = dataRef.Attribute("ref")?.Value;
+        var name = dataRef.Attribute("name")?.Value;
+        var sheet = dataRef.Attribute("sheet")?.Value;
+
+        if (string.IsNullOrWhiteSpace(reference) && string.IsNullOrWhiteSpace(name))
+        {
+            issues.Add($"{worksheetPart} {description} has no ref reference or name");
+        }
+        else if (!string.IsNullOrWhiteSpace(reference) && !IsValidLocalWorksheetReference(reference))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid local ref reference '{reference}'");
+        }
+
+        if (dataRef.Attribute("sheet") is not null && string.IsNullOrWhiteSpace(sheet))
+            issues.Add($"{worksheetPart} {description} has blank sheet attribute");
+
+        if (dataRef.Attribute("name") is not null && string.IsNullOrWhiteSpace(name))
+            issues.Add($"{worksheetPart} {description} has blank name attribute");
+
+        var normalizedKey = $"{sheet?.Trim() ?? string.Empty}|{reference?.Trim() ?? string.Empty}|{name?.Trim() ?? string.Empty}";
+        if (normalizedKey != "||" && !seenReferences.Add(normalizedKey))
+            issues.Add($"{worksheetPart} {dataRefsDescription} has duplicate dataRef '{normalizedKey}'");
+
+        if (dataRef.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddOptionalWorksheetMetadataBooleanIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) || IsValidPackageBoolean(value))
+            return;
+
+        issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void AddOptionalNonNegativePackageIntIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!TryParseNonNegativePackageInt(value, out _))
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void AddOptionalPackageCountIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        int actualCount,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!TryParseNonNegativePackageInt(value, out var declaredCount))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+            return;
+        }
+
+        if (declaredCount != actualCount)
+            issues.Add($"{worksheetPart} {description} {attributeName} is {declaredCount}, but contains {actualCount} entries");
+    }
+
+    private static void ThrowInvalidWorksheetSortAndDataConsolidationMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet sort/data-consolidation metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetDiagnosticMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -10146,6 +10501,26 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetScenarioInputCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSortStateReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSortConditionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetDataConsolidationReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetDataRefsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetDataRefReference(
         int Ordinal,
         XElement Element);
 
