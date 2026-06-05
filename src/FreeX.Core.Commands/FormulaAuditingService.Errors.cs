@@ -1579,6 +1579,7 @@ public static partial class FormulaAuditingService
             '\uFF45' => 'e',
             '\uFF0B' => '+',
             '\uFE62' => '+',
+            '\u2212' => '-',
             '\uFF0D' => '-',
             '\uFE63' => '-',
             _ => value
@@ -1759,6 +1760,7 @@ public static partial class FormulaAuditingService
 
         return value switch
         {
+            '\uFF0C' => ',',
             '\uFF0D' => '-',
             '\uFF0E' => '.',
             '\uFF0F' => '/',
