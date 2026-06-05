@@ -258,7 +258,7 @@ internal static partial class AccessibilityTextRules
     [GeneratedRegex(@"(?i)^[\w .-]+(?:\s+\((?:copy|\d+)\))?\.(?:png|jpe?g|gif|bmp|tiff?|webp)$")]
     private static partial Regex ImageFileNameRegex();
 
-    [GeneratedRegex(@"(?i)^(?:Screenshot|Photo)\s+\d{4}-\d{2}-\d{2}$")]
+    [GeneratedRegex(@"(?i)^(?:Screenshot|Photo)[\s_-]+(?:\d{4}[-_]\d{2}[-_]\d{2}|\d{8})$")]
     private static partial Regex ScreenshotOrPhotoDateDefaultRegex();
 
     [GeneratedRegex(@"\s+")]
