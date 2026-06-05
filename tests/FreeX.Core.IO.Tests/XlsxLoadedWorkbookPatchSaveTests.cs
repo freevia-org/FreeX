@@ -829,6 +829,38 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void RebaseLoadedPackageSnapshot_TreatsOpenRecalculationAsBaselineForPatchSave()
+    {
+        var sourceBytes = CreateFormulaSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetCell(1, 1)!.Value = new NumberValue(3);
+        adapter.RebaseLoadedPackageSnapshot(workbook).Should().BeTrue();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("user edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadCellFormula(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("1+1");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("2");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("user edit");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithFormulaTextEdit_PatchesFormulaAndDropsCalcChain()
     {
         var sourceBytes = CreateFormulaSourcePackage();

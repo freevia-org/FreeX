@@ -1488,6 +1488,8 @@ public static partial class FormulaAuditingService
         if (value.Length < 6)
             return false;
 
+        value = NormalizeSupportedTextDateCharacters(value);
+
         const string dayWithOptionalOrdinalSuffixPattern = @"\d{1,2}(?:[sS][tT]|[nN][dD]|[rR][dD]|[tT][hH])?";
 
         var dateValue = TryStripWeekdayPrefix(value, out var valueWithoutWeekdayPrefix)
@@ -1594,6 +1596,36 @@ public static partial class FormulaAuditingService
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out _);
+    }
+
+    private static string NormalizeSupportedTextDateCharacters(string value)
+    {
+        char[]? normalized = null;
+        for (var i = 0; i < value.Length; i++)
+        {
+            var normalizedCharacter = NormalizeSupportedTextDateCharacter(value[i]);
+            if (normalizedCharacter == value[i])
+                continue;
+
+            normalized ??= value.ToCharArray();
+            normalized[i] = normalizedCharacter;
+        }
+
+        return normalized is null ? value : new string(normalized);
+    }
+
+    private static char NormalizeSupportedTextDateCharacter(char value)
+    {
+        if (value is >= '\uFF10' and <= '\uFF19')
+            return (char)('0' + value - '\uFF10');
+
+        return value switch
+        {
+            '\uFF0D' => '-',
+            '\uFF0E' => '.',
+            '\uFF0F' => '/',
+            _ => value
+        };
     }
 
     private static bool TryStripWeekdayPrefix(string value, out string dateText)

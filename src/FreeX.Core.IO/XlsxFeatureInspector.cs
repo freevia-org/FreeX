@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -39,6 +40,13 @@ public sealed record XlsxFeatureReport(
 
 public static class XlsxFeatureInspector
 {
+    private static readonly XmlReaderSettings ScanXmlSettings = new()
+    {
+        DtdProcessing = DtdProcessing.Prohibit,
+        IgnoreComments = true,
+        IgnoreProcessingInstructions = true
+    };
+
     public static XlsxFeatureReport Inspect(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -436,8 +444,8 @@ public static class XlsxFeatureInspector
     }
 
     private static bool ConnectionsHaveLiveWebQuery(ZipArchiveEntry entry) =>
-        XmlHasDescendant(entry, element =>
-            string.Equals(element.Name.LocalName, "webPr", StringComparison.OrdinalIgnoreCase));
+        XmlHasElement(entry, reader =>
+            string.Equals(reader.LocalName, "webPr", StringComparison.OrdinalIgnoreCase));
 
     private static bool WorksheetHasSparklines(ZipArchiveEntry entry)
     {
@@ -455,25 +463,45 @@ public static class XlsxFeatureInspector
     }
 
     private static bool WorksheetHasFormControls(ZipArchiveEntry entry) =>
-        XmlHasDescendant(entry, element =>
-            string.Equals(element.Name.LocalName, "control", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(element.Name.LocalName, "controls", StringComparison.OrdinalIgnoreCase));
+        XmlHasElement(entry, reader =>
+            string.Equals(reader.LocalName, "control", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(reader.LocalName, "controls", StringComparison.OrdinalIgnoreCase));
 
     private static bool WorksheetHasEmbeddedObjects(ZipArchiveEntry entry) =>
-        XmlHasDescendant(entry, element =>
-            string.Equals(element.Name.LocalName, "oleObject", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(element.Name.LocalName, "oleObjects", StringComparison.OrdinalIgnoreCase));
+        XmlHasElement(entry, reader =>
+            string.Equals(reader.LocalName, "oleObject", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(reader.LocalName, "oleObjects", StringComparison.OrdinalIgnoreCase));
 
     private static bool DrawingHasFormControls(ZipArchiveEntry entry) =>
-        XmlHasDescendant(entry, element =>
-            string.Equals(element.Name.LocalName, "control", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(element.Name.LocalName, "ClientData", StringComparison.OrdinalIgnoreCase) &&
-            IsFormControlObjectType(element.Attribute("ObjectType")?.Value));
+        XmlHasElement(entry, reader =>
+            string.Equals(reader.LocalName, "control", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(reader.LocalName, "ClientData", StringComparison.OrdinalIgnoreCase) &&
+            IsFormControlObjectType(reader.GetAttribute("ObjectType")));
 
     private static bool DrawingHasEmbeddedObjects(ZipArchiveEntry entry) =>
-        XmlHasDescendant(entry, element =>
-            string.Equals(element.Name.LocalName, "oleObj", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(element.Name.LocalName, "oleObject", StringComparison.OrdinalIgnoreCase));
+        XmlHasElement(entry, reader =>
+            string.Equals(reader.LocalName, "oleObj", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(reader.LocalName, "oleObject", StringComparison.OrdinalIgnoreCase));
+
+    private static bool XmlHasElement(ZipArchiveEntry entry, Func<XmlReader, bool> predicate)
+    {
+        try
+        {
+            using var stream = entry.Open();
+            using var reader = XmlReader.Create(stream, ScanXmlSettings);
+            while (reader.Read())
+            {
+                if (reader.NodeType == XmlNodeType.Element && predicate(reader))
+                    return true;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private static bool XmlHasDescendant(ZipArchiveEntry entry, Func<XElement, bool> predicate)
     {
@@ -505,16 +533,31 @@ public static class XlsxFeatureInspector
     {
         try
         {
-            var propertiesXml = XlsxPackageXmlEditor.LoadXml(entry);
-            XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+            using var stream = entry.Open();
+            using var reader = XmlReader.Create(stream, ScanXmlSettings);
+            const string customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
 
-            return propertiesXml
-                .Descendants(customPropertiesNs + "property")
-                .Select(property => property.Attribute("name")?.Value)
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Any(name =>
-                    name!.StartsWith("MSIP_Label_", StringComparison.OrdinalIgnoreCase) ||
-                    name.StartsWith("Sensitivity", StringComparison.OrdinalIgnoreCase));
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element ||
+                    !string.Equals(reader.LocalName, "property", StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(reader.NamespaceURI, customPropertiesNs, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var name = reader.GetAttribute("name");
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                if (name.StartsWith("MSIP_Label_", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("Sensitivity", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
         catch
         {

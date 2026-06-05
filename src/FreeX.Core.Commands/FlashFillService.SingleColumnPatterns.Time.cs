@@ -24,6 +24,8 @@ public static partial class FlashFillService
         Second
     }
 
+    private readonly record struct TimeRangeTextFrame(string Prefix, string Between, string Suffix);
+
     private readonly record struct TimeLikeComponents(
         string HourText,
         string UnpaddedHourText,
@@ -206,7 +208,12 @@ public static partial class FlashFillService
     private static Func<string, string?>? TryEmbeddedTimeRangeEndpointExtraction(
         IReadOnlyList<(string Source, string Expected)> examples)
     {
+        if (examples.Count < 2)
+            return null;
+
         TimeRangeEndpointKind? endpointKind = null;
+        TimeRangeTextFrame? firstFrame = null;
+        var sawDifferentFrame = false;
         var sawEndpointCandidate = false;
 
         foreach (var (source, expected) in examples)
@@ -227,10 +234,19 @@ public static partial class FlashFillService
                 endpointKind = currentKind;
             else if (endpointKind.Value != currentKind)
                 return _ => null;
+
+            var currentFrame = GetTimeRangeTextFrame(source, first, second);
+            if (firstFrame is null)
+                firstFrame = currentFrame;
+            else if (firstFrame.Value != currentFrame)
+                sawDifferentFrame = true;
         }
 
         if (!sawEndpointCandidate || endpointKind is null)
             return null;
+
+        if (!sawDifferentFrame)
+            return _ => null;
 
         var kind = endpointKind.Value;
         var cache = new ExtractedSegmentCache();
@@ -455,6 +471,15 @@ public static partial class FlashFillService
         return length == expected.Length &&
                source.AsSpan(range.Start, length).SequenceEqual(expected.AsSpan());
     }
+
+    private static TimeRangeTextFrame GetTimeRangeTextFrame(
+        string source,
+        (int Start, int EndExclusive) first,
+        (int Start, int EndExclusive) second) =>
+        new(
+            source[..first.Start],
+            source[first.EndExclusive..second.Start],
+            source[second.EndExclusive..]);
 
     private static bool HasAnyEmbeddedTimeComponentMatch(string source, string expected)
     {

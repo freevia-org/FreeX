@@ -16,13 +16,81 @@ public sealed partial class XlsxFileAdapter
         SourcePackages.Remove(workbook);
     }
 
+    public bool RebaseLoadedPackageSnapshot(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
+            return false;
+
+        SourcePackages.Remove(workbook);
+        SourcePackages.Add(workbook, sourcePackage.Rebase(workbook));
+        return true;
+    }
+
     private static string CreateSourceModelFingerprint(Workbook workbook)
     {
         using var hash = SHA256.Create();
         using var stream = new CryptoStream(Stream.Null, hash, CryptoStreamMode.Write, leaveOpen: true);
-        new NativeJsonAdapter().Save(workbook, stream);
+        new NativeJsonAdapter().SaveForFingerprint(workbook, stream);
+        WriteStyleOnlyFingerprint(workbook, stream);
         stream.FlushFinalBlock();
         return Convert.ToHexString(hash.Hash ?? []);
+    }
+
+    private static void WriteStyleOnlyFingerprint(Workbook workbook, Stream stream)
+    {
+        WriteFingerprintToken(stream, "\nfreex-style-only-fingerprint-v1\n");
+        for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
+        {
+            var sheet = workbook.Sheets[sheetIndex];
+            WriteFingerprintToken(stream, "sheet\t");
+            WriteFingerprintToken(stream, sheetIndex.ToString(CultureInfo.InvariantCulture));
+            WriteFingerprintToken(stream, "\tcount\t");
+            WriteFingerprintToken(stream, sheet.StyleOnlyCellCount.ToString(CultureInfo.InvariantCulture));
+            WriteFingerprintToken(stream, "\n");
+
+            if (!sheet.HasStyleOnlyCells)
+                continue;
+
+            if (sheet.TryGetCompressedStyleOnlyRuns(out var runs))
+            {
+                WriteFingerprintToken(stream, "runs\t");
+                WriteFingerprintToken(stream, runs.Count.ToString(CultureInfo.InvariantCulture));
+                WriteFingerprintToken(stream, "\n");
+                foreach (var run in runs)
+                {
+                    WriteFingerprintToken(stream, run.Row.ToString(CultureInfo.InvariantCulture));
+                    WriteFingerprintToken(stream, "\t");
+                    WriteFingerprintToken(stream, run.StartCol.ToString(CultureInfo.InvariantCulture));
+                    WriteFingerprintToken(stream, "\t");
+                    WriteFingerprintToken(stream, run.EndCol.ToString(CultureInfo.InvariantCulture));
+                    WriteFingerprintToken(stream, "\t");
+                    WriteFingerprintToken(stream, run.StyleId.Value.ToString(CultureInfo.InvariantCulture));
+                    WriteFingerprintToken(stream, "\n");
+                }
+
+                continue;
+            }
+
+            WriteFingerprintToken(stream, "entries\n");
+            foreach (var ((row, col), styleId) in sheet.GetStyleOnlyEntries()
+                         .OrderBy(entry => entry.Key.Row)
+                         .ThenBy(entry => entry.Key.Col))
+            {
+                WriteFingerprintToken(stream, row.ToString(CultureInfo.InvariantCulture));
+                WriteFingerprintToken(stream, "\t");
+                WriteFingerprintToken(stream, col.ToString(CultureInfo.InvariantCulture));
+                WriteFingerprintToken(stream, "\t");
+                WriteFingerprintToken(stream, styleId.Value.ToString(CultureInfo.InvariantCulture));
+                WriteFingerprintToken(stream, "\n");
+            }
+        }
+    }
+
+    private static void WriteFingerprintToken(Stream stream, string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        stream.Write(bytes, 0, bytes.Length);
     }
 
     private sealed record XlsxSourcePackage(
@@ -327,6 +395,19 @@ public sealed partial class XlsxFileAdapter
         }
 
         public MemoryStream OpenRead() => new(Buffer, Offset, Count, writable: false);
+
+        public XlsxSourcePackage Rebase(Workbook workbook)
+        {
+            if (CellPatchBaseline is null)
+                return this;
+
+            return this with
+            {
+                ModelFingerprint = null,
+                CellPatchBaseline = CellPatchBaseline.Rebase(workbook, CreateSourceModelFingerprint(workbook)),
+                CellPatchBaselineBlockReason = null
+            };
+        }
 
         public bool Matches(Workbook workbook) => Matches(workbook, out _);
 
@@ -1963,6 +2044,61 @@ public sealed partial class XlsxFileAdapter
                 blockReason = "baseline_exception";
                 return null;
             }
+        }
+
+        public XlsxCellPatchBaseline Rebase(Workbook workbook, string modelFingerprint)
+        {
+            if (workbook.SheetCount != _worksheets.Count)
+                return this;
+
+            var worksheets = new List<XlsxWorksheetCellPatchBaseline>(_worksheets.Count);
+            for (var sheetIndex = 0; sheetIndex < _worksheets.Count; sheetIndex++)
+            {
+                var baseline = _worksheets[sheetIndex];
+                var sheet = workbook.Sheets[sheetIndex];
+                if (sheet.Id != baseline.SheetId ||
+                    !string.Equals(sheet.Name, baseline.SheetName, StringComparison.Ordinal))
+                {
+                    return this;
+                }
+
+                var cells = new Dictionary<(uint Row, uint Col), XlsxPatchCell>(sheet.CellCount);
+                foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+                {
+                    string? sourceStyleIndex = null;
+                    if (baseline.Cells.TryGetValue((row, col), out var original) &&
+                        original.StyleId == cell.StyleId)
+                    {
+                        sourceStyleIndex = original.SourceStyleIndex;
+                    }
+
+                    cells[(row, col)] = new XlsxPatchCell(
+                        cell.Value,
+                        cell.FormulaText,
+                        cell.StyleId,
+                        sourceStyleIndex,
+                        cell.IgnoreFormulaError);
+                }
+
+                worksheets.Add(baseline with
+                {
+                    CellCount = sheet.CellCount,
+                    StyleOnlyCellCount = sheet.StyleOnlyCellCount,
+                    Dimensions = XlsxWorksheetDimensionBaseline.Capture(sheet),
+                    MergedRegions = sheet.MergedRegions.ToArray(),
+                    Hyperlinks = XlsxWorksheetHyperlinkBaseline.Capture(sheet),
+                    Comments = XlsxWorksheetCommentBaseline.Capture(sheet),
+                    Tables = XlsxWorksheetTablePatchBaseline.Capture(sheet),
+                    Cells = cells
+                });
+            }
+
+            return new XlsxCellPatchBaseline(
+                worksheets,
+                _sourceStyleIndexesByStyleId,
+                _chartSourceRanges,
+                _pivotSourceRanges,
+                modelFingerprint);
         }
 
         public bool TryGetPatchableValueChanges(

@@ -434,6 +434,50 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Theory]
+    [InlineData("\uFF11/\uFF12/\uFF12\uFF16")]
+    [InlineData("'\uFF11/\uFF12/\uFF12\uFF16")]
+    [InlineData("\uFF12\uFF16-\uFF11-\uFF12")]
+    [InlineData("\uFF12\uFF16\uFF0D\uFF11\uFF0D\uFF12")]
+    [InlineData("\uFF12\uFF16\uFF0E\uFF11\uFF0E\uFF12")]
+    [InlineData("Jan \uFF12nd, \uFF12\uFF16")]
+    [InlineData("\uFF12/Jan/\uFF12\uFF16")]
+    [InlineData("Mon \uFF11/\uFF12/\uFF12\uFF16")]
+    [InlineData("Jan\uFF0F\uFF12\uFF0F\uFF12\uFF16")]
+    public void FindFormulaErrorIssues_ReturnsFullwidthTextDatesWithTwoDigitYears(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue(value));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.Cell.Should().Be("A2");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.TwoDigitYearTextDateErrorCode);
+        issue.FormulaText.Should().BeNull();
+        issue.Description.Should().Contain("two-digit year");
+    }
+
+    [Theory]
+    [InlineData("\uFF11/\uFF12/\uFF12\uFF10\uFF12\uFF16")]
+    [InlineData("\uFF12\uFF16/\uFF11\uFF13/\uFF12")]
+    [InlineData("\uFF12\uFF16\uFF0E\uFF12\uFF0E\uFF13\uFF10")]
+    [InlineData("Jan \uFF13\uFF12, \uFF12\uFF16")]
+    [InlineData("\uFF2A\uFF41\uFF4E \uFF12, \uFF12\uFF16")]
+    [InlineData("\uFF11\uFF0F\uFF0F\uFF12\uFF0F\uFF12\uFF16")]
+    [InlineData("\uFF11\uFF12\uFF13")]
+    [InlineData("\uFF11\uFF0C\uFF12\uFF13\uFF14\uFF0E\uFF15\uFF10")]
+    public void FindFormulaErrorIssues_DoesNotReturnFullwidthTextDatesWithTwoDigitYearsForNonMatchingText(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(value));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.TwoDigitYearTextDateErrorCode);
+    }
+
+    [Theory]
     [InlineData("1/2/2026")]
     [InlineData("Jan/2/2026")]
     [InlineData("2/Jan/2026")]

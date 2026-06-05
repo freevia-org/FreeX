@@ -125,6 +125,10 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
     private const string PrinterSettingsRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
+    private const string WorksheetCustomPropertyContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.customProperty";
+    private const string WorksheetCustomPropertyRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty";
     private const string RelationshipPartContentType =
         "application/vnd.openxmlformats-package.relationships+xml";
     private const string WorkbookContentType =
@@ -454,6 +458,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetDrawingPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetBackgroundImagePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetCustomPropertyPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertLegacyCommentPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPivotPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -658,6 +663,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetDrawingPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetBackgroundImagePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetCustomPropertyPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertLegacyCommentPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPivotPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -2977,6 +2983,221 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet printer settings package graph: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetCustomPropertyPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+        var referencedRelationships = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var referencedPackageParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetRelationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            var customPropertyReferences = worksheetXml.Root?
+                .Element(SpreadsheetNs + "customProperties")?
+                .Elements(SpreadsheetNs + "customPr")
+                .Select((customProperty, index) => new WorksheetCustomPropertyReference(
+                    index + 1,
+                    customProperty.Attribute("name")?.Value,
+                    customProperty.Attribute("id")?.Value,
+                    customProperty.Attribute(OfficeRelationshipNs + "id")?.Value))
+                .ToArray() ?? [];
+
+            foreach (var customPropertyReference in customPropertyReferences)
+            {
+                var referenceDescription = FormatWorksheetCustomPropertyReference(customPropertyReference);
+                if (string.IsNullOrWhiteSpace(customPropertyReference.Name))
+                    issues.Add($"{worksheetPart} {referenceDescription} has no name");
+
+                if (!string.IsNullOrWhiteSpace(customPropertyReference.LegacyId) &&
+                    (!int.TryParse(customPropertyReference.LegacyId, NumberStyles.None, CultureInfo.InvariantCulture, out var legacyId) ||
+                     legacyId <= 0))
+                {
+                    issues.Add($"{worksheetPart} {referenceDescription} has invalid id '{customPropertyReference.LegacyId}'");
+                }
+
+                if (string.IsNullOrWhiteSpace(customPropertyReference.RelationshipId))
+                {
+                    if (string.IsNullOrWhiteSpace(customPropertyReference.LegacyId))
+                        issues.Add($"{worksheetPart} {referenceDescription} has neither id nor relationship id");
+                    continue;
+                }
+
+                var relationshipKey = $"{NormalizePackagePart(worksheetRelationshipPart)}|{customPropertyReference.RelationshipId}";
+                if (!referencedRelationships.Add(relationshipKey))
+                {
+                    issues.Add($"{worksheetPart} {referenceDescription} duplicates worksheet custom-property relationship {customPropertyReference.RelationshipId}");
+                    continue;
+                }
+
+                AddWorksheetCustomPropertyRelationshipIssues(
+                    archive,
+                    worksheetPart,
+                    worksheetRelationshipPart,
+                    referenceDescription,
+                    customPropertyReference.RelationshipId,
+                    referencedPackageParts,
+                    issues);
+            }
+
+            foreach (var customPropertyRelationship in FindPackageRelationshipsByType(
+                         archive,
+                         worksheetRelationshipPart,
+                         WorksheetCustomPropertyRelationshipType))
+            {
+                var relationshipId = customPropertyRelationship.Attribute("Id")?.Value;
+                if (string.IsNullOrWhiteSpace(relationshipId))
+                {
+                    issues.Add($"{worksheetRelationshipPart} has a customProperty relationship without Id");
+                    continue;
+                }
+
+                var relationshipKey = $"{NormalizePackagePart(worksheetRelationshipPart)}|{relationshipId}";
+                if (!referencedRelationships.Contains(relationshipKey))
+                    issues.Add($"{worksheetRelationshipPart} customProperty relationship {relationshipId} is not referenced by a worksheet customPr in {worksheetPart}");
+            }
+        }
+
+        foreach (var customPropertyPart in FindWorksheetCustomPropertyParts(archive))
+        {
+            if (!referencedPackageParts.Contains(customPropertyPart))
+                issues.Add($"{customPropertyPart} is present without a worksheet customPr relationship reference");
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetCustomPropertyPackage(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetCustomPropertyRelationshipIssues(
+        ZipArchive archive,
+        string worksheetPart,
+        string worksheetRelationshipPart,
+        string referenceDescription,
+        string relationshipId,
+        HashSet<string> referencedPackageParts,
+        List<string> issues)
+    {
+        var relationship = FindPackageRelationshipById(
+            archive,
+            worksheetRelationshipPart,
+            relationshipId,
+            out var relationshipIssue);
+        if (relationship is null)
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} reference {relationshipId}: {relationshipIssue}");
+            return;
+        }
+
+        if (!string.Equals(relationship.Attribute("Type")?.Value, WorksheetCustomPropertyRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} has Type={relationship.Attribute("Type")?.Value}; expected {WorksheetCustomPropertyRelationshipType}");
+            return;
+        }
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} is external");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} has invalid TargetMode {targetMode}");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} has no Target");
+            return;
+        }
+
+        target = target.Trim();
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} targets external URI without TargetMode=External: {target}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                worksheetRelationshipPart,
+                target,
+                out var customPropertyPart,
+                out var targetIssue))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!IsWorksheetCustomPropertyPart(customPropertyPart))
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} targets {customPropertyPart}, which is not a worksheet custom-property binary part");
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, customPropertyPart, WorksheetCustomPropertyContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var customPropertyEntry = FindPackageEntry(archive, customPropertyPart);
+        if (customPropertyEntry is null)
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} targets missing package part {customPropertyPart}");
+            return;
+        }
+
+        referencedPackageParts.Add(customPropertyPart);
+        if (customPropertyEntry.Length == 0)
+            issues.Add($"{customPropertyPart} is an empty worksheet custom-property binary part");
+    }
+
+    private static HashSet<string> FindWorksheetCustomPropertyParts(ZipArchive archive) =>
+        archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Select(entry => NormalizePackagePart(entry.FullName))
+            .Where(IsWorksheetCustomPropertyPart)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsWorksheetCustomPropertyPart(string packagePart)
+    {
+        packagePart = NormalizePackagePart(packagePart);
+        if (!packagePart.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (packagePart.StartsWith("xl/customProperty/", StringComparison.OrdinalIgnoreCase))
+        {
+            return !packagePart.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!packagePart.StartsWith("xl/customProperty", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var fileName = packagePart["xl/".Length..];
+        return !fileName.Contains('/', StringComparison.Ordinal);
+    }
+
+    private static string FormatWorksheetCustomPropertyReference(WorksheetCustomPropertyReference customProperty) =>
+        string.IsNullOrWhiteSpace(customProperty.Name)
+            ? $"customPr #{customProperty.Ordinal}"
+            : $"customPr '{customProperty.Name}'";
+
+    private static void ThrowInvalidWorksheetCustomPropertyPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet custom-property package graph: {sample}{suffix}");
     }
 
     private static void AssertLegacyCommentPackageComplete(string xlsxPath, string label, string sourcePath)
@@ -9098,6 +9319,12 @@ internal static class ExcelOpenSmoke
 
     private sealed record WorksheetPrinterSettingsReference(
         int Ordinal,
+        string? RelationshipId);
+
+    private sealed record WorksheetCustomPropertyReference(
+        int Ordinal,
+        string? Name,
+        string? LegacyId,
         string? RelationshipId);
 
     private sealed record DocumentPropertyPackageDefinition(
