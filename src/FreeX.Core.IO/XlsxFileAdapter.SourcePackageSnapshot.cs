@@ -4668,6 +4668,7 @@ public sealed partial class XlsxFileAdapter
         uint DataBodyStartRow,
         uint DataBodyEndRow,
         bool AllowsScalarDataBodyEdits,
+        IReadOnlySet<uint> FilteredColumns,
         IReadOnlySet<uint> CalculatedFormulaColumns)
     {
         public static XlsxPatchStructuredTable Capture(StructuredTableModel table)
@@ -4684,10 +4685,13 @@ public sealed partial class XlsxFileAdapter
                 ? dataBodyStartRow - 1
                 : dataBodyStartRow + checked((uint)dataRows) - 1;
             var allowsScalarDataBodyEdits = dataRows > 0 &&
-                table.FilterColumns.Count == 0 &&
-                (table.NativeAutoFilterAttributes?.Count ?? 0) == 0 &&
                 (table.NativeAutoFilterChildXmls?.Count ?? 0) == 0 &&
                 string.IsNullOrWhiteSpace(table.NativeSortStateXml);
+            var filteredColumns = table.FilterColumns
+                .Where(filter => filter.ColumnId >= 0)
+                .Select(filter => table.Range.Start.Col + checked((uint)filter.ColumnId))
+                .Where(column => column >= table.Range.Start.Col && column <= table.Range.End.Col)
+                .ToHashSet();
             var calculatedFormulaColumns = table.Columns
                 .Where(column => !string.IsNullOrWhiteSpace(column.CalculatedColumnFormula))
                 .Select(column => table.Range.Start.Col + checked((uint)column.Id) - 1)
@@ -4700,6 +4704,7 @@ public sealed partial class XlsxFileAdapter
                 dataBodyStartRow,
                 dataBodyEndRow,
                 allowsScalarDataBodyEdits,
+                filteredColumns,
                 calculatedFormulaColumns);
         }
 
@@ -4718,6 +4723,7 @@ public sealed partial class XlsxFileAdapter
             row <= DataBodyEndRow &&
             col >= Range.Start.Col &&
             col <= Range.End.Col &&
+            !FilteredColumns.Contains(col) &&
             !CalculatedFormulaColumns.Contains(col);
 
         private static string CreateMetadataKey(StructuredTableModel table)

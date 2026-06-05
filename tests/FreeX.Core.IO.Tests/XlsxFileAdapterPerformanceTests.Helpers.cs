@@ -116,15 +116,17 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         bool formulaMarker = false,
         bool internalHyperlinkMarker = false,
         bool legacyCommentMarker = false,
-        bool structuredTableMarker = false)
+        bool structuredTableMarker = false,
+        bool filteredStructuredTableMarker = false)
     {
+        var hasStructuredTable = structuredTableMarker || filteredStructuredTableMarker;
         using var stream = new MemoryStream(capacity: 8 * 1024 * 1024);
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
             WriteTextEntry(
                 archive,
                 "[Content_Types].xml",
-                writer => WriteGeneratedStyleHeavyContentTypes(writer, legacyCommentMarker, structuredTableMarker));
+                writer => WriteGeneratedStyleHeavyContentTypes(writer, legacyCommentMarker, hasStructuredTable));
             WriteTextEntry(archive, "_rels/.rels", WriteGeneratedStyleHeavyRootRelationships);
             WriteTextEntry(archive, "xl/workbook.xml", WriteGeneratedStyleHeavyWorkbook);
             WriteTextEntry(archive, "xl/_rels/workbook.xml.rels", WriteGeneratedStyleHeavyWorkbookRelationships);
@@ -144,10 +146,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                         formulaMarker,
                         internalHyperlinkMarker,
                         legacyCommentMarker,
-                        structuredTableMarker));
+                        hasStructuredTable));
             }
 
-            if (legacyCommentMarker || structuredTableMarker)
+            if (legacyCommentMarker || hasStructuredTable)
             {
                 WriteTextEntry(
                     archive,
@@ -155,15 +157,18 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                     writer => WriteGeneratedStyleHeavyWorksheetRelationships(
                         writer,
                         legacyCommentMarker,
-                        structuredTableMarker));
+                        hasStructuredTable));
                 if (legacyCommentMarker)
                 {
                     WriteTextEntry(archive, "xl/comments1.xml", WriteGeneratedStyleHeavyComments);
                     WriteTextEntry(archive, "xl/drawings/vmlDrawing1.vml", WriteGeneratedStyleHeavyVmlDrawing);
                 }
 
-                if (structuredTableMarker)
-                    WriteTextEntry(archive, "xl/tables/table1.xml", WriteGeneratedStyleHeavyStructuredTable);
+                if (hasStructuredTable)
+                    WriteTextEntry(
+                        archive,
+                        "xl/tables/table1.xml",
+                        writer => WriteGeneratedStyleHeavyStructuredTable(writer, filteredStructuredTableMarker));
             }
         }
 
@@ -467,13 +472,23 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             </xml>
             """);
 
-    private static void WriteGeneratedStyleHeavyStructuredTable(TextWriter writer)
+    private static void WriteGeneratedStyleHeavyStructuredTable(TextWriter writer, bool includeFilter)
     {
         writer.Write(
             """
             <?xml version="1.0" encoding="UTF-8"?>
             <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="GeneratedTable1" displayName="GeneratedTable1" ref="A1:L400" totalsRowShown="0">
-              <autoFilter ref="A1:L400"/>
+            """);
+        writer.Write(
+            includeFilter
+                ? """
+                    <autoFilter ref="A1:L400"><filterColumn colId="0"><filters><filter val="1001001"/></filters></filterColumn></autoFilter>
+                """
+                : """
+                    <autoFilter ref="A1:L400"/>
+                """);
+        writer.Write(
+            """
               <tableColumns count="12">
             """);
         for (var col = 1; col <= GeneratedStyleHeavyValueColumnsPerSheet; col++)

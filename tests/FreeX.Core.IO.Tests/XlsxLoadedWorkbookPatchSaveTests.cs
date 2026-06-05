@@ -658,7 +658,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
-    public void Save_LoadedWorkbookWithFilteredStructuredTableDataBodyEdit_FallsBackToFullSave()
+    public void Save_LoadedWorkbookWithFilteredStructuredTableDataBodyEdit_PatchesSourcePackage()
     {
         var sourceBytes = CreateStructuredTableSourcePackage(includeFilter: true);
         var adapter = new XlsxFileAdapter();
@@ -676,9 +676,51 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         adapter.Save(workbook, saved);
         var savedBytes = saved.ToArray();
 
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
         ReadPackageEntry(savedBytes, "xl/workbook.xml")
             .Should()
-            .NotEqual(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/worksheets/_rels/sheet1.xml.rels")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/worksheets/_rels/sheet1.xml.rels"));
+        ReadPackageEntry(savedBytes, "xl/tables/table1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/tables/table1.xml"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "B2")
+            .Should()
+            .Be("99");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        reloadedSheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(99));
+        reloadedSheet.StructuredTables.Should().ContainSingle()
+            .Which.FilterColumns.Should().ContainSingle()
+            .Which.Values.Should().ContainSingle().Which.Should().Be("East");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithFilteredStructuredTableFilterColumnEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateStructuredTableSourcePackage(includeFilter: true);
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.StructuredTables.Should().ContainSingle()
+            .Which.FilterColumns.Should().ContainSingle()
+            .Which.ColumnId.Should().Be(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("West"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_table_cell");
     }
 
     [Fact]
