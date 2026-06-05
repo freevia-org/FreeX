@@ -1,4 +1,3 @@
-using System.Threading;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using FluentAssertions;
@@ -12,7 +11,7 @@ public sealed class GridViewAutomationPeerTests
     [Fact]
     public void GridViewAutomationPeer_ExposesVisibleCellsAsGridItemsWithValuesAndSelection()
     {
-        RunOnStaThread(() =>
+        WpfTestThread.Run(() =>
         {
             var sheetId = SheetId.New();
             var grid = new GridView
@@ -56,28 +55,5 @@ public sealed class GridViewAutomationPeerTests
             value.Value.Should().Be("42");
             selectionItem.IsSelected.Should().BeTrue();
         });
-    }
-
-    private static void RunOnStaThread(Action action)
-    {
-        Exception? failure = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                failure = ex;
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
-        if (failure is not null)
-            throw failure;
     }
 }

@@ -3,7 +3,6 @@ using System.Collections;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Threading;
 using FreeX.Core.Model;
 using FluentAssertions;
 
@@ -54,7 +53,7 @@ public sealed class GridViewMergeLookupPerformanceTests
     [Fact]
     public void RebuildMergeLookup_SkipsOffscreenMergedRegionsBeforeVisibleRowExpansion()
     {
-        RunOnStaThread(() =>
+        WpfTestThread.Run(() =>
         {
             const int offscreenMergeCount = 80_000;
             const int iterations = 8;
@@ -189,27 +188,4 @@ public sealed class GridViewMergeLookupPerformanceTests
 
     private static int GetMergeLookupCount(GridView grid, FieldInfo lookupField) =>
         ((IDictionary)lookupField.GetValue(grid)!).Count;
-
-    private static void RunOnStaThread(Action action)
-    {
-        Exception? exception = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                exception = ex;
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
-        if (exception is not null)
-            throw exception;
-    }
 }
