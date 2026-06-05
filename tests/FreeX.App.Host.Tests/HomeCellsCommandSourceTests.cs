@@ -64,6 +64,10 @@ public sealed class HomeCellsCommandSourceTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CellsCommands.cs"));
 
+        SourceMethodExtractor.ExtractMethodSource(source, "private void InsertPickerBtn_Click(")
+            .Should().Contain("InsertCellsMenuItem_Click(sender, e);");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void DeletePickerBtn_Click(")
+            .Should().Contain("DeleteCellsMenuItem_Click(sender, e);");
         source.Should().Contain("new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Down)");
         source.Should().Contain("new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Right)");
         source.Should().Contain("new InsertRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount)");

@@ -9,15 +9,50 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class AutoFilterDialogTests
 {
     [Fact]
-    public void DialogLayout_ScrollsWhenTypedFilterControlsAreVisible()
+    public void DialogLayout_PinsActionButtonsBelowScrollableDropdownContent()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialog.cs"));
 
+        source.Should().Contain("SizeToContent = SizeToContent.Height");
+        source.Should().Contain("var root = new DockPanel { Margin = new Thickness(10), LastChildFill = true };");
         source.Should().Contain("var scrollViewer = new ScrollViewer");
         source.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
         source.Should().Contain("DockPanel.SetDock(buttons, Dock.Bottom)");
         source.Should().Contain("root.Children.Add(buttons)");
         source.Should().Contain("scrollViewer.Content = stack");
+        source.IndexOf("root.Children.Add(buttons)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(source.IndexOf("root.Children.Add(scrollViewer)", StringComparison.Ordinal));
+        source.Should().NotContain("Height = 540");
+    }
+
+    [Fact]
+    public void DialogLayout_ActionButtonsKeepNaturalHeightAtRuntime()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AutoFilterDialog(
+            [
+                new AutoFilterDialogItem("Apple", "Apple", true),
+                new AutoFilterDialogItem("Banana", "Banana", true)
+            ]);
+            dialog.Show();
+            try
+            {
+                dialog.UpdateLayout();
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog).ToList();
+                var ok = buttons.Single(button => button.IsDefault);
+                var cancel = buttons.Single(button => button.IsCancel);
+
+                ok.ActualHeight.Should().BeLessThan(40);
+                cancel.ActualHeight.Should().BeLessThan(40);
+                dialog.ActualWidth.Should().BeLessThan(340);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -27,7 +62,7 @@ public sealed partial class AutoFilterDialogTests
 
         source.Should().Contain("_searchBox.TextChanged");
         source.Should().Contain("FilterItems(_allItems, _searchBox.Text)");
-        source.Should().Contain("GetSortDirection()");
+        source.Should().Contain("UpdateSelectAllBoxState()");
         source.Should().Contain("_allItems");
         source.Should().Contain("_addCurrentSelectionToFilterBox.IsChecked == true");
         source.Should().Contain("GetResultItemsForSearchMode");
@@ -40,15 +75,13 @@ public sealed partial class AutoFilterDialogTests
 
         foreach (var key in new[]
         {
-            "AutoFilter_NoSort",
             "AutoFilter_SortAToZ",
             "AutoFilter_SortZToA",
             "AutoFilter_ClearFilterFrom2",
             "AutoFilter_TextFilters",
             "AutoFilter_NumberFilters",
             "AutoFilter_DateFilters",
-            "AutoFilter_SelectAll2",
-            "AutoFilter_ClearAll",
+            "AutoFilter_SelectAll",
             "AutoFilter_AddCurrentSelectionToFilter"
         })
             source.Should().Contain($"UiText.Get(\"{key}\")");
@@ -57,6 +90,7 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("Content = UiText.Cancel");
         source.Should().Contain("UiText.Get(\"AutoFilter_CriteriaText\")");
         source.Should().Contain("UiText.Get(\"AutoFilter_Search2\")");
+        source.Should().NotContain("RadioButton _sortNone");
     }
 
     [Fact]
@@ -74,8 +108,27 @@ public sealed partial class AutoFilterDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_sortAscending.Focus();");
-        source.Should().Contain("Keyboard.Focus(_sortAscending);");
+        source.Should().Contain("_sortAscendingButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_sortAscendingButton);");
+    }
+
+    [Fact]
+    public void DialogControls_UseExcelStyleCommandSortAndSelectAllCheckbox()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("private readonly Button _sortAscendingButton");
+        source.Should().Contain("private readonly Button _sortDescendingButton");
+        source.Should().Contain("ApplySortCommand(AutoFilterSortDirection.Ascending)");
+        source.Should().Contain("ApplySortCommand(AutoFilterSortDirection.Descending)");
+        source.Should().Contain("private readonly CheckBox _selectAllBox");
+        source.Should().Contain("Content = UiText.Get(\"AutoFilter_SelectAll\")");
+        source.Should().Contain("IsThreeState = true");
+        source.Should().Contain("SetSelectionForVisibleItems");
+        source.Should().Contain("UpdateSelectAllBoxState");
+        source.Should().NotContain("private readonly RadioButton _sortNone");
+        source.Should().NotContain("var selectionRow = new StackPanel");
+        source.Should().NotContain("UiText.Get(\"AutoFilter_ClearAll\")");
     }
 
     [Fact]
@@ -203,7 +256,8 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("_customFilterGroup");
         source.Should().Contain("Header = UiText.Get(\"AutoFilter_CustomFilter\")");
         source.Should().Contain("IsReadOnly = true");
-        source.Should().Contain("_customFilterGroup.Visibility = Visibility.Visible");
+        source.Should().Contain("private void ShowCustomFilterPanel()");
+        source.Should().Contain("_customFilterGroup.Visibility = Visibility.Visible;");
         source.Should().Contain("_criteriaSuggestionLabel.Visibility = Visibility.Visible");
         source.Should().Contain("BuildCriteriaText");
         source.Should().Contain("BuildBetweenCriteriaText");

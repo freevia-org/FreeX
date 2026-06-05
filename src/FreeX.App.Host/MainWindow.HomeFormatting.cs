@@ -16,6 +16,24 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private enum RibbonBorderPreset
+    {
+        All,
+        Outside,
+        Inside,
+        None,
+        Bottom,
+        Top,
+        Left,
+        Right,
+        ThickBottom,
+        BottomDouble,
+        ThickBox,
+        TopAndBottom,
+        TopAndThickBottom,
+        TopAndDoubleBottom
+    }
+
     // ── Formatting toolbar handlers ───────────────────────────────────────────
 
     private void BoldButton_Click(object sender, RoutedEventArgs e)
@@ -223,6 +241,7 @@ public partial class MainWindow
 
     private void FontColorPickerBtn_Click(object sender, RoutedEventArgs e)
     {
+        e.Handled = true;
         if (!TryShowColorPicker("Font Color", _selectedFontColor, allowNoColor: false, out var color) ||
             color is not { } selected)
         {
@@ -243,6 +262,7 @@ public partial class MainWindow
 
     private void FillColorPickerBtn_Click(object sender, RoutedEventArgs e)
     {
+        e.Handled = true;
         if (!TryShowColorPicker("Fill Color", _selectedFillColor, allowNoColor: true, out var color))
             return;
 
@@ -368,8 +388,7 @@ public partial class MainWindow
 
     private void BorderPickerBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-            OpenRibbonContextMenu(btn, cm);
+        ApplySelectedBorderPreset();
     }
 
     private void ApplyRangeBorderPreset(Func<GridRange, CellAddress, StyleDiff> createDiff, string title)
@@ -406,59 +425,127 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private void BorderAllMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff(_borderPickerStyle, _borderPickerColor));
-
-    private void BorderOutsideMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset(
-            (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
-            "Outside Borders");
-
-    private void BorderInsideMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset(
-            (range, address) => BorderShortcutService.GetInsideBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
-            "Inside Borders");
-
-    private void BorderNoneMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ApplySelectedBorderPreset()
     {
-        ApplyStyleDiff(BorderShortcutService.GetClearBorderDiff());
+        switch (_selectedBorderPreset)
+        {
+            case RibbonBorderPreset.All:
+                ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff(_borderPickerStyle, _borderPickerColor));
+                break;
+
+            case RibbonBorderPreset.Outside:
+                ApplyRangeBorderPreset(
+                    (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
+                    "Outside Borders");
+                break;
+
+            case RibbonBorderPreset.Inside:
+                ApplyRangeBorderPreset(
+                    (range, address) => BorderShortcutService.GetInsideBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
+                    "Inside Borders");
+                break;
+
+            case RibbonBorderPreset.None:
+                ApplyStyleDiff(BorderShortcutService.GetClearBorderDiff());
+                break;
+
+            case RibbonBorderPreset.Bottom:
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, _borderPickerStyle, _borderPickerColor));
+                break;
+
+            case RibbonBorderPreset.Top:
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, _borderPickerStyle, _borderPickerColor));
+                break;
+
+            case RibbonBorderPreset.Left:
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, _borderPickerStyle, _borderPickerColor));
+                break;
+
+            case RibbonBorderPreset.Right:
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, _borderPickerStyle, _borderPickerColor));
+                break;
+
+            case RibbonBorderPreset.ThickBottom:
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick, _borderPickerColor));
+                break;
+
+            case RibbonBorderPreset.BottomDouble:
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double, _borderPickerColor));
+                break;
+
+            case RibbonBorderPreset.ThickBox:
+                ApplyRangeBorderPreset(
+                    (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerColor),
+                    "Thick Outside Borders");
+                break;
+
+            case RibbonBorderPreset.TopAndBottom:
+                ApplyRangeBorderPreset(
+                    (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, _borderPickerStyle, _borderPickerColor),
+                    "Top and Bottom Border");
+                break;
+
+            case RibbonBorderPreset.TopAndThickBottom:
+                ApplyRangeBorderPreset(
+                    (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Thick, _borderPickerColor),
+                    "Top and Thick Bottom Border");
+                break;
+
+            case RibbonBorderPreset.TopAndDoubleBottom:
+                ApplyRangeBorderPreset(
+                    (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Double, _borderPickerColor),
+                    "Top and Double Bottom Border");
+                break;
+        }
     }
 
+    private void ApplyBorderPreset(RibbonBorderPreset preset)
+    {
+        _selectedBorderPreset = preset;
+        ApplySelectedBorderPreset();
+    }
+
+    private void BorderAllMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyBorderPreset(RibbonBorderPreset.All);
+
+    private void BorderOutsideMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyBorderPreset(RibbonBorderPreset.Outside);
+
+    private void BorderInsideMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyBorderPreset(RibbonBorderPreset.Inside);
+
+    private void BorderNoneMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyBorderPreset(RibbonBorderPreset.None);
+
     private void BorderBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, _borderPickerStyle, _borderPickerColor));
+        => ApplyBorderPreset(RibbonBorderPreset.Bottom);
 
     private void BorderTopMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, _borderPickerStyle, _borderPickerColor));
+        => ApplyBorderPreset(RibbonBorderPreset.Top);
 
     private void BorderLeftMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, _borderPickerStyle, _borderPickerColor));
+        => ApplyBorderPreset(RibbonBorderPreset.Left);
 
     private void BorderRightMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, _borderPickerStyle, _borderPickerColor));
+        => ApplyBorderPreset(RibbonBorderPreset.Right);
 
     private void BorderThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick, _borderPickerColor));
+        => ApplyBorderPreset(RibbonBorderPreset.ThickBottom);
 
     private void BorderBottomDoubleMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double, _borderPickerColor));
+        => ApplyBorderPreset(RibbonBorderPreset.BottomDouble);
 
     private void BorderThickBoxMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerColor), "Thick Outside Borders");
+        => ApplyBorderPreset(RibbonBorderPreset.ThickBox);
 
     private void BorderTopAndBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset(
-            (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, _borderPickerStyle, _borderPickerColor),
-            "Top and Bottom Border");
+        => ApplyBorderPreset(RibbonBorderPreset.TopAndBottom);
 
     private void BorderTopAndThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset(
-            (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Thick, _borderPickerColor),
-            "Top and Thick Bottom Border");
+        => ApplyBorderPreset(RibbonBorderPreset.TopAndThickBottom);
 
     private void BorderTopAndDoubleBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset(
-            (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Double, _borderPickerColor),
-            "Top and Double Bottom Border");
+        => ApplyBorderPreset(RibbonBorderPreset.TopAndDoubleBottom);
 
     private void BorderDrawMenuItem_Click(object sender, RoutedEventArgs e)
         => BeginBorderDrawMode(BorderDrawMode.Draw);

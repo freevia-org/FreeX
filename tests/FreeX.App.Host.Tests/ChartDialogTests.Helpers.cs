@@ -23,10 +23,6 @@ public sealed partial class ChartDialogTests
             "ChartTypeDialogs.PickerUi.cs",
             "ChartTypeDialogs.Change.cs");
 
-    private static T GetPrivateField<T>(object instance, string name)
-        where T : class
-        => DialogSourceTestSupport.GetPrivateField<T>(instance, name);
-
     private static MouseButtonEventArgs CreateMouseDoubleClickEvent() =>
         new(Mouse.PrimaryDevice, 0, MouseButton.Left)
         {

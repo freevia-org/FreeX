@@ -112,6 +112,10 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("new SetPageMarginsCommand(sheetId, WorksheetPageMargins.Normal)");
         source.Should().Contain("new SetPageOrientationCommand(sheetId, WorksheetPageOrientation.Portrait)");
         source.Should().Contain("new SetPaperSizeCommand(sheetId, WorksheetPaperSize.Letter)");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void PrintAreaBtn_Click(")
+            .Should().Contain("PrintAreaSetMenuItem_Click(sender, e);");
+        SourceMethodExtractor.ExtractMethodSource(source, "private void BackgroundBtn_Click(")
+            .Should().Contain("BackgroundChooseMenuItem_Click(sender, e);");
         source.Should().Contain("new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))");
         source.Should().Contain("new ClearPrintAreaCommand(sheetId)");
         source.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit)");

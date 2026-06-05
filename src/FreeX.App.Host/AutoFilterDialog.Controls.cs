@@ -10,6 +10,21 @@ namespace FreeX.App.Host;
 
 public sealed partial class AutoFilterDialog
 {
+    private static Button CreateMenuCommandButton(string content, Visibility visibility = Visibility.Visible) =>
+        new()
+        {
+            Content = content,
+            Visibility = visibility,
+            HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
+            Padding = new Thickness(6, 3, 6, 3),
+            Margin = new Thickness(0, 0, 0, 2),
+            MinHeight = 24,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent
+        };
+
+    private static string FormatCascadeMenuHeader(string header) => $"{header}    >";
+
     private static void AddFilterMenuSeparator(Panel stack)
     {
         stack.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
@@ -17,8 +32,8 @@ public sealed partial class AutoFilterDialog
 
     private void FocusInitialKeyboardTarget()
     {
-        _sortAscending.Focus();
-        Keyboard.Focus(_sortAscending);
+        _sortAscendingButton.Focus();
+        Keyboard.Focus(_sortAscendingButton);
     }
 
     private void AutoFilterDialog_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -64,6 +79,7 @@ public sealed partial class AutoFilterDialog
 
         _criteriaOperatorBox.Focus();
         Keyboard.Focus(_criteriaOperatorBox);
+        ShowCustomFilterPanel();
         UpdateCriteriaTextFromTypedControls();
         return true;
     }
@@ -73,12 +89,15 @@ public sealed partial class AutoFilterDialog
         _textFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Text
             ? Visibility.Visible
             : Visibility.Collapsed;
+        _textFiltersButton.Content = FormatCascadeMenuHeader(UiText.Get("AutoFilter_TextFilters"));
         _numberFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Number
             ? Visibility.Visible
             : Visibility.Collapsed;
+        _numberFiltersButton.Content = FormatCascadeMenuHeader(UiText.Get("AutoFilter_NumberFilters"));
         _dateFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Date
             ? Visibility.Visible
             : Visibility.Collapsed;
+        _dateFiltersButton.Content = FormatCascadeMenuHeader(UiText.Get("AutoFilter_DateFilters"));
     }
 
     private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)
@@ -131,6 +150,7 @@ public sealed partial class AutoFilterDialog
         if (child.Kind != AutoFilterMenuEntryKind.FilterFamilyCommand)
             return;
 
+        ShowCustomFilterPanel();
         var option = _criteriaOperatorBox.Items
             .OfType<AutoFilterCriteriaOption>()
             .FirstOrDefault(item => string.Equals(item.CriteriaPrefix, child.Value, StringComparison.Ordinal));
@@ -145,6 +165,24 @@ public sealed partial class AutoFilterDialog
             _criteriaValueBox.Focus();
     }
 
+    private void ShowCustomFilterPanel()
+    {
+        _customFilterGroup.Visibility = Visibility.Visible;
+        UpdateCriteriaTextFromTypedControls();
+    }
+
+    private void ApplySortCommand(AutoFilterSortDirection direction)
+    {
+        Result = BuildResult(
+            direction,
+            _allItems,
+            string.Empty,
+            string.Empty,
+            null,
+            addCurrentSelectionToFilter: false);
+        DialogResult = true;
+    }
+
     public static (string Ascending, string Descending) GetSortLabels(AutoFilterMenuFilterKind filterKind) =>
         filterKind switch
         {
@@ -156,8 +194,8 @@ public sealed partial class AutoFilterDialog
     private void SetSortLabels(AutoFilterMenuFilterKind filterKind)
     {
         var labels = GetSortLabels(filterKind);
-        _sortAscending.Content = labels.Ascending;
-        _sortDescending.Content = labels.Descending;
+        _sortAscendingButton.Content = labels.Ascending;
+        _sortDescendingButton.Content = labels.Descending;
     }
 
     private StackPanel CreateBetweenCriteriaPanel()
@@ -296,6 +334,7 @@ public sealed partial class AutoFilterDialog
         var item = _items[index];
         item.IsSelected = !item.IsSelected;
         _checklistBox.Items.Refresh();
+        UpdateSelectAllBoxState();
         FocusChecklistItem(index);
         return true;
     }
@@ -332,13 +371,50 @@ public sealed partial class AutoFilterDialog
     {
         _selectedColorFilter = colorFilter;
         Result = BuildResult(
-            GetSortDirection(),
+            AutoFilterSortDirection.None,
             _allItems,
             _searchBox.Text,
             _criteriaBox.Text,
             colorFilter,
             _addCurrentSelectionToFilterBox.IsChecked == true);
         DialogResult = true;
+    }
+
+    private void SetSelectionForVisibleItems(bool isSelected)
+    {
+        if (_updatingSelectAllBox)
+            return;
+
+        ReplaceAllItems(SetSelectionForSearch(_allItems, _searchBox.Text, isSelected));
+    }
+
+    private void UpdateSelectAllBoxState()
+    {
+        _updatingSelectAllBox = true;
+        try
+        {
+            if (_items.Count == 0)
+            {
+                _selectAllBox.IsChecked = false;
+                return;
+            }
+
+            var selectedCount = _items.Count(item => item.IsSelected);
+            _selectAllBox.IsChecked = selectedCount == _items.Count
+                ? true
+                : selectedCount == 0
+                    ? false
+                    : null;
+        }
+        finally
+        {
+            _updatingSelectAllBox = false;
+        }
+    }
+
+    private void ChecklistItemSelectionChanged(object sender, RoutedEventArgs e)
+    {
+        UpdateSelectAllBoxState();
     }
 
     private static Rectangle CreateColorSwatch(AutoFilterColorOption option)
@@ -357,7 +433,7 @@ public sealed partial class AutoFilterDialog
         };
     }
 
-    private static DataTemplate CreateItemTemplate()
+    private DataTemplate CreateItemTemplate()
     {
         var checkBox = new FrameworkElementFactory(typeof(CheckBox));
         checkBox.SetBinding(ContentControl.ContentProperty, new System.Windows.Data.Binding(nameof(AutoFilterDialogItem.DisplayText)));
@@ -366,6 +442,8 @@ public sealed partial class AutoFilterDialog
             Mode = System.Windows.Data.BindingMode.TwoWay,
             UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
         });
+        checkBox.AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent, new RoutedEventHandler(ChecklistItemSelectionChanged));
+        checkBox.AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent, new RoutedEventHandler(ChecklistItemSelectionChanged));
         return new DataTemplate { VisualTree = checkBox };
     }
 }

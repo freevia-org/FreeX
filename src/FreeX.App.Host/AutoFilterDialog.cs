@@ -16,7 +16,13 @@ public sealed partial class AutoFilterDialog : Window
     private readonly CheckBox _addCurrentSelectionToFilterBox = new()
     {
         Content = UiText.Get("AutoFilter_AddCurrentSelectionToFilter"),
-        Margin = new Thickness(0, 0, 0, 8)
+        Margin = new Thickness(0, 0, 0, 6)
+    };
+    private readonly CheckBox _selectAllBox = new()
+    {
+        Content = UiText.Get("AutoFilter_SelectAll"),
+        IsThreeState = true,
+        Margin = new Thickness(0, 0, 0, 4)
     };
     private readonly TextBox _criteriaBox = new() { IsReadOnly = true };
     private readonly ComboBox _criteriaSuggestionBox = new()
@@ -59,18 +65,22 @@ public sealed partial class AutoFilterDialog : Window
         DisplayMemberPath = nameof(AutoFilterCriteriaOption.Label)
     };
     private readonly TextBox _criteriaValueBox2 = new() { Visibility = Visibility.Collapsed };
-    private readonly RadioButton _sortNone = new() { Content = UiText.Get("AutoFilter_NoSort"), IsChecked = true };
-    private readonly RadioButton _sortAscending = new() { Content = UiText.Get("AutoFilter_SortAToZ") };
-    private readonly RadioButton _sortDescending = new() { Content = UiText.Get("AutoFilter_SortZToA") };
-    private readonly Button _clearFilterButton = new() { Content = UiText.Get("AutoFilter_ClearFilterFrom2"), Margin = new Thickness(0, 8, 0, 0) };
+    private readonly Button _sortAscendingButton = CreateMenuCommandButton(UiText.Get("AutoFilter_SortAToZ"));
+    private readonly Button _sortDescendingButton = CreateMenuCommandButton(UiText.Get("AutoFilter_SortZToA"));
+    private readonly Button _clearFilterButton = CreateMenuCommandButton(UiText.Get("AutoFilter_ClearFilterFrom2"));
     private readonly GroupBox _filterByColorGroup = new() { Header = UiText.Get("AutoFilter_FilterByColor2"), Visibility = Visibility.Collapsed };
     private readonly StackPanel _filterByColorPanel = new();
     private readonly List<Button> _colorChoiceButtons = [];
-    private readonly Button _textFiltersButton = new() { Content = UiText.Get("AutoFilter_TextFilters"), Visibility = Visibility.Collapsed };
-    private readonly Button _numberFiltersButton = new() { Content = UiText.Get("AutoFilter_NumberFilters"), Visibility = Visibility.Collapsed };
-    private readonly Button _dateFiltersButton = new() { Content = UiText.Get("AutoFilter_DateFilters"), Visibility = Visibility.Collapsed };
+    private readonly Button _textFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_TextFilters"), Visibility.Collapsed);
+    private readonly Button _numberFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_NumberFilters"), Visibility.Collapsed);
+    private readonly Button _dateFiltersButton = CreateMenuCommandButton(UiText.Get("AutoFilter_DateFilters"), Visibility.Collapsed);
     private readonly ListBox _checklistBox = new();
-    private readonly GroupBox _customFilterGroup = new() { Header = UiText.Get("AutoFilter_CustomFilter"), Visibility = Visibility.Collapsed };
+    private readonly GroupBox _customFilterGroup = new()
+    {
+        Header = UiText.Get("AutoFilter_CustomFilter"),
+        Visibility = Visibility.Collapsed,
+        Margin = new Thickness(0, 8, 0, 0)
+    };
     private readonly Label _criteriaSuggestionLabel = new()
     {
         Content = UiText.Get("AutoFilter_CriteriaTemplate"),
@@ -78,6 +88,7 @@ public sealed partial class AutoFilterDialog : Window
         Visibility = Visibility.Collapsed
     };
     private AutoFilterColorFilter? _selectedColorFilter;
+    private bool _updatingSelectAllBox;
 
     public AutoFilterDialogResult Result { get; private set; }
 
@@ -119,7 +130,6 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaValueBox2.Visibility = Visibility.Visible;
             _criteriaValueBox2.ToolTip = UiText.Get("AutoFilter_ValueForTheSecondTypedFilter");
             _criteriaBox.ToolTip = UiText.Get("AutoFilter_GeneratedCriterionThatWillBeApplied");
-            _customFilterGroup.Visibility = Visibility.Visible;
         }
         ConfigureFilterFamilySubmenu(menuPlan);
 
@@ -138,25 +148,55 @@ public sealed partial class AutoFilterDialog : Window
         Result = BuildResult(AutoFilterSortDirection.None, _allItems, string.Empty, string.Empty);
 
         Title = UiText.Get("AutoFilter_AutoFilter");
-        Width = 360;
-        Height = 540;
+        Width = 312;
+        MaxHeight = 560;
+        SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        var root = new DockPanel { Margin = new Thickness(16) };
+        var root = new DockPanel { Margin = new Thickness(10), LastChildFill = true };
         _datePresetBox.ItemsSource = CreateDatePresetChoices();
         _criteriaConnectorBox.ItemsSource = CreateConnectorChoices();
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        var ok = new Button { Content = UiText.Ok, IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+        ok.Click += (_, _) =>
+        {
+            if (!ValidateTypedCriteriaInputs())
+                return;
+
+            Result = BuildResult(
+                AutoFilterSortDirection.None,
+                _allItems,
+                _searchBox.Text,
+                _criteriaBox.Text,
+                _selectedColorFilter,
+                _addCurrentSelectionToFilterBox.IsChecked == true);
+            DialogResult = true;
+        };
+        var cancel = new Button { Content = UiText.Cancel, IsCancel = true, Width = 76 };
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
+        root.Children.Add(buttons);
+
         var stack = new StackPanel();
         var scrollViewer = new ScrollViewer
         {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
         scrollViewer.Content = stack;
         root.Children.Add(scrollViewer);
 
-        stack.Children.Add(_sortNone);
-        stack.Children.Add(_sortAscending);
-        stack.Children.Add(_sortDescending);
+        _sortAscendingButton.Click += (_, _) => ApplySortCommand(AutoFilterSortDirection.Ascending);
+        _sortDescendingButton.Click += (_, _) => ApplySortCommand(AutoFilterSortDirection.Descending);
+        stack.Children.Add(_sortAscendingButton);
+        stack.Children.Add(_sortDescendingButton);
         AddFilterMenuSeparator(stack);
         _clearFilterButton.Click += (_, _) =>
         {
@@ -164,7 +204,6 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaBox.Clear();
             _criteriaValueBox.Clear();
             _searchBox.Clear();
-            _sortNone.IsChecked = true;
             ReplaceAllItems(SelectAll(_allItems));
             Result = CreateClearFilterResult();
             DialogResult = true;
@@ -181,12 +220,15 @@ public sealed partial class AutoFilterDialog : Window
         }
 
         AddFilterMenuSeparator(stack);
-        stack.Children.Add(new Label { Content = UiText.Get("AutoFilter_Search2"), Target = _searchBox, Padding = new Thickness(0), Margin = new Thickness(0, 12, 0, 2) });
-        _searchBox.Margin = new Thickness(0, 0, 0, 8);
+        stack.Children.Add(new Label { Content = UiText.Get("AutoFilter_Search2"), Target = _searchBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+        _searchBox.Margin = new Thickness(0, 0, 0, 6);
         _searchBox.ToolTip = UiText.Get("AutoFilter_Search3");
         _searchBox.TextChanged += (_, _) => ReplaceItems(FilterItems(_allItems, _searchBox.Text));
         stack.Children.Add(_searchBox);
         stack.Children.Add(_addCurrentSelectionToFilterBox);
+        _selectAllBox.Checked += (_, _) => SetSelectionForVisibleItems(isSelected: true);
+        _selectAllBox.Unchecked += (_, _) => SetSelectionForVisibleItems(isSelected: false);
+        stack.Children.Add(_selectAllBox);
 
         _checklistBox.ItemsSource = _items;
         _checklistBox.Height = 180;
@@ -195,20 +237,6 @@ public sealed partial class AutoFilterDialog : Window
         _checklistBox.PreviewKeyDown += ChecklistBox_PreviewKeyDown;
         AutomationProperties.SetName(_checklistBox, UiText.Get("AutoFilter_FilterValues"));
         stack.Children.Add(_checklistBox);
-
-        var selectionRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 12)
-        };
-        var selectAll = new Button { Content = UiText.Get("AutoFilter_SelectAll2"), Width = 88, Margin = new Thickness(0, 0, 8, 0) };
-        selectAll.Click += (_, _) => ReplaceAllItems(SetSelectionForSearch(_allItems, _searchBox.Text, isSelected: true));
-        var clearAll = new Button { Content = UiText.Get("AutoFilter_ClearAll"), Width = 88 };
-        clearAll.Click += (_, _) => ReplaceAllItems(SetSelectionForSearch(_allItems, _searchBox.Text, isSelected: false));
-        selectionRow.Children.Add(selectAll);
-        selectionRow.Children.Add(clearAll);
-        stack.Children.Add(selectionRow);
-        AddFilterMenuSeparator(stack);
 
         var customFilterPanel = new StackPanel();
         _customFilterGroup.Content = customFilterPanel;
@@ -261,36 +289,10 @@ public sealed partial class AutoFilterDialog : Window
         };
         customFilterPanel.Children.Add(_criteriaSuggestionBox);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0)
-        };
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        var ok = new Button { Content = UiText.Ok, IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
-        ok.Click += (_, _) =>
-        {
-            if (!ValidateTypedCriteriaInputs())
-                return;
-
-            Result = BuildResult(
-                GetSortDirection(),
-                _allItems,
-                _searchBox.Text,
-                _criteriaBox.Text,
-                _selectedColorFilter,
-                _addCurrentSelectionToFilterBox.IsChecked == true);
-            DialogResult = true;
-        };
-        var cancel = new Button { Content = UiText.Cancel, IsCancel = true, Width = 76 };
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
-        root.Children.Add(buttons);
-
         Content = root;
         PreviewKeyDown += AutoFilterDialog_PreviewKeyDown;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+        UpdateSelectAllBoxState();
     }
 
     private static IReadOnlyList<FilterChoice> CreateDatePresetChoices() =>

@@ -82,6 +82,8 @@ public static partial class FlashFillService
             ?? TryExtractFinalDottedToken(examples)
             ?? TryRemoveLeadingDottedToken(examples)
             ?? TryExtractMiddleDottedToken(examples)
+            ?? TryExtractFirstDottedToken(examples)
+            ?? TryRemoveMiddleDottedToken(examples)
             ?? TryRemoveLeadingDelimitedToken(examples)
             ?? TryRemoveFinalDelimitedToken(examples)
             ?? TryExtractFinalDelimitedToken(examples)

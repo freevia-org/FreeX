@@ -17,6 +17,7 @@ public partial class MainWindow
     private const string RibbonDropdownContentPartName = "PART_RibbonDropdownContent";
     private const double RibbonSplitButtonIconColumnWidth = 24;
     private const double RibbonSplitButtonDropdownColumnWidth = 14;
+    private const double RibbonSplitButtonFallbackDropdownZoneWidth = RibbonSplitButtonDropdownColumnWidth;
     private const double RibbonSplitButtonIconOnlyContentWidth =
         RibbonSplitButtonIconColumnWidth + RibbonSplitButtonDropdownColumnWidth;
 
@@ -406,7 +407,12 @@ public partial class MainWindow
         }
 
         if (RibbonMetadata.IsDropdownMenuButton(button))
-            button.RaiseEvent(new RoutedEventArgs(RibbonMetadata.DropdownClickEvent, button));
+        {
+            var dropdownArgs = new RoutedEventArgs(RibbonMetadata.DropdownClickEvent, button);
+            button.RaiseEvent(dropdownArgs);
+            if (!dropdownArgs.Handled)
+                button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+        }
     }
 
     private static bool IsRibbonDropdownZoneClick(ButtonBase button, Point position)
@@ -424,23 +430,22 @@ public partial class MainWindow
             return false;
 
         var layout = GetRibbonDropdownZoneLayout(button);
+        if (layout is not (RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium) &&
+            TryGetRibbonDropdownChevronBounds(button, out var chevronBounds))
+        {
+            bounds = GetRibbonChevronDropdownZoneBounds(chevronBounds, width, height);
+            return bounds is { Width: > 0, Height: > 0 };
+        }
+
         var horizontalZoneHeight = GetRibbonHorizontalDropdownZoneHeight(height);
-        var useIconAdjacentZone = ShouldUseIconAdjacentDropdownZone(button, layout);
         bounds = layout switch
         {
             RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium =>
                 GetRibbonHorizontalDropdownZoneBounds(button, width, height, horizontalZoneHeight),
-            _ when useIconAdjacentZone =>
+            _ when ShouldUseIconAdjacentDropdownZone(button, layout) =>
                 GetRibbonIconAdjacentDropdownZoneBounds(button, width, height),
-            _ => new Rect(Math.Max(0, width - 18), 0, Math.Min(18, width), height)
+            _ => GetRibbonTrailingDropdownZoneBounds(width, height)
         };
-
-        if (!useIconAdjacentZone &&
-            layout is not (RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium) &&
-            TryGetRibbonDropdownChevronBounds(button, out var chevronBounds))
-        {
-            bounds.Union(chevronBounds);
-        }
 
         return bounds is { Width: > 0, Height: > 0 };
     }
@@ -473,6 +478,20 @@ public partial class MainWindow
             zoneLeft = Math.Clamp(Math.Ceiling(iconBounds.Right), 0, width);
 
         return new Rect(zoneLeft, 0, Math.Max(0, width - zoneLeft), height);
+    }
+
+    private static Rect GetRibbonChevronDropdownZoneBounds(Rect chevronBounds, double buttonWidth, double buttonHeight)
+    {
+        var zoneWidth = Math.Min(RibbonSplitButtonDropdownColumnWidth, buttonWidth);
+        var center = chevronBounds.Left + chevronBounds.Width / 2;
+        var zoneLeft = Math.Clamp(Math.Round(center - zoneWidth / 2), 0, Math.Max(0, buttonWidth - zoneWidth));
+        return new Rect(zoneLeft, 0, zoneWidth, buttonHeight);
+    }
+
+    private static Rect GetRibbonTrailingDropdownZoneBounds(double buttonWidth, double buttonHeight)
+    {
+        var zoneWidth = Math.Min(RibbonSplitButtonFallbackDropdownZoneWidth, buttonWidth);
+        return new Rect(Math.Max(0, buttonWidth - zoneWidth), 0, zoneWidth, buttonHeight);
     }
 
     private static bool HasVisibleRibbonCommandLabel(ButtonBase button)
@@ -582,7 +601,6 @@ public partial class MainWindow
             {
                 bounds = chevron.TransformToAncestor(button)
                     .TransformBounds(new Rect(0, 0, chevron.ActualWidth, chevron.ActualHeight));
-                bounds.Inflate(7, 7);
                 return true;
             }
             catch (InvalidOperationException)
