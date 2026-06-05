@@ -17,7 +17,7 @@ public sealed record SortOptions(bool CaseSensitive = false, bool LeftToRight = 
 /// Sorts the rows of a rectangular range by a specified column, ascending or descending.
 /// Stores a snapshot of the original arrangement for undo via Revert.
 /// </summary>
-public sealed class SortCommand : IWorkbookCommand
+public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
@@ -30,6 +30,7 @@ public sealed class SortCommand : IWorkbookCommand
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private HashSet<uint>? _hiddenRowsSnapshot;
+    private IReadOnlyList<CellAddress> _affectedCells = [];
 
     private sealed record SortPayloadCapture(
         SortCellPayload[][] Rows,
@@ -55,6 +56,8 @@ public sealed class SortCommand : IWorkbookCommand
         ? $"Sort {(_sortKeys[0].Ascending ? "Ascending" : "Descending")}"
         : "Sort";
 
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
     public SortCommand(SheetId sheetId, GridRange range, uint sortByColOffset, bool ascending)
         : this(sheetId, range, [new SortKey(sortByColOffset, ascending)])
     {
@@ -70,6 +73,7 @@ public sealed class SortCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        _affectedCells = [];
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.Sort) is { } protectedOutcome)
             return protectedOutcome;
@@ -103,9 +107,9 @@ public sealed class SortCommand : IWorkbookCommand
 
         // Read current state and save snapshot. Redo replays Apply after Revert,
         // so the snapshot must describe the current pre-sort state each time.
-        _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
-        _hiddenRowsSnapshot = new HashSet<uint>(sheet.HiddenRows);
-        var payloadCapture = CapturePayloads(sheet, _sheetId, _range, startRow, startCol, rowCount, colCount);
+        _rowHeightSnapshot = CaptureRowHeights(sheet, startRow, rowCount);
+        _hiddenRowsSnapshot = CaptureHiddenRows(sheet, startRow, rowCount);
+        var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
         _threadedCommentSnapshot = payloadCapture.ThreadedCommentSnapshot;
@@ -154,6 +158,7 @@ public sealed class SortCommand : IWorkbookCommand
             }
         }
 
+        _affectedCells = affected;
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -168,9 +173,9 @@ public sealed class SortCommand : IWorkbookCommand
         int rowCount,
         int colCount)
     {
-        _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
-        _hiddenRowsSnapshot = new HashSet<uint>(sheet.HiddenRows);
-        var payloadCapture = CapturePayloads(sheet, _sheetId, _range, startRow, startCol, rowCount, colCount);
+        _rowHeightSnapshot = null;
+        _hiddenRowsSnapshot = null;
+        var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
         _threadedCommentSnapshot = payloadCapture.ThreadedCommentSnapshot;
@@ -207,6 +212,7 @@ public sealed class SortCommand : IWorkbookCommand
             }
         }
 
+        _affectedCells = affected;
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -217,14 +223,13 @@ public sealed class SortCommand : IWorkbookCommand
 
         RestoreCellSnapshot(sheet, _snapshot);
         RestoreCommentSnapshots(sheet);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
-        RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
+        RestoreRowHeights(sheet);
+        RestoreHiddenRows(sheet);
     }
 
     private static SortPayloadCapture CapturePayloads(
         Sheet sheet,
         SheetId sheetId,
-        GridRange range,
         uint startRow,
         uint startCol,
         int rowCount,
@@ -232,6 +237,8 @@ public sealed class SortCommand : IWorkbookCommand
     {
         var rows = new SortCellPayload[rowCount][];
         var cellSnapshot = new List<List<(CellAddress, Cell?)>>(rowCount);
+        var commentSnapshot = new Dictionary<CellAddress, string>();
+        var threadedCommentSnapshot = new Dictionary<CellAddress, ThreadedComment>();
 
         for (int ri = 0; ri < rowCount; ri++)
         {
@@ -243,22 +250,46 @@ public sealed class SortCommand : IWorkbookCommand
             {
                 uint col = startCol + (uint)ci;
                 var addr = new CellAddress(sheetId, row, col);
-                payloadRow[ci] = CaptureCellPayload(sheet, addr, out var snapshotCell);
+                var payload = CaptureCellPayload(sheet, addr, out var snapshotCell);
+                payloadRow[ci] = payload;
                 snapRow.Add((addr, snapshotCell));
+                if (payload.Comment is not null)
+                    commentSnapshot[addr] = payload.Comment;
+                if (payload.ThreadedComment is not null)
+                    threadedCommentSnapshot[addr] = payload.ThreadedComment;
             }
 
             rows[ri] = payloadRow;
             cellSnapshot.Add(snapRow);
         }
 
-        var commentSnapshot = sheet.Comments
-            .Where(p => range.Contains(p.Key))
-            .ToDictionary(p => p.Key, p => p.Value);
-        var threadedCommentSnapshot = sheet.ThreadedComments
-            .Where(p => range.Contains(p.Key))
-            .ToDictionary(p => p.Key, p => p.Value);
-
         return new SortPayloadCapture(rows, cellSnapshot, commentSnapshot, threadedCommentSnapshot);
+    }
+
+    private static Dictionary<uint, double> CaptureRowHeights(Sheet sheet, uint startRow, int rowCount)
+    {
+        var snapshot = new Dictionary<uint, double>();
+        for (int ri = 0; ri < rowCount; ri++)
+        {
+            var row = startRow + (uint)ri;
+            if (sheet.RowHeights.TryGetValue(row, out var height))
+                snapshot[row] = height;
+        }
+
+        return snapshot;
+    }
+
+    private static HashSet<uint> CaptureHiddenRows(Sheet sheet, uint startRow, int rowCount)
+    {
+        var snapshot = new HashSet<uint>();
+        for (int ri = 0; ri < rowCount; ri++)
+        {
+            var row = startRow + (uint)ri;
+            if (sheet.HiddenRows.Contains(row))
+                snapshot.Add(row);
+        }
+
+        return snapshot;
     }
 
     private static SortCellPayload CaptureCellPayload(Sheet sheet, CellAddress address, out Cell? snapshotCell)
@@ -313,7 +344,7 @@ public sealed class SortCommand : IWorkbookCommand
 
     private void RestoreCommentSnapshots(Sheet sheet)
     {
-        foreach (var addr in _range.AllCells())
+        foreach (var addr in _affectedCells)
         {
             sheet.Comments.Remove(addr);
             sheet.ThreadedComments.Remove(addr);
@@ -330,6 +361,30 @@ public sealed class SortCommand : IWorkbookCommand
             foreach (var (addr, comment) in _threadedCommentSnapshot)
                 sheet.ThreadedComments[addr] = comment;
         }
+    }
+
+    private void RestoreRowHeights(Sheet sheet)
+    {
+        if (_rowHeightSnapshot is null)
+            return;
+
+        for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+            sheet.RowHeights.Remove(row);
+
+        foreach (var (row, height) in _rowHeightSnapshot)
+            sheet.RowHeights[row] = height;
+    }
+
+    private void RestoreHiddenRows(Sheet sheet)
+    {
+        if (_hiddenRowsSnapshot is null)
+            return;
+
+        for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+            sheet.HiddenRows.Remove(row);
+
+        foreach (var row in _hiddenRowsSnapshot)
+            sheet.HiddenRows.Add(row);
     }
 
     private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, CellColor? targetColor, CustomSortOrder? customOrder, bool caseSensitive)
