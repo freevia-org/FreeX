@@ -44,6 +44,7 @@ internal static class Program
         Directory.CreateDirectory(runDir);
 
         Console.WriteLine("FreeX / Excel functional fidelity batch");
+        Console.WriteLine($"Mode: {(options.Recalc ? "compute-fidelity (FreeX formulas recalculated)" : "load-fidelity (FreeX cached values)")}");
         Console.WriteLine($"Files: {files.Count}");
         Console.WriteLine($"Run directory: {runDir}");
 
@@ -54,7 +55,7 @@ internal static class Program
             {
                 Console.WriteLine($"[{index + 1}/{files.Count}] {Path.GetFileName(file)}");
                 var result = new FileResult(Path.GetFileName(file));
-                try { FreeXInspector.Inspect(file, result); }
+                try { FreeXInspector.Inspect(file, result, options.Recalc); }
                 catch (Exception ex) { result.FreeXError = $"{ex.GetType().Name}: {ex.Message}"; }
                 try { ExcelInspector.Inspect(file, result, options); }
                 catch (Exception ex) { result.ExcelError = $"{ex.GetType().Name}: {ex.Message}"; }

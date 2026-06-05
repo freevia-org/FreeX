@@ -255,6 +255,29 @@ public sealed class FlashFillCommandTests
     }
 
     [Fact]
+    public void FlashFillCommand_WhenThreeLeftColumnsArePopulated_UsesThreeColumnNamePatternFirst()
+    {
+        var (wb, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Ada"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Byron"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Lovelace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("Lovelace, Ada Byron"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Grace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Brewster"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("Hopper"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 4), new TextValue("Hopper, Grace Brewster"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Alan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Mathison"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new TextValue("Turing"));
+
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 4, sourceColIndex: 3, startRow: 1, endRow: 3);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(3, 4)!.Value.Should().Be(new TextValue("Turing, Alan Mathison"));
+    }
+
+    [Fact]
     public void FlashFillCommand_SelectedRangeWithBlankSourceRow_FillsPopulatedRows()
     {
         var (wb, sheet, ctx) = Setup();
