@@ -239,6 +239,7 @@ public sealed partial class XlsxFileAdapter
         {
             SaveSourcePackageIndependentPostProcessingMetadata();
             NormalizeStylesheetForSchema();
+            NormalizeDocumentPropertiesPackageGraph();
             NormalizeWorkbookForSchema();
             return;
         }
@@ -280,6 +281,7 @@ public sealed partial class XlsxFileAdapter
 
         NormalizeStylesheetForSchema();
         NormalizeSourcePackageForExcelCompatibility();
+        NormalizeDocumentPropertiesPackageGraph();
         NormalizeWorkbookForSchema();
 
         packageStream.Position = 0;
@@ -312,6 +314,12 @@ public sealed partial class XlsxFileAdapter
             XlsxExcelCompatibilityNormalizer.NormalizeSourcePackageSave(
                 packageStream,
                 CreateExcelCompatibilityNormalizationPlan(sourcePackage, sourceParts, featurePlan));
+        }
+
+        void NormalizeDocumentPropertiesPackageGraph()
+        {
+            packageStream.Position = 0;
+            XlsxDocumentPropertiesPreserver.NormalizePackageGraph(packageStream);
         }
 
         void NormalizeWorkbookForSchema()

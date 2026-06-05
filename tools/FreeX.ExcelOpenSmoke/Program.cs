@@ -92,6 +92,14 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
     private const string CustomXmlPropertiesRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps";
+    private const string CustomDocumentPropertiesContentType =
+        "application/vnd.openxmlformats-officedocument.custom-properties+xml";
+    private const string CustomDocumentPropertiesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
+    private const string ExtendedPropertiesContentType =
+        "application/vnd.openxmlformats-officedocument.extended-properties+xml";
+    private const string ExtendedPropertiesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
     private const string ExternalLinkContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
     private const string ExternalLinkRelationshipType =
@@ -109,6 +117,10 @@ internal static class ExcelOpenSmoke
     private const string OfficeDocumentRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string PackageRootRelationshipPart = "_rels/.rels";
+    private const string PackageCorePropertiesContentType =
+        "application/vnd.openxmlformats-package.core-properties+xml";
+    private const string PackageCorePropertiesRelationshipType =
+        "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
     private const string PrinterSettingsContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
     private const string PrinterSettingsRelationshipType =
@@ -171,6 +183,12 @@ internal static class ExcelOpenSmoke
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelationshipNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace PackageCorePropertiesNs =
+        "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+    private static readonly XNamespace ExtendedPropertiesNs =
+        "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
+    private static readonly XNamespace CustomDocumentPropertiesNs =
+        "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
     private static readonly XNamespace OfficeRelationshipNs =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace CustomXmlNs =
@@ -428,6 +446,7 @@ internal static class ExcelOpenSmoke
                 AssertPackageContentTypesComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPackageRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertDocumentPropertiesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -631,6 +650,7 @@ internal static class ExcelOpenSmoke
             AssertPackageContentTypesComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPackageRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertDocumentPropertiesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -1858,6 +1878,168 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid XLSX workbook package root: {string.Join("; ", issues)}");
+    }
+
+    private static void AssertDocumentPropertiesPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+        var relationshipEntry = FindPackageEntry(archive, PackageRootRelationshipPart);
+        XElement[] rootRelationships = relationshipEntry is null
+            ? []
+            : LoadPackageXml(relationshipEntry)
+                .Root?
+                .Elements(PackageRelationshipNs + "Relationship")
+                .ToArray() ?? [];
+
+        foreach (var definition in GetDocumentPropertyPackageDefinitions())
+        {
+            var relationships = rootRelationships
+                .Where(relationship => string.Equals(
+                    relationship.Attribute("Type")?.Value,
+                    definition.RelationshipType,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (relationships.Length > 1)
+                issues.Add($"{PackageRootRelationshipPart} has {relationships.Length} {definition.Label} relationships; expected at most one");
+
+            var relationshipTargetsExpectedPart = false;
+            foreach (var relationship in relationships)
+            {
+                if (AddDocumentPropertyRelationshipIssues(archive, definition, relationship, issues))
+                    relationshipTargetsExpectedPart = true;
+            }
+
+            var expectedEntry = FindPackageEntry(archive, definition.PackagePart);
+            if (expectedEntry is not null && relationships.Length == 0)
+            {
+                issues.Add($"{definition.PackagePart} exists without a package root {definition.Label} relationship");
+                AddDocumentPropertyPartIssues(archive, definition, expectedEntry, issues);
+            }
+            else if (expectedEntry is not null && !relationshipTargetsExpectedPart)
+            {
+                issues.Add($"{definition.PackagePart} exists but no package root {definition.Label} relationship targets it");
+                AddDocumentPropertyPartIssues(archive, definition, expectedEntry, issues);
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidDocumentPropertiesPackage(label, sourcePath, issues);
+    }
+
+    private static DocumentPropertyPackageDefinition[] GetDocumentPropertyPackageDefinitions() =>
+    [
+        new(
+            "core-properties",
+            PackageCorePropertiesRelationshipType,
+            "docProps/core.xml",
+            PackageCorePropertiesContentType,
+            PackageCorePropertiesNs + "coreProperties"),
+        new(
+            "extended-properties",
+            ExtendedPropertiesRelationshipType,
+            "docProps/app.xml",
+            ExtendedPropertiesContentType,
+            ExtendedPropertiesNs + "Properties"),
+        new(
+            "custom-properties",
+            CustomDocumentPropertiesRelationshipType,
+            "docProps/custom.xml",
+            CustomDocumentPropertiesContentType,
+            CustomDocumentPropertiesNs + "Properties")
+    ];
+
+    private static bool AddDocumentPropertyRelationshipIssues(
+        ZipArchive archive,
+        DocumentPropertyPackageDefinition definition,
+        XElement relationship,
+        List<string> issues)
+    {
+        var relationshipId = relationship.Attribute("Id")?.Value ?? "(no Id)";
+        var relationshipLabel = $"{PackageRootRelationshipPart} {definition.Label} relationship {relationshipId}";
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} is external");
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} has invalid TargetMode {targetMode}");
+            return false;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{relationshipLabel} has no Target");
+            return false;
+        }
+
+        target = target.Trim();
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add($"{relationshipLabel} targets external URI without TargetMode=External: {target}");
+            return false;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                PackageRootRelationshipPart,
+                target,
+                out var packagePart,
+                out var targetIssue))
+        {
+            issues.Add($"{relationshipLabel} has invalid Target {target}: {targetIssue}");
+            return false;
+        }
+
+        var targetsExpectedPart = string.Equals(
+            packagePart,
+            definition.PackagePart,
+            StringComparison.OrdinalIgnoreCase);
+        if (!targetsExpectedPart)
+            issues.Add($"{relationshipLabel} targets {packagePart}; expected {definition.PackagePart}");
+
+        var packageEntry = FindPackageEntry(archive, packagePart);
+        if (packageEntry is null)
+        {
+            issues.Add($"{relationshipLabel} targets missing package part {packagePart}");
+            return targetsExpectedPart;
+        }
+
+        AddDocumentPropertyPartIssues(archive, definition with { PackagePart = packagePart }, packageEntry, issues);
+        return targetsExpectedPart;
+    }
+
+    private static void AddDocumentPropertyPartIssues(
+        ZipArchive archive,
+        DocumentPropertyPackageDefinition definition,
+        ZipArchiveEntry packageEntry,
+        List<string> issues)
+    {
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, definition.PackagePart, definition.ContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var document = LoadPackageXml(packageEntry);
+        if (document.Root?.Name != definition.RootElement)
+            issues.Add($"{definition.PackagePart} has an invalid {definition.Label} root element");
+    }
+
+    private static void ThrowInvalidDocumentPropertiesPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid document properties package graph: {sample}{suffix}");
     }
 
     private static void AssertWorkbookSheetRelationshipsComplete(string xlsxPath, string label, string sourcePath)
@@ -7043,6 +7225,10 @@ internal static class ExcelOpenSmoke
                 [
                     new(
                         "_rels/.rels",
+                        "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
+                        "docProps/core.xml"),
+                    new(
+                        "_rels/.rels",
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
                         "docProps/app.xml")
                 ],
@@ -8913,6 +9099,13 @@ internal static class ExcelOpenSmoke
     private sealed record WorksheetPrinterSettingsReference(
         int Ordinal,
         string? RelationshipId);
+
+    private sealed record DocumentPropertyPackageDefinition(
+        string Label,
+        string RelationshipType,
+        string PackagePart,
+        string ContentType,
+        XName RootElement);
 
     private sealed record TablePartReference(
         int Ordinal,
