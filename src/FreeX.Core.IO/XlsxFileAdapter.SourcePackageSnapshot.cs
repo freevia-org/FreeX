@@ -479,6 +479,8 @@ public sealed partial class XlsxFileAdapter
                 {
                     XlsxExcelCompatibilityNormalizer.RemoveCalcChain(archive);
                 }
+
+                XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
             }
 
             patchedPackage.Position = 0;
