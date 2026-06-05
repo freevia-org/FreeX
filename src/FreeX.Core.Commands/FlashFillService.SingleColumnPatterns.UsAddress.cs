@@ -269,6 +269,9 @@ public static partial class FlashFillService
             return streetWithoutUnit.Length > 0 && unitIdentifier.Length > 0;
         }
 
+        if (identifierToken == "#")
+            return false;
+
         var designatorEnd = identifierStart;
         while (designatorEnd >= 0 && char.IsWhiteSpace(street[designatorEnd]))
             designatorEnd--;
@@ -282,6 +285,43 @@ public static partial class FlashFillService
 
         var designatorTokenStart = designatorStart + 1;
         var designator = street[designatorTokenStart..(designatorEnd + 1)];
+        if (designator == "#")
+        {
+            var hashPrefixEnd = designatorTokenStart - 1;
+            while (hashPrefixEnd >= 0 && char.IsWhiteSpace(street[hashPrefixEnd]))
+                hashPrefixEnd--;
+
+            if (hashPrefixEnd < 0)
+                return false;
+
+            var hashDesignatorEnd = hashPrefixEnd;
+            var hashDesignatorStart = hashDesignatorEnd;
+            while (hashDesignatorStart >= 0 && !char.IsWhiteSpace(street[hashDesignatorStart]))
+                hashDesignatorStart--;
+
+            var hashDesignatorTokenStart = hashDesignatorStart + 1;
+            var hashDesignator = street[hashDesignatorTokenStart..(hashDesignatorEnd + 1)];
+            if (IsUsStreetUnitDesignator(hashDesignator))
+            {
+                var hashStreetEnd = hashDesignatorTokenStart - 1;
+                while (hashStreetEnd >= 0 && char.IsWhiteSpace(street[hashStreetEnd]))
+                    hashStreetEnd--;
+
+                if (hashStreetEnd < 0)
+                    return false;
+
+                streetWithoutUnit = street[..(hashStreetEnd + 1)].Trim();
+                unitSuffix = street[hashDesignatorTokenStart..(end + 1)].Trim();
+                unitIdentifier = identifierToken.Trim();
+                return streetWithoutUnit.Length > 0 && unitSuffix.Length > 0 && unitIdentifier.Length > 0;
+            }
+
+            streetWithoutUnit = street[..(hashPrefixEnd + 1)].Trim();
+            unitSuffix = street[designatorTokenStart..(end + 1)].Trim();
+            unitIdentifier = identifierToken.Trim();
+            return streetWithoutUnit.Length > 0 && unitSuffix.Length > 0 && unitIdentifier.Length > 0;
+        }
+
         if (!IsUsStreetUnitDesignator(designator))
             return false;
 

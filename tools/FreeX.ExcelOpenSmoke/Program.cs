@@ -454,6 +454,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileVersionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetHyperlinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -677,6 +678,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileVersionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetHyperlinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3537,6 +3539,21 @@ internal static class ExcelOpenSmoke
         issues.Add($"{WorkbookPart} {description} has invalid {attributeName} value '{value}'");
     }
 
+    private static void AddOptionalWorkbookMetadataUnsignedIntIssue(
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) ||
+            uint.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+        {
+            return;
+        }
+
+        issues.Add($"{WorkbookPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
     private static void AddOptionalWorkbookMetadataBooleanIssue(
         string description,
         string attributeName,
@@ -3673,6 +3690,92 @@ internal static class ExcelOpenSmoke
 
     private static bool IsKnownWorkbookPropertiesUpdateLinksValue(string value) =>
         value is "userSet" or "never" or "always";
+
+    private static void AssertWorkbookProtectionMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookProtectionMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookProtectionMetadata(label, sourcePath, issues);
+    }
+
+    private static void ThrowInvalidWorkbookProtectionMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbookProtection metadata: {sample}{suffix}");
+    }
+
+    private static void AddWorkbookProtectionMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var workbookProtectionElements = root.Elements(SpreadsheetNs + "workbookProtection").ToArray();
+        if (workbookProtectionElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {workbookProtectionElements.Length} workbookProtection elements; expected at most one");
+
+        foreach (var workbookProtection in workbookProtectionElements.Select((element, index) => new WorkbookProtectionReference(index + 1, element)))
+        {
+            AddWorkbookProtectionIssues(root, workbookProtection, issues);
+        }
+    }
+
+    private static void AddWorkbookProtectionIssues(
+        XElement workbookRoot,
+        WorkbookProtectionReference workbookProtectionReference,
+        List<string> issues)
+    {
+        var workbookProtection = workbookProtectionReference.Element;
+        var description = $"workbookProtection #{workbookProtectionReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            workbookProtection,
+            description,
+            [
+                "bookViews",
+                "sheets",
+                "functionGroups",
+                "externalReferences",
+                "definedNames",
+                "calcPr",
+                "oleSize",
+                "customWorkbookViews",
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var attribute in workbookProtection.Attributes().Where(attribute => IsKnownWorkbookProtectionBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "spinCount", workbookProtection.Attribute("spinCount")?.Value, issues);
+
+        if (workbookProtection.Elements().Any())
+            issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool IsKnownWorkbookProtectionBooleanAttribute(string name) =>
+        name is "lockStructure" or "lockWindows" or "lockRevision";
 
     private static void AssertWorksheetSheetPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
     {
@@ -12659,6 +12762,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookPropertiesReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookProtectionReference(
         int Ordinal,
         XElement Element);
 
