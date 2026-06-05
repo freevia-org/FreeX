@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -7,6 +8,7 @@ namespace FreeX.Core.IO.Tests;
 public sealed class XlsxWorksheetSheetDataLayoutReaderTests
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace X14AcNs = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac";
 
     [Fact]
     public void ReadSheetDataLayout_ParsesDirectRowColumnAndCellMetadata()
@@ -125,6 +127,24 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         layout.HasPreservableSourceSheetDataMetadata.Should().BeTrue();
     }
 
+    [Theory]
+    [MemberData(nameof(SheetDataPreservableMetadataCases))]
+    public void ReadSheetDataLayout_StreamingMetadataDetectionMatchesWorksheetPreflight(
+        XElement sheetData,
+        bool expected)
+    {
+        var worksheet = new XDocument(
+            new XElement(WorksheetNs + "worksheet", new XElement(sheetData)));
+        using var reader = worksheet.Root!.Element(WorksheetNs + "sheetData")!.CreateReader();
+
+        var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(reader, WorksheetNs);
+
+        layout.HasPreservableSourceSheetDataMetadata.Should().Be(expected);
+        HasPreservableSourceWorksheetMetadataByEntry(worksheet)
+            .Should()
+            .Be(expected);
+    }
+
     [Fact]
     public void ReadSheetDataLayout_TreatsNonCustomTallRowHeightAsAutofitDisplayHint()
     {
@@ -169,10 +189,100 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         cellSource.Should().Contain("ReadSheetDataCells(");
         cellSource.Should().NotContain("worksheetXml.Descendants(worksheetNs + \"c\")");
         adapterSource.Should().Contain("TryLoadWorksheetXmlWithoutSheetData(");
-        adapterSource.Should().Contain("detectPreservableSourceSheetDataMetadata: false");
+        adapterSource.Should().Contain("detectPreservableSourceSheetDataMetadata: true");
+        adapterSource.Should().NotContain("HasPreservableSourceWorksheetMetadata(worksheetEntry, worksheetNs)");
         adapterSource.Should().NotContain("ReadCachedFormulaErrors(worksheetXml, worksheetNs)");
         adapterSource.Should().NotContain("ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs)");
     }
+
+    public static TheoryData<XElement, bool> SheetDataPreservableMetadataCases() => new()
+    {
+        {
+            new XElement(
+                WorksheetNs + "sheetData",
+                new XElement(
+                    WorksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    new XAttribute("spans", "1:2"),
+                    new XAttribute(X14AcNs + "dyDescent", "0.25"),
+                    Cell("A1", null, null, new XElement(WorksheetNs + "v", "1")),
+                    Cell("B1", null, null, new XElement(WorksheetNs + "f", "A1+1"), new XElement(WorksheetNs + "v", "2")))),
+            false
+        },
+        {
+            new XElement(
+                WorksheetNs + "sheetData",
+                new XElement(
+                    WorksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    new XAttribute("nativeRowFlag", "1"),
+                    Cell("A1", null, null, new XElement(WorksheetNs + "v", "1")))),
+            true
+        },
+        {
+            new XElement(
+                WorksheetNs + "sheetData",
+                new XElement(
+                    WorksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    new XElement(
+                        WorksheetNs + "c",
+                        new XAttribute("r", "A1"),
+                        new XAttribute("cm", "1"),
+                        new XElement(WorksheetNs + "v", "1")))),
+            true
+        },
+        {
+            new XElement(
+                WorksheetNs + "sheetData",
+                new XElement(
+                    WorksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    new XElement(
+                        WorksheetNs + "c",
+                        new XAttribute("r", "A1"),
+                        new XElement(WorksheetNs + "v", "1"),
+                        new XElement(WorksheetNs + "extLst")))),
+            true
+        },
+        {
+            new XElement(
+                WorksheetNs + "sheetData",
+                new XElement(
+                    WorksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    Cell(
+                        "A1",
+                        null,
+                        null,
+                        new XElement(WorksheetNs + "f", new XAttribute("t", "shared"), "A2"),
+                        new XElement(WorksheetNs + "v", "1")))),
+            true
+        },
+        {
+            new XElement(
+                WorksheetNs + "sheetData",
+                new XElement(
+                    WorksheetNs + "row",
+                    new XAttribute("r", "1"),
+                    Cell(
+                        "A1",
+                        null,
+                        "inlineStr",
+                        new XElement(
+                            WorksheetNs + "is",
+                            new XElement(
+                                WorksheetNs + "r",
+                                new XElement(WorksheetNs + "t", "rich")))))),
+            true
+        },
+        {
+            new XElement(
+                WorksheetNs + "sheetData",
+                new XElement(WorksheetNs + "phoneticPr")),
+            true
+        }
+    };
 
     private static XElement Cell(string reference, string? style = null, string? type = null, params object[] content)
     {
@@ -183,6 +293,22 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         if (type is not null)
             cell.SetAttributeValue("t", type);
         return cell;
+    }
+
+    private static bool HasPreservableSourceWorksheetMetadataByEntry(XDocument worksheet)
+    {
+        using var package = new MemoryStream();
+        using (var createArchive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = createArchive.CreateEntry("xl/worksheets/sheet1.xml");
+            using var writer = new StreamWriter(entry.Open());
+            worksheet.Save(writer, SaveOptions.DisableFormatting);
+        }
+
+        package.Position = 0;
+        using var readArchive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetEntry = readArchive.GetEntry("xl/worksheets/sheet1.xml")!;
+        return XlsxWorksheetMetadataPreserver.HasPreservableSourceWorksheetMetadata(worksheetEntry, WorksheetNs);
     }
 
     private static string Source(string fileName) =>

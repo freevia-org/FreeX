@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -153,7 +152,7 @@ public sealed class FindReplaceDialogXamlTests
     [Fact]
     public void Dialog_DefaultsWithinScopeToSheet()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FindReplaceDialog.xaml.cs"));
+        var source = ReadFindReplaceDialogSource();
 
         source.Should().Contain("Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet");
     }
@@ -213,7 +212,7 @@ public sealed class FindReplaceDialogXamlTests
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceBtn", "Visibility", "Collapsed");
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceAllBtn", "Visibility", "Collapsed");
 
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FindReplaceDialog.xaml.cs"));
+        var source = ReadFindReplaceDialogSource();
         source.Should().Contain("private void FindReplaceTabs_SelectionChanged");
         source.Should().Contain("UpdateReplaceButtonVisibility();");
         source.Should().Contain("FindReplaceTabs.SelectedItem == ReplaceTab ? Visibility.Visible : Visibility.Collapsed");
@@ -340,7 +339,7 @@ public sealed class FindReplaceDialogXamlTests
             {
                 InvokePrivate(dialog, "ChooseFindFormatFromCellButton_Click");
 
-                GetPrivateField<StyleDiff?>(dialog, "_findFormatDiff").Should().NotBeNull();
+                DialogSourceTestSupport.GetPrivateField<StyleDiff>(dialog, "_findFormatDiff").Should().NotBeNull();
                 GetPrivateControl<TextBlock>(dialog, "StatusLabel").Text.Should().Be("Format chosen from active worksheet cell.");
             }
             finally
@@ -353,7 +352,7 @@ public sealed class FindReplaceDialogXamlTests
     [Fact]
     public void Dialog_SourcePreservesHandlersAndSelectsReplaceTabForReplaceMode()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FindReplaceDialog.xaml.cs"));
+        var source = ReadFindReplaceDialogSource();
 
         source.Should().Contain("private void FindNext_Click");
         source.Should().Contain("private void ReplaceAll_Click");
@@ -386,7 +385,7 @@ public sealed class FindReplaceDialogXamlTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesFindOrReplaceSearchBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FindReplaceDialog.xaml.cs"));
+        var source = ReadFindReplaceDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -432,7 +431,7 @@ public sealed class FindReplaceDialogXamlTests
     [Fact]
     public void DialogBlankSearch_ShowsOwnedWarningAndFocusesFindWhatBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FindReplaceDialog.xaml.cs"));
+        var source = ReadFindReplaceDialogSource();
 
         source.Should().Contain("ShowBlankSearchWarning()");
         source.Should().Contain("private bool ShowBlankSearchWarning()");
@@ -453,12 +452,8 @@ public sealed class FindReplaceDialogXamlTests
         method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
     }
 
-    private static T GetPrivateField<T>(FindReplaceDialog dialog, string fieldName)
-    {
-        var field = typeof(FindReplaceDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeAssignableTo<T>().Subject;
-    }
+    private static string ReadFindReplaceDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("FindReplaceDialog.xaml.cs");
 
     private static T GetPrivateControl<T>(FindReplaceDialog dialog, string fieldName)
         where T : class

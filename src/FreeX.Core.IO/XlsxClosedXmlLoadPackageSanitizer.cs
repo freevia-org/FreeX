@@ -764,7 +764,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         ZipArchiveEntry sourceEntry,
         ZipArchive targetArchive)
     {
-        var targetEntry = targetArchive.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+        var targetEntry = targetArchive.CreateEntry(sourceEntry.FullName, CompressionLevel.Fastest);
         targetEntry.LastWriteTime = sourceEntry.LastWriteTime;
         return targetEntry;
     }
