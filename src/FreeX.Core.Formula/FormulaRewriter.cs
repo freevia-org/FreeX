@@ -10,6 +10,14 @@ public sealed record DeleteRowsOp(string SheetName, uint StartRow,  uint Count) 
 public sealed record InsertColsOp(string SheetName, uint BeforeCol, uint Count) : RewriteOperation;
 public sealed record DeleteColsOp(string SheetName, uint StartCol,  uint Count) : RewriteOperation;
 public sealed record PasteOffsetOp(int RowDelta, int ColDelta)                  : RewriteOperation;
+public sealed record MoveRangeOp(
+    string SheetName,
+    uint SourceStartRow,
+    uint SourceStartCol,
+    uint SourceEndRow,
+    uint SourceEndCol,
+    int RowDelta,
+    int ColDelta)                                                               : RewriteOperation;
 public sealed record RenameSheetOp(string OldSheetName, string NewSheetName)    : RewriteOperation;
 public sealed record DeleteSheetOp(string SheetName)                            : RewriteOperation;
 
@@ -89,6 +97,7 @@ public static class FormulaRewriter
             InsertColsOp ins => RewriteCellRefInsertCols(cr, ins, ref changed),
             DeleteColsOp del => RewriteCellRefDeleteCols(cr, del, ref changed),
             PasteOffsetOp paste => RewriteCellRefPaste(cr, paste, ref changed),
+            MoveRangeOp move => RewriteCellRefMove(cr, move, ref changed),
             RenameSheetOp rename => RewriteCellRefRenameSheet(cr, rename, ref changed),
             DeleteSheetOp => RewriteSheetQualifiedRefDeleteSheet(ref changed),
             _ => cr
@@ -103,6 +112,9 @@ public static class FormulaRewriter
         var endRef = rr.End.SheetName is null && rr.SheetName is not null
             ? rr.End with { SheetName = rr.SheetName }
             : rr.End;
+
+        if (op is MoveRangeOp move)
+            return RewriteRangeMove(rr, endRef, move, hostSheetName, ref changed);
 
         var start = RewriteCellRef(rr.Start, op, hostSheetName, ref changed);
         var end   = RewriteCellRef(endRef,   op, hostSheetName, ref changed);
@@ -286,6 +298,73 @@ public static class FormulaRewriter
             ? CellAddress.NumberToColumnName(newColNum)
             : cr.ColumnName;
         return cr with { Row = newRow, ColumnName = newColName };
+    }
+
+    private static FormulaNode RewriteCellRefMove(
+        CellRefNode cr, MoveRangeOp op, ref bool changed)
+    {
+        if (!IsInMoveSource(cr, op))
+            return cr;
+
+        long row = (long)cr.Row + op.RowDelta;
+        long col = (long)cr.ColumnNumber + op.ColDelta;
+        if (row < 1 || row > CellAddress.MaxRow || col < 1 || col > CellAddress.MaxCol)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        changed = true;
+        return cr with
+        {
+            Row = (uint)row,
+            ColumnName = CellAddress.NumberToColumnName((uint)col)
+        };
+    }
+
+    private static FormulaNode RewriteRangeMove(
+        RangeRefNode rr,
+        CellRefNode endRef,
+        MoveRangeOp op,
+        string hostSheetName,
+        ref bool changed)
+    {
+        if (!Matches(rr.SheetName, op, hostSheetName))
+            return rr;
+
+        var startInSource = IsInMoveSource(rr.Start, op);
+        var endInSource = IsInMoveSource(endRef, op);
+        if (!startInSource || !endInSource)
+        {
+            if (!IsSingleCellMove(op) || startInSource == endInSource)
+                return rr;
+
+            var moving = startInSource ? rr.Start : endRef;
+            var other = startInSource ? endRef : rr.Start;
+            if (!CanExpandSingleCellMoveRange(moving, other, op))
+                return rr;
+
+            var rewritten = RewriteCellRefMove(moving, op, ref changed);
+            if (rewritten is ErrorNode)
+            {
+                changed = true;
+                return new ErrorNode(ErrorValue.Ref);
+            }
+
+            return startInSource
+                ? rr with { Start = (CellRefNode)rewritten }
+                : rr with { End = (CellRefNode)rewritten };
+        }
+
+        var start = RewriteCellRefMove(rr.Start, op, ref changed);
+        var end = RewriteCellRefMove(endRef, op, ref changed);
+        if (start is ErrorNode || end is ErrorNode)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        return rr with { Start = (CellRefNode)start, End = (CellRefNode)end };
     }
 
     private static FormulaNode RewriteCellRefRenameSheet(
@@ -534,6 +613,7 @@ public static class FormulaRewriter
             DeleteRowsOp del => del.SheetName,
             InsertColsOp ins => ins.SheetName,
             DeleteColsOp del => del.SheetName,
+            MoveRangeOp move => move.SheetName,
             _ => null
         };
 
@@ -541,5 +621,44 @@ public static class FormulaRewriter
 
         var refSheet = refSheetName ?? hostSheetName;
         return string.Equals(refSheet, opSheet, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsInMoveSource(CellRefNode cr, MoveRangeOp op) =>
+        cr.Row >= op.SourceStartRow &&
+        cr.Row <= op.SourceEndRow &&
+        cr.ColumnNumber >= op.SourceStartCol &&
+        cr.ColumnNumber <= op.SourceEndCol;
+
+    private static bool IsSingleCellMove(MoveRangeOp op) =>
+        op.SourceStartRow == op.SourceEndRow &&
+        op.SourceStartCol == op.SourceEndCol;
+
+    private static bool CanExpandSingleCellMoveRange(
+        CellRefNode movingEndpoint,
+        CellRefNode otherEndpoint,
+        MoveRangeOp op)
+    {
+        if (movingEndpoint.Row == otherEndpoint.Row &&
+            op.RowDelta == 0 &&
+            IsFartherOutward(movingEndpoint.ColumnNumber, otherEndpoint.ColumnNumber, op.ColDelta))
+        {
+            return true;
+        }
+
+        return movingEndpoint.ColumnNumber == otherEndpoint.ColumnNumber &&
+               op.ColDelta == 0 &&
+               IsFartherOutward(movingEndpoint.Row, otherEndpoint.Row, op.RowDelta);
+    }
+
+    private static bool IsFartherOutward(uint movingCoordinate, uint otherCoordinate, int delta)
+    {
+        if (delta == 0 || movingCoordinate == otherCoordinate)
+            return false;
+
+        var originalDistance = Math.Abs((long)movingCoordinate - otherCoordinate);
+        var movedCoordinate = (long)movingCoordinate + delta;
+        var movedDistance = Math.Abs(movedCoordinate - otherCoordinate);
+        return Math.Sign((long)movingCoordinate - otherCoordinate) == Math.Sign(movedCoordinate - otherCoordinate) &&
+               movedDistance > originalDistance;
     }
 }
