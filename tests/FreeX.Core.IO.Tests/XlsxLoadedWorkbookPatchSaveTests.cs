@@ -1662,6 +1662,100 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         Encoding.UTF8.GetString(ReadPackageEntry(savedBytes, "xl/worksheets/sheet1.xml"))
             .Should()
             .NotContain("/revision");
+        ReadMarkupCompatibilityIgnorable(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Be("x14 foo");
+        ReadMarkupCompatibilityIgnorable(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Be("x14ac");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithOnlyOfficeRevisionLastSaveAttribute_PatchesSourcePackageAndDropsRevisionAttribute()
+    {
+        var sourceBytes = AddWorkbookOnlyOfficeRevisionLastSaveAttribute(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(456));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "B2")
+            .Should()
+            .Be("456");
+        PackageXmlHasOfficeRevisionAttributes(savedBytes, "xl/workbook.xml")
+            .Should()
+            .BeFalse();
+        Encoding.UTF8.GetString(ReadPackageEntry(savedBytes, "xl/workbook.xml"))
+            .Should()
+            .NotContain("/revision");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithOfficeRevisionPointerElement_PatchesSourcePackageAndPreservesNeededIgnorablePrefix()
+    {
+        var sourceBytes = AddWorkbookOfficeRevisionPointerElement(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(654));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        var workbookXml = Encoding.UTF8.GetString(ReadPackageEntry(savedBytes, "xl/workbook.xml"));
+        workbookXml.Should().Contain("revisionPtr");
+        workbookXml.Should().NotContain("uidLastSave");
+        workbookXml.Should().NotContain("revision10");
+        ReadMarkupCompatibilityIgnorable(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Be("xr");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithShadowedRevisionPrefix_KeepsNonRevisionIgnorablePrefix()
+    {
+        var sourceBytes = AddWorksheetRevisionPrefixShadow(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(789));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadMarkupCompatibilityIgnorable(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Be("x14ac");
+        ReadRowMarkupCompatibilityIgnorable(savedBytes, "xl/worksheets/sheet1.xml", 1)
+            .Should()
+            .Be("xr");
+        Encoding.UTF8.GetString(ReadPackageEntry(savedBytes, "xl/worksheets/sheet1.xml"))
+            .Should()
+            .Contain("urn:freex-nonrevision");
     }
 
     private static byte[] CreateSourcePackage()
@@ -1687,17 +1781,21 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+            XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+            XNamespace fooNs = "urn:freex-nonrevision";
             XNamespace revisionNs = "http://schemas.microsoft.com/office/spreadsheetml/2014/revision";
             XNamespace revision2Ns = "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2";
             XNamespace revision10Ns = "http://schemas.microsoft.com/office/spreadsheetml/2016/revision10";
 
             var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
             workbookXml.Root!.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
+            workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "x14", x14Ns.NamespaceName);
+            workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "foo", fooNs.NamespaceName);
             workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr2", revision2Ns.NamespaceName);
             workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr10", revision10Ns.NamespaceName);
             workbookXml.Root.SetAttributeValue(
                 markupCompatNs + "Ignorable",
-                AppendIgnorablePrefix(workbookXml.Root.Attribute(markupCompatNs + "Ignorable")?.Value, "xr2", "xr10"));
+                AppendIgnorablePrefix(workbookXml.Root.Attribute(markupCompatNs + "Ignorable")?.Value, "x14", "xr2", "xr10", "foo"));
             workbookXml.Root.SetAttributeValue(revision10Ns + "uidLastSave", "{00000000-0000-0000-0000-000000000000}");
             workbookXml.Root
                 .Element(workbookNs + "bookViews")!
@@ -1715,6 +1813,86 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                 .Descendants(workbookNs + "c")
                 .Single(element => element.Attribute("r")?.Value == "A1")
                 .SetAttributeValue(revisionNs + "uid", "{EB1F693D-8528-450A-BC10-895DEFE5B6D9}");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddWorkbookOnlyOfficeRevisionLastSaveAttribute(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+            XNamespace revision10Ns = "http://schemas.microsoft.com/office/spreadsheetml/2016/revision10";
+            var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
+            workbookXml.Root!.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
+            workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr10", revision10Ns.NamespaceName);
+            workbookXml.Root.SetAttributeValue(
+                markupCompatNs + "Ignorable",
+                AppendIgnorablePrefix(workbookXml.Root.Attribute(markupCompatNs + "Ignorable")?.Value, "xr10"));
+            workbookXml.Root.SetAttributeValue(revision10Ns + "uidLastSave", "{00000000-0000-0000-0000-000000000000}");
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddWorkbookOfficeRevisionPointerElement(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+            XNamespace revisionNs = "http://schemas.microsoft.com/office/spreadsheetml/2014/revision";
+            XNamespace revision10Ns = "http://schemas.microsoft.com/office/spreadsheetml/2016/revision10";
+            var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
+            workbookXml.Root!.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
+            workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr", revisionNs.NamespaceName);
+            workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr10", revision10Ns.NamespaceName);
+            workbookXml.Root.SetAttributeValue(
+                markupCompatNs + "Ignorable",
+                AppendIgnorablePrefix(workbookXml.Root.Attribute(markupCompatNs + "Ignorable")?.Value, "xr", "xr10"));
+            workbookXml.Root.AddFirst(new XElement(
+                revisionNs + "revisionPtr",
+                new XAttribute("revIDLastSave", "0"),
+                new XAttribute(revision10Ns + "uidLastSave", "{00000000-0000-0000-0000-000000000000}")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddWorksheetRevisionPrefixShadow(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+            XNamespace revisionNs = "http://schemas.microsoft.com/office/spreadsheetml/2014/revision";
+            XNamespace nonRevisionNs = "urn:freex-nonrevision";
+
+            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+            worksheetXml.Root!.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
+            worksheetXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr", revisionNs.NamespaceName);
+            worksheetXml.Root.SetAttributeValue(
+                markupCompatNs + "Ignorable",
+                AppendIgnorablePrefix(worksheetXml.Root.Attribute(markupCompatNs + "Ignorable")?.Value, "xr"));
+            worksheetXml
+                .Descendants(workbookNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A1")
+                .SetAttributeValue(revisionNs + "uid", "{EB1F693D-8528-450A-BC10-895DEFE5B6D9}");
+
+            var row = worksheetXml
+                .Descendants(workbookNs + "row")
+                .Single(element => element.Attribute("r")?.Value == "1");
+            row.SetAttributeValue(XNamespace.Xmlns + "xr", nonRevisionNs.NamespaceName);
+            row.SetAttributeValue(markupCompatNs + "Ignorable", "xr");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -2799,6 +2977,29 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         var replacement = archive.CreateEntry(path);
         using var replacementStream = replacement.Open();
         document.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+    }
+
+    private static string? ReadMarkupCompatibilityIgnorable(byte[] packageBytes, string path)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = LoadPackageXml(archive, path);
+        XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+        return document.Root?.Attribute(markupCompatNs + "Ignorable")?.Value;
+    }
+
+    private static string? ReadRowMarkupCompatibilityIgnorable(byte[] packageBytes, string worksheetPath, uint row)
+    {
+        using var stream = new MemoryStream(packageBytes, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var document = LoadPackageXml(archive, worksheetPath);
+        XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+        var ns = document.Root!.Name.Namespace;
+        return document
+            .Descendants(ns + "row")
+            .Single(element => element.Attribute("r")?.Value == row.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Attribute(markupCompatNs + "Ignorable")
+            ?.Value;
     }
 
     private static string AppendIgnorablePrefix(string? currentValue, params string[] prefixes)

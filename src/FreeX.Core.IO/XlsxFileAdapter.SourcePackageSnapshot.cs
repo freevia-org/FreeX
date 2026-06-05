@@ -1101,25 +1101,244 @@ public sealed partial class XlsxFileAdapter
             if (entry is null)
                 return;
 
-            var document = XlsxPackageXmlEditor.LoadXml(entry);
-            if (document.Root is null || !RemoveOfficeRevisionAttributes(document.Root))
+            if (TryReplacePatchOfficeRevisionAttributesStreaming(archive, entry))
                 return;
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, path, document);
+            entry = archive.GetEntry(path);
+            if (entry is null)
+                return;
+
+            var document = XlsxPackageXmlEditor.LoadXml(entry);
+            if (document.Root is not null && RemoveOfficeRevisionAttributes(document.Root))
+                XlsxPackageXmlEditor.ReplaceXml(archive, path, document);
         }
+
+        private static bool TryReplacePatchOfficeRevisionAttributesStreaming(
+            ZipArchive archive,
+            ZipArchiveEntry entry)
+        {
+            using var rewritten = new MemoryStream();
+            bool changed;
+            bool hasOfficeRevisionElements;
+            try
+            {
+                using (var source = entry.Open())
+                {
+                    changed = WritePatchXmlWithoutOfficeRevisionAttributes(
+                        source,
+                        rewritten,
+                        out hasOfficeRevisionElements);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (hasOfficeRevisionElements)
+                return false;
+
+            if (!changed)
+                return true;
+
+            var path = entry.FullName;
+            entry.Delete();
+            var replacement = archive.CreateEntry(path, CompressionLevel.Optimal);
+            rewritten.Position = 0;
+            using var replacementStream = replacement.Open();
+            rewritten.CopyTo(replacementStream);
+            return true;
+        }
+
+        private static bool WritePatchXmlWithoutOfficeRevisionAttributes(
+            Stream source,
+            Stream target,
+            out bool hasOfficeRevisionElements)
+        {
+            var changed = false;
+            hasOfficeRevisionElements = false;
+            var inScopeRevisionPrefixes = new Stack<HashSet<string>>();
+            using var reader = XmlReader.Create(source, SecureXmlReaderSettings.Create());
+            using var writer = XmlWriter.Create(target, CreatePatchPackageXmlWriterSettings());
+
+            while (reader.Read())
+            {
+                switch (reader.NodeType)
+                {
+                    case XmlNodeType.Element:
+                        if (IsOfficeRevisionNamespace(reader.NamespaceURI))
+                            hasOfficeRevisionElements = true;
+
+                        changed |= WritePatchElementWithoutOfficeRevisionAttributes(
+                            reader,
+                            writer,
+                            inScopeRevisionPrefixes);
+                        break;
+
+                    case XmlNodeType.EndElement:
+                        writer.WriteFullEndElement();
+                        if (inScopeRevisionPrefixes.Count > 0)
+                            inScopeRevisionPrefixes.Pop();
+                        break;
+
+                    case XmlNodeType.Text:
+                        writer.WriteString(reader.Value);
+                        break;
+
+                    case XmlNodeType.CDATA:
+                        writer.WriteCData(reader.Value);
+                        break;
+
+                    case XmlNodeType.SignificantWhitespace:
+                    case XmlNodeType.Whitespace:
+                        writer.WriteWhitespace(reader.Value);
+                        break;
+
+                    case XmlNodeType.Comment:
+                        writer.WriteComment(reader.Value);
+                        break;
+
+                    case XmlNodeType.ProcessingInstruction:
+                        if (!string.Equals(reader.Name, "xml", StringComparison.OrdinalIgnoreCase))
+                            writer.WriteProcessingInstruction(reader.Name, reader.Value);
+                        break;
+
+                    case XmlNodeType.DocumentType:
+                        writer.WriteDocType(
+                            reader.Name,
+                            reader.GetAttribute("PUBLIC"),
+                            reader.GetAttribute("SYSTEM"),
+                            reader.Value);
+                        break;
+
+                    case XmlNodeType.EntityReference:
+                        writer.WriteEntityRef(reader.Name);
+                        break;
+                }
+            }
+
+            writer.Flush();
+            return changed;
+        }
+
+        private static bool WritePatchElementWithoutOfficeRevisionAttributes(
+            XmlReader reader,
+            XmlWriter writer,
+            Stack<HashSet<string>> inScopeRevisionPrefixes)
+        {
+            var changed = false;
+            var attributes = ReadCurrentAttributes(reader);
+            var revisionPrefixes = inScopeRevisionPrefixes.Count > 0
+                ? new HashSet<string>(inScopeRevisionPrefixes.Peek(), StringComparer.Ordinal)
+                : new HashSet<string>(StringComparer.Ordinal);
+            foreach (var attribute in attributes)
+            {
+                if (!attribute.IsNamespaceDeclaration ||
+                    string.Equals(attribute.LocalName, "xmlns", StringComparison.Ordinal))
+                    continue;
+
+                if (IsOfficeRevisionNamespace(attribute.Value))
+                    revisionPrefixes.Add(attribute.LocalName);
+                else
+                    revisionPrefixes.Remove(attribute.LocalName);
+            }
+
+            writer.WriteStartElement(reader.Prefix, reader.LocalName, reader.NamespaceURI);
+            foreach (var attribute in attributes)
+            {
+                if (attribute.IsNamespaceDeclaration && IsOfficeRevisionNamespace(attribute.Value))
+                {
+                    changed = true;
+                    continue;
+                }
+
+                if (!attribute.IsNamespaceDeclaration && IsOfficeRevisionNamespace(attribute.NamespaceUri))
+                {
+                    changed = true;
+                    continue;
+                }
+
+                if (IsMarkupCompatibilityIgnorableAttribute(attribute))
+                {
+                    var filteredValue = RemoveOfficeRevisionIgnorablePrefixes(attribute.Value, revisionPrefixes);
+                    if (string.IsNullOrEmpty(filteredValue))
+                    {
+                        changed = true;
+                        continue;
+                    }
+
+                    if (!string.Equals(filteredValue, attribute.Value, StringComparison.Ordinal))
+                        changed = true;
+
+                    writer.WriteAttributeString(attribute.Prefix, attribute.LocalName, attribute.NamespaceUri, filteredValue);
+                    continue;
+                }
+
+                writer.WriteAttributeString(attribute.Prefix, attribute.LocalName, attribute.NamespaceUri, attribute.Value);
+            }
+
+            if (reader.IsEmptyElement)
+                writer.WriteEndElement();
+            else
+                inScopeRevisionPrefixes.Push(revisionPrefixes);
+
+            return changed;
+        }
+
+        private static IReadOnlyList<PatchXmlAttribute> ReadCurrentAttributes(XmlReader reader)
+        {
+            if (!reader.HasAttributes)
+                return [];
+
+            var attributes = new List<PatchXmlAttribute>(reader.AttributeCount);
+            for (var index = 0; index < reader.AttributeCount; index++)
+            {
+                reader.MoveToAttribute(index);
+                attributes.Add(new PatchXmlAttribute(
+                    reader.Prefix,
+                    reader.LocalName,
+                    reader.NamespaceURI,
+                    reader.Value,
+                    reader.Prefix == "xmlns" ||
+                    (reader.Prefix.Length == 0 &&
+                     string.Equals(reader.LocalName, "xmlns", StringComparison.Ordinal))));
+            }
+
+            reader.MoveToElement();
+            return attributes;
+        }
+
+        private static bool IsMarkupCompatibilityIgnorableAttribute(PatchXmlAttribute attribute) =>
+            string.Equals(attribute.LocalName, "Ignorable", StringComparison.Ordinal) &&
+            string.Equals(
+                attribute.NamespaceUri,
+                "http://schemas.openxmlformats.org/markup-compatibility/2006",
+                StringComparison.Ordinal);
+
+        private static string RemoveOfficeRevisionIgnorablePrefixes(
+            string value,
+            IReadOnlySet<string> revisionPrefixes)
+        {
+            if (revisionPrefixes.Count == 0)
+                return value;
+
+            var retainedPrefixes = value
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .Where(prefix => !revisionPrefixes.Contains(prefix))
+                .ToArray();
+            return string.Join(" ", retainedPrefixes);
+        }
+
+        private static XmlWriterSettings CreatePatchPackageXmlWriterSettings() => new()
+        {
+            Encoding = new UTF8Encoding(false),
+            OmitXmlDeclaration = false,
+            CloseOutput = false
+        };
 
         private static bool RemoveOfficeRevisionAttributes(XElement root)
         {
             var changed = false;
-            var revisionPrefixes = root
-                .DescendantsAndSelf()
-                .SelectMany(element => element.Attributes())
-                .Where(attribute =>
-                    attribute.IsNamespaceDeclaration &&
-                    IsOfficeRevisionNamespace(attribute.Value))
-                .Select(attribute => attribute.Name.LocalName)
-                .Where(prefix => !string.Equals(prefix, "xmlns", StringComparison.Ordinal))
-                .ToHashSet(StringComparer.Ordinal);
 
             foreach (var attribute in root
                          .DescendantsAndSelf()
@@ -1131,7 +1350,7 @@ public sealed partial class XlsxFileAdapter
                 changed = true;
             }
 
-            if (RemoveOfficeRevisionIgnorablePrefixes(root, revisionPrefixes))
+            if (RemoveOfficeRevisionIgnorablePrefixes(root))
                 changed = true;
 
             foreach (var namespaceDeclaration in root
@@ -1150,6 +1369,13 @@ public sealed partial class XlsxFileAdapter
             return changed;
         }
 
+        private readonly record struct PatchXmlAttribute(
+            string Prefix,
+            string LocalName,
+            string NamespaceUri,
+            string Value,
+            bool IsNamespaceDeclaration);
+
         private static bool IsOfficeRevisionAttribute(XAttribute attribute) =>
             !attribute.IsNamespaceDeclaration &&
             IsOfficeRevisionNamespace(attribute.Name.NamespaceName);
@@ -1165,38 +1391,65 @@ public sealed partial class XlsxFileAdapter
                     !attribute.IsNamespaceDeclaration &&
                     attribute.Name.NamespaceName == namespaceName));
 
-        private static bool RemoveOfficeRevisionIgnorablePrefixes(
-            XElement root,
-            IReadOnlySet<string> revisionPrefixes)
+        private static bool RemoveOfficeRevisionIgnorablePrefixes(XElement root)
         {
-            if (revisionPrefixes.Count == 0)
-                return false;
-
-            XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
             var changed = false;
-            foreach (var attribute in root
-                         .DescendantsAndSelf()
-                         .Attributes(markupCompatNs + "Ignorable")
-                         .ToList())
-            {
-                var retainedPrefixes = attribute.Value
-                    .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-                    .Where(prefix => !revisionPrefixes.Contains(prefix))
-                    .ToArray();
-                var retainedValue = string.Join(" ", retainedPrefixes);
-                if (string.Equals(attribute.Value, retainedValue, StringComparison.Ordinal))
-                    continue;
-
-                if (retainedPrefixes.Length == 0)
-                    attribute.Remove();
-                else
-                    attribute.Value = retainedValue;
-
-                changed = true;
-            }
-
+            RemoveOfficeRevisionIgnorablePrefixes(
+                root,
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                ref changed);
             return changed;
+
+            static void RemoveOfficeRevisionIgnorablePrefixes(
+                XElement element,
+                Dictionary<string, string> inheritedRevisionNamespacesByPrefix,
+                ref bool changed)
+            {
+                XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+                var revisionNamespacesByPrefix = new Dictionary<string, string>(
+                    inheritedRevisionNamespacesByPrefix,
+                    StringComparer.Ordinal);
+                foreach (var namespaceDeclaration in element.Attributes().Where(attribute => attribute.IsNamespaceDeclaration))
+                {
+                    var prefix = namespaceDeclaration.Name.LocalName;
+                    if (string.Equals(prefix, "xmlns", StringComparison.Ordinal))
+                        continue;
+
+                    if (IsOfficeRevisionNamespace(namespaceDeclaration.Value))
+                        revisionNamespacesByPrefix[prefix] = namespaceDeclaration.Value;
+                    else
+                        revisionNamespacesByPrefix.Remove(prefix);
+                }
+
+                var ignorable = element.Attribute(markupCompatNs + "Ignorable");
+                if (ignorable is not null)
+                {
+                    var retainedPrefixes = ignorable.Value
+                        .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                        .Where(prefix =>
+                            !revisionNamespacesByPrefix.TryGetValue(prefix, out var namespaceName) ||
+                            HasOfficeRevisionElementInNamespace(element, namespaceName))
+                        .ToArray();
+                    var retainedValue = string.Join(" ", retainedPrefixes);
+                    if (!string.Equals(ignorable.Value, retainedValue, StringComparison.Ordinal))
+                    {
+                        if (retainedPrefixes.Length == 0)
+                            ignorable.Remove();
+                        else
+                            ignorable.Value = retainedValue;
+
+                        changed = true;
+                    }
+                }
+
+                foreach (var child in element.Elements())
+                    RemoveOfficeRevisionIgnorablePrefixes(child, revisionNamespacesByPrefix, ref changed);
+            }
         }
+
+        private static bool HasOfficeRevisionElementInNamespace(XElement root, string namespaceName) =>
+            root.DescendantsAndSelf()
+                .Any(element => string.Equals(element.Name.NamespaceName, namespaceName, StringComparison.Ordinal));
 
         private static bool AllowsCellPatchSaveForPackage(
             byte[] package,
@@ -2732,8 +2985,10 @@ public sealed partial class XlsxFileAdapter
                 for (var index = 0; index < reader.AttributeCount; index++)
                 {
                     reader.MoveToAttribute(index);
-                    if (string.Equals(reader.LocalName, "uid", StringComparison.Ordinal) &&
-                        reader.NamespaceURI.Contains("/revision", StringComparison.Ordinal))
+                    if (reader.Prefix != "xmlns" &&
+                        !(reader.Prefix.Length == 0 &&
+                          string.Equals(reader.LocalName, "xmlns", StringComparison.Ordinal)) &&
+                        IsOfficeRevisionNamespace(reader.NamespaceURI))
                     {
                         reader.MoveToElement();
                         return true;
@@ -2757,8 +3012,8 @@ public sealed partial class XlsxFileAdapter
             root.DescendantsAndSelf()
                 .SelectMany(element => element.Attributes())
                 .Any(attribute =>
-                    string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
-                    attribute.Name.NamespaceName.Contains("/revision", StringComparison.Ordinal));
+                    !attribute.IsNamespaceDeclaration &&
+                    IsOfficeRevisionNamespace(attribute.Name.NamespaceName));
 
         private static bool HasUnsupportedWorksheetTableParts(
             ZipArchive archive,
