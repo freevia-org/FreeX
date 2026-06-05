@@ -1,6 +1,4 @@
 using FluentAssertions;
-using System.IO;
-using System.Reflection;
 using System.Windows.Automation;
 using System.Windows.Controls;
 
@@ -10,11 +8,7 @@ public sealed partial class ScenarioManagerDialogTests
 {
     private static T GetField<T>(ScenarioManagerDialog dialog, string fieldName)
         where T : class
-    {
-        var field = typeof(ScenarioManagerDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, fieldName);
 
     private static void AssertAutomation(Control control, string name, string automationId, string helpText)
     {
@@ -24,8 +18,13 @@ public sealed partial class ScenarioManagerDialogTests
     }
 
     private static string ReadScenarioManagerDialogSources() =>
-        string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.Planning.cs")));
+        DialogSourceTestSupport.ReadHostSources(
+            "ScenarioManagerDialog.cs",
+            "ScenarioManagerDialog.Planning.cs");
+
+    private static string ReadScenarioManagerDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("ScenarioManagerDialog.cs");
+
+    private static string ReadMainWindowScenarioCommandsSource() =>
+        DialogSourceTestSupport.ReadHostSources("MainWindow.ScenarioCommands.cs");
 }

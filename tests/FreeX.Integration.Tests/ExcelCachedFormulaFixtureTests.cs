@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -42,6 +43,21 @@ public sealed class ExcelCachedFormulaFixtureTests
         var mismatches = CompareFormulaCellsToCachedResults(workbook).ToArray();
 
         mismatches.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookRecalc_AppliesLegacyImplicitIntersectionForExcelFormula()
+    {
+        using var fixture = CreateLegacyImplicitIntersectionWorkbook();
+        var workbook = new XlsxFileAdapter().Load(fixture);
+        var sheet = workbook.Sheets.Should().ContainSingle().Subject;
+
+        var report = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator())
+            .RecalculateAllFormulas(workbook);
+
+        report.Errors.Should().BeEmpty();
+        sheet.GetValue(15, 5).Should().Be(new NumberValue(50));
+        sheet.GetValue(15, 6).Should().Be(BlankValue.Instance);
     }
 
     private static IEnumerable<string> CompareFormulaCellsToCachedResults(Workbook workbook)
@@ -220,6 +236,68 @@ public sealed class ExcelCachedFormulaFixtureTests
                     </row>
                     <row r="24">
                       <c r="D24" t="e"><f>DEC2BIN(10,NA())</f><v>#N/A</v></c>
+                    </row>
+                  </sheetData>
+                </worksheet>
+                """);
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static MemoryStream CreateLegacyImplicitIntersectionWorkbook()
+    {
+        var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AddXml(archive, "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                </Types>
+                """);
+            AddXml(archive, "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """);
+            AddXml(archive, "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                </Relationships>
+                """);
+            AddXml(archive, "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="ImplicitIntersection" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                  <calcPr calcMode="auto"/>
+                </workbook>
+                """);
+            AddXml(archive, "xl/worksheets/sheet1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="7">
+                      <c r="A7"><v>2</v></c>
+                      <c r="E7"><v>5</v></c>
+                      <c r="J7"><v>9</v></c>
+                    </row>
+                    <row r="15">
+                      <c r="B15"><v>10</v></c>
+                      <c r="E15"><f>A7:J7*B15</f><v>50</v></c>
                     </row>
                   </sheetData>
                 </worksheet>
