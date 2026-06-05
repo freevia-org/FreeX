@@ -236,7 +236,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         return targets;
     }
 
-    private static (IReadOnlyList<XlsxTextBoxPackagePart> TextBoxes, IReadOnlyList<XlsxShapePackagePart> Shapes) ReadShapeParts(
+    internal static (IReadOnlyList<XlsxTextBoxPackagePart> TextBoxes, IReadOnlyList<XlsxShapePackagePart> Shapes) ReadShapeParts(
         XDocument drawingXml)
     {
         var textBoxes = new List<XlsxTextBoxPackagePart>();

@@ -286,7 +286,7 @@ internal static partial class AccessibilityTextRules
     [GeneratedRegex(@"(?i)^(?:IMG[\s_-]?\d{4,}|DSC[\s_-]?\d{4,}|DSCF\d{4,}|PXL[\s_-]\d{8}[\s_-]\d{6,}(?:[\s_-]\d+)?)$")]
     private static partial Regex CameraDefaultImageFileNameRegex();
 
-    [GeneratedRegex(@"(?i)^(?:Screenshot|Photo)[\s_-]+(?:\d{4}[-_]\d{2}[-_]\d{2}|\d{8})$")]
+    [GeneratedRegex(@"(?i)^(?:Screenshot|Screen\s*Shot|Photo)[\s_-]+(?:\d{4}[-_]\d{2}[-_]\d{2}|\d{8})(?:[\s_-]+(?:at[\s_-]+)?(?:\d{6}|\d{1,2}(?:[._:-]\d{2}){1,2})(?:[\s_-]*(?:AM|PM))?)?(?:\.(?:png|jpe?g|gif|bmp|tiff?|webp))?$")]
     private static partial Regex ScreenshotOrPhotoDateDefaultRegex();
 
     [GeneratedRegex(@"\s+")]
