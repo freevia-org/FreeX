@@ -39,9 +39,8 @@ public sealed class RepositoryPreflightTests
         var generatedDocsScript = CreatePassingPreflightScript(temp.Path, "Test-GeneratedDocs.ps1");
         var conflictMarkersScript = CreatePassingPreflightScript(temp.Path, "Test-ConflictMarkers.ps1");
 
-        var result = PowerShellScriptRunner.Run(
+        var result = RunScriptFromTemporaryWorkingDirectory(
             scriptPath,
-            Path.GetTempPath(),
             $"-JsonFilesScriptPath \"{jsonScript}\" " +
             $"-XmlFilesScriptPath \"{xmlScript}\" " +
             $"-ToolScriptsScriptPath \"{toolScriptsScript}\" " +
@@ -72,7 +71,7 @@ public sealed class RepositoryPreflightTests
         using var temp = new TestTemporaryDirectory();
         var missingScriptPath = Path.Combine(temp.Path, "missing.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-XmlFilesScriptPath \"{missingScriptPath}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-XmlFilesScriptPath \"{missingScriptPath}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("XML files preflight script was not found");
@@ -90,7 +89,7 @@ public sealed class RepositoryPreflightTests
         File.WriteAllText(workflowPath, "name: Tester Release");
 
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("missing a dotnet-version SDK band");
@@ -138,7 +137,7 @@ public sealed class RepositoryPreflightTests
             """);
 
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("across 1 project file(s).");
@@ -176,12 +175,18 @@ public sealed class RepositoryPreflightTests
             """);
 
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
         var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
         result.ExitCode.Should().NotBe(0);
         combinedOutput.Should().Contain("newer than workflow SDK 10.0.x");
         combinedOutput.Should().Contain("src/Future/Future.csproj: net11.0");
+    }
+
+    private static PowerShellResult RunScriptFromTemporaryWorkingDirectory(string scriptPath, string arguments)
+    {
+        using var workingDirectory = new TestTemporaryDirectory();
+        return PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, arguments);
     }
 
     private static string CreatePassingPreflightScript(string directory, string fileName)

@@ -8,7 +8,8 @@ public sealed class FileSavePlannerTests
     [Fact]
     public void CanSkipCleanSave_ReturnsTrueForCleanWorkbookAndSameTargetPath()
     {
-        var path = Path.Combine(Path.GetTempPath(), "Book.xlsx");
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "Book.xlsx");
 
         var skip = FileSavePlanner.CanSkipCleanSave(
             workbookDirty: false,
@@ -21,7 +22,8 @@ public sealed class FileSavePlannerTests
     [Fact]
     public void CanSkipCleanSave_ReturnsFalseForDirtyWorkbook()
     {
-        var path = Path.Combine(Path.GetTempPath(), "Book.xlsx");
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "Book.xlsx");
 
         var skip = FileSavePlanner.CanSkipCleanSave(
             workbookDirty: true,
@@ -34,12 +36,12 @@ public sealed class FileSavePlannerTests
     [Fact]
     public void CanSkipCleanSave_ReturnsFalseForSaveAsTarget()
     {
-        var directory = Path.GetTempPath();
+        using var temp = new TestTemporaryDirectory();
 
         var skip = FileSavePlanner.CanSkipCleanSave(
             workbookDirty: false,
-            currentFilePath: Path.Combine(directory, "Book.xlsx"),
-            targetPath: Path.Combine(directory, "Copy.xlsx"));
+            currentFilePath: Path.Combine(temp.Path, "Book.xlsx"),
+            targetPath: Path.Combine(temp.Path, "Copy.xlsx"));
 
         skip.Should().BeFalse();
     }

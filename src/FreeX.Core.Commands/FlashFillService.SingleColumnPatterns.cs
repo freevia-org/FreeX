@@ -395,6 +395,25 @@ public static partial class FlashFillService
             : null;
     }
 
+    private static Func<string, string?>? TryExtractFileParentDirectoryName(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFileParentDirectoryName(e.Source, out var name) && name == e.Expected))
+            return null;
+
+        var cache = new ExtractedSegmentCache();
+        return source => TryGetFileParentDirectoryNameRange(source, out var start, out var endExclusive)
+            ? cache.GetOrAdd(source, start, endExclusive)
+            : null;
+    }
+
+    private static Func<string, string?>? TryExtractFileParentDirectoryTitle(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetFileParentDirectoryTitle(e.Source, out var title) && title == e.Expected))
+            return null;
+
+        return source => TryGetFileParentDirectoryTitle(source, out var title) ? title : null;
+    }
+
     private static bool TryRemoveFinalDottedToken(string source, out string stem)
     {
         stem = string.Empty;
@@ -498,6 +517,74 @@ public static partial class FlashFillService
         stemEndExclusive = stemEnd + 1;
         return true;
     }
+
+    private static bool TryGetFileParentDirectoryName(string source, out string name)
+    {
+        name = string.Empty;
+        if (!TryGetFileParentDirectoryNameRange(source, out var start, out var endExclusive))
+            return false;
+
+        name = SliceSegment(source, start, endExclusive);
+        return true;
+    }
+
+    private static bool TryGetFileParentDirectoryTitle(string source, out string title)
+    {
+        title = string.Empty;
+        return TryGetFileParentDirectoryName(source, out var name) &&
+               TryFormatSlugStemAsTitle(name, out title);
+    }
+
+    private static bool TryGetFileParentDirectoryNameRange(
+        string source,
+        out int parentStart,
+        out int parentEndExclusive)
+    {
+        parentStart = 0;
+        parentEndExclusive = 0;
+        if (IsHttpOrHttpsUrlCandidate(source))
+            return false;
+
+        var end = source.Length - 1;
+        TrimTrailingWhitespace(source, ref end);
+        if (end < 0)
+            return false;
+
+        var lastSeparatorIndex = LastPathSeparatorIndex(source, end);
+        if (lastSeparatorIndex <= 0 || lastSeparatorIndex >= end)
+            return false;
+
+        var finalStart = lastSeparatorIndex + 1;
+        var finalEnd = end;
+        TrimSegment(source, ref finalStart, ref finalEnd);
+        if (finalStart > finalEnd)
+            return false;
+
+        var finalLength = finalEnd - finalStart + 1;
+        var dotIndex = source.LastIndexOf('.', finalEnd, finalLength);
+        if (dotIndex <= finalStart || dotIndex == finalEnd)
+            return false;
+
+        var parentEnd = lastSeparatorIndex - 1;
+        TrimSegment(source, ref parentStart, ref parentEnd);
+        if (parentStart > parentEnd)
+            return false;
+
+        var previousSeparatorIndex = LastPathSeparatorIndex(source, parentEnd);
+        parentStart = previousSeparatorIndex + 1;
+        TrimSegment(source, ref parentStart, ref parentEnd);
+        if (parentStart > parentEnd)
+            return false;
+
+        if (source[parentEnd] == ':')
+            return false;
+
+        parentEndExclusive = parentEnd + 1;
+        return true;
+    }
+
+    private static int LastPathSeparatorIndex(string source, int startIndex) =>
+        Math.Max(source.LastIndexOf('/', startIndex), source.LastIndexOf('\\', startIndex));
 
     private static bool TryFindDelimitedPartIndex(
         string source,

@@ -71,7 +71,7 @@ public sealed class GitHubWorkflowPreflightTests
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), "");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, "");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
@@ -104,7 +104,7 @@ public sealed class GitHubWorkflowPreflightTests
             """);
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("must declare timeout-minutes");
@@ -140,7 +140,7 @@ public sealed class GitHubWorkflowPreflightTests
             """);
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("actions/upload-artifact steps must set if-no-files-found to error or warn");
@@ -177,7 +177,7 @@ public sealed class GitHubWorkflowPreflightTests
             """);
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("actions/checkout steps must set persist-credentials: false");
@@ -210,7 +210,7 @@ public sealed class GitHubWorkflowPreflightTests
             """);
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("workflow must not use self-hosted runners");
@@ -243,7 +243,7 @@ public sealed class GitHubWorkflowPreflightTests
             """);
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("workflow must not use the privileged pull_request_target event");
@@ -275,7 +275,7 @@ public sealed class GitHubWorkflowPreflightTests
             """);
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("workflow must not request write-all permissions");
@@ -307,7 +307,7 @@ public sealed class GitHubWorkflowPreflightTests
             """);
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("must declare an explicit shell");
@@ -338,7 +338,7 @@ public sealed class GitHubWorkflowPreflightTests
             """);
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("must stay within the workflow workspace");
@@ -369,11 +369,17 @@ public sealed class GitHubWorkflowPreflightTests
             """);
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("GitHub workflow validation failed");
         (result.Output + result.Error).Should().Contain("actions/checkout@main");
+    }
+
+    private static PowerShellResult RunScriptFromTemporaryWorkingDirectory(string scriptPath, string arguments)
+    {
+        using var workingDirectory = new TestTemporaryDirectory();
+        return PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, arguments);
     }
 
 }
