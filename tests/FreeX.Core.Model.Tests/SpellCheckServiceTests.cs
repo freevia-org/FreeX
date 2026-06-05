@@ -2433,6 +2433,53 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversReleasePackagingInstallerVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "INSTALATION Instaler packge Packging PUBLSH Publishng Artifactt verison MANIFESTT Manfiest certificat Signng Previeww Distributon Releasecandidate. Keep installation, installer, package, packaging, publish, publishing, artifact, version, manifest, certificate, signing, preview, distribution, release candidate, preinstalation, instalation_id, https://instalation.example.com/packging, release@verison.example.com, \"C:\\packge folder\\signng file.zip\", and [C:\\artifactt folder\\releasecandidate file.zip]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "instalation INSTALATION Instalation https://instalation.example.com/instalation release@instalation.example.com instalation_id preinstalation \"C:\\instalation folder\\instalation file.zip\" [C:\\instalation folder\\instalation file.zip].")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "installation");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("INSTALATION", "INSTALLATION"),
+            ("Instaler", "Installer"),
+            ("packge", "package"),
+            ("Packging", "Packaging"),
+            ("PUBLSH", "PUBLISH"),
+            ("Publishng", "Publishing"),
+            ("Artifactt", "Artifact"),
+            ("verison", "version"),
+            ("MANIFESTT", "MANIFEST"),
+            ("Manfiest", "Manifest"),
+            ("certificat", "certificate"),
+            ("Signng", "Signing"),
+            ("Previeww", "Preview"),
+            ("Distributon", "Distribution"),
+            ("Releasecandidate", "Release candidate"));
+        plan.IssueCount.Should().Be(15);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "INSTALLATION Installer package Packaging PUBLISH Publishing Artifact version MANIFEST Manifest certificate Signing Preview Distribution Release candidate. Keep installation, installer, package, packaging, publish, publishing, artifact, version, manifest, certificate, signing, preview, distribution, release candidate, preinstalation, instalation_id, https://instalation.example.com/packging, release@verison.example.com, \"C:\\packge folder\\signng file.zip\", and [C:\\artifactt folder\\releasecandidate file.zip].");
+        plan.Edits[0].ReplacementCount.Should().Be(15);
+        replaceAllCorrected.Should().Be(
+            "installation INSTALLATION Installation https://instalation.example.com/instalation release@instalation.example.com instalation_id preinstalation \"C:\\instalation folder\\instalation file.zip\" [C:\\instalation folder\\instalation file.zip].");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversDocumentationSupportVocabularyTypos()
     {
         var wb = new Workbook("test");
