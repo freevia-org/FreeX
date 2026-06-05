@@ -334,6 +334,12 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatXor()
+    {
+        AssertFormulaBooleanContrastLocations("XOR($A1>=100,$C1,$A1<80)", "B3", "B4");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIsPredicates()
     {
         AssertFormulaPredicateContrastLocations("ISBLANK($A1)", "B1");
@@ -427,6 +433,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatXorNestedWrappers()
+    {
+        AssertFormulaPredicateContrastLocations("XOR(ISNUMBER($A1),$C1)", "B2", "B3", "B5");
+        AssertFormulaXorContrastLocations("XOR(IF($A1>=100,TRUE,FALSE),$C1=\"Open\")", "B2", "B3");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAnd()
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -473,6 +486,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaIfContrastLocations("IF(SUM($A1)>0,TRUE,FALSE)");
         AssertFormulaIfContrastLocations("IF($A1>=100,SUM($A1),FALSE)");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideXorWrapper()
+    {
+        AssertFormulaXorContrastLocations("XOR($A1>=100,SUM($A1)>0)");
+        AssertFormulaXorContrastLocations("XOR()");
     }
 
     [Fact]
@@ -771,6 +791,17 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     private static void AssertFormulaIfContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaXorContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
