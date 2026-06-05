@@ -893,12 +893,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 's' && EqualAsciiWordIgnoreCase(word, "studnt"))
-                {
-                    suggestion = "student";
-                    return true;
-                }
-
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "thier"))
                 {
                     suggestion = "their";
@@ -1348,6 +1342,12 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "stauts"))
                 {
                     suggestion = "status";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "studnt"))
+                {
+                    suggestion = "student";
                     return true;
                 }
 
