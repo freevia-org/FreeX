@@ -145,9 +145,43 @@ public sealed class FlashFillCommand : IWorkbookCommand
         if (_fillColIndex < 3 || _sourceColIndex != _fillColIndex - 1)
             return null;
 
+        if (_fillColIndex >= 4)
+        {
+            var threeLeftCol0 = _fillColIndex - 3;
+            var threeLeftCol1 = _fillColIndex - 2;
+            var threeLeftCol2 = _fillColIndex - 1;
+            var threeColumnResult = TryFillFromImmediateLeftColumns(
+                sheet,
+                exampleRows,
+                exampleOutputs,
+                rowsToFill,
+                threeLeftCol0,
+                threeLeftCol1,
+                threeLeftCol2);
+            if (threeColumnResult is not null)
+                return threeColumnResult;
+        }
+
         var leftCol0 = _fillColIndex - 2;
         var leftCol1 = _fillColIndex - 1;
 
+        return TryFillFromImmediateLeftColumns(
+            sheet,
+            exampleRows,
+            exampleOutputs,
+            rowsToFill,
+            leftCol0,
+            leftCol1);
+    }
+
+    private static IReadOnlyList<string>? TryFillFromImmediateLeftColumns(
+        Sheet sheet,
+        IReadOnlyList<uint> exampleRows,
+        IReadOnlyList<string> exampleOutputs,
+        IReadOnlyList<uint> rowsToFill,
+        uint leftCol0,
+        uint leftCol1)
+    {
         var exampleSources = new List<IReadOnlyList<string>>(exampleRows.Count);
         foreach (var row in exampleRows)
         {
@@ -171,6 +205,38 @@ public sealed class FlashFillCommand : IWorkbookCommand
         return FlashFillService.FillFromColumns(exampleSources, exampleOutputs, remainingSources);
     }
 
+    private static IReadOnlyList<string>? TryFillFromImmediateLeftColumns(
+        Sheet sheet,
+        IReadOnlyList<uint> exampleRows,
+        IReadOnlyList<string> exampleOutputs,
+        IReadOnlyList<uint> rowsToFill,
+        uint leftCol0,
+        uint leftCol1,
+        uint leftCol2)
+    {
+        var exampleSources = new List<IReadOnlyList<string>>(exampleRows.Count);
+        foreach (var row in exampleRows)
+        {
+            var sources = GetPopulatedLeftSources(sheet, row, leftCol0, leftCol1, leftCol2);
+            if (sources is null)
+                return null;
+
+            exampleSources.Add(sources);
+        }
+
+        var remainingSources = new List<IReadOnlyList<string>>(rowsToFill.Count);
+        foreach (var row in rowsToFill)
+        {
+            var sources = GetPopulatedLeftSources(sheet, row, leftCol0, leftCol1, leftCol2);
+            if (sources is null)
+                return null;
+
+            remainingSources.Add(sources);
+        }
+
+        return FlashFillService.FillFromColumns(exampleSources, exampleOutputs, remainingSources);
+    }
+
     private static IReadOnlyList<string>? GetPopulatedLeftSources(Sheet sheet, uint row, uint leftCol0, uint leftCol1)
     {
         var first = ScalarToString(sheet.GetValue(row, leftCol0));
@@ -178,6 +244,22 @@ public sealed class FlashFillCommand : IWorkbookCommand
 
         return first.Length > 0 && second.Length > 0
             ? [first, second]
+            : null;
+    }
+
+    private static IReadOnlyList<string>? GetPopulatedLeftSources(
+        Sheet sheet,
+        uint row,
+        uint leftCol0,
+        uint leftCol1,
+        uint leftCol2)
+    {
+        var first = ScalarToString(sheet.GetValue(row, leftCol0));
+        var second = ScalarToString(sheet.GetValue(row, leftCol1));
+        var third = ScalarToString(sheet.GetValue(row, leftCol2));
+
+        return first.Length > 0 && second.Length > 0 && third.Length > 0
+            ? [first, second, third]
             : null;
     }
 }
