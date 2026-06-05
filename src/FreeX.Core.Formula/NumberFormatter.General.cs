@@ -1,7 +1,7 @@
 using System.Globalization;
 using FreeX.Core.Model;
 
-namespace FreeX.Core.Calc;
+namespace FreeX.Core.Formula;
 
 public static partial class NumberFormatter
 {
