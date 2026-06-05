@@ -48,6 +48,8 @@ public sealed partial class XlsxFileAdapter
             return false;
         }
 
+        preparedPackage.TryEnsureCellPatchEligibility(workbook, out preparedPackage, out _);
+
         if (!ReferenceEquals(preparedPackage, sourcePackage))
         {
             SourcePackages.Remove(workbook);
@@ -146,7 +148,8 @@ public sealed partial class XlsxFileAdapter
         string? CellPatchBaselineBlockReason,
         XlsxCellPatchBaselineFacts? CellPatchBaselineFacts = null,
         bool IsCellPatchBaselineLazy = false,
-        bool IsCellPatchEligibilityLazy = false)
+        bool IsCellPatchEligibilityLazy = false,
+        bool SourceHasCustomViews = false)
     {
         private const int FingerprintCellLimit = 25_000;
         private const int CellPatchBaselineLimit = 2_000_000;
@@ -246,7 +249,8 @@ public sealed partial class XlsxFileAdapter
                 CellPatchBaseline: null,
                 CellPatchBaselineBlockReason: null,
                 IsCellPatchBaselineLazy: true,
-                IsCellPatchEligibilityLazy: true);
+                IsCellPatchEligibilityLazy: true,
+                SourceHasCustomViews: workbook.CustomViews.Count > 0);
         }
 
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
@@ -275,7 +279,8 @@ public sealed partial class XlsxFileAdapter
             bool allowBufferReuse,
             IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
             bool? hasUnsupportedConditionalFormatting,
-            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout)
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout,
+            bool sourceHasWorkbookCustomViews = false)
             => Capture(
                 stream,
                 workbook,
@@ -283,7 +288,8 @@ public sealed partial class XlsxFileAdapter
                 currentModelFingerprint: null,
                 worksheetsWithPreservableSourceMetadata,
                 hasUnsupportedConditionalFormatting,
-                sheetXmlLayout);
+                sheetXmlLayout,
+                sourceHasWorkbookCustomViews);
 
         private static XlsxSourcePackage Capture(
             MemoryStream stream,
@@ -305,10 +311,15 @@ public sealed partial class XlsxFileAdapter
             string? currentModelFingerprint,
             IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
             bool? hasUnsupportedConditionalFormatting,
-            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null)
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout = null,
+            bool sourceHasWorkbookCustomViews = false)
         {
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var cellPatchBaselineFacts = XlsxCellPatchBaselineFacts.Capture(workbook, sheetXmlLayout);
+            var sourceHasCustomViews = SourcePackageHasCustomViews(
+                workbook,
+                sheetXmlLayout,
+                sourceHasWorkbookCustomViews);
             if (stream.TryGetBuffer(out var buffer))
             {
                 if (allowBufferReuse &&
@@ -330,7 +341,8 @@ public sealed partial class XlsxFileAdapter
                         CellPatchBaselineBlockReason: null,
                         CellPatchBaselineFacts: cellPatchBaselineFacts,
                         IsCellPatchBaselineLazy: true,
-                        IsCellPatchEligibilityLazy: true);
+                        IsCellPatchEligibilityLazy: true,
+                        SourceHasCustomViews: sourceHasCustomViews);
                 }
 
                 var copiedBytes = buffer.Array is not null &&
@@ -352,7 +364,8 @@ public sealed partial class XlsxFileAdapter
                     CellPatchBaselineBlockReason: null,
                     CellPatchBaselineFacts: cellPatchBaselineFacts,
                     IsCellPatchBaselineLazy: true,
-                    IsCellPatchEligibilityLazy: true);
+                    IsCellPatchEligibilityLazy: true,
+                    SourceHasCustomViews: sourceHasCustomViews);
             }
 
             var bytes = ReadBytes(stream);
@@ -369,7 +382,19 @@ public sealed partial class XlsxFileAdapter
                 CellPatchBaselineBlockReason: null,
                 CellPatchBaselineFacts: cellPatchBaselineFacts,
                 IsCellPatchBaselineLazy: true,
-                IsCellPatchEligibilityLazy: true);
+                IsCellPatchEligibilityLazy: true,
+                SourceHasCustomViews: sourceHasCustomViews);
+        }
+
+        private static bool SourcePackageHasCustomViews(
+            Workbook workbook,
+            IReadOnlyDictionary<string, SheetXmlLayout>? sheetXmlLayout,
+            bool sourceHasWorkbookCustomViews)
+        {
+            if (sourceHasWorkbookCustomViews || workbook.CustomViews.Count > 0)
+                return true;
+
+            return sheetXmlLayout?.Values.Any(layout => layout.CustomViews.Count > 0) == true;
         }
 
         private static byte[] ReadBytes(Stream stream)
@@ -441,6 +466,31 @@ public sealed partial class XlsxFileAdapter
             return cellPatchBaseline is not null;
         }
 
+        public bool TryEnsureCellPatchEligibility(
+            Workbook workbook,
+            out XlsxSourcePackage preparedPackage,
+            out string? blockReason)
+        {
+            preparedPackage = this;
+            blockReason = CellPatchEligibilityBlockReason;
+            if (!IsCellPatchEligibilityLazy)
+                return AllowsCellPatchSave;
+
+            var allowsCellPatchSave = AllowsCellPatchSaveForPackage(
+                Buffer,
+                Offset,
+                Count,
+                workbook,
+                out blockReason);
+            preparedPackage = this with
+            {
+                AllowsCellPatchSave = allowsCellPatchSave,
+                CellPatchEligibilityBlockReason = blockReason,
+                IsCellPatchEligibilityLazy = false
+            };
+            return allowsCellPatchSave;
+        }
+
         public bool Matches(Workbook workbook) => Matches(workbook, out _);
 
         public bool Matches(Workbook workbook, out string? currentModelFingerprint)
@@ -482,7 +532,16 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
 
-            var (allowsCellPatchSave, cellPatchEligibilityBlockReason) = ResolveCellPatchEligibility(workbook);
+            var allowsCellPatchSave = TryEnsureCellPatchEligibility(
+                workbook,
+                out var eligibilityPreparedPackage,
+                out var cellPatchEligibilityBlockReason);
+            if (!ReferenceEquals(eligibilityPreparedPackage, this))
+            {
+                SourcePackages.Remove(workbook);
+                SourcePackages.Add(workbook, eligibilityPreparedPackage);
+            }
+
             if (!allowsCellPatchSave)
                 return Fail(cellPatchEligibilityBlockReason ?? "patch_blocked_package_or_workbook_requires_full_save", out diagnostics);
 
@@ -528,7 +587,7 @@ public sealed partial class XlsxFileAdapter
             patchedPackage.Write(Buffer, Offset, Count);
             using (var archive = new ZipArchive(patchedPackage, ZipArchiveMode.Update, leaveOpen: true))
             {
-                NormalizePatchCustomViews(archive, workbook);
+                NormalizePatchCustomViews(archive, workbook, SourceHasCustomViews);
                 NormalizePatchSharedStrings(archive);
 
                 var cellChangesByWorksheet = changes
@@ -649,7 +708,8 @@ public sealed partial class XlsxFileAdapter
                         commentChanges,
                         worksheetViewChanges,
                         patchedPatchValidationFingerprint),
-                    CellPatchBaselineBlockReason));
+                    CellPatchBaselineBlockReason,
+                    SourceHasCustomViews: workbook.CustomViews.Count > 0));
             }
             else
             {
@@ -673,23 +733,9 @@ public sealed partial class XlsxFileAdapter
             return true;
         }
 
-        private (bool AllowsCellPatchSave, string? BlockReason) ResolveCellPatchEligibility(Workbook workbook)
+        private static void NormalizePatchCustomViews(ZipArchive archive, Workbook workbook, bool sourceHasCustomViews)
         {
-            if (!IsCellPatchEligibilityLazy)
-                return (AllowsCellPatchSave, CellPatchEligibilityBlockReason);
-
-            var allowsCellPatchSave = AllowsCellPatchSaveForPackage(
-                Buffer,
-                Offset,
-                Count,
-                workbook,
-                out var blockReason);
-            return (allowsCellPatchSave, blockReason);
-        }
-
-        private static void NormalizePatchCustomViews(ZipArchive archive, Workbook workbook)
-        {
-            if (workbook.CustomViews.Count > 0)
+            if (!sourceHasCustomViews || workbook.CustomViews.Count > 0)
                 return;
 
             var changed = RemovePatchWorkbookCustomViews(archive);

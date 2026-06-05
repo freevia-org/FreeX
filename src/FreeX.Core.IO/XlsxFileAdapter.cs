@@ -518,7 +518,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             loadPackage.CanReuseBufferForSnapshot,
             worksheetsWithPreservableSourceMetadata,
             hasUnsupportedConditionalFormatting,
-            sheetXmlLayout));
+            sheetXmlLayout,
+            sourceHasWorkbookCustomViews: xlsxCustomViews.Count > 0));
         SourcePackages.Add(workbook, sourcePackage);
         totalStopwatch.Stop();
         LastLoadDiagnostics = new XlsxLoadDiagnostics(
