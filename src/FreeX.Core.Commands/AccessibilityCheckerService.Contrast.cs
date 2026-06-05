@@ -647,6 +647,12 @@ public static partial class AccessibilityCheckerService
             case "ISODD":
                 kind = ConditionalFormulaPredicateKind.IsOdd;
                 return true;
+            case "ISREF":
+                kind = ConditionalFormulaPredicateKind.IsRef;
+                return true;
+            case "ISFORMULA":
+                kind = ConditionalFormulaPredicateKind.IsFormula;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -1012,7 +1018,9 @@ public static partial class AccessibilityCheckerService
         IsErr,
         IsNa,
         IsEven,
-        IsOdd
+        IsOdd,
+        IsRef,
+        IsFormula
     }
 
     private readonly record struct ConditionalFormulaOperand(
@@ -1201,6 +1209,12 @@ public static partial class AccessibilityCheckerService
             int rowOffset,
             int colOffset)
         {
+            if (predicate.Kind == ConditionalFormulaPredicateKind.IsRef)
+                return EvaluateFormulaIsRefPredicate(predicate.Operand, rowOffset, colOffset);
+
+            if (predicate.Kind == ConditionalFormulaPredicateKind.IsFormula)
+                return EvaluateFormulaIsFormulaPredicate(predicate.Operand, rowOffset, colOffset);
+
             if (!TryResolveFormulaOperand(predicate.Operand, rowOffset, colOffset, out var value))
                 return null;
 
@@ -1218,6 +1232,32 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaPredicateKind.IsOdd => EvaluateFormulaParityPredicate(value, expectEven: false),
                 _ => null
             };
+        }
+
+        private bool? EvaluateFormulaIsRefPredicate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset)
+        {
+            if (operand.Kind == ConditionalFormulaOperandKind.Literal)
+                return false;
+
+            return TryResolveFormulaReference(operand, rowOffset, colOffset, out _, out _, out _)
+                ? true
+                : null;
+        }
+
+        private bool? EvaluateFormulaIsFormulaPredicate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset)
+        {
+            if (operand.Kind == ConditionalFormulaOperandKind.Literal)
+                return null;
+
+            return TryResolveFormulaReference(operand, rowOffset, colOffset, out var targetSheet, out var row, out var col)
+                ? targetSheet.GetCell(row, col)?.HasFormula == true
+                : null;
         }
 
         private static bool IsNaError(ErrorValue error) =>
@@ -1307,22 +1347,43 @@ public static partial class AccessibilityCheckerService
                 return true;
             }
 
-            var row = ShiftFormulaRow(operand.Row, operand.IsRowAbsolute, rowOffset);
-            var col = ShiftFormulaColumn(operand.Col, operand.IsColAbsolute, colOffset);
-            if (!row.HasValue || !col.HasValue)
+            if (!TryResolveFormulaReference(operand, rowOffset, colOffset, out var targetSheet, out var row, out var col))
             {
                 value = ErrorValue.Ref;
                 return false;
             }
 
-            var targetSheet = operand.SheetName is null ? sheet : workbook.GetSheet(operand.SheetName);
-            if (targetSheet is null)
-            {
-                value = ErrorValue.Ref;
-                return false;
-            }
+            value = targetSheet.GetValue(row, col);
+            return true;
+        }
 
-            value = targetSheet.GetValue(row.Value, col.Value);
+        private bool TryResolveFormulaReference(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out Sheet targetSheet,
+            out uint row,
+            out uint col)
+        {
+            targetSheet = default!;
+            row = 0;
+            col = 0;
+
+            if (operand.Kind != ConditionalFormulaOperandKind.Reference)
+                return false;
+
+            var shiftedRow = ShiftFormulaRow(operand.Row, operand.IsRowAbsolute, rowOffset);
+            var shiftedCol = ShiftFormulaColumn(operand.Col, operand.IsColAbsolute, colOffset);
+            if (!shiftedRow.HasValue || !shiftedCol.HasValue)
+                return false;
+
+            var resolvedSheet = operand.SheetName is null ? sheet : workbook.GetSheet(operand.SheetName);
+            if (resolvedSheet is null)
+                return false;
+
+            targetSheet = resolvedSheet;
+            row = shiftedRow.Value;
+            col = shiftedCol.Value;
             return true;
         }
 
