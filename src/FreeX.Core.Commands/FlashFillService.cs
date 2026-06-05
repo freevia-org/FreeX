@@ -41,6 +41,7 @@ public static partial class FlashFillService
             ?? TryEmailDisplayName(examples)
             ?? TryEmailLocalPartWithoutPlusTag(examples)
             ?? TryEmailDomainStem(examples)
+            ?? TryEmailDomainSuffix(examples)
             ?? TryWebAddressCleanup(examples)
             ?? TryExtractFinalUrlPathSegmentStem(examples)
             ?? TryExtractFinalUrlPathSegmentRawSlugStem(examples)
