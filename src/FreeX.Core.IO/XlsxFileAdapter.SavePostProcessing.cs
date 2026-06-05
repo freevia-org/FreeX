@@ -291,7 +291,10 @@ public sealed partial class XlsxFileAdapter
             workbook,
             currentModelFingerprint,
             sourcePackage?.WorksheetsWithPreservableSourceMetadata,
-            sourcePackage?.HasUnsupportedConditionalFormatting));
+            sourcePackage?.HasUnsupportedConditionalFormatting) with
+            {
+                SourceNeedsPackageGraphNormalization = false
+            });
 
         void SaveSourcePackageIndependentPostProcessingMetadata()
         {

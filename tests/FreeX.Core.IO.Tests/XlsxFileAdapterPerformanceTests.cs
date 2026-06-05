@@ -356,10 +356,12 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SaveSourcePackageCapture_ReusesSaveFingerprintForSnapshot()
     {
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
         var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
         var postProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
         var snapshotSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
 
+        adapterSource.Should().Contain("sourceNeedsPackageGraphNormalization: XlsxDocumentPropertiesPreserver.NeedsPackageGraphNormalization(packageStream)");
         saveSource.Should().Contain("string? currentModelFingerprint = null;");
         saveSource.Should().Contain("sourcePackage.Matches(workbook, out currentModelFingerprint)");
         saveSource.Should().Contain("sourcePackage.TrySavePatchedCellValues(");
@@ -367,6 +369,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         saveSource.Should().Contain("out patchDiagnostics");
         postProcessingSource.Should().Contain("currentModelFingerprint,");
         postProcessingSource.Should().Contain("sourcePackage?.WorksheetsWithPreservableSourceMetadata");
+        postProcessingSource.Should().Contain("SourceNeedsPackageGraphNormalization = false");
         snapshotSource.Should().Contain("public bool Matches(Workbook workbook, out string? currentModelFingerprint)");
         snapshotSource.Should().Contain("ref string? currentModelFingerprint");
         snapshotSource.Should().Contain("currentModelFingerprint,");
@@ -379,6 +382,12 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("SourceHasCustomViews");
         snapshotSource.Should().Contain("if (!sourceHasCustomViews || workbook.CustomViews.Count > 0)");
         snapshotSource.Should().Contain("layout.CustomViews.Count > 0");
+        snapshotSource.Should().Contain("SourceNeedsPackageGraphNormalization");
+        snapshotSource.Should().Contain("if (SourceNeedsPackageGraphNormalization != false)");
+        snapshotSource.Should().Contain("TryApplySimpleExistingCellChangesStreaming(");
+        snapshotSource.Should().Contain("CanStreamSimpleExistingCellChanges(");
+        snapshotSource.Should().Contain("XlsxCellValuePatchKind.LiteralValue or");
+        snapshotSource.Should().Contain("XlsxCellValuePatchKind.FormulaCachedValue or");
         snapshotSource.Should().Contain("XlsxCellPatchBaselineFacts.Capture(workbook, sheetXmlLayout)");
         snapshotSource.Should().Contain("baselineFacts: CellPatchBaselineFacts");
         snapshotSource.Should().Contain("private const int CellPatchBaselineLimit = 2_000_000;");
@@ -404,7 +413,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("patchedSourceModelFingerprint,");
         snapshotSource.Should().Contain("patchedPatchValidationFingerprint),");
         snapshotSource.Should().Contain("CellPatchBaselineBlockReason,");
-        snapshotSource.Should().Contain("SourceHasCustomViews: workbook.CustomViews.Count > 0));");
+        snapshotSource.Should().Contain("SourceHasCustomViews: workbook.CustomViews.Count > 0,");
     }
 
     [Fact]
