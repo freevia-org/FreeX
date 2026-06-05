@@ -353,6 +353,13 @@ public sealed partial class XlsxFileAdapter
         }
     }
 
+    private sealed record XlsxOfficeRevisionAttributeFacts(
+        bool HasWorkbookAttributes,
+        IReadOnlySet<string> WorksheetPaths)
+    {
+        public bool HasAny => HasWorkbookAttributes || WorksheetPaths.Count > 0;
+    }
+
     private sealed record XlsxSourcePackage(
         byte[] Buffer,
         int Offset,
@@ -368,7 +375,8 @@ public sealed partial class XlsxFileAdapter
         bool IsCellPatchBaselineLazy = false,
         bool IsCellPatchEligibilityLazy = false,
         bool SourceHasCustomViews = false,
-        bool? SourceNeedsPackageGraphNormalization = null)
+        bool? SourceNeedsPackageGraphNormalization = null,
+        XlsxOfficeRevisionAttributeFacts? SourceOfficeRevisionAttributes = null)
     {
         private const int FingerprintCellLimit = 25_000;
         private const int CellPatchBaselineLimit = 2_000_000;
@@ -706,11 +714,13 @@ public sealed partial class XlsxFileAdapter
                 Offset,
                 Count,
                 workbook,
-                out blockReason);
+                out blockReason,
+                out var officeRevisionAttributes);
             preparedPackage = this with
             {
                 AllowsCellPatchSave = allowsCellPatchSave,
                 CellPatchEligibilityBlockReason = blockReason,
+                SourceOfficeRevisionAttributes = allowsCellPatchSave ? officeRevisionAttributes : null,
                 IsCellPatchEligibilityLazy = false
             };
             return allowsCellPatchSave;
@@ -824,6 +834,8 @@ public sealed partial class XlsxFileAdapter
             {
                 NormalizePatchCustomViews(archive, workbook, SourceHasCustomViews);
                 NormalizePatchSharedStrings(archive);
+                if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
+                    NormalizePatchOfficeRevisionAttributes(archive, officeRevisionAttributes);
 
                 var cellChangesByWorksheet = changes
                     .GroupBy(change => change.WorksheetPath, StringComparer.OrdinalIgnoreCase)
@@ -957,7 +969,8 @@ public sealed partial class XlsxFileAdapter
                         patchedPatchValidationFingerprint),
                     CellPatchBaselineBlockReason,
                     SourceHasCustomViews: workbook.CustomViews.Count > 0,
-                    SourceNeedsPackageGraphNormalization: false));
+                    SourceNeedsPackageGraphNormalization: false,
+                    SourceOfficeRevisionAttributes: null));
             }
             else
             {
@@ -1071,6 +1084,120 @@ public sealed partial class XlsxFileAdapter
                 XlsxPackageXmlEditor.ReplaceXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
         }
 
+        private static void NormalizePatchOfficeRevisionAttributes(
+            ZipArchive archive,
+            XlsxOfficeRevisionAttributeFacts facts)
+        {
+            if (facts.HasWorkbookAttributes)
+                RemovePatchOfficeRevisionAttributes(archive, "xl/workbook.xml");
+
+            foreach (var worksheetPath in facts.WorksheetPaths)
+                RemovePatchOfficeRevisionAttributes(archive, worksheetPath);
+        }
+
+        private static void RemovePatchOfficeRevisionAttributes(ZipArchive archive, string path)
+        {
+            var entry = archive.GetEntry(path);
+            if (entry is null)
+                return;
+
+            var document = XlsxPackageXmlEditor.LoadXml(entry);
+            if (document.Root is null || !RemoveOfficeRevisionAttributes(document.Root))
+                return;
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, path, document);
+        }
+
+        private static bool RemoveOfficeRevisionAttributes(XElement root)
+        {
+            var changed = false;
+            var revisionPrefixes = root
+                .DescendantsAndSelf()
+                .SelectMany(element => element.Attributes())
+                .Where(attribute =>
+                    attribute.IsNamespaceDeclaration &&
+                    IsOfficeRevisionNamespace(attribute.Value))
+                .Select(attribute => attribute.Name.LocalName)
+                .Where(prefix => !string.Equals(prefix, "xmlns", StringComparison.Ordinal))
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var attribute in root
+                         .DescendantsAndSelf()
+                         .SelectMany(element => element.Attributes())
+                         .Where(IsOfficeRevisionAttribute)
+                         .ToList())
+            {
+                attribute.Remove();
+                changed = true;
+            }
+
+            if (RemoveOfficeRevisionIgnorablePrefixes(root, revisionPrefixes))
+                changed = true;
+
+            foreach (var namespaceDeclaration in root
+                         .DescendantsAndSelf()
+                         .SelectMany(element => element.Attributes())
+                         .Where(attribute =>
+                             attribute.IsNamespaceDeclaration &&
+                             IsOfficeRevisionNamespace(attribute.Value) &&
+                             !NamespaceIsUsed(root, attribute.Value))
+                         .ToList())
+            {
+                namespaceDeclaration.Remove();
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static bool IsOfficeRevisionAttribute(XAttribute attribute) =>
+            !attribute.IsNamespaceDeclaration &&
+            IsOfficeRevisionNamespace(attribute.Name.NamespaceName);
+
+        private static bool IsOfficeRevisionNamespace(string namespaceName) =>
+            namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
+            namespaceName.Contains("/revision", StringComparison.Ordinal);
+
+        private static bool NamespaceIsUsed(XElement root, string namespaceName) =>
+            root.DescendantsAndSelf().Any(element =>
+                element.Name.NamespaceName == namespaceName ||
+                element.Attributes().Any(attribute =>
+                    !attribute.IsNamespaceDeclaration &&
+                    attribute.Name.NamespaceName == namespaceName));
+
+        private static bool RemoveOfficeRevisionIgnorablePrefixes(
+            XElement root,
+            IReadOnlySet<string> revisionPrefixes)
+        {
+            if (revisionPrefixes.Count == 0)
+                return false;
+
+            XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+            var changed = false;
+            foreach (var attribute in root
+                         .DescendantsAndSelf()
+                         .Attributes(markupCompatNs + "Ignorable")
+                         .ToList())
+            {
+                var retainedPrefixes = attribute.Value
+                    .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                    .Where(prefix => !revisionPrefixes.Contains(prefix))
+                    .ToArray();
+                var retainedValue = string.Join(" ", retainedPrefixes);
+                if (string.Equals(attribute.Value, retainedValue, StringComparison.Ordinal))
+                    continue;
+
+                if (retainedPrefixes.Length == 0)
+                    attribute.Remove();
+                else
+                    attribute.Value = retainedValue;
+
+                changed = true;
+            }
+
+            return changed;
+        }
+
         private static bool AllowsCellPatchSaveForPackage(
             byte[] package,
             int offset,
@@ -1084,8 +1211,18 @@ public sealed partial class XlsxFileAdapter
             int count,
             Workbook workbook,
             out string? blockReason)
+            => AllowsCellPatchSaveForPackage(package, offset, count, workbook, out blockReason, out _);
+
+        private static bool AllowsCellPatchSaveForPackage(
+            byte[] package,
+            int offset,
+            int count,
+            Workbook workbook,
+            out string? blockReason,
+            out XlsxOfficeRevisionAttributeFacts? officeRevisionAttributes)
         {
             blockReason = null;
+            officeRevisionAttributes = null;
             if (WorkbookRequiresFullSavePostProcessing(workbook, out blockReason))
                 return false;
 
@@ -1093,7 +1230,11 @@ public sealed partial class XlsxFileAdapter
             {
                 using var packageStream = new MemoryStream(package, offset, count, writable: false);
                 using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read);
-                return PackageAllowsCellPatchSave(archive, workbook, out blockReason);
+                return PackageAllowsCellPatchSave(
+                    archive,
+                    workbook,
+                    out blockReason,
+                    out officeRevisionAttributes);
             }
             catch
             {
@@ -1244,8 +1385,16 @@ public sealed partial class XlsxFileAdapter
             ZipArchive archive,
             Workbook workbook,
             out string? blockReason)
+            => PackageAllowsCellPatchSave(archive, workbook, out blockReason, out _);
+
+        private static bool PackageAllowsCellPatchSave(
+            ZipArchive archive,
+            Workbook workbook,
+            out string? blockReason,
+            out XlsxOfficeRevisionAttributeFacts? officeRevisionAttributes)
         {
             blockReason = null;
+            officeRevisionAttributes = null;
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
@@ -1263,11 +1412,7 @@ public sealed partial class XlsxFileAdapter
                 return false;
             }
 
-            if (HasOfficeRevisionAttributes(workbookXml.Root))
-            {
-                blockReason = "package_guard_workbook_revisions";
-                return false;
-            }
+            var hasWorkbookOfficeRevisionAttributes = HasOfficeRevisionAttributes(workbookXml.Root);
 
             var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
             if (worksheetPathMap is null)
@@ -1292,6 +1437,7 @@ public sealed partial class XlsxFileAdapter
             var allowedDrawingPackagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var allowedChartPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var allowedPivotPackagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var officeRevisionWorksheetPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry))
             {
                 var worksheetPath = XlsxPackagePath.NormalizeZipPath(worksheetEntry.FullName.Replace('\\', '/'));
@@ -1377,10 +1523,7 @@ public sealed partial class XlsxFileAdapter
                 }
 
                 if (worksheetGuardInfo.HasOfficeRevisionAttributes)
-                {
-                    blockReason = "package_guard_worksheet_revisions";
-                    return false;
-                }
+                    officeRevisionWorksheetPaths.Add(worksheetPath);
 
                 if (worksheetGuardInfo.LegacyDrawingRelationshipIds.Count > 1 ||
                     (worksheetGuardInfo.LegacyDrawingRelationshipIds.Count == 1 &&
@@ -1418,6 +1561,9 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
+            officeRevisionAttributes = new XlsxOfficeRevisionAttributeFacts(
+                hasWorkbookOfficeRevisionAttributes,
+                officeRevisionWorksheetPaths);
             return true;
         }
 

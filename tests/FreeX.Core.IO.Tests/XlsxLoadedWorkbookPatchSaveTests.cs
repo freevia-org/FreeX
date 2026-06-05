@@ -1628,6 +1628,42 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             .Be("Google Sans");
     }
 
+    [Fact]
+    public void Save_LoadedWorkbookWithOfficeRevisionUidAttributes_PatchesSourcePackageAndDropsRevisionAttributes()
+    {
+        var sourceBytes = AddOfficeRevisionUidAttributes(CreateSourcePackage());
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched revision uid workbook"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("patched revision uid workbook");
+        PackageXmlHasOfficeRevisionAttributes(savedBytes, "xl/workbook.xml")
+            .Should()
+            .BeFalse();
+        PackageXmlHasOfficeRevisionAttributes(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .BeFalse();
+        Encoding.UTF8.GetString(ReadPackageEntry(savedBytes, "xl/workbook.xml"))
+            .Should()
+            .NotContain("/revision");
+        Encoding.UTF8.GetString(ReadPackageEntry(savedBytes, "xl/worksheets/sheet1.xml"))
+            .Should()
+            .NotContain("/revision");
+    }
+
     private static byte[] CreateSourcePackage()
     {
         using var stream = new MemoryStream();
@@ -1638,6 +1674,48 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
             sheet.Cell("B2").Value = 123.45;
             sheet.Cell("C3").Value = true;
             workbook.SaveAs(stream);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] AddOfficeRevisionUidAttributes(byte[] sourceBytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(sourceBytes, 0, sourceBytes.Length);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+            XNamespace revisionNs = "http://schemas.microsoft.com/office/spreadsheetml/2014/revision";
+            XNamespace revision2Ns = "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2";
+            XNamespace revision10Ns = "http://schemas.microsoft.com/office/spreadsheetml/2016/revision10";
+
+            var workbookXml = LoadPackageXml(archive, "xl/workbook.xml");
+            workbookXml.Root!.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
+            workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr2", revision2Ns.NamespaceName);
+            workbookXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr10", revision10Ns.NamespaceName);
+            workbookXml.Root.SetAttributeValue(
+                markupCompatNs + "Ignorable",
+                AppendIgnorablePrefix(workbookXml.Root.Attribute(markupCompatNs + "Ignorable")?.Value, "xr2", "xr10"));
+            workbookXml.Root.SetAttributeValue(revision10Ns + "uidLastSave", "{00000000-0000-0000-0000-000000000000}");
+            workbookXml.Root
+                .Element(workbookNs + "bookViews")!
+                .Element(workbookNs + "workbookView")!
+                .SetAttributeValue(revision2Ns + "uid", "{48973FB0-6DDF-407F-BFF1-05D2BBB0F9CF}");
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+            var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+            worksheetXml.Root!.SetAttributeValue(XNamespace.Xmlns + "mc", markupCompatNs.NamespaceName);
+            worksheetXml.Root.SetAttributeValue(XNamespace.Xmlns + "xr", revisionNs.NamespaceName);
+            worksheetXml.Root.SetAttributeValue(
+                markupCompatNs + "Ignorable",
+                AppendIgnorablePrefix(worksheetXml.Root.Attribute(markupCompatNs + "Ignorable")?.Value, "xr"));
+            worksheetXml
+                .Descendants(workbookNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A1")
+                .SetAttributeValue(revisionNs + "uid", "{EB1F693D-8528-450A-BC10-895DEFE5B6D9}");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
         return stream.ToArray();
@@ -2705,6 +2783,51 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         using var bytes = new MemoryStream();
         entryStream.CopyTo(bytes);
         return bytes.ToArray();
+    }
+
+    private static XDocument LoadPackageXml(ZipArchive archive, string path)
+    {
+        var entry = archive.GetEntry(path);
+        entry.Should().NotBeNull();
+        using var entryStream = entry!.Open();
+        return XDocument.Load(entryStream);
+    }
+
+    private static void ReplacePackageXml(ZipArchive archive, string path, XDocument document)
+    {
+        archive.GetEntry(path)?.Delete();
+        var replacement = archive.CreateEntry(path);
+        using var replacementStream = replacement.Open();
+        document.Save(replacementStream, System.Xml.Linq.SaveOptions.DisableFormatting);
+    }
+
+    private static string AppendIgnorablePrefix(string? currentValue, params string[] prefixes)
+    {
+        var values = (currentValue ?? string.Empty)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+        foreach (var prefix in prefixes)
+        {
+            if (!values.Contains(prefix, StringComparer.Ordinal))
+                values.Add(prefix);
+        }
+
+        return string.Join(" ", values);
+    }
+
+    private static bool PackageXmlHasOfficeRevisionAttributes(byte[] packageBytes, string path)
+    {
+        using var stream = new MemoryStream(ReadPackageEntry(packageBytes, path), writable: false);
+        var document = XDocument.Load(stream);
+        return document.Root!
+            .DescendantsAndSelf()
+            .SelectMany(element => element.Attributes())
+            .Any(attribute =>
+                !attribute.IsNamespaceDeclaration &&
+                attribute.Name.NamespaceName.StartsWith(
+                    "http://schemas.microsoft.com/office/spreadsheetml/",
+                    StringComparison.Ordinal) &&
+                attribute.Name.NamespaceName.Contains("/revision", StringComparison.Ordinal));
     }
 
     private static bool PackageHasEntry(byte[] packageBytes, string path)
