@@ -1003,6 +1003,45 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_UrlQueryParameterValue_UsesLastNonEmptyRepeatedParameterValueWhenExamplesAreDistinct()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/items?tag=alpha&tag=omega&tag=&sort=asc", "omega"),
+                ("https://fabrikam.example/items?tag=beta&sort=desc&tag=gamma&tag=+&view=1", "gamma")
+            ],
+            ["https://northwind.example/items?tag=&tag=delta&sort=x&tag=epsilon&tag=%20&view=1"]);
+
+        result.Should().BeEquivalentTo(["epsilon"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlQueryParameterValue_UsesLastRepeatedParameterValueAcrossSemicolonsAndDecoding()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/items?tag=alpha;tag=road+bike;sort=asc", "road bike"),
+                ("https://fabrikam.example/items?tag=beta;sort=desc;tag=gravel%20bike;view=1", "gravel bike")
+            ],
+            ["https://northwind.example/items?tag=delta;sort=x;tag=electric%3Bcargo+bike;view=1"]);
+
+        result.Should().BeEquivalentTo(["electric;cargo bike"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterValue_TakesPrecedenceWhenLastRepeatedParameterValueAlsoMatchesExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/items?tag=alpha&tag=omega", "omega"),
+                ("https://fabrikam.example/items?tag=beta&tag=gamma", "gamma")
+            ],
+            ["https://northwind.example/items?tag=delta&tag=epsilon&sort=x"]);
+
+        result.Should().BeEquivalentTo(["x"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_UrlQueryParameterValue_ReturnsNullWhenRemainingParameterIsMissing()
     {
         var result = FlashFillService.Fill(
