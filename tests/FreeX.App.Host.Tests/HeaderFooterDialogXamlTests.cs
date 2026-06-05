@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -404,14 +403,12 @@ public sealed class HeaderFooterDialogXamlTests
     }
 
     private static string ReadHeaderFooterDialogSource() =>
-        string.Join(Environment.NewLine, new[]
-        {
+        DialogSourceTestSupport.ReadHostSources(
             "HeaderFooterDialog.xaml.cs",
             "HeaderFooterDialog.TextHelpers.cs",
             "HeaderFooterDialog.Result.cs",
             "HeaderFooterDialog.Pictures.cs",
-            "HeaderFooterPictureFormatDialog.cs"
-        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", file))));
+            "HeaderFooterPictureFormatDialog.cs");
 
     private static void InvokePrivateAllowingNonModalDialogResult(HeaderFooterDialog dialog, string methodName)
     {

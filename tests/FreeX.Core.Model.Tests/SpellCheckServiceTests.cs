@@ -1734,6 +1734,55 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversTelecomNetworkVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "FIBERR opticl Modemm handof LATANCY signall switchh Routerr backhal BROADBAN bandwith roamingg Gatewayy cellularr Subscrber activaton Provisoning. Keep fiber, optical, modem, handoff, latency, signal, switch, router, backhaul, broadband, bandwidth, roaming, gateway, cellular, subscriber, activation, provisioning, prefiberr, fiberr_id, https://fiberr.example.com/routerr, noc@signall.example.com, \"C:\\backhal folder\\gatewayy file.xlsx\", and [C:\\roamingg folder\\provisoning file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "fiberr FIBERR Fiberr https://fiberr.example.com/fiberr noc@fiberr.example.com fiberr_id prefiberr \"C:\\fiberr folder\\fiberr file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "fiber");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("FIBERR", "FIBER"),
+            ("opticl", "optical"),
+            ("Modemm", "Modem"),
+            ("handof", "handoff"),
+            ("LATANCY", "LATENCY"),
+            ("signall", "signal"),
+            ("switchh", "switch"),
+            ("Routerr", "Router"),
+            ("backhal", "backhaul"),
+            ("BROADBAN", "BROADBAND"),
+            ("bandwith", "bandwidth"),
+            ("roamingg", "roaming"),
+            ("Gatewayy", "Gateway"),
+            ("cellularr", "cellular"),
+            ("Subscrber", "Subscriber"),
+            ("activaton", "activation"),
+            ("Provisoning", "Provisioning"));
+        plan.IssueCount.Should().Be(17);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "FIBER optical Modem handoff LATENCY signal switch Router backhaul BROADBAND bandwidth roaming Gateway cellular Subscriber activation Provisioning. Keep fiber, optical, modem, handoff, latency, signal, switch, router, backhaul, broadband, bandwidth, roaming, gateway, cellular, subscriber, activation, provisioning, prefiberr, fiberr_id, https://fiberr.example.com/routerr, noc@signall.example.com, \"C:\\backhal folder\\gatewayy file.xlsx\", and [C:\\roamingg folder\\provisoning file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(17);
+        replaceAllCorrected.Should().Be(
+            "fiber FIBER Fiber https://fiberr.example.com/fiberr noc@fiberr.example.com fiberr_id prefiberr \"C:\\fiberr folder\\fiberr file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversReliabilityMaintenanceVocabularyTypos()
     {
         var wb = new Workbook("test");

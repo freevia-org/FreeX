@@ -1327,6 +1327,30 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fiberr"))
+                {
+                    suggestion = "fiber";
+                    return true;
+                }
+
+                if (first == 'h' && EqualAsciiWordIgnoreCase(word, "handof"))
+                {
+                    suggestion = "handoff";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "modemm"))
+                {
+                    suggestion = "modem";
+                    return true;
+                }
+
+                if (first == 'o' && EqualAsciiWordIgnoreCase(word, "opticl"))
+                {
+                    suggestion = "optical";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "sumary"))
                 {
                     suggestion = "summary";
@@ -1833,6 +1857,36 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'b' && EqualAsciiWordIgnoreCase(word, "backhal"))
+                {
+                    suggestion = "backhaul";
+                    return true;
+                }
+
+                if (first == 'l' && EqualAsciiWordIgnoreCase(word, "latancy"))
+                {
+                    suggestion = "latency";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "routerr"))
+                {
+                    suggestion = "router";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "signall"))
+                {
+                    suggestion = "signal";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "switchh"))
+                {
+                    suggestion = "switch";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "shpping"))
                 {
                     suggestion = "shipping";
@@ -2222,6 +2276,18 @@ public static partial class SpellCheckService
                 if (first == 'b' && EqualAsciiWordIgnoreCase(word, "backordr"))
                 {
                     suggestion = "backorder";
+                    return true;
+                }
+
+                if (first == 'b' && EqualAsciiWordIgnoreCase(word, "bandwith"))
+                {
+                    suggestion = "bandwidth";
+                    return true;
+                }
+
+                if (first == 'b' && EqualAsciiWordIgnoreCase(word, "broadban"))
+                {
+                    suggestion = "broadband";
                     return true;
                 }
 
@@ -2771,6 +2837,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "gatewayy"))
+                {
+                    suggestion = "gateway";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "roamingg"))
+                {
+                    suggestion = "roaming";
+                    return true;
+                }
+
                 if (first == 'w' && EqualAsciiWordIgnoreCase(word, "walkthru"))
                 {
                     suggestion = "walkthrough";
@@ -2863,6 +2941,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "activaton"))
+                {
+                    suggestion = "activation";
+                    return true;
+                }
+
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "credental"))
                 {
                     suggestion = "credential";
@@ -2878,6 +2962,12 @@ public static partial class SpellCheckService
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "contracor"))
                 {
                     suggestion = "contractor";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "cellularr"))
+                {
+                    suggestion = "cellular";
                     return true;
                 }
 
@@ -3220,6 +3310,12 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "sucessful"))
                 {
                     suggestion = "successful";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "subscrber"))
+                {
+                    suggestion = "subscriber";
                     return true;
                 }
 
@@ -3860,6 +3956,12 @@ public static partial class SpellCheckService
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "percentatge"))
                 {
                     suggestion = "percentage";
+                    return true;
+                }
+
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "provisoning"))
+                {
+                    suggestion = "provisioning";
                     return true;
                 }
 
