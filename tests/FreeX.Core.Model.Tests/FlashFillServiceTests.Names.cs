@@ -421,6 +421,37 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameTitles_RemovesExpandedHonorifics()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Mx. Ada Lovelace", "Ada Lovelace"),
+                ("Reverend Grace Brewster Hopper", "Grace Brewster Hopper")
+            ],
+            [
+                "Honorable Katherine Coleman Johnson",
+                "Rev. Alan Mathison Turing",
+                "Fr. Emmy Noether",
+                "Father Claude Shannon",
+                "Rabbi Chaim Weizmann",
+                "Imam Fatima al-Fihri",
+                "Hon Mary Somerville"
+            ]);
+
+        result.Should().BeEquivalentTo(
+            [
+                "Katherine Coleman Johnson",
+                "Alan Mathison Turing",
+                "Emmy Noether",
+                "Claude Shannon",
+                "Chaim Weizmann",
+                "Fatima al-Fihri",
+                "Mary Somerville"
+            ],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameTitles_RemovesTitleFromSingleTokenNames()
     {
         var result = FlashFillService.Fill(
@@ -440,6 +471,19 @@ public sealed partial class FlashFillServiceTests
             [
                 ("Dr. Ada Lovelace", "Ada Lovelace"),
                 ("Prof Grace Hopper", "Grace Hopper")
+            ],
+            ["Katherine Johnson"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_KnownNameTitles_ReturnsNullForUntitledRemainingNamesAfterExpandedHonorifics()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Mx. Ada Lovelace", "Ada Lovelace"),
+                ("Rev Grace Hopper", "Grace Hopper")
             ],
             ["Katherine Johnson"]);
 
@@ -470,6 +514,29 @@ public sealed partial class FlashFillServiceTests
             ["Ms. Katherine Coleman Johnson III, CPA."]);
 
         result.Should().BeEquivalentTo(["Katherine Coleman Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownNameTitlesAndSuffixes_RemovesExpandedTitlesAndCredentials()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Hon. Ada Lovelace J.D., MPH", "Ada Lovelace"),
+                ("Reverend Grace Brewster Hopper D.O., R.N.", "Grace Brewster Hopper")
+            ],
+            [
+                "Imam Katherine Coleman Johnson P.E., M.P.H.",
+                "Fr. Alan Mathison Turing JD, RN",
+                "Rabbi Barbara Liskov DO, PE"
+            ]);
+
+        result.Should().BeEquivalentTo(
+            [
+                "Katherine Coleman Johnson",
+                "Alan Mathison Turing",
+                "Barbara Liskov"
+            ],
+            o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -577,6 +644,39 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameSuffixes_RemovesLegalClinicalEngineeringCredentials()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace, JD", "Ada Lovelace"),
+                ("Grace Brewster Hopper J.D.", "Grace Brewster Hopper")
+            ],
+            [
+                "Katherine Coleman Johnson DO",
+                "Alan Mathison Turing D.O.",
+                "Barbara Liskov RN",
+                "Mary Golda Ross R.N.",
+                "Hedy Lamarr PE",
+                "Dorothy Vaughan P.E.",
+                "Maryam Mirzakhani MPH",
+                "Rosalind Franklin M.P.H."
+            ]);
+
+        result.Should().BeEquivalentTo(
+            [
+                "Katherine Coleman Johnson",
+                "Alan Mathison Turing",
+                "Barbara Liskov",
+                "Mary Golda Ross",
+                "Hedy Lamarr",
+                "Dorothy Vaughan",
+                "Maryam Mirzakhani",
+                "Rosalind Franklin"
+            ],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameSuffixes_RemovesOnlyFinalSuffixForSuffixOnlyPatterns()
     {
         var result = FlashFillService.Fill(
@@ -655,6 +755,53 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesExpandedInternationalLegalSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Pte", "Northwind"),
+                ("Adventure Works SARL", "Adventure Works")
+            ],
+            [
+                "Contoso Pvt",
+                "Fabrikam KK",
+                "Litware K.K.",
+                "Tailspin SAS",
+                "Wingtip SRL",
+                "Blue Yonder S.R.L.",
+                "Coho SpA",
+                "A Datum S.p.A.",
+                "Fourth Coffee AB",
+                "Graphic Design Oy",
+                "Proseware A/S",
+                "Alpine Ski House ApS",
+                "Lucerne Trading Kft",
+                "Wide World Importers Sro",
+                "City Power S.R.O."
+            ]);
+
+        result.Should().BeEquivalentTo(
+            [
+                "Contoso",
+                "Fabrikam",
+                "Litware",
+                "Tailspin",
+                "Wingtip",
+                "Blue Yonder",
+                "Coho",
+                "A Datum",
+                "Fourth Coffee",
+                "Graphic Design",
+                "Proseware",
+                "Alpine Ski House",
+                "Lucerne Trading",
+                "Wide World Importers",
+                "City Power"
+            ],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownOrganizationSuffixes_RemovesStackedLegalSuffixes()
     {
         var result = FlashFillService.Fill(
@@ -665,6 +812,33 @@ public sealed partial class FlashFillServiceTests
             ["Contoso Analytics Ltd PLC"]);
 
         result.Should().BeEquivalentTo(["Contoso Analytics"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesExpandedStackedLegalSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders Pte Ltd", "Northwind Traders"),
+                ("Adventure Works K.K. LLC", "Adventure Works")
+            ],
+            [
+                "Contoso Analytics SAS SRL",
+                "Fabrikam Labs S.p.A. S.R.L.",
+                "Tailspin Oy AB",
+                "Proseware A/S ApS",
+                "Lucerne Kft GmbH"
+            ]);
+
+        result.Should().BeEquivalentTo(
+            [
+                "Contoso Analytics",
+                "Fabrikam Labs",
+                "Tailspin",
+                "Proseware",
+                "Lucerne"
+            ],
+            o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -702,6 +876,19 @@ public sealed partial class FlashFillServiceTests
                 ("Adventure Works Inc.", "Adventure Works")
             ],
             ["Contoso Retail"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_KnownOrganizationSuffixes_ReturnsNullForUnsuffixedRemainingNamesAfterExpandedLegalSuffixExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders Pte", "Northwind Traders"),
+                ("Adventure Works S.p.A.", "Adventure Works")
+            ],
+            ["Contoso Analytics"]);
 
         result.Should().BeNull();
     }
