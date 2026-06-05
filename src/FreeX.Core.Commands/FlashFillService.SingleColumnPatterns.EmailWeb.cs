@@ -1094,13 +1094,17 @@ public static partial class FlashFillService
         if (!TryGetDecodedQueryParameters(source, out var parameters))
             return false;
 
+        var firstTitle = string.Empty;
         foreach (var name in parameters.Select(p => p.Name).Distinct(StringComparer.Ordinal))
         {
-            if (!TryFormatSlugStemAsTitle(name, out var title) ||
-                title != expected)
-            {
+            if (!TryFormatSlugStemAsTitle(name, out var title))
                 continue;
-            }
+
+            if (firstTitle.Length == 0)
+                firstTitle = title;
+
+            if (title != expected)
+                continue;
 
             if (parameterName.Length > 0)
             {
@@ -1109,6 +1113,12 @@ public static partial class FlashFillService
             }
 
             parameterName = name;
+        }
+
+        if (firstTitle != expected)
+        {
+            parameterName = string.Empty;
+            return false;
         }
 
         return parameterName.Length > 0;

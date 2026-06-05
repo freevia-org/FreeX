@@ -1120,6 +1120,19 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_UrlQueryParameterNameTitle_ReturnsNullWhenMatchingNameIsNotFirstTitleizableName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.example.com/search?sort-order=popular&product-category=powder-skis", "Product Category"),
+                ("https://shop.example.com/search?delivery-method=ground&shipping_option=air", "Shipping Option")
+            ],
+            ["https://shop.example.com/search?promoCode=spring&sort=popular"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_UrlQueryParameterNameTitle_LeavesRawQueryNameExtractionPrecedence()
     {
         var result = FlashFillService.Fill(
