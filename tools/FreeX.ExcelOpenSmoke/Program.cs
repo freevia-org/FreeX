@@ -467,6 +467,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetPageBreakMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSingleXmlCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSmartTagMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -683,6 +684,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetPageBreakMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSingleXmlCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSmartTagMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -4689,6 +4691,324 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet printOptions metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetPageBreakMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetPageBreakMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetPageBreakMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetPageBreakMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var rowBreaksElements = root.Elements(SpreadsheetNs + "rowBreaks").ToArray();
+        if (rowBreaksElements.Length > 1)
+            issues.Add($"{worksheetPart} has {rowBreaksElements.Length} rowBreaks elements; expected at most one");
+
+        foreach (var rowBreaks in rowBreaksElements.Select((element, index) => new WorksheetPageBreaksReference(
+                     index + 1,
+                     element,
+                     "rowBreaks",
+                     (int)CellAddress.MaxRow,
+                     (int)CellAddress.MaxCol - 1)))
+        {
+            AddWorksheetPageBreaksIssues(worksheetPart, root, rowBreaks, issues);
+        }
+
+        var columnBreaksElements = root.Elements(SpreadsheetNs + "colBreaks").ToArray();
+        if (columnBreaksElements.Length > 1)
+            issues.Add($"{worksheetPart} has {columnBreaksElements.Length} colBreaks elements; expected at most one");
+
+        foreach (var columnBreaks in columnBreaksElements.Select((element, index) => new WorksheetPageBreaksReference(
+                     index + 1,
+                     element,
+                     "colBreaks",
+                     (int)CellAddress.MaxCol,
+                     (int)CellAddress.MaxRow - 1)))
+        {
+            AddWorksheetPageBreaksIssues(worksheetPart, root, columnBreaks, issues);
+        }
+    }
+
+    private static void AddWorksheetPageBreaksIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetPageBreaksReference pageBreaksReference,
+        List<string> issues)
+    {
+        var pageBreaks = pageBreaksReference.Element;
+        var description = $"{pageBreaksReference.ElementName} #{pageBreaksReference.Ordinal}";
+        string[] laterElements = string.Equals(pageBreaksReference.ElementName, "rowBreaks", StringComparison.Ordinal)
+            ? [
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ]
+            : [
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ];
+
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            pageBreaks,
+            description,
+            laterElements,
+            issues);
+
+        string[] earlierElements = string.Equals(pageBreaksReference.ElementName, "colBreaks", StringComparison.Ordinal)
+            ? [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks"
+            ]
+            : [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter"
+            ];
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            pageBreaks,
+            description,
+            earlierElements,
+            issues);
+
+        var breakElements = pageBreaks.Elements(SpreadsheetNs + "brk").ToArray();
+        AddOptionalPackageCountIssue(worksheetPart, description, "count", pageBreaks.Attribute("count")?.Value, breakElements.Length, issues);
+        AddOptionalWorksheetPageBreakManualCountIssue(worksheetPart, description, pageBreaks.Attribute("manualBreakCount")?.Value, breakElements.Length, issues);
+
+        foreach (var unexpectedChild in pageBreaks.Elements().Where(element => element.Name != SpreadsheetNs + "brk"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var seenBreakIds = new HashSet<int>();
+        foreach (var breakElement in breakElements.Select((element, index) => new WorksheetPageBreakReference(index + 1, element)))
+        {
+            AddWorksheetPageBreakIssues(
+                worksheetPart,
+                description,
+                breakElement,
+                pageBreaksReference.MaxBreakId,
+                pageBreaksReference.MaxBreakSpan,
+                seenBreakIds,
+                issues);
+        }
+    }
+
+    private static void AddOptionalWorksheetPageBreakManualCountIssue(
+        string worksheetPart,
+        string description,
+        string? value,
+        int breakCount,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!TryParseNonNegativePackageInt(value, out var manualBreakCount))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid manualBreakCount value '{value}'");
+            return;
+        }
+
+        if (manualBreakCount > breakCount)
+            issues.Add($"{worksheetPart} {description} manualBreakCount is {manualBreakCount}, but contains {breakCount} brk entries");
+    }
+
+    private static void AddWorksheetPageBreakIssues(
+        string worksheetPart,
+        string pageBreaksDescription,
+        WorksheetPageBreakReference pageBreakReference,
+        int maxBreakId,
+        int maxBreakSpan,
+        HashSet<int> seenBreakIds,
+        List<string> issues)
+    {
+        var breakElement = pageBreakReference.Element;
+        var description = $"{pageBreaksDescription} brk #{pageBreakReference.Ordinal}";
+        if (AddRequiredWorksheetPageBreakIntIssue(worksheetPart, description, "id", breakElement.Attribute("id")?.Value, 2, maxBreakId, issues, out var id) &&
+            !seenBreakIds.Add(id))
+        {
+            issues.Add($"{worksheetPart} {pageBreaksDescription} has duplicate brk id {id}");
+        }
+
+        AddOptionalWorksheetPageBreakIntIssue(worksheetPart, description, "min", breakElement.Attribute("min")?.Value, 0, maxBreakSpan, issues, out var min);
+        AddOptionalWorksheetPageBreakIntIssue(worksheetPart, description, "max", breakElement.Attribute("max")?.Value, 0, maxBreakSpan, issues, out var max);
+        if (min is not null && max is not null && min > max)
+            issues.Add($"{worksheetPart} {description} min value {min} is greater than max value {max}");
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "man", breakElement.Attribute("man")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "pt", breakElement.Attribute("pt")?.Value, issues);
+
+        if (breakElement.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool AddRequiredWorksheetPageBreakIntIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        int minValue,
+        int maxValue,
+        List<string> issues,
+        out int parsedValue)
+    {
+        parsedValue = -1;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            issues.Add($"{worksheetPart} {description} has no {attributeName} attribute");
+            return false;
+        }
+
+        return AddWorksheetPageBreakIntIssue(worksheetPart, description, attributeName, value, minValue, maxValue, issues, out parsedValue);
+    }
+
+    private static void AddOptionalWorksheetPageBreakIntIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        int minValue,
+        int maxValue,
+        List<string> issues,
+        out int? parsedValue)
+    {
+        parsedValue = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (AddWorksheetPageBreakIntIssue(worksheetPart, description, attributeName, value, minValue, maxValue, issues, out var parsed))
+            parsedValue = parsed;
+    }
+
+    private static bool AddWorksheetPageBreakIntIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string value,
+        int minValue,
+        int maxValue,
+        List<string> issues,
+        out int parsedValue)
+    {
+        parsedValue = -1;
+        if (!TryParseNonNegativePackageInt(value, out parsedValue))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+            return false;
+        }
+
+        if (parsedValue < minValue || parsedValue > maxValue)
+        {
+            issues.Add($"{worksheetPart} {description} {attributeName} value {parsedValue} is outside {minValue}-{maxValue}");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static void ThrowInvalidWorksheetPageBreakMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet page-break metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetDiagnosticMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -11494,6 +11814,17 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetPrintOptionsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetPageBreaksReference(
+        int Ordinal,
+        XElement Element,
+        string ElementName,
+        int MaxBreakId,
+        int MaxBreakSpan);
+
+    private sealed record WorksheetPageBreakReference(
         int Ordinal,
         XElement Element);
 

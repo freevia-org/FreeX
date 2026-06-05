@@ -1380,23 +1380,34 @@ public static partial class FormulaAuditingService
 
     private static bool TryParseFiniteNumberText(string text)
     {
-        if (TryParseFiniteNumberTextCore(text))
+        if (TryParseFiniteNumberTextVariant(text))
             return true;
-
-        if (TryNormalizeSupportedNumberText(text, out var normalizedText) &&
-            TryParseFiniteNumberTextCore(normalizedText))
-        {
-            return true;
-        }
 
         if (!TryNormalizeTrailingSignNumberText(text, out var trailingSignText))
             return false;
 
-        if (TryParseFiniteNumberTextCore(trailingSignText))
+        return TryParseFiniteNumberTextVariant(trailingSignText);
+    }
+
+    private static bool TryParseFiniteNumberTextVariant(string text)
+    {
+        if (TryParseFiniteNumberTextCore(text))
             return true;
 
-        return TryNormalizeSupportedNumberText(trailingSignText, out normalizedText) &&
-               TryParseFiniteNumberTextCore(normalizedText);
+        if (TryNormalizeSupportedNumberText(text, out var normalizedText))
+        {
+            if (TryParseFiniteNumberTextCore(normalizedText))
+                return true;
+
+            if (TryNormalizeAsciiSpaceThousandsSeparators(normalizedText, out var normalizedSpaceText) &&
+                TryParseFiniteNumberTextCore(normalizedSpaceText))
+            {
+                return true;
+            }
+        }
+
+        return TryNormalizeAsciiSpaceThousandsSeparators(text, out var asciiSpaceText) &&
+               TryParseFiniteNumberTextCore(asciiSpaceText);
     }
 
     private static bool TryNormalizeTrailingSignNumberText(string text, out string normalizedText)
@@ -1468,6 +1479,78 @@ public static partial class FormulaAuditingService
 
         normalizedText = new string(normalizedChars, 0, writeIndex);
         return normalizedText.Length > 1;
+    }
+
+    private static bool TryNormalizeAsciiSpaceThousandsSeparators(string text, out string normalizedText)
+    {
+        normalizedText = string.Empty;
+        if (text.IndexOf(' ') < 0)
+            return false;
+
+        var numberStart = text.Length > 0 && (text[0] == '+' || text[0] == '-')
+            ? 1
+            : 0;
+        if (numberStart >= text.Length)
+            return false;
+
+        var integerEnd = numberStart;
+        while (integerEnd < text.Length && text[integerEnd] != '.' && text[integerEnd] != 'E' && text[integerEnd] != 'e')
+            integerEnd++;
+
+        if (!TryValidateAsciiSpaceGroupedInteger(text, numberStart, integerEnd))
+            return false;
+
+        var normalizedChars = text.ToCharArray();
+        for (var index = numberStart; index < integerEnd; index++)
+        {
+            if (normalizedChars[index] == ' ')
+                normalizedChars[index] = ',';
+        }
+
+        normalizedText = new string(normalizedChars);
+        return true;
+    }
+
+    private static bool TryValidateAsciiSpaceGroupedInteger(string text, int start, int end)
+    {
+        var hasAsciiSpaceSeparator = false;
+        var groupStart = start;
+        var groupIndex = 0;
+
+        for (var index = start; index <= end; index++)
+        {
+            if (index < end && text[index] != ' ' && text[index] != ',')
+                continue;
+
+            var groupLength = index - groupStart;
+            if (groupLength == 0)
+                return false;
+
+            if (groupIndex == 0)
+            {
+                if (groupLength > 3)
+                    return false;
+            }
+            else if (groupLength != 3)
+            {
+                return false;
+            }
+
+            for (var digitIndex = groupStart; digitIndex < index; digitIndex++)
+            {
+                if (text[digitIndex] is < '0' or > '9')
+                    return false;
+            }
+
+            if (index < end)
+            {
+                hasAsciiSpaceSeparator |= text[index] == ' ';
+                groupStart = index + 1;
+                groupIndex++;
+            }
+        }
+
+        return hasAsciiSpaceSeparator && groupIndex > 0;
     }
 
     private static char NormalizeSupportedNumberCharacter(char value)
