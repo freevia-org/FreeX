@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -28,7 +27,7 @@ public sealed class DialogFocusTests
     [Fact]
     public void FocusAndSelect_PreservesKeyboardFocusCall()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DialogFocus.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("DialogFocus.cs");
 
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
