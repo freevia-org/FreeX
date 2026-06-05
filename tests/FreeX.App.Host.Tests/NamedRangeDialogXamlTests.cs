@@ -405,7 +405,7 @@ public sealed class NamedRangeDialogXamlTests
             dialog.Show();
             try
             {
-                var picker = GetPrivateField<Button>(dialog, "_rangePickerButton");
+                var picker = DialogSourceTestSupport.GetPrivateField<Button>(dialog, "_rangePickerButton");
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
                 requests.Should().Equal(new NamedRangeSelectionRequest(
@@ -431,7 +431,7 @@ public sealed class NamedRangeDialogXamlTests
                 ["Workbook"]);
             try
             {
-                var picker = GetPrivateField<Button>(dialog, "_rangePickerButton");
+                var picker = DialogSourceTestSupport.GetPrivateField<Button>(dialog, "_rangePickerButton");
 
                 System.Windows.Automation.AutomationProperties.GetName(picker)
                     .Should()
@@ -478,8 +478,8 @@ public sealed class NamedRangeDialogXamlTests
 
                 GetControl<TextBox>(manager, "RefersToBox").Text.Should().Be("Sheet2!B2:D8");
                 GetControl<TextBox>(manager, "RefersToBox").SelectionLength.Should().Be("Sheet2!B2:D8".Length);
-                GetPrivateField<TextBox>(definition, "_refersToBox").Text.Should().Be("Sheet3!C4:E9");
-                GetPrivateField<TextBox>(definition, "_refersToBox").SelectionLength.Should().Be("Sheet3!C4:E9".Length);
+                DialogSourceTestSupport.GetPrivateField<TextBox>(definition, "_refersToBox").Text.Should().Be("Sheet3!C4:E9");
+                DialogSourceTestSupport.GetPrivateField<TextBox>(definition, "_refersToBox").SelectionLength.Should().Be("Sheet3!C4:E9".Length);
             }
             finally
             {
@@ -520,10 +520,6 @@ public sealed class NamedRangeDialogXamlTests
             "NamedRangeDialog.xaml.cs",
             "NameDefinitionDialog.cs",
             "NamedRangeDialogPlanner.cs");
-
-    private static T GetPrivateField<T>(object instance, string name)
-        where T : class
-        => DialogSourceTestSupport.GetPrivateField<T>(instance, name);
 
     private static void InvokePrivate(NamedRangeDialog dialog, string methodName)
     {
