@@ -101,8 +101,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     slicerTimelineMetadata = XlsxSlicerTimelineMetadataReader.Load(packageArchive);
                 if (packageParts.HasExternalLinks)
                     externalLinkMetadata = XlsxExternalLinkMetadataReader.Load(packageArchive);
-                if (packageParts.HasStructuredTables)
-                    structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageArchive);
             }
             catch (InvalidDataException)
             {
@@ -124,13 +122,29 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         Dictionary<string, SheetXmlLayout> sheetXmlLayout = [];
         var sheetXmlLayoutHadWarnings = false;
+        var loadedStructuredTableMetadataFromSheetLayout = false;
         IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip = null;
         var sanitizationHints = default(XlsxClosedXmlLoadSanitizationHints);
         var sheetXmlLayoutDiagnostics = MeasureLoadPhase(() =>
         {
             var sheetXmlLayoutWarningCount = warnings.Count;
-            sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);
+            sheetXmlLayout = LoadSheetXmlLayout(
+                packageStream,
+                stylesXml,
+                workbookTheme,
+                indexedColors,
+                packageParts.HasStructuredTables,
+                out var sheetLayoutStructuredTableMetadata,
+                warnings);
             sheetXmlLayoutHadWarnings = warnings.Count != sheetXmlLayoutWarningCount;
+            if (packageParts.HasStructuredTables &&
+                !sheetXmlLayoutHadWarnings &&
+                sheetXmlLayout.Count > 0)
+            {
+                structuredTableMetadata = sheetLayoutStructuredTableMetadata;
+                loadedStructuredTableMetadataFromSheetLayout = true;
+            }
+
             styleOnlyWorksheetPathsToStrip = GetClosedXmlStyleOnlyWorksheetPathsToStrip(
                 sheetXmlLayout,
                 sheetXmlLayoutHadWarnings);
@@ -139,6 +153,24 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheetXmlLayout,
                 sheetXmlLayoutHadWarnings);
         });
+        if (packageParts.HasStructuredTables && !loadedStructuredTableMetadataFromSheetLayout)
+        {
+            packageStream.Position = 0;
+            packageMetadataDiagnostics = AddLoadPhaseDiagnostics(
+                packageMetadataDiagnostics,
+                MeasureLoadPhase(() =>
+                {
+                    try
+                    {
+                        using var packageArchive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
+                        structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageArchive);
+                    }
+                    catch (InvalidDataException)
+                    {
+                        // Not a valid zip archive; let the ClosedXML loader produce the format error.
+                    }
+                }));
+        }
         packageStream.Position = 0;
         var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(
             packageStream,

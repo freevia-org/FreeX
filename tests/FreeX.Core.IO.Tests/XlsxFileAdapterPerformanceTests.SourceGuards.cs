@@ -141,7 +141,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("XlsxIndexedColorPaletteMapper.Load(stylesXml)");
         adapterSource.Should().Contain("XlsxPivotTableStyleMetadataReader.Load(stylesXml)");
         adapterSource.Should().Contain("XlsxStructuredTableStyleMetadataReader.Load(stylesXml)");
-        adapterSource.Should().Contain("LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings)");
+        adapterSource.Should().Contain("sheetXmlLayout = LoadSheetXmlLayout(");
+        adapterSource.Should().Contain("packageParts.HasStructuredTables,");
         adapterSource.Should().NotContain("XlsxStylesheetReader.Load(packageStream)");
         adapterSource.Should().NotContain("LoadNumberFormatCatalog(packageStream)");
         adapterSource.Should().NotContain("XlsxIndexedColorPaletteMapper.Load(packageStream)");
@@ -154,6 +155,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     public void LoadCore_UsesPackagePartSummaryToSkipOptionalMetadataReaders()
     {
         var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var layoutSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+        var structuredTableSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableMetadataReader.cs"))
+            .ReplaceLineEndings("\n");
 
         adapterSource.Should().Contain("packageParts = XlsxLoadPackageParts.Inspect(packageArchive);");
         adapterSource.Should().Contain("if (packageParts.HasPivotPackageParts)");
@@ -162,11 +166,21 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("InspectChartExChartParts(archive)");
         adapterSource.Should().Contain("if (packageParts.HasSlicerTimelinePackageParts)");
         adapterSource.Should().Contain("if (packageParts.HasExternalLinks)");
-        adapterSource.Should().Contain("if (packageParts.HasStructuredTables)");
+        adapterSource.Should().Contain("if (packageParts.HasStructuredTables &&");
         adapterSource.Should().Contain("XlsxPivotTableReader.Load(packageArchive, numberFormatCatalog)");
         adapterSource.Should().Contain("XlsxSlicerTimelineMetadataReader.Load(packageArchive)");
         adapterSource.Should().Contain("XlsxExternalLinkMetadataReader.Load(packageArchive)");
-        adapterSource.Should().Contain("XlsxStructuredTableMetadataReader.Load(packageArchive)");
+        adapterSource.Should().Contain("XlsxStructuredTableMetadataReader.Load(");
+        adapterSource.Should().Contain("packageArchive,");
+        adapterSource.Should().Contain("loadedStructuredTableMetadataFromSheetLayout");
+        adapterSource.Should().Contain("!loadedStructuredTableMetadataFromSheetLayout");
+        layoutSource.Should().Contain("ReadTableRelationshipIds(worksheetXml, worksheetNs, relNs)");
+        layoutSource.Should().Contain("TableRelationshipIds");
+        layoutSource.Should().Contain("XlsxStructuredTableMetadataReader.Load(");
+        structuredTableSource.Should().Contain("IReadOnlyDictionary<string, IReadOnlyList<string>>? tableRelationshipIdsBySheetName");
+        structuredTableSource.Should().Contain("return Load(archive);");
+        structuredTableSource.Should().Contain("catch\n        {\n            return StructuredTablePackageMetadata.Empty;\n        }");
+        structuredTableSource.Should().Contain("catch\n        {\n            return Load(archive);\n        }");
         adapterSource.Should().NotContain("XlsxPivotTableReader.Load(packageStream, numberFormatCatalog)");
         adapterSource.Should().NotContain("XlsxSlicerTimelineMetadataReader.Load(packageStream)");
         adapterSource.Should().NotContain("XlsxExternalLinkMetadataReader.Load(packageStream)");

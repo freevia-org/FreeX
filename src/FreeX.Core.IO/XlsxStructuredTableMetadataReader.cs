@@ -56,6 +56,33 @@ internal static class XlsxStructuredTableMetadataReader
         }
     }
 
+    internal static StructuredTablePackageMetadata Load(
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string>? worksheetPathsBySheetName,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? tableRelationshipIdsBySheetName)
+    {
+        if (worksheetPathsBySheetName is null ||
+            tableRelationshipIdsBySheetName is null)
+        {
+            return Load(archive);
+        }
+
+        try
+        {
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var tablesBySheetName = LoadTablesBySheetName(
+                archive,
+                worksheetPathsBySheetName,
+                tableRelationshipIdsBySheetName,
+                packageRelNs);
+            return new StructuredTablePackageMetadata(tablesBySheetName);
+        }
+        catch
+        {
+            return Load(archive);
+        }
+    }
+
     private static Dictionary<string, List<PendingStructuredTableModel>> LoadTablesBySheetName(
         ZipArchive archive,
         IReadOnlyDictionary<string, string> sheetsByPath,
@@ -77,6 +104,48 @@ internal static class XlsxStructuredTableMetadataReader
                 relNs.NamespaceName);
             if (tableRelIds.Count == 0)
                 continue;
+
+            var worksheetRels = LoadRelationshipTargets(archive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
+            foreach (var tableRelId in tableRelIds)
+            {
+                if (!worksheetRels.TryGetValue(tableRelId, out var tablePath))
+                    continue;
+
+                var tableEntry = archive.GetEntry(tablePath);
+                if (tableEntry is null)
+                    continue;
+
+                var tableXml = LoadXml(tableEntry);
+                if (TryReadTable(tableXml, tablePath, out var table))
+                {
+                    if (!result.TryGetValue(sheetName, out var sheetTables))
+                    {
+                        sheetTables = [];
+                        result[sheetName] = sheetTables;
+                    }
+
+                    sheetTables.Add(table);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, List<PendingStructuredTableModel>> LoadTablesBySheetName(
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> worksheetPathsBySheetName,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> tableRelationshipIdsBySheetName,
+        XNamespace packageRelNs)
+    {
+        var result = new Dictionary<string, List<PendingStructuredTableModel>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (sheetName, worksheetPath) in worksheetPathsBySheetName)
+        {
+            if (!tableRelationshipIdsBySheetName.TryGetValue(sheetName, out var tableRelIds) ||
+                tableRelIds.Count == 0)
+            {
+                continue;
+            }
 
             var worksheetRels = LoadRelationshipTargets(archive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
             foreach (var tableRelId in tableRelIds)

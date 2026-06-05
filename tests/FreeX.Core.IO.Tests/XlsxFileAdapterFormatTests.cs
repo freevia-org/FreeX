@@ -176,7 +176,8 @@ public sealed class XlsxFileAdapterFormatTests
         sanitizerSource.Should().Contain("RemoveWorksheetDrawingReferences(archive)");
         sanitizerSource.Should().Contain("RemoveWorksheetDrawingRelationships(archive, removedParts)");
         adapterSource.Should().Contain("var sheetXmlLayoutWarningCount = warnings.Count;");
-        adapterSource.Should().Contain("sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);");
+        adapterSource.Should().Contain("sheetXmlLayout = LoadSheetXmlLayout(");
+        adapterSource.Should().Contain("packageParts.HasStructuredTables,");
         adapterSource.Should().Contain("warnings.Count != sheetXmlLayoutWarningCount");
         adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(");
         adapterSource.Should().Contain("styleOnlyWorksheetPathsToStrip");

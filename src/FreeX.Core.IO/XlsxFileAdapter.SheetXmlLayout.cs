@@ -96,6 +96,7 @@ public sealed partial class XlsxFileAdapter
         bool HasClosedXmlUnsupportedConditionalFormatting,
         bool HasUnsupportedConditionalFormatting,
         bool HasWorksheetDynamicFilters,
+        IReadOnlyList<string> TableRelationshipIds,
         string? CodeName);
 
     private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(
@@ -103,9 +104,12 @@ public sealed partial class XlsxFileAdapter
         XDocument? stylesXml,
         WorkbookTheme workbookTheme,
         WorkbookIndexedColorPalette indexedColors,
+        bool loadStructuredTableMetadata,
+        out StructuredTablePackageMetadata structuredTableMetadata,
         List<string>? warnings = null)
     {
         var result = new Dictionary<string, SheetXmlLayout>(StringComparer.OrdinalIgnoreCase);
+        structuredTableMetadata = StructuredTablePackageMetadata.Empty;
 
         try
         {
@@ -128,6 +132,12 @@ public sealed partial class XlsxFileAdapter
                 XlsxPackagePath.NormalizeWorkbookTarget);
 
             var differentialStyles = XlsxDifferentialStyleReader.ReadAll(stylesXml, workbookNs);
+            Dictionary<string, string>? worksheetPathsBySheetName = loadStructuredTableMetadata
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : null;
+            Dictionary<string, IReadOnlyList<string>>? tableRelationshipIdsBySheetName = loadStructuredTableMetadata
+                ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                : null;
 
             foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
             {
@@ -142,7 +152,22 @@ public sealed partial class XlsxFileAdapter
                 if (worksheetEntry is null)
                     continue;
 
-                result[name] = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, differentialStyles, workbookTheme, indexedColors);
+                var layout = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, differentialStyles, workbookTheme, indexedColors);
+                result[name] = layout;
+                if (loadStructuredTableMetadata)
+                {
+                    worksheetPathsBySheetName![name] = worksheetPath;
+                    if (layout.TableRelationshipIds.Count > 0)
+                        tableRelationshipIdsBySheetName![name] = layout.TableRelationshipIds;
+                }
+            }
+
+            if (loadStructuredTableMetadata)
+            {
+                structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(
+                    archive,
+                    worksheetPathsBySheetName,
+                    tableRelationshipIdsBySheetName);
             }
         }
         catch (Exception ex)
@@ -253,6 +278,7 @@ public sealed partial class XlsxFileAdapter
         var rowBreaks = worksheetXml.Root?.Element(worksheetNs + "rowBreaks");
         var colBreaks = worksheetXml.Root?.Element(worksheetNs + "colBreaks");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
         var activeCell = ParseOptionalCellReference(
@@ -295,6 +321,7 @@ public sealed partial class XlsxFileAdapter
             XlsxConditionalFormatRuleSupport.HasUnsupportedRule(worksheetXml, worksheetNs, allowBlankType: false);
         var hasUnsupportedConditionalFormatting =
             XlsxConditionalFormatRuleSupport.HasUnsupportedRule(worksheetXml, worksheetNs, allowBlankType: true);
+        var tableRelationshipIds = ReadTableRelationshipIds(worksheetXml, worksheetNs, relNs);
 
         return new SheetXmlLayout(
             rowColumnLayout.HiddenRows,
@@ -384,7 +411,31 @@ public sealed partial class XlsxFileAdapter
             hasClosedXmlUnsupportedConditionalFormatting,
             hasUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters,
+            tableRelationshipIds,
             codeName);
+    }
+
+    private static IReadOnlyList<string> ReadTableRelationshipIds(
+        XDocument worksheetXml,
+        XNamespace worksheetNs,
+        XNamespace relNs)
+    {
+        var tableParts = worksheetXml.Root?.Element(worksheetNs + "tableParts");
+        if (tableParts is null)
+            return [];
+
+        List<string>? result = null;
+        foreach (var tablePart in tableParts.Elements(worksheetNs + "tablePart"))
+        {
+            var relId = tablePart.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(relId))
+                continue;
+
+            result ??= [];
+            result.Add(relId);
+        }
+
+        return result ?? [];
     }
 
     private static bool TryLoadWorksheetXmlWithoutSheetData(
