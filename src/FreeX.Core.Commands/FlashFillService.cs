@@ -45,6 +45,7 @@ public static partial class FlashFillService
             ?? TryExtractFinalUrlPathSegmentStem(examples)
             ?? TryExtractFinalUrlPathSegmentRawSlugStem(examples)
             ?? TryExtractFinalUrlPathSegmentSlugTitle(examples)
+            ?? TryExtractParentUrlPathSegment(examples)
             ?? TryUrlQueryParameterValue(examples)
             ?? TryDigitMask(examples)
             ?? TryDateNormalization(examples)

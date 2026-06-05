@@ -267,6 +267,15 @@ public static partial class FlashFillService
         return source => TryGetFinalUrlPathSegmentSlugTitle(source, out var title) ? title : null;
     }
 
+    private static Func<string, string?>? TryExtractParentUrlPathSegment(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetParentUrlPathSegment(e.Source, out var segment) && segment == e.Expected))
+            return null;
+
+        return source => TryGetParentUrlPathSegment(source, out var segment) ? segment : null;
+    }
+
     private static Func<string, string?>? TryUrlFirstQueryParameterName(
         IReadOnlyList<(string Source, string Expected)> examples)
     {
@@ -501,6 +510,69 @@ public static partial class FlashFillService
         }
 
         return true;
+    }
+
+    private static bool TryGetParentUrlPathSegment(string source, out string segment)
+    {
+        segment = string.Empty;
+
+        var candidate = source.Trim();
+        if (candidate.Length == 0 ||
+            candidate.Any(char.IsWhiteSpace) ||
+            !IsHttpOrHttpsUrlCandidate(candidate) ||
+            !Uri.TryCreate(candidate, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            uri.UserInfo.Length > 0 ||
+            !TryNormalizeWebHost(uri.Host, out _))
+        {
+            return false;
+        }
+
+        var authorityStart = candidate.IndexOf("://", StringComparison.Ordinal) + 3;
+        var pathStart = candidate.IndexOf('/', authorityStart);
+        if (pathStart < 0)
+            return false;
+
+        var queryIndex = candidate.IndexOf('?', pathStart);
+        var fragmentIndex = candidate.IndexOf('#', pathStart);
+        var pathEndExclusive = MinPositiveIndexOrLength(candidate.Length, queryIndex, fragmentIndex);
+        if (pathEndExclusive <= pathStart + 1)
+            return false;
+
+        var finalSegmentEnd = pathEndExclusive - 1;
+        if (candidate[finalSegmentEnd] == '/')
+            return false;
+
+        var finalSlashIndex = candidate.LastIndexOf('/', finalSegmentEnd, finalSegmentEnd - pathStart + 1);
+        if (finalSlashIndex <= pathStart)
+            return false;
+
+        var parentSegmentEnd = finalSlashIndex - 1;
+        TrimSegment(candidate, ref pathStart, ref parentSegmentEnd);
+        if (pathStart > parentSegmentEnd)
+            return false;
+
+        var parentSlashIndex = candidate.LastIndexOf('/', parentSegmentEnd, parentSegmentEnd - pathStart + 1);
+        var parentSegmentStart = parentSlashIndex + 1;
+        TrimSegment(candidate, ref parentSegmentStart, ref parentSegmentEnd);
+        if (parentSegmentStart > parentSegmentEnd)
+            return false;
+
+        var rawSegment = SliceSegment(candidate, parentSegmentStart, parentSegmentEnd + 1);
+        if (!HasValidPercentEscapes(rawSegment))
+            return false;
+
+        try
+        {
+            segment = Uri.UnescapeDataString(rawSegment);
+        }
+        catch (UriFormatException)
+        {
+            segment = string.Empty;
+            return false;
+        }
+
+        return segment.Length > 0;
     }
 
     private static bool TryGetFinalUrlPathSegmentSlugStem(

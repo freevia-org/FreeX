@@ -580,6 +580,63 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ParentUrlPathSegment_ExtractsDecodedPenultimateSegment()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/catalog/bikes/road-bike.html?ref=nav", "bikes"),
+                ("https://northwind.example/store/helmets/trail-helmet.html#details", "helmets")
+            ],
+            ["https://adatum.example/shop/skis/powder-ski.html?color=blue"]);
+
+        result.Should().BeEquivalentTo(["skis"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ParentUrlPathSegment_DecodesPercentEscapes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/catalog/spring%20deals/road-bike.html?ref=nav", "spring deals"),
+                ("https://northwind.example/store/trail%20helmets/trail-helmet.html#details", "trail helmets")
+            ],
+            ["https://adatum.example/shop/powder%20skis/powder-ski.html?color=blue"]);
+
+        result.Should().BeEquivalentTo(["powder skis"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ParentUrlPathSegment_PreservesPlusInPathSegments()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/catalog/bike+deals/road-bike.html?ref=nav", "bike+deals"),
+                ("https://northwind.example/store/trail+helmets/trail-helmet.html#details", "trail+helmets")
+            ],
+            ["https://adatum.example/shop/powder+skis/powder-ski.html?color=blue"]);
+
+        result.Should().BeEquivalentTo(["powder+skis"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("https://adatum.example")]
+    [InlineData("https://adatum.example/powder-ski.html")]
+    [InlineData("https://adatum.example/shop/skis/")]
+    [InlineData("ftp://adatum.example/shop/skis/powder-ski.html")]
+    [InlineData("https://user@adatum.example/shop/skis/powder-ski.html")]
+    public void Fill_ParentUrlPathSegment_ReturnsNullForUnsupportedRemainingUrl(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/catalog/bikes/road-bike.html?ref=nav", "bikes"),
+                ("https://northwind.example/store/helmets/trail-helmet.html#details", "helmets")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_UrlQueryParameterValue_ExtractsDecodedParameterValue()
     {
         var result = FlashFillService.Fill(
