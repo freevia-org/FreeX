@@ -75,10 +75,14 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Screenshot 4")]
     [InlineData("Screenshot-4")]
     [InlineData("Screenshot 2026-06-04")]
+    [InlineData("Screenshot_2026-06-04")]
+    [InlineData("Screenshot 20260604")]
     [InlineData("Screenshot (2).jpeg")]
     [InlineData("Photo")]
     [InlineData("Photo 5")]
     [InlineData("Photo 2026-06-04")]
+    [InlineData("Photo-2026-06-04")]
+    [InlineData("Photo_2026_06_04")]
     [InlineData("photo-final (3).webp")]
     [InlineData("Icon")]
     [InlineData("Icon 6")]
@@ -167,6 +171,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("Customer onboarding graphic")]
     [InlineData("Fulfillment diagram showing handoffs")]
     [InlineData("Screenshot 2026-06-04 showing sales dashboard")]
+    [InlineData("Screenshot_2026-06-04 showing sales dashboard")]
     [InlineData("Photo of warehouse team")]
     [InlineData("Status icon legend")]
     [InlineData("Drawing of approval workflow")]
@@ -350,7 +355,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         {
             Anchor = new CellAddress(sheet.Id, 2, 1),
             Kind = PictureKind.Image,
-            Title = "Screenshot 2026-06-04"
+            Title = "Screenshot_2026-06-04"
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
@@ -368,13 +373,13 @@ public sealed partial class AccessibilityCheckerServiceTests
         {
             Anchor = new CellAddress(sheet.Id, 5, 1),
             Kind = DrawingShapeKind.Rectangle,
-            Name = "Icon 6"
+            Name = "Photo-2026-06-04"
         });
         sheet.TextBoxes.Add(new TextBoxModel
         {
             Anchor = new CellAddress(sheet.Id, 6, 1),
             Text = "Profile photo",
-            Title = "Photo 2026-06-04",
+            Title = "Photo_2026_06_04",
             FillColor = CellColor.White
         });
 

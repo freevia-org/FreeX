@@ -1345,6 +1345,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "studnt"))
+                {
+                    suggestion = "student";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "suport"))
                 {
                     suggestion = "support";
@@ -1923,6 +1929,18 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "studnts"))
+                {
+                    suggestion = "students";
+                    return true;
+                }
+
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "syllbus"))
+                {
+                    suggestion = "syllabus";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "suppler"))
                 {
                     suggestion = "supplier";
@@ -2084,6 +2102,12 @@ public static partial class SpellCheckService
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "clinicly"))
                 {
                     suggestion = "clinically";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "clasroom"))
+                {
+                    suggestion = "classroom";
                     return true;
                 }
 
@@ -2327,6 +2351,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "registrr"))
+                {
+                    suggestion = "registrar";
+                    return true;
+                }
+
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "restoree"))
                 {
                     suggestion = "restore";
@@ -2467,6 +2497,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "assignmnt"))
+                {
+                    suggestion = "assignment";
+                    return true;
+                }
+
                 if (first == 'b' && EqualAsciiWordIgnoreCase(word, "billablee"))
                 {
                     suggestion = "billable";
@@ -2521,6 +2557,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "curriculm"))
+                {
+                    suggestion = "curriculum";
+                    return true;
+                }
+
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "changereq"))
                 {
                     suggestion = "change request";
@@ -2554,6 +2596,12 @@ public static partial class SpellCheckService
                 if (first == 'e' && EqualAsciiWordIgnoreCase(word, "encrypton"))
                 {
                     suggestion = "encryption";
+                    return true;
+                }
+
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "enrollmnt"))
+                {
+                    suggestion = "enrollment";
                     return true;
                 }
 
@@ -2620,6 +2668,12 @@ public static partial class SpellCheckService
                 if (first == 'g' && EqualAsciiWordIgnoreCase(word, "goverment"))
                 {
                     suggestion = "government";
+                    return true;
+                }
+
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "gradution"))
+                {
+                    suggestion = "graduation";
                     return true;
                 }
 
@@ -2862,6 +2916,12 @@ public static partial class SpellCheckService
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acommodate"))
                 {
                     suggestion = "accommodate";
+                    return true;
+                }
+
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "attendence"))
+                {
+                    suggestion = "attendance";
                     return true;
                 }
 
