@@ -353,8 +353,11 @@ internal static class Program
         {
             for (var col = 1u; col <= Math.Min(CellAddress.MaxCol, 200u); col++)
             {
-                if (sheet.GetCell(new CellAddress(sheet.Id, row, col)) is null)
+                if (sheet.GetCell(new CellAddress(sheet.Id, row, col)) is null &&
+                    sheet.GetStyleOnly(row, col) is null)
+                {
                     return (row, col);
+                }
             }
         }
 

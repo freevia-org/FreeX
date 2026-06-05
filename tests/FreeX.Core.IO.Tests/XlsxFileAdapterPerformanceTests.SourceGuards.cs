@@ -264,6 +264,18 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void SourcePackagePatch_RewritesWorksheetXmlWithFastCompression()
+    {
+        var snapshotSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+        var streamingPatchStart = snapshotSource.IndexOf("public static bool TryApplySimpleExistingCellChangesStreaming", StringComparison.Ordinal);
+        var streamingPatchEnd = snapshotSource.IndexOf("private static XmlWriterSettings CreatePatchXmlWriterSettings", streamingPatchStart, StringComparison.Ordinal);
+        var streamingPatchSource = snapshotSource[streamingPatchStart..streamingPatchEnd];
+
+        streamingPatchSource.Should().Contain("archive.CreateEntry(worksheetPath, CompressionLevel.Fastest)");
+        streamingPatchSource.Should().NotContain("archive.CreateEntry(worksheetPath, CompressionLevel.Optimal)");
+    }
+
+    [Fact]
     public void Save_ExpandsStyleOnlyCellsInPostProcessingAfterClosedXmlStyleSeeding()
     {
         var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));

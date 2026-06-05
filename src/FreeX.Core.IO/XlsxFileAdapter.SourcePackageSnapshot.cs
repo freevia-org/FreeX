@@ -3024,7 +3024,7 @@ public sealed partial class XlsxFileAdapter
                         return null;
                     }
 
-                    var sourceCellStyleIndexes =
+                    var sourceCellStyles =
                         retainedBaselineFacts is not null &&
                         retainedBaselineFacts.TryGetSheetFacts(sheet, worksheetPath, out var sheetFacts)
                             ? ReadSourceCellStyleIndexes(
@@ -3046,7 +3046,7 @@ public sealed partial class XlsxFileAdapter
                                 sheet,
                                 sourceStyleIndexesByStyleId,
                                 ambiguousSourceStyleIds);
-                    if (sourceCellStyleIndexes is null)
+                    if (sourceCellStyles is null)
                     {
                         blockReason = "baseline_source_cell_styles";
                         return null;
@@ -3059,7 +3059,7 @@ public sealed partial class XlsxFileAdapter
                     var cellIndex = 0;
                     foreach (var ((row, col), cell) in occupiedCells)
                     {
-                        var hasExplicitSourceStyleIndex = sourceCellStyleIndexes.TryGetValue(row, col, out var sourceStyleIndex);
+                        var hasExplicitSourceStyleIndex = sourceCellStyles.PopulatedCells.TryGetValue(row, col, out var sourceStyleIndex);
                         if (cell.StyleId == StyleId.Default || hasExplicitSourceStyleIndex)
                         {
                             AddSourceStyleIndex(
@@ -3095,6 +3095,7 @@ public sealed partial class XlsxFileAdapter
                         sourceComments,
                         XlsxWorksheetViewBaseline.Capture(sheet),
                         XlsxWorksheetTablePatchBaseline.Capture(sheet),
+                        sourceCellStyles.StyleOnlyCells,
                         cells));
                 }
 
@@ -3217,8 +3218,7 @@ public sealed partial class XlsxFileAdapter
                 var baseline = _worksheets[sheetIndex];
                 var sheet = workbook.Sheets[sheetIndex];
                 if (sheet.Id != baseline.SheetId ||
-                    !string.Equals(sheet.Name, baseline.SheetName, StringComparison.Ordinal) ||
-                    sheet.StyleOnlyCellCount != baseline.StyleOnlyCellCount)
+                    !string.Equals(sheet.Name, baseline.SheetName, StringComparison.Ordinal))
                 {
                     return Fail("change_sheet_identity_or_style_only_cells", out blockReason);
                 }
@@ -3331,6 +3331,7 @@ public sealed partial class XlsxFileAdapter
                 }
 
                 var addedCells = 0;
+                var consumedSourceStyleOnlyCells = 0;
                 var currentCells = sheet.GetOccupiedCellMap();
                 foreach (var ((row, col), cell) in currentCells)
                 {
@@ -3342,14 +3343,47 @@ public sealed partial class XlsxFileAdapter
                         if (_pivotSourceRanges.Contains(baseline.SheetId, row, col))
                             return Fail("change_pivot_source_cell", out blockReason);
 
-                        if (baseline.Tables.HasTables)
+                        if (baseline.Tables.HasTables &&
+                            !baseline.Tables.AllowsInsertedScalarValueCellPatch(row, col))
+                        {
                             return Fail("change_table_inserted_cell", out blockReason);
+                        }
+
+                        StyleId originalStyleId;
+                        string? originalSourceStyleIndex;
+                        string? insertedSourceStyleIndex;
+                        var consumesSourceStyleOnlyCell = baseline.TryGetSourceStyleOnlyCell(row, col, out var sourceStyleOnlyCell);
+                        if (consumesSourceStyleOnlyCell)
+                        {
+                            if (cell.StyleId != sourceStyleOnlyCell.StyleId)
+                                return Fail("change_inserted_style_only_cell", out blockReason);
+
+                            originalStyleId = sourceStyleOnlyCell.StyleId;
+                            originalSourceStyleIndex = sourceStyleOnlyCell.SourceStyleIndex;
+                            insertedSourceStyleIndex = sourceStyleOnlyCell.SourceStyleIndex;
+                            consumedSourceStyleOnlyCells++;
+                        }
+                        else if (cell.StyleId == StyleId.Default)
+                        {
+                            originalStyleId = StyleId.Default;
+                            originalSourceStyleIndex = null;
+                            insertedSourceStyleIndex = null;
+                        }
+                        else if (TryGetSourceStyleIndex(cell.StyleId, out var mappedSourceStyleIndex))
+                        {
+                            originalStyleId = StyleId.Default;
+                            originalSourceStyleIndex = null;
+                            insertedSourceStyleIndex = mappedSourceStyleIndex;
+                        }
+                        else
+                        {
+                            return Fail("change_inserted_cell", out blockReason);
+                        }
 
                         if (cell.HasFormula ||
                             cell.IgnoreFormulaError ||
                             cell.Value is BlankValue ||
-                            !IsPatchableScalarValue(cell.Value) ||
-                            !TryGetSourceStyleIndex(cell.StyleId, out var insertedSourceStyleIndex))
+                            !IsPatchableScalarValue(cell.Value))
                         {
                             return Fail("change_inserted_cell", out blockReason);
                         }
@@ -3364,11 +3398,12 @@ public sealed partial class XlsxFileAdapter
                             cell.Value,
                             OriginalFormulaText: null,
                             NewFormulaText: null,
-                            OriginalStyleId: StyleId.Default,
+                            OriginalStyleId: originalStyleId,
                             NewStyleId: cell.StyleId,
-                            OriginalSourceStyleIndex: null,
+                            OriginalSourceStyleIndex: originalSourceStyleIndex,
                             NewSourceStyleIndex: insertedSourceStyleIndex,
-                            OriginalIgnoreFormulaError: false));
+                            OriginalIgnoreFormulaError: false,
+                            ConsumesSourceStyleOnlyCell: consumesSourceStyleOnlyCell));
                         if (changes.Count > changeLimit)
                             return Fail("change_limit_cells", out blockReason);
 
@@ -3497,6 +3532,9 @@ public sealed partial class XlsxFileAdapter
 
                 if (sheet.CellCount != baseline.CellCount + addedCells - deletedCells)
                     return Fail("change_cell_count_mismatch", out blockReason);
+
+                if (sheet.StyleOnlyCellCount != baseline.StyleOnlyCellCount - consumedSourceStyleOnlyCells)
+                    return Fail("change_sheet_identity_or_style_only_cells", out blockReason);
             }
 
             bool modelMatches;
@@ -3620,7 +3658,7 @@ public sealed partial class XlsxFileAdapter
                 return false;
 
             worksheetEntry.Delete();
-            var replacement = archive.CreateEntry(worksheetPath, CompressionLevel.Optimal);
+            var replacement = archive.CreateEntry(worksheetPath, CompressionLevel.Fastest);
             patchedWorksheet.Position = 0;
             using var replacementStream = replacement.Open();
             patchedWorksheet.CopyTo(replacementStream);
@@ -3751,14 +3789,24 @@ public sealed partial class XlsxFileAdapter
                 var cell = FindCell(sheetData, worksheetNs, change.Row, change.Col);
                 if (change.Kind == XlsxCellValuePatchKind.InsertedLiteralValue)
                 {
-                    if (cell is not null ||
-                        !InsertLiteralCell(
+                    if (cell is null)
+                    {
+                        if (!InsertLiteralCell(
                             sheetData,
                             worksheetNs,
                             change.Row,
                             change.Col,
                             change.NewValue,
                             change.NewSourceStyleIndex))
+                        {
+                            return false;
+                        }
+
+                        continue;
+                    }
+
+                    if (!change.ConsumesSourceStyleOnlyCell ||
+                        !RewriteStyleOnlyCellAsLiteral(cell, worksheetNs, change.NewValue, change.NewSourceStyleIndex))
                     {
                         return false;
                     }
@@ -4375,10 +4423,12 @@ public sealed partial class XlsxFileAdapter
                 var cells = baseline.WithAppliedCellChanges(sheetChanges ?? []);
                 var inserted = CountCellPatchChanges(sheetChanges, XlsxCellValuePatchKind.InsertedLiteralValue);
                 var deleted = CountCellPatchChanges(sheetChanges, XlsxCellValuePatchKind.DeletedCell);
+                var consumedStyleOnly = CountConsumedSourceStyleOnlyCells(sheetChanges);
 
                 worksheets.Add(baseline with
                 {
                     CellCount = baseline.CellCount + inserted - deleted,
+                    StyleOnlyCellCount = baseline.StyleOnlyCellCount - consumedStyleOnly,
                     Dimensions = dimensionPatch?.Current ?? baseline.Dimensions,
                     MergedRegions = mergeRegionPatch?.Current ?? baseline.MergedRegions,
                     Hyperlinks = hyperlinkPatch?.Current ?? baseline.Hyperlinks,
@@ -4386,6 +4436,7 @@ public sealed partial class XlsxFileAdapter
                     Comments = commentPatch?.Current ?? baseline.Comments,
                     SourceComments = commentPatch?.CurrentSource ?? baseline.SourceComments,
                     View = worksheetViewPatch?.Current ?? baseline.View,
+                    SourceStyleOnlyCells = baseline.WithConsumedSourceStyleOnlyCells(sheetChanges ?? []),
                     Cells = cells
                 });
             }
@@ -4486,6 +4537,8 @@ public sealed partial class XlsxFileAdapter
 
                         insertedCells.Add((sheet, change.Row, change.Col, insertedCell));
                         sheet.ClearCell(change.Row, change.Col);
+                        if (change.ConsumesSourceStyleOnlyCell)
+                            sheet.SetStyleOnly(change.Row, change.Col, change.OriginalStyleId);
                         continue;
                     }
 
@@ -4737,7 +4790,11 @@ public sealed partial class XlsxFileAdapter
                 : left.Col.CompareTo(right.Col);
         }
 
-        private static XlsxSourceCellStyleIndexLookup? ReadSourceCellStyleIndexes(
+        private sealed record XlsxSourceCellStyleInfo(
+            XlsxSourceCellStyleIndexLookup PopulatedCells,
+            XlsxSourceStyleOnlyCellEntry[] StyleOnlyCells);
+
+        private static XlsxSourceCellStyleInfo? ReadSourceCellStyleIndexes(
             SheetXmlLayout layout,
             Sheet sheet,
             Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
@@ -4749,7 +4806,7 @@ public sealed partial class XlsxFileAdapter
                 sourceStyleIndexesByStyleId,
                 ambiguousStyleIds);
 
-        private static XlsxSourceCellStyleIndexLookup? ReadSourceCellStyleIndexes(
+        private static XlsxSourceCellStyleInfo? ReadSourceCellStyleIndexes(
             XlsxCellPatchBaselineSheetFacts sheetFacts,
             Sheet sheet,
             Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
@@ -4761,7 +4818,7 @@ public sealed partial class XlsxFileAdapter
                 sourceStyleIndexesByStyleId,
                 ambiguousStyleIds);
 
-        private static XlsxSourceCellStyleIndexLookup? ReadSourceCellStyleIndexes(
+        private static XlsxSourceCellStyleInfo? ReadSourceCellStyleIndexes(
             IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitPopulatedCellStyles,
             IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
             Sheet sheet,
@@ -4800,9 +4857,11 @@ public sealed partial class XlsxFileAdapter
                     GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex));
             }
 
-            return new XlsxExplicitSourceCellStyleIndexLookup(
-                explicitPopulatedCellStyles,
-                sourceStyleIndexCache);
+            return new XlsxSourceCellStyleInfo(
+                new XlsxExplicitSourceCellStyleIndexLookup(
+                    explicitPopulatedCellStyles,
+                    sourceStyleIndexCache),
+                ReadSourceStyleOnlyCells(explicitStyleOnlyCells, sheet, sourceStyleIndexCache));
         }
 
         private static string? GetCachedSourceStyleIndex(Dictionary<int, string?> cache, int styleIndex)
@@ -4815,7 +4874,42 @@ public sealed partial class XlsxFileAdapter
             return sourceStyleIndex;
         }
 
-        private static XlsxSourceCellStyleIndexLookup? ReadSourceCellStyleIndexes(
+        private static XlsxSourceStyleOnlyCellEntry[] ReadSourceStyleOnlyCells(
+            IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
+            Sheet sheet,
+            Dictionary<int, string?> sourceStyleIndexCache)
+        {
+            List<XlsxSourceStyleOnlyCellEntry>? result = null;
+            foreach (var (row, col, styleIndex) in explicitStyleOnlyCells)
+            {
+                if (styleIndex < 0 ||
+                    sheet.GetStyleOnly(row, col) is not { } styleOnlyStyleId)
+                {
+                    continue;
+                }
+
+                result ??= [];
+                result.Add(new XlsxSourceStyleOnlyCellEntry(
+                    row,
+                    col,
+                    styleOnlyStyleId,
+                    GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex)));
+            }
+
+            return SortSourceStyleOnlyCells(result);
+        }
+
+        private static XlsxSourceStyleOnlyCellEntry[] SortSourceStyleOnlyCells(List<XlsxSourceStyleOnlyCellEntry>? entries)
+        {
+            if (entries is not { Count: > 0 })
+                return [];
+
+            var result = entries.ToArray();
+            Array.Sort(result, XlsxSourceStyleOnlyCellEntry.Compare);
+            return result;
+        }
+
+        private static XlsxSourceCellStyleInfo? ReadSourceCellStyleIndexes(
             ZipArchive archive,
             string worksheetPath,
             Sheet sheet,
@@ -4827,6 +4921,7 @@ public sealed partial class XlsxFileAdapter
                 return null;
 
             var result = new Dictionary<(uint Row, uint Col), string?>(sheet.CellCount);
+            List<XlsxSourceStyleOnlyCellEntry>? styleOnlyCells = null;
             using var stream = entry.Open();
             using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
             while (reader.Read())
@@ -4863,10 +4958,14 @@ public sealed partial class XlsxFileAdapter
                         ambiguousStyleIds,
                         styleOnlyStyleId,
                         sourceStyleIndex);
+                    styleOnlyCells ??= [];
+                    styleOnlyCells.Add(new XlsxSourceStyleOnlyCellEntry(row, col, styleOnlyStyleId, sourceStyleIndex));
                 }
             }
 
-            return new XlsxDictionarySourceCellStyleIndexLookup(result);
+            return new XlsxSourceCellStyleInfo(
+                new XlsxDictionarySourceCellStyleIndexLookup(result),
+                SortSourceStyleOnlyCells(styleOnlyCells));
         }
 
         private static IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> ReadSourceHyperlinks(
@@ -5199,6 +5298,20 @@ public sealed partial class XlsxFileAdapter
             ApplyCellStyle(cellElement, sourceStyleIndex);
             RewriteLiteralCellValue(cellElement, worksheetNs, value);
             InsertCellInColumnOrder(rowElement, worksheetNs, cellElement, col);
+            return true;
+        }
+
+        private static bool RewriteStyleOnlyCellAsLiteral(
+            XElement cell,
+            XNamespace worksheetNs,
+            ScalarValue value,
+            string? sourceStyleIndex)
+        {
+            if (cell.Elements().Any())
+                return false;
+
+            ApplyCellStyle(cell, sourceStyleIndex);
+            RewriteLiteralCellValue(cell, worksheetNs, value);
             return true;
         }
 
@@ -5997,6 +6110,17 @@ public sealed partial class XlsxFileAdapter
 
             return true;
         }
+
+        public bool AllowsInsertedScalarValueCellPatch(uint row, uint col)
+        {
+            foreach (var table in Tables)
+            {
+                if (table.Contains(row, col))
+                    return false;
+            }
+
+            return true;
+        }
     }
 
     private sealed record XlsxPatchStructuredTable(
@@ -6763,6 +6887,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyDictionary<CellAddress, XlsxSourceComment> SourceComments,
         XlsxWorksheetViewBaseline View,
         XlsxWorksheetTablePatchBaseline Tables,
+        XlsxSourceStyleOnlyCellEntry[] SourceStyleOnlyCells,
         XlsxPatchCellEntry[] Cells)
     {
         public bool TryGetCell(uint row, uint col, out XlsxPatchCell cell)
@@ -6787,6 +6912,35 @@ public sealed partial class XlsxFileAdapter
                 }
 
                 cell = entry.Cell;
+                return true;
+            }
+
+            cell = default;
+            return false;
+        }
+
+        public bool TryGetSourceStyleOnlyCell(uint row, uint col, out XlsxSourceStyleOnlyCellEntry cell)
+        {
+            var low = 0;
+            var high = SourceStyleOnlyCells.Length - 1;
+            while (low <= high)
+            {
+                var mid = low + ((high - low) / 2);
+                ref readonly var entry = ref SourceStyleOnlyCells[mid];
+                var compare = entry.CompareTo(row, col);
+                if (compare < 0)
+                {
+                    low = mid + 1;
+                    continue;
+                }
+
+                if (compare > 0)
+                {
+                    high = mid - 1;
+                    continue;
+                }
+
+                cell = entry;
                 return true;
             }
 
@@ -6855,6 +7009,38 @@ public sealed partial class XlsxFileAdapter
             Array.Sort(cells, XlsxPatchCellEntry.Compare);
             return cells;
         }
+
+        public XlsxSourceStyleOnlyCellEntry[] WithConsumedSourceStyleOnlyCells(IReadOnlyList<XlsxCellValuePatch> changes)
+        {
+            if (SourceStyleOnlyCells.Length == 0 ||
+                CountConsumedSourceStyleOnlyCells(changes) == 0)
+            {
+                return SourceStyleOnlyCells;
+            }
+
+            var result = new List<XlsxSourceStyleOnlyCellEntry>(SourceStyleOnlyCells.Length);
+            foreach (var entry in SourceStyleOnlyCells)
+            {
+                var consumed = false;
+                foreach (var change in changes)
+                {
+                    if (change.ConsumesSourceStyleOnlyCell &&
+                        change.Row == entry.Row &&
+                        change.Col == entry.Col)
+                    {
+                        consumed = true;
+                        break;
+                    }
+                }
+
+                if (!consumed)
+                    result.Add(entry);
+            }
+
+            return result.Count == SourceStyleOnlyCells.Length
+                ? SourceStyleOnlyCells
+                : result.ToArray();
+        }
     }
 
     private static int CountCellPatchChanges(
@@ -6872,6 +7058,44 @@ public sealed partial class XlsxFileAdapter
         }
 
         return count;
+    }
+
+    private static int CountConsumedSourceStyleOnlyCells(IReadOnlyList<XlsxCellValuePatch>? changes)
+    {
+        if (changes is null || changes.Count == 0)
+            return 0;
+
+        var count = 0;
+        foreach (var change in changes)
+        {
+            if (change.ConsumesSourceStyleOnlyCell)
+                count++;
+        }
+
+        return count;
+    }
+
+    private readonly record struct XlsxSourceStyleOnlyCellEntry(
+        uint Row,
+        uint Col,
+        StyleId StyleId,
+        string? SourceStyleIndex)
+    {
+        public static int Compare(XlsxSourceStyleOnlyCellEntry left, XlsxSourceStyleOnlyCellEntry right)
+        {
+            var rowCompare = left.Row.CompareTo(right.Row);
+            return rowCompare != 0
+                ? rowCompare
+                : left.Col.CompareTo(right.Col);
+        }
+
+        public int CompareTo(uint row, uint col)
+        {
+            var rowCompare = Row.CompareTo(row);
+            return rowCompare != 0
+                ? rowCompare
+                : Col.CompareTo(col);
+        }
     }
 
     private readonly record struct XlsxPatchCellEntry(uint Row, uint Col, XlsxPatchCell Cell)
@@ -6914,7 +7138,8 @@ public sealed partial class XlsxFileAdapter
         StyleId NewStyleId,
         string? OriginalSourceStyleIndex,
         string? NewSourceStyleIndex,
-        bool OriginalIgnoreFormulaError)
+        bool OriginalIgnoreFormulaError,
+        bool ConsumesSourceStyleOnlyCell = false)
     {
         public bool HasStyleChange => OriginalStyleId != NewStyleId;
     }

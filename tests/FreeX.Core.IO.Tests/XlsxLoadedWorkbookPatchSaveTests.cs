@@ -247,6 +247,78 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithNewLiteralInSourceStyleOnlyCell_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateStyledSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        var styleOnlyStyleId = sheet.GetStyleOnly(1, 4);
+        styleOnlyStyleId.Should().NotBeNull();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new Cell
+        {
+            Value = new TextValue("new styled value"),
+            StyleId = styleOnlyStyleId!.Value
+        });
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.PathLabel.Should().Be("source_patch");
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/styles.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/styles.xml"));
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D1")
+            .Should()
+            .Be("new styled value");
+        ReadCellStyleIndex(savedBytes, "xl/worksheets/sheet1.xml", "D1")
+            .Should()
+            .Be(ReadCellStyleIndex(sourceBytes, "xl/worksheets/sheet1.xml", "D1"));
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloaded = adapter.Load(reloadStream);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+        reloadedSheet.GetStyleOnly(1, 4).Should().BeNull();
+        reloadedSheet.GetCell(1, 4)!.Value.Should().Be(new TextValue("new styled value"));
+        reloaded.GetStyle(reloadedSheet.GetCell(1, 4)!.StyleId)
+            .Should()
+            .Be(workbook.GetStyle(styleOnlyStyleId.Value));
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithNewLiteralInSourceStyleOnlyCellAndChangedStyle_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateStyledSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.GetStyleOnly(1, 4).Should().NotBeNull();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("default styled value"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.PathLabel.Should().Be("full_save");
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_inserted_style_only_cell");
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithNewCellStyleEdit_FallsBackToFullSave()
     {
         var sourceBytes = CreateSourcePackage();
@@ -668,6 +740,37 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "C4")
             .Should()
             .Be("outside patched");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithStructuredTableNewCellOutsideTable_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateStructuredTableSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.StructuredTables.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("new outside"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        ReadPackageEntry(savedBytes, "xl/tables/table1.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/tables/table1.xml"));
+        ReadWorksheetDimension(savedBytes, "xl/worksheets/sheet1.xml")
+            .Should()
+            .Be("A1:D4");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "D4")
+            .Should()
+            .Be("new outside");
     }
 
     [Fact]
