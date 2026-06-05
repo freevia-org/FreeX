@@ -1,5 +1,4 @@
 using System.IO;
-using System.Windows;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.Core.Commands;
@@ -134,11 +133,11 @@ public sealed class ErrorCheckingDialogSourceTests
             dialog.Show();
             try
             {
-                var buttons = FindVisualChildren<Button>(dialog)
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Where(button => button.Content is string)
                     .GroupBy(button => (string)button.Content)
                     .ToDictionary(group => group.Key, group => group.ToList());
-                var list = FindVisualChildren<ListView>(dialog).Single();
+                var list = WpfTestTree.FindVisualDescendants<ListView>(dialog).Single();
 
                 buttons["_Previous"].Single().IsEnabled.Should().BeFalse();
                 buttons["_Next"].Single().IsEnabled.Should().BeTrue();
@@ -211,7 +210,7 @@ public sealed class ErrorCheckingDialogSourceTests
             dialog.Show();
             try
             {
-                var buttons = FindVisualChildren<Button>(dialog)
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Where(button => button.Content is string)
                     .GroupBy(button => (string)button.Content)
                     .ToDictionary(group => group.Key, group => group.ToList());
@@ -237,17 +236,4 @@ public sealed class ErrorCheckingDialogSourceTests
             "=A1",
             "Formula uses an incompatible value.");
 
-    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
-        where T : DependencyObject
-    {
-        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-            if (child is T match)
-                yield return match;
-
-            foreach (var descendant in FindVisualChildren<T>(child))
-                yield return descendant;
-        }
-    }
 }

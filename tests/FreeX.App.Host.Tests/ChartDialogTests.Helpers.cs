@@ -1,6 +1,5 @@
 using System.IO;
 using System.Reflection;
-using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -12,10 +11,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class ChartDialogTests
 {
-    private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
-        where T : DependencyObject
-        => WpfTestTree.FindLogicalDescendants<T>(root);
-
     private static string ReadChartDialogSource() =>
         string.Join(Environment.NewLine, new[]
         {

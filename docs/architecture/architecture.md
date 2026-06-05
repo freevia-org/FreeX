@@ -385,7 +385,7 @@ theme for gallery swatches and Format as Table materialization.
 Flash Fill remains a deterministic pattern service, not an Excel-like ML inference engine. It supports conservative
 single-column transforms including dotted-token extraction with variable dot counts for final-token patterns,
 dotted/underscored/hyphenated email display-name cleanup, plus-address email local-part tag removal,
-spaced or compact pipe/arrow label-value splitting, semicolon-separated URL query-parameter first-name, last-name, first-value, last-value, same-name first-value, and same-name last repeated-value extraction, URL fragment extraction, digit-mask formatting
+spaced or compact colon/equal, slash, pipe, ASCII/Unicode arrow, and hyphen/en dash/em dash label-value splitting, semicolon-separated URL query-parameter first-name, last-name, first-value, last-value, same-name first-value, and same-name last repeated-value extraction, URL fragment extraction, digit-mask formatting
 such as phone-number punctuation copied from examples, calendar-valid embedded-date extraction/normalization from
 labeled text with ambiguous multi-date sources rejected, weekday-prefixed and embedded numeric and English month-name date
 component extraction that preserves raw month tokens while normalizing ordinal day tokens, pure and embedded time component extraction for hour, minute, second, and
@@ -393,12 +393,14 @@ meridiem from time-like values or labeled text with ambiguous component examples
 ambiguous multi-time sources rejected, and two-part full-name reordering such as `Ada Lovelace` to
 `Lovelace, Ada`, plus a small multi-column pattern set. First/last-name,
 first-initial/last-name, and last-name/first-initial email generation learn constant
-domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/last-initial aliases. It returns no result when the examples are ambiguous.
+domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/last-initial aliases. Root-domain stem
+extraction recognizes a bounded set of common multi-label public suffixes such as `co.uk`, `com.au`, and `co.nz`.
+It returns no result when the examples are ambiguous.
 
 Spell Check remains a deterministic known-corrections service in `Core.Commands`, not dictionary-backed proofing. It
 scans literal text cells, notes, threaded comment roots, and threaded comment replies in deterministic sheet/address order
 and plans undoable replacement edits while leaving formula cells alone. The known-corrections catalog covers bounded
-office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, quality/testing, documentation/support, reliability/maintenance, operations/planning, budget/stakeholder/project-control, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
+office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, quality/testing, documentation/support, reliability/maintenance, operations/planning, budget/stakeholder/project-control, procurement/inventory/supplier, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
 file path, identifier, and prefixed-word spans.
 The host workflow keeps Ignore All case-insensitive for the current pass and persists Add to Dictionary custom words
 through `FreeXOptions` so matching scanner results stay suppressed across sessions/workbooks without introducing a full
@@ -410,7 +412,7 @@ Accessibility Checker remains a deterministic model-backed audit in `Core.Comman
 engine. It reports issues supported by current workbook state, including merged cells, blank structured-table headers,
 low-contrast cell text against base, workbook theme/tint, and patterned fills, low-contrast text boxes against
 explicit, theme, and workbook object-default fills, missing object alternate text, hidden sheets/rows/columns with
-modeled content including hyperlinks, unclear hyperlink display text, and charts whose title is missing as the current accessible label.
+modeled content including hyperlinks, blank, generic, URL-like, or unclear hyperlink display text, and charts whose title is missing as the current accessible label.
 
 Native JSON persists the local threaded-comment model, including author, replies, created/modified UTC activity
 metadata, and resolved state, so FreeX's in-app comment threads survive native save/load. Comment navigation and

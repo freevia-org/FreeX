@@ -215,6 +215,19 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDomainStem_ExtractsRootStemFromCuratedMultiLabelPublicSuffix()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada@eu.sales.contoso.co.uk", "contoso"),
+                ("grace@research.fabrikam.org.uk", "fabrikam")
+            ],
+            ["alan@labs.northwind.com.au", "katherine@north.america.adatum.co.nz"]);
+
+        result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_EmailDomainStem_PreservesSubdomainStemBeforeTopLevelDomain()
     {
         var result = FlashFillService.Fill(
@@ -306,6 +319,19 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_WebAddressDomainStem_ExtractsRootStemFromCuratedMultiLabelPublicSuffix()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.contoso.com.au/path", "contoso"),
+                ("http://eu.research.fabrikam.co.uk/x", "fabrikam")
+            ],
+            ["https://checkout.northwind.co.nz/cart?x=1", "https://portal.adatum.com.sg/path"]);
+
+        result.Should().BeEquivalentTo(["northwind", "adatum"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_WebAddressDomainStem_PreservesSubdomainStemBeforeTopLevelDomain()
     {
         var result = FlashFillService.Fill(
@@ -316,6 +342,32 @@ public sealed partial class FlashFillServiceTests
             ["https://labs.northwind.net/catalog/list?page=2#details"]);
 
         result.Should().BeEquivalentTo(["labs.northwind"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressDomainStem_PreservesStemBeforeFinalTldForMultiLabelPublicSuffixes()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.contoso.com.au/products?id=1", "shop.contoso.com"),
+                ("http://research.fabrikam.co.uk/support#top", "research.fabrikam.co")
+            ],
+            ["https://labs.northwind.net.au/catalog/list?page=2#details"]);
+
+        result.Should().BeEquivalentTo(["labs.northwind.net"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_WebAddressDomainStem_LeavesNonCuratedCcTldSuffixBehaviorUnchanged()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://shop.contoso.store.uk/path", "store"),
+                ("http://portal.fabrikam.market.au/x", "market")
+            ],
+            ["https://checkout.northwind.retail.uk/cart", "http://service.adatum.portal.au/path"]);
+
+        result.Should().BeEquivalentTo(["retail", "portal"], o => o.WithStrictOrdering());
     }
 
     [Fact]

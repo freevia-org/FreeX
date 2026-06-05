@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -44,10 +43,10 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var buttons = FindVisualChildren<Button>(dialog)
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Where(button => button.Content is string)
                     .ToDictionary(button => (string)button.Content);
-                var boxes = FindVisualChildren<CheckBox>(dialog)
+                var boxes = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Where(box => box.Content is "Region" or "Sales")
                     .ToList();
 
@@ -89,18 +88,18 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var headersBox = FindVisualChildren<CheckBox>(dialog)
+                var headersBox = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(box => Equals(box.Content, "_My data has headers"));
                 AutomationProperties.GetName(headersBox).Should().Be("My data has headers");
                 AutomationProperties.GetAutomationId(headersBox).Should().Be("RemoveDuplicatesHasHeadersBox");
                 AutomationProperties.GetHelpText(headersBox).Should().Be("Select when the first row contains column headers.");
 
-                var columnsPanel = FindVisualChildren<StackPanel>(dialog)
+                var columnsPanel = WpfTestTree.FindVisualDescendants<StackPanel>(dialog)
                     .Single(panel => AutomationProperties.GetAutomationId(panel) == "RemoveDuplicatesColumnsPanel");
                 AutomationProperties.GetName(columnsPanel).Should().Be("Columns");
                 AutomationProperties.GetHelpText(columnsPanel).Should().Be("Choose the columns used to identify duplicate rows.");
 
-                var buttons = FindVisualChildren<Button>(dialog)
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Where(button => button.Content is string)
                     .ToDictionary(button => (string)button.Content);
                 AutomationProperties.GetAutomationId(buttons["_Select All"]).Should().Be("RemoveDuplicatesSelectAllButton");
@@ -110,7 +109,7 @@ public sealed partial class DataToolDialogTests
                 AutomationProperties.GetName(buttons["_Unselect All"]).Should().Be("Unselect all columns");
                 AutomationProperties.GetHelpText(buttons["_Unselect All"]).Should().Be("Clear every column selection.");
 
-                var regionBox = FindVisualChildren<CheckBox>(dialog)
+                var regionBox = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "RemoveDuplicatesColumn0Box");
                 AutomationProperties.GetName(regionBox).Should().Be("Region column");
                 AutomationProperties.GetHelpText(regionBox).Should().Be("Select to include this column when identifying duplicate rows.");
