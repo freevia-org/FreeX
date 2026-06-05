@@ -266,6 +266,77 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_ExtractMiddleDottedToken_ExtractsInteriorTokenFromThreeTokenSources()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Region.East.001", "East"),
+                ("Team.Alpha.Q1", "Alpha")
+            ],
+            ["Area.South.003"]);
+
+        result.Should().BeEquivalentTo(["South"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractMiddleDottedToken_TrimsWhitespaceAroundSourceAndToken()
+    {
+        var result = FlashFillService.Fill(
+            [
+                (" Region . East . 001 ", "East"),
+                (" Team . Alpha . Q1 ", "Alpha")
+            ],
+            [" Area . South . 003 "]);
+
+        result.Should().BeEquivalentTo(["South"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("AreaSouth003")]
+    [InlineData("Area.South")]
+    [InlineData(".South.003")]
+    [InlineData("Area..003")]
+    [InlineData("Area.South.")]
+    [InlineData("Area.South.003.Extra")]
+    public void Fill_ExtractMiddleDottedToken_ReturnsNullWhenRemainingIsNotExactlyThreeNonEmptyTokens(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Region.East.001", "East"),
+                ("Team.Alpha.Q1", "Alpha")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_ExtractMiddleDottedToken_DoesNotOverrideFinalDottedTokenExtraction()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Region.East.001", "001"),
+                ("Team.Alpha.Q1", "Q1")
+            ],
+            ["Area.South.003"]);
+
+        result.Should().BeEquivalentTo(["003"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractMiddleDottedToken_DoesNotOverrideFinalDottedTokenRemoval()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Region.East.001", "Region.East"),
+                ("Team.Alpha.Q1", "Team.Alpha")
+            ],
+            ["Area.South.003"]);
+
+        result.Should().BeEquivalentTo(["Area.South"], o => o.WithStrictOrdering());
+    }
+
     [Theory]
     [InlineData(
         @"C:\Reports\Q1.xlsx",
