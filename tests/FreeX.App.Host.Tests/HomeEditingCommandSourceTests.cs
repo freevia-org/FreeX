@@ -16,8 +16,8 @@ public sealed class HomeEditingCommandSourceTests
         string keyTip,
         string handler)
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var button = ExtractButtonElementByClickHandler(xaml, handler);
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var button = xaml.ExtractButtonElementByClickHandler(handler);
 
         button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -58,8 +58,8 @@ public sealed class HomeEditingCommandSourceTests
         string keyTip,
         string handler)
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var menuItem = ExtractMenuItemElementByClickHandler(xaml, handler);
+        var xaml = LocalizedXamlTestSupport.ReadMainWindowXaml();
+        var menuItem = xaml.ExtractMenuItemElementByClickHandler(handler);
 
         menuItem.ShouldContainLocalizedAttribute("Header", header);
         menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -109,39 +109,5 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? [])");
         source.Should().Contain("new ClearCommentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))");
         source.Should().Contain("new ClearHyperlinksCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))");
-    }
-
-    private static string ExtractButtonElementByClickHandler(string xaml, string clickHandler)
-    {
-        var clickIndex = xaml.IndexOf($"Click=\"{clickHandler}\"", StringComparison.Ordinal);
-        clickIndex.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} button should be present");
-
-        var start = xaml.LastIndexOf("<Button", clickIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} button should have a Button start tag");
-
-        var end = xaml.IndexOf("</Button>", clickIndex, StringComparison.Ordinal);
-        if (end >= clickIndex)
-            return xaml.Substring(start, end - start + "</Button>".Length);
-
-        end = xaml.IndexOf("/>", clickIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThanOrEqualTo(clickIndex, $"the {clickHandler} button should have an end tag or be self-closing");
-        return xaml.Substring(start, end - start + 2);
-    }
-
-    private static string ExtractMenuItemElementByClickHandler(string xaml, string clickHandler)
-    {
-        var clickIndex = xaml.IndexOf($"Click=\"{clickHandler}\"", StringComparison.Ordinal);
-        clickIndex.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} menu item should be present");
-
-        var start = xaml.LastIndexOf("<MenuItem", clickIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} menu item should have a start tag");
-
-        var end = xaml.IndexOf("</MenuItem>", clickIndex, StringComparison.Ordinal);
-        if (end >= clickIndex)
-            return xaml.Substring(start, end - start + "</MenuItem>".Length);
-
-        end = xaml.IndexOf("/>", clickIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThanOrEqualTo(clickIndex, $"the {clickHandler} menu item should have an end tag or be self-closing");
-        return xaml.Substring(start, end - start + 2);
     }
 }
