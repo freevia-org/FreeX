@@ -32,6 +32,7 @@ public static partial class FlashFillService
             ?? TryInitials(examples)
             ?? TryNameAbbreviations(examples)
             ?? TryKnownNameCleanupDerivedPattern(examples)
+            ?? TryFullNameMiddleInitialEmailPattern(examples)
             ?? TryFullNameEmailPattern(examples)
             ?? TryKnownTitleAndSuffixRemoval(examples)
             ?? TryKnownTitleRemoval(examples)
@@ -365,6 +366,77 @@ public static partial class FlashFillService
         }
 
         return null;
+    }
+
+    private static Func<string, string?>? TryFullNameMiddleInitialEmailPattern(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var separator in EmailSeparators)
+        {
+            var pattern = TrySharedDomainThreeTokenFullNameEmailPattern(
+                examples,
+                tokens => (tokens[0] + separator + GetFirstInitial(tokens[1]) + separator + tokens[2]).ToLowerInvariant());
+            if (pattern is not null)
+                return pattern;
+        }
+
+        var firstMiddleInitialLastPattern = TrySharedDomainThreeTokenFullNameEmailPattern(
+            examples,
+            tokens => (tokens[0] + GetFirstInitial(tokens[1]) + tokens[2]).ToLowerInvariant());
+        if (firstMiddleInitialLastPattern is not null)
+            return firstMiddleInitialLastPattern;
+
+        var firstInitialMiddleInitialLastPattern = TrySharedDomainThreeTokenFullNameEmailPattern(
+            examples,
+            tokens => (GetFirstInitial(tokens[0]) + GetFirstInitial(tokens[1]) + tokens[2]).ToLowerInvariant());
+        if (firstInitialMiddleInitialLastPattern is not null)
+            return firstInitialMiddleInitialLastPattern;
+
+        return null;
+    }
+
+    private static Func<string, string?>? TrySharedDomainThreeTokenFullNameEmailPattern(
+        IReadOnlyList<(string Source, string Expected)> examples,
+        Func<string[], string> localPart)
+    {
+        string? domain = null;
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitThreeTokenFullName(source, out var tokens))
+                return null;
+
+            var expectedPrefix = localPart(tokens) + "@";
+            if (!expected.StartsWith(expectedPrefix, StringComparison.Ordinal))
+                return null;
+
+            var currentDomain = expected[expectedPrefix.Length..];
+            if (string.IsNullOrWhiteSpace(currentDomain) || !currentDomain.Contains('.', StringComparison.Ordinal))
+                return null;
+
+            if (domain is null)
+                domain = currentDomain;
+            else if (!string.Equals(domain, currentDomain, StringComparison.Ordinal))
+                return null;
+        }
+
+        return domain is null
+            ? null
+            : source => TrySplitThreeTokenFullName(source, out var tokens)
+                ? localPart(tokens) + "@" + domain
+                : null;
+    }
+
+    private static bool TrySplitThreeTokenFullName(string source, out string[] tokens)
+    {
+        var sourceTokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (sourceTokens.Length != 3 || sourceTokens.Any(token => token.Length == 0))
+        {
+            tokens = [];
+            return false;
+        }
+
+        tokens = [sourceTokens[0], sourceTokens[1], sourceTokens[2]];
+        return true;
     }
 
     private static Func<string, string?>? TrySharedDomainFullNameEmailPattern(

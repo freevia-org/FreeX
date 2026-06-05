@@ -1984,6 +1984,86 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeEquivalentTo(["katherine.j@contoso.com"], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData(".", "alan.m.turing@contoso.com", "katherine.c.johnson@contoso.com")]
+    [InlineData("_", "alan_m_turing@contoso.com", "katherine_c_johnson@contoso.com")]
+    [InlineData("-", "alan-m-turing@contoso.com", "katherine-c-johnson@contoso.com")]
+    public void Fill_FullNamesToMiddleInitialEmail_LearnsSeparatedAliasAndSharedDomain(
+        string separator,
+        string expectedFirst,
+        string expectedSecond)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", $"ada{separator}b{separator}lovelace@contoso.com"),
+                ("Grace Brewster Hopper", $"grace{separator}b{separator}hopper@contoso.com")
+            ],
+            [
+                "Alan Mathison Turing",
+                "Katherine Coleman Johnson"
+            ]);
+
+        result.Should().BeEquivalentTo([expectedFirst, expectedSecond], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToMiddleInitialEmail_LearnsCompactFirstMiddleInitialLastAndSharedDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "adablovelace@contoso.com"),
+                ("Grace Brewster Hopper", "gracebhopper@contoso.com")
+            ],
+            [
+                "Alan Mathison Turing",
+                "Katherine Coleman Johnson"
+            ]);
+
+        result.Should().BeEquivalentTo(["alanmturing@contoso.com", "katherinecjohnson@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToMiddleInitialEmail_LearnsCompactInitialsLastAndSharedDomain()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "ablovelace@contoso.com"),
+                ("Grace Brewster Hopper", "gbhopper@contoso.com")
+            ],
+            [
+                "Alan Mathison Turing",
+                "Katherine Coleman Johnson"
+            ]);
+
+        result.Should().BeEquivalentTo(["amturing@contoso.com", "kcjohnson@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToMiddleInitialEmail_ReturnsNullWhenExampleDomainsDiffer()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "ada.b.lovelace@contoso.com"),
+                ("Grace Brewster Hopper", "grace.b.hopper@example.org")
+            ],
+            ["Alan Mathison Turing"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_FullNamesToMiddleInitialEmail_ReturnsNullWhenRemainingNameHasTooFewTokens()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "ada.b.lovelace@contoso.com"),
+                ("Grace Brewster Hopper", "grace.b.hopper@contoso.com")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_FullNamesToEmail_ReturnsNullWhenExampleDomainsDiffer()
     {

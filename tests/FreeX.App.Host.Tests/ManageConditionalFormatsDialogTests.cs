@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -36,10 +35,9 @@ public sealed partial class ManageConditionalFormatsDialogTests
             .Single(item => Equals(item.Content, content));
 
     private static string ReadManageConditionalFormatsDialogSource() =>
-        string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ManageConditionalFormatsDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ManageConditionalFormatsDialog.Columns.cs")));
+        DialogSourceTestSupport.ReadHostSources(
+            "ManageConditionalFormatsDialog.cs",
+            "ManageConditionalFormatsDialog.Columns.cs");
 
     private static ConditionalFormat CreateRule(
         SheetId sheetId,
