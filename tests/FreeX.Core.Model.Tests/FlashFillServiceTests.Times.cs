@@ -343,6 +343,19 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmbeddedTimeRangeEndpointExtraction_ReturnsNullForIdenticalFirstEndpointFramesMovingTogether()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Window 14:05 to 16:40", "14:05"),
+                ("Window 10:00 to 12:00", "10:00")
+            ],
+            ["Window 09:30 to 10:45"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_EmbeddedTimeExtraction_ExtractsLabeledTwelveHourTime()
     {
         var result = FlashFillService.Fill(

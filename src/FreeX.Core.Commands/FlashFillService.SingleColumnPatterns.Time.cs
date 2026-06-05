@@ -24,6 +24,8 @@ public static partial class FlashFillService
         Second
     }
 
+    private readonly record struct TimeRangeTextFrame(string Prefix, string Between, string Suffix);
+
     private readonly record struct TimeLikeComponents(
         string HourText,
         string UnpaddedHourText,
@@ -210,6 +212,11 @@ public static partial class FlashFillService
             return null;
 
         TimeRangeEndpointKind? endpointKind = null;
+        TimeRangeTextFrame? firstFrame = null;
+        TimeParts? previousFirstTime = null;
+        TimeParts? previousSecondTime = null;
+        var sawDifferentFrame = false;
+        var sawOpposingEndpointMovement = false;
         var sawEndpointCandidate = false;
 
         foreach (var (source, expected) in examples)
@@ -230,10 +237,36 @@ public static partial class FlashFillService
                 endpointKind = currentKind;
             else if (endpointKind.Value != currentKind)
                 return _ => null;
+
+            var currentFrame = GetTimeRangeTextFrame(source, first, second);
+            if (firstFrame is null)
+                firstFrame = currentFrame;
+            else if (firstFrame.Value != currentFrame)
+                sawDifferentFrame = true;
+
+            if (!TryGetTimeParts(source, first, out var firstTime) ||
+                !TryGetTimeParts(source, second, out var secondTime))
+            {
+                return null;
+            }
+
+            if (previousFirstTime is { } previousFirst && previousSecondTime is { } previousSecond)
+            {
+                var firstMovement = Math.Sign(CompareTimeParts(firstTime, previousFirst));
+                var secondMovement = Math.Sign(CompareTimeParts(secondTime, previousSecond));
+                if (firstMovement != 0 && secondMovement != 0 && firstMovement != secondMovement)
+                    sawOpposingEndpointMovement = true;
+            }
+
+            previousFirstTime = firstTime;
+            previousSecondTime = secondTime;
         }
 
         if (!sawEndpointCandidate || endpointKind is null)
             return null;
+
+        if (!sawDifferentFrame && !sawOpposingEndpointMovement)
+            return _ => null;
 
         var kind = endpointKind.Value;
         var cache = new ExtractedSegmentCache();
@@ -457,6 +490,29 @@ public static partial class FlashFillService
         var length = range.EndExclusive - range.Start;
         return length == expected.Length &&
                source.AsSpan(range.Start, length).SequenceEqual(expected.AsSpan());
+    }
+
+    private static TimeRangeTextFrame GetTimeRangeTextFrame(
+        string source,
+        (int Start, int EndExclusive) first,
+        (int Start, int EndExclusive) second) =>
+        new(
+            source[..first.Start],
+            source[first.EndExclusive..second.Start],
+            source[second.EndExclusive..]);
+
+    private static bool TryGetTimeParts(
+        string source,
+        (int Start, int EndExclusive) range,
+        out TimeParts time) =>
+        TryReadTimeTokenAt(source, range.Start, out var endExclusive, out time, out _) &&
+        endExclusive == range.EndExclusive;
+
+    private static int CompareTimeParts(TimeParts left, TimeParts right)
+    {
+        var leftSeconds = left.Hour * 60 * 60 + left.Minute * 60 + left.Second;
+        var rightSeconds = right.Hour * 60 * 60 + right.Minute * 60 + right.Second;
+        return leftSeconds.CompareTo(rightSeconds);
     }
 
     private static bool HasAnyEmbeddedTimeComponentMatch(string source, string expected)
