@@ -1,9 +1,5 @@
 using System.IO;
-using System.Windows;
-using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -46,20 +42,6 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("UiText.Get(\"MainWindowMessage_SelectRangeFirst\")");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_DataValidationTitle\")");
         source.Should().NotContain("MessageBox.Show(\"Select a range first.\", \"Data Validation\")");
-    }
-
-    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
-        where T : DependencyObject
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T match)
-                yield return match;
-
-            foreach (var descendant in FindVisualChildren<T>(child))
-                yield return descendant;
-        }
     }
 
     private static char GetAccessKey(string label)

@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -34,7 +33,7 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var picker = FindVisualChildren<Button>(dialog)
+                var picker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetName(button) == "Select destination cell");
 
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -88,7 +87,7 @@ public sealed partial class DataToolDialogTests
             {
                 dialog.ApplyRangeSelection(new CellAddress(sheetId, 4, 8));
 
-                FindVisualChildren<TextBox>(dialog)
+                WpfTestTree.FindVisualDescendants<TextBox>(dialog)
                     .Single(box => box.Text == "H4")
                     .Text.Should().Be("H4");
             }

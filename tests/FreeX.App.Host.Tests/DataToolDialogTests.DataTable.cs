@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -216,7 +215,7 @@ public sealed partial class DataToolDialogTests
 
                 void AssertTextBoxAutomation(string automationId, string name, string helpText)
                 {
-                    var textBox = FindVisualChildren<TextBox>(dialog)
+                    var textBox = WpfTestTree.FindVisualDescendants<TextBox>(dialog)
                         .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
                     AutomationProperties.GetName(textBox).Should().Be(name);
                     AutomationProperties.GetHelpText(textBox).Should().Be(helpText);
@@ -307,7 +306,7 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                var textBoxes = WpfTestTree.FindVisualDescendants<TextBox>(dialog).ToList();
 
                 dialog.ApplyRangeSelection(
                     DataTableRangeSelectionTarget.RowInputCell,
@@ -343,10 +342,10 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                var textBoxes = WpfTestTree.FindVisualDescendants<TextBox>(dialog).ToList();
                 textBoxes[0].Text = " A1 ";
                 textBoxes[1].Text = " C1 ";
-                var picker = FindVisualChildren<Button>(dialog)
+                var picker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetName(button) == automationName);
 
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

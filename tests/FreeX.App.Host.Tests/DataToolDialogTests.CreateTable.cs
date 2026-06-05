@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -39,12 +38,12 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var rangeBox = FindVisualChildren<TextBox>(dialog).Single();
+                var rangeBox = WpfTestTree.FindVisualDescendants<TextBox>(dialog).Single();
                 AutomationProperties.GetName(rangeBox).Should().Be(UiText.Get("CreateTable_RangeAutomationName"));
                 AutomationProperties.GetAutomationId(rangeBox).Should().Be("CreateTableRangeBox");
                 AutomationProperties.GetHelpText(rangeBox).Should().Be(UiText.Get("CreateTable_RangeAutomationHelpText"));
 
-                var headersBox = FindVisualChildren<CheckBox>(dialog)
+                var headersBox = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(box => Equals(box.Content, UiText.Get("CreateTable_HeadersCheckBox")));
                 AutomationProperties.GetName(headersBox).Should().Be(UiText.Get("CreateTable_HeadersAutomationName"));
                 AutomationProperties.GetAutomationId(headersBox).Should().Be("CreateTableHeadersBox");
@@ -115,7 +114,7 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var picker = FindVisualChildren<Button>(dialog)
+                var picker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Where(button => Equals(button.Content, "..."))
                     .Single();
 
@@ -158,7 +157,7 @@ public sealed partial class DataToolDialogTests
             {
                 dialog.ApplyRangeSelection("B2:D8");
 
-                FindVisualChildren<TextBox>(dialog).Single().Text.Should().Be("B2:D8");
+                WpfTestTree.FindVisualDescendants<TextBox>(dialog).Single().Text.Should().Be("B2:D8");
             }
             finally
             {
