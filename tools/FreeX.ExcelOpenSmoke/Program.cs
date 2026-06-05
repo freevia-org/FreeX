@@ -467,6 +467,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetPageSetupMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageBreakMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSingleXmlCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -684,6 +685,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetPageSetupMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageBreakMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSingleXmlCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -4691,6 +4693,185 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet printOptions metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetPageSetupMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetPageSetupMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetPageSetupMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetPageSetupMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var pageSetupElements = root.Elements(SpreadsheetNs + "pageSetup").ToArray();
+        if (pageSetupElements.Length > 1)
+            issues.Add($"{worksheetPart} has {pageSetupElements.Length} pageSetup elements; expected at most one");
+
+        foreach (var pageSetup in pageSetupElements.Select((element, index) => new WorksheetPageSetupReference(index + 1, element)))
+        {
+            AddWorksheetPageSetupIssues(worksheetPart, root, pageSetup, issues);
+        }
+    }
+
+    private static void AddWorksheetPageSetupIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetPageSetupReference pageSetupReference,
+        List<string> issues)
+    {
+        var pageSetup = pageSetupReference.Element;
+        var description = $"pageSetup #{pageSetupReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            pageSetup,
+            description,
+            [
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            pageSetup,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins"
+            ],
+            issues);
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "paperSize", pageSetup.Attribute("paperSize")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "scale", pageSetup.Attribute("scale")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "firstPageNumber", pageSetup.Attribute("firstPageNumber")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "fitToWidth", pageSetup.Attribute("fitToWidth")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "fitToHeight", pageSetup.Attribute("fitToHeight")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "horizontalDpi", pageSetup.Attribute("horizontalDpi")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "verticalDpi", pageSetup.Attribute("verticalDpi")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "copies", pageSetup.Attribute("copies")?.Value, issues);
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "usePrinterDefaults", pageSetup.Attribute("usePrinterDefaults")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "blackAndWhite", pageSetup.Attribute("blackAndWhite")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "draft", pageSetup.Attribute("draft")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "useFirstPageNumber", pageSetup.Attribute("useFirstPageNumber")?.Value, issues);
+
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "pageOrder",
+            pageSetup.Attribute("pageOrder")?.Value,
+            ["downThenOver", "overThenDown"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "orientation",
+            pageSetup.Attribute("orientation")?.Value,
+            ["default", "portrait", "landscape"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "cellComments",
+            pageSetup.Attribute("cellComments")?.Value,
+            ["none", "asDisplayed", "atEnd"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "errors",
+            pageSetup.Attribute("errors")?.Value,
+            ["displayed", "blank", "dash", "NA"],
+            issues);
+
+        if (pageSetup.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddOptionalKnownWorksheetMetadataValueIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        IReadOnlyCollection<string> knownValues,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) ||
+            knownValues.Contains(value.Trim(), StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        issues.Add($"{worksheetPart} {description} has unknown {attributeName} value '{value}'");
+    }
+
+    private static void ThrowInvalidWorksheetPageSetupMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet pageSetup metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetPageBreakMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -11814,6 +11995,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetPrintOptionsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetPageSetupReference(
         int Ordinal,
         XElement Element);
 
