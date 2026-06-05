@@ -1060,6 +1060,56 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversSalesMarketingCustomerVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Campain campains marketting advertisment ADVERTISMENTS pipline Opportunty oppertunity prospectve prospec convertion conversoin retenton churnn QOUTE quotaton pricng discountng. Keep campaign, campaigns, marketing, advertisement, advertisements, pipeline, opportunity, prospective, prospect, conversion, retention, churn, quote, quotation, pricing, discounting, customer, precampain, campain_id, https://campain.example.com/pipline, sales@marketting.example.com, and \"C:\\campain folder\\qoute file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "campain CAMPAIN Campain https://campain.example.com/campain sales@campain.example.com campain_id precampain \"C:\\campain folder\\campain file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "campaign");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Campain", "Campaign"),
+            ("campains", "campaigns"),
+            ("marketting", "marketing"),
+            ("advertisment", "advertisement"),
+            ("ADVERTISMENTS", "ADVERTISEMENTS"),
+            ("pipline", "pipeline"),
+            ("Opportunty", "Opportunity"),
+            ("oppertunity", "opportunity"),
+            ("prospectve", "prospective"),
+            ("prospec", "prospect"),
+            ("convertion", "conversion"),
+            ("conversoin", "conversion"),
+            ("retenton", "retention"),
+            ("churnn", "churn"),
+            ("QOUTE", "QUOTE"),
+            ("quotaton", "quotation"),
+            ("pricng", "pricing"),
+            ("discountng", "discounting"));
+        plan.IssueCount.Should().Be(18);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Campaign campaigns marketing advertisement ADVERTISEMENTS pipeline Opportunity opportunity prospective prospect conversion conversion retention churn QUOTE quotation pricing discounting. Keep campaign, campaigns, marketing, advertisement, advertisements, pipeline, opportunity, prospective, prospect, conversion, retention, churn, quote, quotation, pricing, discounting, customer, precampain, campain_id, https://campain.example.com/pipline, sales@marketting.example.com, and \"C:\\campain folder\\qoute file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(18);
+        replaceAllCorrected.Should().Be(
+            "campaign CAMPAIGN Campaign https://campain.example.com/campain sales@campain.example.com campain_id precampain \"C:\\campain folder\\campain file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");
