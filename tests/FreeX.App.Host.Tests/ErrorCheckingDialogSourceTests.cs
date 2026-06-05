@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.Core.Commands;
@@ -12,7 +11,7 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void DialogListAndHeaderUseIssueWordingForMixedAuditResults()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var source = ReadErrorCheckingDialogSource();
 
         source.Should().Contain("UiText.Format(\"ErrorChecking_IssueCountHeader\", _issues.Count)");
         source.Should().Contain("Header = UiText.Get(\"ErrorChecking_IssueColumnHeader\")");
@@ -24,7 +23,7 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingEmptyResultMessageUsesIssueWording()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs"));
+        var source = ReadMainWindowFormulaCommandsSource();
 
         source.Should().Contain("No issues found.");
         source.Should().NotContain("No errors found.");
@@ -33,9 +32,9 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingDialog_ExposesOptionsCallbackButton()
     {
-        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
-        var formulaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var dialogSource = ReadErrorCheckingDialogSource();
+        var formulaSource = ReadMainWindowFormulaCommandsSource();
+        var backstageSource = ReadMainWindowBackstageSource();
 
         dialogSource.Should().Contain("Action? openOptions");
         dialogSource.Should().Contain("Content = UiText.Get(\"ErrorChecking_OptionsButton\")");
@@ -47,7 +46,7 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingDialog_ExposesKeyboardAccessKeysForCommandButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var source = ReadErrorCheckingDialogSource();
 
         foreach (var content in new[]
         {
@@ -68,7 +67,7 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingDialogOpenedFromKeyboard_FocusesIssueList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var source = ReadErrorCheckingDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -80,7 +79,7 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingDialog_DoubleClickNavigateHandlesMouseEvent()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var source = ReadErrorCheckingDialogSource();
         var doubleClick = source[
             source.IndexOf("private void ListView_MouseDoubleClick", StringComparison.Ordinal)..
             source.IndexOf("private void ListView_KeyDown", StringComparison.Ordinal)];
@@ -96,7 +95,7 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingDialog_LabelsIssueListWithAccessKeyAndAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var source = ReadErrorCheckingDialogSource();
 
         source.Should().Contain("new Label { Content = UiText.Get(\"ErrorChecking_IssuesLabel\"), Target = _listView");
         source.Should().Contain("AutomationProperties.SetName(_listView, UiText.Get(\"ErrorChecking_IssuesAutomationName\"));");
@@ -106,7 +105,7 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingDialog_UsesExcelLikeErrorHelpAndActionStructure()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var source = ReadErrorCheckingDialogSource();
 
         source.Should().Contain("UiText.Get(\"ErrorChecking_HelpGroupHeader\")");
         source.Should().Contain("Content = UiText.Get(\"ErrorChecking_HelpButton\")");
@@ -172,8 +171,8 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingDialog_ShowCalculationStepsTargetsFormulaIssuesOnly()
     {
-        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
-        var formulaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs"));
+        var dialogSource = ReadErrorCheckingDialogSource();
+        var formulaSource = ReadMainWindowFormulaCommandsSource();
 
         dialogSource.Should().Contain("Action<FormulaErrorIssue>? showCalculationSteps = null");
         dialogSource.Should().Contain("_showCalculationSteps = showCalculationSteps ?? traceError;");
@@ -236,4 +235,12 @@ public sealed class ErrorCheckingDialogSourceTests
             "=A1",
             "Formula uses an incompatible value.");
 
+    private static string ReadErrorCheckingDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("ErrorCheckingDialog.cs");
+
+    private static string ReadMainWindowFormulaCommandsSource() =>
+        DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaCommands.cs");
+
+    private static string ReadMainWindowBackstageSource() =>
+        DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 }
