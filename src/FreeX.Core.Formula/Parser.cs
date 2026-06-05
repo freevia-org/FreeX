@@ -310,10 +310,17 @@ public sealed class Parser
         return left;
     }
 
-    // Unary -> ('-' | '+') Unary | Postfix
+    // Unary -> ('-' | '+' | '@') Unary | Postfix
     private FormulaNode ParseUnary()
     {
         using var frame = EnterParseFrame();
+        if (Current.Type == TokenType.ImplicitIntersection)
+        {
+            Advance();
+            var operand = ParseUnary();
+            return new UnaryOpNode(UnaryOperator.ImplicitIntersection, operand);
+        }
+
         if (Current.Type == TokenType.Minus)
         {
             Advance();

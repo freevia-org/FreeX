@@ -112,6 +112,20 @@ public static class FormulaSerializer
                 WriteSubExpr(bin.Right, GetPrecedence(bin.Operator), bin.Operator is BinaryOperator.Subtract or BinaryOperator.Divide, sb);
                 break;
 
+            case UnaryOpNode u when u.Operator == UnaryOperator.ImplicitIntersection:
+                sb.Append('@');
+                if (u.Operand is BinaryOpNode)
+                {
+                    sb.Append('(');
+                    WriteNode(u.Operand, sb);
+                    sb.Append(')');
+                }
+                else
+                {
+                    WriteNode(u.Operand, sb);
+                }
+                break;
+
             case UnaryOpNode u when u.Operator == UnaryOperator.Negate:
                 sb.Append('-');
                 if (u.Operand is BinaryOpNode)

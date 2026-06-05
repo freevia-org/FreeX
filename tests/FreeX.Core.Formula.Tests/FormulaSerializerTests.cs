@@ -207,6 +207,9 @@ public class FormulaSerializerTests(ITestOutputHelper output)
     public void Serialize_UnaryPercent() => RoundTrip("=A1%").Should().Be("A1%");
 
     [Fact]
+    public void Serialize_ImplicitIntersection() => RoundTrip("=@A1:A3").Should().Be("@A1:A3");
+
+    [Fact]
     public void Serialize_ComplexFormula()
     {
         RoundTrip("=IF(A1>0,SUM(B1:B10),0)").Should().Be("IF(A1>0,SUM(B1:B10),0)");

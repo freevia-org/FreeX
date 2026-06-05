@@ -470,10 +470,48 @@ public sealed partial class FormulaEvaluator
 
         return node.Operator switch
         {
+            UnaryOperator.ImplicitIntersection => ImplicitIntersectionOp(operand, context),
             UnaryOperator.Negate => NegateOp(operand),
             UnaryOperator.Percent => PercentOp(operand),
             _ => throw new FormulaEvalException("#VALUE!", $"Unknown unary operator: {node.Operator}")
         };
+    }
+
+    private static ScalarValue ImplicitIntersectionOp(ScalarValue value, IEvalContext context)
+    {
+        if (value is not RangeValue range)
+            return value;
+
+        if (context.CurrentCellAddress is not { } currentCell)
+            return ErrorValue.Value;
+
+        return ResolveImplicitIntersection(range, currentCell);
+    }
+
+    private static ScalarValue ResolveImplicitIntersection(RangeValue range, CellAddress currentCell)
+    {
+        if (range.RowCount == 1 && range.ColCount == 1)
+            return range.Cells[0, 0];
+
+        var rowOffset = TryGetOffset(currentCell.Row, range.StartRow, range.RowCount);
+        var colOffset = TryGetOffset(currentCell.Col, range.StartCol, range.ColCount);
+
+        if (rowOffset is { } row && colOffset is { } col)
+            return range.Cells[row, col];
+
+        if (range.RowCount == 1 && colOffset is { } rowVectorCol)
+            return range.Cells[0, rowVectorCol];
+
+        if (range.ColCount == 1 && rowOffset is { } columnVectorRow)
+            return range.Cells[columnVectorRow, 0];
+
+        return ErrorValue.Value;
+    }
+
+    private static int? TryGetOffset(uint coordinate, uint start, int count)
+    {
+        var offset = (long)coordinate - start;
+        return offset >= 0 && offset < count ? (int)offset : null;
     }
 
     private static ScalarValue NegateOp(ScalarValue v)
