@@ -390,8 +390,8 @@ such as phone-number punctuation copied from examples, calendar-valid embedded-d
 labeled text with ambiguous multi-date sources rejected, weekday-prefixed and embedded numeric and English month-name date
 component extraction that preserves raw month tokens while normalizing ordinal day tokens, pure and embedded time component extraction for hour, minute, second, and
 meridiem from time-like values or labeled text with ambiguous component examples rejected, embedded time extraction/normalization plus supported two-time range endpoint extraction, including same-label ranges when endpoint examples are unambiguous, with
-ambiguous multi-time sources rejected, and two-part full-name reordering such as `Ada Lovelace` to
-`Lovelace, Ada`, plus a small multi-column pattern set. First/last-name,
+ambiguous multi-time sources rejected, known title/honorific, credential, and organization legal-suffix cleanup,
+and two-part full-name reordering such as `Ada Lovelace` to `Lovelace, Ada`, plus a small multi-column pattern set. First/last-name,
 first-initial/last-name, and last-name/first-initial email generation learn constant
 domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/last-initial aliases. Root-domain stem
 extraction recognizes a bounded set of common multi-label public suffixes such as `co.uk`, `com.au`, and `co.nz`.
@@ -411,8 +411,8 @@ normalized add/remove/clear changes and Cancel leaves the original options objec
 Accessibility Checker remains a deterministic model-backed audit in `Core.Commands`, not a full WCAG or screen-reader
 engine. It reports issues supported by current workbook state, including merged cells, blank structured-table headers,
 low-contrast cell text against base, workbook theme/tint, and patterned fills, low-contrast text boxes against
-explicit, theme, and workbook object-default fills, missing object alternate text, hidden sheets/rows/columns with
-modeled content including hyperlinks, blank, generic, URL-like, or unclear hyperlink display text, and charts whose title is missing as the current accessible label.
+explicit, theme, and workbook object-default fills, missing or generic object alternate/title/name text including common default object labels, hidden sheets/rows/columns with
+modeled content including hyperlinks, blank, generic, URL-like, or unclear hyperlink display text, and charts whose title or axis title is missing or generic as the current accessible label.
 
 Native JSON persists the local threaded-comment model, including author, replies, created/modified UTC activity
 metadata, and resolved state, so FreeX's in-app comment threads survive native save/load. Comment navigation and
