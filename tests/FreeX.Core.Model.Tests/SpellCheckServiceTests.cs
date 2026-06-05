@@ -822,6 +822,53 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversBudgetStakeholderProjectControlVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Budjet BUDGGET Stakehlder stakeholer estimte estimete SPONSER sponsr apporver approvr fundng Allocaton alocation scopee changereq. Keep budget, stakeholder, estimate, sponsor, approver, funding, allocation, scope, change request, prebudjet, apporver_id, https://budjet.example.com/stakehlder, finance@fundng.example.com, and \"C:\\allocaton folder\\scopee file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "budjet BUDJET Budjet https://budjet.example.com/budjet finance@budjet.example.com budjet_id prebudjet \"C:\\budjet folder\\budjet file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "budget");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Budjet", "Budget"),
+            ("BUDGGET", "BUDGET"),
+            ("Stakehlder", "Stakeholder"),
+            ("stakeholer", "stakeholder"),
+            ("estimte", "estimate"),
+            ("estimete", "estimate"),
+            ("SPONSER", "SPONSOR"),
+            ("sponsr", "sponsor"),
+            ("apporver", "approver"),
+            ("approvr", "approver"),
+            ("fundng", "funding"),
+            ("Allocaton", "Allocation"),
+            ("alocation", "allocation"),
+            ("scopee", "scope"),
+            ("changereq", "change request"));
+        plan.IssueCount.Should().Be(15);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Budget BUDGET Stakeholder stakeholder estimate estimate SPONSOR sponsor approver approver funding Allocation allocation scope change request. Keep budget, stakeholder, estimate, sponsor, approver, funding, allocation, scope, change request, prebudjet, apporver_id, https://budjet.example.com/stakehlder, finance@fundng.example.com, and \"C:\\allocaton folder\\scopee file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(15);
+        replaceAllCorrected.Should().Be(
+            "budget BUDGET Budget https://budjet.example.com/budjet finance@budjet.example.com budjet_id prebudjet \"C:\\budjet folder\\budjet file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversQualityTestingVocabularyTypos()
     {
         var wb = new Workbook("test");
