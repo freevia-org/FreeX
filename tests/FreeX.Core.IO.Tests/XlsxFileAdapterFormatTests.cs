@@ -169,6 +169,9 @@ public sealed class XlsxFileAdapterFormatTests
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
         sanitizerSource.Should().Contain("GetSanitizationRequirements(");
         sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints? hints = null");
+        sanitizerSource.Should().Contain("RemoveDrawingPackageParts(archive)");
+        sanitizerSource.Should().Contain("RemoveWorksheetDrawingReferences(archive)");
+        sanitizerSource.Should().Contain("RemoveWorksheetDrawingRelationships(archive, removedParts)");
         adapterSource.Should().Contain("var sheetXmlLayoutWarningCount = warnings.Count;");
         adapterSource.Should().Contain("sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);");
         adapterSource.Should().Contain("warnings.Count != sheetXmlLayoutWarningCount");

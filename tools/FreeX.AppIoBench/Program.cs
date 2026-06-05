@@ -307,6 +307,8 @@ internal static class Program
         $"{FormatLoadPhase("style_metadata", diagnostics.StyleMetadata)} " +
         $"{FormatLoadPhase("sheet_xml_layout", diagnostics.SheetXmlLayout)} " +
         $"{FormatLoadPhase("closedxml_load", diagnostics.ClosedXmlLoad)} " +
+        $"{FormatLoadPhase("closedxml_package_prep", diagnostics.ClosedXmlPackagePreparation)} " +
+        $"{FormatLoadPhase("closedxml_workbook_open", diagnostics.ClosedXmlWorkbookOpen)} " +
         $"{FormatLoadPhase("workbook_materialize", diagnostics.WorkbookMaterialization)} " +
         $"{FormatLoadPhase("source_snapshot", diagnostics.SourceSnapshot)}";
 
