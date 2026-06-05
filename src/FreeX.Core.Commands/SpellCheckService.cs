@@ -737,6 +737,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "amout"))
+                {
+                    suggestion = "amount";
+                    return true;
+                }
+
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "axies"))
                 {
                     suggestion = "axis";
@@ -940,12 +946,6 @@ public static partial class SpellCheckService
                 if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acrued"))
                 {
                     suggestion = "accrued";
-                    return true;
-                }
-
-                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "amout"))
-                {
-                    suggestion = "amount";
                     return true;
                 }
 
@@ -2605,12 +2605,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "witholding"))
-                {
-                    suggestion = "withholding";
-                    return true;
-                }
-
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "tommorrow"))
                 {
                     suggestion = "tomorrow";
@@ -2760,6 +2754,12 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "fulfillmnt"))
                 {
                     suggestion = "fulfillment";
+                    return true;
+                }
+
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "witholding"))
+                {
+                    suggestion = "withholding";
                     return true;
                 }
 
