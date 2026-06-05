@@ -11,6 +11,7 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasConditionalFormattingBlocks,
     bool? HasUnsupportedConditionalFormattingBlocks,
     bool? HasWorksheetDynamicFilters,
+    bool? HasDocumentPropertiesPackageGraphIssues,
     IReadOnlySet<string>? MergeCellWorksheetPathsToStrip);
 
 internal static class XlsxClosedXmlLoadPackageSanitizer
@@ -76,6 +77,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 RemoveWorksheetDynamicFilters(archive);
             if (requirements.MergeCellWorksheetPathsToStrip is { Count: > 0 } mergeCellWorksheetPaths)
                 RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
+            if (requirements.HasDocumentPropertiesPackageGraphIssues)
+                XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
         }
 
         sanitized.Position = 0;
@@ -179,11 +182,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 scanUnsupportedConditionalFormatting &&
                 ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks, archive, HasUnsupportedConditionalFormattingBlocks),
                 ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters, archive, HasWorksheetDynamicFilters),
+                ResolveKnownOrScan(knownHints.HasDocumentPropertiesPackageGraphIssues, archive, HasDocumentPropertiesPackageGraphIssues),
                 knownHints.MergeCellWorksheetPathsToStrip);
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, null);
         }
         finally
         {
@@ -202,7 +206,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         if (hints.HasPivotPackageMetadata is not { } hasPivotPackageMetadata ||
             hints.HasChartExChartParts is not { } hasChartExChartParts ||
             hints.HasDrawingPackageParts is not { } hasDrawingPackageParts ||
-            hints.HasWorksheetDynamicFilters is not { } hasWorksheetDynamicFilters)
+            hints.HasWorksheetDynamicFilters is not { } hasWorksheetDynamicFilters ||
+            hints.HasDocumentPropertiesPackageGraphIssues is not { })
         {
             return false;
         }
@@ -226,6 +231,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             scanAllConditionalFormatting && hints.HasConditionalFormattingBlocks.GetValueOrDefault(),
             scanUnsupportedConditionalFormatting && hints.HasUnsupportedConditionalFormattingBlocks.GetValueOrDefault(),
             hasWorksheetDynamicFilters,
+            hints.HasDocumentPropertiesPackageGraphIssues.GetValueOrDefault(),
             hints.MergeCellWorksheetPathsToStrip);
         return true;
     }
@@ -236,6 +242,99 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         Func<ZipArchive, bool> scan) =>
         knownValue ?? scan(archive);
 
+    private static bool HasDocumentPropertiesPackageGraphIssues(ZipArchive archive)
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsEntry = archive.GetEntry("_rels/.rels");
+        if (relationshipsEntry is null)
+            return false;
+
+        try
+        {
+            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+            var root = relationshipsXml.Root;
+            if (root is null || root.Name != relationshipNs + "Relationships")
+                return false;
+
+            return HasDocumentPropertyRelationshipIssue(
+                    archive,
+                    root,
+                    relationshipNs,
+                    "docProps/core.xml",
+                    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties") ||
+                HasDocumentPropertyRelationshipIssue(
+                    archive,
+                    root,
+                    relationshipNs,
+                    "docProps/app.xml",
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties") ||
+                HasDocumentPropertyRelationshipIssue(
+                    archive,
+                    root,
+                    relationshipNs,
+                    "docProps/custom.xml",
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties");
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool HasDocumentPropertyRelationshipIssue(
+        ZipArchive archive,
+        XElement relationshipsRoot,
+        XNamespace relationshipNs,
+        string partName,
+        string relationshipType)
+    {
+        if (archive.GetEntry(partName) is null)
+            return false;
+
+        var relationships = relationshipsRoot
+            .Elements(relationshipNs + "Relationship")
+            .Where(relationship => RelationshipTargetsPart(relationship, partName))
+            .ToArray();
+        if (relationships.Length == 0)
+            return false;
+        if (relationships.Length > 1)
+            return true;
+
+        var relationship = relationships[0];
+        if (!string.Equals(
+                relationship.Attribute("Type")?.Value?.Trim(),
+                relationshipType,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.Equals(
+                relationship.Attribute("Target")?.Value?.Trim(),
+                partName,
+                StringComparison.Ordinal) ||
+            !string.IsNullOrWhiteSpace(relationship.Attribute("TargetMode")?.Value);
+    }
+
+    private static bool RelationshipTargetsPart(XElement relationship, string partName)
+    {
+        var target = relationship.Attribute("Target")?.Value?.Trim();
+        if (string.IsNullOrWhiteSpace(target))
+            return false;
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            XlsxPackagePath.ResolveRelationshipTarget("", target),
+            partName,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private readonly record struct SanitizationRequirements(
         bool HasPivotPackageMetadata,
         bool HasChartExChartParts,
@@ -243,6 +342,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasAllConditionalFormattingBlocks,
         bool HasUnsupportedConditionalFormattingBlocks,
         bool HasWorksheetDynamicFilters,
+        bool HasDocumentPropertiesPackageGraphIssues,
         IReadOnlySet<string>? MergeCellWorksheetPathsToStrip)
     {
         public bool RequiresAny =>
@@ -252,6 +352,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasAllConditionalFormattingBlocks ||
             HasUnsupportedConditionalFormattingBlocks ||
             HasWorksheetDynamicFilters ||
+            HasDocumentPropertiesPackageGraphIssues ||
             MergeCellWorksheetPathsToStrip is { Count: > 0 };
     }
 
@@ -301,6 +402,13 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             targetArchive?.Dispose();
             targetArchive = null;
             targetPackage.Position = 0;
+            if (requirements.HasDocumentPropertiesPackageGraphIssues)
+            {
+                using var archive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+                XlsxDocumentPropertiesPreserver.NormalizePackageGraph(archive);
+                targetPackage.Position = 0;
+            }
+
             returnTargetPackage = true;
             return targetPackage;
         }
@@ -367,6 +475,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return false;
         }
 
+        if (IsChartsheetXml(sourceEntry) &&
+            requirements.HasDrawingPackageParts)
+        {
+            return WriteTransformedChartsheetEntry(sourceEntry, targetArchive);
+        }
+
         if (requirements.HasPivotPackageMetadata &&
             string.Equals(normalizedPath, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
         {
@@ -413,7 +527,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return true;
 
         if (requirements.HasDrawingPackageParts && removedParts.Count > 0)
-            return GetWorksheetPathFromRelationshipPath(normalizedPath) is not null;
+            return GetSheetPathFromRelationshipPath(normalizedPath) is not null;
 
         return requirements.HasChartExChartParts &&
             chartExParts.Count > 0 &&
@@ -445,6 +559,19 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return false;
 
         WriteXmlEntry(sourceEntry, targetArchive, worksheetXml);
+        return true;
+    }
+
+    private static bool WriteTransformedChartsheetEntry(
+        ZipArchiveEntry sourceEntry,
+        ZipArchive targetArchive)
+    {
+        var chartsheetXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        var changed = TransformChartsheetXml(chartsheetXml);
+        if (!changed)
+            return false;
+
+        WriteXmlEntry(sourceEntry, targetArchive, chartsheetXml);
         return true;
     }
 
@@ -498,6 +625,13 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             changed |= RemoveElements(root.Elements(worksheetNs + "mergeCells"));
 
         return changed;
+    }
+
+    private static bool TransformChartsheetXml(XDocument chartsheetXml)
+    {
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return chartsheetXml.Root is { } root &&
+            RemoveElements(root.Elements(sheetNs + "drawing"));
     }
 
     private static bool ShouldStripMergeCells(
@@ -643,6 +777,10 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsChartsheetXml(ZipArchiveEntry entry) =>
+        entry.FullName.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) &&
+        entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsDrawingRelationshipEntry(string normalizedPath) =>
         normalizedPath.StartsWith("xl/drawings/_rels/", StringComparison.OrdinalIgnoreCase) &&
         normalizedPath.EndsWith(".xml.rels", StringComparison.OrdinalIgnoreCase);
@@ -750,8 +888,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         if (removedParts.Count == 0)
             return;
 
-        RemoveWorksheetDrawingReferences(archive);
-        RemoveWorksheetDrawingRelationships(archive, removedParts);
+        RemoveSheetDrawingReferences(archive);
+        RemoveSheetDrawingRelationships(archive, removedParts);
         RemoveContentTypeOverrides(archive, removedParts);
     }
 
@@ -771,45 +909,41 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         normalizedPath.StartsWith("xl/drawings/_rels/drawing", StringComparison.OrdinalIgnoreCase) &&
         normalizedPath.EndsWith(".xml.rels", StringComparison.OrdinalIgnoreCase);
 
-    private static void RemoveWorksheetDrawingReferences(ZipArchive archive)
+    private static void RemoveSheetDrawingReferences(ZipArchive archive)
     {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        foreach (var worksheetEntry in archive.Entries
-                     .Where(entry =>
-                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var sheetEntry in archive.Entries
+                     .Where(entry => IsWorksheetXml(entry) || IsChartsheetXml(entry))
                      .ToList())
         {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
+            var sheetXml = XlsxPackageXmlEditor.LoadXml(sheetEntry);
+            var root = sheetXml.Root;
             if (root is null)
                 continue;
 
             var drawingReferences = root
                 .Elements()
-                .Where(element => element.Name == worksheetNs + "drawing")
+                .Where(element => element.Name == sheetNs + "drawing")
                 .ToList();
             if (drawingReferences.Count == 0)
                 continue;
 
             drawingReferences.Remove();
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            XlsxPackageXmlEditor.ReplaceXml(archive, sheetEntry.FullName, sheetXml);
         }
     }
 
-    private static void RemoveWorksheetDrawingRelationships(
+    private static void RemoveSheetDrawingRelationships(
         ZipArchive archive,
         IReadOnlySet<string> removedParts)
     {
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         foreach (var relsEntry in archive.Entries
-                     .Where(entry =>
-                         entry.FullName.StartsWith("xl/worksheets/_rels/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml.rels", StringComparison.OrdinalIgnoreCase))
+                     .Where(entry => GetSheetPathFromRelationshipPath(entry.FullName) is not null)
                      .ToList())
         {
-            var worksheetPath = GetWorksheetPathFromRelationshipPath(relsEntry.FullName);
-            if (worksheetPath is null)
+            var sheetPath = GetSheetPathFromRelationshipPath(relsEntry.FullName);
+            if (sheetPath is null)
                 continue;
 
             var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
@@ -817,7 +951,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 .Elements(packageRelNs + "Relationship")
                 .Where(relationship =>
                     relationship.Attribute("Target")?.Value is { Length: > 0 } target &&
-                    removedParts.Contains(XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target)))
+                    removedParts.Contains(XlsxPackagePath.ResolveRelationshipTarget(sheetPath, target)))
                 .ToList()
                 ?? [];
             if (relationships.Count == 0)
@@ -828,19 +962,24 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
     }
 
-    private static string? GetWorksheetPathFromRelationshipPath(string relsPath)
+    private static string? GetSheetPathFromRelationshipPath(string relsPath)
     {
-        const string prefix = "xl/worksheets/_rels/";
-        const string suffix = ".rels";
-        var normalized = NormalizeEntryPath(relsPath);
-        if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
-            !normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-        {
+        var sourcePart = GetPackagePartPathFromRelationshipPath(relsPath);
+        if (sourcePart is null)
             return null;
-        }
 
-        return "xl/worksheets/" + normalized[prefix.Length..^suffix.Length];
+        return IsWorksheetPath(sourcePart) || IsChartsheetPath(sourcePart)
+            ? sourcePart
+            : null;
     }
+
+    private static bool IsWorksheetPath(string normalizedPath) =>
+        normalizedPath.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+        normalizedPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsChartsheetPath(string normalizedPath) =>
+        normalizedPath.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) &&
+        normalizedPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
     private static void RemoveContentTypeOverrides(
         ZipArchive archive,
