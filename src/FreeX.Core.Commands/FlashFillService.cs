@@ -48,6 +48,7 @@ public static partial class FlashFillService
             ?? TryDigitMask(examples)
             ?? TryDateNormalization(examples)
             ?? TryEmbeddedDateExtraction(examples)
+            ?? TryEmbeddedDateComponentExtraction(examples)
             ?? TryTimeNormalization(examples)
             ?? TryEmbeddedTimeExtraction(examples)
             ?? TryPhoneNumberNormalization(examples)
