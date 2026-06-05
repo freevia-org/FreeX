@@ -561,6 +561,23 @@ public sealed partial class Sheet
         _spillAnchors[(anchor.Row, anchor.Col)] = ((uint)rows, (uint)cols);
     }
 
+    /// <summary>
+    /// If <paramref name="anchor"/> is a dynamic-array spill anchor, returns its spill extent
+    /// (rows × cols, including the anchor). Used by the saver to mark spilling formulas as array formulas.
+    /// </summary>
+    public bool TryGetSpillExtent(CellAddress anchor, out uint rows, out uint cols)
+    {
+        if (_spillAnchors.TryGetValue((anchor.Row, anchor.Col), out var extent))
+        {
+            rows = extent.Rows;
+            cols = extent.Cols;
+            return true;
+        }
+        rows = 0;
+        cols = 0;
+        return false;
+    }
+
     /// <summary>Remove all spill values written by the given anchor cell's formula.</summary>
     public void ClearSpillRange(CellAddress anchor)
     {
