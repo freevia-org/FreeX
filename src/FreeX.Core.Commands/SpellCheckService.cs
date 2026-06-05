@@ -1977,6 +1977,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "permitt"))
+                {
+                    suggestion = "permit";
+                    return true;
+                }
+
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "promotn"))
                 {
                     suggestion = "promotion";
@@ -2732,12 +2738,6 @@ public static partial class SpellCheckService
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "privlege"))
                 {
                     suggestion = "privilege";
-                    return true;
-                }
-
-                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "permitt"))
-                {
-                    suggestion = "permit";
                     return true;
                 }
 
@@ -3681,6 +3681,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "scafolding"))
+                {
+                    suggestion = "scaffolding";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "seperately"))
                 {
                     suggestion = "separately";
@@ -3896,12 +3902,6 @@ public static partial class SpellCheckService
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "stewardhsip"))
                 {
                     suggestion = "stewardship";
-                    return true;
-                }
-
-                if (first == 's' && EqualAsciiWordIgnoreCase(word, "scafolding"))
-                {
-                    suggestion = "scaffolding";
                     return true;
                 }
 
