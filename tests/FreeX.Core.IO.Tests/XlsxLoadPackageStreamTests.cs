@@ -158,7 +158,8 @@ public sealed class XlsxLoadPackageStreamTests
             HasDrawingPackageParts: true,
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
-            HasWorksheetDynamicFilters: false);
+            HasWorksheetDynamicFilters: false,
+            MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
             package,
@@ -216,7 +217,8 @@ public sealed class XlsxLoadPackageStreamTests
             HasDrawingPackageParts: true,
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
-            HasWorksheetDynamicFilters: false);
+            HasWorksheetDynamicFilters: false,
+            MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
             package,
@@ -271,7 +273,8 @@ public sealed class XlsxLoadPackageStreamTests
             HasDrawingPackageParts: true,
             HasConditionalFormattingBlocks: false,
             HasUnsupportedConditionalFormattingBlocks: false,
-            HasWorksheetDynamicFilters: false);
+            HasWorksheetDynamicFilters: false,
+            MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
             package,
@@ -287,6 +290,70 @@ public sealed class XlsxLoadPackageStreamTests
         archive.GetEntry("xl/charts/chart1.xml").Should().BeNull();
         archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull();
         archive.GetEntry("xl/media/image1.png").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ClosedXmlLoadSanitizer_RemovesMergeCellsFromHintedWorksheets()
+    {
+        using var package = CreatePackageWithWorksheets(
+            [
+                ("xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c></row>
+                  </sheetData>
+                  <mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>
+                </worksheet>
+                """),
+                ("xl/worksheets/sheet2.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c></row>
+                  </sheetData>
+                  <mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>
+                </worksheet>
+                """)
+            ],
+            includeLargePayload: false);
+        var hints = new XlsxClosedXmlLoadSanitizationHints(
+            HasPivotPackageMetadata: false,
+            HasChartExChartParts: false,
+            HasDrawingPackageParts: false,
+            HasConditionalFormattingBlocks: false,
+            HasUnsupportedConditionalFormattingBlocks: false,
+            HasWorksheetDynamicFilters: false,
+            MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "xl/worksheets/sheet1.xml"
+            });
+
+        var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
+            package,
+            removeUnsupportedConditionalFormatting: false,
+            removeAllConditionalFormatting: false,
+            hints);
+
+        try
+        {
+            sanitized.Should().NotBeSameAs(package);
+            using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
+                .Root!
+                .Element(worksheetNs + "mergeCells")
+                .Should()
+                .BeNull();
+            LoadPackageXml(archive, "xl/worksheets/sheet2.xml")
+                .Root!
+                .Element(worksheetNs + "mergeCells")
+                .Should()
+                .NotBeNull();
+        }
+        finally
+        {
+            if (!ReferenceEquals(sanitized, package))
+                sanitized.Dispose();
+        }
     }
 
     [BenchmarkFact]

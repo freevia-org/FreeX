@@ -204,6 +204,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("layout.HasDuplicateStyleOnlyCellStyleIndexes");
         adapterSource.Should().Contain("layout.HasClosedXmlUnsupportedConditionalFormatting");
         adapterSource.Should().Contain("layout.HasWorksheetDynamicFilters");
+        adapterSource.Should().Contain("layout.MergedRegions.Count");
+        adapterSource.Should().Contain("if (xmlLayout is null)");
         adapterSource.Should().Contain("XlsxClosedXmlLoadPackageSanitizer.Create(");
         adapterSource.Should().Contain("styleOnlyWorksheetPathsToStrip,");
         adapterSource.Should().NotContain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)");
@@ -213,6 +215,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         layoutSource.Should().Contain("cellLayout.HasDuplicateStyleOnlyCellStyleIndexes");
         layoutSource.Should().Contain("HasDynamicFilter(autoFilter)");
         layoutSource.Should().Contain("allowBlankType: false");
+        layoutSource.Should().Contain("IReadOnlyList<GridRange> MergedRegions");
+        layoutSource.Should().Contain("ReadMergedRegions(worksheetXml, worksheetNs)");
 
         sheetStyleOnlySource.Should().Contain("EnsureStyleOnlyCapacity");
         sheetStyleOnlySource.Should().Contain("StyleOnlyRun");
@@ -234,6 +238,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sanitizerSource.Should().Contain("RemoveContentTypeOverrides(archive, removedParts)");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters");
+        sanitizerSource.Should().Contain("MergeCellWorksheetPathsToStrip");
+        sanitizerSource.Should().Contain("RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths)");
+        sanitizerSource.Should().Contain("ShouldStripMergeCells(requirements, normalizedPath)");
 
         stripperSource.Should().Contain("IReadOnlySet<string>? worksheetPathsToStrip");
         stripperSource.Should().Contain("internal static bool ShouldStripWorksheet");

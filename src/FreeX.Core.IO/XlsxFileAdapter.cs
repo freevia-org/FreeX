@@ -482,9 +482,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             if (xmlLayout is not null)
                 XlsxDataValidationNativeMetadataMapper.Apply(sheet, xmlLayout.DataValidationNativeMetadata);
 
-            // Load merged regions (best-effort)
-            try { LoadMergedRegions(xlSheet, sheet); }
-            catch (Exception ex) { warnings.Add($"[merged-regions] Sheet '{xlSheet.Name}': {ex.Message}"); }
+            if (xmlLayout is null)
+            {
+                // Fall back to ClosedXML only when trusted worksheet XML layout was unavailable.
+                try { LoadMergedRegions(xlSheet, sheet); }
+                catch (Exception ex) { warnings.Add($"[merged-regions] Sheet '{xlSheet.Name}': {ex.Message}"); }
+            }
         }
 
         ResolvePivotChartCacheBindings(workbook);
@@ -616,17 +619,23 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         bool? hasConditionalFormattingBlocks = null;
         bool? hasClosedXmlUnsupportedConditionalFormatting = null;
         bool? hasWorksheetDynamicFilters = null;
+        IReadOnlySet<string>? mergeCellWorksheetPathsToStrip = null;
         if (!sheetXmlLayoutHadWarnings && sheetXmlLayout.Count > 0)
         {
             hasConditionalFormattingBlocks = false;
             hasClosedXmlUnsupportedConditionalFormatting = false;
             hasWorksheetDynamicFilters = false;
+            var mergeCellWorksheetPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var layout in sheetXmlLayout.Values)
             {
                 hasConditionalFormattingBlocks |= layout.HasConditionalFormattingBlocks;
                 hasClosedXmlUnsupportedConditionalFormatting |= layout.HasClosedXmlUnsupportedConditionalFormatting;
                 hasWorksheetDynamicFilters |= layout.HasWorksheetDynamicFilters;
+                if (layout.MergedRegions.Count > 0)
+                    mergeCellWorksheetPaths.Add(layout.WorksheetPath);
             }
+
+            mergeCellWorksheetPathsToStrip = mergeCellWorksheetPaths;
         }
 
         return new XlsxClosedXmlLoadSanitizationHints(
@@ -635,7 +644,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             !sheetXmlLayoutHadWarnings && packageParts.HasInspected ? packageParts.HasDrawingPackageParts : null,
             hasConditionalFormattingBlocks,
             hasClosedXmlUnsupportedConditionalFormatting,
-            hasWorksheetDynamicFilters);
+            hasWorksheetDynamicFilters,
+            mergeCellWorksheetPathsToStrip);
     }
 
     private static IReadOnlySet<string>? GetWorksheetsWithPreservableSourceMetadata(

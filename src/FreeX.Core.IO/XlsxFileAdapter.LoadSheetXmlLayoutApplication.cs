@@ -20,6 +20,10 @@ public sealed partial class XlsxFileAdapter
             sheet.AllowEditRanges.Add(new GridRange(
                 new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
                 new CellAddress(sheet.Id, range.End.Row, range.End.Col)));
+        foreach (var range in layout.MergedRegions)
+            sheet.AddMergedRegion(new GridRange(
+                new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
+                new CellAddress(sheet.Id, range.End.Row, range.End.Col)));
         sheet.ViewMode = layout.ViewMode;
         sheet.ShowGridlines = layout.ShowGridlines;
         sheet.ShowHeadings = layout.ShowHeadings;

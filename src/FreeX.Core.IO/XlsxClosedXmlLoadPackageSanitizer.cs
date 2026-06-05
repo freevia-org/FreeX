@@ -10,7 +10,8 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasDrawingPackageParts,
     bool? HasConditionalFormattingBlocks,
     bool? HasUnsupportedConditionalFormattingBlocks,
-    bool? HasWorksheetDynamicFilters);
+    bool? HasWorksheetDynamicFilters,
+    IReadOnlySet<string>? MergeCellWorksheetPathsToStrip);
 
 internal static class XlsxClosedXmlLoadPackageSanitizer
 {
@@ -73,6 +74,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 RemoveUnsupportedConditionalFormattingBlocks(archive);
             if (requirements.HasWorksheetDynamicFilters)
                 RemoveWorksheetDynamicFilters(archive);
+            if (requirements.MergeCellWorksheetPathsToStrip is { Count: > 0 } mergeCellWorksheetPaths)
+                RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
         }
 
         sanitized.Position = 0;
@@ -175,11 +178,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasConditionalFormattingBlocks, archive, HasConditionalFormattingBlocks),
                 scanUnsupportedConditionalFormatting &&
                 ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks, archive, HasUnsupportedConditionalFormattingBlocks),
-                ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters, archive, HasWorksheetDynamicFilters));
+                ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters, archive, HasWorksheetDynamicFilters),
+                knownHints.MergeCellWorksheetPathsToStrip);
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, null);
         }
         finally
         {
@@ -221,7 +225,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasDrawingPackageParts,
             scanAllConditionalFormatting && hints.HasConditionalFormattingBlocks.GetValueOrDefault(),
             scanUnsupportedConditionalFormatting && hints.HasUnsupportedConditionalFormattingBlocks.GetValueOrDefault(),
-            hasWorksheetDynamicFilters);
+            hasWorksheetDynamicFilters,
+            hints.MergeCellWorksheetPathsToStrip);
         return true;
     }
 
@@ -237,7 +242,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasDrawingPackageParts,
         bool HasAllConditionalFormattingBlocks,
         bool HasUnsupportedConditionalFormattingBlocks,
-        bool HasWorksheetDynamicFilters)
+        bool HasWorksheetDynamicFilters,
+        IReadOnlySet<string>? MergeCellWorksheetPathsToStrip)
     {
         public bool RequiresAny =>
             HasPivotPackageMetadata ||
@@ -245,7 +251,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasDrawingPackageParts ||
             HasAllConditionalFormattingBlocks ||
             HasUnsupportedConditionalFormattingBlocks ||
-            HasWorksheetDynamicFilters;
+            HasWorksheetDynamicFilters ||
+            MergeCellWorksheetPathsToStrip is { Count: > 0 };
     }
 
     private static MemoryStream CreateFusedTransientPackage(
@@ -338,10 +345,11 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             var shouldStripStyleOnlyCells = XlsxClosedXmlStyleOnlyCellStripper.ShouldStripWorksheet(
                 sourceEntry,
                 styleOnlyWorksheetPathsToStrip);
-            if (ShouldTransformWorksheetXml(requirements))
+            if (ShouldTransformWorksheetXml(requirements, normalizedPath))
             {
                 return WriteTransformedWorksheetEntry(
                     sourceEntry,
+                    normalizedPath,
                     targetArchive,
                     shouldStripStyleOnlyCells,
                     requirements);
@@ -387,12 +395,13 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         return false;
     }
 
-    private static bool ShouldTransformWorksheetXml(SanitizationRequirements requirements) =>
+    private static bool ShouldTransformWorksheetXml(SanitizationRequirements requirements, string normalizedPath) =>
         requirements.HasPivotPackageMetadata ||
         requirements.HasDrawingPackageParts ||
         requirements.HasAllConditionalFormattingBlocks ||
         requirements.HasUnsupportedConditionalFormattingBlocks ||
-        requirements.HasWorksheetDynamicFilters;
+        requirements.HasWorksheetDynamicFilters ||
+        ShouldStripMergeCells(requirements, normalizedPath);
 
     private static bool ShouldTransformRelationshipEntry(
         string normalizedPath,
@@ -423,6 +432,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static bool WriteTransformedWorksheetEntry(
         ZipArchiveEntry sourceEntry,
+        string normalizedPath,
         ZipArchive targetArchive,
         bool stripStyleOnlyCells,
         SanitizationRequirements requirements)
@@ -430,7 +440,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         var worksheetXml = stripStyleOnlyCells
             ? LoadStyleStrippedWorksheetXml(sourceEntry)
             : XlsxPackageXmlEditor.LoadXml(sourceEntry);
-        var changed = TransformWorksheetXml(worksheetXml, requirements);
+        var changed = TransformWorksheetXml(worksheetXml, requirements, normalizedPath);
         if (!stripStyleOnlyCells && !changed)
             return false;
 
@@ -452,7 +462,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static bool TransformWorksheetXml(
         XDocument worksheetXml,
-        SanitizationRequirements requirements)
+        SanitizationRequirements requirements,
+        string normalizedPath)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var root = worksheetXml.Root;
@@ -483,8 +494,16 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             changed |= RemoveElements(root.Descendants(worksheetNs + "dynamicFilter").ToList());
         }
 
+        if (ShouldStripMergeCells(requirements, normalizedPath))
+            changed |= RemoveElements(root.Elements(worksheetNs + "mergeCells"));
+
         return changed;
     }
+
+    private static bool ShouldStripMergeCells(
+        SanitizationRequirements requirements,
+        string normalizedWorksheetPath) =>
+        requirements.MergeCellWorksheetPathsToStrip?.Contains(normalizedWorksheetPath) == true;
 
     private static bool RemoveElements(IEnumerable<XElement> elements)
     {
@@ -934,6 +953,28 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
             dynamicFilters.Remove();
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+        }
+    }
+
+    private static void RemoveWorksheetMergeCells(
+        ZipArchive archive,
+        IReadOnlySet<string> worksheetPathsToStrip)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var worksheetPath in worksheetPathsToStrip)
+        {
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            var changed = RemoveElements(root.Elements(worksheetNs + "mergeCells"));
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
     }
 
