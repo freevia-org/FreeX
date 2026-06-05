@@ -822,6 +822,41 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversQualityTestingVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Testng QAULITY validaton Verfication defectt REGRESION scenrio Automtion coverge ASSERTON basline Expcted. Keep testing, quality, validation, verification, defect, regression, scenario, automation, coverage, assertion, baseline, expected, pretestng, qaulity_id, https://testng.example.com/validaton, qa@qaulity.example.com, and \"C:\\verfication folder\\defectt file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Testng", "Testing"),
+            ("QAULITY", "QUALITY"),
+            ("validaton", "validation"),
+            ("Verfication", "Verification"),
+            ("defectt", "defect"),
+            ("REGRESION", "REGRESSION"),
+            ("scenrio", "scenario"),
+            ("Automtion", "Automation"),
+            ("coverge", "coverage"),
+            ("ASSERTON", "ASSERTION"),
+            ("basline", "baseline"),
+            ("Expcted", "Expected"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Testing QUALITY validation Verification defect REGRESSION scenario Automation coverage ASSERTION baseline Expected. Keep testing, quality, validation, verification, defect, regression, scenario, automation, coverage, assertion, baseline, expected, pretestng, qaulity_id, https://testng.example.com/validaton, qa@qaulity.example.com, and \"C:\\verfication folder\\defectt file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCalendarStatusVocabularyTypos()
     {
         var wb = new Workbook("test");
