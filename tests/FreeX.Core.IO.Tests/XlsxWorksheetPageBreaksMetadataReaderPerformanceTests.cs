@@ -7,7 +7,7 @@ public sealed class XlsxWorksheetPageBreaksMetadataReaderPerformanceTests
     [Fact]
     public void Read_WalksBreakElementsWithoutLinqFiltering()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src", "FreeX.Core.IO", "XlsxWorksheetPageBreaksMetadataReader.cs"));
 
         source.Should().Contain("foreach (var breakElement in pageBreaks.Elements())");
@@ -17,5 +17,4 @@ public sealed class XlsxWorksheetPageBreaksMetadataReaderPerformanceTests
             "page-break metadata reading should avoid allocating a LINQ filter iterator for worksheet break elements");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }
