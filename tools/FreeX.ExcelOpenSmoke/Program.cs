@@ -486,6 +486,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetMergeCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetConditionalFormattingMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDataValidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPageMarginsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -724,6 +725,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetMergeCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetConditionalFormattingMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDataValidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPageMarginsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -8127,6 +8129,661 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet sort/data-consolidation metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetConditionalFormattingMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+        var differentialStyleCount = GetPackageDifferentialStyleCount(archive);
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetConditionalFormattingMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                differentialStyleCount,
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetConditionalFormattingMetadata(label, sourcePath, issues);
+    }
+
+    private static int? GetPackageDifferentialStyleCount(ZipArchive archive)
+    {
+        var stylesEntry = FindPackageEntry(archive, "xl/styles.xml");
+        if (stylesEntry is null)
+            return null;
+
+        var stylesXml = LoadPackageXml(stylesEntry);
+        if (stylesXml.Root?.Name != SpreadsheetNs + "styleSheet")
+            return null;
+
+        return stylesXml.Root.Element(SpreadsheetNs + "dxfs")?.Elements(SpreadsheetNs + "dxf").Count() ?? 0;
+    }
+
+    private static void AddWorksheetConditionalFormattingMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        int? differentialStyleCount,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        foreach (var conditionalFormatting in root
+                     .Elements(SpreadsheetNs + "conditionalFormatting")
+                     .Select((element, index) => new WorksheetConditionalFormattingReference(index + 1, element)))
+        {
+            AddWorksheetConditionalFormattingIssues(worksheetPart, root, conditionalFormatting, differentialStyleCount, issues);
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetConditionalFormattingReference conditionalFormattingReference,
+        int? differentialStyleCount,
+        List<string> issues)
+    {
+        var conditionalFormatting = conditionalFormattingReference.Element;
+        var description = $"conditionalFormatting #{conditionalFormattingReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            conditionalFormatting,
+            description,
+            [
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            conditionalFormatting,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr"
+            ],
+            issues);
+
+        var sqref = conditionalFormatting.Attribute("sqref")?.Value;
+        if (string.IsNullOrWhiteSpace(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has no sqref");
+        }
+        else if (!IsValidPackageSqref(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid local sqref '{sqref}'");
+        }
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "pivot", conditionalFormatting.Attribute("pivot")?.Value, issues);
+
+        foreach (var unexpectedChild in conditionalFormatting.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "cfRule" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var rules = conditionalFormatting.Elements(SpreadsheetNs + "cfRule").ToArray();
+        if (rules.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no cfRule entries");
+
+        var extensionLists = conditionalFormatting.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+
+        AddWorksheetConditionalFormattingChildOrderingIssues(worksheetPart, description, conditionalFormatting, issues);
+
+        foreach (var rule in rules.Select((element, index) => new WorksheetConditionalFormattingRuleReference(index + 1, element)))
+        {
+            AddWorksheetConditionalFormattingRuleIssues(worksheetPart, description, rule, differentialStyleCount, issues);
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingChildOrderingIssues(
+        string worksheetPart,
+        string conditionalFormattingDescription,
+        XElement conditionalFormatting,
+        List<string> issues)
+    {
+        var children = conditionalFormatting.Elements().ToArray();
+        var firstExtensionListIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children
+                .Skip(firstExtensionListIndex + 1)
+                .Any(element => element.Name == SpreadsheetNs + "cfRule"))
+        {
+            issues.Add($"{worksheetPart} {conditionalFormattingDescription} has cfRule entries after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingRuleIssues(
+        string worksheetPart,
+        string conditionalFormattingDescription,
+        WorksheetConditionalFormattingRuleReference ruleReference,
+        int? differentialStyleCount,
+        List<string> issues)
+    {
+        var rule = ruleReference.Element;
+        var description = $"{conditionalFormattingDescription} cfRule #{ruleReference.Ordinal}";
+        var type = rule.Attribute("type")?.Value;
+        if (string.IsNullOrWhiteSpace(type))
+            issues.Add($"{worksheetPart} {description} has no type");
+
+        AddRequiredPositivePackageIntIssue(worksheetPart, description, "priority", rule.Attribute("priority")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "stopIfTrue", rule.Attribute("stopIfTrue")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "aboveAverage", rule.Attribute("aboveAverage")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "bottom", rule.Attribute("bottom")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "percent", rule.Attribute("percent")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "equalAverage", rule.Attribute("equalAverage")?.Value, issues);
+        AddOptionalPositivePackageIntIssue(worksheetPart, description, "rank", rule.Attribute("rank")?.Value, issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "operator",
+            rule.Attribute("operator")?.Value,
+            ["lessThan", "lessThanOrEqual", "equal", "notEqual", "greaterThanOrEqual", "greaterThan", "between", "notBetween", "containsText", "notContains", "beginsWith", "endsWith"],
+            issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "timePeriod",
+            rule.Attribute("timePeriod")?.Value,
+            ["yesterday", "today", "tomorrow", "last7Days", "thisMonth", "lastMonth", "nextMonth", "thisWeek", "lastWeek", "nextWeek"],
+            issues);
+        AddWorksheetConditionalFormattingDxfReferenceIssues(
+            worksheetPart,
+            description,
+            rule.Attribute("dxfId")?.Value,
+            differentialStyleCount,
+            issues);
+
+        foreach (var unexpectedChild in rule.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "formula" &&
+                     element.Name != SpreadsheetNs + "colorScale" &&
+                     element.Name != SpreadsheetNs + "dataBar" &&
+                     element.Name != SpreadsheetNs + "iconSet" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var payloadElements = rule.Elements()
+            .Where(element =>
+                element.Name == SpreadsheetNs + "colorScale" ||
+                element.Name == SpreadsheetNs + "dataBar" ||
+                element.Name == SpreadsheetNs + "iconSet")
+            .ToArray();
+        if (payloadElements.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {payloadElements.Length} conditional-format payload elements; expected at most one");
+
+        var extensionLists = rule.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {extensionLists.Length} extLst elements; expected at most one");
+
+        AddWorksheetConditionalFormattingRuleChildOrderingIssues(worksheetPart, description, rule, issues);
+
+        foreach (var formula in rule.Elements(SpreadsheetNs + "formula").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingFormulaIssues(worksheetPart, description, formula.Ordinal, formula.Element, issues);
+        }
+
+        foreach (var colorScale in rule.Elements(SpreadsheetNs + "colorScale").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetColorScaleIssues(worksheetPart, description, colorScale.Ordinal, colorScale.Element, issues);
+        }
+
+        foreach (var dataBar in rule.Elements(SpreadsheetNs + "dataBar").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetDataBarIssues(worksheetPart, description, dataBar.Ordinal, dataBar.Element, issues);
+        }
+
+        foreach (var iconSet in rule.Elements(SpreadsheetNs + "iconSet").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetIconSetIssues(worksheetPart, description, iconSet.Ordinal, iconSet.Element, issues);
+        }
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, description, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingDxfReferenceIssues(
+        string worksheetPart,
+        string description,
+        string? dxfIdText,
+        int? differentialStyleCount,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(dxfIdText))
+            return;
+
+        if (!TryParseNonNegativePackageInt(dxfIdText, out var dxfId))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid dxfId value '{dxfIdText}'");
+            return;
+        }
+
+        if (differentialStyleCount is null)
+        {
+            issues.Add($"{worksheetPart} {description} references dxfId {dxfId}, but xl/styles.xml is missing or invalid");
+        }
+        else if (dxfId >= differentialStyleCount)
+        {
+            issues.Add($"{worksheetPart} {description} references dxfId {dxfId}, but xl/styles.xml dxfs contains {differentialStyleCount.Value} entries");
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingRuleChildOrderingIssues(
+        string worksheetPart,
+        string description,
+        XElement rule,
+        List<string> issues)
+    {
+        var children = rule.Elements().ToArray();
+        var firstPayloadIndex = Array.FindIndex(children, element =>
+            element.Name == SpreadsheetNs + "colorScale" ||
+            element.Name == SpreadsheetNs + "dataBar" ||
+            element.Name == SpreadsheetNs + "iconSet");
+        if (firstPayloadIndex >= 0 &&
+            children
+                .Skip(firstPayloadIndex + 1)
+                .Any(element => element.Name == SpreadsheetNs + "formula"))
+        {
+            issues.Add($"{worksheetPart} {description} has formula after a conditional-format payload; expected formulas before payloads");
+        }
+
+        var firstExtensionListIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children
+                .Skip(firstExtensionListIndex + 1)
+                .Any(element =>
+                    element.Name == SpreadsheetNs + "formula" ||
+                    element.Name == SpreadsheetNs + "colorScale" ||
+                    element.Name == SpreadsheetNs + "dataBar" ||
+                    element.Name == SpreadsheetNs + "iconSet"))
+        {
+            issues.Add($"{worksheetPart} {description} has child payloads after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingFormulaIssues(
+        string worksheetPart,
+        string ruleDescription,
+        int ordinal,
+        XElement formula,
+        List<string> issues)
+    {
+        var description = $"{ruleDescription} formula #{ordinal}";
+        if (formula.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+            issues.Add($"{worksheetPart} {description} has attributes; expected formula text only");
+
+        if (formula.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected formula text only");
+    }
+
+    private static void AddWorksheetColorScaleIssues(
+        string worksheetPart,
+        string ruleDescription,
+        int ordinal,
+        XElement colorScale,
+        List<string> issues)
+    {
+        var description = $"{ruleDescription} colorScale #{ordinal}";
+        if (colorScale.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration))
+            issues.Add($"{worksheetPart} {description} has attributes; expected cfvo/color children only");
+
+        foreach (var unexpectedChild in colorScale.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "cfvo" &&
+                     element.Name != SpreadsheetNs + "color" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var thresholds = colorScale.Elements(SpreadsheetNs + "cfvo").ToArray();
+        if (thresholds.Length is < 2 or > 3)
+            issues.Add($"{worksheetPart} {description} has {thresholds.Length} cfvo entries; expected 2 or 3");
+
+        var colors = colorScale.Elements(SpreadsheetNs + "color").ToArray();
+        if (colors.Length != thresholds.Length)
+            issues.Add($"{worksheetPart} {description} has {colors.Length} color entries for {thresholds.Length} cfvo entries");
+
+        AddWorksheetConditionalFormattingPayloadOrderingIssues(worksheetPart, description, colorScale, "cfvo", "color", issues);
+        foreach (var threshold in thresholds.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingThresholdIssues(worksheetPart, description, threshold.Ordinal, threshold.Element, issues);
+        }
+
+        foreach (var color in colors.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingColorIssues(worksheetPart, description, $"color #{color.Ordinal}", color.Element, issues);
+        }
+
+        AddWorksheetConditionalFormattingPayloadExtensionListIssues(worksheetPart, description, colorScale, issues);
+    }
+
+    private static void AddWorksheetDataBarIssues(
+        string worksheetPart,
+        string ruleDescription,
+        int ordinal,
+        XElement dataBar,
+        List<string> issues)
+    {
+        var description = $"{ruleDescription} dataBar #{ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showValue", dataBar.Attribute("showValue")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "border", dataBar.Attribute("border")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "minLength", dataBar.Attribute("minLength")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "maxLength", dataBar.Attribute("maxLength")?.Value, issues);
+        AddOptionalKnownWorksheetMetadataValueIssue(
+            worksheetPart,
+            description,
+            "axisPosition",
+            dataBar.Attribute("axisPosition")?.Value,
+            ["automatic", "middle", "none"],
+            issues);
+
+        foreach (var unexpectedChild in dataBar.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "cfvo" &&
+                     element.Name != SpreadsheetNs + "color" &&
+                     element.Name != SpreadsheetNs + "negativeFillColor" &&
+                     element.Name != SpreadsheetNs + "negativeBorderColor" &&
+                     element.Name != SpreadsheetNs + "axisColor" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var thresholds = dataBar.Elements(SpreadsheetNs + "cfvo").ToArray();
+        if (thresholds.Length != 2)
+            issues.Add($"{worksheetPart} {description} has {thresholds.Length} cfvo entries; expected 2");
+
+        var colors = dataBar.Elements(SpreadsheetNs + "color").ToArray();
+        if (colors.Length != 1)
+            issues.Add($"{worksheetPart} {description} has {colors.Length} color entries; expected 1");
+
+        AddWorksheetConditionalFormattingPayloadOrderingIssues(worksheetPart, description, dataBar, "cfvo", "color", issues);
+        foreach (var threshold in thresholds.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingThresholdIssues(worksheetPart, description, threshold.Ordinal, threshold.Element, issues);
+        }
+
+        foreach (var color in colors.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingColorIssues(worksheetPart, description, $"color #{color.Ordinal}", color.Element, issues);
+        }
+
+        foreach (var nativeColor in dataBar
+                     .Elements()
+                     .Where(element =>
+                         element.Name == SpreadsheetNs + "negativeFillColor" ||
+                         element.Name == SpreadsheetNs + "negativeBorderColor" ||
+                         element.Name == SpreadsheetNs + "axisColor")
+                     .Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingColorIssues(worksheetPart, description, $"{nativeColor.Element.Name.LocalName} #{nativeColor.Ordinal}", nativeColor.Element, issues);
+        }
+
+        AddWorksheetConditionalFormattingPayloadExtensionListIssues(worksheetPart, description, dataBar, issues);
+    }
+
+    private static void AddWorksheetIconSetIssues(
+        string worksheetPart,
+        string ruleDescription,
+        int ordinal,
+        XElement iconSet,
+        List<string> issues)
+    {
+        var description = $"{ruleDescription} iconSet #{ordinal}";
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "showValue", iconSet.Attribute("showValue")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "reverse", iconSet.Attribute("reverse")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "percent", iconSet.Attribute("percent")?.Value, issues);
+
+        foreach (var unexpectedChild in iconSet.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "cfvo" &&
+                     element.Name != SpreadsheetNs + "cfIcon" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var thresholds = iconSet.Elements(SpreadsheetNs + "cfvo").ToArray();
+        if (thresholds.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no cfvo entries");
+
+        AddWorksheetConditionalFormattingPayloadOrderingIssues(worksheetPart, description, iconSet, "cfvo", "cfIcon", issues);
+        foreach (var threshold in thresholds.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingThresholdIssues(worksheetPart, description, threshold.Ordinal, threshold.Element, issues);
+        }
+
+        foreach (var icon in iconSet.Elements(SpreadsheetNs + "cfIcon").Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetConditionalFormattingIconIssues(worksheetPart, description, icon.Ordinal, icon.Element, issues);
+        }
+
+        AddWorksheetConditionalFormattingPayloadExtensionListIssues(worksheetPart, description, iconSet, issues);
+    }
+
+    private static void AddWorksheetConditionalFormattingPayloadExtensionListIssues(
+        string worksheetPart,
+        string payloadDescription,
+        XElement payload,
+        List<string> issues)
+    {
+        var extensionLists = payload.Elements(SpreadsheetNs + "extLst").ToArray();
+        if (extensionLists.Length > 1)
+            issues.Add($"{worksheetPart} {payloadDescription} has {extensionLists.Length} extLst elements; expected at most one");
+
+        foreach (var extensionList in extensionLists.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            AddWorksheetNestedExtensionListIssues(worksheetPart, payloadDescription, extensionList.Ordinal, extensionList.Element, issues);
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingPayloadOrderingIssues(
+        string worksheetPart,
+        string description,
+        XElement payload,
+        string firstChildName,
+        string laterChildName,
+        List<string> issues)
+    {
+        var children = payload.Elements().ToArray();
+        var firstLaterChildIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + laterChildName);
+        if (firstLaterChildIndex >= 0 &&
+            children
+                .Skip(firstLaterChildIndex + 1)
+                .Any(element => element.Name == SpreadsheetNs + firstChildName))
+        {
+            issues.Add($"{worksheetPart} {description} has {firstChildName} entries after {laterChildName}; expected {firstChildName} before {laterChildName}");
+        }
+
+        var firstExtensionListIndex = Array.FindIndex(children, element => element.Name == SpreadsheetNs + "extLst");
+        if (firstExtensionListIndex >= 0 &&
+            children
+                .Skip(firstExtensionListIndex + 1)
+                .Any(element => element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has child entries after extLst; expected extLst last");
+        }
+    }
+
+    private static void AddWorksheetConditionalFormattingThresholdIssues(
+        string worksheetPart,
+        string payloadDescription,
+        int ordinal,
+        XElement threshold,
+        List<string> issues)
+    {
+        var description = $"{payloadDescription} cfvo #{ordinal}";
+        var type = threshold.Attribute("type")?.Value;
+        if (string.IsNullOrWhiteSpace(type))
+        {
+            issues.Add($"{worksheetPart} {description} has no type");
+        }
+        else
+        {
+            AddOptionalKnownWorksheetMetadataValueIssue(
+                worksheetPart,
+                description,
+                "type",
+                type,
+                ["num", "percent", "max", "min", "formula", "percentile", "autoMin", "autoMax"],
+                issues);
+        }
+
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "gte", threshold.Attribute("gte")?.Value, issues);
+
+        if (threshold.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetConditionalFormattingColorIssues(
+        string worksheetPart,
+        string payloadDescription,
+        string colorDescription,
+        XElement color,
+        List<string> issues)
+    {
+        var description = $"{payloadDescription} {colorDescription}";
+        var hasKnownColorAttribute =
+            color.Attribute("rgb") is not null ||
+            color.Attribute("indexed") is not null ||
+            color.Attribute("theme") is not null ||
+            color.Attribute("auto") is not null;
+        if (!hasKnownColorAttribute)
+            issues.Add($"{worksheetPart} {description} has no color attribute");
+
+        var rgb = color.Attribute("rgb")?.Value;
+        if (!string.IsNullOrWhiteSpace(rgb) && !IsValidPackageHexColor(rgb))
+            issues.Add($"{worksheetPart} {description} has invalid rgb value '{rgb}'");
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "indexed", color.Attribute("indexed")?.Value, issues);
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "theme", color.Attribute("theme")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "auto", color.Attribute("auto")?.Value, issues);
+
+        if (color.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetConditionalFormattingIconIssues(
+        string worksheetPart,
+        string iconSetDescription,
+        int ordinal,
+        XElement icon,
+        List<string> issues)
+    {
+        var description = $"{iconSetDescription} cfIcon #{ordinal}";
+        if (icon.Attribute("iconSet") is not null && string.IsNullOrWhiteSpace(icon.Attribute("iconSet")?.Value))
+            issues.Add($"{worksheetPart} {description} has blank iconSet");
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "iconId", icon.Attribute("iconId")?.Value, issues);
+
+        if (icon.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddRequiredPositivePackageIntIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            issues.Add($"{worksheetPart} {description} has no {attributeName}");
+            return;
+        }
+
+        if (!TryParseNonNegativePackageInt(value, out var parsedValue) || parsedValue <= 0)
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void AddOptionalPositivePackageIntIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!TryParseNonNegativePackageInt(value, out var parsedValue) || parsedValue <= 0)
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static bool IsValidPackageHexColor(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length is 6 or 8 &&
+            trimmed.All(character =>
+                character is >= '0' and <= '9' ||
+                character is >= 'A' and <= 'F' ||
+                character is >= 'a' and <= 'f');
+    }
+
+    private static void ThrowInvalidWorksheetConditionalFormattingMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet conditionalFormatting metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetDataValidationMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -16434,6 +17091,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetDataRefReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetConditionalFormattingReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetConditionalFormattingRuleReference(
         int Ordinal,
         XElement Element);
 
