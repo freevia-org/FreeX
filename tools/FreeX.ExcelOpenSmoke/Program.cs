@@ -460,6 +460,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomPropertyPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -671,6 +672,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomPropertyPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3405,6 +3407,305 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet scenario metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetSheetViewsMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetSheetViewsMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetSheetViewsMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetSheetViewsMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var sheetViewsContainers = root.Elements(SpreadsheetNs + "sheetViews").ToArray();
+        if (sheetViewsContainers.Length > 1)
+            issues.Add($"{worksheetPart} has {sheetViewsContainers.Length} sheetViews elements; expected at most one");
+
+        foreach (var sheetViews in sheetViewsContainers.Select((element, index) => new WorksheetSheetViewsReference(index + 1, element)))
+        {
+            AddWorksheetSheetViewsIssues(worksheetPart, root, sheetViews, issues);
+        }
+    }
+
+    private static void AddWorksheetSheetViewsIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetSheetViewsReference sheetViewsReference,
+        List<string> issues)
+    {
+        var sheetViews = sheetViewsReference.Element;
+        var description = $"sheetViews #{sheetViewsReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            sheetViews,
+            description,
+            [
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in sheetViews.Elements().Where(element => element.Name != SpreadsheetNs + "sheetView"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var sheetViewElements = sheetViews.Elements(SpreadsheetNs + "sheetView").ToArray();
+        if (sheetViewElements.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no sheetView entries");
+
+        var seenWorkbookViewIds = new HashSet<int>();
+        foreach (var sheetView in sheetViewElements.Select((element, index) => new WorksheetSheetViewReference(index + 1, element)))
+        {
+            AddWorksheetSheetViewIssues(worksheetPart, description, sheetView, seenWorkbookViewIds, issues);
+        }
+    }
+
+    private static void AddWorksheetSheetViewIssues(
+        string worksheetPart,
+        string containerDescription,
+        WorksheetSheetViewReference sheetViewReference,
+        HashSet<int> seenWorkbookViewIds,
+        List<string> issues)
+    {
+        var sheetView = sheetViewReference.Element;
+        var description = $"{containerDescription} sheetView #{sheetViewReference.Ordinal}";
+        AddRequiredNonNegativePackageIntIssue(worksheetPart, description, "workbookViewId", sheetView.Attribute("workbookViewId")?.Value, issues);
+        if (TryParseNonNegativePackageInt(sheetView.Attribute("workbookViewId")?.Value, out var workbookViewId) &&
+            !seenWorkbookViewIds.Add(workbookViewId))
+        {
+            issues.Add($"{worksheetPart} {containerDescription} has duplicate sheetView workbookViewId {workbookViewId}");
+        }
+
+        foreach (var attribute in sheetView.Attributes().Where(attribute => IsKnownSheetViewBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        var view = sheetView.Attribute("view")?.Value;
+        if (!string.IsNullOrWhiteSpace(view) && !IsKnownSheetViewMode(view))
+            issues.Add($"{worksheetPart} {description} has invalid view value '{view}'");
+
+        var topLeftCell = sheetView.Attribute("topLeftCell")?.Value;
+        if (!string.IsNullOrWhiteSpace(topLeftCell) && !IsValidLocalCellReference(topLeftCell))
+            issues.Add($"{worksheetPart} {description} has invalid topLeftCell reference '{topLeftCell}'");
+
+        foreach (var attributeName in new[]
+                 {
+                     "colorId",
+                     "zoomScale",
+                     "zoomScaleNormal",
+                     "zoomScalePageLayoutView",
+                     "zoomScaleSheetLayoutView"
+                 })
+        {
+            AddOptionalNonNegativePackageIntIssue(worksheetPart, description, attributeName, sheetView.Attribute(attributeName)?.Value, issues);
+        }
+
+        var paneElements = sheetView.Elements(SpreadsheetNs + "pane").ToArray();
+        if (paneElements.Length > 1)
+            issues.Add($"{worksheetPart} {description} has {paneElements.Length} pane elements; expected at most one");
+
+        foreach (var pane in paneElements.Select((element, index) => new WorksheetSheetViewPaneReference(index + 1, element)))
+        {
+            AddWorksheetSheetViewPaneIssues(worksheetPart, description, pane, issues);
+        }
+
+        foreach (var selection in sheetView.Elements(SpreadsheetNs + "selection").Select((element, index) => new WorksheetSheetViewSelectionReference(index + 1, element)))
+        {
+            AddWorksheetSheetViewSelectionIssues(worksheetPart, description, selection, issues);
+        }
+
+        foreach (var pivotSelection in sheetView.Elements(SpreadsheetNs + "pivotSelection").Select((element, index) => new WorksheetSheetViewPivotSelectionReference(index + 1, element)))
+        {
+            AddWorksheetSheetViewPivotSelectionIssues(worksheetPart, description, pivotSelection, issues);
+        }
+
+        foreach (var unexpectedChild in sheetView.Elements().Where(element =>
+                     element.Name != SpreadsheetNs + "pane" &&
+                     element.Name != SpreadsheetNs + "selection" &&
+                     element.Name != SpreadsheetNs + "pivotSelection" &&
+                     element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+    }
+
+    private static bool IsKnownSheetViewBooleanAttribute(string name) =>
+        name is "windowProtection" or
+            "showFormulas" or
+            "showGridLines" or
+            "showRowColHeaders" or
+            "showZeros" or
+            "rightToLeft" or
+            "tabSelected" or
+            "showRuler" or
+            "showOutlineSymbols" or
+            "defaultGridColor" or
+            "showWhiteSpace";
+
+    private static bool IsKnownSheetViewMode(string value) =>
+        value.Trim() is "normal" or "pageBreakPreview" or "pageLayout";
+
+    private static void AddWorksheetSheetViewPaneIssues(
+        string worksheetPart,
+        string sheetViewDescription,
+        WorksheetSheetViewPaneReference paneReference,
+        List<string> issues)
+    {
+        var pane = paneReference.Element;
+        var description = $"{sheetViewDescription} pane #{paneReference.Ordinal}";
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "xSplit", pane.Attribute("xSplit")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "ySplit", pane.Attribute("ySplit")?.Value, issues);
+
+        var topLeftCell = pane.Attribute("topLeftCell")?.Value;
+        if (!string.IsNullOrWhiteSpace(topLeftCell) && !IsValidLocalCellReference(topLeftCell))
+            issues.Add($"{worksheetPart} {description} has invalid topLeftCell reference '{topLeftCell}'");
+
+        var activePane = pane.Attribute("activePane")?.Value;
+        if (!string.IsNullOrWhiteSpace(activePane) && !IsKnownPaneValue(activePane))
+            issues.Add($"{worksheetPart} {description} has invalid activePane value '{activePane}'");
+
+        var state = pane.Attribute("state")?.Value;
+        if (!string.IsNullOrWhiteSpace(state) && !IsKnownPaneState(state))
+            issues.Add($"{worksheetPart} {description} has invalid state value '{state}'");
+
+        if (pane.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetSheetViewSelectionIssues(
+        string worksheetPart,
+        string sheetViewDescription,
+        WorksheetSheetViewSelectionReference selectionReference,
+        List<string> issues)
+    {
+        var selection = selectionReference.Element;
+        var description = $"{sheetViewDescription} selection #{selectionReference.Ordinal}";
+
+        var pane = selection.Attribute("pane")?.Value;
+        if (!string.IsNullOrWhiteSpace(pane) && !IsKnownPaneValue(pane))
+            issues.Add($"{worksheetPart} {description} has invalid pane value '{pane}'");
+
+        var activeCell = selection.Attribute("activeCell")?.Value;
+        if (!string.IsNullOrWhiteSpace(activeCell) && !IsValidLocalCellReference(activeCell))
+            issues.Add($"{worksheetPart} {description} has invalid activeCell reference '{activeCell}'");
+
+        var sqref = selection.Attribute("sqref")?.Value;
+        if (!string.IsNullOrWhiteSpace(sqref) && !IsValidPackageSqref(sqref))
+            issues.Add($"{worksheetPart} {description} has invalid sqref '{sqref}'");
+
+        if (selection.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetSheetViewPivotSelectionIssues(
+        string worksheetPart,
+        string sheetViewDescription,
+        WorksheetSheetViewPivotSelectionReference pivotSelectionReference,
+        List<string> issues)
+    {
+        var pivotSelection = pivotSelectionReference.Element;
+        var description = $"{sheetViewDescription} pivotSelection #{pivotSelectionReference.Ordinal}";
+
+        var pane = pivotSelection.Attribute("pane")?.Value;
+        if (!string.IsNullOrWhiteSpace(pane) && !IsKnownPaneValue(pane))
+            issues.Add($"{worksheetPart} {description} has invalid pane value '{pane}'");
+
+        foreach (var attributeName in new[] { "activeRow", "activeCol", "previousRow", "previousCol" })
+        {
+            AddOptionalNonNegativePackageIntIssue(worksheetPart, description, attributeName, pivotSelection.Attribute(attributeName)?.Value, issues);
+        }
+
+        if (pivotSelection.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool IsKnownPaneValue(string value) =>
+        value.Trim() is "bottomRight" or "topRight" or "bottomLeft" or "topLeft";
+
+    private static bool IsKnownPaneState(string value) =>
+        value.Trim() is "split" or "frozen" or "frozenSplit";
+
+    private static void AddOptionalNonNegativePackageDecimalIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!decimal.TryParse(value.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) || parsed < 0m)
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void ThrowInvalidWorksheetSheetViewsMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet sheetViews metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetPhoneticPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -10614,6 +10915,26 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetScenarioInputCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSheetViewsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSheetViewReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSheetViewPaneReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSheetViewSelectionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSheetViewPivotSelectionReference(
         int Ordinal,
         XElement Element);
 
