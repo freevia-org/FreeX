@@ -481,6 +481,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetMergeCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPrintOptionsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -715,6 +716,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetMergeCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPrintOptionsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -6434,6 +6436,219 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet customSheetViews metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetMergeCellsMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetMergeCellsMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetMergeCellsMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetMergeCellsMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var mergeCellsContainers = root.Elements(SpreadsheetNs + "mergeCells").ToArray();
+        if (mergeCellsContainers.Length > 1)
+            issues.Add($"{worksheetPart} has {mergeCellsContainers.Length} mergeCells elements; expected at most one");
+
+        foreach (var mergeCells in mergeCellsContainers.Select((element, index) => new WorksheetMergeCellsReference(index + 1, element)))
+        {
+            AddWorksheetMergeCellsIssues(worksheetPart, root, mergeCells, issues);
+        }
+    }
+
+    private static void AddWorksheetMergeCellsIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetMergeCellsReference mergeCellsReference,
+        List<string> issues)
+    {
+        var mergeCells = mergeCellsReference.Element;
+        var description = $"mergeCells #{mergeCellsReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            mergeCells,
+            description,
+            [
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddWorksheetMetadataPreviousOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            mergeCells,
+            description,
+            [
+                "sheetPr",
+                "dimension",
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in mergeCells.Elements().Where(element => element.Name != SpreadsheetNs + "mergeCell"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected mergeCell entries only");
+        }
+
+        var mergeCellElements = mergeCells.Elements(SpreadsheetNs + "mergeCell").ToArray();
+        if (mergeCellElements.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no mergeCell entries");
+
+        AddOptionalPackageCountIssue(worksheetPart, description, "count", mergeCells.Attribute("count")?.Value, mergeCellElements.Length, issues);
+
+        var seenRanges = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var parsedRanges = new List<WorksheetMergeRange>();
+        foreach (var mergeCell in mergeCellElements.Select((element, index) => new WorksheetMergeCellReference(index + 1, element)))
+        {
+            AddWorksheetMergeCellIssues(worksheetPart, description, mergeCell, seenRanges, parsedRanges, issues);
+        }
+    }
+
+    private static void AddWorksheetMergeCellIssues(
+        string worksheetPart,
+        string mergeCellsDescription,
+        WorksheetMergeCellReference mergeCellReference,
+        HashSet<string> seenRanges,
+        List<WorksheetMergeRange> parsedRanges,
+        List<string> issues)
+    {
+        var mergeCell = mergeCellReference.Element;
+        var description = $"{mergeCellsDescription} mergeCell #{mergeCellReference.Ordinal}";
+        var reference = mergeCell.Attribute("ref")?.Value;
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            issues.Add($"{worksheetPart} {description} has no ref");
+        }
+        else if (!TryParseLocalWorksheetMergeRange(reference, out var mergeRange))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid local ref range '{reference}'");
+        }
+        else
+        {
+            if (!seenRanges.Add(mergeRange.NormalizedReference))
+                issues.Add($"{worksheetPart} {mergeCellsDescription} has duplicate mergeCell ref '{mergeRange.NormalizedReference}'");
+
+            foreach (var previousRange in parsedRanges)
+            {
+                if (MergeRangesOverlap(previousRange, mergeRange))
+                {
+                    issues.Add($"{worksheetPart} {mergeCellsDescription} mergeCell ref '{mergeRange.NormalizedReference}' overlaps '{previousRange.NormalizedReference}'");
+                    break;
+                }
+            }
+
+            parsedRanges.Add(mergeRange);
+        }
+
+        if (mergeCell.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool TryParseLocalWorksheetMergeRange(string reference, out WorksheetMergeRange mergeRange)
+    {
+        mergeRange = default;
+        if (!IsValidLocalWorksheetReference(reference))
+            return false;
+
+        var rangeParts = reference.Trim().Split(':', StringSplitOptions.TrimEntries);
+        if (rangeParts.Length is not 1 and not 2)
+            return false;
+
+        var sheet = SheetId.New();
+        if (!CellAddress.TryParse(rangeParts[0], sheet, out var start))
+            return false;
+
+        var end = start;
+        if (rangeParts.Length == 2 && !CellAddress.TryParse(rangeParts[1], sheet, out end))
+            return false;
+
+        if (start.Row > end.Row || start.Col > end.Col)
+            return false;
+
+        var normalizedReference = rangeParts.Length == 1
+            ? start.ToA1()
+            : $"{start.ToA1()}:{end.ToA1()}";
+        mergeRange = new WorksheetMergeRange(
+            normalizedReference,
+            start.Row,
+            end.Row,
+            start.Col,
+            end.Col);
+        return true;
+    }
+
+    private static bool MergeRangesOverlap(WorksheetMergeRange left, WorksheetMergeRange right) =>
+        left.StartRow <= right.EndRow &&
+        left.EndRow >= right.StartRow &&
+        left.StartColumn <= right.EndColumn &&
+        left.EndColumn >= right.StartColumn;
+
+    private static void ThrowInvalidWorksheetMergeCellsMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet mergeCells metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetPhoneticPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -14847,6 +15062,21 @@ internal static class ExcelOpenSmoke
     private sealed record WorksheetCustomSheetViewReference(
         int Ordinal,
         XElement Element);
+
+    private sealed record WorksheetMergeCellsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetMergeCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private readonly record struct WorksheetMergeRange(
+        string NormalizedReference,
+        uint StartRow,
+        uint EndRow,
+        uint StartColumn,
+        uint EndColumn);
 
     private sealed record WorksheetPhoneticPropertiesReference(
         int Ordinal,
