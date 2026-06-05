@@ -457,6 +457,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookFileRecoveryMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetHyperlinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -683,6 +684,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookFileRecoveryMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetHyperlinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -4001,6 +4003,73 @@ internal static class ExcelOpenSmoke
 
     private static bool IsKnownWorkbookCalculationReferenceModeValue(string value) =>
         value is "A1" or "R1C1";
+
+    private static void AssertWorkbookFileRecoveryMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookFileRecoveryMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookFileRecoveryMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookFileRecoveryMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        foreach (var fileRecovery in root.Elements(SpreadsheetNs + "fileRecoveryPr").Select((element, index) => new WorkbookFileRecoveryReference(index + 1, element)))
+        {
+            AddWorkbookFileRecoveryIssues(root, fileRecovery, issues);
+        }
+    }
+
+    private static void AddWorkbookFileRecoveryIssues(
+        XElement workbookRoot,
+        WorkbookFileRecoveryReference fileRecoveryReference,
+        List<string> issues)
+    {
+        var fileRecovery = fileRecoveryReference.Element;
+        var description = $"fileRecoveryPr #{fileRecoveryReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            fileRecovery,
+            description,
+            [
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var attribute in fileRecovery.Attributes().Where(attribute => IsKnownWorkbookFileRecoveryBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        if (fileRecovery.Elements().Any())
+            issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool IsKnownWorkbookFileRecoveryBooleanAttribute(string name) =>
+        name is "autoRecover" or "crashSave" or "dataExtractLoad" or "repairLoad";
+
+    private static void ThrowInvalidWorkbookFileRecoveryMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook fileRecoveryPr metadata: {sample}{suffix}");
+    }
 
     private static void AssertWorksheetSheetPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
     {
@@ -12999,6 +13068,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookCalculationPropertiesReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookFileRecoveryReference(
         int Ordinal,
         XElement Element);
 
