@@ -460,6 +460,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomPropertyPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetDiagnosticMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSingleXmlCellsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSmartTagMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertLegacyCommentPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -668,6 +669,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomPropertyPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetDiagnosticMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSingleXmlCellsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSmartTagMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertLegacyCommentPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3399,6 +3401,259 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet scenario metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetDiagnosticMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetDiagnosticMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetDiagnosticMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetDiagnosticMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var cellWatchesContainers = root.Elements(SpreadsheetNs + "cellWatches").ToArray();
+        if (cellWatchesContainers.Length > 1)
+            issues.Add($"{worksheetPart} has {cellWatchesContainers.Length} cellWatches elements; expected at most one");
+
+        foreach (var cellWatches in cellWatchesContainers.Select((element, index) => new WorksheetCellWatchesReference(index + 1, element)))
+        {
+            AddWorksheetCellWatchesIssues(worksheetPart, root, cellWatches, issues);
+        }
+
+        var ignoredErrorsContainers = root.Elements(SpreadsheetNs + "ignoredErrors").ToArray();
+        if (ignoredErrorsContainers.Length > 1)
+            issues.Add($"{worksheetPart} has {ignoredErrorsContainers.Length} ignoredErrors elements; expected at most one");
+
+        foreach (var ignoredErrors in ignoredErrorsContainers.Select((element, index) => new WorksheetIgnoredErrorsReference(index + 1, element)))
+        {
+            AddWorksheetIgnoredErrorsIssues(worksheetPart, root, ignoredErrors, issues);
+        }
+    }
+
+    private static void AddWorksheetCellWatchesIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetCellWatchesReference cellWatchesReference,
+        List<string> issues)
+    {
+        var cellWatches = cellWatchesReference.Element;
+        var description = $"cellWatches #{cellWatchesReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            cellWatches,
+            description,
+            [
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in cellWatches.Elements().Where(element => element.Name != SpreadsheetNs + "cellWatch"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var watches = cellWatches.Elements(SpreadsheetNs + "cellWatch").ToArray();
+        if (watches.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no cellWatch entries");
+
+        var seenReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var watch in watches.Select((element, index) => new WorksheetCellWatchReference(index + 1, element)))
+        {
+            AddWorksheetCellWatchIssues(worksheetPart, description, watch, seenReferences, issues);
+        }
+    }
+
+    private static void AddWorksheetCellWatchIssues(
+        string worksheetPart,
+        string containerDescription,
+        WorksheetCellWatchReference watchReference,
+        HashSet<string> seenReferences,
+        List<string> issues)
+    {
+        var watch = watchReference.Element;
+        var description = $"{containerDescription} cellWatch #{watchReference.Ordinal}";
+        var reference = watch.Attribute("r")?.Value;
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            issues.Add($"{worksheetPart} {description} has no r reference");
+        }
+        else if (!IsValidLocalCellReference(reference))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid local r reference '{reference}'");
+        }
+        else if (!seenReferences.Add(reference.Trim()))
+        {
+            issues.Add($"{worksheetPart} {containerDescription} has duplicate cellWatch r reference '{reference}'");
+        }
+
+        if (watch.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetIgnoredErrorsIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetIgnoredErrorsReference ignoredErrorsReference,
+        List<string> issues)
+    {
+        var ignoredErrors = ignoredErrorsReference.Element;
+        var description = $"ignoredErrors #{ignoredErrorsReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            ignoredErrors,
+            description,
+            [
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in ignoredErrors.Elements().Where(element => element.Name != SpreadsheetNs + "ignoredError"))
+        {
+            issues.Add($"{worksheetPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+
+        var errors = ignoredErrors.Elements(SpreadsheetNs + "ignoredError").ToArray();
+        if (errors.Length == 0)
+            issues.Add($"{worksheetPart} {description} has no ignoredError entries");
+
+        var seenSqrefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var ignoredError in errors.Select((element, index) => new WorksheetIgnoredErrorReference(index + 1, element)))
+        {
+            AddWorksheetIgnoredErrorIssues(worksheetPart, description, ignoredError, seenSqrefs, issues);
+        }
+    }
+
+    private static void AddWorksheetIgnoredErrorIssues(
+        string worksheetPart,
+        string containerDescription,
+        WorksheetIgnoredErrorReference ignoredErrorReference,
+        HashSet<string> seenSqrefs,
+        List<string> issues)
+    {
+        var ignoredError = ignoredErrorReference.Element;
+        var description = $"{containerDescription} ignoredError #{ignoredErrorReference.Ordinal}";
+        var sqref = ignoredError.Attribute("sqref")?.Value;
+        if (string.IsNullOrWhiteSpace(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has no sqref");
+        }
+        else if (!IsValidPackageSqref(sqref))
+        {
+            issues.Add($"{worksheetPart} {description} has invalid local sqref '{sqref}'");
+        }
+        else if (!seenSqrefs.Add(NormalizePackageSqref(sqref)))
+        {
+            issues.Add($"{worksheetPart} {containerDescription} has duplicate ignoredError sqref '{sqref}'");
+        }
+
+        foreach (var attribute in ignoredError.Attributes().Where(attribute => IsKnownIgnoredErrorFlag(attribute.Name.LocalName)))
+        {
+            var value = attribute.Value;
+            if (!string.IsNullOrWhiteSpace(value) && !IsValidPackageBoolean(value))
+                issues.Add($"{worksheetPart} {description} has invalid {attribute.Name.LocalName} value '{value}'");
+        }
+
+        if (ignoredError.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorksheetMetadataOrderingIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        XElement metadataElement,
+        string description,
+        IReadOnlyCollection<string> laterWorksheetElements,
+        List<string> issues)
+    {
+        var worksheetChildren = worksheetRoot.Elements().ToArray();
+        var metadataIndex = Array.IndexOf(worksheetChildren, metadataElement);
+        if (metadataIndex < 0)
+            return;
+
+        foreach (var earlierLaterElement in worksheetChildren
+                     .Take(metadataIndex)
+                     .Where(element =>
+                         element.Name.Namespace == SpreadsheetNs &&
+                         laterWorksheetElements.Contains(element.Name.LocalName)))
+        {
+            issues.Add($"{worksheetPart} {description} appears after {earlierLaterElement.Name.LocalName}; expected schema order before that element");
+        }
+    }
+
+    private static bool IsValidPackageSqref(string sqref)
+    {
+        var tokens = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return tokens.Length > 0 && tokens.All(IsValidLocalWorksheetReference);
+    }
+
+    private static string NormalizePackageSqref(string sqref) =>
+        string.Join(" ", sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+    private static bool IsKnownIgnoredErrorFlag(string name) =>
+        name is "numberStoredAsText" or
+            "evalError" or
+            "formula" or
+            "formulaRange" or
+            "unlockedFormula" or
+            "emptyCellReference" or
+            "listDataValidation" or
+            "calculatedColumn" or
+            "twoDigitTextYear";
+
+    private static void ThrowInvalidWorksheetDiagnosticMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet diagnostic metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetSingleXmlCellsMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -9891,6 +10146,22 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetScenarioInputCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetCellWatchesReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetCellWatchReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetIgnoredErrorsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetIgnoredErrorReference(
         int Ordinal,
         XElement Element);
 
