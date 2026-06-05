@@ -21,8 +21,9 @@ public sealed class XmlFilesPreflightTests
     public void XmlFilesPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
+        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), "");
+        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, "");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
@@ -36,8 +37,9 @@ public sealed class XmlFilesPreflightTests
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.slnx"), "<Solution><Folder></Solution>");
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
+        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-XmlRoots \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-XmlRoots \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("XML validation failed");
@@ -51,8 +53,9 @@ public sealed class XmlFilesPreflightTests
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.xaml"), "<Window><Grid></Window>");
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1");
+        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-XmlRoots \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-XmlRoots \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("XML validation failed");
