@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows;
@@ -18,15 +17,13 @@ public sealed partial class ConditionalFormatDialogTests
     }
 
     private static string ReadConditionalFormatDialogSource() =>
-        string.Join(Environment.NewLine, new[]
-        {
+        DialogSourceTestSupport.ReadHostSources(
             "ConditionalFormatDialog.cs",
             "ConditionalFormatDialog.Catalog.cs",
             "ConditionalFormatDialog.ColorEditors.cs",
             "ConditionalFormatDialog.IconSets.cs",
             "ConditionalFormatDialog.Parsing.cs",
-            "ConditionalFormatDialog.Result.cs"
-        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", file))));
+            "ConditionalFormatDialog.Result.cs");
 
     private static T GetControl<T>(ConditionalFormatDialog dialog, string name)
         where T : class
