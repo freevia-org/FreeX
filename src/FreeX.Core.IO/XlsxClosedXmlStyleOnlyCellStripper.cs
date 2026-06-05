@@ -71,7 +71,7 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         }
     }
 
-    private static bool ShouldStripWorksheet(
+    internal static bool ShouldStripWorksheet(
         ZipArchiveEntry sourceEntry,
         IReadOnlySet<string>? worksheetPathsToStrip)
     {
@@ -177,7 +177,7 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
     private static string NormalizeEntryPath(string path) =>
         path.IndexOf('\\') < 0 ? path : path.Replace('\\', '/');
 
-    private static void StripRedundantStyleOnlyCells(Stream worksheetStream, Stream outputStream)
+    internal static void StripRedundantStyleOnlyCells(Stream worksheetStream, Stream outputStream)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var cellName = worksheetNs + "c";

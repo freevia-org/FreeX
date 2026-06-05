@@ -79,6 +79,75 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         return sanitized;
     }
 
+    public static MemoryStream Create(
+        MemoryStream sourcePackage,
+        IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip,
+        bool removeUnsupportedConditionalFormatting = false,
+        bool removeAllConditionalFormatting = false,
+        XlsxClosedXmlLoadSanitizationHints? hints = null)
+    {
+        var shouldStripStyleOnlyCells = styleOnlyWorksheetPathsToStrip is not { Count: 0 };
+        if (!shouldStripStyleOnlyCells)
+        {
+            return Create(
+                sourcePackage,
+                removeUnsupportedConditionalFormatting,
+                removeAllConditionalFormatting,
+                hints);
+        }
+
+        sourcePackage.Position = 0;
+        var requirements = GetSanitizationRequirements(
+            sourcePackage,
+            removeUnsupportedConditionalFormatting,
+            removeAllConditionalFormatting,
+            hints);
+        if (!requirements.RequiresAny)
+            return XlsxClosedXmlStyleOnlyCellStripper.Create(sourcePackage, styleOnlyWorksheetPathsToStrip);
+
+        MemoryStream? fusedPackage = null;
+        try
+        {
+            fusedPackage = CreateFusedTransientPackage(
+                sourcePackage,
+                styleOnlyWorksheetPathsToStrip,
+                requirements);
+            var result = fusedPackage;
+            fusedPackage = null;
+            return result;
+        }
+        catch
+        {
+            fusedPackage?.Dispose();
+            var styleOptimizedPackage = XlsxClosedXmlStyleOnlyCellStripper.Create(
+                sourcePackage,
+                styleOnlyWorksheetPathsToStrip);
+            try
+            {
+                var canMutateStyleOptimizedPackage = !ReferenceEquals(styleOptimizedPackage, sourcePackage);
+                var sanitizedPackage = Create(
+                    styleOptimizedPackage,
+                    removeUnsupportedConditionalFormatting,
+                    removeAllConditionalFormatting,
+                    hints,
+                    mutateSourcePackage: canMutateStyleOptimizedPackage);
+                if (!ReferenceEquals(sanitizedPackage, styleOptimizedPackage) &&
+                    !ReferenceEquals(styleOptimizedPackage, sourcePackage))
+                {
+                    styleOptimizedPackage.Dispose();
+                }
+
+                return sanitizedPackage;
+            }
+            catch
+            {
+                if (!ReferenceEquals(styleOptimizedPackage, sourcePackage))
+                    styleOptimizedPackage.Dispose();
+                throw;
+            }
+        }
+    }
+
     private static SanitizationRequirements GetSanitizationRequirements(
         Stream sourcePackage,
         bool scanUnsupportedConditionalFormatting = true,
@@ -177,6 +246,409 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasAllConditionalFormattingBlocks ||
             HasUnsupportedConditionalFormattingBlocks ||
             HasWorksheetDynamicFilters;
+    }
+
+    private static MemoryStream CreateFusedTransientPackage(
+        MemoryStream sourcePackage,
+        IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip,
+        SanitizationRequirements requirements)
+    {
+        sourcePackage.Position = 0;
+        MemoryStream? targetPackage = null;
+        ZipArchive? targetArchive = null;
+        var returnTargetPackage = false;
+
+        try
+        {
+            targetPackage = new MemoryStream();
+            using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true))
+            {
+                targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Create, leaveOpen: true);
+                var removedParts = CollectRemovedPackageParts(sourceArchive, requirements);
+                var chartExParts = requirements.HasChartExChartParts
+                    ? GetChartExPartNames(sourceArchive)
+                    : [];
+
+                foreach (var sourceEntry in sourceArchive.Entries)
+                {
+                    var normalizedPath = NormalizeEntryPath(sourceEntry.FullName);
+                    if (removedParts.Contains(normalizedPath))
+                        continue;
+
+                    if (TryWriteFusedEntry(
+                            sourceEntry,
+                            normalizedPath,
+                            targetArchive,
+                            styleOnlyWorksheetPathsToStrip,
+                            requirements,
+                            removedParts,
+                            chartExParts))
+                    {
+                        continue;
+                    }
+
+                    CopyEntry(sourceEntry, targetArchive);
+                }
+            }
+
+            targetArchive?.Dispose();
+            targetArchive = null;
+            targetPackage.Position = 0;
+            returnTargetPackage = true;
+            return targetPackage;
+        }
+        finally
+        {
+            targetArchive?.Dispose();
+            sourcePackage.Position = 0;
+            if (!returnTargetPackage)
+                targetPackage?.Dispose();
+        }
+    }
+
+    private static HashSet<string> CollectRemovedPackageParts(
+        ZipArchive sourceArchive,
+        SanitizationRequirements requirements)
+    {
+        var removedParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in sourceArchive.Entries)
+        {
+            var normalizedPath = NormalizeEntryPath(entry.FullName);
+            if (requirements.HasPivotPackageMetadata && IsPivotPackageEntry(normalizedPath) ||
+                requirements.HasDrawingPackageParts && IsClosedXmlDrawingPackageEntry(normalizedPath))
+            {
+                removedParts.Add(normalizedPath);
+            }
+        }
+
+        return removedParts;
+    }
+
+    private static bool TryWriteFusedEntry(
+        ZipArchiveEntry sourceEntry,
+        string normalizedPath,
+        ZipArchive targetArchive,
+        IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip,
+        SanitizationRequirements requirements,
+        IReadOnlySet<string> removedParts,
+        IReadOnlySet<string> chartExParts)
+    {
+        if (IsWorksheetXml(sourceEntry))
+        {
+            var shouldStripStyleOnlyCells = XlsxClosedXmlStyleOnlyCellStripper.ShouldStripWorksheet(
+                sourceEntry,
+                styleOnlyWorksheetPathsToStrip);
+            if (ShouldTransformWorksheetXml(requirements))
+            {
+                return WriteTransformedWorksheetEntry(
+                    sourceEntry,
+                    targetArchive,
+                    shouldStripStyleOnlyCells,
+                    requirements);
+            }
+
+            if (shouldStripStyleOnlyCells)
+            {
+                var targetEntry = CreateTargetEntry(sourceEntry, targetArchive);
+                using var targetStream = targetEntry.Open();
+                using var sourceStream = sourceEntry.Open();
+                XlsxClosedXmlStyleOnlyCellStripper.StripRedundantStyleOnlyCells(sourceStream, targetStream);
+                return true;
+            }
+
+            return false;
+        }
+
+        if (requirements.HasPivotPackageMetadata &&
+            string.Equals(normalizedPath, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            WriteTransformedWorkbookEntry(sourceEntry, targetArchive);
+            return true;
+        }
+
+        if (removedParts.Count > 0 &&
+            string.Equals(normalizedPath, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return WriteTransformedContentTypesEntry(sourceEntry, targetArchive, removedParts);
+        }
+
+        if (normalizedPath.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) &&
+            ShouldTransformRelationshipEntry(normalizedPath, requirements, removedParts, chartExParts))
+        {
+            return WriteTransformedRelationshipEntry(
+                sourceEntry,
+                normalizedPath,
+                targetArchive,
+                requirements,
+                removedParts,
+                chartExParts);
+        }
+
+        return false;
+    }
+
+    private static bool ShouldTransformWorksheetXml(SanitizationRequirements requirements) =>
+        requirements.HasPivotPackageMetadata ||
+        requirements.HasDrawingPackageParts ||
+        requirements.HasAllConditionalFormattingBlocks ||
+        requirements.HasUnsupportedConditionalFormattingBlocks ||
+        requirements.HasWorksheetDynamicFilters;
+
+    private static bool ShouldTransformRelationshipEntry(
+        string normalizedPath,
+        SanitizationRequirements requirements,
+        IReadOnlySet<string> removedParts,
+        IReadOnlySet<string> chartExParts)
+    {
+        if (requirements.HasPivotPackageMetadata)
+            return true;
+
+        if (requirements.HasDrawingPackageParts && removedParts.Count > 0)
+            return GetWorksheetPathFromRelationshipPath(normalizedPath) is not null;
+
+        return requirements.HasChartExChartParts &&
+            chartExParts.Count > 0 &&
+            IsDrawingRelationshipEntry(normalizedPath);
+    }
+
+    private static void WriteTransformedWorkbookEntry(
+        ZipArchiveEntry sourceEntry,
+        ZipArchive targetArchive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        workbookXml.Root?.Elements(workbookNs + "pivotCaches").Remove();
+        WriteXmlEntry(sourceEntry, targetArchive, workbookXml);
+    }
+
+    private static bool WriteTransformedWorksheetEntry(
+        ZipArchiveEntry sourceEntry,
+        ZipArchive targetArchive,
+        bool stripStyleOnlyCells,
+        SanitizationRequirements requirements)
+    {
+        var worksheetXml = stripStyleOnlyCells
+            ? LoadStyleStrippedWorksheetXml(sourceEntry)
+            : XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        var changed = TransformWorksheetXml(worksheetXml, requirements);
+        if (!stripStyleOnlyCells && !changed)
+            return false;
+
+        WriteXmlEntry(sourceEntry, targetArchive, worksheetXml);
+        return true;
+    }
+
+    private static XDocument LoadStyleStrippedWorksheetXml(ZipArchiveEntry sourceEntry)
+    {
+        using var strippedWorksheet = new MemoryStream();
+        using (var sourceStream = sourceEntry.Open())
+        {
+            XlsxClosedXmlStyleOnlyCellStripper.StripRedundantStyleOnlyCells(sourceStream, strippedWorksheet);
+        }
+
+        strippedWorksheet.Position = 0;
+        return XlsxPackageXmlEditor.LoadXml(strippedWorksheet);
+    }
+
+    private static bool TransformWorksheetXml(
+        XDocument worksheetXml,
+        SanitizationRequirements requirements)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = worksheetXml.Root;
+        if (root is null)
+            return false;
+
+        var changed = false;
+
+        if (requirements.HasDrawingPackageParts)
+            changed |= RemoveElements(root.Elements(worksheetNs + "drawing"));
+
+        if (requirements.HasPivotPackageMetadata)
+            changed |= RemoveElements(root.Elements(worksheetNs + "pivotTableDefinition"));
+
+        if (requirements.HasAllConditionalFormattingBlocks)
+        {
+            changed |= RemoveElements(root.Elements(worksheetNs + "conditionalFormatting"));
+        }
+        else if (requirements.HasUnsupportedConditionalFormattingBlocks)
+        {
+            changed |= RemoveElements(root.Elements(worksheetNs + "conditionalFormatting")
+                .Where(block => XlsxConditionalFormatRuleSupport.ConditionalFormattingHasUnsupportedRule(block, worksheetNs, allowBlankType: false))
+                .ToList());
+        }
+
+        if (requirements.HasWorksheetDynamicFilters)
+        {
+            changed |= RemoveElements(root.Descendants(worksheetNs + "dynamicFilter").ToList());
+        }
+
+        return changed;
+    }
+
+    private static bool RemoveElements(IEnumerable<XElement> elements)
+    {
+        var removable = elements as ICollection<XElement> ?? elements.ToList();
+        if (removable.Count == 0)
+            return false;
+
+        removable.Remove();
+        return true;
+    }
+
+    private static bool WriteTransformedContentTypesEntry(
+        ZipArchiveEntry sourceEntry,
+        ZipArchive targetArchive,
+        IReadOnlySet<string> removedParts)
+    {
+        XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        var overrides = contentTypesXml.Root?
+            .Elements(contentTypesNs + "Override")
+            .Where(element =>
+                element.Attribute("PartName")?.Value is { Length: > 0 } partName &&
+                removedParts.Contains(NormalizePartName(partName)))
+            .ToList()
+            ?? [];
+        if (overrides.Count == 0)
+            return false;
+
+        overrides.Remove();
+        WriteXmlEntry(sourceEntry, targetArchive, contentTypesXml);
+        return true;
+    }
+
+    private static bool WriteTransformedRelationshipEntry(
+        ZipArchiveEntry sourceEntry,
+        string normalizedPath,
+        ZipArchive targetArchive,
+        SanitizationRequirements requirements,
+        IReadOnlySet<string> removedParts,
+        IReadOnlySet<string> chartExParts)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var sourcePart = GetPackagePartPathFromRelationshipPath(normalizedPath);
+        var relsXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        var relationships = relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship => ShouldRemoveRelationship(
+                relationship,
+                normalizedPath,
+                sourcePart,
+                requirements,
+                removedParts,
+                chartExParts))
+            .ToList()
+            ?? [];
+        if (relationships.Count == 0)
+            return false;
+
+        relationships.Remove();
+        WriteXmlEntry(sourceEntry, targetArchive, relsXml);
+        return true;
+    }
+
+    private static bool ShouldRemoveRelationship(
+        XElement relationship,
+        string normalizedRelationshipPath,
+        string? sourcePart,
+        SanitizationRequirements requirements,
+        IReadOnlySet<string> removedParts,
+        IReadOnlySet<string> chartExParts)
+    {
+        if (requirements.HasPivotPackageMetadata)
+        {
+            var type = relationship.Attribute("Type")?.Value ?? "";
+            if (type.EndsWith("/pivotCacheDefinition", StringComparison.OrdinalIgnoreCase) ||
+                type.EndsWith("/pivotTable", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        if (sourcePart is null ||
+            relationship.Attribute("Target")?.Value is not { Length: > 0 } target)
+        {
+            return false;
+        }
+
+        var resolvedTarget = XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target);
+        if (requirements.HasDrawingPackageParts && removedParts.Contains(resolvedTarget))
+            return true;
+
+        if (!requirements.HasChartExChartParts ||
+            chartExParts.Count == 0 ||
+            !IsDrawingRelationshipEntry(normalizedRelationshipPath))
+        {
+            return false;
+        }
+
+        var typeValue = relationship.Attribute("Type")?.Value ?? "";
+        return (typeValue.Equals("http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart", StringComparison.OrdinalIgnoreCase) ||
+                typeValue.Equals("http://schemas.microsoft.com/office/2014/relationships/chartEx", StringComparison.OrdinalIgnoreCase)) &&
+               chartExParts.Contains(resolvedTarget);
+    }
+
+    private static void WriteXmlEntry(
+        ZipArchiveEntry sourceEntry,
+        ZipArchive targetArchive,
+        XDocument document)
+    {
+        var targetEntry = CreateTargetEntry(sourceEntry, targetArchive);
+        using var targetStream = targetEntry.Open();
+        document.Save(targetStream, SaveOptions.DisableFormatting);
+    }
+
+    private static void CopyEntry(ZipArchiveEntry sourceEntry, ZipArchive targetArchive)
+    {
+        var targetEntry = CreateTargetEntry(sourceEntry, targetArchive);
+        using var targetStream = targetEntry.Open();
+        using var sourceStream = sourceEntry.Open();
+        sourceStream.CopyTo(targetStream);
+    }
+
+    private static ZipArchiveEntry CreateTargetEntry(
+        ZipArchiveEntry sourceEntry,
+        ZipArchive targetArchive)
+    {
+        var targetEntry = targetArchive.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+        targetEntry.LastWriteTime = sourceEntry.LastWriteTime;
+        return targetEntry;
+    }
+
+    private static bool IsPivotPackageEntry(string normalizedPath) =>
+        normalizedPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
+        normalizedPath.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsWorksheetXml(ZipArchiveEntry entry) =>
+        entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+        entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDrawingRelationshipEntry(string normalizedPath) =>
+        normalizedPath.StartsWith("xl/drawings/_rels/", StringComparison.OrdinalIgnoreCase) &&
+        normalizedPath.EndsWith(".xml.rels", StringComparison.OrdinalIgnoreCase);
+
+    private static string? GetPackagePartPathFromRelationshipPath(string relationshipPath)
+    {
+        var normalizedPath = NormalizeEntryPath(relationshipPath);
+        const string packageRelationshipRoot = "_rels/.rels";
+        if (string.Equals(normalizedPath, packageRelationshipRoot, StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        const string marker = "/_rels/";
+        const string suffix = ".rels";
+        var markerIndex = normalizedPath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0 ||
+            !normalizedPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var directory = normalizedPath[..markerIndex];
+        var fileName = normalizedPath[(markerIndex + marker.Length)..^suffix.Length];
+        return string.IsNullOrEmpty(directory)
+            ? fileName
+            : $"{directory}/{fileName}";
     }
 
     private static bool HasPivotPackageMetadata(ZipArchive archive) =>

@@ -121,25 +121,21 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             MeasureExternalStage(path, "STYLE_STRIPPED_SANITIZED_CLOSEDXML_LOAD", () =>
             {
                 using var sourcePackage = new MemoryStream(package, writable: false);
-                var strippedPackage = XlsxClosedXmlStyleOnlyCellStripper.Create(sourcePackage);
-                MemoryStream? sanitizedPackage = null;
+                var sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(
+                    sourcePackage,
+                    styleOnlyWorksheetPathsToStrip: null);
                 try
                 {
-                    sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(strippedPackage, mutateSourcePackage: true);
                     using var workbook = new XLWorkbook(sanitizedPackage);
                     workbook.Worksheets.Count.Should().BeGreaterThan(0);
                 }
                 finally
                 {
                     if (sanitizedPackage is not null &&
-                        !ReferenceEquals(sanitizedPackage, strippedPackage) &&
                         !ReferenceEquals(sanitizedPackage, sourcePackage))
                     {
                         sanitizedPackage.Dispose();
                     }
-
-                    if (!ReferenceEquals(strippedPackage, sourcePackage))
-                        strippedPackage.Dispose();
                 }
             });
 
