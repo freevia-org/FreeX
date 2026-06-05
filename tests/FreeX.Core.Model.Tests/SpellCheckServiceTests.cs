@@ -1009,6 +1009,55 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversItCloudSystemVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Deploymnt DEPLOYEMNT databse DATABSAE Configration CONFIGURATON backkup restoree Migraton Integraton connecton SYNCRONIZE monitering alertng serverr servce cloudd. Keep deployment, database, configuration, backup, restore, migration, integration, connection, synchronize, monitoring, alerting, server, service, cloud, predeploymnt, deploymnt_id, https://deploymnt.example.com/databse, ops@databse.example.com, and \"C:\\deploymnt folder\\serverr file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "deploymnt DEPLOYMNT Deploymnt https://deploymnt.example.com/deploymnt ops@deploymnt.example.com deploymnt_id predeploymnt \"C:\\deploymnt folder\\deploymnt file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "deployment");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Deploymnt", "Deployment"),
+            ("DEPLOYEMNT", "DEPLOYMENT"),
+            ("databse", "database"),
+            ("DATABSAE", "DATABASE"),
+            ("Configration", "Configuration"),
+            ("CONFIGURATON", "CONFIGURATION"),
+            ("backkup", "backup"),
+            ("restoree", "restore"),
+            ("Migraton", "Migration"),
+            ("Integraton", "Integration"),
+            ("connecton", "connection"),
+            ("SYNCRONIZE", "SYNCHRONIZE"),
+            ("monitering", "monitoring"),
+            ("alertng", "alerting"),
+            ("serverr", "server"),
+            ("servce", "service"),
+            ("cloudd", "cloud"));
+        plan.IssueCount.Should().Be(17);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Deployment DEPLOYMENT database DATABASE Configuration CONFIGURATION backup restore Migration Integration connection SYNCHRONIZE monitoring alerting server service cloud. Keep deployment, database, configuration, backup, restore, migration, integration, connection, synchronize, monitoring, alerting, server, service, cloud, predeploymnt, deploymnt_id, https://deploymnt.example.com/databse, ops@databse.example.com, and \"C:\\deploymnt folder\\serverr file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(17);
+        replaceAllCorrected.Should().Be(
+            "deployment DEPLOYMENT Deployment https://deploymnt.example.com/deploymnt ops@deploymnt.example.com deploymnt_id predeploymnt \"C:\\deploymnt folder\\deploymnt file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversInvoiceSupplyChainVocabularyTypos()
     {
         var wb = new Workbook("test");
