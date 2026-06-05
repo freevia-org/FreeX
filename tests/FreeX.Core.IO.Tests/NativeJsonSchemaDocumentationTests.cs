@@ -7,7 +7,7 @@ public sealed class NativeJsonSchemaDocumentationTests
     [Fact]
     public void NativeJsonSchemaReference_DocumentsCurrentHeaderAndDtoFamilies()
     {
-        var path = FindWorkspaceFile("docs", "formats/native-json-schema.md");
+        var path = TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/native-json-schema.md");
         var doc = File.ReadAllText(path);
 
         doc.Should().Contain("FileFormat");
@@ -56,13 +56,11 @@ public sealed class NativeJsonSchemaDocumentationTests
     [Fact]
     public void NativeJsonSchemaReference_DocumentsMigrationPolicy()
     {
-        var doc = File.ReadAllText(FindWorkspaceFile("docs", "formats/native-json-schema.md"));
+        var doc = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/native-json-schema.md"));
 
         doc.Should().Contain("Legacy unversioned files");
         doc.Should().Contain("unsupported future versions");
         doc.Should().Contain("Every schema version bump must add migration tests");
         doc.Should().Contain("NativeJsonSchemaTests");
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }

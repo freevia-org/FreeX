@@ -61,6 +61,26 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Theory]
+    [InlineData("\uFF11\uFF0E\uFF12\uFF13\uFF25\uFF14")]
+    [InlineData("\uFF11\uFF45\uFF0D\uFF13")]
+    [InlineData("\uFF0B \uFF11\uFF0E\uFF12\uFF25\uFF0B\uFF13")]
+    [InlineData("$\uFF11\uFF25\uFF13")]
+    [InlineData("\uFF11\uFF25\uFF12\uFF05")]
+    [InlineData("(\u2212 \uFF11\uFF25\uFF0B\uFF13)")]
+    public void FindFormulaErrorIssues_ReturnsFullwidthScientificNumbersStoredAsText(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(value));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.Cell.Should().Be("A1");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.NumberStoredAsTextErrorCode);
+    }
+
+    [Theory]
     [InlineData("$42")]
     [InlineData("'$42")]
     [InlineData("-$42")]
@@ -303,6 +323,24 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\uFF11\uFF12\uFF13\uFF21")]
     [InlineData("\uFF11\uFF0E\uFF12\uFF0E\uFF13")]
     public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidNumberText(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(value));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.NumberStoredAsTextErrorCode);
+    }
+
+    [Theory]
+    [InlineData("\uFF11\uFF12\uFF25")]
+    [InlineData("\uFF11\uFF12\uFF25\uFF0B")]
+    [InlineData("\uFF11\uFF12\uFF25\uFF0B\uFF0B\uFF13")]
+    [InlineData("\uFF11\uFF12\uFF25\uFF13kg")]
+    [InlineData("\uFF11\uFF12\uFF25\uFF13\uFF05 USD")]
+    [InlineData("\uFF11\uFF12\uFF25\uFF13\uFF25\uFF14")]
+    [InlineData("\uFF11\uFF12\uFF13\uFF21")]
+    public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidFullwidthScientificNumberText(string value)
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");

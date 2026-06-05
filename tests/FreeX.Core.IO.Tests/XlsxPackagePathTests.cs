@@ -61,7 +61,7 @@ public sealed class XlsxPackagePathTests
     [Fact]
     public void RelationshipPathEscaping_FastPathsSafeTargetsBeforeSplittingSegments()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxPackagePath.cs"));
         var escapingHelpers = source[
             source.IndexOf("private static string UnescapePathSegments", StringComparison.Ordinal)..
@@ -109,7 +109,7 @@ public sealed class XlsxPackagePathTests
     [Fact]
     public void ImageMediaMapping_AvoidsLowercaseStringAllocations()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxPackagePath.cs"));
         var mediaMapping = source[
             source.IndexOf("public static string GetImageContentType", StringComparison.Ordinal)..
@@ -130,6 +130,4 @@ public sealed class XlsxPackagePathTests
     {
         XlsxPackagePath.GetWorksheetBackgroundMediaFileName(fileName, index, extension).Should().Be(expected);
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }

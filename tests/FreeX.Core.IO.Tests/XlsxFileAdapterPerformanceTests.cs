@@ -281,7 +281,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SparklineLoad_UsesExtensionListFastPath()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxSparklineMapper.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxSparklineMapper.cs"));
         var readMethod = source[
             source.IndexOf("public static IReadOnlyList<SparklineModel> Read", StringComparison.Ordinal)..
             source.IndexOf("public static void Save", StringComparison.Ordinal)];
@@ -295,8 +295,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadSourcePackageCapture_ReusesOnlyOwnedPackageBuffers()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
-        var snapshotSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var snapshotSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
 
         adapterSource.Should().Contain("loadPackage.CanReuseBufferForSnapshot");
         adapterSource.Should().Contain("CanReuseBufferForSnapshot: false");
@@ -309,7 +309,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadSourcePackageCapture_FingerprintsDenseSaveBenchmarkForCopyFastPath()
     {
-        var snapshotSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+        var snapshotSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
 
         snapshotSource.Should().Contain("private const int FingerprintCellLimit = 25_000;");
         (DenseSheetCount * DenseRowsPerSheet * DenseColumnsPerSheet).Should().BeLessThan(25_000);
@@ -318,7 +318,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadSourcePackageCapture_CountsStyleOnlyEntriesTowardFingerprintLimit()
     {
-        var snapshotSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+        var snapshotSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
 
         snapshotSource.Should().Contain("sheet.HasStyleOnlyCells");
         snapshotSource.Should().Contain("sheet.GetStyleOnlyEntries()");
@@ -327,7 +327,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadPath_BoundsStyleOnlyStripperToLargeStyleOnlyLayouts()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
 
         adapterSource.Should().Contain("private const int ClosedXmlStyleOnlyStripCellThreshold = 16_384;");
         adapterSource.Should().Contain("if (sheetXmlLayoutHadWarnings || sheetXmlLayout.Count == 0)");
@@ -339,9 +339,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadPath_PreSizesSheetCellStorageFromSheetDataLayout()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
-        var cellLayoutSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetCellLayoutReader.cs"));
-        var sheetXmlLayoutSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var cellLayoutSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetCellLayoutReader.cs"));
+        var sheetXmlLayoutSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
 
         cellLayoutSource.Should().Contain("int PopulatedCellCount");
         sheetXmlLayoutSource.Should().Contain("cellLayout.PopulatedCellCount");
@@ -351,9 +351,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SaveSourcePackageCapture_ReusesSaveFingerprintForSnapshot()
     {
-        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
-        var postProcessingSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var snapshotSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+        var postProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var snapshotSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
 
         saveSource.Should().Contain("string? currentModelFingerprint = null;");
         saveSource.Should().Contain("sourcePackage.Matches(workbook, out currentModelFingerprint)");
@@ -376,10 +376,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SaveSourcePackagePreservation_ReusesLoadTimePlainWorksheetPreflight()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
-        var layoutSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
-        var sourcePackageSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"));
-        var preserverSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var layoutSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+        var sourcePackageSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"));
+        var preserverSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.cs"));
 
         adapterSource.Should().Contain("GetWorksheetsWithPreservableSourceMetadata(");
         layoutSource.Should().Contain("HasPreservableSourceWorksheetMetadata(worksheetXml, worksheetNs)");
@@ -391,8 +391,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void SaveSourcePackageCompatibilityNormalization_SkipsUnneededWorksheetScans()
     {
-        var postProcessingSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var normalizerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxExcelCompatibilityNormalizer.cs"));
+        var postProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var normalizerSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxExcelCompatibilityNormalizer.cs"));
 
         postProcessingSource.Should().Contain("CreateExcelCompatibilityNormalizationPlan(sourcePackage, sourceParts, featurePlan)");
         postProcessingSource.Should().Contain("sourcePackage?.WorksheetsWithPreservableSourceMetadata is null");
@@ -406,7 +406,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void WorkbookSchemaNormalizer_PreflightsWorksheetOrderBeforeLoadingXml()
     {
-        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookSchemaNormalizer.cs"));
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookSchemaNormalizer.cs"));
 
         source.Should().Contain("InspectWorksheetNormalization(worksheetEntry, workbookNs, relNs)");
         source.Should().Contain("!preflight.NeedsChildOrderNormalization && !preflight.HasLegacyDrawingHeaderFooter");
