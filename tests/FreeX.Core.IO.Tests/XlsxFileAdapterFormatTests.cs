@@ -133,21 +133,21 @@ public sealed class XlsxFileAdapterFormatTests
     [Fact]
     public void LoadPath_AvoidsFullPackageToArrayCopies()
     {
-        var adapterSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
-        var saveSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
-        var savePostProcessingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var diagnosticsSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetDiagnosticsMapper.cs"));
-        var sanitizerSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
-        var worksheetMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.cs"))
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+        var savePostProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var diagnosticsSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetDiagnosticsMapper.cs"));
+        var sanitizerSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
+        var worksheetMetadataSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.cs"))
             .ReplaceLineEndings("\n");
-        var worksheetCellMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.CellMetadata.cs"));
-        var worksheetMergeHelpersSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.MergeHelpers.cs"));
-        var drawingPartMergerSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetDrawingPartMerger.cs"));
-        var pivotReferencePreserverSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxPivotXmlReferencePreserver.cs"));
-        var tableReferencePreserverSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxStructuredTableReferencePreserver.cs"));
-        var styleOnlyStripperSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
-        var sheetXmlLayoutSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
-        var sourcePackageSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"))
+        var worksheetCellMetadataSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.CellMetadata.cs"));
+        var worksheetMergeHelpersSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.MergeHelpers.cs"));
+        var drawingPartMergerSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetDrawingPartMerger.cs"));
+        var pivotReferencePreserverSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxPivotXmlReferencePreserver.cs"));
+        var tableReferencePreserverSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxStructuredTableReferencePreserver.cs"));
+        var styleOnlyStripperSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
+        var sheetXmlLayoutSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+        var sourcePackageSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"))
             .ReplaceLineEndings("\n");
         var preserveSourcePackageParts = sourcePackageSource[
             sourcePackageSource.IndexOf("private static SourcePackagePartSummary PreserveSourcePackageParts", StringComparison.Ordinal)..
@@ -271,7 +271,7 @@ public sealed class XlsxFileAdapterFormatTests
     [Fact]
     public void SavePostProcessing_UsesSourcePackageReplayOnlyForLoadedWorkbooks()
     {
-        var savePostProcessingSource = File.ReadAllText(FindWorkspaceFile(
+        var savePostProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"))
             .ReplaceLineEndings("\n");
         var adapter = new XlsxFileAdapter();
@@ -329,9 +329,9 @@ public sealed class XlsxFileAdapterFormatTests
     [Fact]
     public void SavePostProcessing_CapturesRefreshedSourcePackageWithoutIntermediateStreamCopy()
     {
-        var savePostProcessingSource = File.ReadAllText(FindWorkspaceFile(
+        var savePostProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var snapshotSource = File.ReadAllText(FindWorkspaceFile(
+        var snapshotSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
 
         savePostProcessingSource.Should().Contain("currentModelFingerprint,");
@@ -340,8 +340,6 @@ public sealed class XlsxFileAdapterFormatTests
         savePostProcessingSource.Should().NotContain("packageStream.CopyTo(refreshedPackageStream)");
         snapshotSource.Should().Contain("public static XlsxSourcePackage Capture(Stream stream, Workbook workbook)");
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 
     private static Workbook CreateSimpleWorkbook(string value)
     {
