@@ -43,6 +43,9 @@ public partial class XlsxCorpusRunnerTests
                     .Should()
                     .BeTrue(row.Id);
 
+            if (tags.Contains("shared-string-package"))
+                AssertPublicSharedStringPackageGraph(archive, row.Id);
+
             if (tags.Contains("cell-types"))
                 PublicWorksheetCells(archive)
                     .Select(cell => cell.Attribute("t")?.Value ?? "n")
@@ -55,13 +58,82 @@ public partial class XlsxCorpusRunnerTests
                     .Should()
                     .Contain(name => name.Length == 31, row.Id);
 
-            if (tags.Contains("unsupported-sheet-types"))
-                archive.Entries.Should().Contain(entry => entry.FullName.StartsWith("xl/chartsheets/", StringComparison.Ordinal), row.Id);
+            if (tags.Contains("chartsheet") || tags.Contains("unsupported-sheet-types"))
+                AssertPublicChartsheetPackageGraph(archive, row.Id);
         }
         finally
         {
             if (package.CanSeek)
                 package.Position = originalPosition;
+        }
+    }
+
+    private static void AssertPublicSharedStringPackageGraph(ZipArchive archive, string because)
+    {
+        const string sharedStringContentType =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
+        const string sharedStringRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+
+        var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
+        sharedStringsEntry.Should().NotBeNull(because);
+
+        AssertContentTypeOverride(archive, "/xl/sharedStrings.xml", sharedStringContentType, because);
+        PublicWorkbookRelationships(archive)
+            .Should()
+            .ContainSingle(rel =>
+                string.Equals(AttributeValue(rel, "Type"), sharedStringRelationshipType, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(ResolveWorkbookRelationshipTarget(AttributeValue(rel, "Target")), "xl/sharedStrings.xml", StringComparison.OrdinalIgnoreCase),
+                because);
+
+        var sharedStringsXml = LoadPackageXml(sharedStringsEntry!);
+        var sharedStringItems = sharedStringsXml.Root?
+            .Elements(WorksheetNs + "si")
+            .ToArray() ?? [];
+        sharedStringItems.Should().NotBeEmpty(because);
+
+        var indexes = PublicWorksheetCells(archive)
+            .Where(cell => string.Equals(cell.Attribute("t")?.Value, "s", StringComparison.Ordinal))
+            .Select(cell => int.TryParse(cell.Element(WorksheetNs + "v")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+                ? index
+                : -1)
+            .ToArray();
+
+        indexes.Should().NotBeEmpty(because);
+        indexes.Should().OnlyContain(index => index >= 0 && index < sharedStringItems.Length, because);
+    }
+
+    private static void AssertPublicChartsheetPackageGraph(ZipArchive archive, string because)
+    {
+        const string chartsheetContentType =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml";
+        const string chartsheetRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
+
+        var workbookXml = LoadPublicWorkbookXml(archive);
+        var workbookRelationships = PublicWorkbookRelationships(archive).ToArray();
+        var chartsheetParts = workbookXml.Root!
+            .Element(WorksheetNs + "sheets")!
+            .Elements(WorksheetNs + "sheet")
+            .Select(sheet => sheet.Attribute(XName.Get("id", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"))?.Value)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => workbookRelationships.SingleOrDefault(rel =>
+                string.Equals(AttributeValue(rel, "Id"), id, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(AttributeValue(rel, "Type"), chartsheetRelationshipType, StringComparison.OrdinalIgnoreCase)))
+            .Where(rel => rel is not null)
+            .Select(rel => ResolveWorkbookRelationshipTarget(AttributeValue(rel!, "Target")))
+            .Where(target => target.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        chartsheetParts.Should().NotBeEmpty(because);
+
+        foreach (var chartsheetPart in chartsheetParts)
+        {
+            var chartsheetEntry = archive.GetEntry(chartsheetPart);
+            chartsheetEntry.Should().NotBeNull(because);
+            LoadPackageXml(chartsheetEntry!).Root!.Name.Should().Be(WorksheetNs + "chartsheet", because);
+            AssertContentTypeOverride(archive, "/" + chartsheetPart, chartsheetContentType, because);
         }
     }
 
@@ -86,14 +158,40 @@ public partial class XlsxCorpusRunnerTests
 
     private static IReadOnlyList<string> PublicWorkbookSheetNames(ZipArchive archive)
     {
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        workbookEntry.Should().NotBeNull("public workbook packages should contain workbook.xml");
-
-        return LoadPackageXml(workbookEntry!)
+        return LoadPublicWorkbookXml(archive)
             .Descendants(WorksheetNs + "sheet")
             .Select(sheet => sheet.Attribute("name")?.Value ?? "")
             .Where(name => name.Length > 0)
             .ToArray();
+    }
+
+    private static XDocument LoadPublicWorkbookXml(ZipArchive archive)
+    {
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        workbookEntry.Should().NotBeNull("public workbook packages should contain workbook.xml");
+        return LoadPackageXml(workbookEntry!);
+    }
+
+    private static IReadOnlyList<XElement> PublicWorkbookRelationships(ZipArchive archive)
+    {
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        workbookRelsEntry.Should().NotBeNull("public workbook packages should contain workbook relationships");
+        return LoadPackageXml(workbookRelsEntry!)
+            .Root!
+            .Elements(PackageRelationshipNs + "Relationship")
+            .ToArray();
+    }
+
+    private static string ResolveWorkbookRelationshipTarget(string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+            return "";
+
+        target = target.Replace('\\', '/').Trim();
+        if (target.StartsWith("/", StringComparison.Ordinal))
+            return NormalizePackagePart(target);
+
+        return NormalizePackagePart("xl/" + target);
     }
 
     private const string RelationshipPartContentType =
@@ -122,8 +220,10 @@ public partial class XlsxCorpusRunnerTests
                tags.Contains("hyperlinks") ||
                tags.Contains("merged-cells") ||
                tags.Contains("inline-strings") ||
+               tags.Contains("shared-string-package") ||
                tags.Contains("cell-types") ||
                (tags.Contains("sheet-names") && tags.Contains("boundary")) ||
+               tags.Contains("chartsheet") ||
                tags.Contains("unsupported-sheet-types");
     }
 

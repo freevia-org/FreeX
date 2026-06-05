@@ -114,6 +114,111 @@ public partial class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void PublicPackageTags_RejectSharedStringCellsOutsideSharedStringTable()
+    {
+        var row = new ManifestRow("public-shared-string-probe", "", "public", "shared-string-package", "", "public-pass", "");
+        using var package = CreatePublicPackageTagProbePackage(archive =>
+        {
+            WritePublicPackageTagContentTypes(
+                archive,
+                """
+                  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+                """);
+            WritePackageEntry(archive, "xl/workbook.xml", PublicWorkbookXml("rIdSheet1"));
+            WritePackageEntry(archive, "xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdSheet1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rIdSharedStrings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="1"><c r="A1" t="s"><v>4</v></c></row>
+                  </sheetData>
+                </worksheet>
+                """);
+            WritePackageEntry(archive, "xl/sharedStrings.xml", """
+                <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1">
+                  <si><t>Only entry</t></si>
+                </sst>
+                """);
+        });
+
+        var act = () => AssertExpectedPublicPackageTags(row, package);
+
+        act.Should().Throw<Exception>().WithMessage("*public-shared-string-probe*");
+    }
+
+    [Fact]
+    public void PublicPackageTags_RejectChartsheetEntriesWithoutWorkbookGraph()
+    {
+        var row = new ManifestRow("public-chartsheet-probe", "", "public", "chartsheet unsupported-sheet-types", "", "public-pass", "");
+        using var package = CreatePublicPackageTagProbePackage(archive =>
+        {
+            WritePublicPackageTagContentTypes(
+                archive,
+                """
+                  <Override PartName="/xl/chartsheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml"/>
+                """);
+            WritePackageEntry(archive, "xl/workbook.xml", PublicWorkbookXml("rIdSheet1"));
+            WritePackageEntry(archive, "xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdSheet1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+            WritePackageEntry(archive, "xl/chartsheets/sheet1.xml", """
+                <chartsheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+        });
+
+        var act = () => AssertExpectedPublicPackageTags(row, package);
+
+        act.Should().Throw<Exception>().WithMessage("*public-chartsheet-probe*");
+    }
+
+    private static MemoryStream CreatePublicPackageTagProbePackage(Action<ZipArchive> configure)
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            configure(archive);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static void WritePublicPackageTagContentTypes(ZipArchive archive, string extraOverrides)
+    {
+        WritePackageEntry(
+            archive,
+            "[Content_Types].xml",
+            $$"""
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+              <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+            {{extraOverrides}}
+            </Types>
+            """);
+    }
+
+    private static string PublicWorkbookXml(string sheetRelationshipId) =>
+        $$"""
+        <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <sheets>
+            <sheet name="Sheet1" sheetId="1" r:id="{{sheetRelationshipId}}"/>
+          </sheets>
+        </workbook>
+        """;
+
+    [Fact]
     public void RegressionFormulaCachedRows_OpenSaveReloadPreservesFormulaCells()
     {
         var rows = ReadManifestRows()
