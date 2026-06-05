@@ -165,7 +165,7 @@ public static partial class FormulaAuditingService
                         address.ToA1(),
                         FormulaStoredAsTextErrorCode,
                         null,
-                        "The text in this cell starts with '=' or an apostrophe-prefixed '=' and is stored as text instead of a formula.");
+                        "The text in this cell starts with '=' or a fullwidth equals sign, optionally after an apostrophe, and is stored as text instead of a formula.");
                 }
             }
         }
@@ -1605,8 +1605,11 @@ public static partial class FormulaAuditingService
         if (trimmed.Length > 0 && trimmed[0] == '\'')
             trimmed = trimmed[1..].TrimStart();
 
-        return trimmed.Length > 1 && trimmed[0] == '=';
+        return trimmed.Length > 1 && IsFormulaTextEqualsSign(trimmed[0]);
     }
+
+    private static bool IsFormulaTextEqualsSign(char value) =>
+        value is '=' or '\uFF1D';
 
     private static bool IsTextDateWithTwoDigitYear(string text)
     {
