@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -238,11 +237,11 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
-                var radioButtons = FindVisualChildren<RadioButton>(dialog).ToList();
-                var uniqueRecordsOnly = FindVisualChildren<CheckBox>(dialog)
+                var textBoxes = WpfTestTree.FindVisualDescendants<TextBox>(dialog).ToList();
+                var radioButtons = WpfTestTree.FindVisualDescendants<RadioButton>(dialog).ToList();
+                var uniqueRecordsOnly = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(checkBox => Equals(checkBox.Content, UiText.Get("AdvancedFilter_UniqueRecordsOnly")));
-                var copyToPicker = FindVisualChildren<Button>(dialog)
+                var copyToPicker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetName(button) == "Select copy-to cell");
 
                 radioButtons.Single(button => Equals(button.Content, UiText.Get("AdvancedFilter_FilterTheListInPlace")))
@@ -272,7 +271,7 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                var textBoxes = WpfTestTree.FindVisualDescendants<TextBox>(dialog).ToList();
 
                 textBoxes.Select(AutomationProperties.GetAutomationId)
                     .Should()
@@ -306,14 +305,14 @@ public sealed partial class DataToolDialogTests
                 AssertRadioAutomation("AdvancedFilterInPlaceButton", "Filter the list, in-place", "Filter the list in its current location.");
                 AssertRadioAutomation("AdvancedFilterCopyToAnotherLocationButton", "Copy to another location", "Copy filtered records to the Copy to destination.");
 
-                var uniqueRecordsOnly = FindVisualChildren<CheckBox>(dialog)
+                var uniqueRecordsOnly = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(checkBox => AutomationProperties.GetAutomationId(checkBox) == "AdvancedFilterUniqueRecordsOnlyBox");
                 AutomationProperties.GetName(uniqueRecordsOnly).Should().Be("Unique records only");
                 AutomationProperties.GetHelpText(uniqueRecordsOnly).Should().Be("Show or copy only unique records.");
 
                 void AssertRadioAutomation(string automationId, string name, string helpText)
                 {
-                    var radioButton = FindVisualChildren<RadioButton>(dialog)
+                    var radioButton = WpfTestTree.FindVisualDescendants<RadioButton>(dialog)
                         .Single(button => AutomationProperties.GetAutomationId(button) == automationId);
                     AutomationProperties.GetName(radioButton).Should().Be(name);
                     AutomationProperties.GetHelpText(radioButton).Should().Be(helpText);
@@ -371,13 +370,13 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                var textBoxes = WpfTestTree.FindVisualDescendants<TextBox>(dialog).ToList();
                 var copyToBox = textBoxes[2];
-                var copyToPicker = FindVisualChildren<Button>(dialog)
+                var copyToPicker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetName(button) == "Select copy-to cell");
-                var inPlace = FindVisualChildren<RadioButton>(dialog)
+                var inPlace = WpfTestTree.FindVisualDescendants<RadioButton>(dialog)
                     .Single(button => Equals(button.Content, "_Filter the list, in-place"));
-                var copyToAnotherLocation = FindVisualChildren<RadioButton>(dialog)
+                var copyToAnotherLocation = WpfTestTree.FindVisualDescendants<RadioButton>(dialog)
                     .Single(button => Equals(button.Content, "_Copy to another location"));
 
                 copyToBox.IsEnabled.Should().BeFalse();
@@ -409,11 +408,11 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var copyToLabel = FindVisualChildren<Label>(dialog)
+                var copyToLabel = WpfTestTree.FindVisualDescendants<Label>(dialog)
                     .Single(label => Equals(label.Content, "Copy _to:"));
-                var inPlace = FindVisualChildren<RadioButton>(dialog)
+                var inPlace = WpfTestTree.FindVisualDescendants<RadioButton>(dialog)
                     .Single(button => Equals(button.Content, "_Filter the list, in-place"));
-                var copyToAnotherLocation = FindVisualChildren<RadioButton>(dialog)
+                var copyToAnotherLocation = WpfTestTree.FindVisualDescendants<RadioButton>(dialog)
                     .Single(button => Equals(button.Content, "_Copy to another location"));
 
                 copyToLabel.IsEnabled.Should().BeFalse();
@@ -464,7 +463,7 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                var textBoxes = WpfTestTree.FindVisualDescendants<TextBox>(dialog).ToList();
 
                 dialog.ApplyRangeSelection(AdvancedFilterRangeSelectionTarget.ListRange, "Sheet2!A1:D20");
                 dialog.ApplyRangeSelection(AdvancedFilterRangeSelectionTarget.CriteriaRange, "E1:F4");
@@ -508,10 +507,10 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                var textBoxes = WpfTestTree.FindVisualDescendants<TextBox>(dialog).ToList();
                 textBoxes[1].Text = " E1:F4 ";
                 textBoxes[2].Text = " H1:J1 ";
-                var picker = FindVisualChildren<Button>(dialog)
+                var picker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetName(button) == automationName);
 
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

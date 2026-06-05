@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -188,7 +187,7 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var functionBox = FindVisualChildren<ComboBox>(dialog)
+                var functionBox = WpfTestTree.FindVisualDescendants<ComboBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "ConsolidateFunctionBox");
                 AutomationProperties.GetName(functionBox).Should().Be("Function");
                 AutomationProperties.GetHelpText(functionBox).Should().Be("Choose the function used to combine source ranges.");
@@ -196,7 +195,7 @@ public sealed partial class DataToolDialogTests
                 AssertTextBoxAutomation("ConsolidateReferenceBox", "Reference", "Enter a source range to add to the All references list.");
                 AssertTextBoxAutomation("ConsolidateDestinationCellBox", "Destination cell", "Enter the upper-left destination cell for the consolidated result.");
 
-                var referencesList = FindVisualChildren<ListBox>(dialog)
+                var referencesList = WpfTestTree.FindVisualDescendants<ListBox>(dialog)
                     .Single(list => AutomationProperties.GetAutomationId(list) == "ConsolidateAllReferencesList");
                 AutomationProperties.GetName(referencesList).Should().Be("All references");
                 AutomationProperties.GetHelpText(referencesList).Should().Be("Lists the source ranges that will be consolidated.");
@@ -210,7 +209,7 @@ public sealed partial class DataToolDialogTests
 
                 void AssertTextBoxAutomation(string automationId, string name, string helpText)
                 {
-                    var textBox = FindVisualChildren<TextBox>(dialog)
+                    var textBox = WpfTestTree.FindVisualDescendants<TextBox>(dialog)
                         .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
                     AutomationProperties.GetName(textBox).Should().Be(name);
                     AutomationProperties.GetHelpText(textBox).Should().Be(helpText);
@@ -218,7 +217,7 @@ public sealed partial class DataToolDialogTests
 
                 void AssertCheckBoxAutomation(string automationId, string name, string helpText)
                 {
-                    var checkBox = FindVisualChildren<CheckBox>(dialog)
+                    var checkBox = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                         .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
                     AutomationProperties.GetName(checkBox).Should().Be(name);
                     AutomationProperties.GetHelpText(checkBox).Should().Be(helpText);
@@ -226,7 +225,7 @@ public sealed partial class DataToolDialogTests
 
                 void AssertButtonAutomation(string automationId, string name, string helpText)
                 {
-                    var button = FindVisualChildren<Button>(dialog)
+                    var button = WpfTestTree.FindVisualDescendants<Button>(dialog)
                         .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
                     AutomationProperties.GetName(button).Should().Be(name);
                     AutomationProperties.GetHelpText(button).Should().Be(helpText);
@@ -335,7 +334,7 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                var textBoxes = WpfTestTree.FindVisualDescendants<TextBox>(dialog).ToList();
 
                 dialog.ApplyRangeSelection(ConsolidateRangeSelectionTarget.Reference, "Sheet2!A1:D20");
                 dialog.ApplyRangeSelection(ConsolidateRangeSelectionTarget.DestinationCell, "K5");
@@ -365,7 +364,7 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var picker = FindVisualChildren<Button>(dialog)
+                var picker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetName(button) == automationName);
 
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -105,18 +104,18 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var next = FindVisualChildren<Button>(dialog)
+                var next = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => Equals(button.Content, "_Next >"));
 
                 next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-                var tabDelimiter = FindVisualChildren<CheckBox>(dialog)
+                var tabDelimiter = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(checkBox => Equals(checkBox.Content, "_Tab"));
                 Keyboard.FocusedElement.Should().BeSameAs(tabDelimiter);
 
                 next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-                var columnSelector = FindVisualChildren<ComboBox>(dialog)
+                var columnSelector = WpfTestTree.FindVisualDescendants<ComboBox>(dialog)
                     .Single(comboBox => comboBox.Items.OfType<string>().Contains("Column 1"));
                 Keyboard.FocusedElement.Should().BeSameAs(columnSelector);
             }

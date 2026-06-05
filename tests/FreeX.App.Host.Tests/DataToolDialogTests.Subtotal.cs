@@ -1,9 +1,7 @@
 using System.IO;
-using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -91,9 +89,9 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var comboBoxes = FindVisualChildren<ComboBox>(dialog).ToList();
-                var checkBoxes = FindVisualChildren<CheckBox>(dialog).ToList();
-                var buttons = FindVisualChildren<Button>(dialog).ToList();
+                var comboBoxes = WpfTestTree.FindVisualDescendants<ComboBox>(dialog).ToList();
+                var checkBoxes = WpfTestTree.FindVisualDescendants<CheckBox>(dialog).ToList();
+                var buttons = WpfTestTree.FindVisualDescendants<Button>(dialog).ToList();
 
                 comboBoxes[0].SelectedValue.Should().Be(0u);
                 comboBoxes[1].SelectedValue.Should().Be("Sum");
@@ -128,7 +126,7 @@ public sealed partial class DataToolDialogTests
             dialog.Show();
             try
             {
-                var comboBoxes = FindVisualChildren<ComboBox>(dialog).ToList();
+                var comboBoxes = WpfTestTree.FindVisualDescendants<ComboBox>(dialog).ToList();
                 var groupColumnBox = comboBoxes.Single(box => AutomationProperties.GetAutomationId(box) == "SubtotalGroupColumnBox");
                 AutomationProperties.GetName(groupColumnBox).Should().Be("At each change in");
                 AutomationProperties.GetHelpText(groupColumnBox).Should().Be("Choose the column that defines each subtotal group.");
@@ -137,12 +135,12 @@ public sealed partial class DataToolDialogTests
                 AutomationProperties.GetName(functionBox).Should().Be("Use function");
                 AutomationProperties.GetHelpText(functionBox).Should().Be("Choose the function used to calculate each subtotal.");
 
-                var columnsPanel = FindVisualChildren<StackPanel>(dialog)
+                var columnsPanel = WpfTestTree.FindVisualDescendants<StackPanel>(dialog)
                     .Single(panel => AutomationProperties.GetAutomationId(panel) == "SubtotalColumnsPanel");
                 AutomationProperties.GetName(columnsPanel).Should().Be("Add subtotal to");
                 AutomationProperties.GetHelpText(columnsPanel).Should().Be("Choose columns that receive subtotal calculations.");
 
-                var salesBox = FindVisualChildren<CheckBox>(dialog)
+                var salesBox = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "SubtotalColumn1Box");
                 AutomationProperties.GetName(salesBox).Should().Be("Sales subtotal column");
                 AutomationProperties.GetHelpText(salesBox).Should().Be("Select to add a subtotal calculation to this column.");
@@ -151,14 +149,14 @@ public sealed partial class DataToolDialogTests
                 AssertCheckBoxAutomation("SubtotalPageBreakBox", "Page break between groups", "Insert a page break after each subtotal group.");
                 AssertCheckBoxAutomation("SubtotalSummaryBelowBox", "Summary below data", "Place subtotal rows below each group.");
 
-                var removeAll = FindVisualChildren<Button>(dialog)
+                var removeAll = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetAutomationId(button) == "SubtotalRemoveAllButton");
                 AutomationProperties.GetName(removeAll).Should().Be("Remove all subtotals");
                 AutomationProperties.GetHelpText(removeAll).Should().Be("Remove all subtotal rows from the selected data.");
 
                 void AssertCheckBoxAutomation(string automationId, string name, string helpText)
                 {
-                    var checkBox = FindVisualChildren<CheckBox>(dialog)
+                    var checkBox = WpfTestTree.FindVisualDescendants<CheckBox>(dialog)
                         .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
                     AutomationProperties.GetName(checkBox).Should().Be(name);
                     AutomationProperties.GetHelpText(checkBox).Should().Be(helpText);
