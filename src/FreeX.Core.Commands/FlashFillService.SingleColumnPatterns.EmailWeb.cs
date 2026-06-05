@@ -246,9 +246,23 @@ public static partial class FlashFillService
         return source => TryGetFinalUrlPathSegmentSlugTitle(source, out var title) ? title : null;
     }
 
+    private static Func<string, string?>? TryUrlFirstQueryParameterName(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => e.Expected.Length > 0 &&
+                               TryGetFirstDecodedQueryParameterName(e.Source, out var name) &&
+                               name == e.Expected))
+        {
+            return null;
+        }
+
+        return source => TryGetFirstDecodedQueryParameterName(source, out var name) ? name : null;
+    }
+
     private static Func<string, string?>? TryUrlQueryParameterValue(IReadOnlyList<(string Source, string Expected)> examples)
     {
-        return TryUrlQueryParameterValueCore(examples)
+        return TryUrlFirstQueryParameterName(examples)
+            ?? TryUrlQueryParameterValueCore(examples)
             ?? TryUrlFragmentValue(examples);
     }
 
@@ -577,6 +591,40 @@ public static partial class FlashFillService
         }
 
         value = string.Empty;
+        return false;
+    }
+
+    private static bool TryGetFirstDecodedQueryParameterName(string source, out string name)
+    {
+        name = string.Empty;
+        if (!IsHttpOrHttpsUrlCandidate(source) ||
+            !TryCreateHttpWebUri(source, out var uri) ||
+            uri.Query.Length <= 1)
+        {
+            return false;
+        }
+
+        var query = uri.Query[1..];
+        foreach (var segment in query.Split(['&', ';'], StringSplitOptions.None))
+        {
+            if (segment.Length == 0)
+                continue;
+
+            var equalsIndex = segment.IndexOf('=');
+            var rawName = equalsIndex < 0
+                ? segment
+                : segment[..equalsIndex];
+            if (rawName.Length == 0 ||
+                !TryDecodeQueryComponent(rawName, out name) ||
+                name.Length == 0)
+            {
+                name = string.Empty;
+                return false;
+            }
+
+            return true;
+        }
+
         return false;
     }
 
