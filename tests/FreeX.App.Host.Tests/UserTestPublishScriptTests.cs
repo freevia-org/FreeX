@@ -82,109 +82,70 @@ public sealed class UserTestPublishScriptTests
     public void PublishScript_RejectsUnsignedMsixUnlessExplicitlyAllowedBeforePublishing()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
-            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
+        Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
     [Fact]
     public void PublishScript_RejectsMsixSigningOptionsWithoutCertificatePathBeforePublishing()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("MSIX signing options require MsixCertificatePath");
-            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("MSIX signing options require MsixCertificatePath");
+        Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
     [Fact]
     public void PublishScript_RejectsDirectoryMsixCertificatePathBeforePublishing()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
-        var outputDirectory = Path.Combine(tempDirectory, "out");
-        var certificateDirectory = Path.Combine(tempDirectory, "certificate");
+        using var temp = new TestTemporaryDirectory();
+        var outputDirectory = Path.Combine(temp.Path, "out");
+        var certificateDirectory = Path.Combine(temp.Path, "certificate");
         Directory.CreateDirectory(outputDirectory);
         Directory.CreateDirectory(certificateDirectory);
 
-        try
-        {
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("MsixCertificatePath must reference an existing certificate file");
-            Directory.GetFileSystemEntries(outputDirectory).Should().BeEmpty();
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("MsixCertificatePath must reference an existing certificate file");
+        Directory.GetFileSystemEntries(outputDirectory).Should().BeEmpty();
     }
 
     [Fact]
     public void PublishScript_RejectsUnsafeMsixTimestampUrlBeforePublishing()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("MsixTimestampUrl must be an absolute http or https URL");
-            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("MsixTimestampUrl must be an absolute http or https URL");
+        Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
     [Fact]
     public void PublishScript_RejectsRuntimeIdentifierPathSegmentsBeforePublishing()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDirectory);
+        using var temp = new TestTemporaryDirectory();
 
-        try
-        {
-            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
-            result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
-            (result.Output + result.Error).Should().Contain("path separators");
-            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
+        (result.Output + result.Error).Should().Contain("path separators");
+        Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
     [Fact]
