@@ -461,6 +461,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
         using (var warmup = new MemoryStream())
             adapter.Save(workbooks[0], warmup);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -496,6 +498,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
         timings.Average().Should().BeGreaterThan(0);
         packageSizes.Should().OnlyContain(size => size > 0);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
     }
 
     [BenchmarkFact]
@@ -671,9 +675,24 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
     [BenchmarkFact]
     public void Benchmark_SaveLoadedGeneratedStyleHeavyStructuredTableWorkbook_ReportsTiming()
+        => RunGeneratedStyleHeavyStructuredTableSaveBenchmark(
+            filteredStructuredTable: false,
+            "XLSX_SAVE_LOADED_GENERATED_STYLE_HEAVY_STRUCTURED_TABLE");
+
+    [BenchmarkFact]
+    public void Benchmark_SaveLoadedGeneratedStyleHeavyFilteredStructuredTableWorkbook_ReportsTiming()
+        => RunGeneratedStyleHeavyStructuredTableSaveBenchmark(
+            filteredStructuredTable: true,
+            "XLSX_SAVE_LOADED_GENERATED_STYLE_HEAVY_FILTERED_STRUCTURED_TABLE");
+
+    private static void RunGeneratedStyleHeavyStructuredTableSaveBenchmark(
+        bool filteredStructuredTable,
+        string label)
     {
         const int iterations = 5;
-        var package = CreateGeneratedStyleHeavyXlsxPackage(structuredTableMarker: true);
+        var package = CreateGeneratedStyleHeavyXlsxPackage(
+            structuredTableMarker: !filteredStructuredTable,
+            filteredStructuredTableMarker: filteredStructuredTable);
         var adapter = new XlsxFileAdapter();
         var workbooks = new List<Workbook>(iterations + 1);
         for (var i = 0; i <= iterations; i++)
@@ -714,7 +733,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
 
         Console.WriteLine(
-            "PERF XLSX_SAVE_LOADED_GENERATED_STYLE_HEAVY_STRUCTURED_TABLE " +
+            $"PERF {label} " +
             $"sheets={GeneratedStyleHeavySheetCount} rows={GeneratedStyleHeavyRowsPerSheet} " +
             $"value_cols={GeneratedStyleHeavyValueColumnsPerSheet} style_only_cols={GeneratedStyleHeavyStyleOnlyColumnsPerSheet} " +
             $"style_only_cells={GeneratedStyleHeavySheetCount * GeneratedStyleHeavyRowsPerSheet * GeneratedStyleHeavyStyleOnlyColumnsPerSheet:N0} " +

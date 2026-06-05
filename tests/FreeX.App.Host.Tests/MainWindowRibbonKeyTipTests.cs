@@ -5,7 +5,6 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -477,8 +476,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 return [];
 
             var root = selectedTab.Content as DependencyObject ?? selectedTab;
-            return EnumerateSelfAndVisualDescendants(root)
-                .Concat(EnumerateLogicalDescendants(root))
+            return WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(root)
+                .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(root))
                 .OfType<ButtonBase>()
                 .Distinct()
                 .Where(button => button.IsVisible);
@@ -785,40 +784,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
             }
         }
 
-        private static IEnumerable<DependencyObject> EnumerateSelfAndVisualDescendants(DependencyObject root)
-        {
-            yield return root;
-
-            var childCount = 0;
-            try
-            {
-                childCount = VisualTreeHelper.GetChildrenCount(root);
-            }
-            catch (InvalidOperationException)
-            {
-            }
-
-            for (var index = 0; index < childCount; index++)
-            {
-                var child = VisualTreeHelper.GetChild(root, index);
-                foreach (var descendant in EnumerateSelfAndVisualDescendants(child))
-                    yield return descendant;
-            }
-        }
-
-        private static IEnumerable<DependencyObject> EnumerateLogicalDescendants(DependencyObject root)
-        {
-            foreach (var child in LogicalTreeHelper.GetChildren(root))
-            {
-                if (child is not DependencyObject dependencyObject)
-                    continue;
-
-                yield return dependencyObject;
-
-                foreach (var descendant in EnumerateLogicalDescendants(dependencyObject))
-                    yield return descendant;
-            }
-        }
     }
 
     private static void ConfigureWorkbookWithPivotTable(Workbook workbook)
