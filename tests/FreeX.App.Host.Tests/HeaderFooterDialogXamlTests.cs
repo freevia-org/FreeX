@@ -153,12 +153,12 @@ public sealed class HeaderFooterDialogXamlTests
             dialog.Show();
             try
             {
-                var button = GetControl<Button>(dialog, "FormatPictureButton");
-                var status = GetControl<TextBlock>(dialog, "PictureTargetStatusText");
+                var button = DialogSourceTestSupport.GetPrivateField<Button>(dialog, "FormatPictureButton");
+                var status = DialogSourceTestSupport.GetPrivateField<TextBlock>(dialog, "PictureTargetStatusText");
                 button.IsEnabled.Should().BeTrue();
                 status.Text.Should().Be("Target: center section has a picture.");
 
-                GetControl<TextBox>(dialog, "HeaderLeftBox").Focus();
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "HeaderLeftBox").Focus();
 
                 button.IsEnabled.Should().BeFalse();
                 status.Text.Should().Be("Target: left section has no picture.");
@@ -360,7 +360,7 @@ public sealed class HeaderFooterDialogXamlTests
             dialog.Show();
             try
             {
-                GetControl<TextBox>(dialog, "HeaderCenterBox").Text = "";
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "HeaderCenterBox").Text = "";
 
                 InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
 
@@ -385,14 +385,6 @@ public sealed class HeaderFooterDialogXamlTests
             .Elements(presentation + "ComboBoxItem")
             .Select(element => element.Attribute("Content")?.Value)
             .ToList();
-
-    private static T GetControl<T>(HeaderFooterDialog dialog, string name)
-        where T : class
-    {
-        var field = typeof(HeaderFooterDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
 
     private static string ReadHeaderFooterDialogSource() =>
         DialogSourceTestSupport.ReadHostSources(
