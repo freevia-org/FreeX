@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -78,7 +77,7 @@ public sealed partial class InsertFunctionDialogTests
         xlookupLabels.Should().AllSatisfy(label => label.Should().Contain("_"));
         xlookupLabels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
 
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FunctionArgumentsDialog.cs"));
+        var source = ReadFunctionArgumentsDialogSource();
         source.Should().Contain("AddArgumentRow(body, _arguments[index], argumentLabels[index])");
         source.Should().Contain("Content = labelText");
         source.Should().Contain("Target = box");
@@ -87,7 +86,7 @@ public sealed partial class InsertFunctionDialogTests
     [Fact]
     public void FunctionArgumentsDialogOpenedFromKeyboard_FocusesFirstArgumentBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FunctionArgumentsDialog.cs"));
+        var source = ReadFunctionArgumentsDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -100,7 +99,7 @@ public sealed partial class InsertFunctionDialogTests
     [Fact]
     public void FunctionArgumentsDialog_ExposesExcelLikeHelpAction()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FunctionArgumentsDialog.cs"));
+        var source = ReadFunctionArgumentsDialogSource();
 
         source.Should().Contain("Content = UiText.Get(\"FunctionArguments_HelpButton\")");
         source.Should().Contain("ShowFunctionHelp");
@@ -113,7 +112,7 @@ public sealed partial class InsertFunctionDialogTests
     [Fact]
     public void FunctionArgumentsDialog_LabelsFormulaResultPreviewForAccessibility()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FunctionArgumentsDialog.cs"));
+        var source = ReadFunctionArgumentsDialogSource();
 
         source.Should().Contain("Text = UiText.Get(\"FunctionArguments_FormulaResultLabel\")");
         source.Should().Contain("AutomationProperties.SetName(_formulaPreview, UiText.Get(\"FunctionArguments_FormulaResultAutomationName\"));");

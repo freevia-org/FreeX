@@ -1,4 +1,3 @@
-using System.Reflection;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -17,9 +16,11 @@ public sealed partial class InsertFunctionDialogTests
 
     private static T GetPrivateControl<T>(InsertFunctionDialog dialog, string fieldName)
         where T : class
-    {
-        var field = typeof(InsertFunctionDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, fieldName);
+
+    private static string ReadInsertFunctionDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("InsertFunctionDialog.cs");
+
+    private static string ReadFunctionArgumentsDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("FunctionArgumentsDialog.cs");
 }

@@ -1,6 +1,22 @@
 namespace FreeX.Core.Model;
 
 /// <summary>
+/// How a formula that produces a multi-cell result behaves in a scalar context.
+/// </summary>
+public enum FormulaArrayMode
+{
+    /// <summary>Modern dynamic array: the result spills. Default for authored/edited formulas.</summary>
+    Dynamic,
+
+    /// <summary>
+    /// Legacy implicit intersection: a range used in a scalar context resolves to the single cell that
+    /// intersects the formula's own row/column (Excel's implicit <c>@</c>). Set by the loader for plain
+    /// (non-array) formulas read from a workbook.
+    /// </summary>
+    Implicit,
+}
+
+/// <summary>
 /// Represents a single cell in a worksheet.
 /// A cell holds an optional formula string and a computed/entered value.
 /// </summary>
@@ -17,8 +33,16 @@ public sealed class Cell
     public string? FormulaText
     {
         get => _formulaText;
-        set { _formulaText = value; CachedAst = null; }
+        // Assigning formula text means the cell was authored/edited, which is a modern (Dynamic) formula.
+        // The loader marks legacy formulas Implicit explicitly after constructing the cell.
+        set { _formulaText = value; CachedAst = null; ArrayMode = FormulaArrayMode.Dynamic; }
     }
+
+    /// <summary>
+    /// Whether a multi-cell formula result spills (<see cref="FormulaArrayMode.Dynamic"/>) or implicitly
+    /// intersects to a scalar (<see cref="FormulaArrayMode.Implicit"/>). Defaults to Dynamic.
+    /// </summary>
+    public FormulaArrayMode ArrayMode { get; set; } = FormulaArrayMode.Dynamic;
 
     /// <summary>Whether this cell contains a formula.</summary>
     public bool HasFormula => FormulaText is not null;
@@ -53,6 +77,7 @@ public sealed class Cell
         };
         copy._formulaText = _formulaText;
         copy.CachedAst = CachedAst;
+        copy.ArrayMode = ArrayMode;
         return copy;
     }
 }

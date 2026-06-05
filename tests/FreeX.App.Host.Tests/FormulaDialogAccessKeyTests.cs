@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,7 +7,7 @@ public sealed class FormulaDialogAccessKeyTests
     [Fact]
     public void CreateNamesFromSelectionDialog_ExposesKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateNamesFromSelectionDialog.cs"));
+        var source = ReadCreateNamesFromSelectionDialogSource();
 
         foreach (var expected in new[]
         {
@@ -29,7 +28,7 @@ public sealed class FormulaDialogAccessKeyTests
     [Fact]
     public void CreateNamesFromSelectionDialog_ExposesNamedOptionsGroupHelpText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateNamesFromSelectionDialog.cs"));
+        var source = ReadCreateNamesFromSelectionDialogSource();
 
         source.Should().Contain("using System.Windows.Automation;");
         source.Should().Contain("AutomationProperties.SetName(group, UiText.Get(\"CreateNamesFromSelection_GroupAutomationName\"));");
@@ -40,7 +39,7 @@ public sealed class FormulaDialogAccessKeyTests
     [Fact]
     public void CreateNamesFromSelectionDialog_OptionCheckboxesExposeAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateNamesFromSelectionDialog.cs"));
+        var source = ReadCreateNamesFromSelectionDialogSource();
 
         source.Should().Contain("SetOptionAutomationMetadata(");
         source.Should().Contain("AutomationProperties.SetAutomationId(checkBox, automationId);");
@@ -64,7 +63,7 @@ public sealed class FormulaDialogAccessKeyTests
     [Fact]
     public void CreateNamesFromSelectionDialogOpenedFromKeyboard_FocusesTopRowChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateNamesFromSelectionDialog.cs"));
+        var source = ReadCreateNamesFromSelectionDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -111,7 +110,7 @@ public sealed class FormulaDialogAccessKeyTests
     [Fact]
     public void CreateNamesFromSelectionDialogInvalidSelection_WarnsAndRefocusesTopRowChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateNamesFromSelectionDialog.cs"));
+        var source = ReadCreateNamesFromSelectionDialogSource();
 
         source.Should().Contain("DialogButtonRowFactory.Create(Accept");
         source.Should().Contain("if (!TryCreateResult(");
@@ -125,7 +124,7 @@ public sealed class FormulaDialogAccessKeyTests
     [Fact]
     public void EvaluateFormulaDialog_ExposesKeyboardAccessKeysForActions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "EvaluateFormulaDialog.cs"));
+        var source = ReadEvaluateFormulaDialogSource();
 
         foreach (var expected in new[]
         {
@@ -146,7 +145,7 @@ public sealed class FormulaDialogAccessKeyTests
     [Fact]
     public void EvaluateFormulaDialogOpenedFromKeyboard_FocusesFirstEnabledCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "EvaluateFormulaDialog.cs"));
+        var source = ReadEvaluateFormulaDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -155,4 +154,10 @@ public sealed class FormulaDialogAccessKeyTests
         source.Should().Contain("target.Focus();");
         source.Should().Contain("Keyboard.Focus(target);");
     }
+
+    private static string ReadCreateNamesFromSelectionDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("CreateNamesFromSelectionDialog.cs");
+
+    private static string ReadEvaluateFormulaDialogSource() =>
+        DialogSourceTestSupport.ReadHostSources("EvaluateFormulaDialog.cs");
 }

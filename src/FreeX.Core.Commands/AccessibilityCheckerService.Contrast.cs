@@ -556,6 +556,26 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
+        if (string.Equals(function.FunctionName, "IF", StringComparison.OrdinalIgnoreCase))
+        {
+            if (function.Arguments.Count != 3 ||
+                !TryCreateFormulaExpression(function.Arguments[0], out var condition) ||
+                !TryCreateFormulaExpression(function.Arguments[1], out var whenTrue) ||
+                !TryCreateFormulaExpression(function.Arguments[2], out var whenFalse))
+            {
+                return false;
+            }
+
+            expression = new ConditionalFormulaIfExpression(condition, whenTrue, whenFalse);
+            return true;
+        }
+
+        if (TryCreateFormulaPredicate(function, out var predicate))
+        {
+            expression = new ConditionalFormulaPredicateExpression(predicate);
+            return true;
+        }
+
         var logicalOperator = string.Equals(function.FunctionName, "AND", StringComparison.OrdinalIgnoreCase)
             ? ConditionalFormulaLogicalOperator.And
             : string.Equals(function.FunctionName, "OR", StringComparison.OrdinalIgnoreCase)
@@ -573,6 +593,62 @@ public static partial class AccessibilityCheckerService
 
         expression = new ConditionalFormulaLogicalExpression(logicalOperator.Value, operands);
         return true;
+    }
+
+    private static bool TryCreateFormulaPredicate(FunctionCallNode function, out ConditionalFormulaPredicate predicate)
+    {
+        predicate = default;
+        if (function.Arguments.Count != 1 ||
+            !TryGetFormulaPredicateKind(function.FunctionName, out var kind) ||
+            !TryCreateFormulaOperand(function.Arguments[0], out var operand))
+        {
+            return false;
+        }
+
+        predicate = new ConditionalFormulaPredicate(kind, operand);
+        return true;
+    }
+
+    private static bool TryGetFormulaPredicateKind(
+        string functionName,
+        out ConditionalFormulaPredicateKind kind)
+    {
+        switch (functionName.ToUpperInvariant())
+        {
+            case "ISBLANK":
+                kind = ConditionalFormulaPredicateKind.IsBlank;
+                return true;
+            case "ISNUMBER":
+                kind = ConditionalFormulaPredicateKind.IsNumber;
+                return true;
+            case "ISTEXT":
+                kind = ConditionalFormulaPredicateKind.IsText;
+                return true;
+            case "ISNONTEXT":
+                kind = ConditionalFormulaPredicateKind.IsNonText;
+                return true;
+            case "ISLOGICAL":
+                kind = ConditionalFormulaPredicateKind.IsLogical;
+                return true;
+            case "ISERROR":
+                kind = ConditionalFormulaPredicateKind.IsError;
+                return true;
+            case "ISERR":
+                kind = ConditionalFormulaPredicateKind.IsErr;
+                return true;
+            case "ISNA":
+                kind = ConditionalFormulaPredicateKind.IsNa;
+                return true;
+            case "ISEVEN":
+                kind = ConditionalFormulaPredicateKind.IsEven;
+                return true;
+            case "ISODD":
+                kind = ConditionalFormulaPredicateKind.IsOdd;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
     }
 
     private static bool TryCreateFormulaBooleanOperandExpression(FormulaNode ast, out ConditionalFormulaExpression expression)
@@ -898,6 +974,14 @@ public static partial class AccessibilityCheckerService
         ConditionalFormulaLogicalOperator Operator,
         IReadOnlyList<ConditionalFormulaExpression> Operands) : ConditionalFormulaExpression;
 
+    private sealed record ConditionalFormulaPredicateExpression(
+        ConditionalFormulaPredicate Predicate) : ConditionalFormulaExpression;
+
+    private sealed record ConditionalFormulaIfExpression(
+        ConditionalFormulaExpression Condition,
+        ConditionalFormulaExpression WhenTrue,
+        ConditionalFormulaExpression WhenFalse) : ConditionalFormulaExpression;
+
     private enum ConditionalFormulaLogicalOperator
     {
         And,
@@ -909,6 +993,24 @@ public static partial class AccessibilityCheckerService
         ConditionalFormulaOperand Left,
         BinaryOperator Operator,
         ConditionalFormulaOperand Right);
+
+    private readonly record struct ConditionalFormulaPredicate(
+        ConditionalFormulaPredicateKind Kind,
+        ConditionalFormulaOperand Operand);
+
+    private enum ConditionalFormulaPredicateKind
+    {
+        IsBlank,
+        IsNumber,
+        IsText,
+        IsNonText,
+        IsLogical,
+        IsError,
+        IsErr,
+        IsNa,
+        IsEven,
+        IsOdd
+    }
 
     private readonly record struct ConditionalFormulaOperand(
         ConditionalFormulaOperandKind Kind,
@@ -977,6 +1079,8 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaOperandExpression operand => EvaluateFormulaBooleanOperand(operand.Operand, rowOffset, colOffset),
                 ConditionalFormulaComparisonExpression comparison => EvaluateFormulaComparison(comparison.Comparison, rowOffset, colOffset),
                 ConditionalFormulaLogicalExpression logical => EvaluateFormulaLogical(logical, rowOffset, colOffset),
+                ConditionalFormulaPredicateExpression predicate => EvaluateFormulaPredicate(predicate.Predicate, rowOffset, colOffset),
+                ConditionalFormulaIfExpression ifExpression => EvaluateFormulaIf(ifExpression, rowOffset, colOffset),
                 _ => null
             };
 
@@ -1054,6 +1158,67 @@ public static partial class AccessibilityCheckerService
 
         private static bool? Negate(bool? value) =>
             value.HasValue ? !value.Value : null;
+
+        private bool? EvaluateFormulaIf(
+            ConditionalFormulaIfExpression ifExpression,
+            int rowOffset,
+            int colOffset)
+        {
+            var condition = EvaluateFormulaExpression(ifExpression.Condition, rowOffset, colOffset);
+            return condition switch
+            {
+                true => EvaluateFormulaExpression(ifExpression.WhenTrue, rowOffset, colOffset),
+                false => EvaluateFormulaExpression(ifExpression.WhenFalse, rowOffset, colOffset),
+                _ => null
+            };
+        }
+
+        private bool? EvaluateFormulaPredicate(
+            ConditionalFormulaPredicate predicate,
+            int rowOffset,
+            int colOffset)
+        {
+            if (!TryResolveFormulaOperand(predicate.Operand, rowOffset, colOffset, out var value))
+                return null;
+
+            return predicate.Kind switch
+            {
+                ConditionalFormulaPredicateKind.IsBlank => value is BlankValue,
+                ConditionalFormulaPredicateKind.IsNumber => value is NumberValue or DateTimeValue,
+                ConditionalFormulaPredicateKind.IsText => value is TextValue,
+                ConditionalFormulaPredicateKind.IsNonText => value is not TextValue,
+                ConditionalFormulaPredicateKind.IsLogical => value is BoolValue,
+                ConditionalFormulaPredicateKind.IsError => value is ErrorValue,
+                ConditionalFormulaPredicateKind.IsErr => value is ErrorValue error && !IsNaError(error),
+                ConditionalFormulaPredicateKind.IsNa => value is ErrorValue error && IsNaError(error),
+                ConditionalFormulaPredicateKind.IsEven => EvaluateFormulaParityPredicate(value, expectEven: true),
+                ConditionalFormulaPredicateKind.IsOdd => EvaluateFormulaParityPredicate(value, expectEven: false),
+                _ => null
+            };
+        }
+
+        private static bool IsNaError(ErrorValue error) =>
+            string.Equals(error.Code, ErrorValue.NA.Code, StringComparison.OrdinalIgnoreCase);
+
+        private static bool? EvaluateFormulaParityPredicate(ScalarValue value, bool expectEven)
+        {
+            var number = value switch
+            {
+                NumberValue numeric => numeric.Value,
+                DateTimeValue dateTime => dateTime.Value,
+                _ => (double?)null
+            };
+
+            if (!number.HasValue || !double.IsFinite(number.Value))
+                return null;
+
+            var truncated = Math.Truncate(number.Value);
+            if (truncated < long.MinValue || truncated > long.MaxValue)
+                return null;
+
+            var isEven = ((long)truncated) % 2 == 0;
+            return expectEven ? isEven : !isEven;
+        }
 
         private bool? EvaluateFormulaComparison(
             ConditionalFormulaComparison comparison,

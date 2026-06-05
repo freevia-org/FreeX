@@ -80,6 +80,24 @@ public sealed class ExcelCachedFormulaFixtureTests
         sheet.GetValue(15, 6).Should().Be(BlankValue.Instance);
     }
 
+    [Fact]
+    public void LoadedWorkbookRecalc_ReturnsValueErrorWhenLegacyImplicitIntersectionMissesRange()
+    {
+        using var fixture = CreateLegacyImplicitIntersectionWorkbook(
+            formulaCellReference: "K15",
+            formulaCellTypeAttribute: " t=\"e\"",
+            cachedValueXml: "<v>#VALUE!</v>");
+        var workbook = new XlsxFileAdapter().Load(fixture);
+        var sheet = workbook.Sheets.Should().ContainSingle().Subject;
+
+        var report = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator())
+            .RecalculateAllFormulas(workbook);
+
+        report.Errors.Should().BeEmpty();
+        sheet.GetValue(15, 11).Should().Be(ErrorValue.Value);
+        sheet.GetValue(15, 12).Should().Be(BlankValue.Instance);
+    }
+
     private static IEnumerable<string> CompareFormulaCellsToCachedResults(Workbook workbook)
     {
         var evaluator = new FormulaEvaluator();
@@ -268,7 +286,10 @@ public sealed class ExcelCachedFormulaFixtureTests
 
     private static MemoryStream CreateLegacyImplicitIntersectionWorkbook(
         string formula = "A7:J7*B15",
-        string definedNamesXml = "")
+        string definedNamesXml = "",
+        string formulaCellReference = "E15",
+        string formulaCellTypeAttribute = "",
+        string cachedValueXml = "<v>50</v>")
     {
         var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
@@ -320,7 +341,7 @@ public sealed class ExcelCachedFormulaFixtureTests
                     </row>
                     <row r="15">
                       <c r="B15"><v>10</v></c>
-                      <c r="E15"><f>{formula}</f><v>50</v></c>
+                      <c r="{formulaCellReference}"{formulaCellTypeAttribute}><f>{formula}</f>{cachedValueXml}</c>
                     </row>
                   </sheetData>
                 </worksheet>
