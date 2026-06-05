@@ -2029,12 +2029,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 'i' && EqualAsciiWordIgnoreCase(word, "integraton"))
-                {
-                    suggestion = "integration";
-                    return true;
-                }
-
                 if (first == 'o' && EqualAsciiWordIgnoreCase(word, "occurence"))
                 {
                     suggestion = "occurrence";
@@ -2262,6 +2256,12 @@ public static partial class SpellCheckService
                 if (first == 'f' && EqualAsciiWordIgnoreCase(word, "forcasting"))
                 {
                     suggestion = "forecasting";
+                    return true;
+                }
+
+                if (first == 'i' && EqualAsciiWordIgnoreCase(word, "integraton"))
+                {
+                    suggestion = "integration";
                     return true;
                 }
 
