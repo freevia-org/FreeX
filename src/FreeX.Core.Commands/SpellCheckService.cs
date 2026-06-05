@@ -1917,12 +1917,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 'o' && EqualAsciiWordIgnoreCase(word, "occupncy"))
-                {
-                    suggestion = "occupancy";
-                    return true;
-                }
-
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "sroting"))
                 {
                     suggestion = "sorting";
@@ -2516,6 +2510,12 @@ public static partial class SpellCheckService
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "privlege"))
                 {
                     suggestion = "privilege";
+                    return true;
+                }
+
+                if (first == 'o' && EqualAsciiWordIgnoreCase(word, "occupncy"))
+                {
+                    suggestion = "occupancy";
                     return true;
                 }
 
