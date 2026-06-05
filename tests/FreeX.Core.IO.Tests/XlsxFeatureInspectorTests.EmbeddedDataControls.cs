@@ -159,9 +159,13 @@ public partial class XlsxFeatureInspectorTests
         var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
             "src", "FreeX.Core.IO", "XlsxFeatureInspector.cs"));
         var relationshipInspection = source[
-            source.IndexOf("private static IEnumerable<XlsxUnsupportedFeatureKind> InspectRelationships", StringComparison.Ordinal)..
+            source.IndexOf("private static IReadOnlyList<XlsxUnsupportedFeatureKind> InspectRelationships", StringComparison.Ordinal)..
             source.IndexOf("private static bool IsSupportedChartPart", StringComparison.Ordinal)];
 
+        relationshipInspection.Should().Contain("XmlReader.Create(stream, ScanXmlSettings)");
+        relationshipInspection.Should().NotContain("XlsxPackageXmlEditor.LoadXml(entry)");
+        relationshipInspection.Should().Contain("reader.NamespaceURI == relationshipsNs");
+        relationshipInspection.Should().Contain("reader.Depth != relationshipsDepth + 1");
         relationshipInspection.Should().Contain("NormalizeRelationshipTarget(target)");
         relationshipInspection.Should().Contain("StringComparison.OrdinalIgnoreCase");
         relationshipInspection.Should().NotContain(

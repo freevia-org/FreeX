@@ -37,10 +37,15 @@ public sealed partial class Sheet
     public void SetStyleOnly(uint row, uint col, StyleId styleId)
     {
         var key = (row, col);
-        var isRunBacked = TryGetStyleOnlyRun(row, col).HasValue;
-        if (isRunBacked)
+        var runStyleId = TryGetStyleOnlyRun(row, col);
+        if (runStyleId.HasValue)
         {
             _styleOnlyRunTombstones?.Remove(key);
+            if (runStyleId.Value == styleId)
+            {
+                _styleOnly.Remove(key);
+                return;
+            }
         }
         else if (!_styleOnly.ContainsKey(key))
         {
