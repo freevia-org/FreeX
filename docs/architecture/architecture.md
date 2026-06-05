@@ -393,14 +393,14 @@ meridiem from time-like values or labeled text with ambiguous component examples
 ambiguous multi-time sources rejected, US address component extraction including street unit suffixes/identifiers with spaced hash unit forms, known title/honorific, credential, and organization legal-suffix cleanup,
 and two-part full-name reordering such as `Ada Lovelace` to `Lovelace, Ada`, plus a small multi-column pattern set. First/last-name,
 first-initial/last-name, and last-name/first-initial email generation learn constant
-domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/last-initial aliases. Root-domain stem
-extraction recognizes a bounded set of common multi-label public suffixes such as `co.uk`, `com.au`, and `co.nz`.
+domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/last-initial aliases. Domain/public-suffix extraction
+recognizes bounded common multi-label suffixes such as `co.uk`, `com.au`, and `co.nz`, including root-domain stem and suffix outputs.
 It returns no result when the examples are ambiguous.
 
 Spell Check remains a deterministic known-corrections service in `Core.Commands`, not dictionary-backed proofing. It
 scans literal text cells, notes, threaded comment roots, and threaded comment replies in deterministic sheet/address order
 and plans undoable replacement edits while leaving formula cells alone. The known-corrections catalog covers bounded
-office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, quality/testing, documentation/support, reliability/maintenance, operations/planning, budget/stakeholder/project-control, procurement/inventory/supplier, finance/accounting/ledger, tax/audit/billing, banking/treasury, insurance/actuarial, healthcare/clinical, education/academic, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
+office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, quality/testing, documentation/support, reliability/maintenance, operations/planning, budget/stakeholder/project-control, procurement/inventory/supplier, finance/accounting/ledger, tax/audit/billing, banking/treasury, insurance/actuarial, healthcare/clinical, education/academic, facilities/real-estate, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
 file path, identifier, and prefixed-word spans.
 The host workflow keeps Ignore All case-insensitive for the current pass and persists Add to Dictionary custom words
 through `FreeXOptions` so matching scanner results stay suppressed across sessions/workbooks without introducing a full
