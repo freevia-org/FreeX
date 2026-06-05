@@ -31,21 +31,15 @@ public sealed class AppCrashAnalyticsTests
     [Fact]
     public void Options_CreateDefault_MarksEnvironmentKillSwitch()
     {
-        Environment.SetEnvironmentVariable("FREEX_CRASH_ANALYTICS", "0");
-        try
-        {
-            var options = AppCrashAnalyticsOptions.CreateDefault(
-                sentryDsnProvider: () => "https://public@example.ingest.sentry.io/1",
-                crashAnalyticsEnabled: false);
+        using var environmentVariable = TestEnvironmentVariableScope.Set("FREEX_CRASH_ANALYTICS", "0");
 
-            options.IsEnabled.Should().BeFalse();
-            options.IsDisabledByEnvironment.Should().BeTrue();
-            options.Dsn.Should().Be("https://public@example.ingest.sentry.io/1");
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("FREEX_CRASH_ANALYTICS", null);
-        }
+        var options = AppCrashAnalyticsOptions.CreateDefault(
+            sentryDsnProvider: () => "https://public@example.ingest.sentry.io/1",
+            crashAnalyticsEnabled: false);
+
+        options.IsEnabled.Should().BeFalse();
+        options.IsDisabledByEnvironment.Should().BeTrue();
+        options.Dsn.Should().Be("https://public@example.ingest.sentry.io/1");
     }
 
     [Fact]

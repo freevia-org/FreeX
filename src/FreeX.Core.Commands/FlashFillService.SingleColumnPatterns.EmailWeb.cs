@@ -265,6 +265,7 @@ public static partial class FlashFillService
             ?? TryUrlFirstQueryParameterValue(examples)
             ?? TryUrlQueryParameterValueCore(examples)
             ?? TryUrlLastQueryParameterName(examples)
+            ?? TryUrlLastQueryParameterValue(examples)
             ?? TryUrlFragmentValue(examples);
     }
 
@@ -279,6 +280,19 @@ public static partial class FlashFillService
         }
 
         return source => TryGetLastDecodedQueryParameterName(source, out var name) ? name : null;
+    }
+
+    private static Func<string, string?>? TryUrlLastQueryParameterValue(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => e.Expected.Length > 0 &&
+                               TryGetLastNonEmptyQueryParameterValue(e.Source, out var value) &&
+                               value == e.Expected))
+        {
+            return null;
+        }
+
+        return source => TryGetLastNonEmptyQueryParameterValue(source, out var value) ? value : null;
     }
 
     private static Func<string, string?>? TryUrlFirstQueryParameterValue(
@@ -640,6 +654,33 @@ public static partial class FlashFillService
     {
         foreach (var (_, currentValue) in parameters)
         {
+            if (!string.IsNullOrWhiteSpace(currentValue))
+            {
+                value = currentValue;
+                return true;
+            }
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
+    private static bool TryGetLastNonEmptyQueryParameterValue(
+        string source,
+        out string value)
+    {
+        value = string.Empty;
+        return TryGetDecodedQueryParameters(source, out var parameters) &&
+               TryGetLastNonEmptyQueryParameterValue(parameters, out value);
+    }
+
+    private static bool TryGetLastNonEmptyQueryParameterValue(
+        IReadOnlyList<(string Name, string Value)> parameters,
+        out string value)
+    {
+        for (var i = parameters.Count - 1; i >= 0; i--)
+        {
+            var currentValue = parameters[i].Value;
             if (!string.IsNullOrWhiteSpace(currentValue))
             {
                 value = currentValue;
