@@ -164,6 +164,7 @@ internal static partial class AccessibilityTextRules
         return GenericAltTexts.Contains(text) ||
             HasGenericNumberedAltText(text) ||
             LooksLikeScreenshotOrPhotoDateDefault(text) ||
+            LooksLikeCameraDefaultImageFileName(text) ||
             LooksLikeImageFileName(text);
     }
 
@@ -211,6 +212,9 @@ internal static partial class AccessibilityTextRules
     private static bool LooksLikeImageFileName(string text) =>
         ImageFileNameRegex().IsMatch(text);
 
+    private static bool LooksLikeCameraDefaultImageFileName(string text) =>
+        CameraDefaultImageFileNameRegex().IsMatch(text);
+
     private static bool HasGenericNumberedAltText(string text)
     {
         foreach (var prefix in GenericNumberedAltTextPrefixes)
@@ -257,6 +261,9 @@ internal static partial class AccessibilityTextRules
 
     [GeneratedRegex(@"(?i)^[\w .-]+(?:\s+\((?:copy|\d+)\))?\.(?:png|jpe?g|gif|bmp|tiff?|webp)$")]
     private static partial Regex ImageFileNameRegex();
+
+    [GeneratedRegex(@"(?i)^(?:IMG[\s_-]?\d{4,}|DSC[\s_-]?\d{4,}|DSCF\d{4,}|PXL[\s_-]\d{8}[\s_-]\d{6,}(?:[\s_-]\d+)?)$")]
+    private static partial Regex CameraDefaultImageFileNameRegex();
 
     [GeneratedRegex(@"(?i)^(?:Screenshot|Photo)[\s_-]+(?:\d{4}[-_]\d{2}[-_]\d{2}|\d{8})$")]
     private static partial Regex ScreenshotOrPhotoDateDefaultRegex();
