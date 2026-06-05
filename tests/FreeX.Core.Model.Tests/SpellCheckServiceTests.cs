@@ -785,6 +785,39 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversInsuranceActuarialVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "PREMUM deductble Cliam cliams acturial annuitiy underwritng benificiary reinsurence endorsemnt. Keep premum_id, https://premum.example.com/cliam, actuarial@benificiary.example.com, \"C:\\reinsurence folder\\endorsemnt file.xlsx\", and [C:\\deductble folder\\underwritng file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("PREMUM", "PREMIUM"),
+            ("deductble", "deductible"),
+            ("Cliam", "Claim"),
+            ("cliams", "claims"),
+            ("acturial", "actuarial"),
+            ("annuitiy", "annuity"),
+            ("underwritng", "underwriting"),
+            ("benificiary", "beneficiary"),
+            ("reinsurence", "reinsurance"),
+            ("endorsemnt", "endorsement"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "PREMIUM deductible Claim claims actuarial annuity underwriting beneficiary reinsurance endorsement. Keep premum_id, https://premum.example.com/cliam, actuarial@benificiary.example.com, \"C:\\reinsurence folder\\endorsemnt file.xlsx\", and [C:\\deductble folder\\underwritng file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");
