@@ -1048,11 +1048,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             : packageStream;
         try
         {
+            var canMutateStyleOptimizedPackage = !ReferenceEquals(styleOptimizedPackage, packageStream);
             var sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(
                 styleOptimizedPackage,
                 removeUnsupportedConditionalFormatting,
                 removeAllConditionalFormatting,
-                sanitizationHints);
+                sanitizationHints,
+                mutateSourcePackage: canMutateStyleOptimizedPackage);
             if (!ReferenceEquals(sanitizedPackage, styleOptimizedPackage) &&
                 !ReferenceEquals(styleOptimizedPackage, packageStream))
             {

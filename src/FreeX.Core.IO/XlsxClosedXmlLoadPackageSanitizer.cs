@@ -21,7 +21,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         MemoryStream sourcePackage,
         bool removeUnsupportedConditionalFormatting = false,
         bool removeAllConditionalFormatting = false,
-        XlsxClosedXmlLoadSanitizationHints? hints = null)
+        XlsxClosedXmlLoadSanitizationHints? hints = null,
+        bool mutateSourcePackage = false)
     {
         sourcePackage.Position = 0;
         var requirements = GetSanitizationRequirements(
@@ -35,19 +36,28 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return sourcePackage;
         }
 
-        sourcePackage.Position = 0;
-        var sanitized = new MemoryStream();
-        if (sourcePackage.TryGetBuffer(out var sourceBuffer) &&
-            sourceBuffer.Array is not null &&
-            sourcePackage.Length <= int.MaxValue &&
-            sourceBuffer.Offset + (int)sourcePackage.Length <= sourceBuffer.Array.Length)
+        MemoryStream sanitized;
+        if (mutateSourcePackage)
         {
-            sanitized.Write(sourceBuffer.Array, sourceBuffer.Offset, (int)sourcePackage.Length);
+            sanitized = sourcePackage;
         }
         else
         {
-            sourcePackage.WriteTo(sanitized);
+            sourcePackage.Position = 0;
+            sanitized = new MemoryStream();
+            if (sourcePackage.TryGetBuffer(out var sourceBuffer) &&
+                sourceBuffer.Array is not null &&
+                sourcePackage.Length <= int.MaxValue &&
+                sourceBuffer.Offset + (int)sourcePackage.Length <= sourceBuffer.Array.Length)
+            {
+                sanitized.Write(sourceBuffer.Array, sourceBuffer.Offset, (int)sourcePackage.Length);
+            }
+            else
+            {
+                sourcePackage.WriteTo(sanitized);
+            }
         }
+
         sanitized.Position = 0;
         using (var archive = new ZipArchive(sanitized, ZipArchiveMode.Update, leaveOpen: true))
         {

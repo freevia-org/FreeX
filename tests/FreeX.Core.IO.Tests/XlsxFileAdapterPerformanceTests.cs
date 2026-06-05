@@ -125,7 +125,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
                 MemoryStream? sanitizedPackage = null;
                 try
                 {
-                    sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(strippedPackage);
+                    sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(strippedPackage, mutateSourcePackage: true);
                     using var workbook = new XLWorkbook(sanitizedPackage);
                     workbook.Worksheets.Count.Should().BeGreaterThan(0);
                 }
