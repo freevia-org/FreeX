@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -115,7 +114,7 @@ public sealed class GoalSeekDialogXamlTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesSetCellBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoalSeekDialog.xaml.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -125,7 +124,7 @@ public sealed class GoalSeekDialogXamlTests
     [Fact]
     public void InvalidInputMessage_RefocusesAndSelectsOffendingField()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoalSeekDialog.xaml.cs");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, error, UiText.Get(\"GoalSeek_GoalSeek\"));");
         source.Should().Contain("FocusInvalidInput(error);");
@@ -136,7 +135,7 @@ public sealed class GoalSeekDialogXamlTests
     [Fact]
     public void RangePickerButtons_RefocusSelectedInputWithKeyboardFocus()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoalSeekDialog.xaml.cs");
         var handlerSource = source[
             source.IndexOf("private void RangePickerButton_Click", StringComparison.Ordinal)..
             source.IndexOf("public static GoalSeekRangeSelectionRequest", StringComparison.Ordinal)];
@@ -161,8 +160,8 @@ public sealed class GoalSeekDialogXamlTests
                     GoalSeekRangeSelectionTarget.ChangingCell,
                     new CellAddress(sheetId, 7, 4));
 
-                GetControl<TextBox>(dialog, "SetCellBox").Text.Should().Be("B3");
-                GetControl<TextBox>(dialog, "ChangingCellBox").Text.Should().Be("D7");
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "SetCellBox").Text.Should().Be("B3");
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "ChangingCellBox").Text.Should().Be("D7");
             }
             finally
             {
@@ -174,7 +173,7 @@ public sealed class GoalSeekDialogXamlTests
     [Fact]
     public void MainWindow_WiresGoalSeekRangePickerToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("new GoalSeekDialog(");
         source.Should().Contain("request => ApplyGoalSeekRangeSelection(dlg, request)");
@@ -203,7 +202,7 @@ public sealed class GoalSeekDialogXamlTests
             dialog.Show();
             try
             {
-                GetControl<TextBox>(dialog, targetName).Text = $" {currentText} ";
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, targetName).Text = $" {currentText} ";
                 var button = new Button { CommandParameter = targetName };
 
                 InvokePrivate(dialog, "RangePickerButton_Click", button);
@@ -219,14 +218,6 @@ public sealed class GoalSeekDialogXamlTests
                 dialog.Close();
             }
         });
-    }
-
-    private static T GetControl<T>(GoalSeekDialog dialog, string name)
-        where T : class
-    {
-        var field = typeof(GoalSeekDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
 
     private static void InvokePrivate(GoalSeekDialog dialog, string methodName, object sender)
