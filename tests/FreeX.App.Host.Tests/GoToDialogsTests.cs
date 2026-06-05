@@ -152,7 +152,7 @@ public sealed class GoToDialogsTests
         StaTestRunner.Run(() =>
         {
             var dialog = new GoToDialog(sheetId, defaultAddress: "A1", recentReferences: ["D10"]);
-            var historyList = GetPrivateControl<ListBox>(dialog, "_historyList");
+            var historyList = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_historyList");
             dialog.Dispatcher.BeginInvoke(() =>
             {
                 historyList.SelectedItem = "D10";
@@ -179,7 +179,7 @@ public sealed class GoToDialogsTests
         StaTestRunner.Run(() =>
         {
             var dialog = new GoToDialog(sheetId, defaultAddress: "A1", recentReferences: ["D10"]);
-            var historyList = GetPrivateControl<ListBox>(dialog, "_historyList");
+            var historyList = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_historyList");
             historyList.SelectedItem = null;
 
             var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
@@ -431,32 +431,16 @@ public sealed class GoToDialogsTests
         return char.ToUpperInvariant(label[index + 1]);
     }
 
-    private static T GetPrivateControl<T>(GoToDialog dialog, string fieldName)
-        where T : class
-    {
-        var field = typeof(GoToDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
-
-    private static T GetPrivateGoToSpecialField<T>(GoToSpecialDialog dialog, string fieldName)
-        where T : class
-    {
-        var field = typeof(GoToSpecialDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
-
     private static void SelectGoToSpecialChoice(GoToSpecialDialog dialog, GoToSpecialKind kind)
     {
-        var buttons = GetPrivateGoToSpecialField<List<RadioButton>>(dialog, "_buttons");
+        var buttons = DialogSourceTestSupport.GetPrivateField<List<RadioButton>>(dialog, "_buttons");
         buttons.Single(button => button.Tag is GoToSpecialKind buttonKind && buttonKind == kind).IsChecked = true;
     }
 
     private static void SetAllValueTypeBoxes(GoToSpecialDialog dialog, bool isChecked)
     {
         foreach (var fieldName in new[] { "_numbersBox", "_textBox", "_logicalsBox", "_errorsBox" })
-            GetPrivateGoToSpecialField<CheckBox>(dialog, fieldName).IsChecked = isChecked;
+            DialogSourceTestSupport.GetPrivateField<CheckBox>(dialog, fieldName).IsChecked = isChecked;
     }
 
     private static void InvokePrivateAllowingNonModalDialogResult(GoToSpecialDialog dialog, string methodName)

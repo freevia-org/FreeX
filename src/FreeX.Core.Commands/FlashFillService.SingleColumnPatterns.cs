@@ -442,6 +442,19 @@ public static partial class FlashFillService
         return null;
     }
 
+    private static Func<string, string?>? TryRemoveMiddleDelimitedToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var delimiter in FinalDelimitedTokenDelimiters)
+        {
+            if (!examples.All(e => TryRemoveMiddleDelimitedToken(e.Source, delimiter, out var remainder) && remainder == e.Expected))
+                continue;
+
+            return source => TryRemoveMiddleDelimitedToken(source, delimiter, out var remainder) ? remainder : null;
+        }
+
+        return null;
+    }
+
     private static Func<string, string?>? TryExtractFinalPathSegmentStem(IReadOnlyList<(string Source, string Expected)> examples)
     {
         if (!examples.All(e => TryGetFinalPathSegmentStem(e.Source, out var stem) && stem == e.Expected))
@@ -600,6 +613,35 @@ public static partial class FlashFillService
             return false;
 
         remainder = source[(firstDelimiterIndex + 1)..].Trim();
+        return remainder.Length > 0;
+    }
+
+    private static bool TryRemoveMiddleDelimitedToken(string source, char delimiter, out string remainder)
+    {
+        remainder = string.Empty;
+        var trimmed = source.Trim();
+        var firstDelimiterIndex = trimmed.IndexOf(delimiter);
+        if (firstDelimiterIndex <= 0)
+            return false;
+
+        var secondDelimiterIndex = trimmed.IndexOf(delimiter, firstDelimiterIndex + 1);
+        if (secondDelimiterIndex < 0 || secondDelimiterIndex == trimmed.Length - 1)
+            return false;
+
+        if (trimmed.IndexOf(delimiter, secondDelimiterIndex + 1) >= 0)
+            return false;
+
+        var first = trimmed[..firstDelimiterIndex].Trim();
+        var middle = trimmed[(firstDelimiterIndex + 1)..secondDelimiterIndex].Trim();
+        var last = trimmed[(secondDelimiterIndex + 1)..].Trim();
+        if (first.Length == 0 || middle.Length == 0 || last.Length == 0)
+            return false;
+
+        var secondSeparatorStart = secondDelimiterIndex;
+        while (secondSeparatorStart > firstDelimiterIndex + 1 && char.IsWhiteSpace(trimmed[secondSeparatorStart - 1]))
+            secondSeparatorStart--;
+
+        remainder = first + trimmed[secondSeparatorStart..].TrimEnd();
         return remainder.Length > 0;
     }
 

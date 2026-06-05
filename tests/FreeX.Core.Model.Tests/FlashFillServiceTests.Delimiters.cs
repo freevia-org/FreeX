@@ -222,6 +222,81 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("Region-East-001", "Region-001", "Team-Alpha-Q1", "Team-Q1", "Area-South-003", "Area-003")]
+    [InlineData("Region,East,001", "Region,001", "Team,Alpha,Q1", "Team,Q1", "Area,South,003", "Area,003")]
+    [InlineData("Region;East;001", "Region;001", "Team;Alpha;Q1", "Team;Q1", "Area;South;003", "Area;003")]
+    [InlineData("Region:East:001", "Region:001", "Team:Alpha:Q1", "Team:Q1", "Area:South:003", "Area:003")]
+    [InlineData("Region|East|001", "Region|001", "Team|Alpha|Q1", "Team|Q1", "Area|South|003", "Area|003")]
+    [InlineData("Region_East_001", "Region_001", "Team_Alpha_Q1", "Team_Q1", "Area_South_003", "Area_003")]
+    [InlineData("Region/East/001", "Region/001", "Team/Alpha/Q1", "Team/Q1", "Area/South/003", "Area/003")]
+    [InlineData("Region\\East\\001", "Region\\001", "Team\\Alpha\\Q1", "Team\\Q1", "Area\\South\\003", "Area\\003")]
+    public void Fill_RemoveMiddleDelimitedToken_DropsInteriorTokenFromThreeTokenSources(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_RemoveMiddleDelimitedToken_TrimsWhitespaceAndPreservesRemainingDelimiterStyle()
+    {
+        var result = FlashFillService.Fill(
+            [
+                (" Region - East - 001 ", "Region - 001"),
+                (" Team - Alpha - Q1 ", "Team - Q1")
+            ],
+            [" Area - South - 003 "]);
+
+        result.Should().BeEquivalentTo(["Area - 003"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("AreaSouth003")]
+    [InlineData("Area-South")]
+    [InlineData("-South-003")]
+    [InlineData("Area--003")]
+    [InlineData("Area-South-")]
+    [InlineData("Area-South-003-Extra")]
+    public void Fill_RemoveMiddleDelimitedToken_ReturnsNullWhenRemainingIsNotExactlyThreeNonEmptyTokens(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Region-East-001", "Region-001"),
+                ("Team-Alpha-Q1", "Team-Q1")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_RemoveMiddleDelimitedToken_DoesNotOverrideExistingDelimitedPatterns()
+    {
+        FlashFillService.Fill(
+            [("SKU-2024-Retail", "Retail"), ("SKU-2025-Wholesale", "Wholesale")],
+            ["SKU-NORTH-2026-Online"])
+            .Should().BeEquivalentTo(["Online"], o => o.WithStrictOrdering());
+
+        FlashFillService.Fill(
+            [("SKU-2024-0001", "SKU-2024"), ("SKU-2025-0042", "SKU-2025")],
+            ["SKU-NORTH-2026-0007"])
+            .Should().BeEquivalentTo(["SKU-NORTH-2026"], o => o.WithStrictOrdering());
+
+        FlashFillService.Fill(
+            [("US-East-001", "East-001"), ("EU-West-002", "West-002")],
+            ["APAC-South-003"])
+            .Should().BeEquivalentTo(["South-003"], o => o.WithStrictOrdering());
+    }
+
     [Fact]
     public void Fill_RemoveLeadingDottedToken_DropsLeftmostTokenAcrossVariableCounts()
     {

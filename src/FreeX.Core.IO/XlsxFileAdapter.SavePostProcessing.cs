@@ -10,7 +10,8 @@ public sealed partial class XlsxFileAdapter
     private static void ApplyPackagePostProcessing(
         Workbook workbook,
         Stream packageStream,
-        string? currentModelFingerprint = null)
+        string? currentModelFingerprint = null,
+        bool removeSourceCalcChain = false)
     {
         var featurePlan = XlsxPostProcessingFeaturePlan.Create(workbook);
         XlsxWorkbookWorksheetPathMap? worksheetPathMap = null;
@@ -314,9 +315,14 @@ public sealed partial class XlsxFileAdapter
         void NormalizeSourcePackageForExcelCompatibility()
         {
             packageStream.Position = 0;
+            var normalizationPlan =
+                CreateExcelCompatibilityNormalizationPlan(sourcePackage, sourceParts, featurePlan) with
+                {
+                    RemoveCalcChain = removeSourceCalcChain
+                };
             XlsxExcelCompatibilityNormalizer.NormalizeSourcePackageSave(
                 packageStream,
-                CreateExcelCompatibilityNormalizationPlan(sourcePackage, sourceParts, featurePlan));
+                normalizationPlan);
         }
 
         void NormalizeDocumentPropertiesPackageGraph()
