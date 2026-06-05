@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -9,7 +8,7 @@ public sealed partial class WorkbookThemeDialogXamlTests
     public void Dialog_ExposesThemePresetButtonsBackedByWorkflow()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("WorkbookThemeDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookThemeDialog.xaml.cs");
 
         xaml.Should().Contain("x:Name=\"OfficePresetButton\"");
         xaml.Should().Contain("x:Name=\"ColorfulPresetButton\"");
