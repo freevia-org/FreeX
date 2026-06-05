@@ -1448,6 +1448,10 @@ public static partial class FormulaAuditingService
         {
             '\uFF0C' => ',',
             '\uFF0E' => '.',
+            '\uFF25' => 'E',
+            '\uFF45' => 'e',
+            '\uFF0B' => '+',
+            '\uFF0D' => '-',
             _ => value
         };
     }
