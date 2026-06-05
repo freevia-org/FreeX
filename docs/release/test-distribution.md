@@ -21,7 +21,7 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x
 
 https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix
 
-The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. It preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
+The `Tester Release` GitHub Actions workflow runs repository preflight, build, the default test lane, and the UI test lane before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. It uses normal .NET restore/build caching and parallelism for speed, preserves `default-tests.trx` and `ui-tests.trx` results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
 
 - `FreeX-latest-win-x64.exe`
 - `FreeX-latest-win-x64.exe.sha256`
@@ -34,7 +34,7 @@ The hosted MSIX publish path signs the package when `FREEX_MSIX_CERTIFICATE_BASE
 
 Default tester versions come from `release/progress.json`: the current `overallCompletion` value maps to a minor-version band, and the GitHub run number becomes the patch number. At 95% completion, default tester releases use the `v0.8.<run>` stream. Manual `release_version` overrides remain available for special validation builds.
 
-Current release gate: do not treat a new tester release as available until the workflow completes successfully through repository preflight, restore, build, default tests, UI tests, test-result artifact collection, release metadata, artifact upload, and GitHub release publication.
+Current release gate: do not treat a new tester release as available until the workflow completes successfully through repository preflight, build, default tests, UI tests, test-result artifact collection, release metadata, artifact upload, and GitHub release publication.
 
 Before dispatching a candidate, run `tools/Test-TesterReleaseReadiness.ps1` from the repo root to preflight `release/progress.json`, workflow accessibility inputs, release docs, and checklist alignment. For a public-preview candidate, include `-PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues`; otherwise the preflight reports the build as internal-only.
 
@@ -42,22 +42,27 @@ Use [release/tester-release-checklist.md](tester-release-checklist.md) as the op
 
 ## Default Agent Build Verification
 
-Run these commands from the repository root when validating routine agent work or a non-UI build-lane slice:
+Run these commands from the repository root when validating routine agent work or a non-UI build-lane slice. The default path intentionally allows the .NET SDK to perform restore as needed and keeps build servers, shared compilation, node reuse, and MSBuild parallelism enabled:
 
 0. `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1`
-1. `dotnet restore FreeX.slnx`
-2. `dotnet build FreeX.slnx --configuration Release --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1`
-3. `dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx" --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1`
+1. `dotnet build FreeX.slnx --configuration Release`
+2. `dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx"`
 
-Default agent verification does not run the UI lane and does not use `dotnet test FreeX.slnx`. Success means the repository preflight validates tracked JSON/XML-backed files, tool scripts, workflows, local .NET SDK readiness against the tester-release SDK band, .NET project references, solution membership, and generated docs; restore exits cleanly; the Release solution build reports zero errors; and the default Release test lane reports zero failed tests. If output files are locked by a stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process from another local run, clear the stale process and rerun the same command before treating the build as failed.
+Default agent verification does not run the UI lane and does not use `dotnet test FreeX.slnx`. Success means the repository preflight validates tracked JSON/XML-backed files, tool scripts, workflows, local .NET SDK readiness against the tester-release SDK band, .NET project references, solution membership, and generated docs; the Release solution build reports zero errors; and the default Release test lane reports zero failed tests. If output files are locked by a stale `dotnet`, `MSBuild`, `VBCSCompiler`, or `testhost` process from another local run, clear the stale process and rerun the same command before treating the build as failed.
 
 ## UI Lane Verification
 
 Run the UI lane separately only when a task explicitly requests UI tests, touches WPF app/host behavior or UI test infrastructure, changes UI documentation/inventory, or prepares a tester-release/public-preview candidate:
 
-0. `dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx" --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1`
+0. `dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"`
 
 Success means the UI Release test lane reports zero failed tests. The `Tester Release` workflow remains a full release gate and still runs both the default and UI test lanes before publishing.
+
+## Conservative Rerun Fallback
+
+The old serial/no-build-server command shape is no longer the default because it makes routine verification significantly slower. Use it only as a one-time rerun after clearing stale processes when a command fails because of stale build-server, shared-compiler, node-reuse, or output-lock state:
+
+`--disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1`
 
 ## Phase 3 Diagnostics Contract
 

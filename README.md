@@ -29,22 +29,21 @@ Start with the [user guide](docs/user/guide.md) and the [documentation index](do
 
 ## Development
 
-Run the default agent verification path for routine repo changes. It restores and builds the full solution, then tests only the non-UI lane:
+Run the default agent verification path for routine repo changes. It uses normal .NET restore/build caching and parallelism, builds the full solution, then tests only the non-UI lane:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1
-dotnet restore FreeX.slnx
-dotnet build FreeX.slnx --configuration Release --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
-dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx" --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
+dotnet build FreeX.slnx --configuration Release
+dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build --logger "trx;LogFileName=default-tests.trx"
 ```
 
 Run the UI lane separately only when touching WPF app/host behavior, UI tests, UI documentation/inventory, or when preparing a tester-release/public-preview candidate:
 
 ```powershell
-dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx" --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1
+dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"
 ```
 
-The full solution remains the restore/build target; do not use `dotnet test FreeX.slnx` as the default test command.
+The full solution remains the build target; do not use `dotnet test FreeX.slnx` as the default test command. If stale local build-server state causes a lock or compiler-cache failure after clearing stale processes, rerun the failing command once with `--disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1`.
 
 ## Trademark Notice
 

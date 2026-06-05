@@ -490,7 +490,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
-    [Theory]
+    [BenchmarkTheory]
     [InlineData("=LARGE(A1:A100000,10)", 99_991d, 16_000)]
     [InlineData("=SMALL(A1:A100000,10)", 10d, 16_000)]
     [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 16_000)]
@@ -499,7 +499,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
     }
 
-    [Theory]
+    [BenchmarkTheory]
     [InlineData("=AGGREGATE(12,4,A1:A100000)", 50_000.5d, 16_000)]
     [InlineData("=AGGREGATE(14,4,A1:A100000,10)", 99_991d, 16_000)]
     [InlineData("=AGGREGATE(15,4,A1:A100000,10)", 10d, 16_000)]
@@ -573,7 +573,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
-    [Fact]
+    [BenchmarkFact]
     public void AggregateModeLargeRange_AvoidsGroupByMaterialization()
     {
         var evaluator = new FormulaEvaluator();

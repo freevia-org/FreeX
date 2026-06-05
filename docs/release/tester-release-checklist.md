@@ -4,7 +4,7 @@ Use this checklist before promoting a tester build beyond internal validation. P
 
 ## Required Release Gate
 
-- Repository preflight, restore, build, and test completed in the release workflow.
+- Repository preflight, build, and test completed in the release workflow.
 - Test result artifact was uploaded, even for failed release-gate attempts.
 - Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, and checksum artifacts were uploaded.
 - Stable latest checksum assets were included for both the `.exe` and MSIX packages.

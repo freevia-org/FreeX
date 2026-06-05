@@ -53,12 +53,13 @@ public sealed class TestDistributionPlanTests
 
         source.Should().Contain("## Default Agent Build Verification");
         source.Should().Contain("tools\\Test-RepositoryPreflight.ps1");
-        source.Should().Contain("dotnet restore FreeX.slnx");
-        source.Should().Contain("dotnet build FreeX.slnx --configuration Release --no-restore");
+        source.Should().Contain("dotnet build FreeX.slnx --configuration Release");
         source.Should().Contain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build");
         source.Should().Contain("Default agent verification does not run the UI lane");
         source.Should().Contain("does not use `dotnet test FreeX.slnx`");
         source.Should().Contain("validates tracked JSON/XML-backed files");
+        source.Should().Contain("keeps build servers, shared compilation, node reuse, and MSBuild parallelism enabled");
+        source.Should().Contain("## Conservative Rerun Fallback");
         source.Should().Contain("--disable-build-servers");
         source.Should().Contain("-p:UseSharedCompilation=false");
         source.Should().Contain("-p:NodeReuse=false");
@@ -73,6 +74,8 @@ public sealed class TestDistributionPlanTests
         defaultSectionIndex.Should().BeGreaterThanOrEqualTo(0);
         uiSectionIndex.Should().BeGreaterThan(defaultSectionIndex);
         source[defaultSectionIndex..uiSectionIndex].Should().NotContain("FreeX.UiTests.slnx");
+        source[defaultSectionIndex..uiSectionIndex].Should().NotContain("dotnet restore FreeX.slnx");
+        source[defaultSectionIndex..uiSectionIndex].Should().NotContain("--disable-build-servers");
         source[uiSectionIndex..].Should().Contain("dotnet test FreeX.UiTests.slnx --configuration Release --no-build");
         source[uiSectionIndex..].Should().Contain("Tester Release");
         source[uiSectionIndex..].Should().Contain("still runs both the default and UI test lanes");
@@ -102,7 +105,7 @@ public sealed class TestDistributionPlanTests
 
         source.Should().Contain("Tester Release");
         source.Should().Contain("release_notes");
-        source.Should().Contain("Repository preflight, restore, build, and test");
+        source.Should().Contain("Repository preflight, build, and test");
         source.Should().Contain("Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, and checksum artifacts");
         source.Should().Contain("release/progress.json");
         source.Should().Contain("Keyboard-only smoke validation");
