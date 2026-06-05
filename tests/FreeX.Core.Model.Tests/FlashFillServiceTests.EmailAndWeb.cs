@@ -599,6 +599,120 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_UrlFirstQueryParameterName_TakesPrecedenceWhenLastNameDiffers()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.com/search?campaign=spring&source=email", "campaign"),
+                ("https://fabrikam.example/items?region=west;sort=asc", "region")
+            ],
+            ["https://northwind.test/page?product=bike&ref=nav"]);
+
+        result.Should().BeEquivalentTo(["product"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterName_ExtractsLastNameAcrossAmpersandSemicolonAndEmptySegments()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.com/search?campaign=spring&&source", "source"),
+                ("https://fabrikam.example/items?region=west;;sort", "sort")
+            ],
+            [
+                "https://northwind.test/page?product=bike&&ref#details",
+                "https://adatum.example/page?category=tools;;page"
+            ]);
+
+        result.Should().BeEquivalentTo(["ref", "page"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterName_DecodesEncodedAndPlusNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?q=road&utm%5Fcampaign=spring", "utm_campaign"),
+                ("https://fabrikam.example/items?term=gravel;region+code=west", "region code")
+            ],
+            ["https://northwind.test/page?product=bike&sort+order=asc"]);
+
+        result.Should().BeEquivalentTo(["sort order"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterName_HandlesBareWebAddressesWithQueryStrings()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("www.contoso.com/search?sku=A-100&source=web", "source"),
+                ("fabrikam.org/products?item=B-200;channel=mail", "channel")
+            ],
+            ["northwind.net/catalog?product=C-300&medium=ad"]);
+
+        result.Should().BeEquivalentTo(["medium"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlLastQueryParameterName_TrimsFragments()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=one&source=mail#results", "source"),
+                ("https://fabrikam.example/find?left=two;sort=asc#top", "sort")
+            ],
+            ["https://northwind.test/page?product=bike&ref=nav#details"]);
+
+        result.Should().BeEquivalentTo(["ref"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlFirstQueryParameterValue_TakesPrecedenceWhenLastNameAlsoMatchesExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?alpha=tail&tail=ignored", "tail"),
+                ("https://fabrikam.example/find?beta=end;end=ignored", "end")
+            ],
+            ["https://northwind.example/catalog?gamma=winner&final=ignored"]);
+
+        result.Should().BeEquivalentTo(["winner"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlQueryParameterValue_TakesPrecedenceWhenLastNameAlsoMatchesExamples()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?target=tail&tail=ignored", "tail"),
+                ("https://fabrikam.example/find?target=end;end=ignored", "end")
+            ],
+            ["https://northwind.example/catalog?target=winner&final=ignored"]);
+
+        result.Should().BeEquivalentTo(["winner"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("https://northwind.test/page")]
+    [InlineData("https://northwind.test/page?first=ok&=blank")]
+    [InlineData("https://northwind.test/page?first=ok&+=blank")]
+    [InlineData("https://northwind.test/page?first=ok&bad%ZZ=value")]
+    [InlineData("ftp://northwind.test/page?first=ok&last=value")]
+    [InlineData("https://user@northwind.test/page?first=ok&last=value")]
+    [InlineData("https://localhost/page?first=ok&last=value")]
+    public void Fill_UrlLastQueryParameterName_ReturnsNullForUnsupportedOrBlankRemainingUrl(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/search?first=one&source=mail", "source"),
+                ("https://fabrikam.example/find?left=two;sort=asc", "sort")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_UrlFirstQueryParameterValue_ExtractsDecodedFirstValuesAcrossDifferentParameterNames()
     {
         var result = FlashFillService.Fill(
@@ -813,12 +927,12 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
-    public void Fill_UrlQueryParameterValue_ReturnsNullWhenExampleParameterNamesDiffer()
+    public void Fill_UrlQueryParameterValue_ReturnsNullWhenDifferentParameterNamesAreNotConsistentlyFirstValues()
     {
         var result = FlashFillService.Fill(
             [
-                ("https://contoso.example/search?q=road+bike", "road bike"),
-                ("https://fabrikam.example/search?term=gravel+bike", "gravel bike")
+                ("https://contoso.example/search?sort=asc&q=road+bike", "road bike"),
+                ("https://fabrikam.example/search?term=gravel+bike&sort=desc", "gravel bike")
             ],
             ["https://northwind.example/search?q=electric+bike"]);
 

@@ -1,6 +1,5 @@
 using FluentAssertions;
 using System.IO;
-using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 
@@ -122,9 +121,9 @@ public sealed class WatchWindowMessageFormatterTests
             var dialog = new AddWatchDialog("Sheet1!$A$1:$B$2");
             try
             {
-                var rangeBox = FindLogicalDescendants<TextBox>(dialog)
+                var rangeBox = WpfTestTree.FindLogicalDescendants<TextBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "AddWatchSelectedRangeBox");
-                var buttons = FindLogicalDescendants<Button>(dialog)
+                var buttons = WpfTestTree.FindLogicalDescendants<Button>(dialog)
                     .ToDictionary(button => AutomationProperties.GetAutomationId(button));
 
                 rangeBox.Text.Should().Be("Sheet1!$A$1:$B$2");
@@ -217,17 +216,5 @@ public sealed class WatchWindowMessageFormatterTests
         doubleClick.IndexOf("_navigateTo(row.Address);", StringComparison.Ordinal)
             .Should()
             .BeLessThan(doubleClick.IndexOf("e.Handled = true;", StringComparison.Ordinal));
-    }
-
-    private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
-    {
-        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
-        {
-            if (child is T match)
-                yield return match;
-
-            foreach (var descendant in FindLogicalDescendants<T>(child))
-                yield return descendant;
-        }
     }
 }

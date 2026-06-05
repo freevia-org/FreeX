@@ -59,7 +59,7 @@ public sealed class AppCrashAnalyticsTests
     [Fact]
     public void AppDiagnostics_ForwardsSafeBreadcrumbsAndCrashesToCrashAnalytics()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory();
         var crashAnalytics = new FakeCrashAnalytics();
         var diagnostics = new AppDiagnostics(
             new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true)),
@@ -91,7 +91,7 @@ public sealed class AppCrashAnalyticsTests
     [Fact]
     public void AppDiagnostics_WritesLocalCrashReportWhenRemoteCrashAnalyticsFails()
     {
-        using var temp = new TemporaryDirectory();
+        using var temp = new TestTemporaryDirectory();
         var diagnostics = new AppDiagnostics(
             new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true)),
             new AppDiagnosticsMetadata(
@@ -151,19 +151,4 @@ public sealed class AppCrashAnalyticsTests
         }
     }
 
-    private sealed class TemporaryDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public TemporaryDirectory()
-        {
-            Directory.CreateDirectory(Path);
-        }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
 }

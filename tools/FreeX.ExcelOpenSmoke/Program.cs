@@ -460,6 +460,8 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetCustomPropertyPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetScenarioPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetDimensionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetSheetFormatMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSheetViewsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetPhoneticPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetSortAndDataConsolidationMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -672,6 +674,8 @@ internal static class ExcelOpenSmoke
             AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetCustomPropertyPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetScenarioPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetDimensionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetSheetFormatMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSheetViewsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetPhoneticPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetSortAndDataConsolidationMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3407,6 +3411,252 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet scenario metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetDimensionMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetDimensionMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetDimensionMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetDimensionMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var dimensions = root.Elements(SpreadsheetNs + "dimension").ToArray();
+        if (dimensions.Length > 1)
+            issues.Add($"{worksheetPart} has {dimensions.Length} dimension elements; expected at most one");
+
+        foreach (var dimension in dimensions.Select((element, index) => new WorksheetDimensionReference(index + 1, element)))
+        {
+            AddWorksheetDimensionIssues(worksheetPart, root, dimension, issues);
+        }
+    }
+
+    private static void AddWorksheetDimensionIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetDimensionReference dimensionReference,
+        List<string> issues)
+    {
+        var dimension = dimensionReference.Element;
+        var description = $"dimension #{dimensionReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            dimension,
+            description,
+            [
+                "sheetViews",
+                "sheetFormatPr",
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        var reference = dimension.Attribute("ref")?.Value;
+        if (string.IsNullOrWhiteSpace(reference))
+            issues.Add($"{worksheetPart} {description} has no ref attribute");
+        else if (!IsValidLocalWorksheetReference(reference))
+            issues.Add($"{worksheetPart} {description} has invalid local ref '{reference}'");
+
+        if (dimension.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void ThrowInvalidWorksheetDimensionMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet dimension metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetSheetFormatMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            AddWorksheetSheetFormatMetadataIssues(
+                NormalizePackagePart(worksheetEntry.FullName),
+                LoadPackageXml(worksheetEntry),
+                issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetSheetFormatMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetSheetFormatMetadataIssues(
+        string worksheetPart,
+        XDocument worksheetXml,
+        List<string> issues)
+    {
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var sheetFormats = root.Elements(SpreadsheetNs + "sheetFormatPr").ToArray();
+        if (sheetFormats.Length > 1)
+            issues.Add($"{worksheetPart} has {sheetFormats.Length} sheetFormatPr elements; expected at most one");
+
+        foreach (var sheetFormat in sheetFormats.Select((element, index) => new WorksheetSheetFormatReference(index + 1, element)))
+        {
+            AddWorksheetSheetFormatIssues(worksheetPart, root, sheetFormat, issues);
+        }
+    }
+
+    private static void AddWorksheetSheetFormatIssues(
+        string worksheetPart,
+        XElement worksheetRoot,
+        WorksheetSheetFormatReference sheetFormatReference,
+        List<string> issues)
+    {
+        var sheetFormat = sheetFormatReference.Element;
+        var description = $"sheetFormatPr #{sheetFormatReference.Ordinal}";
+        AddWorksheetMetadataOrderingIssues(
+            worksheetPart,
+            worksheetRoot,
+            sheetFormat,
+            description,
+            [
+                "cols",
+                "sheetData",
+                "sheetCalcPr",
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "singleXmlCells",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            issues);
+
+        AddOptionalNonNegativePackageIntIssue(worksheetPart, description, "baseColWidth", sheetFormat.Attribute("baseColWidth")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "defaultColWidth", sheetFormat.Attribute("defaultColWidth")?.Value, issues);
+        AddOptionalNonNegativePackageDecimalIssue(worksheetPart, description, "defaultRowHeight", sheetFormat.Attribute("defaultRowHeight")?.Value, issues);
+        AddOptionalWorksheetMetadataOutlineLevelIssue(worksheetPart, description, "outlineLevelRow", sheetFormat.Attribute("outlineLevelRow")?.Value, issues);
+        AddOptionalWorksheetMetadataOutlineLevelIssue(worksheetPart, description, "outlineLevelCol", sheetFormat.Attribute("outlineLevelCol")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "thickTop", sheetFormat.Attribute("thickTop")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "thickBottom", sheetFormat.Attribute("thickBottom")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "zeroHeight", sheetFormat.Attribute("zeroHeight")?.Value, issues);
+        AddOptionalWorksheetMetadataBooleanIssue(worksheetPart, description, "customHeight", sheetFormat.Attribute("customHeight")?.Value, issues);
+
+        if (sheetFormat.Elements().Any())
+            issues.Add($"{worksheetPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddOptionalWorksheetMetadataOutlineLevelIssue(
+        string worksheetPart,
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!TryParseNonNegativePackageInt(value, out var outlineLevel) || outlineLevel > 7)
+            issues.Add($"{worksheetPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void ThrowInvalidWorksheetSheetFormatMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet sheetFormatPr metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetSheetViewsMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -10915,6 +11165,14 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetScenarioInputCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetDimensionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorksheetSheetFormatReference(
         int Ordinal,
         XElement Element);
 
