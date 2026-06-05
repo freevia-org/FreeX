@@ -142,6 +142,60 @@ public sealed class SortCommandTests
     }
 
     [Fact]
+    public void SortCommand_CommandBusUndoReportsSortedRangeAffectedCells()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var bus = new CommandBus(_ => new TestCommandContext(workbook));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("C"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("B"));
+        var expectedAffectedCells = range.AllCells().ToList();
+
+        var execute = bus.Execute(workbook.Id, new SortCommand(sheet.Id, range, [new SortKey(0, true)]));
+        var undo = bus.Undo(workbook.Id);
+        var redo = bus.Redo(workbook.Id);
+
+        execute.AffectedCells.Should().Equal(expectedAffectedCells);
+        undo.AffectedCells.Should().Equal(expectedAffectedCells);
+        redo.AffectedCells.Should().Equal(expectedAffectedCells);
+    }
+
+    [Fact]
+    public void SortCommand_UndoRestoresOnlySortedRowMetadata()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2));
+        sheet.RowHeights[2] = 50;
+        sheet.RowHeights[99] = 99;
+        sheet.HiddenRows.Add(2);
+        sheet.HiddenRows.Add(99);
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true)]);
+        command.Apply(ctx);
+        sheet.RowHeights[99] = 123;
+        sheet.HiddenRows.Remove(99);
+        sheet.HiddenRows.Add(100);
+
+        command.Revert(ctx);
+
+        sheet.RowHeights.Should().ContainKey(2).WhoseValue.Should().Be(50);
+        sheet.HiddenRows.Should().Contain(2);
+        sheet.RowHeights.Should().ContainKey(99).WhoseValue.Should().Be(123);
+        sheet.HiddenRows.Should().NotContain(99);
+        sheet.HiddenRows.Should().Contain(100);
+    }
+
+    [Fact]
     public void SortCommand_CanSortRowsByCellFillColor()
     {
         var workbook = new Workbook("test");
