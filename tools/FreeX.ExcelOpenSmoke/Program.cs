@@ -217,6 +217,7 @@ internal static class ExcelOpenSmoke
         "urn:schemas-microsoft-com:vml";
     private static readonly XNamespace VmlOfficeNs =
         "urn:schemas-microsoft-com:office:office";
+    private static readonly char[] InvalidWorkbookSheetNameChars = [':', '\\', '/', '?', '*', '[', ']'];
 
     public static int Run(string[] args)
     {
@@ -2144,27 +2145,67 @@ internal static class ExcelOpenSmoke
             .Root?
             .Elements(PackageRelationshipNs + "Relationship")
             .ToArray() ?? [];
-        var sheets = LoadPackageXml(workbookEntry)
-            .Descendants(SpreadsheetNs + "sheet")
+        var workbookXml = LoadPackageXml(workbookEntry);
+        var workbookRoot = workbookXml.Root;
+        if (workbookRoot is null)
+        {
+            issues.Add($"{WorkbookPart} has no workbook root element");
+            ThrowInvalidWorkbookSheetGraph(label, sourcePath, issues);
+            return;
+        }
+
+        if (workbookRoot.Name != SpreadsheetNs + "workbook")
+            issues.Add($"{WorkbookPart} has invalid workbook root element {workbookRoot.Name.LocalName}");
+
+        var sheetsContainers = workbookRoot.Elements(SpreadsheetNs + "sheets").ToArray();
+        if (sheetsContainers.Length == 0)
+            issues.Add("workbook has no sheets container");
+
+        if (sheetsContainers.Length > 1)
+            issues.Add($"workbook has {sheetsContainers.Length} sheets containers; expected one");
+
+        foreach (var sheetsContainer in sheetsContainers.Select((element, index) => (Ordinal: index + 1, Element: element)))
+        {
+            foreach (var unexpectedChild in sheetsContainer.Element.Elements().Where(element => element.Name != SpreadsheetNs + "sheet"))
+            {
+                issues.Add($"workbook sheets container #{sheetsContainer.Ordinal} has unexpected child element {unexpectedChild.Name.LocalName}; expected sheet entries only");
+            }
+        }
+
+        var sheets = sheetsContainers
+            .SelectMany(container => container.Elements(SpreadsheetNs + "sheet"))
             .ToArray();
         if (sheets.Length == 0)
             issues.Add("workbook has no sheet elements");
 
+        AddWorkbookSheetViewIndexIssues(workbookRoot, sheets.Length, issues);
+
         var seenRelationshipIds = new HashSet<string>(StringComparer.Ordinal);
         var seenSheetParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var sheet in sheets)
+        var seenSheetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenSheetIds = new HashSet<uint>();
+        foreach (var sheetReference in sheets.Select((element, index) => new WorkbookSheetReference(index + 1, element)))
         {
-            var sheetName = sheet.Attribute("name")?.Value ?? "(unnamed sheet)";
+            var sheet = sheetReference.Element;
+            var sheetName = sheet.Attribute("name")?.Value;
+            var sheetDescription = FormatWorkbookSheetDescription(sheetReference.Ordinal, sheetName);
+            AddWorkbookSheetNameIssues(sheetDescription, sheetName, seenSheetNames, issues);
+            AddWorkbookSheetIdIssues(sheetDescription, sheet.Attribute("sheetId")?.Value, seenSheetIds, issues);
+            AddWorkbookSheetStateIssues(sheetDescription, sheet.Attribute("state")?.Value, issues);
+
+            if (sheet.Elements().Any())
+                issues.Add($"{sheetDescription} has child elements; expected attributes only");
+
             var relationshipId = sheet.Attribute(OfficeRelationshipNs + "id")?.Value;
             if (string.IsNullOrWhiteSpace(relationshipId))
             {
-                issues.Add($"workbook sheet '{sheetName}' has no relationship id");
+                issues.Add($"{sheetDescription} has no relationship id");
                 continue;
             }
 
             if (!seenRelationshipIds.Add(relationshipId))
             {
-                issues.Add($"workbook sheet '{sheetName}' reuses relationship id {relationshipId}");
+                issues.Add($"{sheetDescription} reuses relationship id {relationshipId}");
                 continue;
             }
 
@@ -2175,45 +2216,45 @@ internal static class ExcelOpenSmoke
                     StringComparison.Ordinal));
             if (relationship is null)
             {
-                issues.Add($"workbook sheet '{sheetName}' targets missing relationship {relationshipId} in {WorkbookRelationshipPart}");
+                issues.Add($"{sheetDescription} targets missing relationship {relationshipId} in {WorkbookRelationshipPart}");
                 continue;
             }
 
             var relationshipType = relationship.Attribute("Type")?.Value;
             if (!TryGetWorkbookSheetExpectedContentType(relationshipType, out var expectedContentType))
             {
-                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} has unsupported Type={relationshipType}");
+                issues.Add($"{sheetDescription} relationship {relationshipId} has unsupported Type={relationshipType}");
                 continue;
             }
 
             var targetMode = relationship.Attribute("TargetMode")?.Value;
             if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
             {
-                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} must not target an external sheet package part");
+                issues.Add($"{sheetDescription} relationship {relationshipId} must not target an external sheet package part");
                 continue;
             }
 
             var target = relationship.Attribute("Target")?.Value;
             if (string.IsNullOrWhiteSpace(target))
             {
-                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} has no Target");
+                issues.Add($"{sheetDescription} relationship {relationshipId} has no Target");
                 continue;
             }
 
             if (!TryResolvePackageRelationshipTarget(WorkbookRelationshipPart, target, out var sheetPart, out var targetError))
             {
-                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} has invalid Target {target}: {targetError}");
+                issues.Add($"{sheetDescription} relationship {relationshipId} has invalid Target {target}: {targetError}");
                 continue;
             }
 
             if (!PackageEntryExists(archive, sheetPart))
             {
-                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} targets missing package part {sheetPart}");
+                issues.Add($"{sheetDescription} relationship {relationshipId} targets missing package part {sheetPart}");
                 continue;
             }
 
             if (!seenSheetParts.Add(sheetPart))
-                issues.Add($"workbook sheet '{sheetName}' relationship {relationshipId} reuses package part {sheetPart}");
+                issues.Add($"{sheetDescription} relationship {relationshipId} reuses package part {sheetPart}");
 
             var contentTypeIssue = FindPackageContentTypeIssue(archive, sheetPart, expectedContentType);
             if (contentTypeIssue is not null)
@@ -2224,6 +2265,105 @@ internal static class ExcelOpenSmoke
             return;
 
         ThrowInvalidWorkbookSheetGraph(label, sourcePath, issues);
+    }
+
+    private static string FormatWorkbookSheetDescription(int ordinal, string? sheetName)
+    {
+        if (string.IsNullOrWhiteSpace(sheetName))
+            return $"workbook sheet #{ordinal}";
+
+        return $"workbook sheet #{ordinal} '{sheetName}'";
+    }
+
+    private static void AddWorkbookSheetNameIssues(
+        string sheetDescription,
+        string? sheetName,
+        HashSet<string> seenSheetNames,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(sheetName))
+        {
+            issues.Add($"{sheetDescription} has no name");
+            return;
+        }
+
+        if (sheetName.Length > 31)
+            issues.Add($"{sheetDescription} name is {sheetName.Length} characters; expected 31 or fewer");
+
+        if (sheetName.IndexOfAny(InvalidWorkbookSheetNameChars) >= 0)
+            issues.Add($"{sheetDescription} name contains invalid Excel sheet-name character(s)");
+
+        if (!seenSheetNames.Add(sheetName))
+            issues.Add($"{sheetDescription} duplicates another workbook sheet name ignoring case");
+    }
+
+    private static void AddWorkbookSheetIdIssues(
+        string sheetDescription,
+        string? sheetIdText,
+        HashSet<uint> seenSheetIds,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(sheetIdText))
+        {
+            issues.Add($"{sheetDescription} has no sheetId");
+            return;
+        }
+
+        if (!uint.TryParse(sheetIdText, NumberStyles.None, CultureInfo.InvariantCulture, out var sheetId) ||
+            sheetId == 0)
+        {
+            issues.Add($"{sheetDescription} has invalid sheetId value '{sheetIdText}'");
+            return;
+        }
+
+        if (!seenSheetIds.Add(sheetId))
+            issues.Add($"{sheetDescription} duplicates workbook sheetId {sheetId}");
+    }
+
+    private static void AddWorkbookSheetStateIssues(
+        string sheetDescription,
+        string? state,
+        List<string> issues)
+    {
+        if (!string.IsNullOrWhiteSpace(state) && !IsKnownWorkbookViewVisibility(state))
+            issues.Add($"{sheetDescription} has invalid state value '{state}'");
+    }
+
+    private static void AddWorkbookSheetViewIndexIssues(XElement workbookRoot, int sheetCount, List<string> issues)
+    {
+        if (sheetCount <= 0)
+            return;
+
+        foreach (var bookViews in workbookRoot.Elements(SpreadsheetNs + "bookViews").Select((element, index) => new WorkbookBookViewsReference(index + 1, element)))
+        {
+            var bookViewsDescription = $"bookViews #{bookViews.Ordinal}";
+            foreach (var workbookView in bookViews.Element.Elements(SpreadsheetNs + "workbookView").Select((element, index) => new WorkbookViewReference(index + 1, element)))
+            {
+                var viewDescription = $"{bookViewsDescription} workbookView #{workbookView.Ordinal}";
+                AddWorkbookSheetViewIndexIssue(viewDescription, "firstSheet", workbookView.Element.Attribute("firstSheet")?.Value, sheetCount, issues);
+                AddWorkbookSheetViewIndexIssue(viewDescription, "activeTab", workbookView.Element.Attribute("activeTab")?.Value, sheetCount, issues);
+            }
+        }
+    }
+
+    private static void AddWorkbookSheetViewIndexIssue(
+        string viewDescription,
+        string attributeName,
+        string? value,
+        int sheetCount,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (!uint.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var viewIndex))
+        {
+            issues.Add($"{WorkbookPart} {viewDescription} has invalid {attributeName} value '{value}'");
+            return;
+        }
+
+        if (viewIndex >= (uint)sheetCount)
+            issues.Add($"{WorkbookPart} {viewDescription} has {attributeName} index {viewIndex} outside workbook sheet count {sheetCount}");
     }
 
     private static bool TryGetWorkbookSheetExpectedContentType(string? relationshipType, out string expectedContentType)
@@ -18429,6 +18569,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookProtectionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookSheetReference(
         int Ordinal,
         XElement Element);
 
