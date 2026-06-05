@@ -154,6 +154,10 @@ internal static class ExcelOpenSmoke
         "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
     private const string TableRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
+    private const string ThemeContentType =
+        "application/vnd.openxmlformats-officedocument.theme+xml";
+    private const string ThemeRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
     private const string TimelineContentType =
         "application/vnd.ms-excel.timeline+xml";
     private const string TimelineCacheContentType =
@@ -452,6 +456,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertDocumentPropertiesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookThemePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileVersionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileSharingMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -684,6 +689,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertDocumentPropertiesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookThemePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileVersionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileSharingMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -2245,6 +2251,391 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid workbook sheet package graph: {sample}{suffix}");
+    }
+
+    private static void AssertWorkbookThemePackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var themeRelationships = FindPackageRelationshipsByType(
+            archive,
+            WorkbookRelationshipPart,
+            ThemeRelationshipType);
+        var themeEntries = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Where(entry => IsWorkbookThemePart(NormalizePackagePart(entry.FullName)))
+            .ToArray();
+        if (themeRelationships.Length == 0 && themeEntries.Length == 0)
+            return;
+
+        var issues = new List<string>();
+        if (themeRelationships.Length > 1)
+            issues.Add($"{WorkbookRelationshipPart} has {themeRelationships.Length} workbook theme relationships; expected at most one");
+
+        var referencedThemeParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validatedThemeParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var relationship in themeRelationships)
+        {
+            AddWorkbookThemeRelationshipIssues(
+                archive,
+                relationship,
+                referencedThemeParts,
+                validatedThemeParts,
+                issues);
+        }
+
+        foreach (var themeEntry in themeEntries)
+        {
+            var themePart = NormalizePackagePart(themeEntry.FullName);
+            if (referencedThemeParts.Contains(themePart))
+                continue;
+
+            issues.Add($"{themePart} is present without a workbook theme relationship");
+            if (validatedThemeParts.Add(themePart))
+                AddWorkbookThemePartIssues(archive, themePart, themeEntry, issues);
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookThemePackage(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookThemeRelationshipIssues(
+        ZipArchive archive,
+        XElement relationship,
+        HashSet<string> referencedThemeParts,
+        HashSet<string> validatedThemeParts,
+        List<string> issues)
+    {
+        var relationshipId = relationship.Attribute("Id")?.Value;
+        var relationshipLabel =
+            $"{WorkbookRelationshipPart} workbook theme relationship {FormatRelationshipIssueId(relationshipId)}";
+
+        if (!string.Equals(relationship.Attribute("Type")?.Value, ThemeRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} has Type={relationship.Attribute("Type")?.Value}; expected {ThemeRelationshipType}");
+            return;
+        }
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} is external");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{relationshipLabel} has invalid TargetMode {targetMode}");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{relationshipLabel} has no Target");
+            return;
+        }
+
+        target = target.Trim();
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add($"{relationshipLabel} targets external URI without TargetMode=External: {target}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                WorkbookRelationshipPart,
+                target,
+                out var themePart,
+                out var targetIssue))
+        {
+            issues.Add($"{relationshipLabel} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        referencedThemeParts.Add(themePart);
+
+        if (!IsWorkbookThemePart(themePart))
+            issues.Add($"{relationshipLabel} targets {themePart}, which is not an xl/theme XML part");
+
+        var themeEntry = FindPackageEntry(archive, themePart);
+        if (themeEntry is null)
+        {
+            issues.Add($"{relationshipLabel} targets missing package part {themePart}");
+            return;
+        }
+
+        if (validatedThemeParts.Add(themePart))
+            AddWorkbookThemePartIssues(archive, themePart, themeEntry, issues);
+    }
+
+    private static bool IsWorkbookThemePart(string packagePart)
+    {
+        packagePart = NormalizePackagePart(packagePart);
+        return packagePart.StartsWith("xl/theme/", StringComparison.OrdinalIgnoreCase) &&
+            packagePart.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddWorkbookThemePartIssues(
+        ZipArchive archive,
+        string themePart,
+        ZipArchiveEntry themeEntry,
+        List<string> issues)
+    {
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, themePart, ThemeContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        XDocument themeXml;
+        try
+        {
+            themeXml = LoadPackageXml(themeEntry);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Xml.XmlException)
+        {
+            issues.Add($"{themePart} is not parseable theme XML: {ex.Message}");
+            return;
+        }
+
+        var themeRoot = themeXml.Root;
+        if (themeRoot?.Name != DrawingNs + "theme")
+        {
+            issues.Add($"{themePart} has an invalid theme root element");
+            return;
+        }
+
+        AddDrawingMlChildOrderIssues(
+            $"{themePart} theme",
+            themeRoot,
+            new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["themeElements"] = 0,
+                ["objectDefaults"] = 1,
+                ["extraClrSchemeLst"] = 2,
+                ["custClrLst"] = 3,
+                ["extLst"] = 4
+            },
+            issues);
+
+        var themeElements = FindRequiredSingleDrawingMlChild(
+            themeRoot,
+            "themeElements",
+            $"{themePart} theme",
+            issues);
+        if (themeElements is null)
+            return;
+
+        AddWorkbookThemeElementsIssues(themePart, themeElements, issues);
+    }
+
+    private static void AddWorkbookThemeElementsIssues(
+        string themePart,
+        XElement themeElements,
+        List<string> issues)
+    {
+        AddDrawingMlChildOrderIssues(
+            $"{themePart} themeElements",
+            themeElements,
+            new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["clrScheme"] = 0,
+                ["fontScheme"] = 1,
+                ["fmtScheme"] = 2,
+                ["extLst"] = 3
+            },
+            issues);
+
+        var colorScheme = FindRequiredSingleDrawingMlChild(
+            themeElements,
+            "clrScheme",
+            $"{themePart} themeElements",
+            issues);
+        if (colorScheme is not null)
+            AddWorkbookThemeColorSchemeIssues(themePart, colorScheme, issues);
+
+        var fontScheme = FindRequiredSingleDrawingMlChild(
+            themeElements,
+            "fontScheme",
+            $"{themePart} themeElements",
+            issues);
+        if (fontScheme is not null)
+            AddWorkbookThemeFontSchemeIssues(themePart, fontScheme, issues);
+
+        var formatScheme = FindRequiredSingleDrawingMlChild(
+            themeElements,
+            "fmtScheme",
+            $"{themePart} themeElements",
+            issues);
+        if (formatScheme is not null)
+            AddWorkbookThemeFormatSchemeIssues(themePart, formatScheme, issues);
+    }
+
+    private static void AddWorkbookThemeColorSchemeIssues(
+        string themePart,
+        XElement colorScheme,
+        List<string> issues)
+    {
+        AddRequiredNonEmptyAttributeIssue($"{themePart} clrScheme", colorScheme, "name", issues);
+        AddDrawingMlChildOrderIssues(
+            $"{themePart} clrScheme",
+            colorScheme,
+            new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["dk1"] = 0,
+                ["lt1"] = 1,
+                ["dk2"] = 2,
+                ["lt2"] = 3,
+                ["accent1"] = 4,
+                ["accent2"] = 5,
+                ["accent3"] = 6,
+                ["accent4"] = 7,
+                ["accent5"] = 8,
+                ["accent6"] = 9,
+                ["hlink"] = 10,
+                ["folHlink"] = 11,
+                ["extLst"] = 12
+            },
+            issues);
+
+        foreach (var colorSlot in new[]
+                 {
+                     "dk1",
+                     "lt1",
+                     "dk2",
+                     "lt2",
+                     "accent1",
+                     "accent2",
+                     "accent3",
+                     "accent4",
+                     "accent5",
+                     "accent6",
+                     "hlink",
+                     "folHlink"
+                 })
+        {
+            FindRequiredSingleDrawingMlChild(colorScheme, colorSlot, $"{themePart} clrScheme", issues);
+        }
+    }
+
+    private static void AddWorkbookThemeFontSchemeIssues(
+        string themePart,
+        XElement fontScheme,
+        List<string> issues)
+    {
+        AddRequiredNonEmptyAttributeIssue($"{themePart} fontScheme", fontScheme, "name", issues);
+        AddDrawingMlChildOrderIssues(
+            $"{themePart} fontScheme",
+            fontScheme,
+            new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["majorFont"] = 0,
+                ["minorFont"] = 1,
+                ["extLst"] = 2
+            },
+            issues);
+        FindRequiredSingleDrawingMlChild(fontScheme, "majorFont", $"{themePart} fontScheme", issues);
+        FindRequiredSingleDrawingMlChild(fontScheme, "minorFont", $"{themePart} fontScheme", issues);
+    }
+
+    private static void AddWorkbookThemeFormatSchemeIssues(
+        string themePart,
+        XElement formatScheme,
+        List<string> issues)
+    {
+        AddRequiredNonEmptyAttributeIssue($"{themePart} fmtScheme", formatScheme, "name", issues);
+        AddDrawingMlChildOrderIssues(
+            $"{themePart} fmtScheme",
+            formatScheme,
+            new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["fillStyleLst"] = 0,
+                ["lnStyleLst"] = 1,
+                ["effectStyleLst"] = 2,
+                ["bgFillStyleLst"] = 3,
+                ["extLst"] = 4
+            },
+            issues);
+        FindRequiredSingleDrawingMlChild(formatScheme, "fillStyleLst", $"{themePart} fmtScheme", issues);
+        FindRequiredSingleDrawingMlChild(formatScheme, "lnStyleLst", $"{themePart} fmtScheme", issues);
+        FindRequiredSingleDrawingMlChild(formatScheme, "effectStyleLst", $"{themePart} fmtScheme", issues);
+        FindRequiredSingleDrawingMlChild(formatScheme, "bgFillStyleLst", $"{themePart} fmtScheme", issues);
+    }
+
+    private static XElement? FindRequiredSingleDrawingMlChild(
+        XElement parent,
+        string localName,
+        string description,
+        List<string> issues)
+    {
+        var children = parent.Elements(DrawingNs + localName).ToArray();
+        if (children.Length == 0)
+        {
+            issues.Add($"{description} is missing {localName}");
+            return null;
+        }
+
+        if (children.Length > 1)
+            issues.Add($"{description} has {children.Length} {localName} elements; expected one");
+
+        return children[0];
+    }
+
+    private static void AddRequiredNonEmptyAttributeIssue(
+        string description,
+        XElement element,
+        string attributeName,
+        List<string> issues)
+    {
+        if (!string.IsNullOrWhiteSpace(element.Attribute(attributeName)?.Value))
+            return;
+
+        issues.Add($"{description} has no {attributeName}");
+    }
+
+    private static void AddDrawingMlChildOrderIssues(
+        string description,
+        XElement parent,
+        IReadOnlyDictionary<string, int> expectedOrder,
+        List<string> issues)
+    {
+        var lastOrder = -1;
+        string? lastElementName = null;
+        foreach (var child in parent.Elements())
+        {
+            if (child.Name.Namespace != DrawingNs)
+            {
+                issues.Add($"{description} has unexpected child '{child.Name}'");
+                continue;
+            }
+
+            if (!expectedOrder.TryGetValue(child.Name.LocalName, out var order))
+            {
+                issues.Add($"{description} has unexpected child {child.Name.LocalName}");
+                continue;
+            }
+
+            if (order < lastOrder)
+            {
+                issues.Add($"{description} child {child.Name.LocalName} appears after {lastElementName}; expected schema order");
+                continue;
+            }
+
+            lastOrder = order;
+            lastElementName = child.Name.LocalName;
+        }
+    }
+
+    private static void ThrowInvalidWorkbookThemePackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook theme package graph: {sample}{suffix}");
     }
 
     private static void AssertSharedStringTableComplete(string xlsxPath, string label, string sourcePath)
