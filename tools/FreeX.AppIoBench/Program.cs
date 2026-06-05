@@ -81,7 +81,7 @@ internal static class Program
             $"cells={workbook.Sheets.Sum(sheet => sheet.CellCount):N0} " +
             $"warnings={openResult.LoadWarnings?.Count ?? 0} unsupported_features={openResult.FeatureReport?.Features.Count ?? 0} " +
             $"progress_updates={openProgress.Count} elapsed_ms={openStopwatch.Elapsed.TotalMilliseconds:F2} " +
-            $"allocated_bytes={openAllocatedBytes:N0}");
+            $"allocated_bytes={openAllocatedBytes:N0} {FormatLoadDiagnostics(adapter.LastLoadDiagnostics)}");
 
         WritePerf(
             options,
@@ -283,6 +283,19 @@ internal static class Program
         $"patch_changes={diagnostics.TotalPatchChangeCount} cell_changes={diagnostics.CellChangeCount} " +
         $"dimension_changes={diagnostics.DimensionChangeCount} merge_changes={diagnostics.MergeRegionChangeCount} " +
         $"hyperlink_changes={diagnostics.HyperlinkChangeCount} comment_changes={diagnostics.CommentChangeCount}";
+
+    private static string FormatLoadDiagnostics(XlsxLoadDiagnostics diagnostics) =>
+        $"load_core_ms={diagnostics.TotalElapsedMilliseconds:F2} load_core_allocated_bytes={diagnostics.TotalAllocatedBytes:N0} " +
+        $"{FormatLoadPhase("package_copy", diagnostics.PackageCopy)} " +
+        $"{FormatLoadPhase("package_metadata", diagnostics.PackageMetadata)} " +
+        $"{FormatLoadPhase("style_metadata", diagnostics.StyleMetadata)} " +
+        $"{FormatLoadPhase("sheet_xml_layout", diagnostics.SheetXmlLayout)} " +
+        $"{FormatLoadPhase("closedxml_load", diagnostics.ClosedXmlLoad)} " +
+        $"{FormatLoadPhase("workbook_materialize", diagnostics.WorkbookMaterialization)} " +
+        $"{FormatLoadPhase("source_snapshot", diagnostics.SourceSnapshot)}";
+
+    private static string FormatLoadPhase(string name, XlsxLoadPhaseDiagnostics diagnostics) =>
+        $"load_{name}_ms={diagnostics.ElapsedMilliseconds:F2} load_{name}_allocated_bytes={diagnostics.AllocatedBytes:N0}";
 
     private static void WritePerf(AppIoBenchOptions options, string line)
     {

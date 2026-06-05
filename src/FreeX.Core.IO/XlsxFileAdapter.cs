@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Linq.Expressions;
@@ -23,6 +24,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     public string Extension => ".xlsx";
     public string FormatName => "XLSX Workbook";
     internal XlsxSaveDiagnostics LastSaveDiagnostics { get; private set; } = XlsxSaveDiagnostics.NotRun;
+    internal XlsxLoadDiagnostics LastLoadDiagnostics { get; private set; } = XlsxLoadDiagnostics.NotRun;
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
         new(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
@@ -56,74 +58,96 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         out XlsxFeatureReport? featureReport)
     {
         featureReport = null;
-        var loadPackage = CreateLoadPackageStream(stream);
+        LastLoadDiagnostics = XlsxLoadDiagnostics.NotRun;
+        var totalAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+        var totalStopwatch = Stopwatch.StartNew();
+        var (loadPackage, packageCopyDiagnostics) = MeasureLoadPhase(() => CreateLoadPackageStream(stream));
         using var packageStream = loadPackage.PackageStream;
         var packageParts = XlsxLoadPackageParts.Empty;
         var workbookTheme = WorkbookTheme.Office;
         var workbookMetadata = XlsxWorkbookMetadataSnapshot.Default;
+        XlsxFeatureReport? inspectedFeatureReport = null;
         XDocument? stylesXml = null;
         var numberFormatCatalog = new Dictionary<int, string>();
         var pivotMetadata = XlsxPivotTableReader.PivotPackageMetadata.Empty;
         var slicerTimelineMetadata = SlicerTimelinePackageMetadata.Empty;
         IReadOnlyList<ExternalLinkModel> externalLinkMetadata = [];
         var structuredTableMetadata = StructuredTablePackageMetadata.Empty;
-        try
+        var packageMetadataDiagnostics = MeasureLoadPhase(() =>
         {
-            using var packageArchive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
-            // Reject zip-bomb / oversized packages before any decompression-heavy reads.
-            WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(packageArchive);
-            if (inspectFeatures)
-                featureReport = XlsxFeatureInspector.Inspect(packageArchive);
+            try
+            {
+                using var packageArchive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
+                // Reject zip-bomb / oversized packages before any decompression-heavy reads.
+                WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(packageArchive);
+                if (inspectFeatures)
+                    inspectedFeatureReport = XlsxFeatureInspector.Inspect(packageArchive);
 
-            packageParts = XlsxLoadPackageParts.Inspect(packageArchive);
+                packageParts = XlsxLoadPackageParts.Inspect(packageArchive);
 
-            workbookTheme = packageParts.HasTheme
-                ? XlsxWorkbookThemeReader.Load(packageArchive)
-                : WorkbookTheme.Office;
-            workbookMetadata = packageParts.HasWorkbook
-                ? XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageArchive)
-                : XlsxWorkbookMetadataSnapshot.Default;
-            stylesXml = packageParts.HasStyles
-                ? XlsxStylesheetReader.Load(packageArchive)
-                : null;
-            numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml);
-            if (packageParts.HasPivotPackageParts)
-                pivotMetadata = XlsxPivotTableReader.Load(packageArchive, numberFormatCatalog);
-            if (packageParts.HasSlicerTimelinePackageParts)
-                slicerTimelineMetadata = XlsxSlicerTimelineMetadataReader.Load(packageArchive);
-            if (packageParts.HasExternalLinks)
-                externalLinkMetadata = XlsxExternalLinkMetadataReader.Load(packageArchive);
-            if (packageParts.HasStructuredTables)
-                structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageArchive);
-        }
-        catch (InvalidDataException)
-        {
-            // Not a valid zip archive; let the ClosedXML loader produce the format error.
-        }
+                workbookTheme = packageParts.HasTheme
+                    ? XlsxWorkbookThemeReader.Load(packageArchive)
+                    : WorkbookTheme.Office;
+                workbookMetadata = packageParts.HasWorkbook
+                    ? XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageArchive)
+                    : XlsxWorkbookMetadataSnapshot.Default;
+                stylesXml = packageParts.HasStyles
+                    ? XlsxStylesheetReader.Load(packageArchive)
+                    : null;
+                numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml);
+                if (packageParts.HasPivotPackageParts)
+                    pivotMetadata = XlsxPivotTableReader.Load(packageArchive, numberFormatCatalog);
+                if (packageParts.HasSlicerTimelinePackageParts)
+                    slicerTimelineMetadata = XlsxSlicerTimelineMetadataReader.Load(packageArchive);
+                if (packageParts.HasExternalLinks)
+                    externalLinkMetadata = XlsxExternalLinkMetadataReader.Load(packageArchive);
+                if (packageParts.HasStructuredTables)
+                    structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageArchive);
+            }
+            catch (InvalidDataException)
+            {
+                // Not a valid zip archive; let the ClosedXML loader produce the format error.
+            }
+        });
+        featureReport = inspectedFeatureReport;
 
-        var indexedColors = XlsxIndexedColorPaletteMapper.Load(stylesXml);
-        var pivotTableStyleMetadata = XlsxPivotTableStyleMetadataReader.Load(stylesXml);
-        var structuredTableStyleMetadata = XlsxStructuredTableStyleMetadataReader.Load(stylesXml);
-        var xlsxCustomViews = workbookMetadata.CustomViews;
+        var (styleMetadata, styleMetadataDiagnostics) = MeasureLoadPhase(() => (
+            IndexedColors: XlsxIndexedColorPaletteMapper.Load(stylesXml),
+            PivotTableStyles: XlsxPivotTableStyleMetadataReader.Load(stylesXml),
+            StructuredTableStyles: XlsxStructuredTableStyleMetadataReader.Load(stylesXml),
+            CustomViews: workbookMetadata.CustomViews));
+        var indexedColors = styleMetadata.IndexedColors;
+        var pivotTableStyleMetadata = styleMetadata.PivotTableStyles;
+        var structuredTableStyleMetadata = styleMetadata.StructuredTableStyles;
+        var xlsxCustomViews = styleMetadata.CustomViews;
 
         packageStream.Position = 0;
-        var sheetXmlLayoutWarningCount = warnings.Count;
-        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);
-        var sheetXmlLayoutHadWarnings = warnings.Count != sheetXmlLayoutWarningCount;
-        var styleOnlyWorksheetPathsToStrip = GetClosedXmlStyleOnlyWorksheetPathsToStrip(
-            sheetXmlLayout,
-            sheetXmlLayoutHadWarnings);
-        var sanitizationHints = CreateClosedXmlLoadSanitizationHints(
-            packageParts,
-            sheetXmlLayout,
-            sheetXmlLayoutHadWarnings);
+        Dictionary<string, SheetXmlLayout> sheetXmlLayout = [];
+        var sheetXmlLayoutHadWarnings = false;
+        IReadOnlySet<string>? styleOnlyWorksheetPathsToStrip = null;
+        var sanitizationHints = default(XlsxClosedXmlLoadSanitizationHints);
+        var sheetXmlLayoutDiagnostics = MeasureLoadPhase(() =>
+        {
+            var sheetXmlLayoutWarningCount = warnings.Count;
+            sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);
+            sheetXmlLayoutHadWarnings = warnings.Count != sheetXmlLayoutWarningCount;
+            styleOnlyWorksheetPathsToStrip = GetClosedXmlStyleOnlyWorksheetPathsToStrip(
+                sheetXmlLayout,
+                sheetXmlLayoutHadWarnings);
+            sanitizationHints = CreateClosedXmlLoadSanitizationHints(
+                packageParts,
+                sheetXmlLayout,
+                sheetXmlLayoutHadWarnings);
+        });
         packageStream.Position = 0;
-        var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(
+        var (closedXmlLoad, closedXmlLoadDiagnostics) = MeasureLoadPhase(() => OpenClosedXmlWorkbookWithSanitizationFallback(
             packageStream,
             styleOnlyWorksheetPathsToStrip,
-            sanitizationHints);
+            sanitizationHints));
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
+        var materializationAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+        var materializationStopwatch = Stopwatch.StartNew();
         var worksheetsWithPreservableSourceMetadata = GetWorksheetsWithPreservableSourceMetadata(
             sheetXmlLayout,
             sheetXmlLayoutHadWarnings,
@@ -448,14 +472,54 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         }
 
         SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(
+        materializationStopwatch.Stop();
+        var materializationDiagnostics = new XlsxLoadPhaseDiagnostics(
+            materializationStopwatch.Elapsed.TotalMilliseconds,
+            GC.GetTotalAllocatedBytes(precise: true) - materializationAllocatedBefore);
+        var (sourcePackage, sourceSnapshotDiagnostics) = MeasureLoadPhase(() => XlsxSourcePackage.Capture(
             packageStream,
             workbook,
             loadPackage.CanReuseBufferForSnapshot,
             worksheetsWithPreservableSourceMetadata,
             hasUnsupportedConditionalFormatting,
             sheetXmlLayout));
+        SourcePackages.Add(workbook, sourcePackage);
+        totalStopwatch.Stop();
+        LastLoadDiagnostics = new XlsxLoadDiagnostics(
+            totalStopwatch.Elapsed.TotalMilliseconds,
+            GC.GetTotalAllocatedBytes(precise: true) - totalAllocatedBefore,
+            packageCopyDiagnostics,
+            packageMetadataDiagnostics,
+            styleMetadataDiagnostics,
+            sheetXmlLayoutDiagnostics,
+            closedXmlLoadDiagnostics,
+            materializationDiagnostics,
+            sourceSnapshotDiagnostics);
         return workbook;
+    }
+
+    private static XlsxLoadPhaseDiagnostics MeasureLoadPhase(Action action)
+    {
+        var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+        var stopwatch = Stopwatch.StartNew();
+        action();
+        stopwatch.Stop();
+        return new XlsxLoadPhaseDiagnostics(
+            stopwatch.Elapsed.TotalMilliseconds,
+            GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore);
+    }
+
+    private static (T Result, XlsxLoadPhaseDiagnostics Diagnostics) MeasureLoadPhase<T>(Func<T> action)
+    {
+        var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+        var stopwatch = Stopwatch.StartNew();
+        var result = action();
+        stopwatch.Stop();
+        return (
+            result,
+            new XlsxLoadPhaseDiagnostics(
+                stopwatch.Elapsed.TotalMilliseconds,
+                GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore));
     }
 
     private static void AddStyleOnlyRun(
