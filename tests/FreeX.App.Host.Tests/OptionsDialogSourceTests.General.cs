@@ -13,8 +13,7 @@ public sealed partial class OptionsDialogSourceTests
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "FreeXOptionsDialogTests", Guid.NewGuid().ToString("N"));
         var path = Path.Combine(tempDirectory, "options.json");
-        var previousPath = Environment.GetEnvironmentVariable(FreeXOptions.OptionsPathEnvironmentVariable);
-        Environment.SetEnvironmentVariable(FreeXOptions.OptionsPathEnvironmentVariable, path);
+        using var optionsPath = TestEnvironmentVariableScope.Set(FreeXOptions.OptionsPathEnvironmentVariable, path);
 
         try
         {
@@ -57,7 +56,6 @@ public sealed partial class OptionsDialogSourceTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable(FreeXOptions.OptionsPathEnvironmentVariable, previousPath);
             if (Directory.Exists(tempDirectory))
                 Directory.Delete(tempDirectory, recursive: true);
         }
