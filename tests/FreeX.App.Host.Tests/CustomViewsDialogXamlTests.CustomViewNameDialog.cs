@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,7 +7,7 @@ public sealed partial class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialog_ExposesKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CustomViewNameDialog.cs");
 
         source.Should().Contain("new Label { Content = UiText.Get(\"CustomViewName_NameLabel\")");
         source.Should().Contain("Target = _nameBox");
@@ -22,7 +21,7 @@ public sealed partial class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialog_FieldsExposeAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CustomViewNameDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_nameBox, UiText.Get(\"CustomViewName_NameAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_nameBox, \"CustomViewNameBox\");");
@@ -47,7 +46,7 @@ public sealed partial class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialogOpenedFromKeyboard_FocusesNameBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CustomViewNameDialog.cs");
         var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
@@ -58,7 +57,7 @@ public sealed partial class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialogBlankName_WarnsAndFocusesNameBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CustomViewNameDialog.cs");
         var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"CustomViewName_BlankNameMessage\"), Title);");
