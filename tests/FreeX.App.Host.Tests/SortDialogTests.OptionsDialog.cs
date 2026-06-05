@@ -73,7 +73,7 @@ public sealed partial class SortDialogTests
             try
             {
                 var combo = GetControl<ComboBox>(dialog, "_firstKeySortOrderBox");
-                var label = FindVisualChildren<Label>(dialog)
+                var label = WpfTestTree.FindVisualDescendants<Label>(dialog)
                     .Single(candidate => Equals(candidate.Content, "_First key sort order:"));
 
                 label.Target.Should().BeSameAs(combo);

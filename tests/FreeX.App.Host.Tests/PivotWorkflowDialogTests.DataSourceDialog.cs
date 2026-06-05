@@ -105,7 +105,7 @@ public sealed partial class PivotWorkflowDialogTests
             dialog.Show();
             try
             {
-                var picker = FindVisualChildren<Button>(dialog)
+                var picker = WpfTestTree.FindVisualDescendants<Button>(dialog)
                     .Single(button => AutomationProperties.GetName(button) == "Select PivotTable source range");
 
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -133,7 +133,7 @@ public sealed partial class PivotWorkflowDialogTests
             {
                 dialog.ApplyRangeSelection("Sales!B2:F40");
 
-                var sourceBox = FindVisualChildren<TextBox>(dialog).Single();
+                var sourceBox = WpfTestTree.FindVisualDescendants<TextBox>(dialog).Single();
                 sourceBox.Text.Should().Be("Sales!B2:F40");
                 sourceBox.SelectionLength.Should().Be("Sales!B2:F40".Length);
             }

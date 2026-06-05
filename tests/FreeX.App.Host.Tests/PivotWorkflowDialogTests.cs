@@ -1,8 +1,6 @@
-using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -33,18 +31,4 @@ public sealed partial class PivotWorkflowDialogTests
     private static T GetPrivateField<T>(object instance, string name)
         where T : class
         => DialogSourceTestSupport.GetPrivateField<T>(instance, name);
-
-    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
-        where T : DependencyObject
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T match)
-                yield return match;
-
-            foreach (var descendant in FindVisualChildren<T>(child))
-                yield return descendant;
-        }
-    }
 }
