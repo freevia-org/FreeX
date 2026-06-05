@@ -86,6 +86,9 @@ public sealed partial class FormulaAuditingServiceTests
     [Theory]
     [InlineData("\uFF11\uFF0E\uFF12\uFF13\uFF25\uFF14")]
     [InlineData("\uFF11\uFF45\uFF0D\uFF13")]
+    [InlineData("1E\u22123")]
+    [InlineData("\uFF11\uFF25\u2212\uFF13")]
+    [InlineData("'\uFF11\uFF25\u2212\uFF13")]
     [InlineData("\uFF0B \uFF11\uFF0E\uFF12\uFF25\uFF0B\uFF13")]
     [InlineData("1\uFE5223E\uFE623")]
     [InlineData("1E\uFE633")]
@@ -440,6 +443,8 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("1 234 kg")]
     [InlineData("123\uFE5245kg")]
     [InlineData("1\uFE522\uFE523")]
+    [InlineData("1\u22122")]
+    [InlineData("\uFF11\u2212\uFF12")]
     [InlineData("\u066B\u066C")]
     public void FindFormulaErrorIssues_DoesNotReturnNumberStoredAsTextForInvalidNumberText(string value)
     {
@@ -564,11 +569,14 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\uFF12/Jan/\uFF12\uFF16")]
     [InlineData("Mon \uFF11/\uFF12/\uFF12\uFF16")]
     [InlineData("Jan\uFF0F\uFF12\uFF0F\uFF12\uFF16")]
+    [InlineData("Jan \uFF12\uFF0C \uFF12\uFF16")]
     [InlineData("\uFF2A\uFF41\uFF4E \uFF12, \uFF12\uFF16")]
+    [InlineData("\uFF2A\uFF41\uFF4E \uFF12\uFF0C \uFF12\uFF16")]
     [InlineData("\uFF2A\uFF41\uFF4E\uFF0F\uFF12\uFF0F\uFF12\uFF16")]
     [InlineData("\uFF12\uFF0F\uFF2A\uFF41\uFF4E\uFF0F\uFF12\uFF16")]
     [InlineData("\uFF12\uFF16-\uFF2A\uFF41\uFF4E-\uFF12")]
     [InlineData("\uFF26\uFF52\uFF49 \uFF2A\uFF41\uFF4E \uFF12nd, \uFF12\uFF16")]
+    [InlineData("\uFF26\uFF52\uFF49\uFF0C \uFF2A\uFF41\uFF4E \uFF12\uFF0C \uFF12\uFF16")]
     public void FindFormulaErrorIssues_ReturnsFullwidthTextDatesWithTwoDigitYears(string value)
     {
         var wb = new Workbook("test");
@@ -589,8 +597,11 @@ public sealed partial class FormulaAuditingServiceTests
     [InlineData("\uFF12\uFF16/\uFF11\uFF13/\uFF12")]
     [InlineData("\uFF12\uFF16\uFF0E\uFF12\uFF0E\uFF13\uFF10")]
     [InlineData("Jan \uFF13\uFF12, \uFF12\uFF16")]
+    [InlineData("Jan \uFF13\uFF12\uFF0C \uFF12\uFF16")]
     [InlineData("\uFF2A\uFF41\uFF4E \uFF13\uFF12, \uFF12\uFF16")]
+    [InlineData("\uFF2A\uFF41\uFF4E \uFF13\uFF12\uFF0C \uFF12\uFF16")]
     [InlineData("\uFF2A\uFF41\uFF58 \uFF12, \uFF12\uFF16")]
+    [InlineData("\uFF2D\uFF4F\uFF4E\uFF0C \uFF2A\uFF41\uFF58 \uFF12\uFF0C \uFF12\uFF16")]
     [InlineData("\u30B8\u30E3 \uFF12, \uFF12\uFF16")]
     [InlineData("\uFF11\uFF0F\uFF0F\uFF12\uFF0F\uFF12\uFF16")]
     [InlineData("\uFF11\uFF12\uFF13")]
