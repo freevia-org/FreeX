@@ -38,6 +38,40 @@ public sealed partial class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void CommitEdit_EnablesTitleBarUndoButton()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.UndoQatEnabled.Should().BeFalse();
+
+            harness.SetFormulaBarText("fresh value");
+            harness.CommitEdit().Should().BeTrue();
+
+            harness.UndoQatEnabled.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void CommandStackChange_EnablesTitleBarUndoButtonAfterDirectCommandBusMutation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var address = new CellAddress(harness.CurrentSheetId, 1, 1);
+
+            harness.UndoQatEnabled.Should().BeFalse();
+
+            harness.ExecuteCommandDirectly(new EditCellsCommand(
+                harness.CurrentSheetId,
+                [(address, Cell.FromValue(new TextValue("direct change")))]));
+
+            harness.UndoQatEnabled.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void InsertedSheet_RebindsActiveCellToCurrentSheet()
     {
         StaTestRunner.Run(() =>
