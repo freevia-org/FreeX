@@ -24,6 +24,24 @@ public static partial class BuiltInFunctions
         _ => throw new FormulaEvalException("#VALUE!", $"Cannot convert {v} to boolean")
     };
 
+    // Coerces a DIRECT argument to AND/OR/XOR the way Excel does: numbers/booleans by value and a NUMERIC
+    // string by its value (<>0 = TRUE). Non-numeric text — including the words "TRUE"/"FALSE" — and other
+    // inputs that are not valid direct logical values (e.g. a direct blank) return false, so the caller
+    // yields #VALUE!. (Text inside a referenced range is ignored separately, not via this method.)
+    internal static bool TryDirectLogicalBool(ScalarValue value, out bool result)
+    {
+        result = false;
+        switch (value)
+        {
+            case BoolValue b: result = b.Value; return true;
+            case NumberValue n: result = n.Value != 0.0; return true;
+            case DateTimeValue d: result = d.Value != 0.0; return true;
+            case DirectTextLiteralValue t when ExcelTextNumberParser.TryParse(t.Value, out var dn): result = dn != 0.0; return true;
+            case TextValue t when ExcelTextNumberParser.TryParse(t.Value, out var tn): result = tn != 0.0; return true;
+            default: return false;
+        }
+    }
+
     internal static string ToText(ScalarValue v) => v switch
     {
         DirectTextLiteralValue t => t.Value,

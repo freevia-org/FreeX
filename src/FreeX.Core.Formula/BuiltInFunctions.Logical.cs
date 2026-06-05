@@ -46,9 +46,9 @@ public static partial class BuiltInFunctions
                 else if (refError is not null) return refError;
                 continue;
             }
-            if (arg is TextValue or BlankValue) return ErrorValue.Value;
+            if (!TryDirectLogicalBool(arg, out var direct)) return ErrorValue.Value;
             hadUsableValue = true;
-            if (!ToBool(arg)) return new BoolValue(false);
+            if (!direct) return new BoolValue(false);
         }
         return hadUsableValue ? new BoolValue(true) : ErrorValue.Value;
     }
@@ -69,9 +69,9 @@ public static partial class BuiltInFunctions
                 else if (refError is not null) return refError;
                 continue;
             }
-            if (arg is TextValue or BlankValue) return ErrorValue.Value;
+            if (!TryDirectLogicalBool(arg, out var direct)) return ErrorValue.Value;
             hadUsableValue = true;
-            if (ToBool(arg)) return new BoolValue(true);
+            if (direct) return new BoolValue(true);
         }
         return hadUsableValue ? new BoolValue(false) : ErrorValue.Value;
     }
