@@ -155,6 +155,55 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void SmallRibbonMenuButtonDropdownZoneOnlyCoversChevronLane()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var createContent = typeof(MainWindow)
+                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
+            var ensureChevron = typeof(MainWindow)
+                .GetMethod("EnsureRibbonDropdownChevron", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "EnsureRibbonDropdownChevron");
+            var content = (Grid)createContent.Invoke(null, ["Sort & Filter", "Sort & Filter", RibbonCommandLayoutKind.Small])!;
+            var button = new Button
+            {
+                Content = content,
+                Padding = new Thickness(4, 2, 4, 2),
+                BorderThickness = new Thickness(0),
+                Width = 128,
+                Height = 24,
+                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left
+            };
+
+            ensureChevron.Invoke(null, [button]);
+            var window = ShowStandaloneRibbonButton(button, 128, 24);
+            try
+            {
+                var chevron = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
+                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
+                    .OfType<FrameworkElement>()
+                    .Distinct()
+                    .Single(RibbonMetadata.IsDropdownChevron);
+                var chevronBounds = chevron.TransformToAncestor(button)
+                    .TransformBounds(new Rect(0, 0, chevron.ActualWidth, chevron.ActualHeight));
+                var dropdownBounds = GetRibbonDropdownZoneBounds(button);
+
+                dropdownBounds.Width.Should().BeApproximately(14, 0.5);
+                dropdownBounds.Height.Should().BeApproximately(button.ActualHeight, 0.5);
+                dropdownBounds.Left.Should().BeLessThanOrEqualTo(chevronBounds.Left + 0.5);
+                dropdownBounds.Right.Should().BeGreaterThanOrEqualTo(chevronBounds.Right - 0.5);
+                dropdownBounds.Right.Should().BeLessThan(button.ActualWidth - 8,
+                    "the dropdown lane should not stretch across trailing empty button chrome");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void IconOnlyRibbonMenuButtonDropdownZoneStartsAfterCommandIcon()
     {
         StaTestRunner.Run(() =>
