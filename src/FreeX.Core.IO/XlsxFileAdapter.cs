@@ -1043,32 +1043,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         bool removeUnsupportedConditionalFormatting,
         bool removeAllConditionalFormatting = false)
     {
-        var styleOptimizedPackage = styleOnlyWorksheetPathsToStrip is not { Count: 0 }
-            ? XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)
-            : packageStream;
-        try
-        {
-            var canMutateStyleOptimizedPackage = !ReferenceEquals(styleOptimizedPackage, packageStream);
-            var sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(
-                styleOptimizedPackage,
-                removeUnsupportedConditionalFormatting,
-                removeAllConditionalFormatting,
-                sanitizationHints,
-                mutateSourcePackage: canMutateStyleOptimizedPackage);
-            if (!ReferenceEquals(sanitizedPackage, styleOptimizedPackage) &&
-                !ReferenceEquals(styleOptimizedPackage, packageStream))
-            {
-                styleOptimizedPackage.Dispose();
-            }
-
-            return sanitizedPackage;
-        }
-        catch
-        {
-            if (!ReferenceEquals(styleOptimizedPackage, packageStream))
-                styleOptimizedPackage.Dispose();
-            throw;
-        }
+        return XlsxClosedXmlLoadPackageSanitizer.Create(
+            packageStream,
+            styleOnlyWorksheetPathsToStrip,
+            removeUnsupportedConditionalFormatting,
+            removeAllConditionalFormatting,
+            sanitizationHints);
     }
 
     private static XlsxLoadPhaseDiagnostics AddLoadPhaseDiagnostics(

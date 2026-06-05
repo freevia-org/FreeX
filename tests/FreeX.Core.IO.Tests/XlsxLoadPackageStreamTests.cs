@@ -207,6 +207,61 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void ClosedXmlLoadSanitizer_FusesStyleOnlyStripAndDrawingCleanup()
+    {
+        using var package = CreatePackageWithDrawingReferences();
+        var hints = new XlsxClosedXmlLoadSanitizationHints(
+            HasPivotPackageMetadata: false,
+            HasChartExChartParts: false,
+            HasDrawingPackageParts: true,
+            HasConditionalFormattingBlocks: false,
+            HasUnsupportedConditionalFormattingBlocks: false,
+            HasWorksheetDynamicFilters: false);
+
+        using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
+            package,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "xl/worksheets/sheet1.xml"
+            },
+            removeUnsupportedConditionalFormatting: false,
+            removeAllConditionalFormatting: false,
+            hints);
+
+        sanitized.Should().NotBeSameAs(package);
+        ReadWorksheetCellReferences(sanitized, "xl/worksheets/sheet1.xml").Should().Equal("A1", "B1");
+        using var archive = new ZipArchive(sanitized, ZipArchiveMode.Read, leaveOpen: true);
+        archive.GetEntry("xl/drawings/drawing1.xml").Should().BeNull();
+        archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels").Should().BeNull();
+        archive.GetEntry("xl/charts/chart1.xml").Should().BeNull();
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull();
+        archive.GetEntry("xl/media/image1.png").Should().NotBeNull();
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        worksheetXml.Root!.Elements(worksheetNs + "drawing").Should().BeEmpty();
+        worksheetXml.Root!.Elements(worksheetNs + "legacyDrawing").Should().ContainSingle();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relsXml = LoadPackageXml(archive, "xl/worksheets/_rels/sheet1.xml.rels");
+        relsXml.Root!.Elements(packageRelNs + "Relationship")
+            .Select(relationship => relationship.Attribute("Target")?.Value)
+            .Should()
+            .NotContain("../drawings/drawing1.xml");
+        relsXml.Root!.Elements(packageRelNs + "Relationship")
+            .Select(relationship => relationship.Attribute("Target")?.Value)
+            .Should()
+            .Contain("../drawings/vmlDrawing1.vml");
+
+        XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
+        contentTypesXml.Root!.Elements(contentTypesNs + "Override")
+            .Select(element => element.Attribute("PartName")?.Value)
+            .Should()
+            .NotContain(["/xl/drawings/drawing1.xml", "/xl/charts/chart1.xml"]);
+    }
+
+    [Fact]
     public void ClosedXmlLoadSanitizer_CanMutateOwnedTransientPackageWithoutSecondCopy()
     {
         using var package = CreatePackageWithDrawingReferences();
@@ -526,7 +581,7 @@ public sealed class XlsxLoadPackageStreamTests
                 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
                   <sheetData>
-                    <row r="1"><c r="A1"><v>1</v></c></row>
+                    <row r="1"><c r="A1"><v>1</v></c><c r="B1" s="1"/><c r="C1" s="1"/></row>
                   </sheetData>
                   <drawing r:id="rIdDrawing"/>
                   <legacyDrawing r:id="rIdVml"/>
