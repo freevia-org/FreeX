@@ -12,7 +12,8 @@ public sealed class ExcelCachedFormulaFixtureTests
 {
     public static IEnumerable<object[]> CachedFormulaFixtureFiles()
     {
-        var directory = FindWorkspacePath("test-corpus", "regressions", "formula-cached");
+        var directory = WorkspacePathLocator.FindDirectoryFromSourceOrCurrentDirectory(
+            ["test-corpus", "regressions", "formula-cached"]);
         if (!Directory.Exists(directory))
             yield break;
 
@@ -235,7 +236,4 @@ public sealed class ExcelCachedFormulaFixtureTests
         using var writer = new StreamWriter(entry.Open());
         writer.Write(XDocument.Parse(xml).ToString(SaveOptions.DisableFormatting));
     }
-
-    private static string FindWorkspacePath(params string[] relativeParts)
-        => WorkspacePathLocator.FindDirectoryFromSourceOrCurrentDirectory(relativeParts);
 }
