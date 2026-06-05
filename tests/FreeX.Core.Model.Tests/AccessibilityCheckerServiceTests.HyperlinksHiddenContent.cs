@@ -103,14 +103,22 @@ public sealed partial class AccessibilityCheckerServiceTests
     [InlineData("   ")]
     [InlineData("click here")]
     [InlineData("Click Here")]
+    [InlineData("continue")]
+    [InlineData("continue reading")]
+    [InlineData("details")]
     [InlineData("here")]
     [InlineData("link")]
     [InlineData("more")]
+    [InlineData("more info")]
     [InlineData("read more")]
     [InlineData("learn more")]
     [InlineData("download")]
     [InlineData("download now")]
+    [InlineData("go")]
+    [InlineData("go to")]
     [InlineData("open")]
+    [InlineData("see more")]
+    [InlineData("source")]
     [InlineData("view")]
     [InlineData("visit website")]
     public void FindIssues_FlagsHyperlinksWithBlankOrGenericDisplayText(string displayText)
@@ -126,6 +134,24 @@ public sealed partial class AccessibilityCheckerServiceTests
 
         issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl)
             .Which.Location.Should().Be("A1");
+    }
+
+    [Theory]
+    [InlineData("Report details for Q4")]
+    [InlineData("More info about Q4 revenue")]
+    [InlineData("Continue reading the migration guide")]
+    [InlineData("Source data workbook")]
+    public void FindIssues_DoesNotFlagDescriptiveHyperlinkDisplayTextThatContainsGenericWords(string displayText)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Links");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.SetCell(address, new TextValue(displayText));
+        sheet.Hyperlinks[address] = "https://example.com/report";
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl);
     }
 
     [Theory]
