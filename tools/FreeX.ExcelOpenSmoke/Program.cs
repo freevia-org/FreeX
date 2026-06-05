@@ -456,6 +456,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookFileSharingMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookViewMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFunctionGroupsMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileRecoveryMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -684,6 +685,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookFileSharingMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookViewMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFunctionGroupsMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileRecoveryMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3562,6 +3564,21 @@ internal static class ExcelOpenSmoke
         issues.Add($"{WorkbookPart} {description} has invalid {attributeName} value '{value}'");
     }
 
+    private static void AddOptionalWorkbookMetadataIntIssue(
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) ||
+            int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+        {
+            return;
+        }
+
+        issues.Add($"{WorkbookPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
     private static void AddOptionalWorkbookMetadataNonNegativeDoubleIssue(
         string description,
         string attributeName,
@@ -3902,6 +3919,246 @@ internal static class ExcelOpenSmoke
 
     private static bool IsKnownWorkbookProtectionBooleanAttribute(string name) =>
         name is "lockStructure" or "lockWindows" or "lockRevision";
+
+    private static void AssertWorkbookViewMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookViewMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookViewMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookViewMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var bookViewElements = root.Elements(SpreadsheetNs + "bookViews").ToArray();
+        if (bookViewElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {bookViewElements.Length} bookViews elements; expected at most one");
+
+        foreach (var bookViews in bookViewElements.Select((element, index) => new WorkbookBookViewsReference(index + 1, element)))
+        {
+            AddWorkbookBookViewsIssues(root, bookViews, issues);
+        }
+
+        var customWorkbookViewElements = root.Elements(SpreadsheetNs + "customWorkbookViews").ToArray();
+        if (customWorkbookViewElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {customWorkbookViewElements.Length} customWorkbookViews elements; expected at most one");
+
+        foreach (var customWorkbookViews in customWorkbookViewElements.Select((element, index) => new WorkbookCustomWorkbookViewsReference(index + 1, element)))
+        {
+            AddWorkbookCustomWorkbookViewsIssues(root, customWorkbookViews, issues);
+        }
+    }
+
+    private static void AddWorkbookBookViewsIssues(
+        XElement workbookRoot,
+        WorkbookBookViewsReference bookViewsReference,
+        List<string> issues)
+    {
+        var bookViews = bookViewsReference.Element;
+        var description = $"bookViews #{bookViewsReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            bookViews,
+            description,
+            [
+                "sheets",
+                "functionGroups",
+                "externalReferences",
+                "definedNames",
+                "calcPr",
+                "oleSize",
+                "customWorkbookViews",
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in bookViews.Elements().Where(element => element.Name != SpreadsheetNs + "workbookView"))
+        {
+            issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected workbookView entries only");
+        }
+
+        var workbookViewElements = bookViews.Elements(SpreadsheetNs + "workbookView").ToArray();
+        if (workbookViewElements.Length == 0)
+            issues.Add($"{WorkbookPart} {description} has no workbookView entries");
+
+        foreach (var workbookView in workbookViewElements.Select((element, index) => new WorkbookViewReference(index + 1, element)))
+        {
+            AddWorkbookViewIssues(description, workbookView, issues);
+        }
+    }
+
+    private static void AddWorkbookViewIssues(
+        string bookViewsDescription,
+        WorkbookViewReference workbookViewReference,
+        List<string> issues)
+    {
+        var workbookView = workbookViewReference.Element;
+        var description = $"{bookViewsDescription} workbookView #{workbookViewReference.Ordinal}";
+
+        foreach (var attribute in workbookView.Attributes().Where(attribute => IsKnownWorkbookViewBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        var visibility = workbookView.Attribute("visibility")?.Value;
+        if (!string.IsNullOrWhiteSpace(visibility) && !IsKnownWorkbookViewVisibility(visibility))
+            issues.Add($"{WorkbookPart} {description} has invalid visibility value '{visibility}'");
+
+        AddOptionalWorkbookMetadataIntIssue(description, "xWindow", workbookView.Attribute("xWindow")?.Value, issues);
+        AddOptionalWorkbookMetadataIntIssue(description, "yWindow", workbookView.Attribute("yWindow")?.Value, issues);
+
+        foreach (var attributeName in new[]
+                 {
+                     "windowWidth",
+                     "windowHeight",
+                     "tabRatio",
+                     "firstSheet",
+                     "activeTab"
+                 })
+        {
+            AddOptionalWorkbookMetadataUnsignedIntIssue(description, attributeName, workbookView.Attribute(attributeName)?.Value, issues);
+        }
+
+        if (workbookView.Elements().Any())
+            issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool IsKnownWorkbookViewBooleanAttribute(string name) =>
+        name is "minimized" or
+            "showHorizontalScroll" or
+            "showVerticalScroll" or
+            "showSheetTabs" or
+            "autoFilterDateGrouping";
+
+    private static bool IsKnownWorkbookViewVisibility(string value) =>
+        value.Trim() is "visible" or "hidden" or "veryHidden";
+
+    private static void AddWorkbookCustomWorkbookViewsIssues(
+        XElement workbookRoot,
+        WorkbookCustomWorkbookViewsReference customWorkbookViewsReference,
+        List<string> issues)
+    {
+        var customWorkbookViews = customWorkbookViewsReference.Element;
+        var description = $"customWorkbookViews #{customWorkbookViewsReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            customWorkbookViews,
+            description,
+            [
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var unexpectedChild in customWorkbookViews.Elements().Where(element => element.Name != SpreadsheetNs + "customWorkbookView"))
+        {
+            issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}; expected customWorkbookView entries only");
+        }
+
+        var customWorkbookViewElements = customWorkbookViews.Elements(SpreadsheetNs + "customWorkbookView").ToArray();
+        if (customWorkbookViewElements.Length == 0)
+            issues.Add($"{WorkbookPart} {description} has no customWorkbookView entries");
+
+        foreach (var customWorkbookView in customWorkbookViewElements.Select((element, index) => new WorkbookCustomWorkbookViewReference(index + 1, element)))
+        {
+            AddWorkbookCustomWorkbookViewIssues(description, customWorkbookView, issues);
+        }
+    }
+
+    private static void AddWorkbookCustomWorkbookViewIssues(
+        string customWorkbookViewsDescription,
+        WorkbookCustomWorkbookViewReference customWorkbookViewReference,
+        List<string> issues)
+    {
+        var customWorkbookView = customWorkbookViewReference.Element;
+        var description = $"{customWorkbookViewsDescription} customWorkbookView #{customWorkbookViewReference.Ordinal}";
+
+        if (string.IsNullOrWhiteSpace(customWorkbookView.Attribute("name")?.Value))
+            issues.Add($"{WorkbookPart} {description} has no name");
+
+        var guid = customWorkbookView.Attribute("guid")?.Value;
+        if (string.IsNullOrWhiteSpace(guid))
+            issues.Add($"{WorkbookPart} {description} has no guid");
+        else if (!Guid.TryParse(guid, out _))
+            issues.Add($"{WorkbookPart} {description} has invalid guid value '{guid}'");
+
+        foreach (var attribute in customWorkbookView.Attributes().Where(attribute => IsKnownCustomWorkbookViewBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        foreach (var attributeName in new[]
+                 {
+                     "mergeInterval",
+                     "activeSheetId",
+                     "windowWidth",
+                     "windowHeight",
+                     "tabRatio"
+                 })
+        {
+            AddOptionalWorkbookMetadataUnsignedIntIssue(description, attributeName, customWorkbookView.Attribute(attributeName)?.Value, issues);
+        }
+
+        AddOptionalWorkbookMetadataIntIssue(description, "xWindow", customWorkbookView.Attribute("xWindow")?.Value, issues);
+        AddOptionalWorkbookMetadataIntIssue(description, "yWindow", customWorkbookView.Attribute("yWindow")?.Value, issues);
+
+        var showObjects = customWorkbookView.Attribute("showObjects")?.Value;
+        if (!string.IsNullOrWhiteSpace(showObjects) && !IsKnownWorkbookPropertiesShowObjectsValue(showObjects))
+            issues.Add($"{WorkbookPart} {description} has invalid showObjects value '{showObjects}'");
+
+        foreach (var unexpectedChild in customWorkbookView.Elements().Where(element => element.Name != SpreadsheetNs + "extLst"))
+        {
+            issues.Add($"{WorkbookPart} {description} has unexpected child element {unexpectedChild.Name.LocalName}");
+        }
+    }
+
+    private static bool IsKnownCustomWorkbookViewBooleanAttribute(string name) =>
+        name is "autoUpdate" or
+            "changesSavedWin" or
+            "onlySync" or
+            "personalView" or
+            "includePrintSettings" or
+            "includeHiddenRowCol" or
+            "maximized" or
+            "minimized" or
+            "showHorizontalScroll" or
+            "showVerticalScroll" or
+            "showSheetTabs" or
+            "showFormulaBar" or
+            "showStatusbar";
+
+    private static void ThrowInvalidWorkbookViewMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook view metadata: {sample}{suffix}");
+    }
 
     private static void AssertWorkbookFunctionGroupsMetadataComplete(string xlsxPath, string label, string sourcePath)
     {
@@ -13164,6 +13421,22 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookProtectionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookBookViewsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookViewReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookCustomWorkbookViewsReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookCustomWorkbookViewReference(
         int Ordinal,
         XElement Element);
 
