@@ -348,6 +348,33 @@ public sealed partial class XlsxPackageMetadataMergerTests
         return package;
     }
 
+    private static MemoryStream CreatePackageWithMalformedCorePropertiesRelationship()
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                </Types>
+                """);
+            WritePackageEntry(archive, "_rels/.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdCoreTypo"
+                                Type="http://schemas.openxmlformats.org/package/2006/relationships/meatadata/core-properties"
+                                Target="/docProps/core.xml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(archive, "docProps/core.xml", """
+                <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"/>
+                """);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
     private static MemoryStream CreatePackageWithExistingWorksheetRelationships()
     {
         var package = new MemoryStream();

@@ -117,33 +117,23 @@ internal static class XlsxDocumentPropertiesPreserver
         var hasPart = archive.GetEntry(partName) is not null;
         var relationships = relationshipsXml.Root!
             .Elements(relationshipNs + "Relationship")
-            .Where(relationship => string.Equals(
-                relationship.Attribute("Type")?.Value?.Trim(),
-                relationshipType,
-                StringComparison.OrdinalIgnoreCase))
+            .Where(relationship =>
+                IsRelationshipType(relationship, relationshipType) ||
+                TargetsInternalPart(relationship, partName))
             .ToList();
 
         XElement? canonicalRelationship = null;
         foreach (var relationship in relationships)
         {
-            if (!hasPart)
+            var target = relationship.Attribute("Target")?.Value?.Trim();
+            var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+            var targetsCanonicalPart = TargetsInternalPart(relationship, partName);
+            if (!hasPart || !IsRelationshipType(relationship, relationshipType))
             {
                 relationship.Remove();
                 changed = true;
                 continue;
             }
-
-            var target = relationship.Attribute("Target")?.Value?.Trim();
-            var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
-            var targetsCanonicalPart =
-                string.IsNullOrWhiteSpace(targetMode) ||
-                string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase);
-            targetsCanonicalPart = targetsCanonicalPart &&
-                !string.IsNullOrWhiteSpace(target) &&
-                string.Equals(
-                    XlsxPackagePath.ResolveRelationshipTarget("", target),
-                    partName,
-                    StringComparison.OrdinalIgnoreCase);
 
             if (targetsCanonicalPart && canonicalRelationship is null)
             {
@@ -176,6 +166,29 @@ internal static class XlsxDocumentPropertiesPreserver
             new XAttribute("Type", relationshipType),
             new XAttribute("Target", partName)));
         return true;
+    }
+
+    private static bool IsRelationshipType(XElement relationship, string relationshipType) =>
+        string.Equals(
+            relationship.Attribute("Type")?.Value?.Trim(),
+            relationshipType,
+            StringComparison.OrdinalIgnoreCase);
+
+    private static bool TargetsInternalPart(XElement relationship, string partName)
+    {
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var target = relationship.Attribute("Target")?.Value?.Trim();
+        return !string.IsNullOrWhiteSpace(target) &&
+               string.Equals(
+                   XlsxPackagePath.ResolveRelationshipTarget("", target),
+                   partName,
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool RemoveCorePropertiesServiceContentTypes(ZipArchive archive)

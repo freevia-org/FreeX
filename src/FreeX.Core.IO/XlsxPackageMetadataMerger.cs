@@ -125,6 +125,7 @@ internal static class XlsxPackageMetadataMerger
     {
         XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         var targetIndex = ArchiveEntryIndex.Create(targetArchive);
+        var internalRelationshipTypesByTarget = BuildInternalRelationshipTypesByTarget(targetArchive, relationshipNs);
 
         foreach (var sourceEntry in sourceArchive.Entries.Where(entry =>
                      entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
@@ -143,6 +144,7 @@ internal static class XlsxPackageMetadataMerger
                     targetIndex,
                     generatedEntriesBeforeMerge,
                     excludedSourceParts,
+                    internalRelationshipTypesByTarget,
                     relationshipNs,
                     out var relationshipsChanged);
                 if (filteredRelationships is null)
@@ -181,7 +183,11 @@ internal static class XlsxPackageMetadataMerger
                         sourceRelationship,
                         targetIndex,
                         generatedEntriesBeforeMerge,
-                        excludedSourceParts))
+                        excludedSourceParts) ||
+                    HasConflictingInternalRelationshipType(
+                        sourceEntry.FullName,
+                        sourceRelationship,
+                        internalRelationshipTypesByTarget))
                     continue;
 
                 if (!existingRelationships.Add(RelationshipSignature(sourceRelationship)))
@@ -195,6 +201,7 @@ internal static class XlsxPackageMetadataMerger
                 var copiedId = copy.Attribute("Id")?.Value;
                 if (!string.IsNullOrWhiteSpace(copiedId))
                     existingIds.Add(copiedId);
+                TrackInternalRelationshipType(sourceEntry.FullName, copy, internalRelationshipTypesByTarget);
                 changed = true;
             }
 
@@ -208,6 +215,7 @@ internal static class XlsxPackageMetadataMerger
         ArchiveEntryIndex targetIndex,
         IReadOnlySet<string> generatedEntriesBeforeMerge,
         IReadOnlySet<string>? excludedSourceParts,
+        Dictionary<string, HashSet<string>> internalRelationshipTypesByTarget,
         XNamespace relationshipNs,
         out bool changed)
     {
@@ -228,7 +236,11 @@ internal static class XlsxPackageMetadataMerger
                     sourceRelationship,
                     targetIndex,
                     generatedEntriesBeforeMerge,
-                    excludedSourceParts))
+                    excludedSourceParts) ||
+                HasConflictingInternalRelationshipType(
+                    sourceEntry.FullName,
+                    sourceRelationship,
+                    internalRelationshipTypesByTarget))
             {
                 changed = true;
                 continue;
@@ -252,6 +264,7 @@ internal static class XlsxPackageMetadataMerger
             var copiedId = copy.Attribute("Id")?.Value;
             if (!string.IsNullOrWhiteSpace(copiedId))
                 existingIds.Add(copiedId);
+            TrackInternalRelationshipType(sourceEntry.FullName, copy, internalRelationshipTypesByTarget);
         }
 
         return targetXml.Root!.Elements(relationshipNs + "Relationship").Any() && changed
@@ -278,6 +291,27 @@ internal static class XlsxPackageMetadataMerger
     private static bool IsPackageMetadataEntry(string entryName) =>
         string.Equals(entryName, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
         entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+
+    private static Dictionary<string, HashSet<string>> BuildInternalRelationshipTypesByTarget(
+        ZipArchive archive,
+        XNamespace relationshipNs)
+    {
+        var result = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var relationshipEntry in archive.Entries.Where(entry =>
+                     entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+        {
+            var xml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
+            foreach (var relationship in xml.Root?.Elements(relationshipNs + "Relationship") ?? [])
+            {
+                if (!IsStructurallyValidPackageRelationship(relationship))
+                    continue;
+
+                TrackInternalRelationshipType(relationshipEntry.FullName, relationship, result);
+            }
+        }
+
+        return result;
+    }
 
     private static bool TryNormalizeCopyableEntryName(string entryName, out string normalized)
     {
@@ -350,10 +384,60 @@ internal static class XlsxPackageMetadataMerger
         var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
         if (IsExcludedSourcePart(targetPart, excludedSourceParts))
             return false;
+        if (IsDocumentPropertyPart(targetPart))
+            return false;
 
         return !string.IsNullOrWhiteSpace(targetPart) &&
                !generatedEntriesBeforeMerge.Contains(targetPart) &&
                targetIndex.Contains(targetPart);
+    }
+
+    private static bool IsDocumentPropertyPart(string targetPart) =>
+        string.Equals(targetPart, "docProps/core.xml", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(targetPart, "docProps/app.xml", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(targetPart, "docProps/custom.xml", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasConflictingInternalRelationshipType(
+        string relationshipPartPath,
+        XElement relationship,
+        Dictionary<string, HashSet<string>> internalRelationshipTypesByTarget)
+    {
+        var targetPart = ResolveInternalRelationshipTarget(relationshipPartPath, relationship);
+        if (string.IsNullOrWhiteSpace(targetPart))
+            return false;
+
+        return internalRelationshipTypesByTarget.TryGetValue(targetPart, out var existingTypes) &&
+               existingTypes.Count > 0 &&
+               !existingTypes.Contains(NormalizeRelationshipType(relationship));
+    }
+
+    private static void TrackInternalRelationshipType(
+        string relationshipPartPath,
+        XElement relationship,
+        Dictionary<string, HashSet<string>> internalRelationshipTypesByTarget)
+    {
+        var targetPart = ResolveInternalRelationshipTarget(relationshipPartPath, relationship);
+        if (string.IsNullOrWhiteSpace(targetPart))
+            return;
+
+        if (!internalRelationshipTypesByTarget.TryGetValue(targetPart, out var relationshipTypes))
+        {
+            relationshipTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            internalRelationshipTypesByTarget.Add(targetPart, relationshipTypes);
+        }
+
+        relationshipTypes.Add(NormalizeRelationshipType(relationship));
+    }
+
+    private static string ResolveInternalRelationshipTarget(string relationshipPartPath, XElement relationship)
+    {
+        if (IsExternalRelationship(relationship))
+            return "";
+
+        var target = NormalizeRelationshipTarget(relationship);
+        return string.IsNullOrWhiteSpace(target)
+            ? ""
+            : XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
     }
 
     private static bool IsStructurallyValidPackageRelationship(XElement relationship)

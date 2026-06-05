@@ -218,4 +218,26 @@ public sealed partial class XlsxPackageMetadataMergerTests
             .Should()
             .NotContain("http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties");
     }
+
+    [Fact]
+    public void MergeRelationshipParts_SkipsMalformedCorePropertiesRelationshipsByTarget()
+    {
+        using var sourcePackage = CreatePackageWithMalformedCorePropertiesRelationship();
+        using var targetPackage = CreatePackageWithExistingRootRelationships();
+        using var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var targetArchive = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
+
+        targetArchive.GetEntry("docProps/core.xml").Should().NotBeNull();
+
+        var relsXml = LoadXml(targetArchive.GetEntry("_rels/.rels")!);
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        relsXml.Root!
+            .Elements(relationshipNs + "Relationship")
+            .Select(element => element.Attribute("Type")?.Value.Trim())
+            .Should()
+            .NotContain("http://schemas.openxmlformats.org/package/2006/relationships/meatadata/core-properties");
+    }
 }

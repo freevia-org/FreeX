@@ -297,6 +297,12 @@ public sealed class XlsxFileAdapterFormatTests
         var freshSaveReturn = savePostProcessingSource.IndexOf(
             "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            NormalizeStylesheetForSchema();\n            NormalizeWorkbookForSchema();\n            return;\n        }",
             StringComparison.Ordinal);
+        if (freshSaveReturn < 0)
+        {
+            freshSaveReturn = savePostProcessingSource.IndexOf(
+                "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            NormalizeStylesheetForSchema();\n            NormalizeDocumentPropertiesPackageGraph();\n            NormalizeWorkbookForSchema();\n            return;\n        }",
+                StringComparison.Ordinal);
+        }
         var sourceReplay = savePostProcessingSource.IndexOf(
             "var sourceParts = PreserveSourcePackageParts(workbook, packageStream);",
             StringComparison.Ordinal);
