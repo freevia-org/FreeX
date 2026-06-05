@@ -694,6 +694,80 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ParentUrlPathSegmentTitle_TitleizesDecodedPenultimateSegment()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/catalog/bike-deals/road-bike.html", "Bike Deals"),
+                ("https://northwind.example/store/trail_helmets/trail-helmet.html", "Trail Helmets")
+            ],
+            ["https://adatum.example/shop/powder-skis/powder-ski.html"]);
+
+        result.Should().BeEquivalentTo(["Powder Skis"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FirstUrlPathSegmentTitle_TitleizesDecodedLeadingSegment()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/spring-catalog/bikes/road-bike.html", "Spring Catalog"),
+                ("https://northwind.example/helmet_store/helmets/trail-helmet.html", "Helmet Store")
+            ],
+            ["https://adatum.example/ski-shop/skis/powder-ski.html"]);
+
+        result.Should().BeEquivalentTo(["Ski Shop"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlPathSegmentTitle_TitleizesPercentDecodedSpaces()
+    {
+        var parentResult = FlashFillService.Fill(
+            [
+                ("https://contoso.example/catalog/bike%20deals/road-bike.html", "Bike Deals"),
+                ("https://northwind.example/store/trail%20helmets/trail-helmet.html", "Trail Helmets")
+            ],
+            ["https://adatum.example/shop/powder%20skis/powder-ski.html"]);
+
+        parentResult.Should().BeEquivalentTo(["Powder Skis"], o => o.WithStrictOrdering());
+
+        var firstResult = FlashFillService.Fill(
+            [
+                ("https://contoso.example/spring%20catalog/bikes/road-bike.html", "Spring Catalog"),
+                ("https://northwind.example/helmet%20store/helmets/trail-helmet.html", "Helmet Store")
+            ],
+            ["https://adatum.example/ski%20shop/skis/powder-ski.html"]);
+
+        firstResult.Should().BeEquivalentTo(["Ski Shop"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ParentUrlPathSegmentTitle_ReturnsNullForPlusPathSegment()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/catalog/bike-deals/road-bike.html", "Bike Deals"),
+                ("https://northwind.example/store/trail_helmets/trail-helmet.html", "Trail Helmets")
+            ],
+            ["https://adatum.example/shop/powder+skis/powder-ski.html"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_FirstUrlPathSegmentTitle_ReturnsNullForPlusPathSegment()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/spring-catalog/bikes/road-bike.html", "Spring Catalog"),
+                ("https://northwind.example/helmet_store/helmets/trail-helmet.html", "Helmet Store")
+            ],
+            ["https://adatum.example/ski+shop/skis/powder-ski.html"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_UrlQueryParameterValue_ExtractsDecodedParameterValue()
     {
         var result = FlashFillService.Fill(
