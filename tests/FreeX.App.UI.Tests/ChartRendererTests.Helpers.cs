@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Reflection;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -54,18 +53,7 @@ public sealed partial class ChartRendererTests
 
     private static void RunWithCulture(string cultureName, Action action)
     {
-        var originalCulture = CultureInfo.CurrentCulture;
-        var originalUiCulture = CultureInfo.CurrentUICulture;
-        try
-        {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
-            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureName);
-            action();
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = originalCulture;
-            CultureInfo.CurrentUICulture = originalUiCulture;
-        }
+        using var cultureScope = TestCultureScope.CurrentCultureAndUICulture(cultureName);
+        action();
     }
 }

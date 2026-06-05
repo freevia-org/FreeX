@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.Core.Model;
-using System.Globalization;
 using System.IO;
 
 namespace FreeX.App.UI.Tests;
@@ -25,19 +24,11 @@ public sealed class ChartDataLabelFormatterTests
     [Fact]
     public void FormatDataLabel_UsesInvariantNumberCulture()
     {
-        var originalCulture = CultureInfo.CurrentCulture;
-        try
-        {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
-            var chart = new ChartModel { DataLabelNumberFormat = ChartDataLabelNumberFormat.Number };
+        using var cultureScope = TestCultureScope.CurrentCulture("de-DE");
+        var chart = new ChartModel { DataLabelNumberFormat = ChartDataLabelNumberFormat.Number };
 
-            ChartDataLabelFormatter.FormatDataLabel(chart, "Sales", "Q1", 1234.5)
-                .Should().Be("1234.50");
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = originalCulture;
-        }
+        ChartDataLabelFormatter.FormatDataLabel(chart, "Sales", "Q1", 1234.5)
+            .Should().Be("1234.50");
     }
 
     [Fact]

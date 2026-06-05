@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO;
 using System.Reflection;
 using FluentAssertions;
@@ -361,12 +360,8 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void SurfaceRenderer_ParsesInvariantDecimalValues()
     {
-        var originalCulture = CultureInfo.CurrentCulture;
-        var originalUiCulture = CultureInfo.CurrentUICulture;
-        try
+        RunWithCulture("de-DE", () =>
         {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
-            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("de-DE");
             var sheetId = SheetId.New();
             var chart = new ChartModel
             {
@@ -389,12 +384,7 @@ public sealed partial class ChartRendererTests
             var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
             series.Items.Should().HaveCount(2);
             series.Items.Select(item => item.Color).Should().OnlyHaveUniqueItems();
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = originalCulture;
-            CultureInfo.CurrentUICulture = originalUiCulture;
-        }
+        });
     }
 
     [Fact]
