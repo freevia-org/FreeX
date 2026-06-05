@@ -452,6 +452,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookPackageRoot(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertDocumentPropertiesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookFileVersionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetHyperlinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -673,6 +674,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookPackageRoot(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertDocumentPropertiesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookFileVersionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetHyperlinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3425,6 +3427,123 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet scenario metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorkbookFileVersionMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookFileVersionMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookFileVersionMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookFileVersionMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var fileVersionElements = root.Elements(SpreadsheetNs + "fileVersion").ToArray();
+        if (fileVersionElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {fileVersionElements.Length} fileVersion elements; expected at most one");
+
+        foreach (var fileVersion in fileVersionElements.Select((element, index) => new WorkbookFileVersionReference(index + 1, element)))
+        {
+            AddWorkbookFileVersionIssues(root, fileVersion, issues);
+        }
+    }
+
+    private static void AddWorkbookFileVersionIssues(
+        XElement workbookRoot,
+        WorkbookFileVersionReference fileVersionReference,
+        List<string> issues)
+    {
+        var fileVersion = fileVersionReference.Element;
+        var description = $"fileVersion #{fileVersionReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            fileVersion,
+            description,
+            [
+                "fileSharing",
+                "workbookPr",
+                "workbookProtection",
+                "bookViews",
+                "sheets",
+                "functionGroups",
+                "externalReferences",
+                "definedNames",
+                "calcPr",
+                "oleSize",
+                "customWorkbookViews",
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        AddOptionalWorkbookMetadataNonNegativeIntIssue(description, "lastEdited", fileVersion.Attribute("lastEdited")?.Value, issues);
+        AddOptionalWorkbookMetadataNonNegativeIntIssue(description, "lowestEdited", fileVersion.Attribute("lowestEdited")?.Value, issues);
+        AddOptionalWorkbookMetadataNonNegativeIntIssue(description, "rupBuild", fileVersion.Attribute("rupBuild")?.Value, issues);
+
+        if (fileVersion.Elements().Any())
+            issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddWorkbookMetadataOrderingIssues(
+        XElement workbookRoot,
+        XElement metadataElement,
+        string description,
+        IReadOnlyCollection<string> laterWorkbookElements,
+        List<string> issues)
+    {
+        var workbookChildren = workbookRoot.Elements().ToArray();
+        var metadataIndex = Array.IndexOf(workbookChildren, metadataElement);
+        if (metadataIndex < 0)
+            return;
+
+        foreach (var earlierLaterElement in workbookChildren
+                     .Take(metadataIndex)
+                     .Where(element =>
+                         element.Name.Namespace == SpreadsheetNs &&
+                         laterWorkbookElements.Contains(element.Name.LocalName)))
+        {
+            issues.Add($"{WorkbookPart} {description} appears after {earlierLaterElement.Name.LocalName}; expected schema order before that element");
+        }
+    }
+
+    private static void AddOptionalWorkbookMetadataNonNegativeIntIssue(
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value) || TryParseNonNegativePackageInt(value, out _))
+            return;
+
+        issues.Add($"{WorkbookPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
+    private static void ThrowInvalidWorkbookFileVersionMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook fileVersion metadata: {sample}{suffix}");
     }
 
     private static void AssertWorksheetSheetPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -12404,6 +12523,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorksheetScenarioInputCellReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookFileVersionReference(
         int Ordinal,
         XElement Element);
 
