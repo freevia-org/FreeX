@@ -813,12 +813,12 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
-    public void Fill_UrlQueryParameterValue_ReturnsNullWhenExampleParameterNamesDiffer()
+    public void Fill_UrlQueryParameterValue_ReturnsNullWhenDifferentParameterNamesAreNotConsistentlyFirstValues()
     {
         var result = FlashFillService.Fill(
             [
-                ("https://contoso.example/search?q=road+bike", "road bike"),
-                ("https://fabrikam.example/search?term=gravel+bike", "gravel bike")
+                ("https://contoso.example/search?sort=asc&q=road+bike", "road bike"),
+                ("https://fabrikam.example/search?term=gravel+bike&sort=desc", "gravel bike")
             ],
             ["https://northwind.example/search?q=electric+bike"]);
 
