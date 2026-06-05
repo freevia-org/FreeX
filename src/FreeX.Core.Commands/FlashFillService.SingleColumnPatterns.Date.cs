@@ -84,9 +84,11 @@ public static partial class FlashFillService
 
     private static bool TrySplitDateLikeComponents(string source, out string[] components)
     {
+        var dateText = StripOptionalEnglishWeekdayPrefix(source);
+
         foreach (var separator in DateComponentSeparators)
         {
-            var parts = source.Split(separator, StringSplitOptions.TrimEntries);
+            var parts = dateText.Split(separator, StringSplitOptions.TrimEntries);
             if (parts.Length != 3 ||
                 parts.Any(part => part.Length == 0 || part.Any(c => !char.IsDigit(c))))
             {
@@ -101,28 +103,10 @@ public static partial class FlashFillService
                 continue;
             }
 
-            if (!int.TryParse(parts[yearIndex], NumberStyles.None, CultureInfo.InvariantCulture, out var year) ||
-                year < 1000)
-            {
-                continue;
-            }
-
-            var dateish = true;
-            for (var i = 0; i < parts.Length; i++)
-            {
-                if (i == yearIndex)
-                    continue;
-
-                if (parts[i].Length is < 1 or > 2 ||
-                    !int.TryParse(parts[i], NumberStyles.None, CultureInfo.InvariantCulture, out var value) ||
-                    value is < 1 or > 31)
-                {
-                    dateish = false;
-                    break;
-                }
-            }
-
-            if (!dateish)
+            var order = yearIndex == 0
+                ? new[] { DatePartKind.Year, DatePartKind.Month, DatePartKind.Day }
+                : new[] { DatePartKind.Month, DatePartKind.Day, DatePartKind.Year };
+            if (!TryCreateDateParts(parts, order, out _))
                 continue;
 
             components = parts;
@@ -147,7 +131,8 @@ public static partial class FlashFillService
     {
         components = default;
 
-        var parts = source.Split((char[]?)null, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var dateText = StripOptionalEnglishWeekdayPrefix(source);
+        var parts = dateText.Split((char[]?)null, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 3)
             return false;
 
@@ -180,6 +165,41 @@ public static partial class FlashFillService
 
         return false;
     }
+
+    private static string StripOptionalEnglishWeekdayPrefix(string source)
+    {
+        var trimmed = source.Trim();
+        var index = 0;
+        while (index < trimmed.Length && char.IsLetter(trimmed[index]))
+            index++;
+
+        if (index == 0 || !IsEnglishWeekdayPart(trimmed[..index]))
+            return trimmed;
+
+        if (index < trimmed.Length && (trimmed[index] == ',' || trimmed[index] == '.'))
+            index++;
+
+        if (index >= trimmed.Length || !char.IsWhiteSpace(trimmed[index]))
+            return trimmed;
+
+        while (index < trimmed.Length && char.IsWhiteSpace(trimmed[index]))
+            index++;
+
+        return index < trimmed.Length ? trimmed[index..] : trimmed;
+    }
+
+    private static bool IsEnglishWeekdayPart(string part) =>
+        part.ToLowerInvariant() switch
+        {
+            "mon" or "monday" => true,
+            "tue" or "tues" or "tuesday" => true,
+            "wed" or "wednesday" => true,
+            "thu" or "thur" or "thurs" or "thursday" => true,
+            "fri" or "friday" => true,
+            "sat" or "saturday" => true,
+            "sun" or "sunday" => true,
+            _ => false
+        };
 
     private static Func<string, string?>? TryEmbeddedDateExtraction(IReadOnlyList<(string Source, string Expected)> examples)
     {

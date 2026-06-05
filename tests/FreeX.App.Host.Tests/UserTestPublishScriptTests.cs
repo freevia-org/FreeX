@@ -87,7 +87,7 @@ public sealed class UserTestPublishScriptTests
 
         try
         {
-            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
@@ -108,7 +108,7 @@ public sealed class UserTestPublishScriptTests
 
         try
         {
-            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("MSIX signing options require MsixCertificatePath");
@@ -132,7 +132,7 @@ public sealed class UserTestPublishScriptTests
 
         try
         {
-            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("MsixCertificatePath must reference an existing certificate file");
@@ -153,7 +153,7 @@ public sealed class UserTestPublishScriptTests
 
         try
         {
-            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("MsixTimestampUrl must be an absolute http or https URL");
@@ -174,7 +174,7 @@ public sealed class UserTestPublishScriptTests
 
         try
         {
-            var result = RunPowerShellScript(scriptPath, $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+            var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
@@ -234,8 +234,4 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("FreeX.cmd");
     }
 
-    private static PowerShellResult RunPowerShellScript(string scriptPath, string arguments)
-    {
-        return PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), arguments);
-    }
 }
