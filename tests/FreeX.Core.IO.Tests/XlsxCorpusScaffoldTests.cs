@@ -32,7 +32,7 @@ public class XlsxCorpusScaffoldTests
     [Fact]
     public void CorpusManifest_UsesDocumentedSchemaAndHasStarterGeneratedRows()
     {
-        var manifestPath = FindWorkspaceFile("test-corpus", "manifest.csv");
+        var manifestPath = TestWorkspaceFiles.FindWorkspaceFile("test-corpus", "manifest.csv");
         var rows = File.ReadAllLines(manifestPath)
             .Where(line => !string.IsNullOrWhiteSpace(line))
             .ToArray();
@@ -55,7 +55,7 @@ public class XlsxCorpusScaffoldTests
     [Fact]
     public void CorpusPrivateFolder_IsGitIgnored()
     {
-        var gitignore = File.ReadAllText(FindWorkspaceFile(".gitignore"));
+        var gitignore = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(".gitignore"));
 
         gitignore.Should().Contain("test-corpus/local-private/");
     }
@@ -63,7 +63,7 @@ public class XlsxCorpusScaffoldTests
     [Fact]
     public void CorpusReadme_StatesPrivateAndRedistributionPolicy()
     {
-        var readme = File.ReadAllText(FindWorkspaceFile("test-corpus", "README.md"));
+        var readme = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("test-corpus", "README.md"));
 
         readme.Should().Contain("local-private");
         readme.Should().Contain("must not be committed");
@@ -73,7 +73,7 @@ public class XlsxCorpusScaffoldTests
     [Fact]
     public void CorpusPlan_DocumentsAllAllowedManifestStatuses()
     {
-        var plan = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-test-corpus-plan.md"));
+        var plan = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-test-corpus-plan.md"));
 
         foreach (var status in AllowedStatuses)
             plan.Should().Contain($"`{status}`");
@@ -83,7 +83,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusPlan_StatesCurrentManifestBaselineCounts()
     {
         var manifestRows = ReadManifestRows();
-        var plan = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-test-corpus-plan.md"));
+        var plan = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-test-corpus-plan.md"));
         var generatedCount = manifestRows.Count(row => row.SourceType == "generated");
         var publicCount = manifestRows.Count(row => row.SourceType == "public");
         var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
@@ -97,7 +97,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_PublishesWorkbookAndFeatureBucketPassRates()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
         var generatedSupportedCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-pass");
         var generatedMetadataCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-metadata-pass");
         var generatedKnownGapCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-known-gap");
@@ -128,8 +128,8 @@ public class XlsxCorpusScaffoldTests
     [Fact]
     public void CorpusReport_LastUpdatedMatchesCorpusPlan()
     {
-        var plan = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-test-corpus-plan.md"));
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var plan = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-test-corpus-plan.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         report.Should().Contain($"**Last updated:** {ReadLastUpdatedDate(plan)}");
     }
@@ -137,7 +137,7 @@ public class XlsxCorpusScaffoldTests
     [Fact]
     public void CorpusReport_StatesTopFailureSummary()
     {
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         report.Should().Contain("## Top Failures");
         report.Should().Contain("No active automated XLSX corpus failures are currently recorded.");
@@ -146,7 +146,7 @@ public class XlsxCorpusScaffoldTests
     [Fact]
     public void CorpusReport_StatesPrioritizedFixListMappedToCommandParity()
     {
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         report.Should().Contain("## Prioritized Fix List");
         report.Should().Contain("`docs/parity/command-surface.md`");
@@ -156,7 +156,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_DoesNotListCompletedLocalPrivateManifestRowsAsOpenGap()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Count(row => row.SourceType == "local-private")
             .Should().BeGreaterThan(0, "optional local-private workbook rows are already represented in the manifest");
@@ -169,7 +169,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_UsesCurrentManifestBaselineInExpansionGap()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         report.Should().NotContain(
             "Continue expanding the 100-row corpus beyond the current baseline",
@@ -223,7 +223,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesNonPublicUnsupportedAndExcludedWarningDeclarations()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
         var warningDeclarationCount = manifestRows
             .Where(row => row.SourceType != "public" && ExpectedWarningsFor(row).Count > 0)
             .Count();
@@ -236,7 +236,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesPublicUnsupportedTagWarningDetectionCount()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
         var publicUnsupportedTagCount = manifestRows
             .Where(row => row.SourceType == "public" && ExpectedWarningsFor(row).Count > 0)
             .Count();
@@ -249,7 +249,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesPublicSourceMetadataCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
         var publicRows = manifestRows
             .Where(row => row.SourceType == "public")
             .ToArray();
@@ -268,7 +268,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesLocalPrivatePrivacyMetadataCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
         var localPrivateRows = manifestRows
             .Where(row => row.SourceType == "local-private")
             .ToArray();
@@ -287,7 +287,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
         var localPrivateKnownGapCount = manifestRows.Count(row => row.SourceType == "local-private" && row.ExpectedStatus == "supported-known-gap");
 
         manifestRows
@@ -302,7 +302,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesDataValidationSemanticXmlCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/dv-count-package-003.xlsx" &&
@@ -317,7 +317,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesUnsupportedSheetTypeWorkbookReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/unsupported-sheet-types-001.xlsx" &&
@@ -333,7 +333,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesThreadedCommentPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/threaded-comments-001.xlsx" &&
@@ -347,7 +347,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesCustomRibbonUiPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/custom-ribbon-ui-001.xlsx" &&
@@ -361,7 +361,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesFormControlPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/form-controls-001.xlsx" &&
@@ -376,7 +376,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesOfficeAddinsPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/office-addins-001.xlsx" &&
@@ -391,7 +391,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesPowerQueryPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/power-query-001.xlsx" &&
@@ -406,7 +406,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesLiveWebQueryPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/live-web-queries-001.xlsx" &&
@@ -421,7 +421,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesSmartArtPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/smartart-diagrams-001.xlsx" &&
@@ -436,7 +436,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesVbaMacrosPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/vba-macros-001.xlsm" &&
@@ -450,7 +450,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesDataModelPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/data-model-001.xlsx" &&
@@ -465,7 +465,7 @@ public class XlsxCorpusScaffoldTests
     public void CorpusReport_StatesLinkedDataTypePackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
-        var report = File.ReadAllText(FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
+        var report = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/xlsx-corpus-report.md"));
 
         manifestRows.Should().Contain(row =>
             row.Path == "generated/linked-data-types-001.xlsx" &&
@@ -480,8 +480,8 @@ public class XlsxCorpusScaffoldTests
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
-        var outstandingBuild = File.ReadAllText(FindWorkspaceFile("docs", "planning/outstanding-build.md"));
-        var nextPhasesPlan = File.ReadAllText(FindWorkspaceFile("docs", "planning/next-phases.md"));
+        var outstandingBuild = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "planning/outstanding-build.md"));
+        var nextPhasesPlan = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "planning/next-phases.md"));
         var generatedCount = manifestRows.Count(row => row.SourceType == "generated");
         var publicCount = manifestRows.Count(row => row.SourceType == "public");
         var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
@@ -497,9 +497,11 @@ public class XlsxCorpusScaffoldTests
     public void RegressionFormulaCachedWorkbooks_AreAllRepresentedInCorpusManifest()
     {
         var manifestRows = ReadManifestRows();
+        var corpusDirectory = Path.GetDirectoryName(TestWorkspaceFiles.FindWorkspaceFile("test-corpus", "manifest.csv"))!;
+        var regressionDirectory = Path.Combine(corpusDirectory, "regressions", "formula-cached");
         var regressionWorkbookPaths = Directory
-            .EnumerateFiles(FindWorkspaceDirectory("test-corpus", "regressions", "formula-cached"), "*.xlsx", SearchOption.TopDirectoryOnly)
-            .Select(path => Path.GetRelativePath(FindWorkspaceDirectory("test-corpus"), path).Replace(Path.DirectorySeparatorChar, '/'))
+            .EnumerateFiles(regressionDirectory, "*.xlsx", SearchOption.TopDirectoryOnly)
+            .Select(path => Path.GetRelativePath(corpusDirectory, path).Replace(Path.DirectorySeparatorChar, '/'))
             .Order(StringComparer.Ordinal)
             .ToArray();
         var manifestRegressionPaths = manifestRows
@@ -515,7 +517,7 @@ public class XlsxCorpusScaffoldTests
     public void NewestStatusReport_StatesCurrentCorpusManifestCount()
     {
         var manifestRows = ReadManifestRows();
-        var docsDirectory = Path.GetDirectoryName(FindWorkspaceFile("docs", "README.md"))!;
+        var docsDirectory = Path.GetDirectoryName(TestWorkspaceFiles.FindWorkspaceFile("docs", "README.md"))!;
         var newestStatusReport = Directory.GetFiles(Path.Combine(docsDirectory, "history"), "status-*.md")
             .Order(StringComparer.Ordinal)
             .Last();
@@ -531,7 +533,7 @@ public class XlsxCorpusScaffoldTests
 
     private static IReadOnlyList<ManifestRow> ReadManifestRows()
     {
-        var manifestPath = FindWorkspaceFile("test-corpus", "manifest.csv");
+        var manifestPath = TestWorkspaceFiles.FindWorkspaceFile("test-corpus", "manifest.csv");
         return File.ReadAllLines(manifestPath)
             .Skip(1)
             .Where(line => !string.IsNullOrWhiteSpace(line))
@@ -610,23 +612,6 @@ public class XlsxCorpusScaffoldTests
             warnings.Add("excluded linked data type disclosed");
 
         return warnings;
-    }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
-
-    private static string FindWorkspaceDirectory(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
-            if (Directory.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException($"Could not locate workspace directory: {Path.Combine(relativeParts)}");
     }
 
     private sealed record ManifestRow(

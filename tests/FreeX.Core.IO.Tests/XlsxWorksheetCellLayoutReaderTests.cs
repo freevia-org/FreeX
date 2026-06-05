@@ -124,7 +124,6 @@ public sealed class XlsxWorksheetCellLayoutReaderTests
     }
 
     private static string Source() =>
-        File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetCellLayoutReader.cs"));
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
+        File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxWorksheetCellLayoutReader.cs"));
 }

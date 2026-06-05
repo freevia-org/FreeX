@@ -913,6 +913,53 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversSecurityAccessControlVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "SECURTY Permisson permisison autentication authentcation autorization encrypton ENCRPYTION Passwrod credental credentail credentails Privlege privleges firewal. Keep security, permission, authentication, authorization, encryption, password, credential, credentials, privilege, privileges, firewall, presecurty, securty_id, https://securty.example.com/permisson, admin@passwrod.example.com, and \"C:\\credental folder\\firewal file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "securty SECURTY Securty https://securty.example.com/securty admin@securty.example.com securty_id presecurty \"C:\\securty folder\\securty file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "security");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("SECURTY", "SECURITY"),
+            ("Permisson", "Permission"),
+            ("permisison", "permission"),
+            ("autentication", "authentication"),
+            ("authentcation", "authentication"),
+            ("autorization", "authorization"),
+            ("encrypton", "encryption"),
+            ("ENCRPYTION", "ENCRYPTION"),
+            ("Passwrod", "Password"),
+            ("credental", "credential"),
+            ("credentail", "credential"),
+            ("credentails", "credentials"),
+            ("Privlege", "Privilege"),
+            ("privleges", "privileges"),
+            ("firewal", "firewall"));
+        plan.IssueCount.Should().Be(15);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "SECURITY Permission permission authentication authentication authorization encryption ENCRYPTION Password credential credential credentials Privilege privileges firewall. Keep security, permission, authentication, authorization, encryption, password, credential, credentials, privilege, privileges, firewall, presecurty, securty_id, https://securty.example.com/permisson, admin@passwrod.example.com, and \"C:\\credental folder\\firewal file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(15);
+        replaceAllCorrected.Should().Be(
+            "security SECURITY Security https://securty.example.com/securty admin@securty.example.com securty_id presecurty \"C:\\securty folder\\securty file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversInvoiceSupplyChainVocabularyTypos()
     {
         var wb = new Workbook("test");

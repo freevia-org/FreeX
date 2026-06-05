@@ -7,7 +7,7 @@ public sealed class XlsxWorksheetPrintOptionsMetadataWriterPerformanceTests
     [Fact]
     public void Save_SkipsSheetsWithoutPrintOptionsMetadataWithoutLinqFiltering()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src", "FreeX.Core.IO", "XlsxWorksheetPrintOptionsMetadataWriter.cs"));
 
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
@@ -18,5 +18,4 @@ public sealed class XlsxWorksheetPrintOptionsMetadataWriterPerformanceTests
             "worksheet print-options metadata saving should avoid allocating a LINQ filter iterator over workbook sheets");
     }
 
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }

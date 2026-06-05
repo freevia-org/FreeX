@@ -353,6 +353,110 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_EmbeddedDateComponents_ExtractsMonthTokenFromEmbeddedMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Due: Jan 2, 2026", "Jan"),
+                ("Ship February 14th, 2025", "February")
+            ],
+            ["Review Mar 5, 2026", "Closed APR 8th, 2027"]);
+
+        result.Should().BeEquivalentTo(["Mar", "APR"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateComponents_ExtractsOrdinalDayFromEmbeddedMonthNameDates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ship February 14th, 2026", "14"),
+                ("Due Jan 2nd, 2025", "2")
+            ],
+            ["Review Mar 5th, 2026", "Closed April 22nd, 2027"]);
+
+        result.Should().BeEquivalentTo(["5", "22"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateComponents_ExtractsYearTokenFromEmbeddedNumericDates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Closed 2026-03-05", "2026"),
+                ("Filed 2027-04-06", "2027")
+            ],
+            ["Review 2028-05-07", "Opened 2029.06.08"]);
+
+        result.Should().BeEquivalentTo(["2028", "2029"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateComponents_ReturnsNullWhenRemainingHasInvalidDate()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Due: Jan 2, 2026", "Jan"),
+                ("Ship: Feb 3, 2025", "Feb")
+            ],
+            ["Review February 30, 2026"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateComponents_ReturnsNullWhenRemainingHasNoEmbeddedDate()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Closed 2026-03-05", "2026"),
+                ("Filed 2027-04-06", "2027")
+            ],
+            ["2028-05-07"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateComponents_ReturnsNullWhenRemainingHasMultipleDates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Closed 2026-03-05", "2026"),
+                ("Filed 2027-04-06", "2027")
+            ],
+            ["Window 2028-05-07 to 2029-06-08"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateComponents_ReturnsNullWhenExamplesAreAmbiguous()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Note 02/02/2026", "02"),
+                ("Long memo 03-03-2027", "03")
+            ],
+            ["Next 04/04/2028"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateComponents_ReturnsNullWhenExamplesSelectDifferentComponents()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Closed 2026-03-05", "2026"),
+                ("Opened 03/05/2027", "03")
+            ],
+            ["Filed 04/06/2028"]);
+
+        result.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("North (Retail)", "Retail", "South (Wholesale)", "Wholesale", "East (Online)", "Online")]
     [InlineData("INV [Open]", "Open", "INV [Closed]", "Closed", "INV [Pending]", "Pending")]

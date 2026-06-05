@@ -96,7 +96,8 @@ public sealed class XlsxLoadWarningsTests
     public void XlsxFileAdapterSource_DoesNotContainDebugWriteLineInCatchBlocks()
     {
         // This is a source-code guard that prevents re-introducing silent swallowing.
-        var adapterSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
 
         adapterSource.Should().NotContain(
             "System.Diagnostics.Debug.WriteLine",
@@ -111,8 +112,10 @@ public sealed class XlsxLoadWarningsTests
     public void XlsxFileAdapterSource_ContainsExpectedWarningCategories()
     {
         var adapterSource =
-            File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs")) +
-            File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+            File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
+                "src", "FreeX.Core.IO", "XlsxFileAdapter.cs")) +
+            File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
+                "src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
 
         foreach (var prefix in ExpectedLoadWarningPrefixes)
             adapterSource.Should().Contain($"\"{prefix}");
@@ -133,6 +136,4 @@ public sealed class XlsxLoadWarningsTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(42));
         return workbook;
     }
-
-    private static string FindWorkspaceFile(params string[] relativeParts) => TestWorkspaceFiles.FindWorkspaceFile(relativeParts);
 }
