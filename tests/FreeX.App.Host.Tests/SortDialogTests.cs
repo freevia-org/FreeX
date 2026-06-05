@@ -1,4 +1,3 @@
-using System.IO;
 using System.Linq;
 using FluentAssertions;
 using System.Windows;
@@ -10,12 +9,10 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class SortDialogTests
 {
     private static string ReadSortDialogSource() =>
-        string.Join(Environment.NewLine, new[]
-        {
+        DialogSourceTestSupport.ReadHostSources(
             "SortDialog.cs",
             "SortDialog.Types.cs",
-            "SortOptionsDialog.cs"
-        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", file))));
+            "SortOptionsDialog.cs");
 
     private static T GetControl<T>(SortDialog dialog, string name)
         where T : class

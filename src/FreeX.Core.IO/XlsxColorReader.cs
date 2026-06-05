@@ -84,6 +84,25 @@ public static class XlsxColorReader
         return TryParseHexColor(NormalizeRgbAttribute(rgb), out color);
     }
 
+    public static bool TryReadCellColor(
+        XElement? element,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors,
+        out CellColor color)
+    {
+        if (TryReadCellColor(element, out color))
+            return true;
+
+        if (TryReadThemeColor(element, theme, out color))
+            return true;
+
+        if (TryReadIndexedColor(element, indexedColors, out color))
+            return true;
+
+        color = default;
+        return false;
+    }
+
     private static string NormalizeRgbAttribute(string rgb)
     {
         var normalized = rgb.Trim().TrimStart('#');

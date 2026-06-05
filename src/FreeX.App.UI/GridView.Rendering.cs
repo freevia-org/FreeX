@@ -563,8 +563,6 @@ public partial class GridView
 
             bool canOverflow = CanOverflowCellText(style, cell.RawValue, cell.DisplayText, cellMerge);
 
-            // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
-            // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
             double fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
 
             Brush textBrush = TextBrush;

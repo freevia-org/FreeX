@@ -1058,7 +1058,8 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("SelectionChanged=\"FontNameBox_SelectionChanged\"");
         formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
         uiStateSource.Should().Contain("SetSelectedItemIfChanged(FontNameBox, state.FontName)");
-        renderSource.Should().Contain("var fontName = string.IsNullOrWhiteSpace(style?.FontName)");
+        renderSource.Should().Contain("ResolveCellFontNameForDisplay(style?.FontName)");
+        renderSource.Should().Contain("AvailableCellFontNames.Value.Contains");
         renderSource.Should().Contain("new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true)");
     }
 

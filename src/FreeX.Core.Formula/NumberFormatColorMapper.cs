@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using FreeX.Core.Model;
 
-namespace FreeX.Core.Calc;
+namespace FreeX.Core.Formula;
 
 internal static class NumberFormatColorMapper
 {

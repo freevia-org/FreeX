@@ -336,6 +336,8 @@ public partial class MainWindow
         HideStartScreen();
     }
 
+    internal Task OpenStartupFileAsync(string path) => OpenFileAsync(path);
+
     private async Task OpenFileAsync(string path)
     {
         var ext = System.IO.Path.GetExtension(path).ToLower();

@@ -132,7 +132,7 @@ public sealed partial class ViewportService
         if (terminalColumns is not null)
             return terminalColumns;
 
-        var defaultColumnWidth = Math.Max(1, sheet.DefaultColumnWidth * 8);
+        var defaultColumnWidth = GetDefaultColumnWidthPixels(sheet);
         if (TryCreateDefaultColMetrics(sheet, startCol, maxCol, availableWidth, defaultColumnWidth) is { } defaultColumns)
             return defaultColumns;
 
@@ -141,7 +141,7 @@ public sealed partial class ViewportService
         for (uint col = startCol; col <= maxCol; col++)
         {
             if (sheet.IsColEffectivelyHidden(col)) continue;
-            double width = sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
+            double width = GetColumnWidthPixels(sheet, col);
             colMetrics.Add(new ColMetric(col, width, leftOffset));
             leftOffset += width;
             if (leftOffset > availableWidth) break;
@@ -315,7 +315,7 @@ public sealed partial class ViewportService
         {
             if (!sheet.IsColEffectivelyHidden(col))
             {
-                var width = sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
+                var width = GetColumnWidthPixels(sheet, col);
                 columns.Add((col, width));
                 totalWidth += width;
                 if (totalWidth >= availableWidth)
@@ -348,7 +348,7 @@ public sealed partial class ViewportService
 
     private static bool CanSkipDefaultTerminalColMetrics(Sheet sheet, uint requestedStartCol, double availableWidth)
     {
-        var defaultWidthPixels = sheet.DefaultColumnWidth * 8;
+        var defaultWidthPixels = GetDefaultColumnWidthPixels(sheet);
         if (sheet.ColumnWidths.Count != 0
             || sheet.HiddenCols.Count != 0
             || sheet.GroupHiddenCols.Count != 0

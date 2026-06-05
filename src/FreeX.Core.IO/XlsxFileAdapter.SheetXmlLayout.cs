@@ -153,7 +153,7 @@ public sealed partial class XlsxFileAdapter
                 if (worksheetEntry is null)
                     continue;
 
-                var layout = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, differentialStyles, workbookTheme, indexedColors);
+                var layout = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, stylesXml, differentialStyles, workbookTheme, indexedColors);
                 result[name] = layout;
                 if (loadStructuredTableMetadata)
                 {
@@ -227,6 +227,7 @@ public sealed partial class XlsxFileAdapter
         ZipArchive archive,
         string worksheetPath,
         ZipArchiveEntry worksheetEntry,
+        XDocument? stylesXml,
         IReadOnlyList<CellStyle> differentialStyles,
         WorkbookTheme workbookTheme,
         WorkbookIndexedColorPalette indexedColors)
@@ -340,9 +341,7 @@ public sealed partial class XlsxFileAdapter
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
             ParseOptionalDouble(sheetFormatPr?.Attribute("defaultColWidth")?.Value),
-            ParseOptionalDouble(sheetFormatPr?.Attribute("defaultRowHeight")?.Value) is { } defaultRowHeightPoints
-                ? defaultRowHeightPoints * (96.0 / 72.0)
-                : null,
+            ReadDefaultRowHeight(sheetFormatPr, stylesXml),
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetSheetFormatMetadata(sheetFormatPr),
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetDimensionMetadata(dimension),
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetSheetPropertiesMetadata(sheetPr),
@@ -698,6 +697,75 @@ public sealed partial class XlsxFileAdapter
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
         double.IsFinite(parsed) &&
         parsed > 0
+            ? parsed
+            : null;
+
+    private static double? ReadDefaultRowHeight(XElement? sheetFormatPr, XDocument? stylesXml)
+    {
+        if (ParseOptionalDouble(sheetFormatPr?.Attribute("defaultRowHeight")?.Value) is not { } rowHeightPoints)
+            return null;
+
+        if (!IsTruthy(sheetFormatPr?.Attribute("customHeight")?.Value) &&
+            IsAptosNarrowNormalStyle(stylesXml) &&
+            Math.Abs(rowHeightPoints - 15.0) < 0.001)
+        {
+            rowHeightPoints = 14.5;
+        }
+
+        return Math.Round(rowHeightPoints * (96.0 / 72.0), MidpointRounding.AwayFromZero);
+    }
+
+    private static bool IsAptosNarrowNormalStyle(XDocument? stylesXml)
+    {
+        var (fontName, fontSize) = ReadNormalStyleFont(stylesXml);
+        return string.Equals(fontName, "Aptos Narrow", StringComparison.OrdinalIgnoreCase) &&
+            (!fontSize.HasValue || Math.Abs(fontSize.Value - 11.0) < 0.001);
+    }
+
+    private static (string? FontName, double? FontSize) ReadNormalStyleFont(XDocument? stylesXml)
+    {
+        var root = stylesXml?.Root;
+        if (root is null)
+            return (null, null);
+
+        var ns = root.Name.Namespace;
+        var fontId = ReadNormalStyleFontId(root, ns) ?? 0;
+        var font = root.Element(ns + "fonts")?
+            .Elements(ns + "font")
+            .ElementAtOrDefault(fontId);
+        if (font is null)
+            return (null, null);
+
+        var fontName = font.Element(ns + "name")?.Attribute("val")?.Value;
+        var fontSize = ParseOptionalDouble(font.Element(ns + "sz")?.Attribute("val")?.Value);
+        return (fontName, fontSize);
+    }
+
+    private static int? ReadNormalStyleFontId(XElement stylesRoot, XNamespace ns)
+    {
+        var normalStyle = stylesRoot.Element(ns + "cellStyles")?
+            .Elements(ns + "cellStyle")
+            .FirstOrDefault(style =>
+                string.Equals(style.Attribute("builtinId")?.Value, "0", StringComparison.Ordinal) ||
+                string.Equals(style.Attribute("name")?.Value, "Normal", StringComparison.OrdinalIgnoreCase));
+
+        if (ParseOptionalNonNegativeInt(normalStyle?.Attribute("xfId")?.Value) is { } normalXfId)
+        {
+            var styleXf = stylesRoot.Element(ns + "cellStyleXfs")?
+                .Elements(ns + "xf")
+                .ElementAtOrDefault(normalXfId);
+            if (ParseOptionalNonNegativeInt(styleXf?.Attribute("fontId")?.Value) is { } styleFontId)
+                return styleFontId;
+        }
+
+        var defaultCellXf = stylesRoot.Element(ns + "cellXfs")?
+            .Elements(ns + "xf")
+            .FirstOrDefault();
+        return ParseOptionalNonNegativeInt(defaultCellXf?.Attribute("fontId")?.Value);
+    }
+
+    private static int? ParseOptionalNonNegativeInt(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed >= 0
             ? parsed
             : null;
 

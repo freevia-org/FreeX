@@ -427,9 +427,11 @@ public sealed partial class DataToolDialogTests
     }
 
     private static string ReadConsolidateDialogSources() =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.cs")) +
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.Planning.cs")) +
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialogPlanner.cs"));
+        DialogSourceTestSupport.ReadHostSourcesWithSeparator(
+            "",
+            "ConsolidateDialog.cs",
+            "ConsolidateDialog.Planning.cs",
+            "ConsolidateDialogPlanner.cs");
 
     [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()

@@ -54,7 +54,7 @@ public sealed partial class ViewportService
             sheet.HiddenCols.Count == 0 &&
             sheet.GroupHiddenCols.Count == 0)
         {
-            var pixelWidth = sheet.DefaultColumnWidth * 8;
+            var pixelWidth = GetDefaultColumnWidthPixels(sheet);
             if (pixelWidth <= 0) return null;
             var col = (uint)(x / pixelWidth) + 1;
             return col <= CellAddress.MaxCol ? col : null;
@@ -65,7 +65,7 @@ public sealed partial class ViewportService
         {
             if (sheet.IsColEffectivelyHidden(col)) continue;
 
-            var width = sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
+            var width = GetColumnWidthPixels(sheet, col);
             if (x < left + width)
                 return col;
 
