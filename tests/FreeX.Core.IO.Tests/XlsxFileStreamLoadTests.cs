@@ -25,9 +25,9 @@ public sealed class XlsxFileStreamLoadTests
         var adapter = new XlsxFileAdapter();
         var workbook = CreateSimpleWorkbook();
 
-        var tempPath = Path.GetTempFileName();
-        try
-        {
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "stream-load.xlsx");
+
             // Save to a real file on disk.
             using (var saveStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 adapter.Save(workbook, saveStream);
@@ -43,11 +43,6 @@ public sealed class XlsxFileStreamLoadTests
             var cell = loaded.GetSheetAt(0)!.GetCell(1, 1);
             cell.Should().NotBeNull();
             cell!.Value.Should().Be(new TextValue("Hello"));
-        }
-        finally
-        {
-            File.Delete(tempPath);
-        }
     }
 
     /// <summary>
@@ -60,9 +55,9 @@ public sealed class XlsxFileStreamLoadTests
         var adapter = new XlsxFileAdapter();
         var workbook = CreateSimpleWorkbook();
 
-        var tempPath = Path.GetTempFileName();
-        try
-        {
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "stream-warnings.xlsx");
+
             using (var saveStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 adapter.Save(workbook, saveStream);
 
@@ -72,11 +67,6 @@ public sealed class XlsxFileStreamLoadTests
 
             result.Workbook.Should().NotBeNull();
             result.Warnings.Should().BeEmpty("a cleanly saved XLSX loaded from FileStream should produce no warnings");
-        }
-        finally
-        {
-            File.Delete(tempPath);
-        }
     }
 
     /// <summary>
