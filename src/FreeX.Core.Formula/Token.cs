@@ -27,6 +27,7 @@ public enum TokenType
     Power,
     Ampersand,     // & (string concatenation)
     Percent,       // % (divide by 100)
+    ImplicitIntersection, // @
 
     // Comparison
     Equal,

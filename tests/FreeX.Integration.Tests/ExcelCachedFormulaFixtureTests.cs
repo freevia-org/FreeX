@@ -81,6 +81,21 @@ public sealed class ExcelCachedFormulaFixtureTests
     }
 
     [Fact]
+    public void LoadedWorkbookRecalc_HonorsExplicitImplicitIntersectionOperator()
+    {
+        using var fixture = CreateLegacyImplicitIntersectionWorkbook("@A7:J7*B15");
+        var workbook = new XlsxFileAdapter().Load(fixture);
+        var sheet = workbook.Sheets.Should().ContainSingle().Subject;
+
+        var report = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator())
+            .RecalculateAllFormulas(workbook);
+
+        report.Errors.Should().BeEmpty();
+        sheet.GetValue(15, 5).Should().Be(new NumberValue(50));
+        sheet.GetValue(15, 6).Should().Be(BlankValue.Instance);
+    }
+
+    [Fact]
     public void LoadedWorkbookRecalc_ReturnsValueErrorWhenLegacyImplicitIntersectionMissesRange()
     {
         using var fixture = CreateLegacyImplicitIntersectionWorkbook(

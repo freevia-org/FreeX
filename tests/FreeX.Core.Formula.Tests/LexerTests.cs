@@ -49,6 +49,15 @@ public class LexerTests
     }
 
     [Fact]
+    public void Tokenizes_ImplicitIntersectionOperator()
+    {
+        var tokens = new Lexer("=@A1:A3").Tokenize();
+        tokens[0].Type.Should().Be(TokenType.ImplicitIntersection);
+        tokens[0].Value.Should().Be("@");
+        tokens[1].Type.Should().Be(TokenType.CellRef);
+    }
+
+    [Fact]
     public void Tokenizes_String_WithEscapedQuotes()
     {
         var tokens = new Lexer("=\"he said \"\"hello\"\"\"").Tokenize();
