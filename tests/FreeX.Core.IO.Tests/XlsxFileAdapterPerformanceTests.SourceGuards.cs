@@ -191,6 +191,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("layout.HasClosedXmlUnsupportedConditionalFormatting");
         adapterSource.Should().Contain("layout.HasWorksheetDynamicFilters");
         adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream, styleOnlyWorksheetPathsToStrip)");
+        adapterSource.Should().Contain("mutateSourcePackage: canMutateStyleOptimizedPackage");
         adapterSource.Should().Contain("sanitizationHints");
 
         layoutSource.Should().Contain("cellLayout.HasDuplicateStyleOnlyCellStyleIndexes");
@@ -203,6 +204,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         sheetStyleOnlySource.Should().Contain("_styleOnly.EnsureCapacity(capacity)");
 
         sanitizerSource.Should().Contain("XlsxClosedXmlLoadSanitizationHints");
+        sanitizerSource.Should().Contain("bool mutateSourcePackage = false");
         sanitizerSource.Should().Contain("TryCreateSanitizationRequirementsFromHints(");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasPivotPackageMetadata");
         sanitizerSource.Should().Contain("ResolveKnownOrScan(knownHints.HasChartExChartParts");
