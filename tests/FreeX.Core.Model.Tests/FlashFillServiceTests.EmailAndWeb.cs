@@ -658,6 +658,51 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_UrlFragmentValue_ExtractsFragmentIdentifier()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.com/docs/report#section-2", "section-2"),
+                ("https://fabrikam.example/path#summary", "summary")
+            ],
+            ["https://northwind.test/page#appendix"]);
+
+        result.Should().BeEquivalentTo(["appendix"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlFragmentValue_ExtractsDecodedFragmentIdentifier()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.example/docs/report#sales%20summary", "sales summary"),
+                ("https://fabrikam.example/path#road+bike", "road bike")
+            ],
+            ["https://northwind.test/page#electric%20cargo+bike"]);
+
+        result.Should().BeEquivalentTo(["electric cargo bike"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("https://northwind.test/page")]
+    [InlineData("https://northwind.test/page#")]
+    [InlineData("northwind.test/page#appendix")]
+    [InlineData("ftp://northwind.test/page#appendix")]
+    [InlineData("https://user@northwind.test/page#appendix")]
+    [InlineData("https://localhost/page#appendix")]
+    public void Fill_UrlFragmentValue_ReturnsNullForUnsupportedRemainingUrl(string remaining)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("https://contoso.com/docs/report#section-2", "section-2"),
+                ("https://fabrikam.example/path#summary", "summary")
+            ],
+            [remaining]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_WebAddressCleanup_HandlesBareWebAddresses()
     {
         var result = FlashFillService.Fill(
