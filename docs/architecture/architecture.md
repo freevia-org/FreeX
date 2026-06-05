@@ -385,7 +385,7 @@ theme for gallery swatches and Format as Table materialization.
 Flash Fill remains a deterministic pattern service, not an Excel-like ML inference engine. It supports conservative
 single-column transforms including dotted-token extraction with variable dot counts for final-token patterns,
 dotted/underscored/hyphenated email display-name cleanup, plus-address email local-part tag removal,
-spaced or compact pipe/arrow label-value splitting, semicolon-separated URL query-parameter name/value extraction, URL fragment extraction, digit-mask formatting
+spaced or compact pipe/arrow label-value splitting, semicolon-separated URL query-parameter name, first-value, and same-name value extraction, URL fragment extraction, digit-mask formatting
 such as phone-number punctuation copied from examples, calendar-valid embedded-date extraction/normalization from
 labeled text with ambiguous multi-date sources rejected, weekday-prefixed and embedded numeric and English month-name date
 component extraction that preserves raw month tokens while normalizing ordinal day tokens, pure and embedded time component extraction for hour, minute, second, and
@@ -398,7 +398,7 @@ domains and modeled `.`, `_`, or `-` separators from examples, as do first-name/
 Spell Check remains a deterministic known-corrections service in `Core.Commands`, not dictionary-backed proofing. It
 scans literal text cells, notes, threaded comment roots, and threaded comment replies in deterministic sheet/address order
 and plans undoable replacement edits while leaving formula cells alone. The known-corrections catalog covers bounded
-office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, planning, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
+office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, quality/testing, operations/planning, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
 file path, identifier, and prefixed-word spans.
 The host workflow keeps Ignore All case-insensitive for the current pass and persists Add to Dictionary custom words
 through `FreeXOptions` so matching scanner results stay suppressed across sessions/workbooks without introducing a full
@@ -445,7 +445,7 @@ through Save As, and hands Windows Share the normalized local path.
 
 Error Checking remains a deterministic model-backed audit in `Core.Commands`, not a full Excel heuristic inference
 engine. It reports cached formula error values, text cells that parse as finite invariant-culture numbers including
-fullwidth digit/comma/decimal/scientific-notation forms plus small comma/decimal/sign variants, supported currency including fullwidth dollar/pound/yen/won and small dollar symbols, ASCII/fullwidth/small percent, accounting-parentheses, and Unicode/fullwidth leading-sign forms, formulas
+fullwidth digit/comma/decimal/scientific-notation forms plus small comma/decimal/sign and Arabic-Indic/extended Arabic-Indic digit/decimal/thousands/percent variants, supported currency including fullwidth dollar/pound/yen/won and small dollar symbols, ASCII/fullwidth/small/Arabic percent, accounting-parentheses, and Unicode/fullwidth leading-sign forms, formulas
 stored as text, two-digit-year text dates including fullwidth digit/Latin-letter/separator variants, formulas whose direct parser-extracted precedents include missing or blank cells, table calculated
 column formulas that differ from the column formula, and common aggregate formulas (`SUM`, `AVERAGE`, `AVERAGEA`,
 `COUNT`, `COUNTA`, `MEDIAN`, `MIN`, `MINA`, `MAX`, `MAXA`, `PRODUCT`, `STDEV`, `STDEVP`, `STDEV.S`, `STDEV.P`, `VAR`, `VARP`,
