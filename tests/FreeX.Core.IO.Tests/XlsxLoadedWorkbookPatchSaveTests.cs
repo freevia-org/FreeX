@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
@@ -721,6 +722,46 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
 
         adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
         adapter.LastSaveDiagnostics.Reason.Should().Be("change_table_cell");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithSparklineAndUnrelatedCellEdit_PatchesSourcePackage()
+    {
+        var sourceBytes = CreateSparklineSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Sparklines.Should().ContainSingle();
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), new NumberValue(99));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        Encoding.UTF8.GetString(ReadPackageEntry(savedBytes, "xl/worksheets/sheet1.xml"))
+            .Should()
+            .Contain("sparklineGroups");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "E2")
+            .Should()
+            .Be("99");
+
+        using var reloadStream = new MemoryStream(savedBytes, writable: false);
+        var reloadedSheet = adapter.Load(reloadStream).GetSheetAt(0);
+        reloadedSheet.GetCell(2, 5)!.Value.Should().Be(new NumberValue(99));
+        var sparkline = reloadedSheet.Sparklines.Should().ContainSingle().Subject;
+        sparkline.Kind.Should().Be(SparklineKind.Column);
+        sparkline.DataRange.ToString().Should().Be("A1:C1");
+        sparkline.Location.ToA1().Should().Be("D1");
     }
 
     [Fact]
@@ -1702,6 +1743,28 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
                 CreateStructuredTableXml(includeFilter)));
 
         return package.ToArray();
+    }
+
+    private static byte[] CreateSparklineSourcePackage()
+    {
+        var workbook = new Workbook("SparklinePatch");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), new NumberValue(10));
+        sheet.Sparklines.Add(new SparklineModel
+        {
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 3)),
+            Location = new CellAddress(sheet.Id, 1, 4),
+            Kind = SparklineKind.Column
+        });
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+        return stream.ToArray();
     }
 
     private static byte[] CreateChartSourcePackage()
