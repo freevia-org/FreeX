@@ -264,7 +264,21 @@ public static partial class FlashFillService
         return TryUrlFirstQueryParameterName(examples)
             ?? TryUrlFirstQueryParameterValue(examples)
             ?? TryUrlQueryParameterValueCore(examples)
+            ?? TryUrlLastQueryParameterName(examples)
             ?? TryUrlFragmentValue(examples);
+    }
+
+    private static Func<string, string?>? TryUrlLastQueryParameterName(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => e.Expected.Length > 0 &&
+                               TryGetLastDecodedQueryParameterName(e.Source, out var name) &&
+                               name == e.Expected))
+        {
+            return null;
+        }
+
+        return source => TryGetLastDecodedQueryParameterName(source, out var name) ? name : null;
     }
 
     private static Func<string, string?>? TryUrlFirstQueryParameterValue(
@@ -668,6 +682,40 @@ public static partial class FlashFillService
         }
 
         return false;
+    }
+
+    private static bool TryGetLastDecodedQueryParameterName(string source, out string name)
+    {
+        name = string.Empty;
+        if (!TryCreateHttpWebUri(source, out _) ||
+            !TryGetRawUrlQuery(source, out var query))
+        {
+            return false;
+        }
+
+        var found = false;
+        foreach (var segment in query.Split(['&', ';'], StringSplitOptions.None))
+        {
+            if (segment.Length == 0)
+                continue;
+
+            var equalsIndex = segment.IndexOf('=');
+            var rawName = equalsIndex < 0
+                ? segment
+                : segment[..equalsIndex];
+            if (rawName.Length == 0 ||
+                !TryDecodeQueryComponent(rawName, out var decodedName) ||
+                string.IsNullOrWhiteSpace(decodedName))
+            {
+                name = string.Empty;
+                return false;
+            }
+
+            name = decodedName;
+            found = true;
+        }
+
+        return found;
     }
 
     private static bool TryGetRawUrlQuery(string source, out string query)
