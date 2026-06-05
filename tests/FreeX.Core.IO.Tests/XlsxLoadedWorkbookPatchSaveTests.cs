@@ -284,6 +284,40 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithUnusedStyleTableEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("patched value"));
+        workbook.RegisterStyle(new CellStyle
+        {
+            Italic = true,
+            FillColor = new CellColor(255, 199, 206)
+        });
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.PathLabel.Should().Be("full_save");
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_unsupported_model_delta");
+
+        saved.Position = 0;
+        adapter.Load(saved)
+            .GetSheetAt(0)
+            .GetCell(1, 1)!
+            .Value
+            .Should()
+            .Be(new TextValue("patched value"));
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithRowColumnDimensionEdit_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();

@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Globalization;
 using System.IO.Compression;
@@ -71,12 +73,88 @@ public sealed partial class XlsxFileAdapter
         using var stream = new CryptoStream(Stream.Null, hash, CryptoStreamMode.Write, leaveOpen: true);
         var adapter = new NativeJsonAdapter();
         if (forPatchValidation)
+        {
             adapter.SaveForPatchValidationFingerprint(workbook, stream);
+            WriteCellStyleFingerprint(workbook, stream);
+        }
         else
+        {
             adapter.SaveForFingerprint(workbook, stream);
+        }
+
         WriteStyleOnlyFingerprint(workbook, stream);
         stream.FlushFinalBlock();
         return Convert.ToHexString(hash.Hash ?? []);
+    }
+
+    private static void WriteCellStyleFingerprint(Workbook workbook, Stream stream)
+    {
+        WriteFingerprintToken(stream, "\nfreex-cell-style-fingerprint-v1\n");
+        WriteFingerprintNumber(stream, workbook.StyleCount);
+        WriteFingerprintToken(stream, "\n");
+
+        for (var styleIndex = 0; styleIndex < workbook.StyleCount; styleIndex++)
+        {
+            var style = workbook.GetStyle(new StyleId(styleIndex));
+            WriteFingerprintNumber(stream, styleIndex);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintString(stream, string.IsNullOrWhiteSpace(style.FontName) ? CellStyle.Default.FontName : style.FontName);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNumber(stream, NativeJsonValueSanitizer.PositiveFiniteOrDefault(style.FontSize, CellStyle.Default.FontSize));
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintBoolean(stream, style.Bold);
+            WriteFingerprintBoolean(stream, style.Italic);
+            WriteFingerprintBoolean(stream, style.Underline);
+            WriteFingerprintBoolean(stream, style.Strikethrough);
+            WriteFingerprintBoolean(stream, style.Superscript);
+            WriteFingerprintBoolean(stream, style.Subscript);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintColor(stream, style.FontColor);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNullableThemeColor(stream, style.FontThemeColor);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNullableColor(stream, style.FillColor);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNullableThemeColor(stream, style.FillThemeColor);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNumber(stream, (int)NativeJsonValueSanitizer.ValidEnumOrDefault(style.FillPatternStyle, CellFillPatternStyle.None));
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNullableColor(stream, style.FillPatternColor);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNullableThemeColor(stream, style.FillPatternThemeColor);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintBorder(stream, style.BorderTop);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintBorder(stream, style.BorderRight);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintBorder(stream, style.BorderBottom);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintBorder(stream, style.BorderLeft);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintString(stream, string.IsNullOrWhiteSpace(style.NumberFormat) ? CellStyle.Default.NumberFormat : style.NumberFormat);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNumber(stream, (int)NativeJsonValueSanitizer.ValidEnumOrDefault(style.HorizontalAlignment, HorizontalAlignment.General));
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNumber(stream, (int)NativeJsonValueSanitizer.ValidEnumOrDefault(style.VerticalAlignment, VerticalAlignment.Bottom));
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintBoolean(stream, style.WrapText);
+            WriteFingerprintBoolean(stream, style.ShrinkToFit);
+            WriteFingerprintBoolean(stream, style.DoubleUnderline);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNumber(stream, Math.Clamp(style.IndentLevel, 0, 15));
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintNumber(stream, NativeJsonValueSanitizer.ValidTextRotationOrDefault(style.TextRotation));
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintBoolean(stream, style.Locked);
+            WriteFingerprintBoolean(stream, style.Hidden);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintDictionary(stream, style.NativeDifferentialAttributes);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintList(stream, style.NativeDifferentialChildXmls);
+            WriteFingerprintToken(stream, "\t");
+            WriteFingerprintDictionary(stream, style.NativeDifferentialElementXmls);
+            WriteFingerprintToken(stream, "\n");
+        }
     }
 
     private static void WriteStyleOnlyFingerprint(Workbook workbook, Stream stream)
@@ -86,9 +164,9 @@ public sealed partial class XlsxFileAdapter
         {
             var sheet = workbook.Sheets[sheetIndex];
             WriteFingerprintToken(stream, "sheet\t");
-            WriteFingerprintToken(stream, sheetIndex.ToString(CultureInfo.InvariantCulture));
+            WriteFingerprintNumber(stream, sheetIndex);
             WriteFingerprintToken(stream, "\tcount\t");
-            WriteFingerprintToken(stream, sheet.StyleOnlyCellCount.ToString(CultureInfo.InvariantCulture));
+            WriteFingerprintNumber(stream, sheet.StyleOnlyCellCount);
             WriteFingerprintToken(stream, "\n");
 
             if (!sheet.HasStyleOnlyCells)
@@ -97,17 +175,17 @@ public sealed partial class XlsxFileAdapter
             if (sheet.TryGetCompressedStyleOnlyRuns(out var runs))
             {
                 WriteFingerprintToken(stream, "runs\t");
-                WriteFingerprintToken(stream, runs.Count.ToString(CultureInfo.InvariantCulture));
+                WriteFingerprintNumber(stream, runs.Count);
                 WriteFingerprintToken(stream, "\n");
                 foreach (var run in runs)
                 {
-                    WriteFingerprintToken(stream, run.Row.ToString(CultureInfo.InvariantCulture));
+                    WriteFingerprintNumber(stream, run.Row);
                     WriteFingerprintToken(stream, "\t");
-                    WriteFingerprintToken(stream, run.StartCol.ToString(CultureInfo.InvariantCulture));
+                    WriteFingerprintNumber(stream, run.StartCol);
                     WriteFingerprintToken(stream, "\t");
-                    WriteFingerprintToken(stream, run.EndCol.ToString(CultureInfo.InvariantCulture));
+                    WriteFingerprintNumber(stream, run.EndCol);
                     WriteFingerprintToken(stream, "\t");
-                    WriteFingerprintToken(stream, run.StyleId.Value.ToString(CultureInfo.InvariantCulture));
+                    WriteFingerprintNumber(stream, run.StyleId.Value);
                     WriteFingerprintToken(stream, "\n");
                 }
 
@@ -119,20 +197,160 @@ public sealed partial class XlsxFileAdapter
                          .OrderBy(entry => entry.Key.Row)
                          .ThenBy(entry => entry.Key.Col))
             {
-                WriteFingerprintToken(stream, row.ToString(CultureInfo.InvariantCulture));
+                WriteFingerprintNumber(stream, row);
                 WriteFingerprintToken(stream, "\t");
-                WriteFingerprintToken(stream, col.ToString(CultureInfo.InvariantCulture));
+                WriteFingerprintNumber(stream, col);
                 WriteFingerprintToken(stream, "\t");
-                WriteFingerprintToken(stream, styleId.Value.ToString(CultureInfo.InvariantCulture));
+                WriteFingerprintNumber(stream, styleId.Value);
                 WriteFingerprintToken(stream, "\n");
             }
         }
     }
 
+    private static void WriteFingerprintBoolean(Stream stream, bool value)
+        => stream.WriteByte(value ? (byte)'1' : (byte)'0');
+
+    private static void WriteFingerprintColor(Stream stream, CellColor color)
+    {
+        WriteFingerprintNumber(stream, color.R);
+        WriteFingerprintToken(stream, ",");
+        WriteFingerprintNumber(stream, color.G);
+        WriteFingerprintToken(stream, ",");
+        WriteFingerprintNumber(stream, color.B);
+    }
+
+    private static void WriteFingerprintNullableColor(Stream stream, CellColor? color)
+    {
+        if (color is not { } value)
+        {
+            stream.WriteByte((byte)'n');
+            return;
+        }
+
+        stream.WriteByte((byte)'v');
+        WriteFingerprintColor(stream, value);
+    }
+
+    private static void WriteFingerprintNullableThemeColor(Stream stream, WorkbookThemeColorReference? color)
+    {
+        if (color is not { } value)
+        {
+            stream.WriteByte((byte)'n');
+            return;
+        }
+
+        stream.WriteByte((byte)'v');
+        WriteFingerprintNumber(stream, (int)value.Slot);
+        WriteFingerprintToken(stream, ",");
+        WriteFingerprintNumber(stream, value.Tint);
+    }
+
+    private static void WriteFingerprintBorder(Stream stream, CellBorder border)
+    {
+        WriteFingerprintNumber(stream, (int)NativeJsonValueSanitizer.ValidEnumOrDefault(border.Style, BorderStyle.None));
+        WriteFingerprintToken(stream, ",");
+        WriteFingerprintColor(stream, border.Color);
+    }
+
+    private static void WriteFingerprintDictionary(Stream stream, IReadOnlyDictionary<string, string>? dictionary)
+    {
+        if (dictionary is null)
+        {
+            stream.WriteByte((byte)'n');
+            return;
+        }
+
+        stream.WriteByte((byte)'d');
+        WriteFingerprintNumber(stream, dictionary.Count);
+        foreach (var pair in dictionary.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            WriteFingerprintToken(stream, ":");
+            WriteFingerprintString(stream, pair.Key);
+            WriteFingerprintToken(stream, "=");
+            WriteFingerprintString(stream, pair.Value);
+        }
+    }
+
+    private static void WriteFingerprintList(Stream stream, IReadOnlyList<string>? list)
+    {
+        if (list is null)
+        {
+            stream.WriteByte((byte)'n');
+            return;
+        }
+
+        stream.WriteByte((byte)'l');
+        WriteFingerprintNumber(stream, list.Count);
+        foreach (var value in list)
+        {
+            WriteFingerprintToken(stream, ":");
+            WriteFingerprintString(stream, value);
+        }
+    }
+
+    private static void WriteFingerprintString(Stream stream, string? value)
+    {
+        if (value is null)
+        {
+            WriteFingerprintToken(stream, "n");
+            return;
+        }
+
+        WriteFingerprintToken(stream, "s");
+        var byteCount = Encoding.UTF8.GetByteCount(value);
+        WriteFingerprintNumber(stream, byteCount);
+        WriteFingerprintToken(stream, ":");
+        WriteFingerprintToken(stream, value);
+    }
+
+    private static void WriteFingerprintNumber(Stream stream, double value)
+    {
+        Span<byte> buffer = stackalloc byte[32];
+        if (!Utf8Formatter.TryFormat(value, buffer, out var written, new StandardFormat('G', 17)))
+            throw new InvalidOperationException("Unable to format XLSX fingerprint number.");
+
+        stream.Write(buffer[..written]);
+    }
+
+    private static void WriteFingerprintNumber(Stream stream, int value)
+    {
+        Span<byte> buffer = stackalloc byte[16];
+        if (!Utf8Formatter.TryFormat(value, buffer, out var written))
+            throw new InvalidOperationException("Unable to format XLSX fingerprint number.");
+
+        stream.Write(buffer[..written]);
+    }
+
+    private static void WriteFingerprintNumber(Stream stream, uint value)
+    {
+        Span<byte> buffer = stackalloc byte[16];
+        if (!Utf8Formatter.TryFormat(value, buffer, out var written))
+            throw new InvalidOperationException("Unable to format XLSX fingerprint number.");
+
+        stream.Write(buffer[..written]);
+    }
+
     private static void WriteFingerprintToken(Stream stream, string value)
     {
-        var bytes = Encoding.UTF8.GetBytes(value);
-        stream.Write(bytes, 0, bytes.Length);
+        var byteCount = Encoding.UTF8.GetByteCount(value);
+        if (byteCount <= 256)
+        {
+            Span<byte> buffer = stackalloc byte[byteCount];
+            var written = Encoding.UTF8.GetBytes(value.AsSpan(), buffer);
+            stream.Write(buffer[..written]);
+            return;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(byteCount);
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(value.AsSpan(), rented.AsSpan(0, byteCount));
+            stream.Write(rented.AsSpan(0, written));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 
     private sealed record XlsxSourcePackage(
