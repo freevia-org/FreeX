@@ -298,6 +298,28 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsHiddenSheetsThatContainOnlyPivotTables()
+    {
+        var workbook = new Workbook("Accessibility");
+        var hiddenSheet = workbook.AddSheet("Archived Pivot");
+        hiddenSheet.IsHidden = true;
+        hiddenSheet.PivotTables.Add(CreatePivotTable(
+            hiddenSheet,
+            "SalesPivot",
+            new CellAddress(hiddenSheet.Id, 3, 2),
+            altTextTitle: "Regional sales by quarter",
+            altTextDescription: null));
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HiddenSheetWithContent).Subject;
+
+        issue.SheetId.Should().Be(hiddenSheet.Id);
+        issue.SheetName.Should().Be("Archived Pivot");
+        issue.Location.Should().Be("Archived Pivot");
+        issue.Message.Should().Be("Hidden sheets with content may not be available to assistive technologies.");
+    }
+
+    [Fact]
     public void FindIssues_FlagsHiddenRowsAndColumnsThatContainContent()
     {
         var workbook = new Workbook("Accessibility");
@@ -323,6 +345,39 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Should()
             .BeEquivalentTo(["C:C", "F:F"]);
         issues.Should().NotContain(i => i.Location == "H8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHiddenRowsAndColumnsThatIntersectPivotTableTargetRange()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Pivot Summary");
+        sheet.HiddenRows.Add(5);
+        sheet.FilterHiddenRows.Add(6);
+        sheet.GroupHiddenRows.Add(7);
+        sheet.HiddenRows.Add(22);
+        sheet.HiddenCols.Add(3);
+        sheet.GroupHiddenCols.Add(4);
+        sheet.HiddenCols.Add(1);
+        sheet.PivotTables.Add(CreatePivotTable(
+            sheet,
+            "SalesPivot",
+            new CellAddress(sheet.Id, 4, 2),
+            altTextTitle: "Regional sales by quarter",
+            altTextDescription: null));
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .Equal("5:5", "6:6", "7:7");
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenColumnWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .Equal("C:C", "D:D");
+        issues.Should().NotContain(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent && i.Location == "22:22");
+        issues.Should().NotContain(i => i.Kind == AccessibilityIssueKind.HiddenColumnWithContent && i.Location == "A:A");
     }
 
     [Fact]
