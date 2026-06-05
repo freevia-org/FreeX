@@ -619,6 +619,99 @@ public sealed partial class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(".", "alan.turing@contoso.com", "katherine.johnson@contoso.com")]
+    [InlineData("_", "alan_turing@contoso.com", "katherine_johnson@contoso.com")]
+    [InlineData("-", "alan-turing@contoso.com", "katherine-johnson@contoso.com")]
+    public void FillFromColumns_ThreeSourceFirstLastEmail_LearnsSeparatorAndConstantDomain(
+        string separator,
+        string firstExpected,
+        string secondExpected)
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            [$"ada{separator}lovelace@contoso.com", $"grace{separator}hopper@contoso.com"],
+            [
+                ["Alan", "Mathison", "Turing"],
+                ["Katherine", "Coleman", "Johnson"]
+            ]);
+
+        result.Should().BeEquivalentTo([firstExpected, secondExpected], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_ThreeSourceFirstInitialLastEmail_LearnsConstantDomain()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["alovelace@contoso.com", "ghopper@contoso.com"],
+            [
+                ["Alan", "Mathison", "Turing"],
+                ["Katherine", "Coleman", "Johnson"]
+            ]);
+
+        result.Should().BeEquivalentTo(
+            ["aturing@contoso.com", "kjohnson@contoso.com"],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_ThreeSourceFirstLastInitialEmail_LearnsConstantDomain()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["adal@contoso.com", "graceh@contoso.com"],
+            [
+                ["Alan", "Mathison", "Turing"],
+                ["Katherine", "Coleman", "Johnson"]
+            ]);
+
+        result.Should().BeEquivalentTo(
+            ["alant@contoso.com", "katherinej@contoso.com"],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_ThreeSourceFirstLastEmail_ReturnsNullWhenExampleDomainsDiffer()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["ada.lovelace@contoso.com", "grace.hopper@example.org"],
+            [
+                ["Alan", "Mathison", "Turing"]
+            ]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void FillFromColumns_ThreeSourceFirstLastEmail_ReturnsNullWhenRemainingMissingThirdSource()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Byron", "Lovelace"],
+                ["Grace", "Brewster", "Hopper"]
+            ],
+            ["ada.lovelace@contoso.com", "grace.hopper@contoso.com"],
+            [
+                ["Alan", "Mathison"]
+            ]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void FillFromColumns_FirstInitialLastLowercase_CombinesSourceColumns()
     {

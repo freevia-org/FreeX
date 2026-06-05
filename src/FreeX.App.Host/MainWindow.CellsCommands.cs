@@ -689,6 +689,16 @@ public partial class MainWindow
             return;
         }
 
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        if (SelectionMoveOverwritePlanner.HasOverwriteTargets(sheet, sourceRange, targetRange) &&
+            !_messageService.AskYesNo(UiText.Get("MainWindowMessage_TextToColumnsReplaceDataPrompt")))
+        {
+            return;
+        }
+
         var command = new MoveRangeCommand(_currentSheetId, sourceRange, targetRange.Start);
         if (!TryExecuteCommand(command, "Move Cells", out var outcome))
             return;
@@ -699,17 +709,13 @@ public partial class MainWindow
         _selectionCursor = targetRange.End;
         SheetGrid.SelectedRange = targetRange;
 
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is not null)
-        {
-            sheet.ActiveRow = targetRange.Start.Row;
-            sheet.ActiveCol = targetRange.Start.Col;
-        }
+        sheet.ActiveRow = targetRange.Start.Row;
+        sheet.ActiveCol = targetRange.Start.Col;
 
         SetCellAddressBoxSelectionText(targetRange.Start == targetRange.End
             ? FormatCellReference(targetRange.Start)
             : FormatRangeReference(targetRange.Start, targetRange.End));
-        SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(targetRange.Start), targetRange.Start));
+        SetFormulaBarSelectionText(FormatFormulaBarText(sheet.GetCell(targetRange.Start), targetRange.Start));
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
