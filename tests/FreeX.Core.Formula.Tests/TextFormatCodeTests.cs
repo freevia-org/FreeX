@@ -33,6 +33,14 @@ public class TextFormatCodeTests
     public void Text_CommonFormats_StillWork(string formula, string expected) =>
         Eval(formula).Should().Be(new TextValue(expected));
 
+    [Theory]
+    [InlineData("=TEXT(1234567,\"0,,\")", "1")]
+    [InlineData("=TEXT(12345,\"0.0,\")", "12.3")]
+    [InlineData("=TEXT(1500000,\"[>=1000000]#.0,,\"\"M\"\";[>=1000]#.0,\"\"K\"\";#.0\")", "1.5M")]
+    [InlineData("=TEXT(12500,\"[>=1000000]#.0,,\"\"M\"\";[>=1000]#.0,\"\"K\"\";#.0\")", "12.5K")]
+    public void Text_CommaScalingMatchesExcelNumberFormats(string formula, string expected) =>
+        Eval(formula).Should().Be(new TextValue(expected));
+
     // A single-section format applied to a negative formats the magnitude and prepends '-' to the WHOLE
     // result, so the minus sits before any prefix (Excel: -$1,234.50, not $-1,234.50).
     [Theory]
