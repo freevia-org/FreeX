@@ -16,19 +16,11 @@ public sealed partial class SortDialogTests
 
     private static T GetControl<T>(SortDialog dialog, string name)
         where T : class
-    {
-        var field = typeof(SortDialog).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, name);
 
     private static T GetControl<T>(SortOptionsDialog dialog, string name)
         where T : class
-    {
-        var field = typeof(SortOptionsDialog).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, name);
 
     private static void ClickDefaultButton(DependencyObject root)
     {
