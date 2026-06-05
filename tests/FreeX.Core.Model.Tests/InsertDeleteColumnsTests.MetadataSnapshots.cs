@@ -7,7 +7,7 @@ public partial class InsertDeleteColumnsTests
     [Fact]
     public void ColumnCommands_UseCompactMetadataSnapshotsForUndo()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src",
             "FreeX.Core.Commands",
             "InsertDeleteColumnsCommand.cs"));

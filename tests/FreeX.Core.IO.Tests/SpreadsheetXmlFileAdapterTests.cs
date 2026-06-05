@@ -13,9 +13,6 @@ public sealed partial class SpreadsheetXmlFileAdapterTests
 
     private static Stream NonSeekableStreamFromString(string value) =>
         new NonSeekableReadStream(StreamFromString(value));
-
-    private static string FindRepoFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
-
     private static Workbook CreateDenseWorkbook(int sheetCount, int rowCount, int columnCount)
     {
         var workbook = new Workbook("SpreadsheetML Dense");

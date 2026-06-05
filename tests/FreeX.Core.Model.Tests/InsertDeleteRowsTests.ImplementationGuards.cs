@@ -7,7 +7,7 @@ public partial class InsertDeleteRowsTests
     [Fact]
     public void DeleteRowsCommand_UsesCompactMetadataSnapshotsForUndo()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src",
             "FreeX.Core.Commands",
             "DeleteRowsCommand.cs"));
@@ -23,7 +23,7 @@ public partial class InsertDeleteRowsTests
     [Fact]
     public void InsertRowsCommand_UsesCompactMetadataSnapshotsForUndo()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src",
             "FreeX.Core.Commands",
             "InsertDeleteRowsCommand.cs"));
@@ -40,11 +40,11 @@ public partial class InsertDeleteRowsTests
     [Fact]
     public void RowCommands_PrecountTailCellSnapshotsBeforeAllocatingLists()
     {
-        var insertSource = File.ReadAllText(FindWorkspaceFile(
+        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src",
             "FreeX.Core.Commands",
             "InsertDeleteRowsCommand.cs"));
-        var deleteSource = File.ReadAllText(FindWorkspaceFile(
+        var deleteSource = File.ReadAllText(WorkspaceFileLocator.Find(
             "src",
             "FreeX.Core.Commands",
             "DeleteRowsCommand.cs"));
@@ -62,7 +62,7 @@ public partial class InsertDeleteRowsTests
     [Fact]
     public void CellStateSnapshot_StoresCoordinatesWithoutPerSnapshotSheetId()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src",
             "FreeX.Core.Commands",
             "CellStateSnapshot.cs"));

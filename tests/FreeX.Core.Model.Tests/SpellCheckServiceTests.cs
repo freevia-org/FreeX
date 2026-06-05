@@ -742,6 +742,96 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversMeetingCommunicationVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "MEATING meetng agnda MINUTS atendee ATTENDES mesage communcation notfication commnet notse. Keep meeting, agenda, minutes, attendee, attendees, message, communication, notification, comment, notes, premeating, mesage_id, https://meating.example.com/mesage, organizer@communcation.example.com, and \"C:\\notfication folder\\commnet file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "mesage MESAGE Mesage https://mesage.example.com/mesage editor@mesage.example.com mesage_id premesage \"C:\\mesage folder\\mesage file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "message");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("MEATING", "MEETING"),
+            ("meetng", "meeting"),
+            ("agnda", "agenda"),
+            ("MINUTS", "MINUTES"),
+            ("atendee", "attendee"),
+            ("ATTENDES", "ATTENDEES"),
+            ("mesage", "message"),
+            ("communcation", "communication"),
+            ("notfication", "notification"),
+            ("commnet", "comment"),
+            ("notse", "notes"));
+        plan.IssueCount.Should().Be(11);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "MEETING meeting agenda MINUTES attendee ATTENDEES message communication notification comment notes. Keep meeting, agenda, minutes, attendee, attendees, message, communication, notification, comment, notes, premeating, mesage_id, https://meating.example.com/mesage, organizer@communcation.example.com, and \"C:\\notfication folder\\commnet file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(11);
+        replaceAllCorrected.Should().Be(
+            "message MESSAGE Message https://mesage.example.com/mesage editor@mesage.example.com mesage_id premesage \"C:\\mesage folder\\mesage file.xlsx\".");
+    }
+
+    [Fact]
+    public void PlanKnownCorrections_CoversPeopleHrAndTeamVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Employe emploee EMPLYEE maneger MANGER departmant departmnt benifits vacaton onbord onbording perfomance performnce trainging recruting. Keep employee, manager, department, benefits, vacation, onboard, onboarding, performance, training, recruiting, preemploye, maneger_id, https://employe.example.com/maneger, hr@departmant.example.com, and \"C:\\benifits folder\\vacaton file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "manger MANGER Manger https://manger.example.com/manger lead@manger.example.com manger_id premanger \"C:\\manger folder\\manger file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "manager");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Employe", "Employee"),
+            ("emploee", "employee"),
+            ("EMPLYEE", "EMPLOYEE"),
+            ("maneger", "manager"),
+            ("MANGER", "MANAGER"),
+            ("departmant", "department"),
+            ("departmnt", "department"),
+            ("benifits", "benefits"),
+            ("vacaton", "vacation"),
+            ("onbord", "onboard"),
+            ("onbording", "onboarding"),
+            ("perfomance", "performance"),
+            ("performnce", "performance"),
+            ("trainging", "training"),
+            ("recruting", "recruiting"));
+        plan.IssueCount.Should().Be(15);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Employee employee EMPLOYEE manager MANAGER department department benefits vacation onboard onboarding performance performance training recruiting. Keep employee, manager, department, benefits, vacation, onboard, onboarding, performance, training, recruiting, preemploye, maneger_id, https://employe.example.com/maneger, hr@departmant.example.com, and \"C:\\benifits folder\\vacaton file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(15);
+        replaceAllCorrected.Should().Be(
+            "manager MANAGER Manager https://manger.example.com/manger lead@manger.example.com manger_id premanger \"C:\\manger folder\\manger file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversRiskActionTrackingVocabularyTypos()
     {
         var wb = new Workbook("test");
@@ -775,6 +865,51 @@ public sealed class SpellCheckServiceTests
         plan.Edits[0].CorrectedText.Should().Be(
             "RISK risk issue issue ACTION action owner owner mitigation mitigate escalate escalation follow-up. Keep risk, issue, action, owner, mitigation, mitigate, escalate, escalation, follow-up, prerisck, risck_id, https://risck.example.com/actoin, reviewer@isue.example.com, and \"C:\\mitgation folder\\escallate file.xlsx\".");
         plan.Edits[0].ReplacementCount.Should().Be(13);
+    }
+
+    [Fact]
+    public void PlanKnownCorrections_CoversLegalCompliancePolicyVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Complaince polcy contrct AGREEMNT privicy CONFIDENTAL confidntial regulaton signiture authorizaton certificaton liablity AUDT. Keep compliance, policy, contract, agreement, privacy, confidential, regulation, signature, authorization, certification, liability, audit, prepolcy, contrct_id, https://complaince.example.com/polcy, legal@privicy.example.com, and \"C:\\confidental folder\\signiture file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "polcy POLCY Polcy https://polcy.example.com/polcy legal@polcy.example.com polcy_id prepolcy \"C:\\polcy folder\\polcy file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "policy");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Complaince", "Compliance"),
+            ("polcy", "policy"),
+            ("contrct", "contract"),
+            ("AGREEMNT", "AGREEMENT"),
+            ("privicy", "privacy"),
+            ("CONFIDENTAL", "CONFIDENTIAL"),
+            ("confidntial", "confidential"),
+            ("regulaton", "regulation"),
+            ("signiture", "signature"),
+            ("authorizaton", "authorization"),
+            ("certificaton", "certification"),
+            ("liablity", "liability"),
+            ("AUDT", "AUDIT"));
+        plan.IssueCount.Should().Be(13);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Compliance policy contract AGREEMENT privacy CONFIDENTIAL confidential regulation signature authorization certification liability AUDIT. Keep compliance, policy, contract, agreement, privacy, confidential, regulation, signature, authorization, certification, liability, audit, prepolcy, contrct_id, https://complaince.example.com/polcy, legal@privicy.example.com, and \"C:\\confidental folder\\signiture file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(13);
+        replaceAllCorrected.Should().Be(
+            "policy POLICY Policy https://polcy.example.com/polcy legal@polcy.example.com polcy_id prepolcy \"C:\\polcy folder\\polcy file.xlsx\".");
     }
 
     [Fact]

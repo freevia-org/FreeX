@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Reflection;
 using FreeX.App.UI;
@@ -13,10 +13,10 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void DrawingObjectRenderAndHitTest_ReusesMetricLookupsForAnchoredObjects()
     {
-        var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
-        var objectDrag = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
-        var planner = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridDrawingObjectPlanner.cs"));
+        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var objectDrag = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
+        var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridDrawingObjectPlanner.cs"));
 
         drawingObjects.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
         pictures.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
@@ -32,7 +32,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void DrawingObjectRenderableBounds_StopAtFirstMetricPastViewport()
     {
-        var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var rowMethod = drawingObjects[
             drawingObjects.IndexOf("private static uint FindLastRenderableDrawingRow", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private static uint FindLastRenderableDrawingColumn", StringComparison.Ordinal)];
@@ -51,7 +51,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderTextBoxes_ReusesNamedClipRectForText()
     {
-        var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var renderTextBox = drawingObjects[
             drawingObjects.IndexOf("private void RenderTextBox(", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
@@ -67,7 +67,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void PivotChartFieldButtonHitTest_ScansChartsBackToFrontWithoutLinqIterators()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.HitTesting.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.HitTesting.cs"));
         var hitTest = source[
             source.IndexOf("public static (ChartModel Chart, string FieldButton)? HitTestPivotChartFieldButton", StringComparison.Ordinal)..];
 
@@ -79,7 +79,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void ChartRenderer_BuildsChartCellLookupWithoutLinqFiltering()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "ChartRenderer.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "ChartRenderer.cs"));
         var buildLookup = source[
             source.IndexOf("private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup", StringComparison.Ordinal)..
             source.IndexOf("private static LineSeries CreateLineSeries", StringComparison.Ordinal)];
@@ -110,10 +110,10 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCharts_ReusesCachedChartImagesAcrossRepaints()
     {
-        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
-        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ChartRenderCache.cs"));
-        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var gridViewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var cacheSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.ChartRenderCache.cs"));
+        var propertiesSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
         var renderCharts = drawingSource[
             drawingSource.IndexOf("private void RenderCharts", StringComparison.Ordinal)..
             drawingSource.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)];
@@ -142,7 +142,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderNativeControls_ReusesPixelsPerDipAcrossClippedTextCalls()
     {
-        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var renderNativeControls = drawingSource[
             drawingSource.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)..
             drawingSource.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)];
@@ -177,7 +177,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderObjectPlaceholders_ReusesPixelsPerDipAcrossPlaceholderLabels()
     {
-        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var renderObjectPlaceholders = drawingSource[
             drawingSource.IndexOf("private void RenderObjectPlaceholders", StringComparison.Ordinal)..
             drawingSource.IndexOf("public static string CreateObjectPlaceholderLabel", StringComparison.Ordinal)];
@@ -204,9 +204,9 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void DrawingObjectLayers_ReuseFrozenDrawingLayerAcrossStableRepaints()
     {
-        var dispatch = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
-        var cache = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjectLayerCache.cs"));
-        var properties = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var dispatch = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var cache = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjectLayerCache.cs"));
+        var properties = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
         var renderPostSelectionLayers = dispatch[
             dispatch.IndexOf("private void RenderPostSelectionLayers", StringComparison.Ordinal)..
             dispatch.IndexOf("private bool HasPostSelectionLayerWork", StringComparison.Ordinal)];

@@ -261,7 +261,7 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void SaveWorkbookReferences_UsesIndexedSheetLookup()
     {
-        var source = File.ReadAllText(FindRepoFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.Save.cs"));
@@ -275,7 +275,7 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void SaveWorkbookReferences_AvoidsLinqProjectionChains()
     {
-        var source = File.ReadAllText(FindRepoFile(
+        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.Save.cs"));
@@ -293,11 +293,11 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void SaveCellWriters_StreamAddressesInsteadOfAllocatingA1Strings()
     {
-        var saveSource = File.ReadAllText(FindRepoFile(
+        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.Save.cs"));
-        var dtoSource = File.ReadAllText(FindRepoFile(
+        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.CellDto.cs"));
@@ -314,11 +314,11 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void SaveCellWriters_StreamScalarValuesWithoutAllocatingFormattedNumberStrings()
     {
-        var saveSource = File.ReadAllText(FindRepoFile(
+        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.Save.cs"));
-        var dtoSource = File.ReadAllText(FindRepoFile(
+        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.CellDto.cs"));
@@ -333,11 +333,11 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void LoadCellReader_MapsValueTypesWithoutAllocatingPerCellStrings()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile(
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.cs"));
-        var dtoSource = File.ReadAllText(FindRepoFile(
+        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.CellDto.cs"));
@@ -352,11 +352,11 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void LoadCellReader_ParsesNumericValuesWithoutAllocatingPerCellStrings()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile(
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.cs"));
-        var dtoSource = File.ReadAllText(FindRepoFile(
+        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.CellDto.cs"));
@@ -372,11 +372,11 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void LoadDenseCells_PreSizesSheetCellStorage()
     {
-        var adapterSource = File.ReadAllText(FindRepoFile(
+        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.cs"));
-        var dtoSource = File.ReadAllText(FindRepoFile(
+        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
             "src",
             "FreeX.Core.IO",
             "NativeJsonAdapter.CellDto.cs"));
@@ -504,6 +504,4 @@ public sealed class NativeJsonAdapterPerformanceTests
 
         return workbook;
     }
-
-    private static string FindRepoFile(params string[] relativeParts) => TestWorkspaceFiles.FindRepoFile(relativeParts);
 }

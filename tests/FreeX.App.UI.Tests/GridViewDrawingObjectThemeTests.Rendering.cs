@@ -15,7 +15,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_ReusesThemeEffectWithinRenderPass()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var renderTextBoxes = source[
             source.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)..
@@ -45,9 +45,9 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_CullsOffscreenObjectsBeforeExpensiveWork()
     {
-        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(FindWorkspaceFile(
+        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
 
         var renderCharts = drawingObjects[
@@ -115,7 +115,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesAuthoredEffectPresetMetadata()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var authoredEffect = source[
             source.IndexOf("private void DrawShapeAuthoredEffect", StringComparison.Ordinal)..
@@ -302,9 +302,9 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesThemeGlowForTextBoxesAndShapesOnly()
     {
-        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(FindWorkspaceFile(
+        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
         var textBoxThemeEffect = drawingObjects[
             drawingObjects.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
@@ -326,9 +326,9 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesThemeSoftEdgesForTextBoxesAndShapesOnly()
     {
-        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(FindWorkspaceFile(
+        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
         var textBoxThemeEffect = drawingObjects[
             drawingObjects.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
@@ -351,9 +351,9 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesThemeBevelAndThreeDRotationForShapesOnly()
     {
-        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(FindWorkspaceFile(
+        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
         var renderCharts = drawingObjects[
             drawingObjects.IndexOf("private void RenderCharts", StringComparison.Ordinal)..
@@ -392,9 +392,9 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesThemeInnerShadowsForTextBoxesAndShapesOnly()
     {
-        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(FindWorkspaceFile(
+        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
         var renderTextBox = drawingObjects[
             drawingObjects.IndexOf("private void RenderTextBox", StringComparison.Ordinal)..
@@ -425,7 +425,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesAuthoredGradientDirectionMetadata()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
 
         source.Should().Contain("shape.GetEffectiveGradientFillDirection()");
@@ -439,7 +439,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void NativeSlicerRendering_DrawsSelectedTilesWithoutMaterializingArray()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var drawSlicer = source[
             source.IndexOf("private void DrawNativeSlicerControl", StringComparison.Ordinal)..
@@ -456,10 +456,10 @@ public sealed partial class GridViewDrawingObjectThemeTests
     public void GridView_ExposesObjectDisplayModeForExcelPlaceholderRendering()
     {
         var source =
-            File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs")) +
-            File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs")) +
-            File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjectLayerCache.cs"));
-        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderDispatch.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjectLayerCache.cs"));
+        var propertiesSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
 
         source.Should().Contain("public enum GridObjectDisplayMode");
         propertiesSource.Should().Contain("ObjectDisplayModeProperty");

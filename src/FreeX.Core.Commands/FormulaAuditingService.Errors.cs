@@ -1284,7 +1284,7 @@ public static partial class FormulaAuditingService
             return false;
 
         var symbolIndex = 0;
-        if (text[0] is '+' or '-')
+        if (TryGetSupportedLeadingSign(text[0], out var asciiSign))
         {
             symbolIndex = 1;
             while (symbolIndex < text.Length && char.IsWhiteSpace(text[symbolIndex]))
@@ -1303,7 +1303,7 @@ public static partial class FormulaAuditingService
 
         numberText = symbolIndex == 0
             ? numericText
-            : string.Concat(text[0], numericText);
+            : string.Concat(asciiSign, numericText);
         return numberText.Length > 0;
     }
 
@@ -1331,7 +1331,7 @@ public static partial class FormulaAuditingService
         if (numericText.Length == 0)
             return false;
 
-        if (numericText[0] is '+' or '-')
+        if (TryGetSupportedLeadingSign(numericText[0], out var asciiSign))
         {
             var numberStart = 1;
             while (numberStart < numericText.Length && char.IsWhiteSpace(numericText[numberStart]))
@@ -1340,7 +1340,7 @@ public static partial class FormulaAuditingService
             if (numberStart >= numericText.Length)
                 return false;
 
-            numberText = string.Concat(numericText[0], numericText[numberStart..].Trim());
+            numberText = string.Concat(asciiSign, numericText[numberStart..].Trim());
             return numberText.Length > 1;
         }
 
@@ -1353,17 +1353,106 @@ public static partial class FormulaAuditingService
             or '\u20B9' or '\u20A9' or '\u20AA' or '\u0E3F' or '\u20BD' or '\u20BA'
             or '\u20B1' or '\u20AB' or '\u20A6' or '\u20B4' or '\u20B8' or '\u20A1';
 
+    private static bool TryGetSupportedLeadingSign(char value, out char asciiSign)
+    {
+        asciiSign = value switch
+        {
+            '+' or '\uFF0B' => '+',
+            '-' or '\u2212' or '\uFF0D' or '\uFE63' => '-',
+            _ => '\0'
+        };
+
+        return asciiSign != '\0';
+    }
+
     private static bool TryStripTrailingPercent(string text, out string numberText)
     {
         numberText = string.Empty;
-        if (text.Length <= 1 || text[^1] != '%')
+        if (text.Length <= 1 || !IsSupportedPercentSign(text[^1]))
             return false;
 
         numberText = text[..^1].Trim();
         return numberText.Length > 0;
     }
 
-    private static bool TryParseFiniteNumberText(string text) =>
+    private static bool IsSupportedPercentSign(char value) =>
+        value is '%' or '\uFF05' or '\uFE6A';
+
+    private static bool TryParseFiniteNumberText(string text)
+    {
+        if (TryParseFiniteNumberTextCore(text))
+            return true;
+
+        return TryNormalizeSupportedNumberText(text, out var normalizedText) &&
+               TryParseFiniteNumberTextCore(normalizedText);
+    }
+
+    private static bool TryNormalizeSupportedNumberText(string text, out string normalizedText)
+    {
+        normalizedText = string.Empty;
+        if (text.Length == 0)
+            return false;
+
+        var numberStart = 0;
+        var hasLeadingSign = TryGetSupportedLeadingSign(text[0], out var asciiSign);
+        if (hasLeadingSign)
+        {
+            numberStart = 1;
+            while (numberStart < text.Length && char.IsWhiteSpace(text[numberStart]))
+                numberStart++;
+
+            if (numberStart >= text.Length || TryGetSupportedLeadingSign(text[numberStart], out _))
+                return false;
+        }
+
+        var changed = hasLeadingSign;
+        char[]? normalizedChars = null;
+        var writeIndex = 0;
+        if (hasLeadingSign)
+        {
+            normalizedChars = new char[text.Length];
+            normalizedChars[writeIndex++] = asciiSign;
+        }
+
+        for (var index = numberStart; index < text.Length; index++)
+        {
+            var normalizedChar = NormalizeSupportedNumberCharacter(text[index]);
+            if (normalizedChar != text[index])
+            {
+                changed = true;
+                if (normalizedChars is null)
+                {
+                    normalizedChars = new char[text.Length];
+                    text.AsSpan(0, index).CopyTo(normalizedChars);
+                    writeIndex = index;
+                }
+            }
+
+            if (normalizedChars is not null)
+                normalizedChars[writeIndex++] = normalizedChar;
+        }
+
+        if (!changed || normalizedChars is null)
+            return false;
+
+        normalizedText = new string(normalizedChars, 0, writeIndex);
+        return normalizedText.Length > 1;
+    }
+
+    private static char NormalizeSupportedNumberCharacter(char value)
+    {
+        if (value is >= '\uFF10' and <= '\uFF19')
+            return (char)('0' + value - '\uFF10');
+
+        return value switch
+        {
+            '\uFF0C' => ',',
+            '\uFF0E' => '.',
+            _ => value
+        };
+    }
+
+    private static bool TryParseFiniteNumberTextCore(string text) =>
         double.TryParse(
             text,
             NumberStyles.Float | NumberStyles.AllowThousands,

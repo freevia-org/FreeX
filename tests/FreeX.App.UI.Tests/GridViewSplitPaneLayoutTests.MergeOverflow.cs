@@ -74,7 +74,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void SplitPaneCellLayoutPlanner_IndexesMergeRowsBySmallerIntersectedSide()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
         var addMergeRows = source[
             source.IndexOf("private static void AddMergeRows", StringComparison.Ordinal)..
@@ -89,7 +89,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void SplitPaneCellLayoutPlanner_PrunesMergedRegionsOutsideQueriedPaneColumns()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
         var createIndex = source[
             source.IndexOf("public static MergeRangeIndex Create", StringComparison.Ordinal)..
@@ -241,7 +241,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void RenderSplitPaneCells_DrawsCommentIndicatorsForCommentOnlyPaneCells()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src", "FreeX.App.UI", "GridView.Rendering.cs"));
         var renderSplitPaneCells = source[
             source.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)..
