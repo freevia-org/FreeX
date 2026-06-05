@@ -455,6 +455,7 @@ internal static class ExcelOpenSmoke
                 AssertWorkbookFileVersionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertSharedStringTableComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertStylesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetHyperlinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -679,6 +680,7 @@ internal static class ExcelOpenSmoke
             AssertWorkbookFileVersionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertSharedStringTableComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertStylesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetHyperlinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3554,6 +3556,26 @@ internal static class ExcelOpenSmoke
         issues.Add($"{WorkbookPart} {description} has invalid {attributeName} value '{value}'");
     }
 
+    private static void AddOptionalWorkbookMetadataNonNegativeDoubleIssue(
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedValue) &&
+            !double.IsNaN(parsedValue) &&
+            !double.IsInfinity(parsedValue) &&
+            parsedValue >= 0)
+        {
+            return;
+        }
+
+        issues.Add($"{WorkbookPart} {description} has invalid {attributeName} value '{value}'");
+    }
+
     private static void AddOptionalWorkbookMetadataBooleanIssue(
         string description,
         string attributeName,
@@ -3776,6 +3798,109 @@ internal static class ExcelOpenSmoke
 
     private static bool IsKnownWorkbookProtectionBooleanAttribute(string name) =>
         name is "lockStructure" or "lockWindows" or "lockRevision";
+
+    private static void AssertWorkbookCalculationPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookCalculationPropertiesMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookCalculationPropertiesMetadata(label, sourcePath, issues);
+    }
+
+    private static void ThrowInvalidWorkbookCalculationPropertiesMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook calcPr metadata: {sample}{suffix}");
+    }
+
+    private static void AddWorkbookCalculationPropertiesMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var calculationPropertiesElements = root.Elements(SpreadsheetNs + "calcPr").ToArray();
+        if (calculationPropertiesElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {calculationPropertiesElements.Length} calcPr elements; expected at most one");
+
+        foreach (var calculationProperties in calculationPropertiesElements.Select((element, index) => new WorkbookCalculationPropertiesReference(index + 1, element)))
+        {
+            AddWorkbookCalculationPropertyIssues(root, calculationProperties, issues);
+        }
+    }
+
+    private static void AddWorkbookCalculationPropertyIssues(
+        XElement workbookRoot,
+        WorkbookCalculationPropertiesReference calculationPropertiesReference,
+        List<string> issues)
+    {
+        var calculationProperties = calculationPropertiesReference.Element;
+        var description = $"calcPr #{calculationPropertiesReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            calculationProperties,
+            description,
+            [
+                "oleSize",
+                "customWorkbookViews",
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        foreach (var attribute in calculationProperties.Attributes().Where(attribute => IsKnownWorkbookCalculationBooleanAttribute(attribute.Name.LocalName)))
+        {
+            AddOptionalWorkbookMetadataBooleanIssue(description, attribute.Name.LocalName, attribute.Value, issues);
+        }
+
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "calcId", calculationProperties.Attribute("calcId")?.Value, issues);
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "iterateCount", calculationProperties.Attribute("iterateCount")?.Value, issues);
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "concurrentManualCount", calculationProperties.Attribute("concurrentManualCount")?.Value, issues);
+        AddOptionalWorkbookMetadataNonNegativeDoubleIssue(description, "iterateDelta", calculationProperties.Attribute("iterateDelta")?.Value, issues);
+
+        var calcMode = calculationProperties.Attribute("calcMode")?.Value;
+        if (!string.IsNullOrWhiteSpace(calcMode) && !IsKnownWorkbookCalculationModeValue(calcMode))
+            issues.Add($"{WorkbookPart} {description} has invalid calcMode value '{calcMode}'");
+
+        var refMode = calculationProperties.Attribute("refMode")?.Value;
+        if (!string.IsNullOrWhiteSpace(refMode) && !IsKnownWorkbookCalculationReferenceModeValue(refMode))
+            issues.Add($"{WorkbookPart} {description} has invalid refMode value '{refMode}'");
+
+        if (calculationProperties.Elements().Any())
+            issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
+    }
+
+    private static bool IsKnownWorkbookCalculationBooleanAttribute(string name) =>
+        name is "fullCalcOnLoad" or
+            "iterate" or
+            "fullPrecision" or
+            "calcCompleted" or
+            "calcOnSave" or
+            "concurrentCalc" or
+            "forceFullCalc";
+
+    private static bool IsKnownWorkbookCalculationModeValue(string value) =>
+        value is "manual" or "auto" or "autoNoTable";
+
+    private static bool IsKnownWorkbookCalculationReferenceModeValue(string value) =>
+        value is "A1" or "R1C1";
 
     private static void AssertWorksheetSheetPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
     {
@@ -12766,6 +12891,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookProtectionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookCalculationPropertiesReference(
         int Ordinal,
         XElement Element);
 
