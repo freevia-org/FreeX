@@ -12,7 +12,7 @@ public partial class XlsxCorpusRunnerTests
 {
     private static IReadOnlyList<ManifestRow> ReadManifestRows()
     {
-        var manifestPath = FindCorpusManifestPath();
+        var manifestPath = CorpusPath("manifest.csv");
         return File.ReadAllLines(manifestPath)
             .Skip(1)
             .Where(line => !string.IsNullOrWhiteSpace(line))
@@ -27,16 +27,13 @@ public partial class XlsxCorpusRunnerTests
         return new ManifestRow(columns[0], columns[1], columns[2], columns[6], columns[7], columns[8], columns[9]);
     }
 
-    private static string FindWorkspaceRoot()
+    private static string CorpusPath(string relativePath)
     {
-        var corpusDirectory = Path.GetDirectoryName(FindCorpusManifestPath())
-            ?? throw new DirectoryNotFoundException("Could not locate FreeX workspace root.");
-        return Directory.GetParent(corpusDirectory)?.FullName
-            ?? throw new DirectoryNotFoundException("Could not locate FreeX workspace root.");
+        var manifestPath = TestWorkspaceFiles.FindWorkspaceFile("test-corpus", "manifest.csv");
+        var corpusDirectory = Path.GetDirectoryName(manifestPath)
+            ?? throw new DirectoryNotFoundException("Could not locate test-corpus directory.");
+        return Path.Combine(corpusDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
     }
-
-    private static string FindCorpusManifestPath() =>
-        TestWorkspaceFiles.FindWorkspaceFile("test-corpus", "manifest.csv");
 
     private sealed record ManifestRow(
         string Id,

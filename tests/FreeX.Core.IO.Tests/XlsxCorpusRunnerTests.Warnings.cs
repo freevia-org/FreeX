@@ -52,7 +52,6 @@ public partial class XlsxCorpusRunnerTests
     [Fact]
     public void PublicCorpusRows_WithUnsupportedWarningTags_ReportExpectedFeaturesWhenFilesArePresent()
     {
-        var workspace = FindWorkspaceRoot();
         var rows = ReadManifestRows()
             .Where(row => row.SourceType == "public")
             .Select(row => new { Row = row, ExpectedKinds = ExpectedFeatureKindsFor(row) })
@@ -64,7 +63,7 @@ public partial class XlsxCorpusRunnerTests
         var inspectedRows = 0;
         foreach (var item in rows)
         {
-            var path = Path.Combine(workspace, "test-corpus", item.Row.Path.Replace('/', Path.DirectorySeparatorChar));
+            var path = CorpusPath(item.Row.Path);
             if (!File.Exists(path))
                 continue;
 
@@ -82,7 +81,6 @@ public partial class XlsxCorpusRunnerTests
     [Fact]
     public void PublicCorpusRows_WithUnsupportedWarningTags_RetainCriticalPackagePartsAfterModelEdit()
     {
-        var workspace = FindWorkspaceRoot();
         var rows = ReadManifestRows()
             .Where(row => row.SourceType == "public")
             .Select(row => new { Row = row, ExpectedKinds = ExpectedFeatureKindsFor(row) })
@@ -95,7 +93,7 @@ public partial class XlsxCorpusRunnerTests
         var inspectedRows = 0;
         foreach (var item in rows)
         {
-            var path = Path.Combine(workspace, "test-corpus", item.Row.Path.Replace('/', Path.DirectorySeparatorChar));
+            var path = CorpusPath(item.Row.Path);
             if (!File.Exists(path))
                 continue;
 

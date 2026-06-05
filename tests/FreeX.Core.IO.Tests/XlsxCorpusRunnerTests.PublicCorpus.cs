@@ -13,14 +13,13 @@ public partial class XlsxCorpusRunnerTests
     [Fact]
     public void LocalPrivateCorpusRows_AreSkippedWhenFilesAreAbsent()
     {
-        var workspace = FindWorkspaceRoot();
         var privateRows = ReadManifestRows()
             .Where(row => row.SourceType == "local-private")
             .ToArray();
 
         foreach (var row in privateRows)
         {
-            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            var path = CorpusPath(row.Path);
             if (!File.Exists(path))
                 continue;
 
@@ -33,7 +32,6 @@ public partial class XlsxCorpusRunnerTests
     [Fact]
     public void PublicCorpusRows_OpenAndSaveWhenFilesArePresent()
     {
-        var workspace = FindWorkspaceRoot();
         var rows = ReadManifestRows()
             .Where(row => row.SourceType == "public")
             .Where(row => row.ExpectedStatus == "public-pass")
@@ -44,7 +42,7 @@ public partial class XlsxCorpusRunnerTests
         var adapter = new XlsxFileAdapter();
         foreach (var row in rows)
         {
-            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            var path = CorpusPath(row.Path);
             if (!File.Exists(path))
                 continue;
 
@@ -79,7 +77,6 @@ public partial class XlsxCorpusRunnerTests
     [Fact]
     public void PublicCorpusRows_WithPackageTagAssertions_RetainPackageStructuresAfterModelEdit()
     {
-        var workspace = FindWorkspaceRoot();
         var rows = ReadManifestRows()
             .Where(row => row.SourceType == "public")
             .Where(row => row.ExpectedStatus == "public-pass")
@@ -92,7 +89,7 @@ public partial class XlsxCorpusRunnerTests
         var inspectedRows = 0;
         foreach (var row in rows)
         {
-            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            var path = CorpusPath(row.Path);
             if (!File.Exists(path))
                 continue;
 
@@ -119,7 +116,6 @@ public partial class XlsxCorpusRunnerTests
     [Fact]
     public void RegressionFormulaCachedRows_OpenSaveReloadPreservesFormulaCells()
     {
-        var workspace = FindWorkspaceRoot();
         var rows = ReadManifestRows()
             .Where(row => row.SourceType == "regression")
             .Where(row => row.FeatureTags.Contains("cached-results", StringComparison.OrdinalIgnoreCase))
@@ -130,7 +126,7 @@ public partial class XlsxCorpusRunnerTests
         var adapter = new XlsxFileAdapter();
         foreach (var row in rows)
         {
-            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            var path = CorpusPath(row.Path);
             File.Exists(path).Should().BeTrue(row.Id);
 
             using var source = File.OpenRead(path);
