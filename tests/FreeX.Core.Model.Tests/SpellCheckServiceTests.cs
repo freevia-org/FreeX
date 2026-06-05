@@ -750,6 +750,74 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversBankingTreasuryVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "TREASRY cashflw Liqudity collaterl princpal intrest maturty escroww disbursemnt settlemnt transacton bankng. Keep treasry_id, https://treasry.example.com/cashflw, treasury@collaterl.example.com, and \"C:\\settlemnt folder\\transacton file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("TREASRY", "TREASURY"),
+            ("cashflw", "cashflow"),
+            ("Liqudity", "Liquidity"),
+            ("collaterl", "collateral"),
+            ("princpal", "principal"),
+            ("intrest", "interest"),
+            ("maturty", "maturity"),
+            ("escroww", "escrow"),
+            ("disbursemnt", "disbursement"),
+            ("settlemnt", "settlement"),
+            ("transacton", "transaction"),
+            ("bankng", "banking"));
+        plan.IssueCount.Should().Be(12);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "TREASURY cashflow Liquidity collateral principal interest maturity escrow disbursement settlement transaction banking. Keep treasry_id, https://treasry.example.com/cashflw, treasury@collaterl.example.com, and \"C:\\settlemnt folder\\transacton file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(12);
+    }
+
+    [Fact]
+    public void PlanKnownCorrections_CoversInsuranceActuarialVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "PREMUM deductble Cliam cliams acturial annuitiy underwritng benificiary reinsurence endorsemnt. Keep premum_id, https://premum.example.com/cliam, actuarial@benificiary.example.com, \"C:\\reinsurence folder\\endorsemnt file.xlsx\", and [C:\\deductble folder\\underwritng file.xlsx]."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("PREMUM", "PREMIUM"),
+            ("deductble", "deductible"),
+            ("Cliam", "Claim"),
+            ("cliams", "claims"),
+            ("acturial", "actuarial"),
+            ("annuitiy", "annuity"),
+            ("underwritng", "underwriting"),
+            ("benificiary", "beneficiary"),
+            ("reinsurence", "reinsurance"),
+            ("endorsemnt", "endorsement"));
+        plan.IssueCount.Should().Be(10);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "PREMIUM deductible Claim claims actuarial annuity underwriting beneficiary reinsurance endorsement. Keep premum_id, https://premum.example.com/cliam, actuarial@benificiary.example.com, \"C:\\reinsurence folder\\endorsemnt file.xlsx\", and [C:\\deductble folder\\underwritng file.xlsx].");
+        plan.Edits[0].ReplacementCount.Should().Be(10);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversCommonReportSpreadsheetTypos()
     {
         var wb = new Workbook("test");

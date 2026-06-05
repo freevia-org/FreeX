@@ -385,7 +385,7 @@ theme for gallery swatches and Format as Table materialization.
 Flash Fill remains a deterministic pattern service, not an Excel-like ML inference engine. It supports conservative
 single-column transforms including dotted-token extraction with variable dot counts for final-token patterns,
 dotted/underscored/hyphenated email display-name cleanup, plus-address email local-part tag removal,
-spaced or compact colon/equal, slash, pipe, ASCII/Unicode arrow, and hyphen/en dash/em dash label-value splitting, semicolon-separated URL query-parameter first-name, last-name, first-value, last-value, same-name first-value, and same-name last repeated-value extraction, URL fragment extraction, decoded first and parent URL path segment extraction, digit-mask formatting
+spaced or compact colon/equal, slash, pipe, ASCII/Unicode arrow, and hyphen/en dash/em dash label-value splitting, semicolon-separated URL query-parameter first-name, last-name, first-value, last-value, same-name first-value, and same-name last repeated-value extraction, URL fragment extraction, decoded first and parent URL path segment extraction and titleization, digit-mask formatting
 such as phone-number punctuation copied from examples, calendar-valid embedded-date extraction/normalization from
 labeled text with ambiguous multi-date sources rejected, weekday-prefixed and embedded numeric and English month-name date
 component extraction that preserves raw month tokens while normalizing ordinal day tokens, pure and embedded time component extraction for hour, minute, second, and
@@ -400,7 +400,7 @@ It returns no result when the examples are ambiguous.
 Spell Check remains a deterministic known-corrections service in `Core.Commands`, not dictionary-backed proofing. It
 scans literal text cells, notes, threaded comment roots, and threaded comment replies in deterministic sheet/address order
 and plans undoable replacement edits while leaving formula cells alone. The known-corrections catalog covers bounded
-office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, quality/testing, documentation/support, reliability/maintenance, operations/planning, budget/stakeholder/project-control, procurement/inventory/supplier, finance/accounting/ledger, tax/audit/billing, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
+office, spreadsheet, data/analytics, sales/marketing/customer, IT/cloud/system, formula/function/reporting, product/engineering/planning, quality/testing, documentation/support, reliability/maintenance, operations/planning, budget/stakeholder/project-control, procurement/inventory/supplier, finance/accounting/ledger, tax/audit/billing, banking/treasury, risk/action, invoice/supply-chain, meeting/communication, people/HR, legal/compliance, and security/access vocabulary while preserving ignored URL, email,
 file path, identifier, and prefixed-word spans.
 The host workflow keeps Ignore All case-insensitive for the current pass and persists Add to Dictionary custom words
 through `FreeXOptions` so matching scanner results stay suppressed across sessions/workbooks without introducing a full

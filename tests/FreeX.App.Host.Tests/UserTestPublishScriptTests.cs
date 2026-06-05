@@ -83,8 +83,9 @@ public sealed class UserTestPublishScriptTests
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
+        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
@@ -96,8 +97,9 @@ public sealed class UserTestPublishScriptTests
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
+        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("MSIX signing options require MsixCertificatePath");
@@ -113,8 +115,9 @@ public sealed class UserTestPublishScriptTests
         var certificateDirectory = Path.Combine(temp.Path, "certificate");
         Directory.CreateDirectory(outputDirectory);
         Directory.CreateDirectory(certificateDirectory);
+        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("MsixCertificatePath must reference an existing certificate file");
@@ -126,8 +129,9 @@ public sealed class UserTestPublishScriptTests
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
+        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("MsixTimestampUrl must be an absolute http or https URL");
@@ -139,8 +143,9 @@ public sealed class UserTestPublishScriptTests
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
+        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, Path.GetTempPath(), $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
