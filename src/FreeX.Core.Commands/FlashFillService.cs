@@ -26,6 +26,7 @@ public static partial class FlashFillService
         Func<string, string?>? patternFn =
             TryTimeComponentExtraction(examples)
             ?? TryEmbeddedTimeComponentExtraction(examples)
+            ?? TryEmbeddedTimeRangeEndpointExtraction(examples)
             ?? TryConstant(examples)
             ?? TryCaseTransform(examples)
             ?? TryInitials(examples)
@@ -50,7 +51,6 @@ public static partial class FlashFillService
             ?? TryEmbeddedDateExtraction(examples)
             ?? TryEmbeddedDateComponentExtraction(examples)
             ?? TryTimeNormalization(examples)
-            ?? TryEmbeddedTimeRangeEndpointExtraction(examples)
             ?? TryEmbeddedTimeExtraction(examples)
             ?? TryPhoneNumberNormalization(examples)
             ?? TryUsAddressComponentExtraction(examples)
