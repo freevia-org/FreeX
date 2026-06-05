@@ -383,7 +383,7 @@ style elements remain raw XML-preserved and otherwise uninterpreted. Built-in ta
 theme for gallery swatches and Format as Table materialization.
 
 Flash Fill remains a deterministic pattern service, not an Excel-like ML inference engine. It supports conservative
-single-column transforms including dotted-token extraction with variable dot counts for final-token patterns,
+single-column transforms including dotted-token extraction with variable dot counts for final-token patterns, local file final path stem and parent directory extraction,
 dotted/underscored/hyphenated email display-name cleanup, plus-address email local-part tag removal,
 spaced or compact colon/equal, slash, pipe, ASCII/Unicode arrow, and hyphen/en dash/em dash label-value splitting, semicolon-separated URL query-parameter first-name, last-name, first-value, last-value, same-name first-value, and same-name last repeated-value extraction, URL fragment extraction, decoded first, second, and parent URL path segment extraction and titleization, digit-mask formatting
 such as phone-number punctuation copied from examples, calendar-valid embedded-date extraction/normalization from
@@ -411,7 +411,7 @@ normalized add/remove/clear changes and Cancel leaves the original options objec
 Accessibility Checker remains a deterministic model-backed audit in `Core.Commands`, not a full WCAG or screen-reader
 engine. It reports issues supported by current workbook state, including merged cells, blank structured-table headers,
 low-contrast cell text against base, workbook theme/tint, and patterned fills, low-contrast text boxes against
-explicit, theme, and workbook object-default fills, missing or generic object alternate/title/name text including common default object labels and compact/separator-numbered defaults, hidden sheets/rows/columns with
+explicit, theme, and workbook object-default fills, missing or generic object alternate/title/name text including common default object labels, compact/separator-numbered defaults, and copied image filename defaults, hidden sheets/rows/columns with
 modeled content including hyperlinks, blank, generic action-phrase, URL-like, or unclear hyperlink display text, and charts whose title or axis title is missing or generic as the current accessible label.
 
 Native JSON persists the local threaded-comment model, including author, replies, created/modified UTC activity
