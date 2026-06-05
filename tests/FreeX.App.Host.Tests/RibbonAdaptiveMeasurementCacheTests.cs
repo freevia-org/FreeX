@@ -403,7 +403,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
 
         public IReadOnlyList<string> VisibleRibbonGroupNames =>
             (_window.FindName("RibbonTabs") as TabControl)?.SelectedItem is TabItem selectedTab
-                ? EnumerateVisualDescendants(selectedTab.Content as DependencyObject ?? selectedTab)
+                ? WpfTestTree.FindVisualDescendants<DependencyObject>(selectedTab.Content as DependencyObject ?? selectedTab)
                     .OfType<FrameworkElement>()
                     .Where(element => element.Visibility == Visibility.Visible &&
                                       RibbonMetadata.TryGetGroupName(element, out _))
@@ -492,19 +492,6 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
 
         private static string? GetGroupName(FrameworkElement element) =>
             RibbonMetadata.TryGetGroupName(element, out var name) ? name : null;
-
-        private static IEnumerable<DependencyObject> EnumerateVisualDescendants(DependencyObject root)
-        {
-            var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
-            for (var i = 0; i < count; i++)
-            {
-                var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-                yield return child;
-
-                foreach (var descendant in EnumerateVisualDescendants(child))
-                    yield return descendant;
-            }
-        }
 
         private static void PumpDispatcher()
         {
