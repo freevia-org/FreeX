@@ -255,26 +255,5 @@ public sealed class RibbonKeyTipRoutingTests
         return menuItem;
     }
 
-    private static void RunSta(Action action)
-    {
-        Exception? exception = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                exception = ex;
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
-        if (exception is not null)
-            throw exception;
-    }
+    private static void RunSta(Action action) => StaTestRunner.Run(action);
 }
