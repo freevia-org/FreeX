@@ -165,7 +165,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             HasPreservableSheetViewMetadata(sourceSheetViews, workbookNs);
     }
 
-    private static bool HasPreservableSourceWorksheetMetadata(
+    internal static bool HasPreservableSourceWorksheetMetadata(
         ZipArchiveEntry sourceWorksheetEntry,
         XNamespace workbookNs)
     {

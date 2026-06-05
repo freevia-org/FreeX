@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 
 using FreeX.Core.Model;
@@ -204,9 +205,26 @@ public sealed partial class XlsxFileAdapter
         WorkbookTheme workbookTheme,
         WorkbookIndexedColorPalette indexedColors)
     {
-        var worksheetXml = LoadXml(worksheetEntry);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var sheetDataLayout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheetXml, worksheetNs);
+        XDocument worksheetXml;
+        XlsxWorksheetSheetDataLayout sheetDataLayout;
+        var loadedPrunedWorksheetXml = false;
+        if (TryLoadWorksheetXmlWithoutSheetData(
+                worksheetEntry,
+                worksheetNs,
+                out var prunedWorksheetXml,
+                out var streamedSheetDataLayout))
+        {
+            worksheetXml = prunedWorksheetXml;
+            loadedPrunedWorksheetXml = true;
+            sheetDataLayout = MergeColumnLayout(worksheetXml, worksheetNs, streamedSheetDataLayout);
+        }
+        else
+        {
+            worksheetXml = LoadXml(worksheetEntry);
+            sheetDataLayout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheetXml, worksheetNs);
+        }
+
         var rowColumnLayout = sheetDataLayout.RowColumnLayout;
         var cellLayout = sheetDataLayout.CellLayout;
 
@@ -266,7 +284,11 @@ public sealed partial class XlsxFileAdapter
         var threadedComments = XlsxWorksheetThreadedCommentMapper.Read(archive, worksheetPath);
         var codeName = sheetPr?.Attribute("codeName")?.Value;
         var hasPreservableSourceWorksheetMetadata = HasRetainedWorksheetMetadataElement(worksheetXml.Root, worksheetNs) ||
-            XlsxWorksheetMetadataPreserver.HasPreservableSourceWorksheetMetadata(worksheetXml, worksheetNs);
+            XlsxWorksheetMetadataPreserver.HasPreservableSourceWorksheetMetadata(worksheetXml, worksheetNs) ||
+            sheetDataLayout.HasPreservableSourceSheetDataMetadata;
+        if (!hasPreservableSourceWorksheetMetadata && loadedPrunedWorksheetXml)
+            hasPreservableSourceWorksheetMetadata =
+                XlsxWorksheetMetadataPreserver.HasPreservableSourceWorksheetMetadata(worksheetEntry, worksheetNs);
         var hasConditionalFormattingBlocks =
             worksheetXml.Root?.Elements(worksheetNs + "conditionalFormatting").Any() == true;
         var hasClosedXmlUnsupportedConditionalFormatting =
@@ -363,6 +385,131 @@ public sealed partial class XlsxFileAdapter
             hasUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters,
             codeName);
+    }
+
+    private static bool TryLoadWorksheetXmlWithoutSheetData(
+        ZipArchiveEntry worksheetEntry,
+        XNamespace worksheetNs,
+        out XDocument worksheetXml,
+        out XlsxWorksheetSheetDataLayout sheetDataLayout)
+    {
+        worksheetXml = new XDocument();
+        sheetDataLayout = CreateEmptySheetDataLayout();
+
+        try
+        {
+            using var stream = worksheetEntry.Open();
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            reader.MoveToContent();
+            if (reader.NodeType != XmlNodeType.Element ||
+                reader.LocalName != "worksheet" ||
+                !string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var root = CreateShallowElement(reader);
+            worksheetXml.Add(root);
+            if (reader.IsEmptyElement)
+                return true;
+
+            var worksheetDepth = reader.Depth;
+            var readNext = true;
+            while (true)
+            {
+                if (readNext && !reader.Read())
+                    break;
+                readNext = true;
+
+                if (reader.NodeType == XmlNodeType.EndElement &&
+                    reader.Depth == worksheetDepth)
+                {
+                    break;
+                }
+
+                if (reader.NodeType != XmlNodeType.Element ||
+                    reader.Depth != worksheetDepth + 1)
+                {
+                    continue;
+                }
+
+                if (reader.LocalName == "sheetData" &&
+                    string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal))
+                {
+                    root.Add(CreateShallowElement(reader));
+                    sheetDataLayout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(
+                        reader,
+                        worksheetNs,
+                        detectPreservableSourceSheetDataMetadata: false);
+                    continue;
+                }
+
+                if (XNode.ReadFrom(reader) is XElement child)
+                {
+                    root.Add(child);
+                    readNext = false;
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            worksheetXml = new XDocument();
+            sheetDataLayout = CreateEmptySheetDataLayout();
+            return false;
+        }
+    }
+
+    private static XlsxWorksheetSheetDataLayout MergeColumnLayout(
+        XDocument worksheetXml,
+        XNamespace worksheetNs,
+        XlsxWorksheetSheetDataLayout sheetDataLayout)
+    {
+        var columnLayout = XlsxWorksheetRowColumnLayoutReader.Read(worksheetXml, worksheetNs);
+        return sheetDataLayout with
+        {
+            RowColumnLayout = sheetDataLayout.RowColumnLayout with
+            {
+                HiddenCols = columnLayout.HiddenCols,
+                ColOutlineLevels = columnLayout.ColOutlineLevels,
+                GroupHiddenCols = columnLayout.GroupHiddenCols,
+                ColumnWidths = columnLayout.ColumnWidths
+            }
+        };
+    }
+
+    private static XlsxWorksheetSheetDataLayout CreateEmptySheetDataLayout() =>
+        new(
+            new XlsxWorksheetRowColumnLayout([], [], [], [], [], [], [], []),
+            new XlsxWorksheetCellLayout([], [], [], false, false, 0));
+
+    private static XElement CreateShallowElement(XmlReader reader)
+    {
+        var element = new XElement(XName.Get(reader.LocalName, reader.NamespaceURI));
+        if (!reader.HasAttributes)
+            return element;
+
+        for (var i = 0; i < reader.AttributeCount; i++)
+        {
+            reader.MoveToAttribute(i);
+            element.Add(new XAttribute(GetAttributeName(reader), reader.Value));
+        }
+
+        reader.MoveToElement();
+        return element;
+    }
+
+    private static XName GetAttributeName(XmlReader reader)
+    {
+        if (reader.Prefix == "xmlns")
+            return XNamespace.Xmlns + reader.LocalName;
+        if (reader.Name == "xmlns")
+            return XName.Get("xmlns");
+        if (reader.NamespaceURI.Length == 0)
+            return XName.Get(reader.LocalName);
+
+        return XName.Get(reader.LocalName, reader.NamespaceURI);
     }
 
     private static bool HasDynamicFilter(WorksheetAutoFilterModel? autoFilter)

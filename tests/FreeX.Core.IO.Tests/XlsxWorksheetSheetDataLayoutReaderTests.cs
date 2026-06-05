@@ -71,6 +71,59 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
     }
 
     [Fact]
+    public void ReadSheetDataLayout_StreamingParserMatchesDirectSheetDataAndFlagsNativeMetadata()
+    {
+        var worksheet = new XDocument(
+            new XElement(WorksheetNs + "worksheet",
+                new XElement(WorksheetNs + "sheetData",
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "5"),
+                        new XAttribute("hidden", "1"),
+                        new XAttribute("ht", "18"),
+                        new XAttribute("outlineLevel", "2"),
+                        new XAttribute("collapsed", "1"),
+                        new XAttribute("thickTop", "1"),
+                        Cell("A5", style: "4"),
+                        Cell(
+                            "B5",
+                            null,
+                            "e",
+                            new XElement(
+                                WorksheetNs + "f",
+                                new XAttribute("t", "shared"),
+                                "1/0"),
+                            new XElement(WorksheetNs + "v", "#DIV/0!")),
+                        Cell(
+                            "C5",
+                            "6",
+                            "inlineStr",
+                            new XElement(
+                                WorksheetNs + "is",
+                                new XElement(
+                                    WorksheetNs + "r",
+                                    new XElement(WorksheetNs + "t", "rich"))))))));
+
+        using var reader = worksheet.Root!.Element(WorksheetNs + "sheetData")!.CreateReader();
+
+        var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(reader, WorksheetNs);
+
+        layout.RowColumnLayout.HiddenRows.Should().Equal(5u);
+        layout.RowColumnLayout.RowHeights[5].Should().BeApproximately(24, 0.0001);
+        layout.RowColumnLayout.RowOutlineLevels.Should().Contain(5u, 2);
+        layout.RowColumnLayout.GroupHiddenRows.Should().Equal(5u);
+        layout.CellLayout.HasStyleOnlyCells.Should().BeTrue();
+        layout.CellLayout.ExplicitStyleOnlyCells.Should().Equal((5u, 1u, 4));
+        layout.CellLayout.ExplicitPopulatedCellStyles.Should().Equal((5u, 3u, 6));
+        layout.CellLayout.CachedFormulaErrors.Should().Equal(new Dictionary<(uint Row, uint Col), ErrorValue>
+        {
+            [(5, 2)] = ErrorValue.DivByZero
+        });
+        layout.CellLayout.PopulatedCellCount.Should().Be(2);
+        layout.HasPreservableSourceSheetDataMetadata.Should().BeTrue();
+    }
+
+    [Fact]
     public void LoadSheetDataLayout_UsesDirectSheetDataAndColumnScans()
     {
         var rowColumnSource = Source("XlsxWorksheetRowColumnLayoutReader.cs");
@@ -80,11 +133,14 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         rowColumnSource.Should().Contain("ReadSheetDataLayout(worksheetXml, worksheetNs)");
         rowColumnSource.Should().Contain("root.Element(worksheetNs + \"sheetData\")?.Elements(rowName)");
         rowColumnSource.Should().Contain("root.Elements(worksheetNs + \"cols\")");
+        rowColumnSource.Should().Contain("XmlReader reader,");
+        rowColumnSource.Should().Contain("detectPreservableSourceSheetDataMetadata");
         rowColumnSource.Should().NotContain("worksheetXml.Descendants(worksheetNs + \"row\")");
         rowColumnSource.Should().NotContain("worksheetXml.Descendants(worksheetNs + \"col\")");
         cellSource.Should().Contain("ReadSheetDataCells(");
         cellSource.Should().NotContain("worksheetXml.Descendants(worksheetNs + \"c\")");
-        adapterSource.Should().Contain("var sheetDataLayout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheetXml, worksheetNs);");
+        adapterSource.Should().Contain("TryLoadWorksheetXmlWithoutSheetData(");
+        adapterSource.Should().Contain("detectPreservableSourceSheetDataMetadata: false");
         adapterSource.Should().NotContain("ReadCachedFormulaErrors(worksheetXml, worksheetNs)");
         adapterSource.Should().NotContain("ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs)");
     }
