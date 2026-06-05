@@ -1,6 +1,5 @@
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
-using System.Globalization;
 using Xunit;
 
 namespace FreeX.Core.Calc.Tests;
@@ -797,30 +796,18 @@ public class NumberFormatterTests
     [Fact]
     public void CustomNumberSubset_FormatsSpecialExcelDateTimeLocaleTokensUsingCurrentCulture()
     {
-        var originalCulture = CultureInfo.CurrentCulture;
-        var originalUiCulture = CultureInfo.CurrentUICulture;
-        try
-        {
-            var culture = CultureInfo.GetCultureInfo("de-DE");
-            CultureInfo.CurrentCulture = culture;
-            CultureInfo.CurrentUICulture = culture;
-            var value = new DateTimeValue(new DateTime(2024, 1, 1, 13, 14, 15).ToOADate());
+        using var cultureScope = TestCultureScope.CurrentCultureAndUICulture("de-DE");
+        var value = new DateTimeValue(new DateTime(2024, 1, 1, 13, 14, 15).ToOADate());
 
-            Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(value, "[$-F800]"));
-            Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(value, "[$-F800]dddd, mmmm dd, yyyy"));
-            Assert.Equal("13:14:15", NumberFormatter.Format(value, "[$-F400]"));
-            Assert.Equal("13:14:15", NumberFormatter.Format(value, "[$-F400]h:mm:ss AM/PM"));
+        Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(value, "[$-F800]"));
+        Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(value, "[$-F800]dddd, mmmm dd, yyyy"));
+        Assert.Equal("13:14:15", NumberFormatter.Format(value, "[$-F400]"));
+        Assert.Equal("13:14:15", NumberFormatter.Format(value, "[$-F400]h:mm:ss AM/PM"));
 
-            var numericSerial = new NumberValue(value.Value);
-            Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(numericSerial, "[$-F800]dddd, mmmm dd, yyyy"));
-            Assert.Equal("13:14:15", NumberFormatter.Format(numericSerial, "[$-F400]h:mm:ss AM/PM"));
-            Assert.Equal("45292.55", NumberFormatter.Format(numericSerial, "[$-F400]0.00"));
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = originalCulture;
-            CultureInfo.CurrentUICulture = originalUiCulture;
-        }
+        var numericSerial = new NumberValue(value.Value);
+        Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(numericSerial, "[$-F800]dddd, mmmm dd, yyyy"));
+        Assert.Equal("13:14:15", NumberFormatter.Format(numericSerial, "[$-F400]h:mm:ss AM/PM"));
+        Assert.Equal("45292.55", NumberFormatter.Format(numericSerial, "[$-F400]0.00"));
     }
 
     [Theory]
