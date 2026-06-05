@@ -1761,12 +1761,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "municipl"))
-                {
-                    suggestion = "municipal";
-                    return true;
-                }
-
                 if (first == 'm' && EqualAsciiWordIgnoreCase(word, "meterng"))
                 {
                     suggestion = "metering";
@@ -2309,12 +2303,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "compliace"))
-                {
-                    suggestion = "compliance";
-                    return true;
-                }
-
                 if (first == 'e' && EqualAsciiWordIgnoreCase(word, "excelent"))
                 {
                     suggestion = "excellent";
@@ -2438,6 +2426,12 @@ public static partial class SpellCheckService
                 if (first == 'm' && EqualAsciiWordIgnoreCase(word, "migraton"))
                 {
                     suggestion = "migration";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "municipl"))
+                {
+                    suggestion = "municipal";
                     return true;
                 }
 
@@ -2842,6 +2836,12 @@ public static partial class SpellCheckService
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "collaterl"))
                 {
                     suggestion = "collateral";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "compliace"))
+                {
+                    suggestion = "compliance";
                     return true;
                 }
 
