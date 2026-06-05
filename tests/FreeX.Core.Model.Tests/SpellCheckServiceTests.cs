@@ -671,6 +671,55 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversDataAnalyticsReportingVocabularyTypos()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "DASHBORD Dashbaord metrc METIRC metircs Segmnt cohrot ANALYTCS Insigt insigts DATSET querry atribute Dimenson visualizaton aggregaton corelation. Keep dashboard, predashbord, dashbord_id, https://dashbord.example.com/metrc, analyst@dashbord.example.com, and \"C:\\datset folder\\dashbord file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+        var replaceAllIssue = SpellCheckService
+            .FindIssuesInCell(
+                textAddress,
+                "dashbord DASHBORD Dashbord https://dashbord.example.com/dashbord analyst@dashbord.example.com dashbord_id predashbord \"C:\\dashbord folder\\dashbord file.xlsx\".")
+            .First();
+
+        var replaceAllCorrected = SpellCheckService.ApplyCorrectionToAllOccurrences(replaceAllIssue, "dashboard");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("DASHBORD", "DASHBOARD"),
+            ("Dashbaord", "Dashboard"),
+            ("metrc", "metric"),
+            ("METIRC", "METRIC"),
+            ("metircs", "metrics"),
+            ("Segmnt", "Segment"),
+            ("cohrot", "cohort"),
+            ("ANALYTCS", "ANALYTICS"),
+            ("Insigt", "Insight"),
+            ("insigts", "insights"),
+            ("DATSET", "DATASET"),
+            ("querry", "query"),
+            ("atribute", "attribute"),
+            ("Dimenson", "Dimension"),
+            ("visualizaton", "visualization"),
+            ("aggregaton", "aggregation"),
+            ("corelation", "correlation"));
+        plan.IssueCount.Should().Be(17);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "DASHBOARD Dashboard metric METRIC metrics Segment cohort ANALYTICS Insight insights DATASET query attribute Dimension visualization aggregation correlation. Keep dashboard, predashbord, dashbord_id, https://dashbord.example.com/metrc, analyst@dashbord.example.com, and \"C:\\datset folder\\dashbord file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(17);
+        replaceAllCorrected.Should().Be(
+            "dashboard DASHBOARD Dashboard https://dashbord.example.com/dashbord analyst@dashbord.example.com dashbord_id predashbord \"C:\\dashbord folder\\dashbord file.xlsx\".");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_CoversOperationsPlanningVocabularyTypos()
     {
         var wb = new Workbook("test");
