@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -9,7 +8,7 @@ public sealed class CrashAnalyticsOptionsDialogTests
     public void OptionsDialog_ExposesCrashAnalyticsOptInInTrustCenter()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         xaml.Should().Contain("x:Name=\"OptCrashAnalytics\"");
         xaml.Should().Contain("Send opt-in _crash reports");

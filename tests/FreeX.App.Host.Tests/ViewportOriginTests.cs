@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -9,7 +8,7 @@ public sealed class ViewportOriginTests
     [Fact]
     public void CreateViewport_SkipsObjectDataWhenObjectsAreNotRendered()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
         var createViewport = source[
             source.IndexOf("private ViewportModel CreateViewport", StringComparison.Ordinal)..
             source.IndexOf("private SplitPaneViewportOffsets? GetSplitPaneViewportOffsets", StringComparison.Ordinal)];

@@ -24,6 +24,7 @@ public sealed partial class NativeJsonAdapter
         public string? Value { get; set; }
         public string? ValueType { get; set; }
         public string? Formula { get; set; }
+        public string? FormulaArrayMode { get; set; }
         public bool IgnoreFormulaError { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? StyleId { get; set; }
@@ -260,6 +261,7 @@ public sealed partial class NativeJsonAdapter
         private static ReadOnlySpan<byte> ValueProperty => "Value"u8;
         private static ReadOnlySpan<byte> ValueTypeProperty => "ValueType"u8;
         private static ReadOnlySpan<byte> FormulaProperty => "Formula"u8;
+        private static ReadOnlySpan<byte> FormulaArrayModeProperty => "FormulaArrayMode"u8;
         private static ReadOnlySpan<byte> IgnoreFormulaErrorProperty => "IgnoreFormulaError"u8;
         private static ReadOnlySpan<byte> StyleIdProperty => "StyleId"u8;
         private static ReadOnlySpan<byte> StyleProperty => "Style"u8;
@@ -272,6 +274,7 @@ public sealed partial class NativeJsonAdapter
         private static readonly JsonEncodedText ValueName = JsonEncodedText.Encode(nameof(CellDto.Value));
         private static readonly JsonEncodedText ValueTypeName = JsonEncodedText.Encode(nameof(CellDto.ValueType));
         private static readonly JsonEncodedText FormulaName = JsonEncodedText.Encode(nameof(CellDto.Formula));
+        private static readonly JsonEncodedText FormulaArrayModeName = JsonEncodedText.Encode(nameof(CellDto.FormulaArrayMode));
         private static readonly JsonEncodedText IgnoreFormulaErrorName = JsonEncodedText.Encode(nameof(CellDto.IgnoreFormulaError));
         private static readonly JsonEncodedText StyleIdName = JsonEncodedText.Encode(nameof(CellDto.StyleId));
         private static readonly JsonEncodedText StyleName = JsonEncodedText.Encode(nameof(CellDto.Style));
@@ -339,6 +342,11 @@ public sealed partial class NativeJsonAdapter
                 {
                     reader.Read();
                     dto.Formula = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
+                }
+                else if (reader.ValueTextEquals(FormulaArrayModeProperty))
+                {
+                    reader.Read();
+                    dto.FormulaArrayMode = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
                 }
                 else if (reader.ValueTextEquals(IgnoreFormulaErrorProperty))
                 {
@@ -470,6 +478,7 @@ public sealed partial class NativeJsonAdapter
             Utf8JsonWriter writer,
             ScalarValue value,
             string? formula,
+            FormulaArrayMode arrayMode,
             bool ignoreFormulaError,
             int? styleId,
             CellStyleDto? style,
@@ -482,6 +491,8 @@ public sealed partial class NativeJsonAdapter
             WriteScalarValuePayload(writer, value);
             if (formula is not null)
                 writer.WriteString(FormulaName, formula);
+            if (formula is not null && arrayMode != FormulaArrayMode.Dynamic)
+                writer.WriteString(FormulaArrayModeName, arrayMode.ToString());
             if (ignoreFormulaError)
                 writer.WriteBoolean(IgnoreFormulaErrorName, ignoreFormulaError);
             if (styleId is { } nativeStyleId)
@@ -502,6 +513,8 @@ public sealed partial class NativeJsonAdapter
                 writer.WriteString(ValueTypeName, value.ValueType);
             if (value.Formula is not null)
                 writer.WriteString(FormulaName, value.Formula);
+            if (value.Formula is not null && value.FormulaArrayMode is not null)
+                writer.WriteString(FormulaArrayModeName, value.FormulaArrayMode);
             if (value.IgnoreFormulaError)
                 writer.WriteBoolean(IgnoreFormulaErrorName, value.IgnoreFormulaError);
             if (value.StyleId is { } styleId)

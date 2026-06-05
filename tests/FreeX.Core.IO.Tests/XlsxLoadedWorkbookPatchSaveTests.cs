@@ -1349,7 +1349,7 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
-    public void Save_LoadedWorkbookWithFormulaTextEdit_PatchesFormulaAndDropsCalcChain()
+    public void Save_LoadedWorkbookWithPlainFormulaTextEdit_FallsBackToFullSaveAndDropsCalcChain()
     {
         var sourceBytes = CreateFormulaSourcePackage();
         var adapter = new XlsxFileAdapter();
@@ -1366,9 +1366,12 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         adapter.Save(workbook, saved);
         var savedBytes = saved.ToArray();
 
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_formula_array_mode");
+        adapter.LastSaveDiagnostics.InvalidatesCalcChain.Should().BeTrue();
         ReadPackageEntry(savedBytes, "xl/workbook.xml")
             .Should()
-            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+            .NotEqual(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
         PackageHasEntry(savedBytes, "xl/calcChain.xml").Should().BeFalse();
         ReadContentTypeOverrides(savedBytes).Should().NotContain("/xl/calcChain.xml");
         ReadWorkbookRelationshipTypes(savedBytes)
@@ -1377,9 +1380,29 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
         ReadCellFormula(savedBytes, "xl/worksheets/sheet1.xml", "A1")
             .Should()
             .Be("1+2");
-        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
-            .Should()
-            .Be("3");
+    }
+
+    [Fact]
+    public void Save_LoadedWorkbookWithFormulaArrayModeEdit_FallsBackToFullSave()
+    {
+        var sourceBytes = CreateFormulaSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
+        cell.ArrayMode.Should().Be(FormulaArrayMode.Implicit);
+        cell.FormulaText = cell.FormulaText;
+        cell.ArrayMode.Should().Be(FormulaArrayMode.Dynamic);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_formula_array_mode");
+        adapter.LastSaveDiagnostics.InvalidatesCalcChain.Should().BeTrue();
     }
 
     [Fact]

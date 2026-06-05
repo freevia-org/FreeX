@@ -41,6 +41,33 @@ public class ImplicitIntersectionRoundTripTests
     }
 
     [Fact]
+    public void EditedPlainFormula_BecomesDynamic_AndSurvivesRebuildSave()
+    {
+        using var ms = BuildXlsxWithPlainFormula("A7:J7*B15");
+        var adapter = new XlsxFileAdapter();
+        var wb = adapter.Load(ms);
+        var sheet = wb.GetSheetAt(0);
+        var formulaAddress = new CellAddress(sheet.Id, 20, 10);
+        sheet.GetCell(formulaAddress)!.ArrayMode.Should().Be(FormulaArrayMode.Implicit);
+
+        sheet.SetFormula(formulaAddress, "A7:J7*B15");
+        sheet.GetCell(formulaAddress)!.ArrayMode.Should().Be(FormulaArrayMode.Dynamic);
+
+        new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()).RecalculateAllFormulas(wb);
+        sheet.GetCell(20, 10)!.Value.Should().Be(new NumberValue(2));
+        sheet.TryGetSpillExtent(formulaAddress, out var spillRows, out var spillCols).Should().BeTrue();
+        spillRows.Should().Be(1);
+        spillCols.Should().Be(10);
+        sheet.GetValue(20, 19).Should().Be(new NumberValue(20));
+
+        using var saved = new MemoryStream();
+        adapter.Save(wb, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        reloaded.GetSheetAt(0).GetCell(20, 10)!.ArrayMode.Should().Be(FormulaArrayMode.Dynamic);
+    }
+
+    [Fact]
     public void DynamicSpillFormula_SurvivesRebuildSave_AsDynamic()
     {
         var wb = new Workbook("T");

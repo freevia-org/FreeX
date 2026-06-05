@@ -285,6 +285,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBooleanFunctions()
+    {
+        AssertFormulaBooleanContrastLocations("=TRUE()", "B1", "B2", "B3", "B4");
+        AssertFormulaBooleanContrastLocations("=FALSE()");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumericLiterals()
     {
         AssertFormulaBooleanContrastLocations("=1", "B1", "B2", "B3", "B4");
@@ -323,6 +330,15 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaBooleanContrastLocations("AND($A1>=100,$C1)", "B2");
         AssertFormulaBooleanContrastLocations("OR($A1>=100,$C1)", "B1", "B2", "B3");
         AssertFormulaBooleanContrastLocations("NOT($C1)", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBooleanFunctionsInsideLogicalWrappers()
+    {
+        AssertFormulaBooleanContrastLocations("AND(TRUE(),$A1>=100)", "B2", "B3");
+        AssertFormulaBooleanContrastLocations("OR(FALSE(),$C1)", "B1", "B2");
+        AssertFormulaBooleanContrastLocations("NOT(FALSE())", "B1", "B2", "B3", "B4");
+        AssertFormulaBooleanContrastLocations("XOR(TRUE(),$C1)", "B3", "B4");
     }
 
     [Fact]
@@ -410,6 +426,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIfBooleanBranches()
     {
         AssertFormulaIfContrastLocations("IF($A1>=100,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaIfContrastLocations("IF($A1>=100,TRUE(),FALSE())", "B2", "B4");
     }
 
     [Fact]
@@ -437,6 +454,42 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaPredicateContrastLocations("XOR(ISNUMBER($A1),$C1)", "B2", "B3", "B5");
         AssertFormulaXorContrastLocations("XOR(IF($A1>=100,TRUE,FALSE),$C1=\"Open\")", "B2", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatBooleanFunctionsWithArguments()
+    {
+        AssertFormulaBooleanContrastLocations("=TRUE(1)");
+        AssertFormulaBooleanContrastLocations("NOT(FALSE($A1))");
+        AssertFormulaBooleanContrastLocations("AND(TRUE(1),$A1>=100)");
+        AssertFormulaIfContrastLocations("IF($A1>=100,TRUE(1),FALSE())");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIsRefReferences()
+    {
+        AssertFormulaReferencePredicateContrastLocations("ISREF($A1)", "B1", "B2", "B3", "B4", "B5");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatIsFormulaReferences()
+    {
+        AssertFormulaReferencePredicateContrastLocations("ISFORMULA($A1)", "B1", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatIsRefIsFormulaLiteralOperands()
+    {
+        AssertFormulaReferencePredicateContrastLocations("ISREF(42)");
+        AssertFormulaReferencePredicateContrastLocations("ISFORMULA(42)");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNestedIsRefIsFormulaPredicates()
+    {
+        AssertFormulaReferencePredicateContrastLocations("AND(ISFORMULA($A1),$C1)", "B1");
+        AssertFormulaReferencePredicateContrastLocations("XOR(ISREF($A1),$C1)", "B3", "B4", "B5");
+        AssertFormulaReferencePredicateContrastLocations("IF(ISFORMULA($A1),TRUE,FALSE)", "B1", "B4");
     }
 
     [Fact]
@@ -501,6 +554,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaPredicateContrastLocations("ISNUMBER(SUM($A1))");
         AssertFormulaParityContrastLocations("ISEVEN(SUM($A1))");
         AssertFormulaParityContrastLocations("ISODD(SUM($A1))");
+        AssertFormulaReferencePredicateContrastLocations("ISREF(SUM($A1))");
+        AssertFormulaReferencePredicateContrastLocations("ISFORMULA(SUM($A1))");
         AssertFormulaPredicateContrastLocations("SUM($A1)>0");
     }
 
@@ -746,6 +801,39 @@ public sealed partial class AccessibilityCheckerServiceTests
             sheet.SetCell(new CellAddress(sheet.Id, row, 4), nonNumericSource);
     }
 
+    private static Workbook CreateFormulaReferencePredicateContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 5, 2);
+
+        SetFormulaReferencePredicateContrastRow(sheet, 1, Cell.FromFormula("1+1"), flag: true, "Formula source");
+        SetFormulaReferencePredicateContrastRow(sheet, 2, Cell.FromValue(new NumberValue(42)), flag: true, "Number source");
+        SetFormulaReferencePredicateContrastRow(sheet, 3, source: null, flag: false, "Blank source");
+        SetFormulaReferencePredicateContrastRow(sheet, 4, Cell.FromFormula("A2*2"), flag: false, "Second formula source");
+        SetFormulaReferencePredicateContrastRow(sheet, 5, Cell.FromValue(new TextValue("Revenue")), flag: false, "Text source");
+
+        return workbook;
+    }
+
+    private static void SetFormulaReferencePredicateContrastRow(
+        Sheet sheet,
+        uint row,
+        Cell? source,
+        bool flag,
+        string label)
+    {
+        if (source is not null)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), source);
+
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new BoolValue(flag));
+    }
+
     private static void AssertFormulaBooleanContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaBooleanContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
@@ -793,6 +881,17 @@ public sealed partial class AccessibilityCheckerServiceTests
     private static void AssertFormulaIfContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaReferencePredicateContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaReferencePredicateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)

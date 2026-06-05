@@ -34,6 +34,7 @@ public class LexerTests
     [Theory]
     [InlineData("=_xlfn.XLOOKUP(\"B\",A1:A2,B1:B2)", "XLOOKUP")]
     [InlineData("=_xlfn._xlws.FILTER(A1:A2,B1:B2)", "FILTER")]
+    [InlineData("=_xlfn.SINGLE(A1:A3)", "SINGLE")]
     public void Tokenizes_ExcelFutureFunctionPrefixesAsCanonicalFunctionNames(string formula, string expectedName)
     {
         var tokens = new Lexer(formula).Tokenize();
