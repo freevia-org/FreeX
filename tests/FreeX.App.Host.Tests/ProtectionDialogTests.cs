@@ -11,10 +11,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class ProtectionDialogTests
 {
-    private static T GetPrivateField<T>(object instance, string name)
-        where T : class =>
-        DialogSourceTestSupport.GetPrivateField<T>(instance, name);
-
     private static void InvokePrivate(AllowEditRangeDialog dialog, string methodName)
     {
         var method = typeof(AllowEditRangeDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);

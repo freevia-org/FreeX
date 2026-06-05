@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -76,12 +75,12 @@ public sealed partial class ProtectionDialogTests
             var confirmDialog = new ConfirmPasswordDialog("secret");
             try
             {
-                var passwordBox = GetPrivateField<PasswordBox>(protectDialog, "_passwordBox");
+                var passwordBox = DialogSourceTestSupport.GetPrivateField<PasswordBox>(protectDialog, "_passwordBox");
                 AutomationProperties.GetName(passwordBox).Should().Be("Protection password");
                 AutomationProperties.GetAutomationId(passwordBox).Should().Be("ProtectionPasswordBox");
                 AutomationProperties.GetHelpText(passwordBox).Should().Be("Enter the optional password for protecting the sheet or workbook.");
 
-                var confirmationBox = GetPrivateField<PasswordBox>(confirmDialog, "_confirmationBox");
+                var confirmationBox = DialogSourceTestSupport.GetPrivateField<PasswordBox>(confirmDialog, "_confirmationBox");
                 AutomationProperties.GetName(confirmationBox).Should().Be("Confirm protection password");
                 AutomationProperties.GetAutomationId(confirmationBox).Should().Be("ConfirmProtectionPasswordBox");
                 AutomationProperties.GetHelpText(confirmationBox).Should().Be("Reenter the password to confirm protection.");
