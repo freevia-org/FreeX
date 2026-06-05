@@ -17,6 +17,8 @@ public sealed partial class AutoFilterDialog
         _items.Clear();
         foreach (var item in items)
             _items.Add(item);
+
+        UpdateSelectAllBoxState();
     }
 
     private void ReplaceAllItems(IEnumerable<AutoFilterDialogItem> items)
@@ -24,16 +26,6 @@ public sealed partial class AutoFilterDialog
         _allItems.Clear();
         _allItems.AddRange(items);
         ReplaceItems(FilterItems(_allItems, _searchBox.Text));
-    }
-
-    private AutoFilterSortDirection GetSortDirection()
-    {
-        if (_sortAscending.IsChecked == true)
-            return AutoFilterSortDirection.Ascending;
-
-        return _sortDescending.IsChecked == true
-            ? AutoFilterSortDirection.Descending
-            : AutoFilterSortDirection.None;
     }
 
     private void UpdateCriteriaTextFromTypedControls()
