@@ -370,7 +370,10 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("mergeRegionChanges,");
         snapshotSource.Should().Contain("hyperlinkChanges,");
         snapshotSource.Should().Contain("var patchedSourceModelFingerprint = currentModelFingerprint;");
-        snapshotSource.Should().Contain("var patchedPatchValidationFingerprint = CreatePatchValidationModelFingerprint(workbook);");
+        snapshotSource.Should().Contain("out var currentPatchValidationModelFingerprint,");
+        snapshotSource.Should().Contain("currentPatchValidationModelFingerprint ?? CreatePatchValidationModelFingerprint(workbook);");
+        snapshotSource.Should().Contain("currentPatchValidationModelFingerprint = CreatePatchValidationModelFingerprint(workbook);");
+        snapshotSource.Should().Contain("ChangesOnlyExistingCells(");
         snapshotSource.Should().Contain("patchedSourceModelFingerprint,");
         snapshotSource.Should().Contain("patchedPatchValidationFingerprint),");
         snapshotSource.Should().Contain("CellPatchBaselineBlockReason));");
