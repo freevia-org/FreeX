@@ -17569,6 +17569,12 @@ public partial class FileAdapterSmokeTests
         dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep");
         dataConsolidate.Descendants(worksheetNs + "dataRef").Should().ContainSingle()
             .Which.Attribute("customDataRefFlag")!.Value.Should().Be("keep");
+
+        var worksheetChildren = worksheetXml.Root!.Elements().Select(element => element.Name.LocalName).ToList();
+        var dataConsolidateIndex = worksheetChildren.IndexOf("dataConsolidate");
+        var pageMarginsIndex = worksheetChildren.IndexOf("pageMargins");
+        if (pageMarginsIndex >= 0)
+            dataConsolidateIndex.Should().BeLessThan(pageMarginsIndex);
     }
 
     [Fact]
