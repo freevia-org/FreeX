@@ -109,6 +109,10 @@ internal static class ExcelOpenSmoke
     private const string OfficeDocumentRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string PackageRootRelationshipPart = "_rels/.rels";
+    private const string PrinterSettingsContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
+    private const string PrinterSettingsRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
     private const string RelationshipPartContentType =
         "application/vnd.openxmlformats-package.relationships+xml";
     private const string WorkbookContentType =
@@ -430,6 +434,7 @@ internal static class ExcelOpenSmoke
                 AssertWorksheetHyperlinkPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetDrawingPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetBackgroundImagePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorksheetPrinterSettingsPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertLegacyCommentPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorksheetTablePackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertPivotPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -632,6 +637,7 @@ internal static class ExcelOpenSmoke
             AssertWorksheetHyperlinkPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetDrawingPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetBackgroundImagePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorksheetPrinterSettingsPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertLegacyCommentPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorksheetTablePackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertPivotPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -2605,6 +2611,190 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid worksheet background image package graph: {sample}{suffix}");
+    }
+
+    private static void AssertWorksheetPrinterSettingsPackageComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+        var validatedRelationships = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validatedPackageParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worksheetEntry in archive.Entries.Where(entry =>
+                     NormalizePackagePart(entry.FullName).StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetPart = NormalizePackagePart(worksheetEntry.FullName);
+            var worksheetRelationshipPart = GetRelationshipPartForPackagePart(worksheetPart);
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            var referencedRelationshipIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var pageSetupReferences = worksheetXml
+                .Descendants(SpreadsheetNs + "pageSetup")
+                .Select((pageSetup, index) => new WorksheetPrinterSettingsReference(
+                    index + 1,
+                    pageSetup.Attribute(OfficeRelationshipNs + "id")?.Value))
+                .Where(reference => reference.RelationshipId is not null)
+                .ToArray();
+            foreach (var pageSetupReference in pageSetupReferences)
+            {
+                if (string.IsNullOrWhiteSpace(pageSetupReference.RelationshipId))
+                {
+                    issues.Add($"{worksheetPart} pageSetup #{pageSetupReference.Ordinal} has an empty printer settings relationship id");
+                    continue;
+                }
+
+                referencedRelationshipIds.Add(pageSetupReference.RelationshipId);
+                AddWorksheetPrinterSettingsRelationshipIssues(
+                    archive,
+                    worksheetPart,
+                    worksheetRelationshipPart,
+                    $"pageSetup #{pageSetupReference.Ordinal}",
+                    pageSetupReference.RelationshipId,
+                    validatedRelationships,
+                    validatedPackageParts,
+                    issues);
+            }
+
+            foreach (var printerSettingsRelationship in FindPackageRelationshipsByType(
+                         archive,
+                         worksheetRelationshipPart,
+                         PrinterSettingsRelationshipType))
+            {
+                var relationshipId = printerSettingsRelationship.Attribute("Id")?.Value;
+                if (string.IsNullOrWhiteSpace(relationshipId))
+                {
+                    issues.Add($"{worksheetRelationshipPart} has a printerSettings relationship without Id");
+                    continue;
+                }
+
+                if (referencedRelationshipIds.Contains(relationshipId))
+                    continue;
+
+                AddWorksheetPrinterSettingsRelationshipIssues(
+                    archive,
+                    worksheetPart,
+                    worksheetRelationshipPart,
+                    "printerSettings relationship",
+                    relationshipId,
+                    validatedRelationships,
+                    validatedPackageParts,
+                    issues);
+            }
+        }
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorksheetPrinterSettingsPackage(label, sourcePath, issues);
+    }
+
+    private static void AddWorksheetPrinterSettingsRelationshipIssues(
+        ZipArchive archive,
+        string worksheetPart,
+        string worksheetRelationshipPart,
+        string referenceDescription,
+        string relationshipId,
+        HashSet<string> validatedRelationships,
+        HashSet<string> validatedPackageParts,
+        List<string> issues)
+    {
+        var relationshipKey = $"{NormalizePackagePart(worksheetRelationshipPart)}|{relationshipId}";
+        if (!validatedRelationships.Add(relationshipKey))
+            return;
+
+        var relationship = FindPackageRelationshipById(
+            archive,
+            worksheetRelationshipPart,
+            relationshipId,
+            out var relationshipIssue);
+        if (relationship is null)
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} reference {relationshipId}: {relationshipIssue}");
+            return;
+        }
+
+        if (!string.Equals(relationship.Attribute("Type")?.Value, PrinterSettingsRelationshipType, StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} has Type={relationship.Attribute("Type")?.Value}; expected {PrinterSettingsRelationshipType}");
+            return;
+        }
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} is external");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} has invalid TargetMode {targetMode}");
+            return;
+        }
+
+        var target = relationship.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} has no Target");
+            return;
+        }
+
+        target = target.Trim();
+        if (IsAbsoluteRelationshipTarget(target))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} targets external URI without TargetMode=External: {target}");
+            return;
+        }
+
+        if (!TryResolvePackageRelationshipTarget(
+                worksheetRelationshipPart,
+                target,
+                out var printerSettingsPart,
+                out var targetIssue))
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} in {worksheetRelationshipPart} has invalid Target {target}: {targetIssue}");
+            return;
+        }
+
+        if (!IsPrinterSettingsPart(printerSettingsPart))
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} targets {printerSettingsPart}, which is not an xl/printerSettings binary part");
+
+        var contentTypeIssue = FindPackageContentTypeIssue(archive, printerSettingsPart, PrinterSettingsContentType);
+        if (contentTypeIssue is not null)
+            issues.Add(contentTypeIssue);
+
+        var printerSettingsEntry = FindPackageEntry(archive, printerSettingsPart);
+        if (printerSettingsEntry is null)
+        {
+            issues.Add($"{worksheetPart} {referenceDescription} relationship {relationshipId} targets missing package part {printerSettingsPart}");
+            return;
+        }
+
+        if (!validatedPackageParts.Add(printerSettingsPart))
+            return;
+
+        if (printerSettingsEntry.Length == 0)
+            issues.Add($"{printerSettingsPart} is an empty printer settings binary part");
+    }
+
+    private static bool IsPrinterSettingsPart(string packagePart)
+    {
+        packagePart = NormalizePackagePart(packagePart);
+        return packagePart.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase) &&
+            packagePart.EndsWith(".bin", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ThrowInvalidWorksheetPrinterSettingsPackage(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid worksheet printer settings package graph: {sample}{suffix}");
     }
 
     private static void AssertLegacyCommentPackageComplete(string xlsxPath, string label, string sourcePath)
@@ -8717,6 +8907,10 @@ internal static class ExcelOpenSmoke
         string? Location);
 
     private sealed record WorksheetPictureReference(
+        int Ordinal,
+        string? RelationshipId);
+
+    private sealed record WorksheetPrinterSettingsReference(
         int Ordinal,
         string? RelationshipId);
 
