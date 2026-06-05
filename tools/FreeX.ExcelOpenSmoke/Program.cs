@@ -453,6 +453,7 @@ internal static class ExcelOpenSmoke
                 AssertDocumentPropertiesPackageComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookSheetRelationshipsComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookFileVersionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
+                AssertWorkbookFileSharingMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookProtectionMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
                 AssertWorkbookCalculationPropertiesMetadataComplete(freeXSave.SavedPath, "FreeX-saved workbook", input.SourcePath);
@@ -678,6 +679,7 @@ internal static class ExcelOpenSmoke
             AssertDocumentPropertiesPackageComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookSheetRelationshipsComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookFileVersionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
+            AssertWorkbookFileSharingMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookProtectionMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
             AssertWorkbookCalculationPropertiesMetadataComplete(excelSavedPath, "Excel-saved workbook", stagedPath);
@@ -3597,6 +3599,104 @@ internal static class ExcelOpenSmoke
 
         throw new InvalidDataException(
             $"{label} for '{sourcePath}' has invalid workbook fileVersion metadata: {sample}{suffix}");
+    }
+
+    private static void AssertWorkbookFileSharingMetadataComplete(string xlsxPath, string label, string sourcePath)
+    {
+        using var archive = ZipFile.OpenRead(xlsxPath);
+        var issues = new List<string>();
+
+        var workbookEntry = FindPackageEntry(archive, WorkbookPart);
+        if (workbookEntry is not null)
+            AddWorkbookFileSharingMetadataIssues(LoadPackageXml(workbookEntry), issues);
+
+        if (issues.Count == 0)
+            return;
+
+        ThrowInvalidWorkbookFileSharingMetadata(label, sourcePath, issues);
+    }
+
+    private static void AddWorkbookFileSharingMetadataIssues(XDocument workbookXml, List<string> issues)
+    {
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var fileSharingElements = root.Elements(SpreadsheetNs + "fileSharing").ToArray();
+        if (fileSharingElements.Length > 1)
+            issues.Add($"{WorkbookPart} has {fileSharingElements.Length} fileSharing elements; expected at most one");
+
+        foreach (var fileSharing in fileSharingElements.Select((element, index) => new WorkbookFileSharingReference(index + 1, element)))
+        {
+            AddWorkbookFileSharingIssues(root, fileSharing, issues);
+        }
+    }
+
+    private static void AddWorkbookFileSharingIssues(
+        XElement workbookRoot,
+        WorkbookFileSharingReference fileSharingReference,
+        List<string> issues)
+    {
+        var fileSharing = fileSharingReference.Element;
+        var description = $"fileSharing #{fileSharingReference.Ordinal}";
+        AddWorkbookMetadataOrderingIssues(
+            workbookRoot,
+            fileSharing,
+            description,
+            [
+                "workbookPr",
+                "workbookProtection",
+                "bookViews",
+                "sheets",
+                "functionGroups",
+                "externalReferences",
+                "definedNames",
+                "calcPr",
+                "oleSize",
+                "customWorkbookViews",
+                "pivotCaches",
+                "smartTagPr",
+                "smartTagTypes",
+                "webPublishing",
+                "fileRecoveryPr",
+                "webPublishObjects",
+                "extLst"
+            ],
+            issues);
+
+        AddOptionalWorkbookMetadataBooleanIssue(description, "readOnlyRecommended", fileSharing.Attribute("readOnlyRecommended")?.Value, issues);
+        AddOptionalWorkbookMetadataUnsignedIntIssue(description, "spinCount", fileSharing.Attribute("spinCount")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "userName", fileSharing.Attribute("userName")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "reservationPassword", fileSharing.Attribute("reservationPassword")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "algorithmName", fileSharing.Attribute("algorithmName")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "hashValue", fileSharing.Attribute("hashValue")?.Value, issues);
+        AddOptionalWorkbookMetadataNonEmptyAttributeIssue(description, "saltValue", fileSharing.Attribute("saltValue")?.Value, issues);
+
+        if (fileSharing.Elements().Any())
+            issues.Add($"{WorkbookPart} {description} has child elements; expected attributes only");
+    }
+
+    private static void AddOptionalWorkbookMetadataNonEmptyAttributeIssue(
+        string description,
+        string attributeName,
+        string? value,
+        List<string> issues)
+    {
+        if (value is null || !string.IsNullOrWhiteSpace(value))
+            return;
+
+        issues.Add($"{WorkbookPart} {description} has empty {attributeName} value");
+    }
+
+    private static void ThrowInvalidWorkbookFileSharingMetadata(string label, string sourcePath, IReadOnlyList<string> issues)
+    {
+        var sample = string.Join("; ", issues.Take(MaxPackageRelationshipIssuesToReport));
+        var suffix = issues.Count > MaxPackageRelationshipIssuesToReport
+            ? $"; ... {issues.Count - MaxPackageRelationshipIssuesToReport} more"
+            : string.Empty;
+
+        throw new InvalidDataException(
+            $"{label} for '{sourcePath}' has invalid workbook fileSharing metadata: {sample}{suffix}");
     }
 
     private static void AssertWorkbookPropertiesMetadataComplete(string xlsxPath, string label, string sourcePath)
@@ -12883,6 +12983,10 @@ internal static class ExcelOpenSmoke
         XElement Element);
 
     private sealed record WorkbookFileVersionReference(
+        int Ordinal,
+        XElement Element);
+
+    private sealed record WorkbookFileSharingReference(
         int Ordinal,
         XElement Element);
 
