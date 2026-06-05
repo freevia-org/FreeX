@@ -1291,6 +1291,65 @@ public sealed class SpellCheckServiceTests
             "invoice INVOICE Invoice https://invoce.example.com/invoce buyer@invoce.example.com invoce_id preinvoce \"C:\\invoce folder\\invoce file.xlsx\".");
     }
 
+    [Theory]
+    [InlineData("Inventry", "Inventory")]
+    [InlineData("inventroy", "inventory")]
+    [InlineData("SUPPLER", "SUPPLIER")]
+    [InlineData("suplier", "supplier")]
+    [InlineData("warehous", "warehouse")]
+    [InlineData("procuremnt", "procurement")]
+    [InlineData("fulfillmnt", "fulfillment")]
+    [InlineData("backordr", "backorder")]
+    [InlineData("reorderd", "reordered")]
+    [InlineData("stockk", "stock")]
+    [InlineData("recieving", "receiving")]
+    public void FindIssuesInCell_CoversProcurementInventorySupplierVocabularyTypos(
+        string word,
+        string expectedSuggestion)
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+
+        var issues = SpellCheckService.FindIssuesInCell(address, $"Review {word}.");
+
+        issues.Should().HaveCount(1);
+        issues[0].Word.Should().Be(word);
+        issues[0].Suggestion.Should().Be(expectedSuggestion);
+    }
+
+    [Fact]
+    public void PlanKnownCorrections_CoversProcurementInventorySupplierSentenceAndIgnoredSpans()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Procuremnt inventry inventroy from suppler suplier at warehous, then fulfillmnt backordr reorderd stockk recieving. Keep https://inventry.example.com/procuremnt, ops@suppler.example.com, and \"C:\\warehous folder\\backordr file.xlsx\"."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => issue.Word).Should().Equal(
+            "Procuremnt",
+            "inventry",
+            "inventroy",
+            "suppler",
+            "suplier",
+            "warehous",
+            "fulfillmnt",
+            "backordr",
+            "reorderd",
+            "stockk",
+            "recieving");
+        plan.IssueCount.Should().Be(11);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "Procurement inventory inventory from supplier supplier at warehouse, then fulfillment backorder reordered stock receiving. Keep https://inventry.example.com/procuremnt, ops@suppler.example.com, and \"C:\\warehous folder\\backordr file.xlsx\".");
+        plan.Edits[0].ReplacementCount.Should().Be(11);
+    }
+
     [Fact]
     public void PlanKnownCorrections_CoversSalesMarketingCustomerVocabularyTypos()
     {
