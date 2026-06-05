@@ -2315,6 +2315,12 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "voltagee"))
+                {
+                    suggestion = "voltage";
+                    return true;
+                }
+
                 if (first == 'm' && EqualAsciiWordIgnoreCase(word, "milstone"))
                 {
                     suggestion = "milestone";
@@ -3061,12 +3067,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 'v' && EqualAsciiWordIgnoreCase(word, "voltagee"))
-                {
-                    suggestion = "voltage";
-                    return true;
-                }
-
                 break;
             case 10:
                 if (first == 'd' && EqualAsciiWordIgnoreCase(word, "definately"))
@@ -3423,12 +3423,6 @@ public static partial class SpellCheckService
                     return true;
                 }
 
-                if (first == 't' && EqualAsciiWordIgnoreCase(word, "transmision"))
-                {
-                    suggestion = "transmission";
-                    return true;
-                }
-
                 if (first == 'u' && EqualAsciiWordIgnoreCase(word, "utilzation"))
                 {
                     suggestion = "utilization";
@@ -3578,6 +3572,12 @@ public static partial class SpellCheckService
                 if (first == 't' && EqualAsciiWordIgnoreCase(word, "throughputt"))
                 {
                     suggestion = "throughput";
+                    return true;
+                }
+
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "transmision"))
+                {
+                    suggestion = "transmission";
                     return true;
                 }
 
