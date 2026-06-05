@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -30,7 +29,7 @@ public sealed class CommonMessageTextTests
     [Fact]
     public void DialogButtonRowFactory_DefaultButtonsResolveContentAndAccessibilityTextThroughUiText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DialogButtonRowFactory.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("DialogButtonRowFactory.cs");
 
         source.Should().Contain("ResolveDefaultAcceptContent(acceptContent)");
         source.Should().Contain("? UiText.Ok");
@@ -46,7 +45,7 @@ public sealed class CommonMessageTextTests
     [InlineData("WpfUserMessageService.cs")]
     public void DefaultMessageBoxTitlesResolveThroughUiText(string fileName)
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName));
+        var source = DialogSourceTestSupport.ReadHostSources(fileName);
 
         source.Should().Contain("ResolveDefaultTitle(title, DefaultErrorTitle, UiText.ErrorTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultWarningTitle, UiText.WarningTitle)");
