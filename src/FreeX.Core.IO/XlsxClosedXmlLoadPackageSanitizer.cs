@@ -250,7 +250,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return;
 
         RemoveWorksheetDrawingReferences(archive);
-        RemoveWorksheetDrawingRelationships(archive, removedParts);
+        RemoveRelationshipsToRemovedParts(archive, removedParts);
         RemoveContentTypeOverrides(archive, removedParts);
     }
 
@@ -296,27 +296,28 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
     }
 
-    private static void RemoveWorksheetDrawingRelationships(
+    private static void RemoveRelationshipsToRemovedParts(
         ZipArchive archive,
         IReadOnlySet<string> removedParts)
     {
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         foreach (var relsEntry in archive.Entries
                      .Where(entry =>
-                         entry.FullName.StartsWith("xl/worksheets/_rels/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) &&
                          entry.FullName.EndsWith(".xml.rels", StringComparison.OrdinalIgnoreCase))
                      .ToList())
         {
-            var worksheetPath = GetWorksheetPathFromRelationshipPath(relsEntry.FullName);
-            if (worksheetPath is null)
+            var sourcePath = GetSourcePathFromRelationshipPath(relsEntry.FullName);
+            if (sourcePath is null)
                 continue;
 
             var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
             var relationships = relsXml.Root?
                 .Elements(packageRelNs + "Relationship")
                 .Where(relationship =>
+                    !string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase) &&
                     relationship.Attribute("Target")?.Value is { Length: > 0 } target &&
-                    removedParts.Contains(XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target)))
+                    removedParts.Contains(XlsxPackagePath.ResolveRelationshipTarget(sourcePath, target)))
                 .ToList()
                 ?? [];
             if (relationships.Count == 0)
@@ -327,18 +328,27 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
     }
 
-    private static string? GetWorksheetPathFromRelationshipPath(string relsPath)
+    private static string? GetSourcePathFromRelationshipPath(string relsPath)
     {
-        const string prefix = "xl/worksheets/_rels/";
         const string suffix = ".rels";
         var normalized = NormalizeEntryPath(relsPath);
-        if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
-            !normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        if (!normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
 
-        return "xl/worksheets/" + normalized[prefix.Length..^suffix.Length];
+        const string rootPrefix = "_rels/";
+        if (normalized.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            return normalized[rootPrefix.Length..^suffix.Length];
+
+        const string marker = "/_rels/";
+        var markerIndex = normalized.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0)
+            return null;
+
+        var directory = normalized[..markerIndex];
+        var sourceFileName = normalized[(markerIndex + marker.Length)..^suffix.Length];
+        return sourceFileName.Length == 0 ? null : $"{directory}/{sourceFileName}";
     }
 
     private static void RemoveContentTypeOverrides(

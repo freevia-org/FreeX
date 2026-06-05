@@ -191,6 +191,11 @@ public sealed class XlsxLoadPackageStreamTests
                 .Select(relationship => relationship.Attribute("Target")?.Value)
                 .Should()
                 .Contain("../drawings/vmlDrawing1.vml");
+            var chartsheetRelsXml = LoadPackageXml(archive, "xl/chartsheets/_rels/sheet1.xml.rels");
+            chartsheetRelsXml.Root!.Elements(packageRelNs + "Relationship")
+                .Select(relationship => relationship.Attribute("Target")?.Value)
+                .Should()
+                .NotContain("../charts/chart1.xml");
 
             XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
             var contentTypesXml = LoadPackageXml(archive, "[Content_Types].xml");
@@ -487,6 +492,7 @@ public sealed class XlsxLoadPackageStreamTests
                   <Default Extension="xml" ContentType="application/xml"/>
                   <Default Extension="png" ContentType="image/png"/>
                   <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                  <Override PartName="/xl/chartsheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml"/>
                   <Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
                   <Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>
                 </Types>
@@ -511,6 +517,21 @@ public sealed class XlsxLoadPackageStreamTests
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
                   <Relationship Id="rIdDrawing" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
                   <Relationship Id="rIdVml" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" Target="../drawings/vmlDrawing1.vml"/>
+                </Relationships>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/chartsheets/sheet1.xml",
+                """
+                <chartsheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>
+                """);
+            WritePackageEntry(
+                archive,
+                "xl/chartsheets/_rels/sheet1.xml.rels",
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdChart" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
                 </Relationships>
                 """);
             WritePackageEntry(
