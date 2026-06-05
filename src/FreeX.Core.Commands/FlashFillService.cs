@@ -191,6 +191,16 @@ public static partial class FlashFillService
         if (!HasThreeNameSources(exampleSources) || !HasThreeNameSources(remainingSources))
             return null;
 
+        var emailPatterns = new List<Func<IReadOnlyList<string>, string>>();
+        if (TryThreeColumnFirstLastEmailPattern(exampleSources, exampleOutputs) is { } emailPattern)
+            emailPatterns.Add(emailPattern);
+
+        if (TryThreeColumnFirstInitialLastEmailPattern(exampleSources, exampleOutputs) is { } initialLastEmailPattern)
+            emailPatterns.Add(initialLastEmailPattern);
+
+        if (TryThreeColumnFirstLastInitialEmailPattern(exampleSources, exampleOutputs) is { } firstLastInitialEmailPattern)
+            emailPatterns.Add(firstLastInitialEmailPattern);
+
         var patterns = new List<Func<IReadOnlyList<string>, string>>
         {
             s => GetNameToken(s, 0) + " " + GetNameToken(s, 1) + " " + GetNameToken(s, 2),
@@ -202,6 +212,8 @@ public static partial class FlashFillService
             s => GetNameToken(s, 0) + " " + GetNameToken(s, 1) + " " + GetNameInitial(s, 2) + ".",
             s => GetNameInitial(s, 0) + ". " + GetNameInitial(s, 1) + ". " + GetNameInitial(s, 2) + "."
         };
+        if (emailPatterns.Count > 0)
+            patterns.InsertRange(0, emailPatterns);
 
         foreach (var pattern in patterns)
         {
@@ -226,6 +238,44 @@ public static partial class FlashFillService
         }
 
         return null;
+    }
+
+    private static Func<IReadOnlyList<string>, string>? TryThreeColumnFirstLastEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs)
+    {
+        foreach (var separator in EmailSeparators)
+        {
+            var pattern = TrySharedDomainEmailPattern(
+                exampleSources,
+                exampleOutputs,
+                s => GetEmailNameToken(s, 0) + separator + GetEmailNameToken(s, 2),
+                domain => s => CreateLowerTokenPairEmail(s, 0, separator, 2, domain));
+            if (pattern is not null)
+                return pattern;
+        }
+
+        return null;
+    }
+
+    private static Func<IReadOnlyList<string>, string>? TryThreeColumnFirstInitialLastEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs)
+    {
+        return TrySharedDomainEmailPattern(
+            exampleSources,
+            exampleOutputs,
+            s => GetEmailNameInitial(s, 0) + GetEmailNameToken(s, 2));
+    }
+
+    private static Func<IReadOnlyList<string>, string>? TryThreeColumnFirstLastInitialEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs)
+    {
+        return TrySharedDomainEmailPattern(
+            exampleSources,
+            exampleOutputs,
+            s => GetEmailNameToken(s, 0) + GetEmailNameInitial(s, 2));
     }
 
     private static bool HasThreeNameSources(IReadOnlyList<IReadOnlyList<string>> sources)

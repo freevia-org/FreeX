@@ -151,18 +151,15 @@ public sealed partial class ChartDialogTests
 
     private static string ReadChartFormatDialogSource()
     {
-        return string.Join(
+        return DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             "\n",
-            new[]
-            {
-                "ChartFormatDialogs.cs",
-                "ChartAxisFormatDialog.cs",
-                "ChartDataLabelsDialog.cs",
-                "ChartErrorBarsDialog.cs",
-                "ChartTrendlineOptionsDialog.cs",
-                "ChartSeriesFormatDialog.cs",
-                "ChartTypeFormatDialogs.cs"
-            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName))));
+            "ChartFormatDialogs.cs",
+            "ChartAxisFormatDialog.cs",
+            "ChartDataLabelsDialog.cs",
+            "ChartErrorBarsDialog.cs",
+            "ChartTrendlineOptionsDialog.cs",
+            "ChartSeriesFormatDialog.cs",
+            "ChartTypeFormatDialogs.cs");
     }
 
     private static char GetAccessKey(string label)

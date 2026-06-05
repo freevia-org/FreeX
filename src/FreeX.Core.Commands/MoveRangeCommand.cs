@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -134,6 +135,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         var payloads = new List<MovePayload>(GetSafeListCapacity(sourceRange.CellCount));
         var rowDelta = (long)destination.Row - sourceRange.Start.Row;
         var colDelta = (long)destination.Col - sourceRange.Start.Col;
+        var pasteOffset = new PasteOffsetOp(checked((int)rowDelta), checked((int)colDelta));
 
         foreach (var source in sourceRange.AllCells())
         {
@@ -141,9 +143,17 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                 destination.Sheet,
                 checked((uint)(source.Row + rowDelta)),
                 checked((uint)(source.Col + colDelta)));
+            var cell = sheet.GetCell(source)?.Clone();
+            if (cell?.FormulaText is { } formulaText)
+            {
+                cell.FormulaText =
+                    FormulaRewriter.Rewrite(formulaText, pasteOffset, sheet.Name)
+                    ?? formulaText;
+            }
+
             payloads.Add(new MovePayload(
                 target,
-                sheet.GetCell(source)?.Clone(),
+                cell,
                 sheet.GetStyleOnly(source.Row, source.Col),
                 sheet.Comments.TryGetValue(source, out var comment) ? comment : null,
                 sheet.ThreadedComments.TryGetValue(source, out var threadedComment)
