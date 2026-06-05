@@ -305,6 +305,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("loadPackage.CanReuseBufferForSnapshot");
         adapterSource.Should().Contain("CanReuseBufferForSnapshot: false");
         adapterSource.Should().Contain("CanReuseBufferForSnapshot: true");
+        adapterSource.Should().Contain("sourceHasWorkbookCustomViews: xlsxCustomViews.Count > 0");
         snapshotSource.Should().Contain("allowBufferReuse &&");
         snapshotSource.Should().Contain("buffer.Array,");
         snapshotSource.Should().Contain("worksheetsWithPreservableSourceMetadata");
@@ -372,6 +373,12 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("GetModelFingerprint(workbook, currentModelFingerprint)");
         snapshotSource.Should().Contain("TryPrepareLoadedPackageSnapshotForEdit(Workbook workbook, out string? blockReason)");
         snapshotSource.Should().Contain("TryEnsureCellPatchBaseline(");
+        snapshotSource.Should().Contain("preparedPackage.TryEnsureCellPatchEligibility(workbook, out preparedPackage, out _);");
+        snapshotSource.Should().Contain("public bool TryEnsureCellPatchEligibility(");
+        snapshotSource.Should().Contain("IsCellPatchEligibilityLazy = false");
+        snapshotSource.Should().Contain("SourceHasCustomViews");
+        snapshotSource.Should().Contain("if (!sourceHasCustomViews || workbook.CustomViews.Count > 0)");
+        snapshotSource.Should().Contain("layout.CustomViews.Count > 0");
         snapshotSource.Should().Contain("XlsxCellPatchBaselineFacts.Capture(workbook, sheetXmlLayout)");
         snapshotSource.Should().Contain("baselineFacts: CellPatchBaselineFacts");
         snapshotSource.Should().Contain("private const int CellPatchBaselineLimit = 2_000_000;");
@@ -396,7 +403,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("ChangesOnlyExistingCells(");
         snapshotSource.Should().Contain("patchedSourceModelFingerprint,");
         snapshotSource.Should().Contain("patchedPatchValidationFingerprint),");
-        snapshotSource.Should().Contain("CellPatchBaselineBlockReason));");
+        snapshotSource.Should().Contain("CellPatchBaselineBlockReason,");
+        snapshotSource.Should().Contain("SourceHasCustomViews: workbook.CustomViews.Count > 0));");
     }
 
     [Fact]
