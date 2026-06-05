@@ -1094,34 +1094,27 @@ public static partial class FlashFillService
         if (!TryGetDecodedQueryParameters(source, out var parameters))
             return false;
 
-        var firstTitle = string.Empty;
-        foreach (var name in parameters.Select(p => p.Name).Distinct(StringComparer.Ordinal))
+        var firstName = parameters[0].Name;
+        if (!TryFormatSlugStemAsTitle(firstName, out var firstTitle) ||
+            firstTitle != expected)
+        {
+            return false;
+        }
+
+        foreach (var name in parameters.Select(p => p.Name).Distinct(StringComparer.Ordinal).Skip(1))
         {
             if (!TryFormatSlugStemAsTitle(name, out var title))
                 continue;
 
-            if (firstTitle.Length == 0)
-                firstTitle = title;
-
             if (title != expected)
                 continue;
 
-            if (parameterName.Length > 0)
-            {
-                parameterName = string.Empty;
-                return false;
-            }
-
-            parameterName = name;
-        }
-
-        if (firstTitle != expected)
-        {
             parameterName = string.Empty;
             return false;
         }
 
-        return parameterName.Length > 0;
+        parameterName = firstName;
+        return true;
     }
 
     private static bool TryGetFirstTitleizableQueryParameterName(string source, out string parameterName)
@@ -1130,13 +1123,11 @@ public static partial class FlashFillService
         if (!TryGetDecodedQueryParameters(source, out var parameters))
             return false;
 
-        foreach (var (name, _) in parameters)
+        var name = parameters[0].Name;
+        if (TryFormatSlugStemAsTitle(name, out _))
         {
-            if (TryFormatSlugStemAsTitle(name, out _))
-            {
-                parameterName = name;
-                return true;
-            }
+            parameterName = name;
+            return true;
         }
 
         return false;
