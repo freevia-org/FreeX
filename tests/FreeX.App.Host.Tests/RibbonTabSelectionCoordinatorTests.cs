@@ -36,8 +36,8 @@ public sealed partial class RibbonTabSelectionCoordinatorTests
 
         public IReadOnlyList<int> VisibleRibbonButtonContentIdentityHashCodes =>
             SelectedRibbonContentRoot is { } root
-                ? EnumerateVisualDescendants(root)
-                    .Concat(EnumerateLogicalDescendants(root))
+                ? WpfTestTree.FindVisualDescendants<DependencyObject>(root)
+                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(root))
                     .OfType<Button>()
                     .Where(button => button.IsVisible && button.Content is not null)
                     .Select(button => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(button.Content))
@@ -52,7 +52,7 @@ public sealed partial class RibbonTabSelectionCoordinatorTests
                     return 0;
 
                 panel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                var viewport = FindVisualAncestor<ScrollViewer>(panel)?.ActualWidth;
+                var viewport = WpfTestTree.FindVisualAncestor<ScrollViewer>(panel)?.ActualWidth;
                 if (viewport is null or <= 0)
                     viewport = (_window.FindName("RibbonTabs") as TabControl)?.ActualWidth;
 
@@ -62,8 +62,7 @@ public sealed partial class RibbonTabSelectionCoordinatorTests
 
         public IReadOnlyList<string> ActiveRibbonVisibleHorizontalScrollBars =>
             ActiveRibbonScrollViewer is { } scrollViewer
-                ? EnumerateVisualDescendants(scrollViewer)
-                    .OfType<ScrollBar>()
+                ? WpfTestTree.FindVisualDescendants<ScrollBar>(scrollViewer)
                     .Where(scrollBar => scrollBar.Orientation == Orientation.Horizontal)
                     .Where(scrollBar => scrollBar.IsVisible &&
                                         scrollBar.Visibility == Visibility.Visible &&
@@ -166,8 +165,8 @@ public sealed partial class RibbonTabSelectionCoordinatorTests
 
         private StackPanel? ActiveRibbonPanel =>
             SelectedRibbonContentRoot is { } root
-                ? EnumerateVisualDescendants(root)
-                    .Concat(EnumerateLogicalDescendants(root))
+                ? WpfTestTree.FindVisualDescendants<DependencyObject>(root)
+                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(root))
                     .OfType<StackPanel>()
                     .Distinct()
                     .Where(panel => panel.Orientation == Orientation.Horizontal &&
@@ -178,45 +177,7 @@ public sealed partial class RibbonTabSelectionCoordinatorTests
 
         private ScrollViewer? ActiveRibbonScrollViewer =>
             ActiveRibbonPanel is { } panel
-                ? FindVisualAncestor<ScrollViewer>(panel)
+                ? WpfTestTree.FindVisualAncestor<ScrollViewer>(panel)
                 : null;
-
-        private static IEnumerable<DependencyObject> EnumerateVisualDescendants(DependencyObject root)
-        {
-            var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
-            for (var i = 0; i < count; i++)
-            {
-                var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-                yield return child;
-
-                foreach (var descendant in EnumerateVisualDescendants(child))
-                    yield return descendant;
-            }
-        }
-
-        private static IEnumerable<DependencyObject> EnumerateLogicalDescendants(DependencyObject root)
-        {
-            foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
-            {
-                yield return child;
-
-                foreach (var descendant in EnumerateLogicalDescendants(child))
-                    yield return descendant;
-            }
-        }
-
-        private static T? FindVisualAncestor<T>(DependencyObject? element)
-            where T : DependencyObject
-        {
-            while (element is not null)
-            {
-                if (element is T match)
-                    return match;
-
-                element = System.Windows.Media.VisualTreeHelper.GetParent(element);
-            }
-
-            return null;
-        }
     }
 }

@@ -41,4 +41,18 @@ internal static class WpfTestTree
                 yield return descendant;
         }
     }
+
+    internal static T? FindVisualAncestor<T>(DependencyObject? element)
+        where T : DependencyObject
+    {
+        while (element is not null)
+        {
+            if (element is T match)
+                return match;
+
+            element = VisualTreeHelper.GetParent(element);
+        }
+
+        return null;
+    }
 }
