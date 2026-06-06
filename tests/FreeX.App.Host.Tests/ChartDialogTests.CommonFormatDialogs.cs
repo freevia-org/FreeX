@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -16,7 +15,7 @@ public sealed partial class ChartDialogTests
     public void ChartFormatDialogs_RouteColorFieldsThroughColorPickerButtons()
     {
         var source = ReadChartFormatDialogSource();
-        var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartDialogHelpers.cs"));
+        var helperSource = DialogSourceTestSupport.ReadHostSources("ChartDialogHelpers.cs");
 
         source.Should().Contain("AddColorText");
         helperSource.Should().Contain("new ColorPickerDialog(initialColor, allowNoColor: true)");
@@ -39,7 +38,7 @@ public sealed partial class ChartDialogTests
     public void ChartFormatDialogs_GroupLongStacksIntoExcelLikeSections()
     {
         var source = ReadChartFormatDialogSource();
-        var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartDialogHelpers.cs"));
+        var helperSource = DialogSourceTestSupport.ReadHostSources("ChartDialogHelpers.cs");
 
         source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartDialog_FillLineGroup\")");
         source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAreaLegend_LegendGroup\")");
@@ -120,7 +119,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartDataLabelsDialog_UsesUniqueAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartDataLabelsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartDataLabelsDialog.cs");
         var labels = new[]
         {
             "ChartDataLabels_ShowDataLabels",
