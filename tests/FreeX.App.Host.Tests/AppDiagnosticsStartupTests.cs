@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,8 +7,7 @@ public sealed class AppDiagnosticsStartupTests
     [Fact]
     public void AppStartup_RegistersDiagnosticsAndCrashHandlers()
     {
-        var sourcePath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs");
-        var source = File.ReadAllText(sourcePath);
+        var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
 
         source.Should().Contain("AddSingleton(AppDiagnosticsOptions.CreateDefault())");
         source.Should().Contain("AddSingleton<AppDiagnosticsFileStore>()");
@@ -25,8 +23,8 @@ public sealed class AppDiagnosticsStartupTests
     [Fact]
     public void AppStartup_OpensExistingWorkbookArgument()
     {
-        var appSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var appSource = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         appSource.Should().Contain("e.Args.FirstOrDefault(File.Exists)");
         appSource.Should().Contain("OpenStartupFileAsync(startupWorkbookPath)");
