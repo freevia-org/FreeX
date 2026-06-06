@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -26,7 +25,6 @@ public sealed class DotNetProjectReferencesPreflightTests
     [Fact]
     public void DotNetProjectReferencesPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
         using var temp = new TestTemporaryDirectory();
         var tempDirectory = temp.Path;
 
@@ -44,7 +42,9 @@ public sealed class DotNetProjectReferencesPreflightTests
             """);
         File.WriteAllText(Path.Combine(tempDirectory, "src", "B", "B.csproj"), "<Project />");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-DotNetProjectReferences.ps1",
+            $"-ProjectRoot \"{tempDirectory}\"");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ProjectReference targets for 2 .NET project file(s).");
@@ -64,9 +64,10 @@ public sealed class DotNetProjectReferencesPreflightTests
         File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host_abc123_wpftmp.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
         File.WriteAllText(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
         File.WriteAllText(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-DotNetProjectReferences.ps1",
+            $"-ProjectRoot \"{tempDirectory}\"");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ProjectReference targets for 1 .NET project file(s).");
@@ -92,11 +93,12 @@ public sealed class DotNetProjectReferencesPreflightTests
             </Project>
             """);
         File.WriteAllText(Path.Combine(tempDirectory, "src", "B", "B.csproj"), "<Project />");
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-DotNetProjectReferences.ps1",
+            $"-ProjectRoot \"{tempDirectory}\"");
 
-        var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+        var combinedOutput = result.NormalizedCombinedOutput;
         result.ExitCode.Should().NotBe(0);
         combinedOutput.Should().Contain("Duplicate ProjectReference target");
         combinedOutput.Should().Contain("src/A/A.csproj");
@@ -121,11 +123,12 @@ public sealed class DotNetProjectReferencesPreflightTests
             </Project>
             """);
         File.WriteAllText(Path.Combine(temp.Path, "external", "Outside.csproj"), "<Project />");
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{projectRoot}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-DotNetProjectReferences.ps1",
+            $"-ProjectRoot \"{projectRoot}\"");
 
-        var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+        var combinedOutput = result.NormalizedCombinedOutput;
         result.ExitCode.Should().NotBe(0);
         combinedOutput.Should().Contain("target escapes project root");
         combinedOutput.Should().Contain("..\\external\\Outside.csproj");
@@ -145,21 +148,14 @@ public sealed class DotNetProjectReferencesPreflightTests
               </ItemGroup>
             </Project>
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-DotNetProjectReferences.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-DotNetProjectReferences.ps1",
+            $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("Project reference validation failed");
-        (result.Output + result.Error).Should().Contain("Missing.csproj");
+        result.CombinedOutput.Should().Contain("Project reference validation failed");
+        result.CombinedOutput.Should().Contain("Missing.csproj");
     }
-
-    private static PowerShellResult RunScriptFromTemporaryWorkingDirectory(string scriptPath, string arguments)
-    {
-        using var workingDirectory = new TestTemporaryDirectory();
-        return PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, arguments);
-    }
-
-    private static string NormalizeWhitespace(string text) => Regex.Replace(text, "\\s+", " ");
 
 }

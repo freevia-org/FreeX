@@ -20,10 +20,7 @@ public sealed class XmlFilesPreflightTests
     [Fact]
     public void XmlFilesPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-XmlFiles.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
-
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, "");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-XmlFiles.ps1");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
@@ -36,14 +33,14 @@ public sealed class XmlFilesPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.slnx"), "<Solution><Folder></Solution>");
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-XmlFiles.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-XmlRoots \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-XmlFiles.ps1",
+            $"-XmlRoots \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("XML validation failed");
-        (result.Output + result.Error).Should().Contain("broken.slnx");
+        result.CombinedOutput.Should().Contain("XML validation failed");
+        result.CombinedOutput.Should().Contain("broken.slnx");
     }
 
     [Fact]
@@ -52,14 +49,14 @@ public sealed class XmlFilesPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.xaml"), "<Window><Grid></Window>");
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-XmlFiles.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-XmlRoots \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-XmlFiles.ps1",
+            $"-XmlRoots \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("XML validation failed");
-        (result.Output + result.Error).Should().Contain("broken.xaml");
+        result.CombinedOutput.Should().Contain("XML validation failed");
+        result.CombinedOutput.Should().Contain("broken.xaml");
     }
 
 }

@@ -25,10 +25,7 @@ public sealed class ConflictMarkersPreflightTests
     [Fact]
     public void ConflictMarkersPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
-
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, "");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-ConflictMarkers.ps1");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
@@ -44,10 +41,10 @@ public sealed class ConflictMarkersPreflightTests
         File.WriteAllText(Path.Combine(temp.Path, "untracked.cs"), $"<<<<<<< HEAD{Environment.NewLine}");
         TestProcessRunner.Run("git", "init", temp.Path).ExitCode.Should().Be(0);
         AddGitIndexEntry(temp.Path, "tracked.cs");
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-ProjectRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-ConflictMarkers.ps1",
+            $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated 1 text file(s) for Git conflict markers.");
@@ -61,14 +58,14 @@ public sealed class ConflictMarkersPreflightTests
         File.WriteAllText(Path.Combine(temp.Path, "broken.cs"), $"namespace Scratch;{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}");
         TestProcessRunner.Run("git", "init", temp.Path).ExitCode.Should().Be(0);
         AddGitIndexEntry(temp.Path, "broken.cs");
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-ProjectRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-ConflictMarkers.ps1",
+            $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
-        (result.Output + result.Error).Should().Contain("broken.cs");
+        result.CombinedOutput.Should().Contain("Git conflict marker validation failed");
+        result.CombinedOutput.Should().Contain("broken.cs");
     }
 
     [Theory]
@@ -80,14 +77,14 @@ public sealed class ConflictMarkersPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.cs"), $"namespace Scratch;{Environment.NewLine}{marker}{Environment.NewLine}");
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-SearchRoots \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-ConflictMarkers.ps1",
+            $"-SearchRoots \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
-        (result.Output + result.Error).Should().Contain("broken.cs");
+        result.CombinedOutput.Should().Contain("Git conflict marker validation failed");
+        result.CombinedOutput.Should().Contain("broken.cs");
     }
 
     [Fact]
@@ -96,14 +93,14 @@ public sealed class ConflictMarkersPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.slnx"), $"<Solution>{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}</Solution>");
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-SearchRoots \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-ConflictMarkers.ps1",
+            $"-SearchRoots \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
-        (result.Output + result.Error).Should().Contain("broken.slnx");
+        result.CombinedOutput.Should().Contain("Git conflict marker validation failed");
+        result.CombinedOutput.Should().Contain("broken.slnx");
     }
 
     private static void AddGitIndexEntry(string repositoryPath, string fileName)

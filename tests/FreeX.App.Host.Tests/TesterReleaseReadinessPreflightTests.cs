@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -40,9 +39,8 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_PassesForInternalTesterBuild()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-TesterReleaseReadiness.ps1");
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
-        var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42");
+        var result = PowerShellScriptRunner.RunToolScript("Test-TesterReleaseReadiness.ps1", repoRoot, "-RunNumber 42");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Tester release readiness preflight passed.");
@@ -54,9 +52,11 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_BlocksPublicPreviewWhenAccessibilityGateIsIncomplete()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-TesterReleaseReadiness.ps1");
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
-        var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42 -PublicPreviewCandidate");
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Test-TesterReleaseReadiness.ps1",
+            repoRoot,
+            "-RunNumber 42 -PublicPreviewCandidate");
 
         result.ExitCode.Should().NotBe(0);
         result.Error.Should().Contain("Public-preview preflight requires completed accessibility gate inputs");
@@ -69,9 +69,11 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_AllowsPublicPreviewWhenAccessibilityGateIsComplete()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-TesterReleaseReadiness.ps1");
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
-        var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42 -PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues");
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Test-TesterReleaseReadiness.ps1",
+            repoRoot,
+            "-RunNumber 42 -PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Tester release readiness preflight passed.");

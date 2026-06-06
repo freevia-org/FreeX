@@ -73,9 +73,7 @@ public sealed class GitHubWorkflowPreflightTests
     [Fact]
     public void GitHubWorkflowPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
-
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, "");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-GitHubWorkflows.ps1");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
@@ -106,13 +104,14 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("must declare timeout-minutes");
-        (result.Output + result.Error).Should().Contain("broken.yml");
+        result.CombinedOutput.Should().Contain("must declare timeout-minutes");
+        result.CombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -142,13 +141,14 @@ public sealed class GitHubWorkflowPreflightTests
                       name: freex-release
                       path: artifacts/upload/*.exe
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("actions/upload-artifact steps must set if-no-files-found to error or warn");
-        (result.Output + result.Error).Should().Contain("broken.yml");
+        result.CombinedOutput.Should().Contain("actions/upload-artifact steps must set if-no-files-found to error or warn");
+        result.CombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -179,13 +179,14 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("actions/checkout steps must set persist-credentials: false");
-        (result.Output + result.Error).Should().Contain("broken.yml");
+        result.CombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
+        result.CombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -212,13 +213,14 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("workflow must not use self-hosted runners");
-        (result.Output + result.Error).Should().Contain("broken.yml");
+        result.CombinedOutput.Should().Contain("workflow must not use self-hosted runners");
+        result.CombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -245,13 +247,14 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("workflow must not use the privileged pull_request_target event");
-        (result.Output + result.Error).Should().Contain("broken.yml");
+        result.CombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
+        result.CombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -277,13 +280,14 @@ public sealed class GitHubWorkflowPreflightTests
                     shell: pwsh
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("workflow must not request write-all permissions");
-        (result.Output + result.Error).Should().Contain("broken.yml");
+        result.CombinedOutput.Should().Contain("workflow must not request write-all permissions");
+        result.CombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -309,13 +313,14 @@ public sealed class GitHubWorkflowPreflightTests
                   - name: Missing shell
                     run: dotnet restore FreeX.slnx
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("must declare an explicit shell");
-        (result.Output + result.Error).Should().Contain("Missing shell");
+        result.CombinedOutput.Should().Contain("must declare an explicit shell");
+        result.CombinedOutput.Should().Contain("Missing shell");
     }
 
     [Fact]
@@ -340,13 +345,14 @@ public sealed class GitHubWorkflowPreflightTests
                 steps:
                   - uses: ./../outside-action
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("must stay within the workflow workspace");
-        (result.Output + result.Error).Should().Contain("./../outside-action");
+        result.CombinedOutput.Should().Contain("must stay within the workflow workspace");
+        result.CombinedOutput.Should().Contain("./../outside-action");
     }
 
     [Fact]
@@ -371,19 +377,14 @@ public sealed class GitHubWorkflowPreflightTests
                 steps:
                   - uses: actions/checkout@main
             """);
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GitHubWorkflows.ps1");
 
-        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GitHubWorkflows.ps1",
+            $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("GitHub workflow validation failed");
-        (result.Output + result.Error).Should().Contain("actions/checkout@main");
-    }
-
-    private static PowerShellResult RunScriptFromTemporaryWorkingDirectory(string scriptPath, string arguments)
-    {
-        using var workingDirectory = new TestTemporaryDirectory();
-        return PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, arguments);
+        result.CombinedOutput.Should().Contain("GitHub workflow validation failed");
+        result.CombinedOutput.Should().Contain("actions/checkout@main");
     }
 
 }

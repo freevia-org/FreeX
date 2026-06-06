@@ -82,75 +82,75 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_RejectsUnsignedMsixUnlessExplicitlyAllowedBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Publish-UserTestBuild.ps1",
+            $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
+        result.CombinedOutput.Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
         Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
     [Fact]
     public void PublishScript_RejectsMsixSigningOptionsWithoutCertificatePathBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Publish-UserTestBuild.ps1",
+            $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("MSIX signing options require MsixCertificatePath");
+        result.CombinedOutput.Should().Contain("MSIX signing options require MsixCertificatePath");
         Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
     [Fact]
     public void PublishScript_RejectsDirectoryMsixCertificatePathBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
         var outputDirectory = Path.Combine(temp.Path, "out");
         var certificateDirectory = Path.Combine(temp.Path, "certificate");
         Directory.CreateDirectory(outputDirectory);
         Directory.CreateDirectory(certificateDirectory);
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Publish-UserTestBuild.ps1",
+            $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("MsixCertificatePath must reference an existing certificate file");
+        result.CombinedOutput.Should().Contain("MsixCertificatePath must reference an existing certificate file");
         Directory.GetFileSystemEntries(outputDirectory).Should().BeEmpty();
     }
 
     [Fact]
     public void PublishScript_RejectsUnsafeMsixTimestampUrlBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Publish-UserTestBuild.ps1",
+            $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("MsixTimestampUrl must be an absolute http or https URL");
+        result.CombinedOutput.Should().Contain("MsixTimestampUrl must be an absolute http or https URL");
         Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
     [Fact]
     public void PublishScript_RejectsRuntimeIdentifierPathSegmentsBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
-        using var workingDirectory = new TestTemporaryDirectory();
 
-        var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Publish-UserTestBuild.ps1",
+            $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
-        (result.Output + result.Error).Should().Contain("path separators");
+        result.CombinedOutput.Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
+        result.CombinedOutput.Should().Contain("path separators");
         Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
