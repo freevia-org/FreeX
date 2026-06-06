@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -8,7 +7,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void ExportOptionsDialog_ExposesOnlyHonoredPdfXpsChoices()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("Content = UiText.Get(\"ExportOptions_Workbook\")");
         source.Should().Contain("Content = UiText.Get(\"ExportOptions_ActiveSheetS\")");

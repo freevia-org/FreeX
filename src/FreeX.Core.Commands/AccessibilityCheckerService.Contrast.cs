@@ -703,8 +703,9 @@ public static partial class AccessibilityCheckerService
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
         ast is (BooleanNode
             or CellRefNode
-            or NumberNode
-            or UnaryOpNode { Operator: UnaryOperator.Negate or UnaryOperator.Percent, Operand: NumberNode })
+            or NumberNode)
+            || ast is UnaryOpNode unary && IsFormulaUnaryArithmeticOperator(unary.Operator)
+            || ast is BinaryOpNode binary && IsFormulaArithmeticOperator(binary.Operator)
             || ast is FunctionCallNode function && IsFormulaAggregateFunction(function.FunctionName);
 
     private static bool TryCreateFormulaComparison(FormulaNode ast, out ConditionalFormulaComparison comparison)
@@ -764,6 +765,10 @@ public static partial class AccessibilityCheckerService
             case UnaryOpNode { Operator: UnaryOperator.Percent, Operand: NumberNode number }:
                 operand = LiteralFormulaOperand(new NumberValue(number.Value / 100d));
                 return true;
+            case UnaryOpNode unary when TryCreateFormulaUnaryOperand(unary, out operand):
+                return true;
+            case BinaryOpNode binary when TryCreateFormulaArithmeticOperand(binary, out operand):
+                return true;
             case FunctionCallNode function when TryCreateFormulaAggregateOperand(function, out operand):
                 return true;
             default:
@@ -773,6 +778,68 @@ public static partial class AccessibilityCheckerService
 
     private static ConditionalFormulaOperand LiteralFormulaOperand(ScalarValue value) =>
         new(ConditionalFormulaOperandKind.Literal, value, 0, 0, true, true, null);
+
+    private static bool TryCreateFormulaUnaryOperand(
+        UnaryOpNode unary,
+        out ConditionalFormulaOperand operand)
+    {
+        operand = default;
+        if (!IsFormulaUnaryArithmeticOperator(unary.Operator) ||
+            !TryCreateFormulaOperand(unary.Operand, out var inner))
+        {
+            return false;
+        }
+
+        operand = new ConditionalFormulaOperand(
+            ConditionalFormulaOperandKind.Unary,
+            null,
+            0,
+            0,
+            true,
+            true,
+            null,
+            default,
+            null,
+            null,
+            new ConditionalFormulaUnary(unary.Operator, inner));
+        return true;
+    }
+
+    private static bool IsFormulaUnaryArithmeticOperator(UnaryOperator op) =>
+        op is UnaryOperator.Negate or UnaryOperator.Percent;
+
+    private static bool TryCreateFormulaArithmeticOperand(
+        BinaryOpNode binary,
+        out ConditionalFormulaOperand operand)
+    {
+        operand = default;
+        if (!IsFormulaArithmeticOperator(binary.Operator) ||
+            !TryCreateFormulaOperand(binary.Left, out var left) ||
+            !TryCreateFormulaOperand(binary.Right, out var right))
+        {
+            return false;
+        }
+
+        operand = new ConditionalFormulaOperand(
+            ConditionalFormulaOperandKind.Arithmetic,
+            null,
+            0,
+            0,
+            true,
+            true,
+            null,
+            default,
+            null,
+            new ConditionalFormulaArithmetic(binary.Operator, left, right));
+        return true;
+    }
+
+    private static bool IsFormulaArithmeticOperator(BinaryOperator op) =>
+        op is BinaryOperator.Add
+            or BinaryOperator.Subtract
+            or BinaryOperator.Multiply
+            or BinaryOperator.Divide
+            or BinaryOperator.Power;
 
     private static bool TryCreateFormulaAggregateOperand(
         FunctionCallNode function,
@@ -1199,14 +1266,27 @@ public static partial class AccessibilityCheckerService
         bool IsColAbsolute,
         string? SheetName,
         ConditionalFormulaAggregateKind AggregateKind = default,
-        IReadOnlyList<ConditionalFormulaAggregateArgument>? AggregateArguments = null);
+        IReadOnlyList<ConditionalFormulaAggregateArgument>? AggregateArguments = null,
+        ConditionalFormulaArithmetic? Arithmetic = null,
+        ConditionalFormulaUnary? Unary = null);
 
     private enum ConditionalFormulaOperandKind
     {
         Literal,
         Reference,
+        Unary,
+        Arithmetic,
         Aggregate
     }
+
+    private sealed record ConditionalFormulaUnary(
+        UnaryOperator Operator,
+        ConditionalFormulaOperand Operand);
+
+    private sealed record ConditionalFormulaArithmetic(
+        BinaryOperator Operator,
+        ConditionalFormulaOperand Left,
+        ConditionalFormulaOperand Right);
 
     private enum ConditionalFormulaAggregateKind
     {
@@ -1550,6 +1630,12 @@ public static partial class AccessibilityCheckerService
             if (operand.Kind == ConditionalFormulaOperandKind.Aggregate)
                 return TryEvaluateFormulaAggregate(operand, rowOffset, colOffset, out value);
 
+            if (operand.Kind == ConditionalFormulaOperandKind.Unary)
+                return TryEvaluateFormulaUnary(operand, rowOffset, colOffset, out value);
+
+            if (operand.Kind == ConditionalFormulaOperandKind.Arithmetic)
+                return TryEvaluateFormulaArithmetic(operand, rowOffset, colOffset, out value);
+
             if (!TryResolveFormulaReference(operand, rowOffset, colOffset, out var targetSheet, out var row, out var col))
             {
                 value = ErrorValue.Ref;
@@ -1558,6 +1644,88 @@ public static partial class AccessibilityCheckerService
 
             value = targetSheet.GetValue(row, col);
             return true;
+        }
+
+        private bool TryEvaluateFormulaUnary(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.Unary is not { } unary ||
+                !TryResolveFormulaOperand(unary.Operand, rowOffset, colOffset, out var inner) ||
+                !TryGetFormulaArithmeticNumber(inner, out var number))
+            {
+                return false;
+            }
+
+            var result = unary.Operator switch
+            {
+                UnaryOperator.Negate => -number,
+                UnaryOperator.Percent => number / 100d,
+                _ => double.NaN
+            };
+
+            if (!double.IsFinite(result))
+                return false;
+
+            value = new NumberValue(result);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaArithmetic(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.Arithmetic is not { } arithmetic ||
+                !TryResolveFormulaOperand(arithmetic.Left, rowOffset, colOffset, out var left) ||
+                !TryResolveFormulaOperand(arithmetic.Right, rowOffset, colOffset, out var right) ||
+                !TryGetFormulaArithmeticNumber(left, out var leftNumber) ||
+                !TryGetFormulaArithmeticNumber(right, out var rightNumber))
+            {
+                return false;
+            }
+
+            var result = arithmetic.Operator switch
+            {
+                BinaryOperator.Add => leftNumber + rightNumber,
+                BinaryOperator.Subtract => leftNumber - rightNumber,
+                BinaryOperator.Multiply => leftNumber * rightNumber,
+                BinaryOperator.Divide when rightNumber != 0 => leftNumber / rightNumber,
+                BinaryOperator.Power => Math.Pow(leftNumber, rightNumber),
+                _ => double.NaN
+            };
+
+            if (!double.IsFinite(result))
+                return false;
+
+            value = new NumberValue(result);
+            return true;
+        }
+
+        private static bool TryGetFormulaArithmeticNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    break;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    break;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1 : 0;
+                    break;
+                default:
+                    number = 0;
+                    return false;
+            }
+
+            return double.IsFinite(number);
         }
 
         private bool TryEvaluateFormulaAggregate(

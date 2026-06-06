@@ -50,6 +50,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         adapter.Load(saved).GetSheetAt(0).GetCell(3, 1)!.ArrayMode.Should().Be(FormulaArrayMode.Dynamic);
     }
 
+    [Theory]
+    [InlineData("""<f t="array" ref="A1:A1" ca="1">1+1</f>""", "array", "A1:A1", "ca", "1", 4)]
+    [InlineData("""<f t="shared" ref="A1:A1" si="0">1+1</f>""", "shared", "A1:A1", "si", "0", 5)]
+    public void PatchedAttributedFormulaCachedValue_ProducesSchemaValidWorkbook(
+        string formulaElement,
+        string expectedFormulaType,
+        string expectedFormulaReference,
+        string expectedMetadataAttribute,
+        string expectedMetadataValue,
+        double cachedValue)
+    {
+        using var source = CreateAttributedFormulaWorkbook(formulaElement);
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should().BeTrue(blockReason);
+
+        var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
+        cell.FormulaText.Should().Be("1+1");
+        cell.Value = new NumberValue(cachedValue);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+
+        var formula = ReadFormulaElement(saved, "A1");
+        formula.Value.Should().Be("1+1");
+        formula.Attribute("t")!.Value.Should().Be(expectedFormulaType);
+        formula.Attribute("ref")!.Value.Should().Be(expectedFormulaReference);
+        formula.Attribute(expectedMetadataAttribute)!.Value.Should().Be(expectedMetadataValue);
+    }
+
     private static Workbook CreateDynamicSpillWorkbook(string name)
     {
         var workbook = new Workbook(name);
@@ -80,6 +115,90 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         stream.Position = 0;
         return stream;
+    }
+
+    private static MemoryStream CreateAttributedFormulaWorkbook(string formulaElement)
+    {
+        var package = XlsxPackageTestFixtures.CreatePackage(
+            (
+                "[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+                  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+                  <Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/>
+                  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+                </Types>
+                """),
+            (
+                "_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Data" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                  <calcPr calcId="191029"/>
+                </workbook>
+                """),
+            (
+                "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="calcChain.xml"/>
+                </Relationships>
+                """),
+            (
+                "xl/styles.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>
+                  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+                  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+                  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+                  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+                  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+                  <dxfs count="0"/>
+                  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+                </styleSheet>
+                """),
+            (
+                "xl/calcChain.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <c r="A1" i="1"/>
+                </calcChain>
+                """),
+            (
+                "xl/worksheets/sheet1.xml",
+                $$"""
+                <?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <dimension ref="A1:A1"/>
+                  <sheetData>
+                    <row r="1"><c r="A1">{{formulaElement}}<v>2</v></c></row>
+                  </sheetData>
+                </worksheet>
+                """));
+
+        package.Position = 0;
+        return package;
     }
 
     private static void SetDynamicSpill(Sheet sheet, CellAddress anchor, params double[] values)
