@@ -11,7 +11,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonSurface_IsReachableByKeyboardTabTraversal()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace keyboardNavigation = "clr-namespace:System.Windows.Input;assembly=PresentationFramework";
@@ -30,7 +30,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonCommandStyles_PreserveKeyboardFocusStops()
     {
-        var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "MainWindowResources.xaml"));
+        var resources = DialogSourceTestSupport.LoadHostXamlDocument("Resources", "MainWindowResources.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
