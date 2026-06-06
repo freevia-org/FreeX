@@ -998,6 +998,9 @@ public static partial class AccessibilityCheckerService
             case "ACOS":
                 kind = ConditionalFormulaScalarFunctionKind.Acos;
                 return true;
+            case "ACOT":
+                kind = ConditionalFormulaScalarFunctionKind.Acot;
+                return true;
             case "ATAN":
                 kind = ConditionalFormulaScalarFunctionKind.Atan;
                 return true;
@@ -1107,6 +1110,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Atanh or
             ConditionalFormulaScalarFunctionKind.Asin or
             ConditionalFormulaScalarFunctionKind.Acos or
+            ConditionalFormulaScalarFunctionKind.Acot or
             ConditionalFormulaScalarFunctionKind.Atan or
             ConditionalFormulaScalarFunctionKind.Cos or
             ConditionalFormulaScalarFunctionKind.Tan or
@@ -1693,6 +1697,7 @@ public static partial class AccessibilityCheckerService
         Atanh,
         Asin,
         Acos,
+        Acot,
         Atan,
         Atan2,
         Cos,
@@ -2230,6 +2235,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Atanh:
                 case ConditionalFormulaScalarFunctionKind.Asin:
                 case ConditionalFormulaScalarFunctionKind.Acos:
+                case ConditionalFormulaScalarFunctionKind.Acot:
                 case ConditionalFormulaScalarFunctionKind.Atan:
                 case ConditionalFormulaScalarFunctionKind.Atan2:
                 case ConditionalFormulaScalarFunctionKind.Cos:
@@ -2561,6 +2567,22 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = Math.Acos(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Acot:
+                    if (first == 0d)
+                    {
+                        result = Math.PI / 2d;
+                        break;
+                    }
+
+                    var reciprocal = 1d / first;
+                    if (!double.IsFinite(reciprocal))
+                        return false;
+
+                    result = Math.Atan(reciprocal);
+                    if (first < 0d)
+                        result += Math.PI;
+
                     break;
                 case ConditionalFormulaScalarFunctionKind.Atan:
                     result = Math.Atan(first);
