@@ -24,7 +24,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void DrawingAndPictureController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var drawingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Drawing.cs");
 
@@ -99,7 +99,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PageLayoutCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var pageLayoutSourcePath = Path.Combine(appHostDirectory, "MainWindow.PageLayout.cs");
 
@@ -426,7 +426,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindowCommandPartials_UseMessageServiceNotDirectMessageBox()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
 
         // Verify the service wiring exists in the constructor.
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
