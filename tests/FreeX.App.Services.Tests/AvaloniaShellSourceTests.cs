@@ -63,6 +63,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _openMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _saveMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _saveAsMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _undoMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _redoMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -72,14 +74,25 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_saveAsMenuItem.Header = \"Save As...\";");
         source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
         source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();");
+        source.Should().Contain("_undoMenuItem.Header = \"Undo\";");
+        source.Should().Contain("_undoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta);");
+        source.Should().Contain("_undoMenuItem.Click += (_, _) => UndoLastEdit();");
+        source.Should().Contain("_redoMenuItem.Header = \"Redo\";");
+        source.Should().Contain("_redoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);");
+        source.Should().Contain("_redoMenuItem.Click += (_, _) => RedoLastEdit();");
         source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
         source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
         source.Should().Contain("_quitMenuItem.Click += (_, _) => TryQuitApplication();");
+        source.Should().Contain("editMenu.Items.Add(_undoMenuItem);");
+        source.Should().Contain("editMenu.Items.Add(_redoMenuItem);");
+        source.Should().Contain("Header = \"Edit\"");
         source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
         source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
         source.Should().Contain("_openMenuItem.IsEnabled = _openButton.IsEnabled;");
         source.Should().Contain("_saveMenuItem.IsEnabled = _saveButton.IsEnabled;");
         source.Should().Contain("_saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;");
+        source.Should().Contain("_undoMenuItem.IsEnabled = _undoButton.IsEnabled;");
+        source.Should().Contain("_redoMenuItem.IsEnabled = _redoButton.IsEnabled;");
         source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("await SaveWorkbookAsAsync();");
         source.Should().Contain("TryQuitApplication()");
@@ -110,6 +123,9 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("macos_launch_smoke={(snapshot.IsPassed ? \"passed\" : \"failed\")}");
         smokeSource.Should().Contain("opened_source_path={snapshot.OpenedSourcePath ?? \"\"}");
         smokeSource.Should().Contain("native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}");
+        smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
+        smokeSource.Should().Contain("native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}");
+        smokeSource.Should().Contain("native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}");
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
@@ -118,6 +134,9 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("_nativeMenu?.Items.OfType<NativeMenuItem>().Any");
         windowSource.Should().Contain("WindowShown: IsVisible");
         windowSource.Should().Contain("OpenedSourcePath: _session.CurrentFilePath");
+        windowSource.Should().Contain("HasNativeEditMenu: hasNativeEditMenu");
+        windowSource.Should().Contain("HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, \"Undo\")");
+        windowSource.Should().Contain("HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, \"Redo\")");
         windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
 
@@ -196,5 +215,31 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("StringComparison.Ordinal");
         source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
         source.Should().Contain("Finish the current cell edit before opening another workbook.");
+    }
+
+    [Fact]
+    public void MainWindow_WiresUndoRedoThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly Button _undoButton = new();");
+        source.Should().Contain("private readonly Button _redoButton = new();");
+        source.Should().Contain("_undoButton.Content = \"Undo\";");
+        source.Should().Contain("_redoButton.Content = \"Redo\";");
+        source.Should().Contain("_undoButton.Click += UndoButton_Click;");
+        source.Should().Contain("_redoButton.Click += RedoButton_Click;");
+        source.Should().Contain("_undoButton.IsEnabled = isIdle && _session.CanUndo;");
+        source.Should().Contain("_redoButton.IsEnabled = isIdle && _session.CanRedo;");
+        source.Should().Contain("e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
+        source.Should().Contain("RedoLastEdit();");
+        source.Should().Contain("else if (e.Key == Key.Z)");
+        source.Should().Contain("UndoLastEdit();");
+        source.Should().Contain("else if (e.Key == Key.Y)");
+        source.Should().Contain("private void UndoLastEdit()");
+        source.Should().Contain("private void RedoLastEdit()");
+        source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
+        source.Should().Contain("ApplyEditHistoryResult(_session.UndoLastEdit(), \"Undid last edit\");");
+        source.Should().Contain("ApplyEditHistoryResult(_session.RedoLastEdit(), \"Redid last edit\");");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Edit history unavailable.\");");
     }
 }

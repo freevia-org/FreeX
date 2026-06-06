@@ -66,9 +66,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     string? OpenedSourcePath,
     bool IsOpening,
     bool HasNativeFileMenu,
+    bool HasNativeEditMenu,
     bool HasNativeOpenMenuItem,
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
+    bool HasNativeUndoMenuItem,
+    bool HasNativeRedoMenuItem,
     bool HasNativeQuitMenuItem)
 {
     public bool IsPassed =>
@@ -78,9 +81,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportRowCount > 0 &&
         ViewportColumnCount > 0 &&
         HasNativeFileMenu &&
+        HasNativeEditMenu &&
         HasNativeOpenMenuItem &&
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
+        HasNativeUndoMenuItem &&
+        HasNativeRedoMenuItem &&
         HasNativeQuitMenuItem;
 }
 
@@ -138,9 +144,12 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"opened_source_path={snapshot.OpenedSourcePath ?? ""}",
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
+                $"native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}",
                 $"native_open_menu_item={FormatBool(snapshot.HasNativeOpenMenuItem)}",
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
+                $"native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}",
+                $"native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}",
                 $"native_quit_menu_item={FormatBool(snapshot.HasNativeQuitMenuItem)}",
             ]);
     }

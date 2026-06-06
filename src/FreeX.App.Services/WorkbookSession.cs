@@ -87,6 +87,10 @@ public sealed class WorkbookSession
 
     public IReadOnlyList<FileFormatDescriptor> SaveFormats { get; }
 
+    public bool CanUndo => _cellEditService.CanUndo(Workbook.Id);
+
+    public bool CanRedo => _cellEditService.CanRedo(Workbook.Id);
+
     public void SelectCell(CellAddress address)
     {
         ActiveCell = address;
@@ -179,10 +183,27 @@ public sealed class WorkbookSession
         if (!result.Success)
             return result;
 
-        ActiveCell = address;
-        FormulaEditAddress = null;
-        IsDirty = true;
-        RefreshViewport();
+        ApplySuccessfulEditResult(result, address);
+        return result;
+    }
+
+    public WorkbookCellEditResult UndoLastEdit()
+    {
+        var result = _cellEditService.UndoLastEdit(Workbook);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, ActiveCell);
+        return result;
+    }
+
+    public WorkbookCellEditResult RedoLastEdit()
+    {
+        var result = _cellEditService.RedoLastEdit(Workbook);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, ActiveCell);
         return result;
     }
 
@@ -289,6 +310,23 @@ public sealed class WorkbookSession
     private void RefreshViewport()
     {
         Viewport = BuildViewport();
+    }
+
+    private void ApplySuccessfulEditResult(WorkbookCellEditResult result, CellAddress fallbackAddress)
+    {
+        var address = result.AffectedCells.FirstOrDefault(fallbackAddress);
+        if (!ActiveSheet.Id.Equals(address.Sheet))
+        {
+            var selection = _sheetSelectionService.SelectSheet(Workbook, address.Sheet);
+            ActiveSheet = selection.Sheet;
+            SheetTabs = selection.Tabs;
+        }
+
+        ActiveCell = address;
+        FormulaEditAddress = null;
+        IsDirty = true;
+        RefreshViewport();
+        EnsureActiveCellVisible();
     }
 
     private void EnsureActiveCellVisible()

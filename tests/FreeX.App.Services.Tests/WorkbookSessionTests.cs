@@ -165,6 +165,92 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void UndoLastEdit_RevertsCellEditAndRecalculatesDependents()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetFormula(b1, "A1+1");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false,
+            SourcePath: Path.Combine(Path.GetTempPath(), "Book.fxl")));
+        session.SelectCell(a1);
+        session.CommitCellText("4");
+
+        var result = session.UndoLastEdit();
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(a1);
+        session.CanUndo.Should().BeFalse();
+        session.CanRedo.Should().BeTrue();
+        session.IsDirty.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        sheet.GetCell(a1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(1);
+        sheet.GetCell(b1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(2);
+    }
+
+    [Fact]
+    public void RedoLastEdit_ReappliesUndoneCellEditAndRecalculatesDependents()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetFormula(b1, "A1+1");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false,
+            SourcePath: Path.Combine(Path.GetTempPath(), "Book.fxl")));
+        session.SelectCell(a1);
+        session.CommitCellText("4");
+        session.UndoLastEdit();
+
+        var result = session.RedoLastEdit();
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(a1);
+        session.CanUndo.Should().BeTrue();
+        session.CanRedo.Should().BeFalse();
+        session.IsDirty.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        sheet.GetCell(a1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(4);
+        sheet.GetCell(b1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(5);
+    }
+
+    [Fact]
+    public void UndoRedo_ReturnsFailureWhenHistoryIsUnavailable()
+    {
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var undo = session.UndoLastEdit();
+        var redo = session.RedoLastEdit();
+
+        undo.Success.Should().BeFalse();
+        undo.ErrorMessage.Should().Be("Nothing to undo");
+        redo.Success.Should().BeFalse();
+        redo.ErrorMessage.Should().Be("Nothing to redo");
+        session.CanUndo.Should().BeFalse();
+        session.CanRedo.Should().BeFalse();
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void SelectSheet_UpdatesActiveSheetCellTabsAndViewport()
     {
         var workbook = CreateWorkbook();

@@ -16,6 +16,26 @@ public sealed class WorkbookCellEditService
         _recalcEngine = recalcEngine;
     }
 
+    public bool CanUndo(WorkbookId workbookId) =>
+        _commandBus.CanUndo(workbookId);
+
+    public bool CanRedo(WorkbookId workbookId) =>
+        _commandBus.CanRedo(workbookId);
+
+    public WorkbookCellEditResult UndoLastEdit(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        return ApplyHistoryOutcome(workbook, _commandBus.Undo(workbook.Id));
+    }
+
+    public WorkbookCellEditResult RedoLastEdit(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        return ApplyHistoryOutcome(workbook, _commandBus.Redo(workbook.Id));
+    }
+
     public WorkbookCellEditResult CommitCellText(
         Workbook workbook,
         SheetId sheetId,
@@ -41,7 +61,7 @@ public sealed class WorkbookCellEditService
         }
 
         var affectedCells = outcome.AffectedCells ?? [address];
-        UpdateFormulaDependencies(workbook, affectedCells, newCell);
+        UpdateFormulaDependencies(workbook, affectedCells);
         var recalcReport = workbook.CalculationMode == WorkbookCalculationMode.Automatic
             ? _recalcEngine.Recalculate(workbook, affectedCells)
             : null;
@@ -49,29 +69,46 @@ public sealed class WorkbookCellEditService
         return new WorkbookCellEditResult(true, null, affectedCells, recalcReport);
     }
 
-    private void UpdateFormulaDependencies(
-        Workbook workbook,
-        IReadOnlyList<CellAddress> affectedCells,
-        Cell newCell)
+    private WorkbookCellEditResult ApplyHistoryOutcome(Workbook workbook, CommandOutcome outcome)
     {
-        if (newCell.FormulaText is { } formulaText)
+        if (!outcome.Success)
         {
+            return new WorkbookCellEditResult(
+                false,
+                outcome.ErrorMessage,
+                outcome.AffectedCells ?? [],
+                RecalcReport: null);
+        }
+
+        var affectedCells = outcome.AffectedCells ?? [];
+        UpdateFormulaDependencies(workbook, affectedCells);
+        var recalcReport = workbook.CalculationMode == WorkbookCalculationMode.Automatic
+            ? _recalcEngine.Recalculate(workbook, affectedCells)
+            : null;
+
+        return new WorkbookCellEditResult(true, null, affectedCells, recalcReport);
+    }
+
+    private void UpdateFormulaDependencies(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
+    {
+        foreach (var affected in affectedCells)
+        {
+            var cell = workbook.GetSheet(affected.Sheet)?.GetCell(affected);
+            if (cell?.FormulaText is null)
+            {
+                _recalcEngine.ClearFormulaDependencies(affected);
+                continue;
+            }
+
             try
             {
-                var ast = FormulaEvaluator.ParseFormula(formulaText);
-                foreach (var affected in affectedCells)
-                    _recalcEngine.RegisterFormulaDependencies(affected, ast, affected.Sheet, workbook);
+                var ast = FormulaEvaluator.ParseFormula(cell.FormulaText);
+                _recalcEngine.RegisterFormulaDependencies(affected, ast, affected.Sheet, workbook);
             }
             catch (FormulaParseException)
             {
-                foreach (var affected in affectedCells)
-                    _recalcEngine.ClearFormulaDependencies(affected);
+                _recalcEngine.ClearFormulaDependencies(affected);
             }
-
-            return;
         }
-
-        foreach (var affected in affectedCells)
-            _recalcEngine.ClearFormulaDependencies(affected);
     }
 }

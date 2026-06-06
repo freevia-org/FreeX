@@ -53,9 +53,13 @@ public sealed class MainWindow : Window
     private readonly Button _openButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _saveAsButton = new();
+    private readonly Button _undoButton = new();
+    private readonly Button _redoButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
+    private readonly NativeMenuItem _undoMenuItem = new();
+    private readonly NativeMenuItem _redoMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -184,6 +188,14 @@ public sealed class MainWindow : Window
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
         _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
 
+        _undoMenuItem.Header = "Undo";
+        _undoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta);
+        _undoMenuItem.Click += (_, _) => UndoLastEdit();
+
+        _redoMenuItem.Header = "Redo";
+        _redoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);
+        _redoMenuItem.Click += (_, _) => RedoLastEdit();
+
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
@@ -195,11 +207,20 @@ public sealed class MainWindow : Window
         fileMenu.Items.Add(new NativeMenuItemSeparator());
         fileMenu.Items.Add(_quitMenuItem);
 
+        var editMenu = new NativeMenu();
+        editMenu.Items.Add(_undoMenuItem);
+        editMenu.Items.Add(_redoMenuItem);
+
         _nativeMenu = new NativeMenu();
         _nativeMenu.Items.Add(new NativeMenuItem
         {
             Header = "File",
             Menu = fileMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Edit",
+            Menu = editMenu,
         });
         _nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();
 
@@ -246,6 +267,16 @@ public sealed class MainWindow : Window
         _saveAsButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _saveAsButton.Click += SaveAsButton_Click;
 
+        _undoButton.Content = "Undo";
+        _undoButton.Padding = new Thickness(10, 4);
+        _undoButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _undoButton.Click += UndoButton_Click;
+
+        _redoButton.Content = "Redo";
+        _redoButton.Padding = new Thickness(10, 4);
+        _redoButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _redoButton.Click += RedoButton_Click;
+
         _cellAddressText.Width = 72;
         _cellAddressText.FontSize = 12;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
@@ -277,6 +308,8 @@ public sealed class MainWindow : Window
                     _openButton,
                     _saveButton,
                     _saveAsButton,
+                    _undoButton,
+                    _redoButton,
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
@@ -345,14 +378,19 @@ public sealed class MainWindow : Window
 
     private void UpdateSaveButton()
     {
-        _openButton.IsEnabled = !_isOpening && !_isSaving && StorageProvider.CanOpen;
-        _saveButton.IsEnabled = !_isOpening && !_isSaving && _session.CanSaveCurrentSource(out _);
+        var isIdle = !_isOpening && !_isSaving;
+        _openButton.IsEnabled = isIdle && StorageProvider.CanOpen;
+        _saveButton.IsEnabled = isIdle && _session.CanSaveCurrentSource(out _);
         _saveButton.Content = _session.IsDirty ? "Save*" : "Save";
-        _saveAsButton.IsEnabled = !_isOpening && !_isSaving && StorageProvider.CanSave;
+        _saveAsButton.IsEnabled = isIdle && StorageProvider.CanSave;
+        _undoButton.IsEnabled = isIdle && _session.CanUndo;
+        _redoButton.IsEnabled = isIdle && _session.CanRedo;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
+        _undoMenuItem.IsEnabled = _undoButton.IsEnabled;
+        _redoMenuItem.IsEnabled = _redoButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -831,6 +869,49 @@ public sealed class MainWindow : Window
         await OpenWorkbookAsync();
     }
 
+    private void UndoButton_Click(object? sender, RoutedEventArgs e)
+    {
+        UndoLastEdit();
+    }
+
+    private void RedoButton_Click(object? sender, RoutedEventArgs e)
+    {
+        RedoLastEdit();
+    }
+
+    private void UndoLastEdit()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ApplyEditHistoryResult(_session.UndoLastEdit(), "Undid last edit");
+    }
+
+    private void RedoLastEdit()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        ApplyEditHistoryResult(_session.RedoLastEdit(), "Redid last edit");
+    }
+
+    private void ApplyEditHistoryResult(WorkbookCellEditResult result, string successStatus)
+    {
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Edit history unavailable.");
+            return;
+        }
+
+        RefreshShell(successStatus);
+    }
+
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
     {
         e.DragEffects = TrySelectDroppedWorkbookPath(e, out _, out _)
@@ -868,6 +949,9 @@ public sealed class MainWindow : Window
         var hasNativeFileMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "File", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
+        var hasNativeEditMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+            string.Equals(item.Header?.ToString(), "Edit", StringComparison.Ordinal) &&
+            item.Menu is not null) == true;
 
         return new MacOsLaunchSmokeSnapshot(
             WindowShown: IsVisible,
@@ -879,9 +963,12 @@ public sealed class MainWindow : Window
             OpenedSourcePath: _session.CurrentFilePath,
             IsOpening: _isOpening,
             HasNativeFileMenu: hasNativeFileMenu,
+            HasNativeEditMenu: hasNativeEditMenu,
             HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
+            HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, "Undo"),
+            HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, "Redo"),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
@@ -901,7 +988,25 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y)
+            return;
+
+        if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            e.Handled = true;
+            RedoLastEdit();
+        }
+        else if (e.Key == Key.Z)
+        {
+            e.Handled = true;
+            UndoLastEdit();
+        }
+        else if (e.Key == Key.Y)
+        {
+            e.Handled = true;
+            RedoLastEdit();
+        }
+        else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             e.Handled = true;
             await SaveWorkbookAsAsync();
@@ -1391,6 +1496,13 @@ public sealed class MainWindow : Window
     {
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
+    }
+
+    private void ShowEditIssue(string message)
+    {
+        _statusText.Text = message;
+        _statusText.Foreground = Brush(143, 74, 18);
+        UpdateSaveButton();
     }
 
     private (double Height, double Width) GetCurrentSheetViewportSize()
