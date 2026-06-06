@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -55,7 +54,7 @@ public sealed class HomeClipboardCommandSourceTests
     [Fact]
     public void ClipboardCommandHandlers_RouteThroughCopyPasteModesAndPasteSpecialPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ClipboardCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ClipboardCommands.cs");
 
         source.Should().Contain("private void CutBtn_Click(object sender, RoutedEventArgs e)   { ExecuteCopy(isCut: true); }");
         source.Should().Contain("private void CopyBtn_Click(object sender, RoutedEventArgs e)  { ExecuteCopy(); }");
@@ -73,7 +72,7 @@ public sealed class HomeClipboardCommandSourceTests
     [Fact]
     public void FormatPainterHandlers_CaptureSingleAndPersistentSources()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormatPainter.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.FormatPainter.cs");
 
         source.Should().Contain("private void FormatPainterBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("CaptureFormatPainterSource(persistent: false)");
