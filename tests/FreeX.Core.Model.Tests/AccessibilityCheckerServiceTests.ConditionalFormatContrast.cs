@@ -853,6 +853,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("ROUND($A1/3,0)>=33", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("MOD($A1,2)=0", "B2");
         AssertFormulaArithmeticContrastLocations("SQRT($A1)>=10", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("POWER($A1,2)>10000", "B4");
+        AssertFormulaArithmeticContrastLocations("POWER($A1/25,2)>=16", "B2", "B4");
     }
 
     [Fact]
@@ -864,6 +866,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("IF(SQRT($A1)>=10,TRUE,FALSE)", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("AND(SQRT($A1)>=10,$C1=\"Open\")", "B4");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(SQRT($A1))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(POWER($A1,2)>10000,TRUE,FALSE)", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(POWER($A1,2)>=10000,$C1=\"Closed\")", "B2");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(POWER($A1,2))", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("MOD($A1,2)", "B1", "B3", "B4");
     }
 
@@ -872,6 +877,8 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaAggregateContrastLocations("SUM(ABS($A1-100),MOD($A1,2))>=25", "B1", "B3", "B4");
         AssertFormulaAggregateContrastLocations("SUM(SQRT($A1),1)>10", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(POWER($A1,2),1)>10000", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(POWER($A1,2),$A1)>5000", "B2", "B4");
     }
 
     [Fact]
@@ -889,6 +896,15 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("SQRT(-$A1)>0");
         AssertFormulaArithmeticContrastLocations("SQRT(\"5\")>0");
         AssertFormulaArithmeticContrastLocations("SQRT($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("POWER($A1)>0");
+        AssertFormulaArithmeticContrastLocations("POWER($A1,2,3)>0");
+        AssertFormulaArithmeticContrastLocations("POWER(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("POWER($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("POWER($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("POWER(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("POWER(1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("POWER(0,-1)>0");
+        AssertFormulaArithmeticContrastLocations("POWER(-$A1,0.5)>0");
         AssertFormulaArithmeticContrastLocations("EXP($A1)>0");
     }
 
