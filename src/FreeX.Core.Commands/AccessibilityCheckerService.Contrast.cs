@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -5,6 +8,16 @@ namespace FreeX.Core.Commands;
 
 public static partial class AccessibilityCheckerService
 {
+    private static readonly Regex FormulaDateTimeTextHasTimeSeparatorRegex = new(@"\d\s*:\s*\d");
+    private static readonly Regex FormulaDateTimeTextHasAmPmRegex = new(@"\b(?:AM|PM)\b", RegexOptions.IgnoreCase);
+    private static readonly Regex FormulaDateTimeTextHasDateSeparatorRegex = new(@"\d+\s*[-/]\s*\d+");
+    private static readonly Regex FormulaDateTimeTextHasMonthNameRegex = new(
+        @"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b",
+        RegexOptions.IgnoreCase);
+    private static readonly Regex FormulaDateTimeFakeLeapDayTextRegex = new(
+        @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$",
+        RegexOptions.IgnoreCase);
+
     private static void AddLowContrastChartTextIssues(
         List<AccessibilityIssue> issues,
         Workbook workbook,
@@ -1182,8 +1195,14 @@ public static partial class AccessibilityCheckerService
             case "DATE":
                 kind = ConditionalFormulaScalarFunctionKind.Date;
                 return true;
+            case "DATEVALUE":
+                kind = ConditionalFormulaScalarFunctionKind.DateValue;
+                return true;
             case "TIME":
                 kind = ConditionalFormulaScalarFunctionKind.Time;
+                return true;
+            case "TIMEVALUE":
+                kind = ConditionalFormulaScalarFunctionKind.TimeValue;
                 return true;
             case "YEAR":
                 kind = ConditionalFormulaScalarFunctionKind.Year;
@@ -1359,6 +1378,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Upper or
             ConditionalFormulaScalarFunctionKind.Lower or
             ConditionalFormulaScalarFunctionKind.Trim or
+            ConditionalFormulaScalarFunctionKind.DateValue or
+            ConditionalFormulaScalarFunctionKind.TimeValue or
             ConditionalFormulaScalarFunctionKind.Year or
             ConditionalFormulaScalarFunctionKind.Month or
             ConditionalFormulaScalarFunctionKind.Day or
@@ -2062,7 +2083,9 @@ public static partial class AccessibilityCheckerService
         Search,
         Exact,
         Date,
+        DateValue,
         Time,
+        TimeValue,
         Year,
         Month,
         Day,
@@ -2728,7 +2751,9 @@ public static partial class AccessibilityCheckerService
                     value = new BoolValue(string.Equals(firstText, secondText, StringComparison.Ordinal));
                     return true;
                 case ConditionalFormulaScalarFunctionKind.Date:
+                case ConditionalFormulaScalarFunctionKind.DateValue:
                 case ConditionalFormulaScalarFunctionKind.Time:
+                case ConditionalFormulaScalarFunctionKind.TimeValue:
                 case ConditionalFormulaScalarFunctionKind.Year:
                 case ConditionalFormulaScalarFunctionKind.Month:
                 case ConditionalFormulaScalarFunctionKind.Day:
@@ -3844,6 +3869,11 @@ public static partial class AccessibilityCheckerService
 
                     value = dateValue;
                     return true;
+                case ConditionalFormulaScalarFunctionKind.DateValue:
+                    if (!TryEvaluateFormulaDateValueFunction(function.Arguments[0], rowOffset, colOffset, out value))
+                        return false;
+
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Time:
                     if (!TryResolveFormulaTimePart(function.Arguments[0], rowOffset, colOffset, out var timeHour) ||
                         !TryResolveFormulaTimePart(function.Arguments[1], rowOffset, colOffset, out var timeMinute) ||
@@ -3854,6 +3884,11 @@ public static partial class AccessibilityCheckerService
 
                     var timeFraction = (timeHour * 3600d + timeMinute * 60d + timeSecond) / 86400d;
                     value = new NumberValue(timeFraction - Math.Floor(timeFraction));
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.TimeValue:
+                    if (!TryEvaluateFormulaTimeValueFunction(function.Arguments[0], rowOffset, colOffset, out value))
+                        return false;
+
                     return true;
                 case ConditionalFormulaScalarFunctionKind.Year:
                 case ConditionalFormulaScalarFunctionKind.Month:
@@ -3962,6 +3997,176 @@ public static partial class AccessibilityCheckerService
                 default:
                     return false;
             }
+        }
+
+        private bool TryEvaluateFormulaDateValueFunction(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var source))
+            {
+                if (source is ErrorValue unresolvedError)
+                {
+                    value = unresolvedError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (source is ErrorValue sourceError)
+            {
+                value = sourceError;
+                return true;
+            }
+
+            if (!TryEvaluateFormulaDateValue(FormulaDateTimeValueText(source), out var serial))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = new NumberValue(serial);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaTimeValueFunction(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var source))
+            {
+                if (source is ErrorValue unresolvedError)
+                {
+                    value = unresolvedError;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (source is ErrorValue sourceError)
+            {
+                value = sourceError;
+                return true;
+            }
+
+            if (!TryEvaluateFormulaTimeValue(FormulaDateTimeValueText(source), out var fraction))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = new NumberValue(fraction);
+            return true;
+        }
+
+        private static string FormulaDateTimeValueText(ScalarValue value) =>
+            value switch
+            {
+                TextValue text => text.Value,
+                NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                BlankValue => string.Empty,
+                ErrorValue error => error.Code,
+                _ => value.ToString() ?? string.Empty
+            };
+
+        private static bool TryEvaluateFormulaDateValue(string text, out double serial)
+        {
+            serial = 0;
+            if (TryParseFormulaExcelFakeLeapDayValueText(text, out _))
+            {
+                serial = 60;
+                return true;
+            }
+
+            if (!FormulaTextHasDateComponent(text))
+                return false;
+
+            if (TryParseFormulaMonthYearDateValueText(text, out var monthYearDate))
+            {
+                serial = FormulaDateToExcelSerial(monthYearDate);
+                return double.IsFinite(serial);
+            }
+
+            if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dateTime))
+            {
+                serial = Math.Floor(FormulaDateToExcelSerial(dateTime));
+                return double.IsFinite(serial);
+            }
+
+            return false;
+        }
+
+        private static bool TryEvaluateFormulaTimeValue(string text, out double fraction)
+        {
+            fraction = 0;
+            if (!FormulaTextHasTimeComponent(text))
+                return false;
+
+            if (TryParseFormulaExcelFakeLeapDayValueText(text, out var fakeLeapSerial))
+            {
+                fraction = fakeLeapSerial - Math.Floor(fakeLeapSerial);
+                return double.IsFinite(fraction);
+            }
+
+            if (TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out var timeSpan) &&
+                timeSpan.Days == 0)
+            {
+                fraction = timeSpan.TotalDays;
+                return double.IsFinite(fraction);
+            }
+
+            if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dateTime))
+            {
+                fraction = dateTime.TimeOfDay.TotalDays;
+                return double.IsFinite(fraction);
+            }
+
+            return false;
+        }
+
+        private static bool FormulaTextHasTimeComponent(string text) =>
+            FormulaDateTimeTextHasTimeSeparatorRegex.IsMatch(text) ||
+            FormulaDateTimeTextHasAmPmRegex.IsMatch(text);
+
+        private static bool FormulaTextHasDateComponent(string text) =>
+            FormulaDateTimeTextHasDateSeparatorRegex.IsMatch(text) ||
+            FormulaDateTimeTextHasMonthNameRegex.IsMatch(text);
+
+        private static bool TryParseFormulaMonthYearDateValueText(string text, out DateTime date) =>
+            DateTime.TryParseExact(
+                text.Trim(),
+                ["MMMM yyyy", "MMM yyyy", "MMMM, yyyy", "MMM, yyyy", "MMMM-yyyy", "MMM-yyyy"],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out date);
+
+        private static bool TryParseFormulaExcelFakeLeapDayValueText(string text, out double serial)
+        {
+            serial = 0;
+            var match = FormulaDateTimeFakeLeapDayTextRegex.Match(text.Trim());
+            if (!match.Success)
+                return false;
+
+            serial = 60;
+            if (match.Groups[1].Success)
+            {
+                if (!DateTime.TryParse(match.Groups[1].Value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
+                    return false;
+
+                serial += time.TimeOfDay.TotalDays;
+            }
+
+            return true;
         }
 
         private bool TryEvaluateFormulaDatedif(
