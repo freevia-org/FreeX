@@ -1011,6 +1011,9 @@ public static partial class AccessibilityCheckerService
             case "ACOTH":
                 kind = ConditionalFormulaScalarFunctionKind.Acoth;
                 return true;
+            case "COTH":
+                kind = ConditionalFormulaScalarFunctionKind.Coth;
+                return true;
             case "ASIN":
                 kind = ConditionalFormulaScalarFunctionKind.Asin;
                 return true;
@@ -1131,6 +1134,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Tanh or
             ConditionalFormulaScalarFunctionKind.Atanh or
             ConditionalFormulaScalarFunctionKind.Acoth or
+            ConditionalFormulaScalarFunctionKind.Coth or
             ConditionalFormulaScalarFunctionKind.Asin or
             ConditionalFormulaScalarFunctionKind.Acos or
             ConditionalFormulaScalarFunctionKind.Acot or
@@ -1728,6 +1732,7 @@ public static partial class AccessibilityCheckerService
         Tanh,
         Atanh,
         Acoth,
+        Coth,
         Asin,
         Acos,
         Acot,
@@ -2272,6 +2277,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Tanh:
                 case ConditionalFormulaScalarFunctionKind.Atanh:
                 case ConditionalFormulaScalarFunctionKind.Acoth:
+                case ConditionalFormulaScalarFunctionKind.Coth:
                 case ConditionalFormulaScalarFunctionKind.Asin:
                 case ConditionalFormulaScalarFunctionKind.Acos:
                 case ConditionalFormulaScalarFunctionKind.Acot:
@@ -2632,6 +2638,13 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = 0.5d * Math.Log(acothRatio);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Coth:
+                    var hyperbolicTangent = Math.Tanh(first);
+                    if (hyperbolicTangent == 0d || !double.IsFinite(hyperbolicTangent))
+                        return false;
+
+                    result = 1d / hyperbolicTangent;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Asin:
                     if (first < -1d || first > 1d)
