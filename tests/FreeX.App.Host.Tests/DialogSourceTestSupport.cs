@@ -12,6 +12,12 @@ internal static class DialogSourceTestSupport
     public static string ReadHostSourcesWithSeparator(string separator, params string[] fileNames) =>
         string.Join(separator, fileNames.Select(ReadHostSource));
 
+    public static string ReadAppUiSources(params string[] fileNames) =>
+        ReadAppUiSourcesWithSeparator(Environment.NewLine, fileNames);
+
+    public static string ReadAppUiSourcesWithSeparator(string separator, params string[] fileNames) =>
+        string.Join(separator, fileNames.Select(ReadAppUiSource));
+
     public static string ReadClassSource(string fileName, string startMarker, string endMarker)
     {
         var source = ReadHostSource(fileName);
@@ -38,4 +44,7 @@ internal static class DialogSourceTestSupport
 
     private static string ReadHostSource(string fileName) =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName));
+
+    private static string ReadAppUiSource(string fileName) =>
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", fileName));
 }

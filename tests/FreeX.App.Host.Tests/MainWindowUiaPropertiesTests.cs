@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -266,8 +265,7 @@ public sealed class MainWindowUiaPropertiesTests
     [Fact]
     public void GridView_OverridesOnCreateAutomationPeerForScreenReaderSupport()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
+        var source = DialogSourceTestSupport.ReadAppUiSources("GridView.cs");
 
         source.Should().Contain(
             "OnCreateAutomationPeer",

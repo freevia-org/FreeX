@@ -976,7 +976,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         var uiStateSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
-        var renderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.CellStyles.cs"));
+        var renderSource = DialogSourceTestSupport.ReadAppUiSources("GridView.Rendering.CellStyles.cs");
 
         xaml.Should().Contain("x:Name=\"FontNameBox\"");
         xaml.Should().Contain("SelectionChanged=\"FontNameBox_SelectionChanged\"");
