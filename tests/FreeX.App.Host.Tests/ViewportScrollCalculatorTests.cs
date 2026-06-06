@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO;
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.Core.Model;
@@ -87,7 +86,7 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     [Fact]
     public void MainWindowWheelHandler_NormalizesRawMouseWheelDeltaBeforeScrolling()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
         source.Should().Contain("ViewportScrollCalculator.NormalizeWheelNotches(e.Delta)");
         source.Should().Contain("ViewportScrollCalculator.CalculateWheelScroll");
@@ -96,7 +95,7 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     [Fact]
     public void MainWindowWheelHandler_RoutesSplitPaneWheelThroughPointerResolvedTarget()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
         var wheelHandler = source[
             source.IndexOf("private void SheetGrid_MouseWheel", StringComparison.Ordinal)..
             source.IndexOf("private void OnAutofillEdgeScrollRequested", StringComparison.Ordinal)];
@@ -116,7 +115,7 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     [Fact]
     public void MainWindowEnsureCellVisible_ScansVisibleMetricsWithoutAllocatingFilteredLists()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
         var ensureCellVisible = source[
             source.IndexOf("private void EnsureCellVisible", StringComparison.Ordinal)..
             source.IndexOf("// \u2500\u2500 Navigation helpers", StringComparison.Ordinal)];
