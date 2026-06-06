@@ -40,6 +40,15 @@ internal static class TestWorkspaceFileLocator
                 Path.Combine(relativeParts));
     }
 
+    public static string FindDirectoryFromSourceOrCurrentDirectory(
+        string[] relativeParts,
+        [CallerFilePath] string sourceFilePath = "")
+    {
+        var startDirectory = new DirectoryInfo(Path.GetDirectoryName(sourceFilePath) ?? AppContext.BaseDirectory);
+        var candidate = FindExistingDirectory(startDirectory, relativeParts);
+        return candidate ?? Path.Combine([Directory.GetCurrentDirectory(), .. relativeParts]);
+    }
+
     public static string FindFromWorkspaceRoot(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -71,6 +80,20 @@ internal static class TestWorkspaceFileLocator
         {
             var candidate = Path.Combine([directory.FullName, .. relativeParts]);
             if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        return null;
+    }
+
+    private static string? FindExistingDirectory(DirectoryInfo? directory, string[] relativeParts)
+    {
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (Directory.Exists(candidate))
                 return candidate;
 
             directory = directory.Parent;
