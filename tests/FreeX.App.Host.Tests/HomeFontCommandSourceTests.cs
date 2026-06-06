@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -83,7 +82,7 @@ public sealed class HomeFontCommandSourceTests
     [Fact]
     public void FontCommandHandlers_RouteThroughStyleDiffsAndPlanners()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(Bold: BoldButton.IsChecked == true))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(Italic: ItalicButton.IsChecked == true))");
