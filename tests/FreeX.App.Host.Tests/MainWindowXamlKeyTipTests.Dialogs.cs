@@ -83,7 +83,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void DialogEntryPointHandlers_UseOwnedActivatedDialogs()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
         var source = DialogSourceTestSupport.ReadHostSources(
             Directory.GetFiles(appHostDirectory, "MainWindow*.cs")
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
