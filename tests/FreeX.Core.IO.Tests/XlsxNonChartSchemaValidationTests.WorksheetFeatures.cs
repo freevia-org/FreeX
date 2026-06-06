@@ -328,6 +328,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void ProtectedRanges_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateProtectedRangesSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithProtectedRanges_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateProtectedRangesSourceWorkbook());
+        var sourceProtectedRanges = ReadWorksheetChildElement(source, "protectedRanges");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "protectedRanges")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceProtectedRanges.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void NamedRanges_ProducesSchemaValidWorkbook()
     {
         var workbook = new Workbook("NamedRanges");
@@ -994,6 +1029,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             Hidden: true,
             Locked: true,
             User: "FreeXTest"));
+        return workbook;
+    }
+
+    private static Workbook CreateProtectedRangesSourceWorkbook()
+    {
+        var workbook = new Workbook("ProtectedRangesPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Locked"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
+        sheet.AllowEditRanges.Add(new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3)));
         return workbook;
     }
 
