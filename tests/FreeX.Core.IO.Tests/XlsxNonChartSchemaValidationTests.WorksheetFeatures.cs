@@ -325,6 +325,39 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(workbook).Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithManualPageBreaks_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateManualPageBreakSourceWorkbook());
+        var sourceRowBreaks = ReadWorksheetChildElement(source, "rowBreaks");
+        var sourceColumnBreaks = ReadWorksheetChildElement(source, "colBreaks");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "rowBreaks")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceRowBreaks.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "colBreaks")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceColumnBreaks.ToString(SaveOptions.DisableFormatting));
+    }
+
 
     [Fact]
     public void CombinedNonChartFeatures_ProducesSchemaValidWorkbook()
@@ -401,6 +434,16 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SplitColumn = 2;
         sheet.ViewTopRow = 1;
         sheet.ViewLeftCol = 1;
+        return workbook;
+    }
+
+    private static Workbook CreateManualPageBreakSourceWorkbook()
+    {
+        var workbook = new Workbook("ManualPageBreakPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+        sheet.RowPageBreaks.Add(20);
+        sheet.ColumnPageBreaks.Add(4);
         return workbook;
     }
 
