@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -12,7 +11,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void TitleBarWindowChrome_ExposesMinimizeMaximizeRestoreAndCloseButtons()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace local = "clr-namespace:FreeX.App.Host";
 
@@ -43,12 +42,12 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void QuickAccessToolbar_BuildsPersistedCommandsWithKeyTipsAndSharedCommandRoutes()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var catalogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "QuickAccessToolbarCatalog.cs"));
-        var qatSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
-        var keyTipSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyTips.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
-        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CommandExecution.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var catalogSource = DialogSourceTestSupport.ReadHostSources("QuickAccessToolbarCatalog.cs");
+        var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
+        var keyTipSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.CommandExecution.cs");
 
         xaml.Should().Contain("x:Name=\"TitleBarQatPanel\"");
         xaml.Should().Contain("x:Name=\"BelowRibbonQatPanel\"");

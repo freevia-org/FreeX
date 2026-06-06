@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -164,7 +163,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateDialog_AllReferencesListExposesAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_referencesList, UiText.Get(\"Consolidate_AllReferences2\"));");
     }
@@ -172,7 +171,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateDialog_RangeEditorsExposeAutomationNames()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_referenceBox, UiText.Get(\"Consolidate_Reference2\"));");
         source.Should().Contain("AutomationProperties.SetName(_destinationBox, UiText.Get(\"Consolidate_DestinationCell2\"));");
@@ -241,7 +240,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateDialogOpenedFromKeyboard_FocusesFunctionChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -252,7 +251,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateDialogInvalidFinalValidation_RefocusesInvalidEntry()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
 
         source.Should().Contain("FocusInvalidFinalValidation(error);");
         source.Should().Contain("private void FocusInvalidFinalValidation(string? error)");
@@ -265,7 +264,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateDialogPendingReference_RequiresAddBeforeOk()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
 
         source.Should().Contain("HasPendingReferenceText(_referencesList.Items.Cast<string>(), _referenceBox.Text)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"Consolidate_AddTheReferenceBeforeClickingOk\")");
@@ -277,7 +276,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateDialogInvalidAddReference_RefocusesReferenceWithKeyboardFocus()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
         var addHandlerSource = source[
             source.IndexOf("private void AddReferenceButton_Click", StringComparison.Ordinal)..
             source.IndexOf("private void DeleteReferenceButton_Click", StringComparison.Ordinal)];
@@ -300,7 +299,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateRangePicker_RefocusesSelectedInputAfterRequest()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
         var handlerSource = source[
             source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
             source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
@@ -313,7 +312,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void MainWindow_WiresConsolidateReferencePickersToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("new ConsolidateDialog(");
         source.Should().Contain("request => ApplyConsolidateRangeSelection(dialog, request)");

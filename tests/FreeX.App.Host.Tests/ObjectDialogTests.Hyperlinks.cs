@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -174,10 +173,9 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void HyperlinkDialog_ExposesExcelLikeLinkTypeAndScreenTipAffordances()
     {
-        var source = string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextEntryDialogs.cs")));
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "HyperlinkDialog.cs",
+            "TextEntryDialogs.cs");
 
         source.Should().Contain("UiText.Get(\"Hyperlink_LinkTypeExistingFileOrWebPage\")");
         source.Should().Contain("UiText.Get(\"Hyperlink_LinkTypeCreateNewDocument\")");
@@ -196,7 +194,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void HyperlinkDialog_LabelsLinkTypeListWithAccessKeyTarget()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("HyperlinkDialog.cs");
 
         source.Should().Contain("new Label { Content = UiText.Get(\"Hyperlink_LinkTo\"), Target = _linkTypes");
         source.Should().Contain("AutomationProperties.SetName(_linkTypes, UiText.Get(\"Hyperlink_LinkTo2\"));");
@@ -207,7 +205,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void HyperlinkDialog_TextEditorsExposeAutomationNames()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("HyperlinkDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_displayBox, UiText.Get(\"Hyperlink_TextToDisplay\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_displayBox, \"HyperlinkDisplayTextBox\");");
@@ -254,7 +252,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void HyperlinkDialog_ScreenTipAndBookmarkButtonsExposeAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("HyperlinkDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_screenTipButton, UiText.Get(\"Hyperlink_SetScreenTip\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_screenTipButton, \"HyperlinkScreenTipButton\");");
@@ -267,7 +265,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void HyperlinkTextEntryDialogs_NameEntryBoxFromAccessKeyLabel()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextEntryDialogs.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("TextEntryDialogs.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_textBox, automationName ?? CreateAutomationName(label));");
         source.Should().Contain("label.Replace(\"_\", string.Empty, StringComparison.Ordinal)");
@@ -277,7 +275,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void HyperlinkTextEntryDialogs_ExposeStableAutomationIdsAndHelpText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextEntryDialogs.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("TextEntryDialogs.cs");
 
         source.Should().Contain("AutomationProperties.SetAutomationId(_textBox, automationId ?? CreateAutomationId(title));");
         source.Should().Contain("AutomationProperties.SetHelpText(_textBox, helpText ?? CreateHelpText(label));");
