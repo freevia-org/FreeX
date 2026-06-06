@@ -1,4 +1,6 @@
 using FluentAssertions;
+using FreeX.Core.IO;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
 
@@ -27,6 +29,45 @@ public sealed class StartupWorkbookLoaderTests
         result.SourcePath.Should().Be(path);
         result.DisplayName.Should().Be(Path.GetFileName(path));
         result.Workbook.Sheets.Single().Name.Should().Be("Very Long Sales _Draft_ Import");
+        result.OpenedAsTemplate.Should().BeFalse();
+        result.FeatureReport.Should().BeNull();
+        result.LoadWarnings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Load_WithTemplatePath_PreservesTemplateAndFeatureMetadata()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "Budget.xltx");
+        await File.WriteAllTextAsync(path, "template");
+        var workbook = new Workbook("Template");
+        workbook.AddSheet("Sheet1");
+        var featureReport = new XlsxFeatureReport(
+        [
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Charts, "xl/charts/chart1.xml")
+        ]);
+        var adapter = new TestFileAdapter(
+            load: _ => workbook,
+            extension: ".xltx",
+            formatName: "XLTX Template",
+            formats:
+            [
+                new FileFormatDescriptor(
+                    ".xltx",
+                    "XLTX Template",
+                    CanOpen: true,
+                    CanSave: false,
+                    OpensAsTemplate: true)
+            ]);
+        var service = new WorkbookOpenService(inspectXlsx: _ => featureReport);
+
+        var result = new StartupWorkbookLoader([adapter], openService: service).Load([path]);
+
+        result.IsFallback.Should().BeFalse();
+        result.SourcePath.Should().Be(path);
+        result.OpenedAsTemplate.Should().BeTrue();
+        result.FeatureReport.Should().BeSameAs(featureReport);
+        result.LoadWarnings.Should().BeEmpty();
     }
 
     [Fact]

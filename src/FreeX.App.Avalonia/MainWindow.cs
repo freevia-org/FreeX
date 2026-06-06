@@ -2,8 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -22,6 +24,7 @@ public sealed class MainWindow : Window
     private const double HeaderRowHeight = 28;
     private const double ViewportHeight = 880;
     private const double ViewportWidth = 1440;
+    private const string NativeWorkbookExtension = ".fxl";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
     private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
@@ -32,19 +35,28 @@ public sealed class MainWindow : Window
     private static readonly IBrush SelectionHeaderForeground = Brush(13, 86, 89);
 
     private readonly StartupWorkbookLoadResult _source;
+    private readonly IReadOnlyList<IFileAdapter> _adapters = WorkbookFileAdapterCatalog.CreateDefaultAdapters();
+    private readonly WorkbookSaveService _saveService = new();
     private readonly Workbook _workbook;
     private readonly Sheet _sheet;
     private readonly IViewportService _viewportService = new ViewportService();
     private readonly RecalcEngine _recalcEngine = new(new DependencyGraph(), new FormulaEvaluator());
     private readonly WorkbookCellEditService _cellEditService;
     private readonly ContentControl _sheetGridHost = new();
+    private readonly TextBlock _titleText = new();
     private readonly TextBlock _detailText = new();
     private readonly TextBlock _statusText = new();
     private readonly TextBlock _cellAddressText = new();
     private readonly TextBox _formulaBox = new();
+    private readonly Button _saveButton = new();
+    private readonly Button _saveAsButton = new();
     private ViewportModel _viewport = new([], [], [], null, []);
     private CellAddress _activeCell;
     private CellAddress? _formulaEditAddress;
+    private string? _currentFilePath;
+    private XlsxFeatureReport? _currentXlsxFeatureReport;
+    private bool _isDirty;
+    private bool _isSaving;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
     {
@@ -52,6 +64,8 @@ public sealed class MainWindow : Window
         _workbook = _source.Workbook;
         _sheet = EnsureSheet(_workbook);
         _activeCell = GetInitialActiveCell(_sheet);
+        _currentFilePath = _source.OpenedAsTemplate ? null : _source.SourcePath;
+        _currentXlsxFeatureReport = _source.FeatureReport;
 
         var commandBus = new CommandBus(
             _ => new WorkbookCommandContext(_workbook),
@@ -67,7 +81,8 @@ public sealed class MainWindow : Window
         MinHeight = 520;
         Background = WindowBackground;
         Content = BuildContent();
-        RefreshShell(_source.Status);
+        KeyDown += MainWindow_KeyDown;
+        RefreshShell(FormatStartupStatus(_source));
     }
 
     private static Sheet EnsureSheet(Workbook workbook) =>
@@ -109,16 +124,12 @@ public sealed class MainWindow : Window
 
     private Control BuildToolbar()
     {
-        var title = new TextBlock
-        {
-            Text = _source.DisplayName,
-            FontSize = 14,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Brush(25, 31, 40),
-            MaxWidth = 180,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        };
+        _titleText.FontSize = 14;
+        _titleText.FontWeight = FontWeight.SemiBold;
+        _titleText.Foreground = Brush(25, 31, 40);
+        _titleText.MaxWidth = 180;
+        _titleText.TextTrimming = TextTrimming.CharacterEllipsis;
+        _titleText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
 
         _detailText.FontSize = 12;
         _detailText.Foreground = Brush(94, 103, 116);
@@ -128,6 +139,16 @@ public sealed class MainWindow : Window
 
         _statusText.FontSize = 12;
         _statusText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+
+        _saveButton.Content = "Save";
+        _saveButton.Padding = new Thickness(10, 4);
+        _saveButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _saveButton.Click += SaveButton_Click;
+
+        _saveAsButton.Content = "Save As";
+        _saveAsButton.Padding = new Thickness(10, 4);
+        _saveAsButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _saveAsButton.Click += SaveAsButton_Click;
 
         _cellAddressText.Width = 72;
         _cellAddressText.FontSize = 12;
@@ -155,8 +176,10 @@ public sealed class MainWindow : Window
                 Spacing = 12,
                 Children =
                 {
-                    title,
+                    _titleText,
                     _detailText,
+                    _saveButton,
+                    _saveAsButton,
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
@@ -168,13 +191,23 @@ public sealed class MainWindow : Window
     private void RefreshShell(string status)
     {
         _sheetGridHost.Content = BuildSheetGrid();
+        _titleText.Text = CurrentDisplayName;
         _detailText.Text = $"{_sheet.Name}  |  {_viewport.RowMetrics.Count} rows x {_viewport.ColMetrics.Count} columns";
         _cellAddressText.Text = FormatCellReference(_activeCell);
         _formulaBox.Text = FormatEditText(_sheet.GetCell(_activeCell), _activeCell);
         _statusText.Text = status;
-        _statusText.Foreground = _source.IsFallback && string.Equals(status, _source.Status, StringComparison.Ordinal)
+        _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);
+        Title = $"FreeX - {CurrentDisplayName}{(_isDirty ? " *" : "")}";
+        UpdateSaveButton();
+    }
+
+    private void UpdateSaveButton()
+    {
+        _saveButton.IsEnabled = !_isSaving && CanSaveCurrentSource(out _);
+        _saveButton.Content = _isDirty ? "Save*" : "Save";
+        _saveAsButton.IsEnabled = !_isSaving && StorageProvider.CanSave;
     }
 
     private Control BuildSheetGrid()
@@ -370,9 +403,278 @@ public sealed class MainWindow : Window
 
         _activeCell = address;
         _formulaEditAddress = null;
+        _isDirty = true;
         _viewport = GetViewport();
         RefreshShell($"Edited {FormatCellReference(address)}");
     }
+
+    private async void SaveButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await SaveCurrentWorkbookAsync();
+    }
+
+    private async void SaveAsButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await SaveWorkbookAsAsync();
+    }
+
+    private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.S ||
+            (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
+             !e.KeyModifiers.HasFlag(KeyModifiers.Meta)))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        await SaveCurrentWorkbookAsync();
+    }
+
+    private async Task SaveCurrentWorkbookAsync()
+    {
+        if (_isSaving)
+            return;
+
+        if (CanSaveCurrentSource(out var target))
+        {
+            await SaveWorkbookToTargetAsync(target!);
+            return;
+        }
+
+        await SaveWorkbookAsAsync();
+    }
+
+    private async Task SaveWorkbookAsAsync()
+    {
+        if (_isSaving)
+            return;
+
+        if (!StorageProvider.CanSave)
+        {
+            ShowSaveIssue("Save As unavailable on this platform.");
+            return;
+        }
+
+        var fileTypes = BuildSaveFileTypes();
+        if (fileTypes.Count == 0)
+        {
+            ShowSaveIssue("No save formats are available.");
+            return;
+        }
+
+        var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save Workbook",
+            SuggestedFileName = BuildSuggestedSaveAsFileName(),
+            DefaultExtension = NativeWorkbookExtension[1..],
+            FileTypeChoices = fileTypes,
+            SuggestedFileType = fileTypes[0],
+            ShowOverwritePrompt = true,
+        });
+
+        if (storageFile is null)
+            return;
+
+        using (storageFile)
+        {
+            var path = storageFile.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                ShowSaveIssue("Save As requires a local file path.");
+                return;
+            }
+
+            path = EnsureSaveExtension(path);
+            if (!TryResolveSaveTarget(path, out var target, out var message))
+            {
+                ShowSaveIssue(message);
+                return;
+            }
+
+            await SaveWorkbookToTargetAsync(target!);
+        }
+    }
+
+    private async Task SaveWorkbookToTargetAsync(FileSaveTarget target)
+    {
+        try
+        {
+            _isSaving = true;
+            UpdateSaveButton();
+            _statusText.Text = "Saving...";
+            _statusText.Foreground = Brush(67, 113, 83);
+            var progress = new Progress<WorkbookSaveProgressUpdate>(
+                update =>
+                {
+                    _statusText.Text = FormatSaveStatus(update);
+                    _statusText.Foreground = Brush(67, 113, 83);
+                });
+
+            await _saveService.SaveAsync(target.Path, target.Adapter, _workbook, progress);
+            _isDirty = false;
+            _currentFilePath = target.Path;
+            _currentXlsxFeatureReport = null;
+            _workbook.Name = Path.GetFileName(target.Path);
+            RefreshShell($"Saved {Path.GetFileName(target.Path)}");
+        }
+        catch (Exception ex)
+        {
+            ShowSaveIssue($"Save failed: {ex.Message}");
+        }
+        finally
+        {
+            _isSaving = false;
+            UpdateSaveButton();
+        }
+    }
+
+    private bool CanSaveCurrentSource(out FileSaveTarget? target)
+    {
+        target = null;
+        if (string.IsNullOrWhiteSpace(_currentFilePath))
+            return false;
+
+        return TryResolveSaveTarget(_currentFilePath, out target, out _);
+    }
+
+    private bool TryResolveSaveTarget(string path, out FileSaveTarget? target, out string message)
+    {
+        target = null;
+        if (!FileSavePlanner.TryResolveExistingPath(path, _adapters, out var resolvedTarget) ||
+            resolvedTarget is null)
+        {
+            message = "Unsupported save format.";
+            return false;
+        }
+
+        if (!CanWriteTarget(resolvedTarget.Path, out message))
+            return false;
+
+        target = resolvedTarget;
+        message = "";
+        return true;
+    }
+
+    private bool CanWriteTarget(string path, out string message)
+    {
+        if (IsXlsxPath(path) && _currentXlsxFeatureReport?.HasUnsupportedFeatures == true)
+        {
+            message = "Save As FreeX Workbook to avoid dropping unsupported XLSX features.";
+            return false;
+        }
+
+        message = "";
+        return true;
+    }
+
+    private static bool IsXlsxPath(string path) =>
+        string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase);
+
+    private IReadOnlyList<FilePickerFileType> BuildSaveFileTypes()
+    {
+        var formats = _adapters
+            .SelectMany(adapter => adapter.Formats)
+            .Where(format => format.CanSave)
+            .GroupBy(format => FileFormatResolver.NormalizeExtension(format.Extension), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+
+        var nativeIndex = formats.FindIndex(format =>
+            string.Equals(
+                FileFormatResolver.NormalizeExtension(format.Extension),
+                NativeWorkbookExtension,
+                StringComparison.OrdinalIgnoreCase));
+        if (nativeIndex > 0)
+        {
+            var native = formats[nativeIndex];
+            formats.RemoveAt(nativeIndex);
+            formats.Insert(0, native);
+        }
+
+        return formats
+            .Select(format =>
+            {
+                var extension = FileFormatResolver.NormalizeExtension(format.Extension);
+                return new FilePickerFileType(format.FormatName)
+                {
+                    Patterns = [$"*{extension}"],
+                };
+            })
+            .ToList();
+    }
+
+    private string BuildSuggestedSaveAsFileName()
+    {
+        var sourceName = string.IsNullOrWhiteSpace(_workbook.Name)
+            ? CurrentDisplayName
+            : _workbook.Name;
+        var baseName = Path.GetFileNameWithoutExtension(sourceName);
+        if (string.IsNullOrWhiteSpace(baseName))
+            baseName = "Workbook";
+
+        return baseName + NativeWorkbookExtension;
+    }
+
+    private static string EnsureSaveExtension(string path)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(Path.GetExtension(path))
+                ? path + NativeWorkbookExtension
+                : path;
+        }
+        catch (ArgumentException)
+        {
+            return path;
+        }
+        catch (NotSupportedException)
+        {
+            return path;
+        }
+        catch (PathTooLongException)
+        {
+            return path;
+        }
+    }
+
+    private void ShowSaveIssue(string message)
+    {
+        _statusText.Text = message;
+        _statusText.Foreground = Brush(143, 74, 18);
+    }
+
+    private string CurrentDisplayName =>
+        string.IsNullOrWhiteSpace(_currentFilePath)
+            ? _source.DisplayName
+            : Path.GetFileName(_currentFilePath);
+
+    private bool ShouldUseWarningStatusColor(string status) =>
+        _source.IsFallback ||
+        status.Contains("Unsupported XLSX", StringComparison.Ordinal) ||
+        status.Contains("load warning", StringComparison.OrdinalIgnoreCase);
+
+    private static string FormatStartupStatus(StartupWorkbookLoadResult source)
+    {
+        var status = source.Status;
+        if (source.OpenedAsTemplate)
+            status += " Opened as template.";
+        if (source.FeatureReport?.HasUnsupportedFeatures == true)
+            status += " Unsupported XLSX features detected.";
+        if (source.LoadWarnings is { Count: > 0 } warnings)
+            status += $" {warnings.Count} load warning{(warnings.Count == 1 ? "" : "s")}.";
+
+        return status;
+    }
+
+    private static string FormatSaveStatus(WorkbookSaveProgressUpdate update) =>
+        update.Phase switch
+        {
+            WorkbookSavePhase.Preparing => "Preparing save...",
+            WorkbookSavePhase.Writing => "Writing file...",
+            WorkbookSavePhase.Completed => "Saved",
+            _ => "Saving..."
+        };
 
     private static string FormatCellReference(CellAddress address) =>
         CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture);

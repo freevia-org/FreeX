@@ -7,10 +7,13 @@ internal sealed class TestFileAdapter(
     Func<Stream, Workbook>? load = null,
     Action<Workbook, Stream>? save = null,
     string extension = ".fxjson",
-    string formatName = "Fake") : IFileAdapter
+    string formatName = "Fake",
+    IReadOnlyList<FileFormatDescriptor>? formats = null) : IFileAdapter
 {
     public string Extension => extension;
     public string FormatName => formatName;
+    public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
+        formats ?? [new FileFormatDescriptor(extension, formatName)];
 
     public Workbook Load(Stream stream)
     {

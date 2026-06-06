@@ -1,3 +1,4 @@
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -7,4 +8,7 @@ public sealed record StartupWorkbookLoadResult(
     string DisplayName,
     string Status,
     bool IsFallback,
-    string? SourcePath = null);
+    string? SourcePath = null,
+    bool OpenedAsTemplate = false,
+    XlsxFeatureReport? FeatureReport = null,
+    IReadOnlyList<string>? LoadWarnings = null);

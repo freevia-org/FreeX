@@ -45,7 +45,10 @@ public sealed class StartupWorkbookLoader
                 result.Workbook.Name,
                 $"Opened {extension}.",
                 IsFallback: false,
-                SourcePath: filePath);
+                SourcePath: filePath,
+                OpenedAsTemplate: result.OpenedAsTemplate,
+                FeatureReport: result.FeatureReport,
+                LoadWarnings: result.LoadWarnings);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {
