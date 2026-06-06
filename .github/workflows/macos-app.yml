@@ -1,0 +1,86 @@
+name: macOS App Preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  macos-app:
+    name: macOS app bundle (${{ matrix.runtime }})
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime:
+          - osx-arm64
+          - osx-x64
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build app project
+        shell: pwsh
+        run: dotnet build src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj --configuration Release
+
+      - name: Publish app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runtime="${{ matrix.runtime }}"
+          output_root="$RUNNER_TEMP/freex-$runtime"
+          app="$output_root/FreeX.app"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          zip_path="$artifact_root/freex-$runtime-macos-app.zip"
+
+          rm -rf "$output_root"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root"
+
+          dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
+            --configuration Release \
+            --framework net10.0 \
+            --runtime "$runtime" \
+            --self-contained true \
+            -p:UseAppHost=true \
+            -p:PublishReadyToRun=false \
+            -p:PublishSingleFile=false \
+            --output "$app/Contents/MacOS"
+
+          cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist "$app/Contents/Info.plist"
+          plutil -lint "$app/Contents/Info.plist"
+          chmod +x "$app/Contents/MacOS/FreeX"
+          codesign --force --deep --sign - "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
+          shasum -a 256 "$zip_path" > "$zip_path.sha256"
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-app
+          path: |
+            artifacts/freex-${{ matrix.runtime }}-macos-app.zip
+            artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256
+          if-no-files-found: error

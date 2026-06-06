@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj" />
     <Project Path="src/FreeX.App.Host/FreeX.App.Host.csproj" />
     <Project Path="src/FreeX.App.UI/FreeX.App.UI.csproj" />
     <Project Path="src/FreeX.Core.Calc/FreeX.Core.Calc.csproj" />
