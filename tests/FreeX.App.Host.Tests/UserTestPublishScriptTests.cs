@@ -8,8 +8,7 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_BuildsSmallFrameworkDependentSingleFileArtifactByDefault()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var script = File.ReadAllText(scriptPath);
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Publish-UserTestBuild.ps1");
 
         script.Should().Contain("[string]$OutputRoot = \"artifacts\\releases\"");
         script.Should().Contain("[string]$Version = \"\"");
@@ -70,10 +69,8 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_EnglishOnlyTesterExeExcludesLocalizedSatelliteResources()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var projectPath = DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj");
-        var script = File.ReadAllText(scriptPath);
-        var project = File.ReadAllText(projectPath);
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Publish-UserTestBuild.ps1");
+        var project = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "FreeX.App.Host.csproj");
 
         script.Should().Contain("if ($PublishMode -eq \"SingleFile\")");
         script.Should().Contain("-p:FreeXTesterReleaseEnglishOnly=true");
@@ -160,8 +157,7 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_KeepsFrameworkDependentFolderModeAvailable()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var script = File.ReadAllText(scriptPath);
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Publish-UserTestBuild.ps1");
 
         script.Should().Contain("if ($PublishMode -eq \"SingleFile\")");
         script.Should().Contain("-p:PublishSingleFile=false");
@@ -178,8 +174,7 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_NormalizesMsixVersionsWhenRunNumberExceedsPackagePartLimit()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var script = File.ReadAllText(scriptPath);
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Publish-UserTestBuild.ps1");
 
         script.Should().Contain("$numericParts = [regex]::Matches($DisplayVersion, '\\d+') | ForEach-Object { [int64]$_.Value }");
         script.Should().Contain("$msixParts = @(0L, 0L, 0L, 0L)");
@@ -196,8 +191,7 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_WritesLauncherThatGuidesDesktopRuntimeInstall()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var script = File.ReadAllText(scriptPath);
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Publish-UserTestBuild.ps1");
 
         script.Should().Contain("Microsoft.WindowsDesktop.App");
         script.Should().Contain("https://dotnet.microsoft.com/download/dotnet/10.0");
