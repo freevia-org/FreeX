@@ -211,6 +211,64 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void LargeRibbonMenuButtonDropdownBandCentersChevronBelowLabel()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var createContent = typeof(MainWindow)
+                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
+            var ensureChevron = typeof(MainWindow)
+                .GetMethod("EnsureRibbonDropdownChevron", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "EnsureRibbonDropdownChevron");
+            var content = (StackPanel)createContent.Invoke(null, ["Paste", "Paste", RibbonCommandLayoutKind.Large])!;
+            var button = new Button
+            {
+                Content = content,
+                Padding = new Thickness(3, 2, 3, 2),
+                BorderThickness = new Thickness(0),
+                Width = 70,
+                Height = 76,
+                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center,
+                VerticalContentAlignment = System.Windows.VerticalAlignment.Center
+            };
+
+            ensureChevron.Invoke(null, [button]);
+            var window = ShowStandaloneRibbonButton(button, 70, 76);
+            try
+            {
+                var chevron = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
+                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
+                    .OfType<FrameworkElement>()
+                    .Distinct()
+                    .Single(RibbonMetadata.IsDropdownChevron);
+                var label = WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
+                    .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(button))
+                    .OfType<TextBlock>()
+                    .Distinct()
+                    .Single(RibbonMetadata.IsCommandLabel);
+                var chevronBounds = chevron.TransformToAncestor(button)
+                    .TransformBounds(new Rect(0, 0, chevron.ActualWidth, chevron.ActualHeight));
+                var labelBounds = label.TransformToAncestor(button)
+                    .TransformBounds(new Rect(0, 0, label.ActualWidth, label.ActualHeight));
+                var dropdownBounds = GetRibbonDropdownZoneBounds(button);
+
+                var chevronCenterY = chevronBounds.Top + chevronBounds.Height / 2;
+                var dropdownCenterY = dropdownBounds.Top + dropdownBounds.Height / 2;
+
+                dropdownBounds.Height.Should().BeApproximately(20, 0.5);
+                dropdownBounds.Top.Should().BeGreaterThanOrEqualTo(labelBounds.Bottom - 0.5);
+                chevronCenterY.Should().BeApproximately(dropdownCenterY, 1.25,
+                    "large split-button chevrons should be vertically centered in the lower dropdown band");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void IconOnlyRibbonMenuButtonDropdownZoneStartsAfterCommandIcon()
     {
         StaTestRunner.Run(() =>

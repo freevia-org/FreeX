@@ -18,6 +18,8 @@ public partial class MainWindow
     private const double RibbonSplitButtonIconColumnWidth = 24;
     private const double RibbonSplitButtonDropdownColumnWidth = 14;
     private const double RibbonSplitButtonLabeledDropdownColumnWidth = 20;
+    private const double RibbonSplitButtonLargeDropdownZoneHeight = 20;
+    private const double RibbonSplitButtonLargeChevronTopMargin = 8;
     private const double RibbonSplitButtonFallbackDropdownZoneWidth = RibbonSplitButtonLabeledDropdownColumnWidth;
     private const double RibbonSplitButtonIconOnlyContentWidth =
         RibbonSplitButtonIconColumnWidth + RibbonSplitButtonDropdownColumnWidth;
@@ -165,9 +167,18 @@ public partial class MainWindow
         var chevron = CreateRibbonDropdownChevron(layout);
         if (layout is RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium)
         {
-            chevron.Margin = stack.Orientation == Orientation.Horizontal
-                ? new Thickness(4, 0, 0, 0)
-                : new Thickness(0, 0, 0, 0);
+            if (layout == RibbonCommandContentLayout.Large &&
+                stack.Orientation == Orientation.Vertical)
+            {
+                TightenLargeRibbonDropdownStackForSplitBand(stack);
+                chevron.Margin = new Thickness(0, RibbonSplitButtonLargeChevronTopMargin, 0, 0);
+            }
+            else
+            {
+                chevron.Margin = stack.Orientation == Orientation.Horizontal
+                    ? new Thickness(4, 0, 0, 0)
+                    : new Thickness(0, 0, 0, 0);
+            }
 
             stack.Children.Add(chevron);
             return;
@@ -201,6 +212,17 @@ public partial class MainWindow
         }
 
         stack.Children.Add(chevron);
+    }
+
+    private static void TightenLargeRibbonDropdownStackForSplitBand(StackPanel stack)
+    {
+        foreach (var iconSlot in stack.Children
+                     .OfType<FrameworkElement>()
+                     .Where(RibbonMetadata.IsCommandIcon))
+        {
+            iconSlot.Margin = new Thickness(iconSlot.Margin.Left, iconSlot.Margin.Top, iconSlot.Margin.Right, 0);
+            return;
+        }
     }
 
     private static double GetRibbonSplitButtonDropdownColumnWidth(RibbonCommandContentLayout layout) =>
@@ -504,7 +526,7 @@ public partial class MainWindow
             return bounds is { Width: > 0, Height: > 0 };
         }
 
-        var horizontalZoneHeight = GetRibbonHorizontalDropdownZoneHeight(height);
+        var horizontalZoneHeight = GetRibbonHorizontalDropdownZoneHeight(layout, height);
         bounds = layout switch
         {
             RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium =>
@@ -517,8 +539,12 @@ public partial class MainWindow
         return bounds is { Width: > 0, Height: > 0 };
     }
 
-    private static double GetRibbonHorizontalDropdownZoneHeight(double buttonHeight) =>
-        buttonHeight <= 66 ? 12 : 16;
+    private static double GetRibbonHorizontalDropdownZoneHeight(
+        RibbonCommandContentLayout layout,
+        double buttonHeight) =>
+        layout == RibbonCommandContentLayout.Large && buttonHeight > 66
+            ? RibbonSplitButtonLargeDropdownZoneHeight
+            : buttonHeight <= 66 ? 12 : 16;
 
     private static Rect GetRibbonHorizontalDropdownZoneBounds(
         ButtonBase button,
