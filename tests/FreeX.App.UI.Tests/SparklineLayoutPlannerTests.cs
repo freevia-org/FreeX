@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.App.UI;
-using System.IO;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -158,8 +157,7 @@ public sealed class SparklineLayoutPlannerTests
     [Fact]
     public void SparklineLayoutPlanner_AvoidsLinqAndIntermediatePointArrays()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "SparklineLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("SparklineLayoutPlanner.cs");
 
         source.Should().Contain("for (var i = firstIndex + 1; i < values.Count; i++)");
         source.Should().Contain("foreach (var value in values)");

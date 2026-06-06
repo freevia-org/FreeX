@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
-using System.IO;
 
 namespace FreeX.App.UI.Tests;
 
@@ -80,8 +79,7 @@ public sealed class GridViewEditingCellTests
     [Fact]
     public void BuildOccupiedCellSet_AvoidsLinqPipelines()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.ConditionalIcons.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.ConditionalIcons.cs");
         var buildOccupied = source[
             source.IndexOf("public static HashSet<(uint Row, uint Col)> BuildOccupiedCellSet", StringComparison.Ordinal)..
             source.IndexOf("private static void DrawConditionalIcon", StringComparison.Ordinal)];

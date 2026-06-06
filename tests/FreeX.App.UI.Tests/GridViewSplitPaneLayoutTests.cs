@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
-using System.IO;
 
 namespace FreeX.App.UI.Tests;
 
@@ -29,8 +28,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void CalculateSplitDividerLayout_ReusesRowHeaderWidthForVerticalSplit()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var calculateSplitDividerLayout = source[
             source.IndexOf("public static SplitDividerLayout CalculateSplitDividerLayout", StringComparison.Ordinal)..
             source.IndexOf("private static double SumRowHeights", StringComparison.Ordinal)];
