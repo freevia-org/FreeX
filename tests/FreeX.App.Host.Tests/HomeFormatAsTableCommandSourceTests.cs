@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -20,7 +19,7 @@ public sealed class HomeFormatAsTableCommandSourceTests
     [Fact]
     public void FormatAsTableHandlers_RouteThroughGalleryPlannerAndStructuredTableCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("private void FormatTableBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("PopulateFormatTableGalleryMenu();");
