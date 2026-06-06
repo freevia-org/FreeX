@@ -7,7 +7,8 @@ namespace FreeX.App.Host;
 internal static class RibbonAdaptiveStateApplicator
 {
     private const double IconOnlySplitButtonDropdownColumnWidth = 14;
-    private const double SmallSplitButtonDropdownColumnWidth = 18;
+    private const double SmallSplitButtonDropdownColumnWidth = 20;
+    private const double LargeSplitButtonDropdownChevronTopMargin = 8;
 
     private static readonly DependencyProperty CollapsedButtonFootprintTargetsProperty =
         DependencyProperty.RegisterAttached(
@@ -520,12 +521,16 @@ internal static class RibbonAdaptiveStateApplicator
 
         if (level == MainWindow.RibbonCompactLevel.Full)
         {
+            var hasDropdownChevron = HasDropdownChevron(snapshot.LargeStack);
             SetIfChanged(snapshot.LargeStack, StackPanel.OrientationProperty, Orientation.Vertical);
             SetIfChanged(snapshot.LargeStack, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             SetIfChanged(snapshot.Button, FrameworkElement.HeightProperty, 76d);
             SetIfChanged(snapshot.LargeIconSlot, FrameworkElement.WidthProperty, 34d);
             SetIfChanged(snapshot.LargeIconSlot, FrameworkElement.HeightProperty, 34d);
-            SetIfChanged(snapshot.LargeIconSlot, FrameworkElement.MarginProperty, new Thickness(0, 0, 0, 2));
+            SetIfChanged(
+                snapshot.LargeIconSlot,
+                FrameworkElement.MarginProperty,
+                hasDropdownChevron ? new Thickness(0) : new Thickness(0, 0, 0, 2));
             if (snapshot.LargeIconChild is not null)
             {
                 SetIfChanged(snapshot.LargeIconChild, FrameworkElement.WidthProperty, 32d);
@@ -537,6 +542,7 @@ internal static class RibbonAdaptiveStateApplicator
             SetIfChanged(snapshot.LargeLabelBlock, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             SetIfChanged(snapshot.LargeLabelBlock, TextBlock.TextAlignmentProperty, TextAlignment.Center);
             SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center);
+            ApplyLargeDropdownChevronLayout(snapshot.LargeStack, fullSize: true);
         }
         else
         {
@@ -557,6 +563,27 @@ internal static class RibbonAdaptiveStateApplicator
             SetIfChanged(snapshot.LargeLabelBlock, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
             SetIfChanged(snapshot.LargeLabelBlock, TextBlock.TextAlignmentProperty, TextAlignment.Left);
             SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Left);
+            ApplyLargeDropdownChevronLayout(snapshot.LargeStack, fullSize: false);
+        }
+    }
+
+    private static bool HasDropdownChevron(Panel panel) =>
+        panel.Children
+            .OfType<DependencyObject>()
+            .Any(RibbonMetadata.IsDropdownChevron);
+
+    private static void ApplyLargeDropdownChevronLayout(Panel panel, bool fullSize)
+    {
+        foreach (var chevron in panel.Children
+                     .OfType<FrameworkElement>()
+                     .Where(RibbonMetadata.IsDropdownChevron))
+        {
+            SetIfChanged(
+                chevron,
+                FrameworkElement.MarginProperty,
+                fullSize
+                    ? new Thickness(0, LargeSplitButtonDropdownChevronTopMargin, 0, 0)
+                    : new Thickness(4, 0, 0, 0));
         }
     }
 
