@@ -70,6 +70,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _pasteMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _clearContentsMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _boldMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _italicMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -100,6 +101,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_boldMenuItem.Header = \"Bold\";");
         source.Should().Contain("_boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);");
         source.Should().Contain("_boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold();");
+        source.Should().Contain("_italicMenuItem.Header = \"Italic\";");
+        source.Should().Contain("_italicMenuItem.Gesture = new KeyGesture(Key.I, KeyModifiers.Meta);");
+        source.Should().Contain("_italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic();");
         source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
         source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
         source.Should().Contain("_quitMenuItem.Click += (_, _) => TryQuitApplication();");
@@ -110,6 +114,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("editMenu.Items.Add(_pasteMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_clearContentsMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_boldMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_italicMenuItem);");
         source.Should().Contain("Header = \"Edit\"");
         source.Should().Contain("Header = \"Format\"");
         source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
@@ -124,6 +129,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;");
         source.Should().Contain("_clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;");
         source.Should().Contain("_boldMenuItem.IsEnabled = _boldButton.IsEnabled;");
+        source.Should().Contain("_italicMenuItem.IsEnabled = _italicButton.IsEnabled;");
         source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("await SaveWorkbookAsAsync();");
         source.Should().Contain("TryQuitApplication()");
@@ -163,6 +169,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}");
         smokeSource.Should().Contain("native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}");
         smokeSource.Should().Contain("native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}");
+        smokeSource.Should().Contain("native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}");
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
@@ -180,6 +187,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, \"Paste\")");
         windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, \"Clear Contents\")");
         windowSource.Should().Contain("HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, \"Bold\")");
+        windowSource.Should().Contain("HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, \"Italic\")");
         windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
 
@@ -318,7 +326,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("args.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
         source.Should().Contain("private static string FormatRangeReference(GridRange range)");
-        source.Should().Contain("if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B)");
+        source.Should().Contain("if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I)");
         source.Should().Contain("else if (e.Key == Key.X)");
         source.Should().Contain("await CutSelectedRangeToClipboardAsync();");
         source.Should().Contain("else if (e.Key == Key.C)");
@@ -369,6 +377,31 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static bool HasOnlyCommandModifier(KeyModifiers modifiers)");
         source.Should().Contain("else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeBold();");
+    }
+
+    [Fact]
+    public void MainWindow_WiresItalicThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly ToggleButton _italicButton = new();");
+        source.Should().Contain("_italicButton.Content = \"I\";");
+        source.Should().Contain("_italicButton.FontStyle = FontStyle.Italic;");
+        source.Should().Contain("_italicButton.Click += ItalicButton_Click;");
+        source.Should().Contain("_italicButton.IsChecked = _session.IsSelectedRangeStartItalic;");
+        source.Should().Contain("_italicButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void ItalicButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeItalic(_italicButton.IsChecked == true);");
+        source.Should().Contain("private void ToggleSelectedRangeItalic()");
+        source.Should().Contain("private void ApplySelectedRangeItalic(bool enabled)");
+        source.Should().Contain("var result = _session.SetSelectedRangeItalic(enabled);");
+        source.Should().Contain("_italicButton.IsChecked = _session.IsSelectedRangeStartItalic;");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Italic failed.\");");
+        source.Should().Contain("RefreshShell($\"{(enabled ? \"Italicized\" : \"Unitalicized\")} {rangeReference}\");");
+        source.Should().Contain("FontStyle = fontStyle,");
+        source.Should().Contain("var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;");
+        source.Should().Contain("else if (e.Key == Key.I && HasOnlyCommandModifier(e.KeyModifiers))");
+        source.Should().Contain("ToggleSelectedRangeItalic();");
     }
 
     [Fact]

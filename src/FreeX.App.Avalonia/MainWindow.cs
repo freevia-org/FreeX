@@ -62,6 +62,7 @@ public sealed class MainWindow : Window
     private readonly Button _pasteButton = new();
     private readonly Button _clearContentsButton = new();
     private readonly ToggleButton _boldButton = new();
+    private readonly ToggleButton _italicButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -72,6 +73,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _pasteMenuItem = new();
     private readonly NativeMenuItem _clearContentsMenuItem = new();
     private readonly NativeMenuItem _boldMenuItem = new();
+    private readonly NativeMenuItem _italicMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -228,6 +230,10 @@ public sealed class MainWindow : Window
         _boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);
         _boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold();
 
+        _italicMenuItem.Header = "Italic";
+        _italicMenuItem.Gesture = new KeyGesture(Key.I, KeyModifiers.Meta);
+        _italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic();
+
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
@@ -251,6 +257,7 @@ public sealed class MainWindow : Window
 
         var formatMenu = new NativeMenu();
         formatMenu.Items.Add(_boldMenuItem);
+        formatMenu.Items.Add(_italicMenuItem);
 
         _nativeMenu = new NativeMenu();
         _nativeMenu.Items.Add(new NativeMenuItem
@@ -357,6 +364,12 @@ public sealed class MainWindow : Window
         _boldButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _boldButton.Click += BoldButton_Click;
 
+        _italicButton.Content = "I";
+        _italicButton.FontStyle = FontStyle.Italic;
+        _italicButton.Padding = new Thickness(10, 4);
+        _italicButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _italicButton.Click += ItalicButton_Click;
+
         _cellAddressText.Width = 72;
         _cellAddressText.FontSize = 12;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
@@ -395,6 +408,7 @@ public sealed class MainWindow : Window
                     _pasteButton,
                     _clearContentsButton,
                     _boldButton,
+                    _italicButton,
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
@@ -421,6 +435,7 @@ public sealed class MainWindow : Window
             ? formulaText
             : FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
         _boldButton.IsChecked = _session.IsSelectedRangeStartBold;
+        _italicButton.IsChecked = _session.IsSelectedRangeStartItalic;
         if (preserveFormulaEdit)
         {
             _formulaBox.CaretIndex = Math.Min(formulaCaretIndex, _formulaBox.Text?.Length ?? 0);
@@ -478,6 +493,7 @@ public sealed class MainWindow : Window
         _pasteButton.IsEnabled = isIdle;
         _clearContentsButton.IsEnabled = isIdle;
         _boldButton.IsEnabled = isIdle;
+        _italicButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
@@ -489,6 +505,7 @@ public sealed class MainWindow : Window
         _pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;
         _clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;
         _boldMenuItem.IsEnabled = _boldButton.IsEnabled;
+        _italicMenuItem.IsEnabled = _italicButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -753,6 +770,7 @@ public sealed class MainWindow : Window
             selected ? SelectionHeaderForeground : HeaderForeground,
             TextAlignment.Center,
             FontWeight.SemiBold,
+            FontStyle.Normal,
             selected: false);
 
     private Border CreateCell(DisplayCell cell, uint row, uint col)
@@ -768,6 +786,7 @@ public sealed class MainWindow : Window
                 Brushes.Black,
                 TextAlignment.Left,
                 FontWeight.Normal,
+                FontStyle.Normal,
                 selected,
                 address);
 
@@ -782,6 +801,7 @@ public sealed class MainWindow : Window
             ? TextAlignment.Right
             : TextAlignment.Left;
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
+        var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
 
         return CreateInteractiveCellBorder(
             cell.DisplayText,
@@ -789,6 +809,7 @@ public sealed class MainWindow : Window
             foreground,
             alignment,
             weight,
+            fontStyle,
             selected,
             address);
     }
@@ -799,10 +820,11 @@ public sealed class MainWindow : Window
         IBrush foreground,
         TextAlignment textAlignment,
         FontWeight fontWeight,
+        FontStyle fontStyle,
         bool selected,
         CellAddress address)
     {
-        var border = CreateCellBorder(text, background, foreground, textAlignment, fontWeight, selected);
+        var border = CreateCellBorder(text, background, foreground, textAlignment, fontWeight, fontStyle, selected);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -826,6 +848,7 @@ public sealed class MainWindow : Window
         IBrush foreground,
         TextAlignment textAlignment,
         FontWeight fontWeight,
+        FontStyle fontStyle,
         bool selected)
     {
         return new Border
@@ -839,6 +862,7 @@ public sealed class MainWindow : Window
                 Text = text,
                 FontSize = 12,
                 FontWeight = fontWeight,
+                FontStyle = fontStyle,
                 Foreground = foreground,
                 TextAlignment = textAlignment,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -1020,6 +1044,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeBold(_boldButton.IsChecked == true);
     }
 
+    private void ItalicButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeItalic(_italicButton.IsChecked == true);
+    }
+
     private void UndoLastEdit()
     {
         if (_isOpening || _isSaving)
@@ -1144,6 +1173,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeBold(!_session.IsSelectedRangeStartBold);
     }
 
+    private void ToggleSelectedRangeItalic()
+    {
+        ApplySelectedRangeItalic(!_session.IsSelectedRangeStartItalic);
+    }
+
     private void ApplySelectedRangeBold(bool enabled)
     {
         if (_isOpening || _isSaving)
@@ -1162,6 +1196,26 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"{(enabled ? "Bolded" : "Unbolded")} {rangeReference}");
+    }
+
+    private void ApplySelectedRangeItalic(bool enabled)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeItalic(enabled);
+        if (!result.Success)
+        {
+            _italicButton.IsChecked = _session.IsSelectedRangeStartItalic;
+            ShowEditIssue(result.ErrorMessage ?? "Italic failed.");
+            return;
+        }
+
+        RefreshShell($"{(enabled ? "Italicized" : "Unitalicized")} {rangeReference}");
     }
 
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
@@ -1230,6 +1284,7 @@ public sealed class MainWindow : Window
             HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
             HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
+            HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, "Italic"),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
@@ -1263,7 +1318,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B)
+        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B or Key.I)
             return;
 
         if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
@@ -1300,6 +1355,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             ToggleSelectedRangeBold();
+        }
+        else if (e.Key == Key.I && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ToggleSelectedRangeItalic();
         }
         else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {

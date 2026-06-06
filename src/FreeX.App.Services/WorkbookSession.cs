@@ -106,6 +106,8 @@ public sealed class WorkbookSession
 
     public bool IsSelectedRangeStartBold => GetCellStyle(SelectedRange.Start).Bold;
 
+    public bool IsSelectedRangeStartItalic => GetCellStyle(SelectedRange.Start).Italic;
+
     public WorkbookSelectionStats SelectionStats =>
         _selectionStatsCache.GetOrCalculate(ActiveSheet, SelectedRange, _selectionStatsRevision);
 
@@ -310,6 +312,19 @@ public sealed class WorkbookSession
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(Bold: enabled)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult SetSelectedRangeItalic(bool enabled)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(Italic: enabled)));
         if (!result.Success)
             return result;
 
