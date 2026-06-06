@@ -11,7 +11,7 @@ public sealed class XlsxWorksheetNativeMetadataWriterPerformanceTests
     [InlineData("XlsxWorksheetSheetPropertiesMetadataWriter.cs", "SheetPropertiesMetadata")]
     public void Save_SkipsSheetsWithoutNativeMetadataWithoutLinqFiltering(string fileName, string propertyName)
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", fileName));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource(fileName);
 
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
         source.Should().Contain($"var metadata = sheet.{propertyName};");
@@ -24,8 +24,7 @@ public sealed class XlsxWorksheetNativeMetadataWriterPerformanceTests
     [Fact]
     public void AdditionalWorksheetViews_SaveSkipsSheetsWithoutViewsWithoutLinqFiltering()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src", "FreeX.Core.IO", "XlsxWorksheetAdditionalViewMapper.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetAdditionalViewMapper.cs");
 
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
         source.Should().Contain("var additionalViews = sheet.AdditionalViews;");
