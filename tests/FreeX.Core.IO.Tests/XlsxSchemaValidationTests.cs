@@ -141,6 +141,74 @@ public sealed class XlsxSchemaValidationTests
         AssertChartExAlternateContent(drawing.Xml, drawing.RelId);
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithClassicChart_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookWithChart(ChartType.Column));
+        var sourceChartPart = ReadPackageEntryBytes(source, "xl/charts/chart1.xml");
+        var sourceDrawingPart = ReadPackageEntryBytes(source, "xl/drawings/drawing1.xml");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 4), new TextValue("outside chart source"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadPackageEntryBytes(saved, "xl/charts/chart1.xml").Should().Equal(sourceChartPart);
+        ReadPackageEntryBytes(saved, "xl/drawings/drawing1.xml").Should().Equal(sourceDrawingPart);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithChartEx_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookWithChart(ChartType.Histogram));
+        var chartPart = FindSingleEntryByContentType(source, ChartExContentType);
+        var colorStylePart = FindSingleEntryByContentType(source, ChartExColorStyleContentType);
+        var stylePart = FindSingleEntryByContentType(source, ChartExStyleContentType);
+        var sourceParts = new[]
+        {
+            chartPart,
+            GetRelationshipPartPath(chartPart),
+            colorStylePart,
+            stylePart
+        };
+        var sourcePartBytes = sourceParts.ToDictionary(part => part, part => ReadPackageEntryBytes(source, part));
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 4), new TextValue("outside chartEx source"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        foreach (var part in sourceParts)
+            ReadPackageEntryBytes(saved, part).Should().Equal(sourcePartBytes[part]);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var drawing = FindDrawingForChartExPart(savedArchive, chartPart);
+        AssertChartExAlternateContent(drawing.Xml, drawing.RelId);
+    }
+
     private static Workbook CreateWorkbookWithChart(ChartType chartType)
     {
         var workbook = new Workbook("ChartExValid");
@@ -175,12 +243,60 @@ public sealed class XlsxSchemaValidationTests
     private static System.Collections.Generic.List<string> SchemaErrors(Workbook workbook)
     {
         using var stream = Save(workbook);
-        using var document = SpreadsheetDocument.Open(stream, false);
+        return SchemaErrors(stream);
+    }
+
+    private static System.Collections.Generic.List<string> SchemaErrors(Stream stream)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        if (stream.CanSeek)
+            stream.Position = originalPosition;
+        copy.Position = 0;
+        using var document = SpreadsheetDocument.Open(copy, false);
         var validator = new OpenXmlValidator(FileFormatVersions.Microsoft365);
         return validator.Validate(document)
             .Where(error => error.ErrorType == ValidationErrorType.Schema)
             .Select(error => $"{error.Description} @ {error.Path?.XPath}")
             .ToList();
+    }
+
+    private static byte[] ReadPackageEntryBytes(Stream stream, string entryName)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+        byte[] result;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var entryStream = archive.GetEntry(entryName)!.Open())
+        using (var bytes = new MemoryStream())
+        {
+            entryStream.CopyTo(bytes);
+            result = bytes.ToArray();
+        }
+
+        if (stream.CanSeek)
+            stream.Position = originalPosition;
+        return result;
+    }
+
+    private static string FindSingleEntryByContentType(Stream stream, string contentType)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+        string partName;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            partName = FindSinglePartByContentType(LoadPackageXml(archive, "[Content_Types].xml"), contentType);
+        }
+
+        if (stream.CanSeek)
+            stream.Position = originalPosition;
+        return ToEntryName(partName);
     }
 
     private static XDocument LoadPackageXml(ZipArchive archive, string entryName)
