@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -14,7 +13,7 @@ public sealed partial class DataToolDialogTests
     public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
     {
         var dialogSource = ReadTextToColumnsDialogSources();
-        var modelSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialogModel.cs"));
+        var modelSource = DialogSourceTestSupport.ReadHostSources("TextToColumnsDialogModel.cs");
 
         foreach (var dateOrder in new[] { "MDY", "DMY", "YMD", "MYD", "DYM", "YDM" })
         {
