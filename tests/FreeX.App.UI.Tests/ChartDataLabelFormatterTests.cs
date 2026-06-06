@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.Core.Model;
-using System.IO;
 
 namespace FreeX.App.UI.Tests;
 
@@ -114,9 +113,7 @@ public sealed class ChartDataLabelFormatterTests
     [Fact]
     public void FormatDataLabel_AssemblesAnnotationTextWithoutListOrJoin()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.FindWithFailureMessage(
-            "Unable to locate workspace file",
-            "src", "FreeX.App.UI", "ChartDataLabelFormatter.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartDataLabelFormatter.cs");
         var formatDataLabel = source[
             source.IndexOf("public static string FormatDataLabel", StringComparison.Ordinal)..
             source.IndexOf("public static string GetPieLabelFormat", StringComparison.Ordinal)];
