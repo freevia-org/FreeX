@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -70,7 +69,7 @@ public sealed partial class SymbolPickerDialogSourceTests
     [Fact]
     public void MainWindow_InsertsSelectedSymbolStringIntoTheActiveCell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.InsertCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
 
         source.Should().Contain("string.IsNullOrEmpty(dlg.SelectedSymbol)");
         source.Should().Contain("var selectedSymbol = dlg.SelectedSymbol;");
