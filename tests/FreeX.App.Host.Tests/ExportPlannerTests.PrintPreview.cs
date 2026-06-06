@@ -1,4 +1,3 @@
-using System.IO;
 using System.Printing;
 using System.Windows.Documents;
 using FluentAssertions;
@@ -179,7 +178,7 @@ public partial class ExportPlannerTests
     public void PrintPreviewDialog_DisplaysPrintSettingsSummary()
     {
         var source = ReadPrintPreviewDialogSources();
-        var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PrintExport.cs"));
+        var printExport = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
 
         source.Should().Contain("PrintSettingsPlan settings");
         source.Should().Contain("Action? showMargins = null");
@@ -372,13 +371,12 @@ public partial class ExportPlannerTests
     }
 
     private static string ReadPrintPreviewDialogSources() =>
-        string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewDialog.Layout.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewDialog.Helpers.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewSettingsPanelFactory.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewToolbarPlanner.cs")));
+        DialogSourceTestSupport.ReadHostSources(
+            "PrintPreviewDialog.cs",
+            "PrintPreviewDialog.Layout.cs",
+            "PrintPreviewDialog.Helpers.cs",
+            "PrintPreviewSettingsPanelFactory.cs",
+            "PrintPreviewToolbarPlanner.cs");
 
     private static char ExtractAccessKey(string label)
     {
