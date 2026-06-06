@@ -71,6 +71,7 @@ internal static class XlsxWorksheetPhoneticPropertyMapper
             if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.Alignment))
                 phoneticPr.SetAttributeValue("alignment", sheet.PhoneticProperties.Alignment);
 
+            XlsxWorksheetPhoneticPropertyNormalizer.NormalizeElement(phoneticPr);
             if (phoneticPr.HasAttributes)
                 InsertPhoneticPropertyInOrder(root, workbookNs, phoneticPr);
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);

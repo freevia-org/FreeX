@@ -766,6 +766,23 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void PhoneticProperties_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        var workbook = new Workbook("PhoneticPropertiesSanitize");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+        sheet.PhoneticProperties = new WorksheetPhoneticProperties("not-a-number", "invalidType", "center");
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var phoneticPr = ReadWorksheetChildElement(saved, "phoneticPr");
+        phoneticPr.Attribute("fontId")!.Value.Should().Be("0");
+        phoneticPr.Attribute("type").Should().BeNull();
+        phoneticPr.Attribute("alignment")!.Value.Should().Be("center");
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithPhoneticProperties_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreatePhoneticPropertiesSourceWorkbook());
@@ -791,6 +808,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourcePhoneticProperties.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidPhoneticPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreatePhoneticPropertiesSourceWorkbook());
+        SetWorksheetPhoneticProperties(source, "not-a-number", "invalidType", "center");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var phoneticPr = ReadWorksheetChildElement(saved, "phoneticPr");
+        phoneticPr.Attribute("fontId")!.Value.Should().Be("0");
+        phoneticPr.Attribute("type").Should().BeNull();
+        phoneticPr.Attribute("alignment")!.Value.Should().Be("center");
     }
 
 
@@ -1294,6 +1338,23 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SeedNumericGrid(sheet);
         sheet.PhoneticProperties = new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center");
         return workbook;
+    }
+
+    private static void SetWorksheetPhoneticProperties(
+        MemoryStream stream,
+        string fontId,
+        string type,
+        string alignment)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var phoneticPr = worksheetXml.Root!.Element(workbookNs + "phoneticPr")!;
+        phoneticPr.SetAttributeValue("fontId", fontId);
+        phoneticPr.SetAttributeValue("type", type);
+        phoneticPr.SetAttributeValue("alignment", alignment);
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
     private static Workbook CreateWorksheetOutlineAndFormatSourceWorkbook()
