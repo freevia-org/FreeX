@@ -23,10 +23,10 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x
 
 Latest verified tester release:
 
-- Release: [FreeX (Test Release) v0.8.79](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-79-2026-06-05-22-07-09-run79-attempt1%2B7cba5e3f)
-- Tag: `v0-8-79-2026-06-05-22-07-09-run79-attempt1+7cba5e3f`
-- GitHub Actions run: [27042285396](https://github.com/tony-xmelon/FreeX/actions/runs/27042285396), run number 79, completed successfully
-- Target commit: `7cba5e3f47c25777e590530a3373bebc2bcf129e`
+- Release: [FreeX (Test Release) v0.8.81](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-81-2026-06-05-23-55-40-run81-attempt1%2B8fff07d1)
+- Tag: `v0-8-81-2026-06-05-23-55-40-run81-attempt1+8fff07d1`
+- GitHub Actions run: [27046098961](https://github.com/tony-xmelon/FreeX/actions/runs/27046098961), run number 81, completed successfully
+- Target commit: `8fff07d1b8bdd4a1218decdf06f1924a06e422f3`
 - Release posture: internal-only latest tester build; not a public-preview candidate because live accessibility gate evidence was not recorded
 - Asset check: stable latest `.exe`, `.exe.sha256`, MSIX, and MSIX checksum links returned HTTP 200 after publication
 
@@ -37,7 +37,7 @@ The `Tester Release` GitHub Actions workflow runs repository preflight, restore,
 - `FreeX-latest-win-x64.msix`
 - `FreeX-latest-win-x64.msix.sha256`
 
-Release dispatches must run from `main` because the workflow publishes stable latest assets, and a workflow-level `tester-release` concurrency group prevents overlapping dispatches from moving `latest` backward.
+Release dispatches must run from `main` or an isolated `codex/daily-tester-release-*` branch because the workflow publishes stable latest assets, and a workflow-level `tester-release` concurrency group prevents overlapping dispatches from moving `latest` backward. Use the daily branch path only for a frozen verified candidate when `origin/main` has already advanced with work intentionally deferred to the next release.
 
 The hosted MSIX publish path signs the package when `FREEX_MSIX_CERTIFICATE_BASE64` is configured, with optional `FREEX_MSIX_CERTIFICATE_PASSWORD` and `FREEX_MSIX_TIMESTAMP_URL` inputs. Until a release certificate is available, the workflow passes `-AllowUnsignedMsix` and publishes an unsigned MSIX for tester continuity. `tools/Publish-UserTestBuild.ps1` derives the manifest `Publisher` from the signing certificate subject when signing is enabled, while direct local unsigned MSIX output still requires explicitly passing `-AllowUnsignedMsix`. Installer trust validation and Store-style submission remain release-gate work.
 

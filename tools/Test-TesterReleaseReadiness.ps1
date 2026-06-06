@@ -106,6 +106,7 @@ foreach ($marker in @(
     "group: tester-release",
     "Validate latest release source",
     "refs/heads/main",
+    "refs/heads/codex/daily-tester-release-*",
     "dotnet-version: 10.0.x",
     "tools\Test-RepositoryPreflight.ps1",
     "FreeX.DefaultTests.slnx",
@@ -134,7 +135,7 @@ $distributionPlan = Get-Content -LiteralPath $distributionPlanFile -Raw
 Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "At $overallCompletion% completion, default tester releases use the ``$stream`` stream." -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "Release dispatches must run from ``main`` because the workflow publishes stable latest assets" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "Release dispatches must run from ``main`` or an isolated ``codex/daily-tester-release-*`` branch because the workflow publishes stable latest assets" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "signs the package when ``FREEX_MSIX_CERTIFICATE_BASE64`` is configured" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "publishes an unsigned MSIX for tester continuity" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "Keyboard-only smoke validation" -Label "Test distribution plan"
