@@ -78,7 +78,7 @@ public sealed class GridViewTextDecorationTests
     }
 
     [Fact]
-    public void CanOverflowCellText_PreservesNormalTextOverflowButExcludesShrinkToFit()
+    public void CanOverflowCellText_PreservesNormalTextOverflowButExcludesShrinkToFitAndRotation()
     {
         GridView.CanOverflowCellText(
                 new CellStyle(),
@@ -93,6 +93,54 @@ public sealed class GridViewTextDecorationTests
                 "shrink",
                 merge: null)
             .Should().BeFalse();
+
+        GridView.CanOverflowCellText(
+                new CellStyle { TextRotation = 45 },
+                new TextValue("rotated"),
+                "rotated",
+                merge: null)
+            .Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(-91, 0)]
+    [InlineData(-90, -90)]
+    [InlineData(45, 45)]
+    [InlineData(90, 90)]
+    [InlineData(91, 0)]
+    [InlineData(255, 0)]
+    public void NormalizeCellTextRotationForDisplay_UsesSupportedExcelRange(int rotation, int expected)
+    {
+        GridView.NormalizeCellTextRotationForDisplay(rotation).Should().Be(expected);
+    }
+
+    [Fact]
+    public void PrepareCellDisplayTextForRender_StacksExcelVerticalText()
+    {
+        GridView.HasCellTextOrientation(255).Should().BeTrue();
+        GridView.PrepareCellDisplayTextForRender("Sample", 255).Should().Be("S\na\nm\np\nl\ne");
+        GridView.PrepareCellDisplayTextForRender("Sample", 90).Should().Be("Sample");
+    }
+
+    [Fact]
+    public void CalculateCellTextRenderLayout_UsesRotationBoundsForAlignment()
+    {
+        var layout = GridView.CalculateCellTextRenderLayout(
+            new Rect(10, 20, 100, 40),
+            textWidth: 30,
+            textHeight: 10,
+            FreeX.Core.Model.HorizontalAlignment.Left,
+            FreeX.Core.Model.VerticalAlignment.Center,
+            isNumeric: false,
+            indentPx: 0,
+            textRotation: 90);
+
+        layout.IsRotated.Should().BeTrue();
+        layout.TransformAngle.Should().Be(-90);
+        layout.Bounds.Width.Should().BeApproximately(10, 0.001);
+        layout.Bounds.Height.Should().BeApproximately(30, 0.001);
+        layout.Bounds.Left.Should().BeApproximately(12, 0.001);
+        layout.Bounds.Top.Should().BeApproximately(25, 0.001);
     }
 
     [Fact]
