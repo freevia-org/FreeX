@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -123,7 +122,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
     [Fact]
     public void CreateSections_AvoidsRepeatedEntryLinqScans()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterMenuCatalog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterMenuCatalog.cs");
         var createSections = source.Substring(
             source.IndexOf("public static IReadOnlyList<AutoFilterMenuSection> CreateSections", StringComparison.Ordinal),
             source.IndexOf("private static IReadOnlyList<AutoFilterMenuEntry> CreateFilterFamilyChildren", StringComparison.Ordinal)
