@@ -709,6 +709,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             null,
             null,
             null,
+            null,
             mergeCellWorksheetPathsToStrip);
     }
 

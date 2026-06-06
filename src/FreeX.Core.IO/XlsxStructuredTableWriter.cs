@@ -178,6 +178,7 @@ internal static class XlsxStructuredTableWriter
             }
         }
 
+        XlsxStructuredTableSchemaNormalizer.NormalizeElement(root, tablePath);
         return new XDocument(root);
     }
 
