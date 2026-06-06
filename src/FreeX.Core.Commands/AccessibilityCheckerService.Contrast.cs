@@ -953,6 +953,9 @@ public static partial class AccessibilityCheckerService
             case "NOW":
                 kind = ConditionalFormulaScalarFunctionKind.Now;
                 return true;
+            case "NA":
+                kind = ConditionalFormulaScalarFunctionKind.Na;
+                return true;
             case "ROW":
                 kind = ConditionalFormulaScalarFunctionKind.Row;
                 return true;
@@ -990,7 +993,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Mid or
             ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Today or
-            ConditionalFormulaScalarFunctionKind.Now => argumentCount == 0,
+            ConditionalFormulaScalarFunctionKind.Now or
+            ConditionalFormulaScalarFunctionKind.Na => argumentCount == 0,
             ConditionalFormulaScalarFunctionKind.Row or
             ConditionalFormulaScalarFunctionKind.Column => argumentCount is 0 or 1,
             _ => false
@@ -1490,6 +1494,7 @@ public static partial class AccessibilityCheckerService
         Day,
         Today,
         Now,
+        Na,
         Row,
         Column
     }
@@ -2021,6 +2026,9 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Today:
                 case ConditionalFormulaScalarFunctionKind.Now:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Na:
+                    value = ErrorValue.NA;
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Row:
                 case ConditionalFormulaScalarFunctionKind.Column:
                     return TryEvaluateFormulaRowColumnFunction(function, rowOffset, colOffset, out value);
