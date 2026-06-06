@@ -8,7 +8,7 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_ValidatesReleaseMetadataAndAccessibilityGate()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-TesterReleaseReadiness.ps1");
 
         script.Should().Contain("release/progress.json is missing required property");
         script.Should().Contain("release/progress.json overallCompletion must be between 0 and 100.");
@@ -24,7 +24,7 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void DistributionPlan_DocumentsReadinessPreflight()
     {
-        var plan = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
+        var plan = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
         plan.Should().Contain("tools/Test-TesterReleaseReadiness.ps1");
         plan.Should().Contain("-PublicPreviewCandidate");
