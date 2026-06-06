@@ -77,6 +77,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("smoke_log=\"$artifact_root/freex-$runtime-macos-packaging-smoke.log\"");
         workflow.Should().Contain("launch_smoke_report=\"$artifact_root/freex-$runtime-macos-launch-smoke.txt\"");
         workflow.Should().Contain("notary_log=\"$artifact_root/freex-$runtime-macos-notarization.log\"");
+        workflow.Should().Contain("tester_instructions_path=\"$artifact_root/freex-$runtime-macos-tester-instructions.md\"");
         workflow.Should().Contain("signing_mode=\"ad-hoc\"");
         workflow.Should().Contain("signing_mode=\"developer-id\"");
         workflow.Should().Contain("stapler_validated=\"false\"");
@@ -103,6 +104,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("echo \"codesign_mode=$signing_mode\"");
         workflow.Should().Contain("echo \"notarization_status=$notarization_status\"");
         workflow.Should().Contain("echo \"stapler_validated=$stapler_validated\"");
+        workflow.Should().Contain("echo \"zip_sha256=$zip_sha256\"");
         workflow.Should().Contain("echo \"smoke_status=passed\" >> \"$evidence_path\"");
         workflow.Should().Contain("echo \"smoke_status=skipped_host_arch_mismatch\" >> \"$evidence_path\"");
         workflow.Should().Contain("codesign --verify --deep --strict");
@@ -110,6 +112,13 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("unzip -q");
         workflow.Should().Contain("test -x \"$unzip_root/FreeX.app/Contents/MacOS/FreeX\"");
         workflow.Should().Contain("(cd \"$artifact_root\" && shasum -a 256 \"$zip_name\" > \"$zip_name.sha256\")");
+        workflow.Should().Contain("(cd \"$artifact_root\" && shasum -a 256 -c \"$zip_name.sha256\")");
+        workflow.Should().Contain("zip_sha256=\"$(cut -d ' ' -f 1 \"$artifact_root/$zip_name.sha256\")\"");
+        workflow.Should().Contain("cat > \"$tester_instructions_path\" <<EOF");
+        workflow.Should().Contain("This artifact is a preview build for macOS port validation. It is not a public release channel.");
+        workflow.Should().Contain("Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs.");
+        workflow.Should().Contain("Unzip the GitHub Actions artifact wrapper first; these files are inside it.");
+        workflow.Should().Contain("Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.");
         workflow.Should().Contain("codesign --verify --deep --strict \"$unzip_root/FreeX.app\"");
         workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke \"$smoke_file\"");
         workflow.Should().Contain("grep -q \"Packaging smoke opened\" \"$smoke_log\"");
@@ -172,6 +181,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-notarization.log");
+        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md");
         workflow.Should().Contain("if-no-files-found: error");
     }
 

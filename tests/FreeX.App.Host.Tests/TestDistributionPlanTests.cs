@@ -82,6 +82,29 @@ public sealed class TestDistributionPlanTests
     }
 
     [Fact]
+    public void DistributionPlan_DocumentsMacOsPreviewChecksumAndTesterInstructions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
+
+        source.Should().Contain("macOS App Preview");
+        source.Should().Contain("self-checks each SHA-256 file with `shasum -a 256 -c`");
+        source.Should().Contain("records `zip_sha256` in evidence");
+        source.Should().Contain("not a public release channel");
+        source.Should().Contain("Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs");
+        source.Should().Contain("Actions artifact wrapper");
+        source.Should().Contain("freex-<runtime>-macos-tester-instructions.md");
+        source.Should().Contain("freex-<runtime>-macos-evidence.txt");
+        source.Should().Contain("shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256");
+        source.Should().Contain("open `FreeX.app`");
+        source.Should().Contain("codesign_mode");
+        source.Should().Contain("notarization_status");
+        source.Should().Contain("stapler_validated");
+        source.Should().Contain("zip_sha256");
+        source.Should().Contain("Control-click or right-click > Open");
+        source.Should().Contain("Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.");
+    }
+
+    [Fact]
     public void DistributionPlan_DocumentsAccessibilityValidationGate()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));

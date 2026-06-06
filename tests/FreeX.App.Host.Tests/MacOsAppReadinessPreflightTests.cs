@@ -25,6 +25,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_font_color_swatch_count=69");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
+        script.Should().Contain("shasum -a 256 -c \"$zip_name.sha256\"");
+        script.Should().Contain("zip_sha256=$zip_sha256");
+        script.Should().Contain("freex-$runtime-macos-tester-instructions.md");
         script.Should().Contain("native_horizontal_text_menu_item=true");
         script.Should().Contain("native_rotate_text_down_menu_item=");
         script.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
@@ -251,7 +254,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       app="$RUNNER_TEMP/FreeX.app"
                       artifact_root="$GITHUB_WORKSPACE/artifacts"
                       runtime="osx-arm64"
-                      zip_path="$artifact_root/freex-$runtime-macos-app.zip"
+                      zip_name="freex-$runtime-macos-app.zip"
+                      zip_path="$artifact_root/$zip_name"
                       unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
                       echo "Developer ID signing is disabled for pull_request events; using ad-hoc signing."
                       dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
@@ -277,11 +281,21 @@ public sealed class MacOsAppReadinessPreflightTests
                       lipo -archs "$app/Contents/MacOS/FreeX"
                       codesign --verify --deep --strict "$app"
                       ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
-                      shasum -a 256 "$zip_path"
+                      (cd "$artifact_root" && shasum -a 256 "$zip_name" > "$zip_name.sha256")
                       test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
                       test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
                       xcrun notarytool submit "$zip_path"
                       xcrun stapler validate "$app"
+                      tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
+                      shasum -a 256 -c "$zip_name.sha256"
+                      zip_sha256="$(cut -d ' ' -f 1 "$artifact_root/$zip_name.sha256")"
+                      echo "zip_sha256=$zip_sha256"
+                      cat > "$tester_instructions_path" <<EOF
+                      This artifact is a preview build for macOS port validation. It is not a public release channel.
+                      Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs.
+                      Unzip the GitHub Actions artifact wrapper first; these files are inside it.
+                      Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.
+                      EOF
                       "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$RUNNER_TEMP/smoke.csv"
                       grep -q "Packaging smoke opened" "$artifact_root/smoke.log"
                       grep -q "edited, saved, and reopened" "$artifact_root/smoke.log"
@@ -313,6 +327,7 @@ public sealed class MacOsAppReadinessPreflightTests
                   - uses: actions/upload-artifact@v7
                     with:
                       if-no-files-found: error
+                      path: artifacts/freex-osx-arm64-macos-tester-instructions.md
             """);
 
         WriteMinimalIcns(root, "src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns");

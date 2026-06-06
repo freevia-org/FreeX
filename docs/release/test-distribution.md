@@ -73,7 +73,25 @@ The CI workflow also runs a macOS portable lane on GitHub-hosted macOS runners. 
 
 Success means the macOS Release build and non-UI test lane report zero failed tests. This lane does not build `FreeX.slnx`, `FreeX.UiTests.slnx`, `App.Host`, `App.UI`, WPF UI tests, Excel COM tools, tester-release artifacts, or macOS app packages. See [planning/multiplatform-macos-port.md](../planning/multiplatform-macos-port.md) for the macOS-first port plan.
 
-A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, and uploads zipped app artifacts plus smoke evidence. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene; hosted macOS runner evidence remains required for runtime launch, LaunchServices activation, signing, notarization, and architecture checks.
+A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, self-checks each SHA-256 file with `shasum -a 256 -c`, records `zip_sha256` in evidence, and uploads zipped app artifacts, checksum files, tester instructions, and smoke evidence. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene; hosted macOS runner evidence remains required for runtime launch, LaunchServices activation, signing, notarization, and architecture checks.
+
+### macOS App Preview Tester Instructions
+
+This is a preview validation path, not a public release channel. Use `osx-arm64` for Apple Silicon Macs and `osx-x64` for Intel Macs. GitHub downloads the result as an Actions artifact wrapper; unzip that wrapper first, then use the files inside it:
+
+- `freex-osx-arm64-macos-app.zip` or `freex-osx-x64-macos-app.zip`
+- the matching `.zip.sha256`
+- `freex-<runtime>-macos-tester-instructions.md`
+- `freex-<runtime>-macos-evidence.txt`
+- packaging, LaunchServices, and notarization logs
+
+Before opening the app, testers should run this from the directory containing the inner app ZIP and checksum:
+
+```bash
+shasum -a 256 -c freex-<runtime>-macos-app.zip.sha256
+```
+
+The expected result is `<zip-name>: OK`. After the checksum passes, unzip the inner app ZIP and open `FreeX.app`. If macOS Gatekeeper blocks the preview, testers should inspect `codesign_mode`, `notarization_status`, `stapler_validated`, and `zip_sha256` in the evidence file. Ad-hoc signed or non-notarized previews are internal validation artifacts and may require Control-click or right-click > Open on trusted test machines. Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.
 
 ## Conservative Rerun Fallback
 

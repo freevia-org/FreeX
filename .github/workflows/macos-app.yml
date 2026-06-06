@@ -67,6 +67,7 @@ jobs:
           smoke_log="$artifact_root/freex-$runtime-macos-packaging-smoke.log"
           launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
           notary_log="$artifact_root/freex-$runtime-macos-notarization.log"
+          tester_instructions_path="$artifact_root/freex-$runtime-macos-tester-instructions.md"
           signing_mode="ad-hoc"
           notarization_status="skipped_not_developer_id_signed"
           stapler_validated="false"
@@ -195,6 +196,8 @@ jobs:
             echo "notarization_status=skipped_missing_credentials" | tee "$notary_log"
           fi
           (cd "$artifact_root" && shasum -a 256 "$zip_name" > "$zip_name.sha256")
+          (cd "$artifact_root" && shasum -a 256 -c "$zip_name.sha256")
+          zip_sha256="$(cut -d ' ' -f 1 "$artifact_root/$zip_name.sha256")"
           unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
           rm -rf "$unzip_root"
           mkdir -p "$unzip_root"
@@ -220,6 +223,7 @@ jobs:
             echo "codesign_mode=$signing_mode"
             echo "notarization_status=$notarization_status"
             echo "stapler_validated=$stapler_validated"
+            echo "zip_sha256=$zip_sha256"
           } > "$evidence_path"
           if [[ ("$runtime" == "osx-arm64" && "$host_arch" == "arm64") || ("$runtime" == "osx-x64" && "$host_arch" == "x86_64") ]]; then
             smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
@@ -312,6 +316,54 @@ jobs:
             echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$launch_smoke_report"
           fi
 
+          cat > "$tester_instructions_path" <<EOF
+          # FreeX macOS App Preview ($runtime)
+
+          This artifact is a preview build for macOS port validation. It is not a public release channel.
+
+          Use osx-arm64 for Apple Silicon Macs and osx-x64 for Intel Macs. Unzip the GitHub Actions artifact wrapper first; these files are inside it.
+
+          ## Download
+
+          Download these files from the same GitHub Actions artifact:
+
+          - $zip_name
+          - $zip_name.sha256
+          - freex-$runtime-macos-evidence.txt
+          - freex-$runtime-macos-packaging-smoke.log
+          - freex-$runtime-macos-launch-smoke.txt
+          - freex-$runtime-macos-notarization.log
+
+          ## Verify
+
+          Run this in Terminal from the directory containing the downloaded files:
+
+          \`\`\`bash
+          shasum -a 256 -c $zip_name.sha256
+          \`\`\`
+
+          Expected result:
+
+          \`\`\`text
+          $zip_name: OK
+          \`\`\`
+
+          ## Open
+
+          Unzip $zip_name, then open FreeX.app. If macOS Gatekeeper blocks the preview, check freex-$runtime-macos-evidence.txt first:
+
+          - codesign_mode=$signing_mode
+          - notarization_status=$notarization_status
+          - stapler_validated=$stapler_validated
+          - zip_sha256=$zip_sha256
+
+          Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing. Public distribution still requires Developer ID signing, accepted notarization, and stapling evidence.
+
+          ## Report
+
+          When filing feedback, include the runtime ($runtime), the GitHub Actions run, freex-$runtime-macos-evidence.txt, and the smoke logs when relevant.
+          EOF
+
       - name: Upload app artifact
         uses: actions/upload-artifact@v7
         with:
@@ -323,4 +375,5 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log
             artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt
             artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
+            artifacts/freex-${{ matrix.runtime }}-macos-tester-instructions.md
           if-no-files-found: error
