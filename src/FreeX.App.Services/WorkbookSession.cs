@@ -102,6 +102,8 @@ public sealed class WorkbookSession
 
     public bool CanRedo => _cellEditService.CanRedo(Workbook.Id);
 
+    public bool IsSelectedRangeStartBold => GetCellStyle(SelectedRange.Start).Bold;
+
     public void SelectCell(CellAddress address)
     {
         ActiveCell = address;
@@ -294,6 +296,19 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult SetSelectedRangeBold(bool enabled)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(Bold: enabled)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult UndoLastEdit()
     {
         var result = _cellEditService.UndoLastEdit(Workbook);
@@ -449,6 +464,15 @@ public sealed class WorkbookSession
         IsDirty = true;
         RefreshViewport();
         EnsureActiveCellVisible();
+    }
+
+    private CellStyle GetCellStyle(CellAddress address)
+    {
+        var sheet = Workbook.GetSheet(address.Sheet);
+        var styleId = sheet?.GetCell(address)?.StyleId ??
+            sheet?.GetStyleOnly(address.Row, address.Col) ??
+            StyleId.Default;
+        return Workbook.GetStyle(styleId);
     }
 
     private WorkbookCellEditResult PasteInternalClipboardAtActiveCell(InternalClipboard clipboard)

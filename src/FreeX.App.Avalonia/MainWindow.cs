@@ -60,6 +60,7 @@ public sealed class MainWindow : Window
     private readonly Button _copyButton = new();
     private readonly Button _pasteButton = new();
     private readonly Button _clearContentsButton = new();
+    private readonly ToggleButton _boldButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -69,6 +70,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _copyMenuItem = new();
     private readonly NativeMenuItem _pasteMenuItem = new();
     private readonly NativeMenuItem _clearContentsMenuItem = new();
+    private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -221,6 +223,10 @@ public sealed class MainWindow : Window
         _clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);
         _clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();
 
+        _boldMenuItem.Header = "Bold";
+        _boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);
+        _boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold();
+
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
@@ -242,6 +248,9 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_clearContentsMenuItem);
 
+        var formatMenu = new NativeMenu();
+        formatMenu.Items.Add(_boldMenuItem);
+
         _nativeMenu = new NativeMenu();
         _nativeMenu.Items.Add(new NativeMenuItem
         {
@@ -252,6 +261,11 @@ public sealed class MainWindow : Window
         {
             Header = "Edit",
             Menu = editMenu,
+        });
+        _nativeMenu.Items.Add(new NativeMenuItem
+        {
+            Header = "Format",
+            Menu = formatMenu,
         });
         _nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();
 
@@ -328,6 +342,12 @@ public sealed class MainWindow : Window
         _clearContentsButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _clearContentsButton.Click += ClearContentsButton_Click;
 
+        _boldButton.Content = "B";
+        _boldButton.FontWeight = FontWeight.Bold;
+        _boldButton.Padding = new Thickness(10, 4);
+        _boldButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _boldButton.Click += BoldButton_Click;
+
         _cellAddressText.Width = 72;
         _cellAddressText.FontSize = 12;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
@@ -365,6 +385,7 @@ public sealed class MainWindow : Window
                     _copyButton,
                     _pasteButton,
                     _clearContentsButton,
+                    _boldButton,
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
@@ -389,6 +410,7 @@ public sealed class MainWindow : Window
         _formulaBox.Text = preserveFormulaEdit
             ? formulaText
             : FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
+        _boldButton.IsChecked = _session.IsSelectedRangeStartBold;
         if (preserveFormulaEdit)
         {
             _formulaBox.CaretIndex = Math.Min(formulaCaretIndex, _formulaBox.Text?.Length ?? 0);
@@ -444,6 +466,7 @@ public sealed class MainWindow : Window
         _copyButton.IsEnabled = isIdle;
         _pasteButton.IsEnabled = isIdle;
         _clearContentsButton.IsEnabled = isIdle;
+        _boldButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
@@ -454,6 +477,7 @@ public sealed class MainWindow : Window
         _copyMenuItem.IsEnabled = _copyButton.IsEnabled;
         _pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;
         _clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;
+        _boldMenuItem.IsEnabled = _boldButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -980,6 +1004,11 @@ public sealed class MainWindow : Window
         ClearSelectedRangeContents();
     }
 
+    private void BoldButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeBold(_boldButton.IsChecked == true);
+    }
+
     private void UndoLastEdit()
     {
         if (_isOpening || _isSaving)
@@ -1099,6 +1128,31 @@ public sealed class MainWindow : Window
         RefreshShell($"Cleared {rangeReference}");
     }
 
+    private void ToggleSelectedRangeBold()
+    {
+        ApplySelectedRangeBold(!_session.IsSelectedRangeStartBold);
+    }
+
+    private void ApplySelectedRangeBold(bool enabled)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeBold(enabled);
+        if (!result.Success)
+        {
+            _boldButton.IsChecked = _session.IsSelectedRangeStartBold;
+            ShowEditIssue(result.ErrorMessage ?? "Bold failed.");
+            return;
+        }
+
+        RefreshShell($"{(enabled ? "Bolded" : "Unbolded")} {rangeReference}");
+    }
+
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
     {
         e.DragEffects = TrySelectDroppedWorkbookPath(e, out _, out _)
@@ -1139,6 +1193,9 @@ public sealed class MainWindow : Window
         var hasNativeEditMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
             string.Equals(item.Header?.ToString(), "Edit", StringComparison.Ordinal) &&
             item.Menu is not null) == true;
+        var hasNativeFormatMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+            string.Equals(item.Header?.ToString(), "Format", StringComparison.Ordinal) &&
+            item.Menu is not null) == true;
 
         return new MacOsLaunchSmokeSnapshot(
             WindowShown: IsVisible,
@@ -1151,6 +1208,7 @@ public sealed class MainWindow : Window
             IsOpening: _isOpening,
             HasNativeFileMenu: hasNativeFileMenu,
             HasNativeEditMenu: hasNativeEditMenu,
+            HasNativeFormatMenu: hasNativeFormatMenu,
             HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
             HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
@@ -1160,12 +1218,20 @@ public sealed class MainWindow : Window
             HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, "Copy"),
             HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
             HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
+            HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
         item.Gesture is not null;
+
+    private static bool HasOnlyCommandModifier(KeyModifiers modifiers)
+    {
+        const KeyModifiers commandModifiers = KeyModifiers.Control | KeyModifiers.Meta;
+        return (modifiers & commandModifiers) != 0 &&
+            (modifiers & ~commandModifiers) == 0;
+    }
 
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
@@ -1186,7 +1252,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V)
+        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B)
             return;
 
         if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
@@ -1218,6 +1284,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             await PasteClipboardTextAsync();
+        }
+        else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))
+        {
+            e.Handled = true;
+            ToggleSelectedRangeBold();
         }
         else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {

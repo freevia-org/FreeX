@@ -413,10 +413,12 @@ function Test-MacOsWorkflow {
         "--macos-launch-smoke",
         "native_file_menu=true",
         "native_edit_menu=true",
+        "native_format_menu=true",
         "native_cut_menu_item=true",
         "native_copy_menu_item=true",
         "native_paste_menu_item=true",
         "native_clear_contents_menu_item=true",
+        "native_bold_menu_item=true",
         'bundle_icon=$('
     )
 
@@ -469,9 +471,11 @@ function Test-SourceWiring {
                 "startupArguments = filteredArguments.ToArray();",
                 "HasNativeFileMenu &&",
                 "HasNativeEditMenu &&",
+                "HasNativeFormatMenu &&",
                 "native_cut_menu_item=",
                 "native_copy_menu_item=",
-                "native_clear_contents_menu_item="
+                "native_clear_contents_menu_item=",
+                "native_bold_menu_item="
             )
             OrderedPairs = @()
         },

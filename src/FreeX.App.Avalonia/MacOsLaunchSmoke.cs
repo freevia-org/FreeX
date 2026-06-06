@@ -67,6 +67,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool IsOpening,
     bool HasNativeFileMenu,
     bool HasNativeEditMenu,
+    bool HasNativeFormatMenu,
     bool HasNativeOpenMenuItem,
     bool HasNativeSaveMenuItem,
     bool HasNativeSaveAsMenuItem,
@@ -76,6 +77,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeCopyMenuItem,
     bool HasNativePasteMenuItem,
     bool HasNativeClearContentsMenuItem,
+    bool HasNativeBoldMenuItem,
     bool HasNativeQuitMenuItem)
 {
     public bool IsPassed =>
@@ -86,6 +88,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         ViewportColumnCount > 0 &&
         HasNativeFileMenu &&
         HasNativeEditMenu &&
+        HasNativeFormatMenu &&
         HasNativeOpenMenuItem &&
         HasNativeSaveMenuItem &&
         HasNativeSaveAsMenuItem &&
@@ -95,6 +98,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeCopyMenuItem &&
         HasNativePasteMenuItem &&
         HasNativeClearContentsMenuItem &&
+        HasNativeBoldMenuItem &&
         HasNativeQuitMenuItem;
 }
 
@@ -153,6 +157,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"is_opening={FormatBool(snapshot.IsOpening)}",
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
                 $"native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}",
+                $"native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}",
                 $"native_open_menu_item={FormatBool(snapshot.HasNativeOpenMenuItem)}",
                 $"native_save_menu_item={FormatBool(snapshot.HasNativeSaveMenuItem)}",
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
@@ -162,6 +167,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}",
                 $"native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}",
                 $"native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}",
+                $"native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}",
                 $"native_quit_menu_item={FormatBool(snapshot.HasNativeQuitMenuItem)}",
             ]);
     }

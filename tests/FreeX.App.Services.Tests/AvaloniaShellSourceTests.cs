@@ -69,6 +69,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _copyMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _pasteMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _clearContentsMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _boldMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -96,6 +97,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_clearContentsMenuItem.Header = \"Clear Contents\";");
         source.Should().Contain("_clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);");
         source.Should().Contain("_clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();");
+        source.Should().Contain("_boldMenuItem.Header = \"Bold\";");
+        source.Should().Contain("_boldMenuItem.Gesture = new KeyGesture(Key.B, KeyModifiers.Meta);");
+        source.Should().Contain("_boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold();");
         source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
         source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
         source.Should().Contain("_quitMenuItem.Click += (_, _) => TryQuitApplication();");
@@ -105,7 +109,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("editMenu.Items.Add(_copyMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_pasteMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_clearContentsMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_boldMenuItem);");
         source.Should().Contain("Header = \"Edit\"");
+        source.Should().Contain("Header = \"Format\"");
         source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
         source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
         source.Should().Contain("_openMenuItem.IsEnabled = _openButton.IsEnabled;");
@@ -117,6 +123,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_copyMenuItem.IsEnabled = _copyButton.IsEnabled;");
         source.Should().Contain("_pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;");
         source.Should().Contain("_clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;");
+        source.Should().Contain("_boldMenuItem.IsEnabled = _boldButton.IsEnabled;");
         source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("await SaveWorkbookAsAsync();");
         source.Should().Contain("TryQuitApplication()");
@@ -148,12 +155,14 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("opened_source_path={snapshot.OpenedSourcePath ?? \"\"}");
         smokeSource.Should().Contain("native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}");
         smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
+        smokeSource.Should().Contain("native_format_menu={FormatBool(snapshot.HasNativeFormatMenu)}");
         smokeSource.Should().Contain("native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}");
         smokeSource.Should().Contain("native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}");
         smokeSource.Should().Contain("native_cut_menu_item={FormatBool(snapshot.HasNativeCutMenuItem)}");
         smokeSource.Should().Contain("native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}");
         smokeSource.Should().Contain("native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}");
         smokeSource.Should().Contain("native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}");
+        smokeSource.Should().Contain("native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}");
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
@@ -163,12 +172,14 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("WindowShown: IsVisible");
         windowSource.Should().Contain("OpenedSourcePath: _session.CurrentFilePath");
         windowSource.Should().Contain("HasNativeEditMenu: hasNativeEditMenu");
+        windowSource.Should().Contain("HasNativeFormatMenu: hasNativeFormatMenu");
         windowSource.Should().Contain("HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, \"Undo\")");
         windowSource.Should().Contain("HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, \"Redo\")");
         windowSource.Should().Contain("HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, \"Cut\")");
         windowSource.Should().Contain("HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, \"Copy\")");
         windowSource.Should().Contain("HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, \"Paste\")");
         windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, \"Clear Contents\")");
+        windowSource.Should().Contain("HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, \"Bold\")");
         windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
 
@@ -307,7 +318,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("args.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
         source.Should().Contain("private static string FormatRangeReference(GridRange range)");
-        source.Should().Contain("if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V)");
+        source.Should().Contain("if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.B)");
         source.Should().Contain("else if (e.Key == Key.X)");
         source.Should().Contain("await CutSelectedRangeToClipboardAsync();");
         source.Should().Contain("else if (e.Key == Key.C)");
@@ -334,5 +345,29 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Clear Contents failed.\");");
         source.Should().Contain("if (e.Key == Key.Delete)");
         source.Should().Contain("ClearSelectedRangeContents();");
+    }
+
+    [Fact]
+    public void MainWindow_WiresBoldThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly ToggleButton _boldButton = new();");
+        source.Should().Contain("_boldButton.Content = \"B\";");
+        source.Should().Contain("_boldButton.FontWeight = FontWeight.Bold;");
+        source.Should().Contain("_boldButton.Click += BoldButton_Click;");
+        source.Should().Contain("_boldButton.IsChecked = _session.IsSelectedRangeStartBold;");
+        source.Should().Contain("_boldButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void BoldButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeBold(_boldButton.IsChecked == true);");
+        source.Should().Contain("private void ToggleSelectedRangeBold()");
+        source.Should().Contain("private void ApplySelectedRangeBold(bool enabled)");
+        source.Should().Contain("var result = _session.SetSelectedRangeBold(enabled);");
+        source.Should().Contain("_boldButton.IsChecked = _session.IsSelectedRangeStartBold;");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Bold failed.\");");
+        source.Should().Contain("RefreshShell($\"{(enabled ? \"Bolded\" : \"Unbolded\")} {rangeReference}\");");
+        source.Should().Contain("private static bool HasOnlyCommandModifier(KeyModifiers modifiers)");
+        source.Should().Contain("else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))");
+        source.Should().Contain("ToggleSelectedRangeBold();");
     }
 }
