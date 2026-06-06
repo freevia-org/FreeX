@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,8 +7,8 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportWorkflow_UsesOptionsDialogSelectionRangeAndOpenAfterPublish()
     {
-        var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PrintExport.cs"));
-        var optionsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeXOptions.cs"));
+        var printExport = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
+        var optionsSource = DialogSourceTestSupport.ReadHostSources("FreeXOptions.cs");
 
         optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;");
         printExport.Should().Contain("saveDlg.FilterIndex == 2");
