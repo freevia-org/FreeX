@@ -12,8 +12,19 @@ internal static class Program
         if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
             return smokeExitCode;
 
-        App.StartupArguments = args;
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        if (!MacOsLaunchSmokeOptions.TryParse(
+                args,
+                out var launchSmokeOptions,
+                out var startupArguments,
+                out var launchSmokeError))
+        {
+            Console.Error.WriteLine(launchSmokeError);
+            return 1;
+        }
+
+        App.StartupArguments = startupArguments;
+        App.LaunchSmokeOptions = launchSmokeOptions;
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
         return 0;
     }
 

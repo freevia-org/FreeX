@@ -56,6 +56,9 @@ jobs:
           artifact_root="$GITHUB_WORKSPACE/artifacts"
           zip_name="freex-$runtime-macos-app.zip"
           zip_path="$artifact_root/$zip_name"
+          evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
+          smoke_log="$artifact_root/freex-$runtime-macos-packaging-smoke.log"
+          launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
 
           rm -rf "$output_root"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root"
@@ -83,10 +86,11 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")" = "Spreadsheet Workbooks"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "xlsx"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")" = "Alternate"
+          binary_archs="$(lipo -archs "$app/Contents/MacOS/FreeX")"
           if [[ "$runtime" == "osx-arm64" ]]; then
-            lipo -archs "$app/Contents/MacOS/FreeX" | grep -qw arm64
+            echo "$binary_archs" | grep -qw arm64
           else
-            lipo -archs "$app/Contents/MacOS/FreeX" | grep -qw x86_64
+            echo "$binary_archs" | grep -qw x86_64
           fi
           codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict "$app"
@@ -100,15 +104,66 @@ jobs:
           test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
           codesign --verify --deep --strict "$unzip_root/FreeX.app"
           host_arch="$(uname -m)"
+          {
+            echo "runtime=$runtime"
+            echo "host_arch=$host_arch"
+            echo "binary_archs=$binary_archs"
+            echo "zip_name=$zip_name"
+            echo "bundle_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+            echo "native_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")"
+            echo "native_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "native_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")"
+            echo "imported_document_type=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")"
+            echo "imported_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
+            echo "imported_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")"
+            echo "codesign_verified=true"
+          } > "$evidence_path"
           if [[ ("$runtime" == "osx-arm64" && "$host_arch" == "arm64") || ("$runtime" == "osx-x64" && "$host_arch" == "x86_64") ]]; then
             smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
-            smoke_log="$RUNNER_TEMP/freex-$runtime-smoke.log"
             printf 'Name,Amount\nFreeX,42\n' > "$smoke_file"
             "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$smoke_file" | tee "$smoke_log"
             grep -q "Packaging smoke opened" "$smoke_log"
             grep -q "edited, saved, and reopened" "$smoke_log"
+            echo "smoke_status=passed" >> "$evidence_path"
+
+            launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
+            printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
+            rm -f "$launch_smoke_report"
+            /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
+            open -W -n -b io.github.tony-xmelon.freex "$launch_smoke_file" --args --macos-launch-smoke "$launch_smoke_report" &
+            launch_pid=$!
+            for _ in {1..60}; do
+              if [[ -f "$launch_smoke_report" ]]; then
+                break
+              fi
+              if ! kill -0 "$launch_pid" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ ! -f "$launch_smoke_report" ]]; then
+              echo "macos_launch_smoke=missing_report" > "$launch_smoke_report"
+              osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
+              wait "$launch_pid" || true
+              cat "$launch_smoke_report" >> "$evidence_path"
+              exit 1
+            fi
+            wait "$launch_pid" || true
+            cat "$launch_smoke_report" >> "$evidence_path"
+            grep -q "macos_launch_smoke=passed" "$launch_smoke_report"
+            grep -q "window_shown=true" "$launch_smoke_report"
+            grep -q "opened_source_path=.*freex-$runtime-launch.csv" "$launch_smoke_report"
+            grep -q "viewport_rows=[1-9]" "$launch_smoke_report"
+            grep -q "viewport_columns=[1-9]" "$launch_smoke_report"
+            grep -q "native_file_menu=true" "$launch_smoke_report"
+            grep -q "native_open_menu_item=true" "$launch_smoke_report"
+            grep -q "native_save_menu_item=true" "$launch_smoke_report"
+            grep -q "native_save_as_menu_item=true" "$launch_smoke_report"
+            grep -q "native_quit_menu_item=true" "$launch_smoke_report"
           else
-            echo "Skipping launch smoke for $runtime on $host_arch host."
+            echo "Skipping launch smoke for $runtime on $host_arch host." | tee "$smoke_log"
+            echo "smoke_status=skipped_host_arch_mismatch" >> "$evidence_path"
+            echo "macos_launch_smoke=skipped_host_arch_mismatch" > "$launch_smoke_report"
           fi
 
       - name: Upload app artifact
@@ -118,4 +173,7 @@ jobs:
           path: |
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256
+            artifacts/freex-${{ matrix.runtime }}-macos-evidence.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log
+            artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt
           if-no-files-found: error

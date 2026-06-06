@@ -72,11 +72,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_saveAsMenuItem.Header = \"Save As...\";");
         source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
         source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();");
-        source.Should().Contain("Header = \"Quit FreeX\"");
-        source.Should().Contain("Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta)");
-        source.Should().Contain("quitMenuItem.Click += (_, _) => TryQuitApplication();");
-        source.Should().Contain("NativeMenu.SetMenu(this, menu);");
-        source.Should().Contain("menu.NeedsUpdate += (_, _) => UpdateSaveButton();");
+        source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
+        source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
+        source.Should().Contain("_quitMenuItem.Click += (_, _) => TryQuitApplication();");
+        source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
+        source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
         source.Should().Contain("_openMenuItem.IsEnabled = _openButton.IsEnabled;");
         source.Should().Contain("_saveMenuItem.IsEnabled = _saveButton.IsEnabled;");
         source.Should().Contain("_saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;");
@@ -85,6 +85,40 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("TryQuitApplication()");
         source.Should().Contain("Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop");
         source.Should().Contain("desktop.TryShutdown(0);");
+    }
+
+    [Fact]
+    public void App_WiresMacOsLaunchSmokeToRuntimeSnapshot()
+    {
+        var appSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
+        var programSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        programSource.Should().Contain("MacOsLaunchSmokeOptions.TryParse(");
+        programSource.Should().Contain("out var launchSmokeOptions");
+        programSource.Should().Contain("out var startupArguments");
+        programSource.Should().Contain("App.LaunchSmokeOptions = launchSmokeOptions;");
+        programSource.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
+        appSource.Should().Contain("internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }");
+        appSource.Should().Contain("if (LaunchSmokeOptions is { } launchSmokeOptions)");
+        appSource.Should().Contain("MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions);");
+        smokeSource.Should().Contain("public const string Argument = \"--macos-launch-smoke\";");
+        smokeSource.Should().Contain("startupArguments = filteredArguments.ToArray();");
+        smokeSource.Should().Contain("mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options);");
+        smokeSource.Should().Contain("mainWindow.CreateLaunchSmokeSnapshot()");
+        smokeSource.Should().Contain("macos_launch_smoke={(snapshot.IsPassed ? \"passed\" : \"failed\")}");
+        smokeSource.Should().Contain("opened_source_path={snapshot.OpenedSourcePath ?? \"\"}");
+        smokeSource.Should().Contain("native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}");
+        smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
+        windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
+        windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
+        windowSource.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
+        windowSource.Should().Contain("internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()");
+        windowSource.Should().Contain("_nativeMenu?.Items.OfType<NativeMenuItem>().Any");
+        windowSource.Should().Contain("WindowShown: IsVisible");
+        windowSource.Should().Contain("OpenedSourcePath: _session.CurrentFilePath");
+        windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
 
     [Fact]

@@ -56,6 +56,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
+    private readonly NativeMenuItem _quitMenuItem = new();
+    private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
     private string? _formulaBoxEditOriginalText;
     private bool _isOpening;
@@ -182,29 +184,26 @@ public sealed class MainWindow : Window
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
         _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
 
-        var quitMenuItem = new NativeMenuItem
-        {
-            Header = "Quit FreeX",
-            Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta),
-        };
-        quitMenuItem.Click += (_, _) => TryQuitApplication();
+        _quitMenuItem.Header = "Quit FreeX";
+        _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
+        _quitMenuItem.Click += (_, _) => TryQuitApplication();
 
         var fileMenu = new NativeMenu();
         fileMenu.Items.Add(_openMenuItem);
         fileMenu.Items.Add(_saveMenuItem);
         fileMenu.Items.Add(_saveAsMenuItem);
         fileMenu.Items.Add(new NativeMenuItemSeparator());
-        fileMenu.Items.Add(quitMenuItem);
+        fileMenu.Items.Add(_quitMenuItem);
 
-        var menu = new NativeMenu();
-        menu.Items.Add(new NativeMenuItem
+        _nativeMenu = new NativeMenu();
+        _nativeMenu.Items.Add(new NativeMenuItem
         {
             Header = "File",
             Menu = fileMenu,
         });
-        menu.NeedsUpdate += (_, _) => UpdateSaveButton();
+        _nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();
 
-        NativeMenu.SetMenu(this, menu);
+        NativeMenu.SetMenu(this, _nativeMenu);
     }
 
     private void ConfigureWorkbookDropTarget()
@@ -863,6 +862,32 @@ public sealed class MainWindow : Window
 
         await OpenWorkbookPathAsync(path!);
     }
+
+    internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
+    {
+        var hasNativeFileMenu = _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+            string.Equals(item.Header?.ToString(), "File", StringComparison.Ordinal) &&
+            item.Menu is not null) == true;
+
+        return new MacOsLaunchSmokeSnapshot(
+            WindowShown: IsVisible,
+            WindowTitle: Title ?? "",
+            DisplayName: _session.DisplayName,
+            ActiveSheetName: _session.ActiveSheet.Name,
+            ViewportRowCount: _session.Viewport.RowMetrics.Count,
+            ViewportColumnCount: _session.Viewport.ColMetrics.Count,
+            OpenedSourcePath: _session.CurrentFilePath,
+            IsOpening: _isOpening,
+            HasNativeFileMenu: hasNativeFileMenu,
+            HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, "Open..."),
+            HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, "Save"),
+            HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
+            HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
+    }
+
+    private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader) =>
+        string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
+        item.Gesture is not null;
 
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {

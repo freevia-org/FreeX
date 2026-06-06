@@ -62,6 +62,13 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0'");
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0'");
         workflow.Should().Contain("lipo -archs");
+        workflow.Should().Contain("evidence_path=\"$artifact_root/freex-$runtime-macos-evidence.txt\"");
+        workflow.Should().Contain("smoke_log=\"$artifact_root/freex-$runtime-macos-packaging-smoke.log\"");
+        workflow.Should().Contain("launch_smoke_report=\"$artifact_root/freex-$runtime-macos-launch-smoke.txt\"");
+        workflow.Should().Contain("echo \"binary_archs=$binary_archs\"");
+        workflow.Should().Contain("echo \"codesign_verified=true\"");
+        workflow.Should().Contain("echo \"smoke_status=passed\" >> \"$evidence_path\"");
+        workflow.Should().Contain("echo \"smoke_status=skipped_host_arch_mismatch\" >> \"$evidence_path\"");
         workflow.Should().Contain("codesign --verify --deep --strict");
         workflow.Should().Contain("host_arch=\"$(uname -m)\"");
         workflow.Should().Contain("unzip -q");
@@ -71,8 +78,22 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke \"$smoke_file\"");
         workflow.Should().Contain("grep -q \"Packaging smoke opened\" \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"edited, saved, and reopened\" \"$smoke_log\"");
+        workflow.Should().Contain("lsregister -f \"$unzip_root/FreeX.app\"");
+        workflow.Should().Contain("open -W -n -b io.github.tony-xmelon.freex \"$launch_smoke_file\" --args --macos-launch-smoke \"$launch_smoke_report\"");
+        workflow.Should().Contain("macos_launch_smoke=missing_report");
+        workflow.Should().Contain("grep -q \"macos_launch_smoke=passed\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"window_shown=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"opened_source_path=.*freex-$runtime-launch.csv\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_file_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_open_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_save_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_save_as_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_quit_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256");
+        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-evidence.txt");
+        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log");
+        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt");
         workflow.Should().Contain("if-no-files-found: error");
     }
 
@@ -83,7 +104,9 @@ public sealed class MacOsBundleMetadataTests
 
         program.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
         program.Should().Contain("return smokeExitCode;");
-        program.Should().Contain("StartWithClassicDesktopLifetime(args)");
+        program.Should().Contain("MacOsLaunchSmokeOptions.TryParse(");
+        program.Should().Contain("App.LaunchSmokeOptions = launchSmokeOptions;");
+        program.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
     }
 
     private static string? PlistString(XDocument plist, string key) =>

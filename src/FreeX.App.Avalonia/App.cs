@@ -9,6 +9,8 @@ public sealed class App : Application
 {
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
 
+    internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }
+
     public override void OnFrameworkInitializationCompleted()
     {
         RequestedThemeVariant = ThemeVariant.Light;
@@ -21,6 +23,9 @@ public sealed class App : Application
 
             if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
                 activatableLifetime.Activated += async (_, args) => await MainWindow_ActivatedAsync(mainWindow, args);
+
+            if (LaunchSmokeOptions is { } launchSmokeOptions)
+                MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions);
         }
 
         base.OnFrameworkInitializationCompleted();
