@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using static FreeX.App.Host.Tests.LocalizedXamlTestSupport;
 
@@ -103,7 +102,7 @@ public sealed class PageLayoutCommandSourceTests
     [Fact]
     public void PageLayoutHandlers_RouteThroughExpectedThemePageSetupAndPrintCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
 
         source.Should().Contain("WorkbookThemeWorkflow.CreateColorfulTheme()");
         source.Should().Contain("WorkbookThemeWorkflow.CreateGrayscaleTheme()");
