@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -163,7 +162,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void MainWindow_WiresSelectDataSourceRangePickerToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ChartCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ChartCommands.cs");
 
         source.Should().Contain("new SelectDataSourceDialog(");
         source.Should().Contain("request => ApplySelectDataSourceRangeSelection(dialog, request)");
@@ -192,7 +191,7 @@ public sealed partial class ChartDialogTests
     {
         var source = ReadChartDialogSource();
         var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
-        var chartCommandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ChartCommands.cs"));
+        var chartCommandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ChartCommands.cs");
 
         dialogSource.Should().Contain("if (!ValidateInputs())");
         dialogSource.Should().Contain("ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, out _)");
