@@ -371,6 +371,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void PhoneticProperties_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreatePhoneticPropertiesSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithPhoneticProperties_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreatePhoneticPropertiesSourceWorkbook());
+        var sourcePhoneticProperties = ReadWorksheetChildElement(source, "phoneticPr");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "phoneticPr")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourcePhoneticProperties.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void PageLayout_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreatePageLayoutSourceWorkbook()).Should().BeEmpty();
@@ -602,6 +637,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SplitColumn = 2;
         sheet.ViewTopRow = 1;
         sheet.ViewLeftCol = 1;
+        return workbook;
+    }
+
+    private static Workbook CreatePhoneticPropertiesSourceWorkbook()
+    {
+        var workbook = new Workbook("PhoneticPropertiesPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+        sheet.PhoneticProperties = new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center");
         return workbook;
     }
 
