@@ -19,8 +19,8 @@ public sealed class MainWindow : Window
 {
     private const double HeaderColumnWidth = 58;
     private const double HeaderRowHeight = 28;
-    private const double ViewportHeight = 880;
-    private const double ViewportWidth = 1440;
+    private const double InitialViewportHeight = 880;
+    private const double InitialViewportWidth = 1440;
     private const string NativeWorkbookExtension = ".fxl";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
@@ -52,7 +52,7 @@ public sealed class MainWindow : Window
     public MainWindow(IReadOnlyList<string> startupArguments)
     {
         var source = new StartupWorkbookLoader().Load(startupArguments);
-        _session = _sessionFactory.Create(source, ViewportHeight, ViewportWidth);
+        _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth);
 
         Title = $"FreeX - {_session.DisplayName}";
         Width = 1120;
@@ -80,6 +80,7 @@ public sealed class MainWindow : Window
         _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.Content = _sheetGridHost;
+        _sheetScrollViewer.SizeChanged += SheetScrollViewer_SizeChanged;
         _sheetScrollViewer.PointerWheelChanged += SheetScrollViewer_PointerWheelChanged;
         root.Children.Add(_sheetScrollViewer);
 
@@ -178,12 +179,27 @@ public sealed class MainWindow : Window
 
     private void RefreshShell(string status)
     {
+        var preserveFormulaEdit = _formulaBox.IsFocused && _session.FormulaEditAddress is not null;
+        var formulaText = _formulaBox.Text;
+        var formulaCaretIndex = _formulaBox.CaretIndex;
+        var formulaSelectionStart = _formulaBox.SelectionStart;
+        var formulaSelectionEnd = _formulaBox.SelectionEnd;
+
         _sheetGridHost.Content = BuildSheetGrid();
         _sheetTabsHost.Content = BuildSheetTabs();
         _titleText.Text = _session.DisplayName;
         _detailText.Text = $"{_session.ActiveSheet.Name}  |  {_session.Viewport.RowMetrics.Count} rows x {_session.Viewport.ColMetrics.Count} columns";
         _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
-        _formulaBox.Text = FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
+        _formulaBox.Text = preserveFormulaEdit
+            ? formulaText
+            : FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
+        if (preserveFormulaEdit)
+        {
+            _formulaBox.CaretIndex = Math.Min(formulaCaretIndex, _formulaBox.Text?.Length ?? 0);
+            _formulaBox.SelectionStart = Math.Min(formulaSelectionStart, _formulaBox.Text?.Length ?? 0);
+            _formulaBox.SelectionEnd = Math.Min(formulaSelectionEnd, _formulaBox.Text?.Length ?? 0);
+        }
+
         _statusText.Text = status;
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
@@ -541,6 +557,15 @@ public sealed class MainWindow : Window
         e.Handled = true;
     }
 
+    private void SheetScrollViewer_SizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (!TryGetSheetViewportSize(out var viewportHeight, out var viewportWidth))
+            return;
+
+        if (_session.UpdateViewportSize(viewportHeight, viewportWidth))
+            RefreshShell(string.IsNullOrWhiteSpace(_statusText.Text) ? "Ready" : _statusText.Text);
+    }
+
     private async Task OpenWorkbookAsync()
     {
         if (_isOpening || _isSaving)
@@ -616,7 +641,8 @@ public sealed class MainWindow : Window
                 target.Extension,
                 target.Format,
                 progress);
-            _session = _sessionFactory.CreateOpened(target, result, ViewportHeight, ViewportWidth);
+            var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
+            _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth);
             RefreshShell(_session.StartupStatus);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
@@ -794,6 +820,28 @@ public sealed class MainWindow : Window
     {
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
+    }
+
+    private (double Height, double Width) GetCurrentSheetViewportSize()
+    {
+        return TryGetSheetViewportSize(out var viewportHeight, out var viewportWidth)
+            ? (viewportHeight, viewportWidth)
+            : (_session.ViewportHeight, _session.ViewportWidth);
+    }
+
+    private bool TryGetSheetViewportSize(out double viewportHeight, out double viewportWidth)
+    {
+        var bounds = _sheetScrollViewer.Bounds;
+        if (bounds.Height <= HeaderRowHeight || bounds.Width <= HeaderColumnWidth)
+        {
+            viewportHeight = 0;
+            viewportWidth = 0;
+            return false;
+        }
+
+        viewportHeight = bounds.Height - HeaderRowHeight;
+        viewportWidth = bounds.Width - HeaderColumnWidth;
+        return true;
     }
 
     private bool ShouldUseWarningStatusColor(string status) =>

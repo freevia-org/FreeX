@@ -300,6 +300,71 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void UpdateViewportSize_RebuildsViewportWithNewDimensions()
+    {
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 60,
+            viewportWidth: 160);
+        var initialRows = session.Viewport.RowMetrics.Count;
+        var initialColumns = session.Viewport.ColMetrics.Count;
+
+        var changed = session.UpdateViewportSize(viewportHeight: 140.2, viewportWidth: 280.2);
+
+        changed.Should().BeTrue();
+        session.ViewportHeight.Should().Be(141);
+        session.ViewportWidth.Should().Be(281);
+        session.Viewport.RowMetrics.Count.Should().BeGreaterThan(initialRows);
+        session.Viewport.ColMetrics.Count.Should().BeGreaterThan(initialColumns);
+    }
+
+    [Fact]
+    public void UpdateViewportSize_IgnoresInvalidDimensions()
+    {
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 60,
+            viewportWidth: 160);
+
+        var changed = session.UpdateViewportSize(double.NaN, double.NegativeInfinity);
+
+        changed.Should().BeFalse();
+        session.ViewportHeight.Should().Be(60);
+        session.ViewportWidth.Should().Be(160);
+    }
+
+    [Fact]
+    public void UpdateViewportSize_ReturnsFalseForSameDimensions()
+    {
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 60,
+            viewportWidth: 160);
+
+        session.UpdateViewportSize(viewportHeight: 60, viewportWidth: 160).Should().BeFalse();
+    }
+
+    [Fact]
+    public void UpdateViewportSize_KeepsActiveCellVisibleAfterShrink()
+    {
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 240,
+            viewportWidth: 480);
+        var target = new CellAddress(
+            session.ActiveSheet.Id,
+            session.Viewport.RowMetrics[^1].Row,
+            session.Viewport.ColMetrics[^1].Col);
+        session.SelectCell(target);
+
+        session.UpdateViewportSize(viewportHeight: 60, viewportWidth: 160).Should().BeTrue();
+
+        session.ActiveCell.Should().Be(target);
+        session.Viewport.RowMetrics.Select(row => row.Row).Should().Contain(target.Row);
+        session.Viewport.ColMetrics.Select(col => col.Col).Should().Contain(target.Col);
+    }
+
+    [Fact]
     public void MarkSaved_UpdatesDisplayNameAndClearsDirtyFeatureReport()
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "Book.xlsx");

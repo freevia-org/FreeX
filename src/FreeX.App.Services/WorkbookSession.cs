@@ -10,9 +10,9 @@ public sealed class WorkbookSession
     private readonly WorkbookCellEditService _cellEditService;
     private readonly WorkbookSheetSelectionService _sheetSelectionService;
     private readonly IViewportService _viewportService;
-    private readonly double _viewportHeight;
-    private readonly double _viewportWidth;
     private readonly bool _includeObjects;
+    private double _viewportHeight;
+    private double _viewportWidth;
 
     internal WorkbookSession(
         StartupWorkbookLoadResult source,
@@ -35,8 +35,8 @@ public sealed class WorkbookSession
         _cellEditService = cellEditService;
         _sheetSelectionService = sheetSelectionService;
         _viewportService = viewportService;
-        _viewportHeight = viewportHeight;
-        _viewportWidth = viewportWidth;
+        _viewportHeight = NormalizeViewportDimension(viewportHeight, fallback: 1);
+        _viewportWidth = NormalizeViewportDimension(viewportWidth, fallback: 1);
         _includeObjects = includeObjects;
 
         Workbook = source.Workbook;
@@ -57,6 +57,10 @@ public sealed class WorkbookSession
     public Sheet ActiveSheet { get; private set; }
 
     public ViewportModel Viewport { get; private set; }
+
+    public double ViewportHeight => _viewportHeight;
+
+    public double ViewportWidth => _viewportWidth;
 
     public CellAddress ActiveCell { get; private set; }
 
@@ -120,6 +124,20 @@ public sealed class WorkbookSession
         ActiveSheet.ViewTopRow = normalizedTopRow;
         ActiveSheet.ViewLeftCol = normalizedLeftCol;
         RefreshViewport();
+        return true;
+    }
+
+    public bool UpdateViewportSize(double viewportHeight, double viewportWidth)
+    {
+        var normalizedHeight = NormalizeViewportDimension(viewportHeight, _viewportHeight);
+        var normalizedWidth = NormalizeViewportDimension(viewportWidth, _viewportWidth);
+        if (normalizedHeight == _viewportHeight && normalizedWidth == _viewportWidth)
+            return false;
+
+        _viewportHeight = normalizedHeight;
+        _viewportWidth = normalizedWidth;
+        RefreshViewport();
+        EnsureActiveCellVisible();
         return true;
     }
 
@@ -390,6 +408,14 @@ public sealed class WorkbookSession
     {
         var candidate = (long)value + delta;
         return (uint)Math.Clamp(candidate, 1, max);
+    }
+
+    private static double NormalizeViewportDimension(double value, double fallback)
+    {
+        if (!double.IsFinite(value) || value <= 0)
+            return Math.Max(1, Math.Ceiling(fallback));
+
+        return Math.Max(1, Math.Ceiling(value));
     }
 
     private static IReadOnlyList<FileFormatDescriptor> BuildFormats(
