@@ -928,6 +928,7 @@ public static partial class AccessibilityCheckerService
             case "CEILING":
                 kind = ConditionalFormulaScalarFunctionKind.Ceiling;
                 return true;
+            case "CEILING.PRECISE":
             case "ISO.CEILING":
                 kind = ConditionalFormulaScalarFunctionKind.IsoCeiling;
                 return true;
