@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 using System.Text.RegularExpressions;
 
 namespace FreeX.App.Host.Tests;
@@ -158,7 +157,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [Fact]
     public void GetIcon_DoesNotContainDuplicateContainsPredicates()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonCommandPresentationPlanner.Icons.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonCommandPresentationPlanner.Icons.cs");
         var getIconSource = SourceMethodExtractor.ExtractMethodSource(source, "public static RibbonCommandIcon GetIcon(");
         var duplicatePredicates = Regex
             .Matches(getIconSource, @"name\.Contains\(""(?<predicate>[^""]+)""\)")
@@ -266,7 +265,7 @@ public sealed class RibbonCommandPresentationPlannerTests
 
     private static string ReadMainRibbonXaml()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var start = xaml.IndexOf("<TabControl x:Name=\"RibbonTabs\"", StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0, "MainWindow.xaml should expose the main ribbon tab control");
         var end = xaml.IndexOf("</TabControl>", start, StringComparison.Ordinal);
