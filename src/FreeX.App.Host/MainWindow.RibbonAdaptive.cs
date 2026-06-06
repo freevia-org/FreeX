@@ -121,6 +121,33 @@ public partial class MainWindow
             measuredCorrectionApplied |= ApplyRibbonMeasuredPrimaryFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, groupProfileKeys, cacheKey, availableWidth, selectedTabHeader);
             measuredCorrectionApplied |= ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, groupProfileKeys, cacheKey, availableWidth, selectedTabHeader);
             measuredCorrectionApplied |= ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, groupProfileKeys, cacheKey, availableWidth, selectedTabHeader);
+            if (RibbonRowOverflowsMeasured(activePanel, availableWidth))
+            {
+                _ribbonMeasuredOverflowCache.Clear();
+                measuredCorrectionApplied |= ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, groupProfileKeys, cacheKey, availableWidth, selectedTabHeader);
+            }
+
+            while (RibbonRowOverflowsMeasured(activePanel, availableWidth))
+            {
+                if (!RibbonAdaptiveLayoutEngine.TryFallbackOneMoreGroup(
+                        plannedStates,
+                        preserveFirstGroup: false,
+                        protectedGroupIndexes: null,
+                        out var changedIndex,
+                        out var previousState))
+                {
+                    break;
+                }
+
+                measuredCorrectionApplied |= ApplyRibbonAdaptiveStateAt(
+                    groupSnapshots,
+                    collapsedButtons,
+                    changedIndex,
+                    plannedStates[changedIndex],
+                    previousState,
+                    availableWidth) > 0;
+            }
+
             appliedStates = plannedStates;
         }
 
