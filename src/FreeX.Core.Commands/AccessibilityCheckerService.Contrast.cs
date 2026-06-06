@@ -1235,7 +1235,7 @@ public static partial class AccessibilityCheckerService
     {
         operand = default;
         if (!TryGetFormulaAggregateKind(function.FunctionName, out var aggregateKind) ||
-            function.Arguments.Count == 0)
+            !IsFormulaAggregateArgumentCountSupported(aggregateKind, function.Arguments.Count))
         {
             return false;
         }
@@ -1263,6 +1263,13 @@ public static partial class AccessibilityCheckerService
     private static bool IsFormulaAggregateFunction(string functionName) =>
         TryGetFormulaAggregateKind(functionName, out _);
 
+    private static bool IsFormulaAggregateArgumentCountSupported(
+        ConditionalFormulaAggregateKind aggregateKind,
+        int argumentCount) =>
+        IsFormulaPairwiseAggregate(aggregateKind)
+            ? argumentCount == 2
+            : argumentCount > 0;
+
     private static bool TryGetFormulaAggregateKind(
         string functionName,
         out ConditionalFormulaAggregateKind kind)
@@ -1274,6 +1281,15 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "SUMSQ":
                 kind = ConditionalFormulaAggregateKind.SumSq;
+                return true;
+            case "SUMXMY2":
+                kind = ConditionalFormulaAggregateKind.SumXMy2;
+                return true;
+            case "SUMX2MY2":
+                kind = ConditionalFormulaAggregateKind.SumX2My2;
+                return true;
+            case "SUMX2PY2":
+                kind = ConditionalFormulaAggregateKind.SumX2Py2;
                 return true;
             case "DEVSQ":
                 kind = ConditionalFormulaAggregateKind.DevSq;
@@ -1341,6 +1357,12 @@ public static partial class AccessibilityCheckerService
                 return false;
         }
     }
+
+    private static bool IsFormulaPairwiseAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+        aggregateKind is
+            ConditionalFormulaAggregateKind.SumXMy2 or
+            ConditionalFormulaAggregateKind.SumX2My2 or
+            ConditionalFormulaAggregateKind.SumX2Py2;
 
     private static bool TryCreateFormulaAggregateArgument(
         FormulaNode node,
@@ -1835,6 +1857,9 @@ public static partial class AccessibilityCheckerService
     {
         Sum,
         SumSq,
+        SumXMy2,
+        SumX2My2,
+        SumX2Py2,
         DevSq,
         StdDevSample,
         StdDevPopulation,
@@ -1869,6 +1894,15 @@ public static partial class AccessibilityCheckerService
         bool IsEndColAbsolute,
         string? SheetName,
         ConditionalFormulaOperand? Operand = null);
+
+    private readonly record struct ConditionalFormulaPairwiseAggregateValue(
+        ScalarValue Value,
+        bool IsDirectArgument);
+
+    private readonly record struct ConditionalFormulaPairwiseAggregateValues(
+        int RowCount,
+        int ColCount,
+        IReadOnlyList<ConditionalFormulaPairwiseAggregateValue> Values);
 
     private enum ConditionalFormulaAggregateArgumentKind
     {
@@ -3845,6 +3879,170 @@ public static partial class AccessibilityCheckerService
             return double.IsFinite(result);
         }
 
+        private bool TryEvaluateFormulaPairwiseAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: 2 } arguments)
+                return false;
+
+            if (!TryResolveFormulaPairwiseAggregateValues(arguments[0], rowOffset, colOffset, out var left) ||
+                !TryResolveFormulaPairwiseAggregateValues(arguments[1], rowOffset, colOffset, out var right) ||
+                left.RowCount != right.RowCount ||
+                left.ColCount != right.ColCount ||
+                left.Values.Count != right.Values.Count)
+            {
+                return false;
+            }
+
+            var total = 0d;
+            for (var i = 0; i < left.Values.Count; i++)
+            {
+                if (!TryGetFormulaPairwiseAggregateNumber(left.Values[i], out var x, out var skipLeft))
+                    return false;
+
+                if (skipLeft)
+                    continue;
+
+                if (!TryGetFormulaPairwiseAggregateNumber(right.Values[i], out var y, out var skipRight))
+                    return false;
+
+                if (skipRight)
+                    continue;
+
+                if (!TryGetFormulaPairwiseAggregateTerm(operand.AggregateKind, x, y, out var term))
+                    return false;
+
+                total += term;
+                if (!double.IsFinite(total))
+                    return false;
+            }
+
+            value = new NumberValue(total);
+            return true;
+        }
+
+        private bool TryResolveFormulaPairwiseAggregateValues(
+            ConditionalFormulaAggregateArgument argument,
+            int rowOffset,
+            int colOffset,
+            out ConditionalFormulaPairwiseAggregateValues values)
+        {
+            values = default;
+            switch (argument.Kind)
+            {
+                case ConditionalFormulaAggregateArgumentKind.Literal:
+                    values = SingleFormulaPairwiseAggregateValue(argument.Literal ?? BlankValue.Instance, isDirectArgument: true);
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Reference:
+                    if (!TryResolveFormulaAggregateReference(argument, rowOffset, colOffset, out var targetSheet, out var row, out var col))
+                        return false;
+
+                    values = SingleFormulaPairwiseAggregateValue(targetSheet.GetValue(row, col), isDirectArgument: false);
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Range:
+                    if (!TryResolveFormulaAggregateRange(
+                            argument,
+                            rowOffset,
+                            colOffset,
+                            out var rangeSheet,
+                            out var startRow,
+                            out var startCol,
+                            out var endRow,
+                            out var endCol))
+                    {
+                        return false;
+                    }
+
+                    var rowCount = (int)(endRow - startRow + 1);
+                    var colCount = (int)(endCol - startCol + 1);
+                    var cells = new ConditionalFormulaPairwiseAggregateValue[rowCount * colCount];
+                    var index = 0;
+                    for (var currentRow = startRow; currentRow <= endRow; currentRow++)
+                    {
+                        for (var currentCol = startCol; currentCol <= endCol; currentCol++)
+                        {
+                            cells[index++] = new ConditionalFormulaPairwiseAggregateValue(
+                                rangeSheet.GetValue(currentRow, currentCol),
+                                IsDirectArgument: false);
+                        }
+                    }
+
+                    values = new ConditionalFormulaPairwiseAggregateValues(rowCount, colCount, cells);
+                    return true;
+                case ConditionalFormulaAggregateArgumentKind.Operand:
+                    if (!argument.Operand.HasValue ||
+                        !TryResolveFormulaOperand(argument.Operand.Value, rowOffset, colOffset, out var operandValue))
+                    {
+                        return false;
+                    }
+
+                    values = SingleFormulaPairwiseAggregateValue(operandValue, isDirectArgument: true);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static ConditionalFormulaPairwiseAggregateValues SingleFormulaPairwiseAggregateValue(
+            ScalarValue value,
+            bool isDirectArgument)
+        {
+            var values = new[]
+            {
+                new ConditionalFormulaPairwiseAggregateValue(value, isDirectArgument)
+            };
+
+            return new ConditionalFormulaPairwiseAggregateValues(1, 1, values);
+        }
+
+        private static bool TryGetFormulaPairwiseAggregateNumber(
+            ConditionalFormulaPairwiseAggregateValue value,
+            out double number,
+            out bool skipPair)
+        {
+            number = 0;
+            skipPair = false;
+            if (value.Value is ErrorValue)
+                return false;
+
+            if (TryGetFormulaAggregateNumber(
+                    value.Value,
+                    ConditionalFormulaAggregateKind.SumXMy2,
+                    value.IsDirectArgument,
+                    out number,
+                    out var unsupported))
+            {
+                return true;
+            }
+
+            if (unsupported || value.IsDirectArgument)
+                return false;
+
+            skipPair = true;
+            return true;
+        }
+
+        private static bool TryGetFormulaPairwiseAggregateTerm(
+            ConditionalFormulaAggregateKind aggregateKind,
+            double x,
+            double y,
+            out double term)
+        {
+            term = aggregateKind switch
+            {
+                ConditionalFormulaAggregateKind.SumXMy2 => (x - y) * (x - y),
+                ConditionalFormulaAggregateKind.SumX2My2 => x * x - y * y,
+                ConditionalFormulaAggregateKind.SumX2Py2 => x * x + y * y,
+                _ => double.NaN
+            };
+
+            return double.IsFinite(term);
+        }
+
         private bool TryEvaluateFormulaAggregate(
             ConditionalFormulaOperand operand,
             int rowOffset,
@@ -3852,6 +4050,9 @@ public static partial class AccessibilityCheckerService
             out ScalarValue value)
         {
             value = ErrorValue.Value;
+            if (IsFormulaPairwiseAggregate(operand.AggregateKind))
+                return TryEvaluateFormulaPairwiseAggregate(operand, rowOffset, colOffset, out value);
+
             if (operand.AggregateArguments is not { Count: > 0 } arguments)
                 return false;
 
@@ -4161,6 +4362,9 @@ public static partial class AccessibilityCheckerService
             aggregateKind is
                 ConditionalFormulaAggregateKind.Sum or
                 ConditionalFormulaAggregateKind.SumSq or
+                ConditionalFormulaAggregateKind.SumXMy2 or
+                ConditionalFormulaAggregateKind.SumX2My2 or
+                ConditionalFormulaAggregateKind.SumX2Py2 or
                 ConditionalFormulaAggregateKind.DevSq or
                 ConditionalFormulaAggregateKind.StdDevSample or
                 ConditionalFormulaAggregateKind.StdDevPopulation or
