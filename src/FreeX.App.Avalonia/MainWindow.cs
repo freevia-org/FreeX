@@ -37,12 +37,13 @@ public sealed class MainWindow : Window
     private readonly StartupWorkbookLoadResult _source;
     private readonly IReadOnlyList<IFileAdapter> _adapters = WorkbookFileAdapterCatalog.CreateDefaultAdapters();
     private readonly WorkbookSaveService _saveService = new();
+    private readonly WorkbookSheetSelectionService _sheetSelectionService = new();
     private readonly Workbook _workbook;
-    private readonly Sheet _sheet;
     private readonly IViewportService _viewportService = new ViewportService();
     private readonly RecalcEngine _recalcEngine = new(new DependencyGraph(), new FormulaEvaluator());
     private readonly WorkbookCellEditService _cellEditService;
     private readonly ContentControl _sheetGridHost = new();
+    private readonly ContentControl _sheetTabsHost = new();
     private readonly TextBlock _titleText = new();
     private readonly TextBlock _detailText = new();
     private readonly TextBlock _statusText = new();
@@ -50,6 +51,7 @@ public sealed class MainWindow : Window
     private readonly TextBox _formulaBox = new();
     private readonly Button _saveButton = new();
     private readonly Button _saveAsButton = new();
+    private Sheet _sheet;
     private ViewportModel _viewport = new([], [], [], null, []);
     private CellAddress _activeCell;
     private CellAddress? _formulaEditAddress;
@@ -62,7 +64,7 @@ public sealed class MainWindow : Window
     {
         _source = new StartupWorkbookLoader().Load(startupArguments);
         _workbook = _source.Workbook;
-        _sheet = EnsureSheet(_workbook);
+        _sheet = _sheetSelectionService.EnsureActiveSheet(_workbook).Sheet;
         _activeCell = GetInitialActiveCell(_sheet);
         _currentFilePath = _source.OpenedAsTemplate ? null : _source.SourcePath;
         _currentXlsxFeatureReport = _source.FeatureReport;
@@ -84,11 +86,6 @@ public sealed class MainWindow : Window
         KeyDown += MainWindow_KeyDown;
         RefreshShell(FormatStartupStatus(_source));
     }
-
-    private static Sheet EnsureSheet(Workbook workbook) =>
-        workbook.Sheets.Count == 0
-            ? workbook.AddSheet("Sheet1")
-            : workbook.Sheets[Math.Clamp(workbook.ActiveSheetIndex ?? 0, 0, workbook.Sheets.Count - 1)];
 
     private static CellAddress GetInitialActiveCell(Sheet sheet) =>
         new(sheet.Id, Math.Max(1, sheet.ActiveRow ?? 1), Math.Max(1, sheet.ActiveCol ?? 1));
@@ -112,6 +109,10 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(toolbar, Dock.Top);
         root.Children.Add(toolbar);
 
+        var sheetTabs = BuildSheetTabsChrome();
+        DockPanel.SetDock(sheetTabs, Dock.Bottom);
+        root.Children.Add(sheetTabs);
+
         root.Children.Add(new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -120,6 +121,24 @@ public sealed class MainWindow : Window
         });
 
         return root;
+    }
+
+    private Control BuildSheetTabsChrome()
+    {
+        _sheetTabsHost.Content = BuildSheetTabs();
+        return new Border
+        {
+            Background = Brush(249, 250, 252),
+            BorderBrush = ToolbarBorder,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(12, 6),
+            Child = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = _sheetTabsHost,
+            },
+        };
     }
 
     private Control BuildToolbar()
@@ -191,6 +210,7 @@ public sealed class MainWindow : Window
     private void RefreshShell(string status)
     {
         _sheetGridHost.Content = BuildSheetGrid();
+        _sheetTabsHost.Content = BuildSheetTabs();
         _titleText.Text = CurrentDisplayName;
         _detailText.Text = $"{_sheet.Name}  |  {_viewport.RowMetrics.Count} rows x {_viewport.ColMetrics.Count} columns";
         _cellAddressText.Text = FormatCellReference(_activeCell);
@@ -208,6 +228,51 @@ public sealed class MainWindow : Window
         _saveButton.IsEnabled = !_isSaving && CanSaveCurrentSource(out _);
         _saveButton.Content = _isDirty ? "Save*" : "Save";
         _saveAsButton.IsEnabled = !_isSaving && StorageProvider.CanSave;
+    }
+
+    private Control BuildSheetTabs()
+    {
+        var selection = _sheetSelectionService.EnsureActiveSheet(_workbook);
+        if (_sheet.Id != selection.Sheet.Id)
+        {
+            _sheet = selection.Sheet;
+            _activeCell = GetInitialActiveCell(_sheet);
+            _formulaEditAddress = null;
+            _viewport = GetViewport();
+        }
+
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 4,
+        };
+
+        foreach (var tab in selection.Tabs)
+        {
+            var button = new Button
+            {
+                MinWidth = 72,
+                MaxWidth = 180,
+                MinHeight = 28,
+                Padding = new Thickness(12, 4),
+                Background = tab.IsActive ? SelectionHeaderBackground : Brushes.White,
+                BorderBrush = tab.IsActive ? SelectionBorder : ToolbarBorder,
+                BorderThickness = new Thickness(1),
+                Content = new TextBlock
+                {
+                    Text = tab.Name,
+                    FontSize = 12,
+                    FontWeight = tab.IsActive ? FontWeight.SemiBold : FontWeight.Normal,
+                    Foreground = tab.IsActive ? SelectionHeaderForeground : HeaderForeground,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    TextAlignment = TextAlignment.Center,
+                },
+            };
+            button.Click += (_, _) => SelectSheet(tab.Id);
+            panel.Children.Add(button);
+        }
+
+        return panel;
     }
 
     private Control BuildSheetGrid()
@@ -356,6 +421,19 @@ public sealed class MainWindow : Window
         _sheet.ActiveCol = address.Col;
         _formulaEditAddress = null;
         RefreshShell("Ready");
+    }
+
+    private void SelectSheet(SheetId sheetId)
+    {
+        var selection = _sheetSelectionService.SelectSheet(_workbook, sheetId);
+        if (_sheet.Id == selection.Sheet.Id)
+            return;
+
+        _sheet = selection.Sheet;
+        _activeCell = GetInitialActiveCell(_sheet);
+        _formulaEditAddress = null;
+        _viewport = GetViewport();
+        RefreshShell($"Selected {_sheet.Name}");
     }
 
     private void BeginFormulaEdit(CellAddress address)
