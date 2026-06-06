@@ -1,4 +1,3 @@
-using System.IO;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using FluentAssertions;
@@ -10,8 +9,7 @@ public sealed class ReleaseAutomationWorkflowTests
     [Fact]
     public void TesterReleaseWorkflow_BuildsTestsPublishesAndUploadsLatestExe()
     {
-        var workflowPath = WorkspaceFileLocator.Find(".github", "workflows", "tester-release.yml");
-        var workflow = File.ReadAllText(workflowPath);
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "tester-release.yml");
 
         workflow.Should().Contain("workflow_dispatch:");
         workflow.Should().Contain("release_notes:");
@@ -128,8 +126,7 @@ public sealed class ReleaseAutomationWorkflowTests
     [Fact]
     public void UserTestPublishScript_PublishesFrameworkDependentRuntimeSpecificBuild()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var script = File.ReadAllText(scriptPath);
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Publish-UserTestBuild.ps1");
 
         script.Should().Contain("[string]$RuntimeIdentifier = \"win-x64\"");
         script.Should().Contain("\"-r\", $RuntimeIdentifier");
@@ -149,8 +146,7 @@ public sealed class ReleaseAutomationWorkflowTests
     [Fact]
     public void UserTestPublishScript_CanPackageAndOptionallySignLocalMsix()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var script = File.ReadAllText(scriptPath);
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Publish-UserTestBuild.ps1");
 
         script.Should().Contain("[ValidateSet(\"SingleFile\", \"Folder\", \"Msix\")]");
         script.Should().Contain("[string]$MsixCertificatePath = $env:FREEX_MSIX_CERTIFICATE_PATH");
@@ -188,8 +184,7 @@ public sealed class ReleaseAutomationWorkflowTests
     [Fact]
     public void TesterReleaseWorkflow_DefaultsToStableReleaseWhenAdvertisingLatestDownload()
     {
-        var workflowPath = WorkspaceFileLocator.Find(".github", "workflows", "tester-release.yml");
-        var workflow = File.ReadAllText(workflowPath);
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "tester-release.yml");
 
         workflow.Should().Contain("Download the stable latest asset: FreeX-latest-win-x64.exe");
         workflow.Should().Contain("Checksum for the latest single-file asset: FreeX-latest-win-x64.exe.sha256");
@@ -207,8 +202,7 @@ public sealed class ReleaseAutomationWorkflowTests
     [Fact]
     public void TesterReleaseWorkflow_RefreshesReleaseNotesWhenReleaseAlreadyExists()
     {
-        var workflowPath = WorkspaceFileLocator.Find(".github", "workflows", "tester-release.yml");
-        var workflow = File.ReadAllText(workflowPath);
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "tester-release.yml");
         var existingReleaseBlock = Regex.Match(workflow, @"(?ms)if \(\$releaseExists\) \{.*?\} else \{");
 
         existingReleaseBlock.Success.Should().BeTrue("the rerun path should be explicit and guarded separately from first release creation");
@@ -220,8 +214,7 @@ public sealed class ReleaseAutomationWorkflowTests
     [Fact]
     public void ReleaseProgressJson_DefinesAutomaticTesterVersionBand()
     {
-        var progressPath = WorkspaceFileLocator.Find("release", "progress.json");
-        using var document = JsonDocument.Parse(File.ReadAllText(progressPath));
+        using var document = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("release", "progress.json"));
         var root = document.RootElement;
 
         root.GetProperty("major").GetInt32().Should().Be(0);
@@ -234,8 +227,7 @@ public sealed class ReleaseAutomationWorkflowTests
     [Fact]
     public void TestDistributionPlan_LinksToLatestTesterDownload()
     {
-        var planPath = WorkspaceFileLocator.Find("docs", "release/test-distribution.md");
-        var plan = File.ReadAllText(planPath);
+        var plan = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
         plan.Should().Contain("Latest tester download");
         plan.Should().Contain("FreeX-latest-win-x64.exe");

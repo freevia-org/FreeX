@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,8 +7,7 @@ public sealed class UserTestIssueTemplateTests
     [Fact]
     public void UserTestIssueTemplate_AsksForBuildAndOptionalDiagnostics()
     {
-        var templatePath = WorkspaceFileLocator.Find(".github", "ISSUE_TEMPLATE", "user-test-report.yml");
-        var template = File.ReadAllText(templatePath);
+        var template = WorkspaceFileLocator.ReadAllText(".github", "ISSUE_TEMPLATE", "user-test-report.yml");
 
         template.Should().Contain("FreeX user test report");
         template.Should().Contain("App version/build");
