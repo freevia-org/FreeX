@@ -2354,6 +2354,54 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatErrorFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("ERF($A1/100)", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ERF($A1/100)>0.8", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ERFC($A1/100)<0.2", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ERF($A1/100,1)>0.1", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("ERF(0,$A1/100)>0.8", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ERF.PRECISE($A1/100)>0.9", "B4");
+        AssertFormulaArithmeticContrastLocations("ERFC.PRECISE($A1/100)<0.1", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatErrorFunctionWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaArithmeticContrastLocations("AND(ERF($A1/100)>0.8,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ERFC($A1/100)<0.2,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ERF.PRECISE($A1/100))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ERF($A1/100),1)>1.8", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ERFC.PRECISE($A1/100),1)<1.2", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatErrorFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("ERF()>0");
+        AssertFormulaArithmeticContrastLocations("ERF($A1,1,2)>0");
+        AssertFormulaArithmeticContrastLocations("ERF.PRECISE($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ERFC()>0");
+        AssertFormulaArithmeticContrastLocations("ERFC($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ERFC.PRECISE($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ERF(\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ERF(0,\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ERFC(\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ERF.PRECISE(\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ERFC.PRECISE(\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ERF($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ERF(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ERF(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ERF(0,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ERFC(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ERF(NA())>0");
+        AssertFormulaArithmeticContrastLocations("ERF(0,NA())>0");
+        AssertFormulaArithmeticContrastLocations("ERFC(NA())>0");
+        AssertFormulaArithmeticContrastLocations("ERF.PRECISE(NA())>0");
+        AssertFormulaArithmeticContrastLocations("ERFC.PRECISE(NA())>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBitShiftNegativeDirection()
     {
         AssertFormulaArithmeticContrastLocations("BITLSHIFT($A1,-2)=18", "B1", "B3");
