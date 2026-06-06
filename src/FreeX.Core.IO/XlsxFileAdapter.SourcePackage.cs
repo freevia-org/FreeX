@@ -69,6 +69,7 @@ public sealed partial class XlsxFileAdapter
         XlsxWorksheetMergeCellsNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxWorksheetSheetFormatNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetSheetViewNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheets(generatedArchive);
         XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(generatedArchive);
