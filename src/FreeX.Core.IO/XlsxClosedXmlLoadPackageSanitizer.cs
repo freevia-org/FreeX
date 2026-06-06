@@ -11,6 +11,7 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasConditionalFormattingBlocks,
     bool? HasUnsupportedConditionalFormattingBlocks,
     bool? HasWorksheetDynamicFilters,
+    bool? HasWorksheetAutoFilterSchemaIssues,
     bool? HasDocumentPropertiesPackageGraphIssues,
     bool? HasWorksheetSheetViewSchemaIssues,
     bool? HasWorkbookViewSchemaIssues,
@@ -81,6 +82,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 RemoveUnsupportedConditionalFormattingBlocks(archive);
             if (requirements.HasWorksheetDynamicFilters)
                 RemoveWorksheetDynamicFilters(archive);
+            if (requirements.HasWorksheetAutoFilterSchemaIssues)
+                NormalizeWorksheetAutoFilters(archive);
             if (requirements.HasWorksheetSheetViewSchemaIssues)
                 NormalizeWorksheetSheetViews(archive);
             if (requirements.HasWorkbookViewSchemaIssues)
@@ -200,6 +203,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 scanUnsupportedConditionalFormatting &&
                 ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks, archive, HasUnsupportedConditionalFormattingBlocks),
                 ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters, archive, HasWorksheetDynamicFilters),
+                ResolveKnownOrScan(knownHints.HasWorksheetAutoFilterSchemaIssues, archive, HasWorksheetAutoFilterSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasDocumentPropertiesPackageGraphIssues, archive, HasDocumentPropertiesPackageGraphIssues),
                 ResolveKnownOrScan(knownHints.HasWorksheetSheetViewSchemaIssues, archive, HasWorksheetSheetViewSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorkbookViewSchemaIssues, archive, HasWorkbookViewSchemaIssues),
@@ -211,7 +215,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, null);
         }
         finally
         {
@@ -231,6 +235,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hints.HasChartExChartParts is not { } hasChartExChartParts ||
             hints.HasDrawingPackageParts is not { } hasDrawingPackageParts ||
             hints.HasWorksheetDynamicFilters is not { } hasWorksheetDynamicFilters ||
+            hints.HasWorksheetAutoFilterSchemaIssues is not { } hasWorksheetAutoFilterSchemaIssues ||
             hints.HasDocumentPropertiesPackageGraphIssues is not { } hasDocumentPropertiesPackageGraphIssues ||
             hints.HasWorksheetSheetViewSchemaIssues is not { } hasWorksheetSheetViewSchemaIssues ||
             hints.HasWorkbookViewSchemaIssues is not { } hasWorkbookViewSchemaIssues ||
@@ -261,6 +266,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             scanAllConditionalFormatting && hints.HasConditionalFormattingBlocks.GetValueOrDefault(),
             scanUnsupportedConditionalFormatting && hints.HasUnsupportedConditionalFormattingBlocks.GetValueOrDefault(),
             hasWorksheetDynamicFilters,
+            hasWorksheetAutoFilterSchemaIssues,
             hasDocumentPropertiesPackageGraphIssues,
             hasWorksheetSheetViewSchemaIssues,
             hasWorkbookViewSchemaIssues,
@@ -378,6 +384,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasAllConditionalFormattingBlocks,
         bool HasUnsupportedConditionalFormattingBlocks,
         bool HasWorksheetDynamicFilters,
+        bool HasWorksheetAutoFilterSchemaIssues,
         bool HasDocumentPropertiesPackageGraphIssues,
         bool HasWorksheetSheetViewSchemaIssues,
         bool HasWorkbookViewSchemaIssues,
@@ -394,6 +401,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasAllConditionalFormattingBlocks ||
             HasUnsupportedConditionalFormattingBlocks ||
             HasWorksheetDynamicFilters ||
+            HasWorksheetAutoFilterSchemaIssues ||
             HasDocumentPropertiesPackageGraphIssues ||
             HasWorksheetSheetViewSchemaIssues ||
             HasWorkbookViewSchemaIssues ||
@@ -568,6 +576,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         requirements.HasAllConditionalFormattingBlocks ||
         requirements.HasUnsupportedConditionalFormattingBlocks ||
         requirements.HasWorksheetDynamicFilters ||
+        requirements.HasWorksheetAutoFilterSchemaIssues ||
         requirements.HasWorksheetSheetViewSchemaIssues ||
         ShouldStripMergeCells(requirements, normalizedPath);
 
@@ -683,6 +692,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         if (requirements.HasWorksheetDynamicFilters)
         {
             changed |= RemoveElements(root.Descendants(worksheetNs + "dynamicFilter").ToList());
+        }
+
+        if (requirements.HasWorksheetAutoFilterSchemaIssues &&
+            root.Element(worksheetNs + "autoFilter") is { } autoFilter)
+        {
+            changed |= XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter);
         }
 
         if (requirements.HasWorksheetSheetViewSchemaIssues &&
@@ -1370,6 +1385,54 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection))
         {
             XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+    }
+
+    private static bool HasWorksheetAutoFilterSchemaIssues(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry)
+                     .ToList())
+        {
+            try
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var autoFilter = worksheetXml.Root?.Element(XName.Get(
+                    "autoFilter",
+                    "http://schemas.openxmlformats.org/spreadsheetml/2006/main"));
+                if (autoFilter is not null &&
+                    XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void NormalizeWorksheetAutoFilters(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry)
+                     .ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            var autoFilter = root.Element(worksheetNs + "autoFilter");
+            if (autoFilter is not null &&
+                XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
         }
     }
 
