@@ -7,8 +7,7 @@ public sealed class XlsxWorksheetPageBreaksMetadataReaderPerformanceTests
     [Fact]
     public void Read_WalksBreakElementsWithoutLinqFiltering()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src", "FreeX.Core.IO", "XlsxWorksheetPageBreaksMetadataReader.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetPageBreaksMetadataReader.cs");
 
         source.Should().Contain("foreach (var breakElement in pageBreaks.Elements())");
         source.Should().Contain("breakElement.Name.LocalName");

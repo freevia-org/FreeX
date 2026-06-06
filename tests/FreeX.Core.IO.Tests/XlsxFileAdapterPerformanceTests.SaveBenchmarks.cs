@@ -118,7 +118,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void LoadDrawingPictures_TransfersOwnedImageBuffersWithoutSecondCopy()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.LoadSheetXmlLayoutApplication.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.LoadSheetXmlLayoutApplication.cs");
         var pictureLoop = source[
             source.IndexOf("foreach (var picturePart in layout.PictureParts)", StringComparison.Ordinal)..
             source.IndexOf("foreach (var textBoxPart in layout.TextBoxParts)", StringComparison.Ordinal)];
@@ -126,7 +126,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         pictureLoop.Should().Contain("ImageBytes = picturePart.ImageBytes,");
         pictureLoop.Should().NotContain("ImageBytes = picturePart.ImageBytes.ToArray()");
 
-        var drawingPartsSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetDrawingParts.cs"));
+        var drawingPartsSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetDrawingParts.cs");
         var readPictureParts = drawingPartsSource[
             drawingPartsSource.IndexOf("private static IReadOnlyList<XlsxPicturePackagePart> ReadPictureParts", StringComparison.Ordinal)..
             drawingPartsSource.IndexOf("private static Dictionary<string, string> ReadRelationshipTargetsById", StringComparison.Ordinal)];

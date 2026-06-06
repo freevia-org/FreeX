@@ -57,8 +57,7 @@ public sealed class XlsxWorksheetPageBreaksMetadataWriterPerformanceTests
     [Fact]
     public void Save_UsesSingleBreakLookupForModeledBreaksAndNativeAttributes()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src", "FreeX.Core.IO", "XlsxWorksheetPageBreaksMetadataWriter.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetPageBreaksMetadataWriter.cs");
 
         source.Should().Contain("BuildBreaksById(pageBreaks)");
         source.Should().Contain("breaksById[idText] = breakElement;");
