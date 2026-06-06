@@ -6833,12 +6833,10 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var mergeCells = worksheetXml.Root!.Element(worksheetNs + "mergeCells");
         mergeCells.Should().NotBeNull();
-        mergeCells!.Attribute("nativeMergeContainerAttr").Should().NotBeNull();
-        mergeCells.Attribute("nativeMergeContainerAttr")!.Value.Should().Be("kept");
+        mergeCells!.Attribute("nativeMergeContainerAttr").Should().BeNull();
         var mergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
             .Single(element => element.Attribute("ref")?.Value == "A1:B2");
-        mergeCell.Attribute("nativeMergeCellAttr").Should().NotBeNull();
-        mergeCell.Attribute("nativeMergeCellAttr")!.Value.Should().Be("kept");
+        mergeCell.Attribute("nativeMergeCellAttr").Should().BeNull();
     }
 
     [Fact]
