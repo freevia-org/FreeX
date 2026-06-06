@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -42,7 +41,7 @@ public sealed class HelpCommandSourceTests
     [Fact]
     public void HelpCommandHandlers_RouteThroughExpectedDiagnosticsAndExternalLinkServices()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get(\"MainWindowMessage_HelpOnlineTitle\"))");
         source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");
@@ -61,7 +60,7 @@ public sealed class HelpCommandSourceTests
     [Fact]
     public void HelpKeyboardShortcut_RoutesF1ToHelpOnlineCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHelp, HelpOnlineBtn_Click);");
     }
