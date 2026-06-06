@@ -550,6 +550,62 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_DrawingObjectsExposeRenderablePayloads()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "Decision",
+            Kind = DrawingShapeKind.Ellipse,
+            FillColor = new CellColor(0x22, 0x66, 0xAA),
+            OutlineColor = new CellColor(0x11, 0x22, 0x33)
+        };
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Name = "Logo",
+            Kind = PictureKind.Image,
+            ImageBytes = imageBytes,
+            ContentType = "image/png"
+        };
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Name = "Callout",
+            Text = "Quarterly result",
+            FillColor = new CellColor(0xFF, 0xFF, 0xCC),
+            OutlineColor = new CellColor(0xAA, 0x88, 0x00)
+        };
+        sheet.DrawingShapes.Add(shape);
+        sheet.Pictures.Add(picture);
+        sheet.TextBoxes.Add(textBox);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 120, 300));
+
+        var shapeBounds = viewport.DrawingObjects.Single(bounds => bounds.Kind == SelectionPaneObjectKind.Shape);
+        shapeBounds.ShapeKind.Should().Be(DrawingShapeKind.Ellipse);
+        shapeBounds.FillColor.Should().Be(new CellColor(0x22, 0x66, 0xAA));
+        shapeBounds.OutlineColor.Should().Be(new CellColor(0x11, 0x22, 0x33));
+
+        var pictureBounds = viewport.DrawingObjects.Single(bounds => bounds.Kind == SelectionPaneObjectKind.Picture);
+        pictureBounds.PictureKind.Should().Be(PictureKind.Image);
+        pictureBounds.ImageBytes.Should().Equal(imageBytes);
+        pictureBounds.ImageBytes.Should().NotBeSameAs(imageBytes);
+        pictureBounds.ImageContentType.Should().Be("image/png");
+
+        var textBounds = viewport.DrawingObjects.Single(bounds => bounds.Kind == SelectionPaneObjectKind.TextBox);
+        textBounds.Text.Should().Be("Quarterly result");
+        textBounds.FillColor.Should().Be(new CellColor(0xFF, 0xFF, 0xCC));
+        textBounds.OutlineColor.Should().Be(new CellColor(0xAA, 0x88, 0x00));
+    }
+
+    [Fact]
     public void HitTest_UniformRowAndColumnSizes_FastPathMatchesExpectedCell()
     {
         // DefaultRowHeight = 20.0 px, DefaultColumnWidth = 8.43 chars → 8.43*8 = 67.44 px.

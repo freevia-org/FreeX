@@ -398,7 +398,7 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void MainWindow_RendersNonInteractiveDrawingObjectBoundsOverlay()
+    public void MainWindow_RendersBasicDrawingObjectPreviewOverlay()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
@@ -407,14 +407,32 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)");
         source.Should().Contain("viewport.DrawingObjects is not { Count: > 0 }");
         source.Should().Contain("TryGetDisplayedDrawingObjectBounds(");
+        source.Should().Contain("var visual = CreateDrawingObjectVisual(drawingObject, width, height);");
+        source.Should().Contain("private static Control CreateDrawingObjectVisual(");
+        source.Should().Contain("SelectionPaneObjectKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height)");
+        source.Should().Contain("SelectionPaneObjectKind.Picture => CreateDrawingPictureVisual(drawingObject, width, height)");
+        source.Should().Contain("SelectionPaneObjectKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height)");
+        source.Should().Contain("private static Control CreateDrawingShapeVisual(");
+        source.Should().Contain("using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;");
+        source.Should().Contain("using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;");
+        source.Should().Contain("DrawingShapeKind.Ellipse => new AvaloniaEllipse");
+        source.Should().Contain("DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width)");
+        source.Should().Contain("private static Border CreateDrawingLineVisual(IBrush stroke, double width)");
+        source.Should().Contain("new AvaloniaRectangle");
+        source.Should().Contain("private static Control CreateDrawingPictureVisual(");
+        source.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
+        source.Should().Contain("Source = bitmap");
+        source.Should().Contain("private static Control CreateDrawingTextBoxVisual(");
+        source.Should().Contain("drawingObject.Text");
         source.Should().Contain("drawingObject.AnchorCol");
         source.Should().Contain("drawingObject.AnchorRow");
         source.Should().Contain("IsHitTestVisible = false");
-        source.Should().Contain("Canvas.SetLeft(marker, left);");
-        source.Should().Contain("Canvas.SetTop(marker, top);");
+        source.Should().Contain("Canvas.SetLeft(visual, left);");
+        source.Should().Contain("Canvas.SetTop(visual, top);");
         source.Should().Contain("GetDisplayedColumnWidth(metric)");
         source.Should().Contain("GetDisplayedRowHeight(metric)");
-        source.Should().Contain("new RotateTransform(drawingObject.RotationDegrees)");
+        source.Should().Contain("ApplyDrawingObjectRotation(visual, drawingObject.RotationDegrees);");
+        source.Should().Contain("new RotateTransform(rotationDegrees)");
     }
 
     [Fact]

@@ -474,6 +474,8 @@ function Test-SourceWiring {
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
                 "CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true)",
                 "CellColorPalettePlanner.BuildDefaultSwatches()",
+                "CreateDrawingObjectVisual(drawingObject, width, height)",
+                "TryCreateDrawingBitmap(imageBytes, out var bitmap)",
                 "AddStyledCellBorderOverlay(content, style);",
                 "private static bool HasVisibleCellBorder(CellStyle? style)",
                 "internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()"

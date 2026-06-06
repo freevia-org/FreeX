@@ -32,6 +32,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("IActivatableLifetime");
         script.Should().Contain("OpenActivatedFilesAsync");
         script.Should().Contain("AddStyledCellBorderOverlay(content, style);");
+        script.Should().Contain("CreateDrawingObjectVisual(drawingObject, width, height)");
+        script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("Portable macOS source contains forbidden token");
     }
@@ -367,6 +369,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
                     CellColorPalettePlanner.BuildDefaultSwatches();
+                    CreateDrawingObjectVisual(drawingObject, width, height);
+                    TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
                 }
                 private static bool HasVisibleCellBorder(CellStyle? style) => true;

@@ -6,6 +6,7 @@ public sealed partial class ViewportService
 {
     private static IReadOnlyList<DrawingObjectBounds> BuildDrawingObjectBounds(
         Sheet sheet,
+        WorkbookTheme theme,
         IReadOnlyList<RowMetric> rowMetrics,
         IReadOnlyList<ColMetric> colMetrics)
     {
@@ -23,13 +24,13 @@ public sealed partial class ViewportService
             switch (entry.Kind)
             {
                 case SelectionPaneObjectKind.Shape:
-                    AddShapeBounds(sheet, entry.Id, rowMetrics, colMetrics, bounds);
+                    AddShapeBounds(sheet, theme, entry.Id, rowMetrics, colMetrics, bounds);
                     break;
                 case SelectionPaneObjectKind.Picture:
                     AddPictureBounds(sheet, entry.Id, rowMetrics, colMetrics, bounds);
                     break;
                 case SelectionPaneObjectKind.TextBox:
-                    AddTextBoxBounds(sheet, entry.Id, rowMetrics, colMetrics, bounds);
+                    AddTextBoxBounds(sheet, theme, entry.Id, rowMetrics, colMetrics, bounds);
                     break;
             }
         }
@@ -39,6 +40,7 @@ public sealed partial class ViewportService
 
     private static void AddShapeBounds(
         Sheet sheet,
+        WorkbookTheme theme,
         Guid id,
         IReadOnlyList<RowMetric> rowMetrics,
         IReadOnlyList<ColMetric> colMetrics,
@@ -70,7 +72,10 @@ public sealed partial class ViewportService
             top,
             width,
             height,
-            shape.RotationDegrees));
+            shape.RotationDegrees,
+            ShapeKind: shape.Kind,
+            FillColor: ResolveShapeFillColor(shape, theme),
+            OutlineColor: ResolveShapeOutlineColor(shape, theme)));
     }
 
     private static void AddPictureBounds(
@@ -106,11 +111,17 @@ public sealed partial class ViewportService
             top,
             width,
             height,
-            picture.RotationDegrees));
+            picture.RotationDegrees,
+            PictureKind: picture.Kind,
+            ImageBytes: picture.Kind == PictureKind.Image && picture.ImageBytes is { Length: > 0 } imageBytes
+                ? imageBytes.ToArray()
+                : null,
+            ImageContentType: picture.ContentType));
     }
 
     private static void AddTextBoxBounds(
         Sheet sheet,
+        WorkbookTheme theme,
         Guid id,
         IReadOnlyList<RowMetric> rowMetrics,
         IReadOnlyList<ColMetric> colMetrics,
@@ -142,7 +153,10 @@ public sealed partial class ViewportService
             top,
             width,
             height,
-            textBox.RotationDegrees));
+            textBox.RotationDegrees,
+            Text: textBox.Text,
+            FillColor: ResolveTextBoxFillColor(textBox, theme),
+            OutlineColor: ResolveTextBoxOutlineColor(textBox, theme)));
     }
 
     private static bool TryCreateAnchoredDrawingObjectBounds(
@@ -256,6 +270,18 @@ public sealed partial class ViewportService
 
     private static double NormalizeObjectExtent(double extent) =>
         double.IsFinite(extent) && extent > 0 ? extent : 1;
+
+    private static CellColor? ResolveShapeFillColor(DrawingShapeModel shape, WorkbookTheme theme) =>
+        shape.FillThemeColor?.Resolve(theme) ?? shape.FillColor;
+
+    private static CellColor? ResolveShapeOutlineColor(DrawingShapeModel shape, WorkbookTheme theme) =>
+        shape.OutlineThemeColor?.Resolve(theme) ?? shape.OutlineColor;
+
+    private static CellColor? ResolveTextBoxFillColor(TextBoxModel textBox, WorkbookTheme theme) =>
+        textBox.FillThemeColor?.Resolve(theme) ?? textBox.FillColor;
+
+    private static CellColor? ResolveTextBoxOutlineColor(TextBoxModel textBox, WorkbookTheme theme) =>
+        textBox.OutlineThemeColor?.Resolve(theme) ?? textBox.OutlineColor;
 
     private static string GetObjectDisplayName(string fallback, string? name) =>
         string.IsNullOrWhiteSpace(name) ? fallback : name.Trim();

@@ -135,7 +135,7 @@ public sealed partial class ViewportService : IViewportService
             : [];
 
         var drawingObjects = request.IncludeObjects
-            ? BuildDrawingObjectBounds(sheet, rowMetrics, colMetrics)
+            ? BuildDrawingObjectBounds(sheet, workbook.Theme, rowMetrics, colMetrics)
             : [];
 
         return new ViewportModel(

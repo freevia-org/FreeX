@@ -7,13 +7,16 @@ using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
+using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
 using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 using CellVAlign = FreeX.Core.Model.VerticalAlignment;
@@ -1056,14 +1059,123 @@ public sealed class MainWindow : Window
                 continue;
             }
 
-            var marker = CreateDrawingObjectBoundsMarker(drawingObject, width, height);
-            Canvas.SetLeft(marker, left);
-            Canvas.SetTop(marker, top);
-            overlay.Children.Add(marker);
+            var visual = CreateDrawingObjectVisual(drawingObject, width, height);
+            Canvas.SetLeft(visual, left);
+            Canvas.SetTop(visual, top);
+            overlay.Children.Add(visual);
         }
 
         return overlay;
     }
+
+    private static Control CreateDrawingObjectVisual(
+        DrawingObjectBounds drawingObject,
+        double width,
+        double height)
+    {
+        var visual = drawingObject.Kind switch
+        {
+            SelectionPaneObjectKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height),
+            SelectionPaneObjectKind.Picture => CreateDrawingPictureVisual(drawingObject, width, height),
+            SelectionPaneObjectKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height),
+            _ => CreateDrawingObjectBoundsMarker(drawingObject, width, height)
+        };
+        ApplyDrawingObjectRotation(visual, drawingObject.RotationDegrees);
+        return visual;
+    }
+
+    private static Control CreateDrawingShapeVisual(
+        DrawingObjectBounds drawingObject,
+        double width,
+        double height)
+    {
+        var fill = Brush(drawingObject.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5));
+        var stroke = Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
+        return drawingObject.ShapeKind switch
+        {
+            DrawingShapeKind.Ellipse => new AvaloniaEllipse
+            {
+                Width = Math.Max(1, width),
+                Height = Math.Max(1, height),
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = 1.5,
+                IsHitTestVisible = false,
+            },
+            DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width),
+            _ => new AvaloniaRectangle
+            {
+                Width = Math.Max(1, width),
+                Height = Math.Max(1, height),
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = 1.5,
+                IsHitTestVisible = false,
+            }
+        };
+    }
+
+    private static Border CreateDrawingLineVisual(IBrush stroke, double width) =>
+        new()
+        {
+            Width = Math.Max(1, width),
+            Height = 2,
+            Background = stroke,
+            IsHitTestVisible = false,
+        };
+
+    private static Control CreateDrawingPictureVisual(
+        DrawingObjectBounds drawingObject,
+        double width,
+        double height)
+    {
+        if (drawingObject.ImageBytes is { Length: > 0 } imageBytes &&
+            TryCreateDrawingBitmap(imageBytes, out var bitmap))
+        {
+            return new Border
+            {
+                Width = Math.Max(1, width),
+                Height = Math.Max(1, height),
+                BorderBrush = DrawingObjectBoundsBorder,
+                BorderThickness = new Thickness(1),
+                ClipToBounds = true,
+                IsHitTestVisible = false,
+                Child = new Image
+                {
+                    Source = bitmap,
+                    Stretch = Stretch.UniformToFill,
+                },
+            };
+        }
+
+        return CreateDrawingObjectBoundsMarker(drawingObject, width, height);
+    }
+
+    private static Control CreateDrawingTextBoxVisual(
+        DrawingObjectBounds drawingObject,
+        double width,
+        double height) =>
+        new Border
+        {
+            Width = Math.Max(1, width),
+            Height = Math.Max(1, height),
+            Background = Brush(drawingObject.FillColor ?? CellColor.White),
+            BorderBrush = Brush(drawingObject.OutlineColor ?? new CellColor(0x70, 0x70, 0x70)),
+            BorderThickness = new Thickness(1.5),
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(drawingObject.Text)
+                    ? drawingObject.DisplayName
+                    : drawingObject.Text,
+                FontSize = 12,
+                Foreground = Brushes.Black,
+                Margin = new Thickness(6, 4),
+                TextWrapping = TextWrapping.Wrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            },
+        };
 
     private static Border CreateDrawingObjectBoundsMarker(
         DrawingObjectBounds drawingObject,
@@ -1095,13 +1207,31 @@ public sealed class MainWindow : Window
             };
         }
 
-        if (Math.Abs(drawingObject.RotationDegrees % 360) > 0.0001)
-        {
-            marker.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-            marker.RenderTransform = new RotateTransform(drawingObject.RotationDegrees);
-        }
-
         return marker;
+    }
+
+    private static bool TryCreateDrawingBitmap(byte[] imageBytes, out Bitmap bitmap)
+    {
+        try
+        {
+            using var stream = new MemoryStream(imageBytes);
+            bitmap = new Bitmap(stream);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or NotSupportedException)
+        {
+            bitmap = null!;
+            return false;
+        }
+    }
+
+    private static void ApplyDrawingObjectRotation(Control visual, double rotationDegrees)
+    {
+        if (Math.Abs(rotationDegrees % 360) <= 0.0001)
+            return;
+
+        visual.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+        visual.RenderTransform = new RotateTransform(rotationDegrees);
     }
 
     private static bool TryGetDisplayedDrawingObjectBounds(

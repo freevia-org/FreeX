@@ -88,7 +88,14 @@ public sealed record DrawingObjectBounds(
     double Top,
     double Width,
     double Height,
-    double RotationDegrees = 0);
+    double RotationDegrees = 0,
+    DrawingShapeKind? ShapeKind = null,
+    PictureKind? PictureKind = null,
+    string? Text = null,
+    CellColor? FillColor = null,
+    CellColor? OutlineColor = null,
+    byte[]? ImageBytes = null,
+    string? ImageContentType = null);
 
 public sealed record RowMetric(uint Row, double Height, double TopOffset);
 public sealed record ColMetric(uint Col, double Width, double LeftOffset);
