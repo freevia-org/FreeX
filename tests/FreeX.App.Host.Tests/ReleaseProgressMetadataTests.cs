@@ -26,7 +26,7 @@ public sealed class ReleaseProgressMetadataTests
         var documentedStream = $"v{progress.Major}.{minor}.<run>";
         var completionText = $"At {progress.OverallCompletion}% completion";
 
-        var distributionPlan = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
+        var distributionPlan = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
         distributionPlan.Should().Contain(completionText);
         distributionPlan.Should().Contain(documentedStream);
     }
@@ -34,7 +34,7 @@ public sealed class ReleaseProgressMetadataTests
     [Fact]
     public void ReleaseProgressCompletionBands_MatchTesterReleaseWorkflow()
     {
-        var workflow = File.ReadAllText(WorkspaceFileLocator.Find(".github", "workflows", "tester-release.yml"));
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "tester-release.yml");
 
         workflow.Should().Contain("if ($overallCompletion -ge 99) { $minor = 9 }");
         workflow.Should().Contain("elseif ($overallCompletion -ge 95) { $minor = 8 }");
