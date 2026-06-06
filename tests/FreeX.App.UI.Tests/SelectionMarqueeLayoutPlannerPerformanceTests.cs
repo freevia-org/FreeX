@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.UI.Tests;
 
@@ -8,8 +7,7 @@ public sealed class SelectionMarqueeLayoutPlannerPerformanceTests
     [Fact]
     public void CalculateVisibleRangeRect_AccumulatesBoundsWithoutMaterializedMetricLists()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "SelectionMarqueeLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("SelectionMarqueeLayoutPlanner.cs");
 
         source.Should().Contain("foreach (var row in viewport.RowMetrics)");
         source.Should().Contain("foreach (var column in viewport.ColMetrics)");

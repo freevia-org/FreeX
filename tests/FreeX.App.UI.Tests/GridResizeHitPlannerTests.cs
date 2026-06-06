@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
-using System.IO;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -135,8 +134,7 @@ public sealed class GridResizeHitPlannerTests
     [Fact]
     public void HitTest_StopsHeaderScansOnceSortedEdgesPassPointer()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridResizeHitPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridResizeHitPlanner.cs");
 
         source.Should().Contain("public readonly record struct GridResizeHit");
         source.Should().Contain("for (var i = 0; i < columns.Count; i++)");
