@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 
@@ -10,7 +8,7 @@ public sealed class FormulaRegexCachePerformanceTests
     [Fact]
     public void TextNumberParser_UsesCachedRegexesForRepeatedCoercionChecks()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "ExcelTextNumberParser.cs"));
+        var source = FormulaSourceTestSupport.ReadFormulaSource("ExcelTextNumberParser.cs");
 
         source.Should().Contain("private static readonly Regex FakeLeapDayTextRegex");
         source.Should().Contain("private static readonly Regex MonthNameRegex");
@@ -21,7 +19,7 @@ public sealed class FormulaRegexCachePerformanceTests
     [Fact]
     public void DateTimeFunctions_UseCachedRegexesForRepeatedComponentChecks()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "BuiltInFunctions.DateTime.cs"));
+        var source = FormulaSourceTestSupport.ReadFormulaSource("BuiltInFunctions.DateTime.cs");
 
         source.Should().Contain("private static readonly Regex DateTimeTextHasTimeSeparatorRegex");
         source.Should().Contain("private static readonly Regex DateTimeTextHasDateSeparatorRegex");
@@ -31,8 +29,8 @@ public sealed class FormulaRegexCachePerformanceTests
     [Fact]
     public void WildcardAndSearchRegexCaches_AreBoundedAndTimed()
     {
-        var criteriaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "BuiltInFunctions.Criteria.cs"));
-        var textSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Formula", "BuiltInFunctions.TextCore.cs"));
+        var criteriaSource = FormulaSourceTestSupport.ReadFormulaSource("BuiltInFunctions.Criteria.cs");
+        var textSource = FormulaSourceTestSupport.ReadFormulaSource("BuiltInFunctions.TextCore.cs");
 
         criteriaSource.Should().Contain("FormulaSafetyLimits.MaxRegexCacheEntries");
         criteriaSource.Should().Contain("FormulaSafetyLimits.RegexTimeout");
