@@ -7,10 +7,7 @@ public partial class InsertDeleteRowsTests
     [Fact]
     public void DeleteRowsCommand_UsesCompactMetadataSnapshotsForUndo()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.Core.Commands",
-            "DeleteRowsCommand.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSource("DeleteRowsCommand.cs");
 
         source.Should().Contain("CaptureDictionary(sheet.RowHeights)");
         source.Should().Contain("CaptureSet(sheet.HiddenRows)");
@@ -23,10 +20,7 @@ public partial class InsertDeleteRowsTests
     [Fact]
     public void InsertRowsCommand_UsesCompactMetadataSnapshotsForUndo()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.Core.Commands",
-            "InsertDeleteRowsCommand.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSource("InsertDeleteRowsCommand.cs");
 
         source.Should().Contain("private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;");
         source.Should().Contain("CaptureDictionary(sheet.RowHeights)");
@@ -40,14 +34,8 @@ public partial class InsertDeleteRowsTests
     [Fact]
     public void RowCommands_PrecountTailCellSnapshotsBeforeAllocatingLists()
     {
-        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.Core.Commands",
-            "InsertDeleteRowsCommand.cs"));
-        var deleteSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.Core.Commands",
-            "DeleteRowsCommand.cs"));
+        var insertSource = ModelSourceTestSupport.ReadCommandsSource("InsertDeleteRowsCommand.cs");
+        var deleteSource = ModelSourceTestSupport.ReadCommandsSource("DeleteRowsCommand.cs");
 
         insertSource.Should().Contain("FullSnapshotCapacityThreshold");
         insertSource.Should().Contain("CaptureMovedCellsWithFullCapacity(sheet)");
@@ -62,10 +50,7 @@ public partial class InsertDeleteRowsTests
     [Fact]
     public void CellStateSnapshot_StoresCoordinatesWithoutPerSnapshotSheetId()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.Core.Commands",
-            "CellStateSnapshot.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSource("CellStateSnapshot.cs");
 
         source.Should().Contain("uint Row");
         source.Should().Contain("uint Col");
