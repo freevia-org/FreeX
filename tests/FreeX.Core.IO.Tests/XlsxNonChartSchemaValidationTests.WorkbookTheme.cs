@@ -20,6 +20,45 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorkbookThemePackage_SanitizesOverlongTypefaceNamesForSchemaValidity()
+    {
+        var workbook = new Workbook("WorkbookThemeTypefaceSanitize")
+        {
+            Theme = WorkbookTheme.Office
+                .WithName("FreeX Typeface Sanitize")
+                .WithFonts("\"Google Sans\", Roboto, sans-serif", "\"Aptos Display\", Arial, sans-serif")
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("theme fonts"));
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var fontScheme = ReadPackageRootElement(saved, "xl/theme/theme1.xml")
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "fontScheme")!;
+        fontScheme.Element(drawingNs + "majorFont")!
+            .Element(drawingNs + "latin")!
+            .Attribute("typeface")!
+            .Value
+            .Should()
+            .Be("Google Sans");
+        fontScheme.Element(drawingNs + "minorFont")!
+            .Element(drawingNs + "latin")!
+            .Attribute("typeface")!
+            .Value
+            .Should()
+            .Be("Aptos Display");
+        fontScheme.Element(drawingNs + "majorFont")!
+            .Element(drawingNs + "ea")!
+            .Attribute("typeface")!
+            .Value
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorkbookThemePackage_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorkbookThemeSourceWorkbook());

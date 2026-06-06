@@ -24,7 +24,7 @@ internal static class XlsxFontNameSanitizer
         return true;
     }
 
-    private static string NormalizeFontName(string? value)
+    public static string NormalizeFontName(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return FallbackFontName;
