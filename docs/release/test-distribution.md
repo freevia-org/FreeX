@@ -23,10 +23,10 @@ https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x
 
 Latest verified tester release:
 
-- Release: [FreeX (Test Release) v0.8.87](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-87-2026-06-06-04-42-23-run87-attempt1%2B4bde44a5)
-- Tag: `v0-8-87-2026-06-06-04-42-23-run87-attempt1+4bde44a5`
-- GitHub Actions run: [27052724974](https://github.com/tony-xmelon/FreeX/actions/runs/27052724974), run number 87, completed successfully
-- Target commit: `4bde44a5649cf81a9432dfa2e1b119f5992cec73`
+- Release: [FreeX (Test Release) v0.8.88](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-88-2026-06-06-05-29-34-run88-attempt2%2B57f281a8)
+- Tag: `v0-8-88-2026-06-06-05-29-34-run88-attempt2+57f281a8`
+- GitHub Actions run: [27053510627](https://github.com/tony-xmelon/FreeX/actions/runs/27053510627), run number 88 attempt 2, completed successfully
+- Target commit: `57f281a866d475c48aea39065f492e75206324e1`
 - Release posture: internal-only latest tester build; not a public-preview candidate because live accessibility gate evidence was not recorded
 - Asset check: stable latest `.exe`, `.exe.sha256`, MSIX, and MSIX checksum links returned HTTP 200 after publication
 
