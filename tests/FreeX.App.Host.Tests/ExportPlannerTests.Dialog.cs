@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -161,7 +160,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialogPlanningFacade_ForwardsPureWorkToPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("ExportOptionsDialogPlanner.CreateResult(");
         source.Should().Contain("ExportOptionsDialogPlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex)");
@@ -206,7 +205,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialog_ExposesKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         foreach (var expected in new[]
         {
@@ -242,7 +241,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialog_ExposesPublishScopePageRangeQualityAndOpenAfterPublishControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("Content = UiText.Get(\"ExportOptions_ActiveSheetS\"), IsChecked = true");
         source.Should().Contain("Content = UiText.Get(\"ExportOptions_SelectedRange\")");
@@ -265,7 +264,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialog_PageRangeEditorsExposeAutomationNames()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_fromPageBox, UiText.Get(\"ExportOptions_FromPage\"));");
         source.Should().Contain("AutomationProperties.SetName(_toPageBox, UiText.Get(\"ExportOptions_ToPage\"));");
@@ -274,7 +273,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialog_DisabledChoicesExposeAutomationHelpText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetHelpText(_selectionButton, UiText.Get(\"ExportOptions_SelectACellRangeBeforeExportingTheSelection\"));");
         source.Should().Contain("ApplyUnsupportedPdfPublishOptionHelpText(format);");
@@ -329,7 +328,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialogOpenedFromKeyboard_FocusesActiveSheetChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -342,7 +341,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialog_InvalidPageRange_RefocusesPageRangeEntry()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("FocusInvalidPageRangeInput(error);");
         source.Should().Contain("private void FocusInvalidPageRangeInput(string? error)");
@@ -360,7 +359,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialog_InvalidPdfLanguage_RefocusesLanguageEntry()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, pdfLanguageError, UiText.Get(\"ExportOptions_ExportOptions\"));");
@@ -374,7 +373,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialog_SeedsPdfLanguageFromPersistedOption()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null, ExportFormat format = ExportFormat.Pdf)");
         source.Should().Contain("_pdfLanguageBox.Text = ExportPlanner.NormalizePdfLanguage(initialPdfLanguage);");
