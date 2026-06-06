@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
-using System.IO;
 using System.Reflection;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -13,7 +12,7 @@ public sealed class GridViewMergeLookupPerformanceTests
     [Fact]
     public void RebuildMergeLookup_ReturnsBeforeAllocatingVisibleSetsWhenNoMergedRegions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.State.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.State.cs");
         var method = source[
             source.IndexOf("private void RebuildMergeLookup()", StringComparison.Ordinal)..
             source.IndexOf("private DispatcherTimer?", StringComparison.Ordinal)];
@@ -25,7 +24,7 @@ public sealed class GridViewMergeLookupPerformanceTests
     [Fact]
     public void RebuildMergeLookup_BoundsLargeMergeWorkToVisibleMetrics()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.State.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.State.cs");
         var rebuildMethod = source[
             source.IndexOf("private void RebuildMergeLookup()", StringComparison.Ordinal)..
             source.IndexOf("private Dictionary<uint, List<GridRange>> BuildVisibleRowMergeLookup", StringComparison.Ordinal)];
@@ -101,7 +100,7 @@ public sealed class GridViewMergeLookupPerformanceTests
     [Fact]
     public void RebuildMergeLookup_ReusesCacheWhenVisibleMergeSignatureIsUnchanged()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.State.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.State.cs");
         var rebuildMethod = source[
             source.IndexOf("private void RebuildMergeLookup()", StringComparison.Ordinal)..
             source.IndexOf("private void ClearMergeLookupCache()", StringComparison.Ordinal)];
@@ -142,7 +141,7 @@ public sealed class GridViewMergeLookupPerformanceTests
     [Fact]
     public void OnRender_StillRefreshesMergeLookupBeforeRenderingCells()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderDispatch.cs");
 
         source.IndexOf("RebuildMergeLookup();", StringComparison.Ordinal)
             .Should().BeLessThan(source.IndexOf("RenderCells(dc);", StringComparison.Ordinal));
