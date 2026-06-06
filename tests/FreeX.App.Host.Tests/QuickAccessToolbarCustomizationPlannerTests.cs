@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -87,7 +86,7 @@ public sealed class QuickAccessToolbarCustomizationPlannerTests
     [Fact]
     public void MainWindowQuickAccessToolbar_WiresRibbonAndQatContextMenuCustomization()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
 
         source.Should().Contain("FrameworkElement.ContextMenuOpeningEvent");
         source.Should().Contain("TryFindQuickAccessToolbarCatalogCommand");
