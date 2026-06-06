@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -213,9 +212,11 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void RemoveDuplicatesDialog_ExposesExcelStyleBulkHeaderAndColumnListControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RemoveDuplicatesDialog.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RemoveDuplicatesDialog.Planning.cs"));
-        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
+            string.Empty,
+            "RemoveDuplicatesDialog.cs",
+            "RemoveDuplicatesDialog.Planning.cs");
+        var mainWindowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("UiText.Get(\"RemoveDuplicates_SelectAll\")");
         source.Should().Contain("UiText.Get(\"RemoveDuplicates_UnselectAll\")");
@@ -242,7 +243,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void RemoveDuplicatesDialogOpenedFromKeyboard_FocusesHeaderChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RemoveDuplicatesDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RemoveDuplicatesDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -253,7 +254,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void RemoveDuplicatesDialogInvalidColumnSelection_FocusesColumnChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RemoveDuplicatesDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RemoveDuplicatesDialog.cs");
 
         source.Should().Contain("FocusFirstColumnChoice();");
         source.Should().Contain("private void FocusFirstColumnChoice()");
