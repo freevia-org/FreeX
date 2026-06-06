@@ -1159,6 +1159,12 @@ public static partial class AccessibilityCheckerService
             case "ROMAN":
                 kind = ConditionalFormulaScalarFunctionKind.Roman;
                 return true;
+            case "UNICHAR":
+                kind = ConditionalFormulaScalarFunctionKind.Unichar;
+                return true;
+            case "UNICODE":
+                kind = ConditionalFormulaScalarFunctionKind.Unicode;
+                return true;
             case "VALUE":
                 kind = ConditionalFormulaScalarFunctionKind.Value;
                 return true;
@@ -1376,6 +1382,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.ErfPrecise or
             ConditionalFormulaScalarFunctionKind.Erfc or
             ConditionalFormulaScalarFunctionKind.ErfcPrecise or
+            ConditionalFormulaScalarFunctionKind.Unichar or
+            ConditionalFormulaScalarFunctionKind.Unicode or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -2075,6 +2083,8 @@ public static partial class AccessibilityCheckerService
         Pi,
         Arabic,
         Roman,
+        Unichar,
+        Unicode,
         Value,
         NumberValue,
         Len,
@@ -2704,6 +2714,10 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaArabicFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Roman:
                     return TryEvaluateFormulaRomanFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Unichar:
+                    return TryEvaluateFormulaUnicharFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Unicode:
+                    return TryEvaluateFormulaUnicodeFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Value:
                     return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.NumberValue:
@@ -3091,6 +3105,90 @@ public static partial class AccessibilityCheckerService
                 return false;
 
             value = new TextValue(ToFormulaRoman(truncated, form));
+            return true;
+        }
+
+        private bool TryEvaluateFormulaUnicharFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            if (source is ErrorValue sourceError)
+            {
+                value = sourceError;
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedNumber(source, out var number) ||
+                number < int.MinValue ||
+                number > int.MaxValue)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            var codePoint = (int)Math.Truncate(number);
+            if (codePoint <= 0 ||
+                codePoint > 0x10FFFF ||
+                codePoint is >= 0xD800 and <= 0xDFFF)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = new TextValue(char.ConvertFromUtf32(codePoint));
+            return true;
+        }
+
+        private bool TryEvaluateFormulaUnicodeFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var source))
+                return false;
+
+            if (source is ErrorValue sourceError)
+            {
+                value = sourceError;
+                return true;
+            }
+
+            if (!TryGetFormulaCoercedText(source, out var text))
+                return false;
+
+            if (text.Length == 0)
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            if (char.IsHighSurrogate(text[0]))
+            {
+                if (text.Length < 2 || !char.IsLowSurrogate(text[1]))
+                {
+                    value = ErrorValue.Value;
+                    return true;
+                }
+
+                value = new NumberValue(char.ConvertToUtf32(text[0], text[1]));
+                return true;
+            }
+
+            if (char.IsLowSurrogate(text[0]))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = new NumberValue(text[0]);
             return true;
         }
 
@@ -4837,6 +4935,48 @@ public static partial class AccessibilityCheckerService
 
             text = textValue.Value;
             return true;
+        }
+
+        private static bool TryGetFormulaCoercedNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric:
+                    number = numeric.Value;
+                    break;
+                case DateTimeValue dateTime:
+                    number = dateTime.Value;
+                    break;
+                case BoolValue boolean:
+                    number = boolean.Value ? 1 : 0;
+                    break;
+                case BlankValue:
+                    number = 0;
+                    break;
+                case TextValue text when TryParseFormulaValueText(text.Value, out var parsed):
+                    number = parsed;
+                    break;
+                default:
+                    number = 0;
+                    return false;
+            }
+
+            return double.IsFinite(number);
+        }
+
+        private static bool TryGetFormulaCoercedText(ScalarValue value, out string text)
+        {
+            text = value switch
+            {
+                TextValue textValue => textValue.Value,
+                NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                BlankValue => string.Empty,
+                _ => string.Empty
+            };
+
+            return value is not ErrorValue && value is not RangeValue;
         }
 
         private bool TryResolveFormulaDatePart(

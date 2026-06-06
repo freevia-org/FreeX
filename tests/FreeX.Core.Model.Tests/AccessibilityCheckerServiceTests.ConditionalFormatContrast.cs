@@ -3083,6 +3083,68 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatUnicharFunctionOperands()
+    {
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR($A1)=\"A\"", "B1");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR($A1)=\"\u2603\"", "B2");
+        AssertFormulaUnicodeFunctionContrastLocations("EXACT(UNICHAR($A1),UNICHAR(128512))", "B3");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE(UNICHAR($A1))=$A1", "B2", "B3");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR(65.9)=\"A\"", FormulaUnicodeAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatUnicodeFunctionOperands()
+    {
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE($C1)=65", "B1");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE($C1)=9731", "B2");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE($C1)=128512", "B3");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE($C1)=90", "B4");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE(65)=54", FormulaUnicodeAllLocations);
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE(TRUE)=84", FormulaUnicodeAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatUnicodeFunctionsInWrappersPredicatesAndTextComparisons()
+    {
+        AssertFormulaUnicodeFunctionContrastLocations("IF(UNICODE($C1)=128512,TRUE,FALSE)", "B3");
+        AssertFormulaUnicodeFunctionContrastLocations("AND(UNICODE($C1)>64,$D1)", "B1", "B2", "B3", "B4", "B7");
+        AssertFormulaUnicodeFunctionContrastLocations("ISNUMBER(UNICODE($C1))", "B1", "B2", "B3", "B4", "B6", "B7");
+        AssertFormulaUnicodeFunctionContrastLocations("ISTEXT(UNICHAR($A1))", "B1", "B2", "B3");
+        AssertFormulaUnicodeFunctionContrastLocations("EXACT(UNICHAR($A1),LEFT($C1,2))", "B3");
+        AssertFormulaUnicodeFunctionContrastLocations("SUM(UNICODE($C1),1)=9732", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatUnicodeFunctionErrorPredicates()
+    {
+        AssertFormulaUnicodeFunctionContrastLocations("ISERROR(UNICHAR(0))", FormulaUnicodeAllLocations);
+        AssertFormulaUnicodeFunctionContrastLocations("ISERROR(UNICHAR(\"x\"))", FormulaUnicodeAllLocations);
+        AssertFormulaUnicodeFunctionContrastLocations("ISERROR(UNICODE(\"\"))", FormulaUnicodeAllLocations);
+        AssertFormulaUnicodeFunctionContrastLocations("ISERROR(UNICODE($C$8))", FormulaUnicodeAllLocations);
+        AssertFormulaUnicodeFunctionContrastLocations("ISERROR(UNICODE($C$9))", FormulaUnicodeAllLocations);
+        AssertFormulaUnicodeFunctionContrastLocations("ISNA(UNICODE(NA()))", FormulaUnicodeAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatUnicodeFunctionUnsupportedOrErrorDomainOperands()
+    {
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR()>0");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR($A1,1)=\"A\"");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR(0)=\"\"");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR(1114112)=\"\"");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR(55296)=\"\"");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR(\"x\")=\"\"");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICHAR(1E308*1E308)=\"\"");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE()>0");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE($C1,1)>0");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE(\"\")>0");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE(UNICHAR(0))>0");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE($C$8)>0");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE($C$9)>0");
+        AssertFormulaUnicodeFunctionContrastLocations("UNICODE(NA())>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateFunctionOperands()
     {
         AssertFormulaDateFunctionContrastLocations("YEAR($A1)=2023", "B1", "B2", "B4");
@@ -4128,6 +4190,42 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(number));
     }
 
+    private static Workbook CreateFormulaUnicodeFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 9, 2);
+
+        SetFormulaUnicodeFunctionContrastRow(sheet, 1, 65.9, new TextValue("Apple"), "ASCII text");
+        SetFormulaUnicodeFunctionContrastRow(sheet, 2, 9731, new TextValue("\u2603snow"), "BMP text");
+        SetFormulaUnicodeFunctionContrastRow(sheet, 3, 128512, new TextValue(char.ConvertFromUtf32(128512) + " grin"), "Supplementary text");
+        SetFormulaUnicodeFunctionContrastRow(sheet, 4, 55296, new TextValue("ZA"), "First code point text");
+        SetFormulaUnicodeFunctionContrastRow(sheet, 5, 0, new TextValue(string.Empty), "Empty text");
+        SetFormulaUnicodeFunctionContrastRow(sheet, 6, 1114112, new NumberValue(65), "Numeric text coercion");
+        SetFormulaUnicodeFunctionContrastRow(sheet, 7, -1, new BoolValue(true), "Boolean text coercion");
+        SetFormulaUnicodeFunctionContrastRow(sheet, 8, 55296, new TextValue("\uD800A"), "Unpaired high surrogate");
+        SetFormulaUnicodeFunctionContrastRow(sheet, 9, 56320, new TextValue("\uDC00"), "Unpaired low surrogate");
+
+        return workbook;
+    }
+
+    private static void SetFormulaUnicodeFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        double codePoint,
+        ScalarValue unicodeSource,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(codePoint));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), unicodeSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), new BoolValue(true));
+    }
+
     private static Workbook CreateFormulaDateFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -4391,6 +4489,21 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaBaseConversionFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaUnicodeFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaUnicodeFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
@@ -4488,6 +4601,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaNumberValueAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8"];
+
+    private static string[] FormulaUnicodeAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"];
 
     private static void AddFormulaContrastRule(
         Sheet sheet,
