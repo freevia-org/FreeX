@@ -6,6 +6,42 @@
   <string>en</string>
   <key>CFBundleDisplayName</key>
   <string>FreeX</string>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>fxl</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>FreeX Workbook</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Owner</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>xlsx</string>
+        <string>xlsm</string>
+        <string>xltx</string>
+        <string>xltm</string>
+        <string>xls</string>
+        <string>xlsb</string>
+        <string>xlt</string>
+        <string>csv</string>
+        <string>tsv</string>
+        <string>tab</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>Spreadsheet Workbooks</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+    </dict>
+  </array>
   <key>CFBundleExecutable</key>
   <string>FreeX</string>
   <key>CFBundleIdentifier</key>

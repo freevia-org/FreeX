@@ -77,6 +77,12 @@ jobs:
           test -x "$app/Contents/MacOS/FreeX"
           test -f "$app/Contents/MacOS/FreeX.dll"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" = "FreeX"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeName' "$app/Contents/Info.plist")" = "FreeX Workbook"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "fxl"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$app/Contents/Info.plist")" = "Owner"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeName' "$app/Contents/Info.plist")" = "Spreadsheet Workbooks"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")" = "xlsx"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")" = "Alternate"
           if [[ "$runtime" == "osx-arm64" ]]; then
             lipo -archs "$app/Contents/MacOS/FreeX" | grep -qw arm64
           else
