@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -345,7 +344,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotStyleGalleryDialog_LabelsStyleGalleryWithAccessKeyAndAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotStyleGalleryDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotStyleGalleryDialog.cs");
 
         source.Should().Contain("new Label { Content = UiText.Get(\"PivotStyleGallery_PivotTableStyle\"), Target = _styleGallery");
         source.Should().Contain("AutomationProperties.SetName(_styleGallery, UiText.Get(\"PivotStyleGallery_PivotTableStyleGallery\"));");
@@ -366,7 +365,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void MainWindow_PivotStyleGalleryButton_OpensLightweightGalleryInsteadOfOptionsDialog()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotDesignCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
         var handlerSource = source[
             source.IndexOf("private void PivotStyleGalleryBtn_Click", StringComparison.Ordinal)..
             source.IndexOf("private void PivotRowHeadersBtn_Click", StringComparison.Ordinal)];
@@ -381,7 +380,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void MainWindow_PivotStyleOptionButtons_PreserveCurrentStyleAndToggleOnlyTargetFlag()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotDesignCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
 
         AssertPivotStyleOptionHandler(source, "PivotRowHeadersBtn_Click", "!pivotTable.ShowRowHeaders");
         AssertPivotStyleOptionHandler(source, "PivotColumnHeadersBtn_Click", "!pivotTable.ShowColumnHeaders");
@@ -406,7 +405,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableOptionsDialog_UsesExcelStyleTabbedOptionShell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableOptionsDialog.cs");
 
         foreach (var content in new[]
         {

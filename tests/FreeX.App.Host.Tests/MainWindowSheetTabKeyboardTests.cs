@@ -396,7 +396,7 @@ public sealed class MainWindowSheetTabKeyboardTests
     [Fact]
     public void SheetTabMouseMove_CancelsStaleDragWhenLeftButtonIsReleased()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
         var mouseMove = source[
             source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)..
             source.IndexOf("private void SheetTab_MouseLeftButtonUp", StringComparison.Ordinal)];
@@ -412,8 +412,8 @@ public sealed class MainWindowSheetTabKeyboardTests
     [Fact]
     public void SheetTabDrag_CapturesMouseAndClearsStateOnReleaseOrLostCapture()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         var mouseDown = source[
             source.IndexOf("private void SheetTab_MouseLeftButtonDown", StringComparison.Ordinal)..
@@ -442,7 +442,7 @@ public sealed class MainWindowSheetTabKeyboardTests
     [Fact]
     public void SheetTabLabelDoubleClick_RenamesOnlyForLeftButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
         var labelMouseDown = source[
             source.IndexOf("private void SheetTab_LabelMouseDown", StringComparison.Ordinal)..
             source.IndexOf("private void RenameSheetFromTab", StringComparison.Ordinal)];
