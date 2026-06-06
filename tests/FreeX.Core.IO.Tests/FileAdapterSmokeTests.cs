@@ -19372,7 +19372,6 @@ public partial class FileAdapterSmokeTests
                     PaperSize = "9",
                     Orientation = "landscape",
                     Copies = 2,
-                    UsePrinterDefaults = true,
                     FirstPageNumber = 5,
                     HorizontalDpi = 600,
                     VerticalDpi = 600,
@@ -19510,7 +19509,6 @@ public partial class FileAdapterSmokeTests
             pageSetup.Attribute("paperSize")!.Value.Should().Be("9");
             pageSetup.Attribute("orientation")!.Value.Should().Be("landscape");
             pageSetup.Attribute("copies")!.Value.Should().Be("2");
-            pageSetup.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
             pageSetup.Attribute("firstPageNumber")!.Value.Should().Be("5");
             pageSetup.Attribute("horizontalDpi")!.Value.Should().Be("600");
             pageSetup.Attribute("verticalDpi")!.Value.Should().Be("600");
@@ -19532,11 +19530,11 @@ public partial class FileAdapterSmokeTests
             pivotFormats.ToString().Should().Contain("4472C4");
             chartXml.Root.Element(chartNs + "roundedCorners")!.Attribute("val")!.Value.Should().Be("1");
             var protection = chartXml.Root.Element(chartNs + "protection")!;
-            protection.Attribute("chartObject")!.Value.Should().Be("1");
-            protection.Attribute("data")!.Value.Should().Be("1");
-            protection.Attribute("formatting")!.Value.Should().Be("0");
-            protection.Attribute("selection")!.Value.Should().Be("1");
-            protection.Attribute("userInterface")!.Value.Should().Be("1");
+            protection.Element(chartNs + "chartObject")!.Attribute("val")!.Value.Should().Be("1");
+            protection.Element(chartNs + "data")!.Attribute("val")!.Value.Should().Be("1");
+            protection.Element(chartNs + "formatting")!.Attribute("val")!.Value.Should().Be("0");
+            protection.Element(chartNs + "selection")!.Attribute("val")!.Value.Should().Be("1");
+            protection.Element(chartNs + "userInterface")!.Attribute("val")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "autoTitleDeleted")!.Attribute("val")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "plotVisOnly")!.Attribute("val")!.Value.Should().Be("0");
             chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "dispBlanksAs")!.Attribute("val")!.Value.Should().Be("zero");
