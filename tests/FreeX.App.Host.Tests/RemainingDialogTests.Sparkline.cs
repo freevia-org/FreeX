@@ -1,6 +1,5 @@
 using FreeX.Core.Model;
 using FluentAssertions;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -66,7 +65,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void MainWindow_WiresSparklineRangePickersToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.InsertCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
 
         source.Should().Contain("new SparklineDialog(");
         source.Should().Contain("request => ApplySparklineRangeSelection(dialog, request)");
@@ -147,7 +146,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void SparklineDialogRangePicker_RefocusesSelectedInputWithKeyboardFocus()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SparklineDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SparklineDialog.cs");
         var handlerSource = source[source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..];
 
         handlerSource.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest);");
@@ -159,9 +158,9 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void SparklineDialogInvalidRanges_ShowOwnedWarningAndRefocusBadInput()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SparklineDialog.cs"));
-        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SparklineDialogPlanner.cs"));
-        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.InsertCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SparklineDialog.cs");
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("SparklineDialogPlanner.cs");
+        var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
 
         source.Should().Contain("if (!ValidateInputs())");
         source.Should().Contain("SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId)");
