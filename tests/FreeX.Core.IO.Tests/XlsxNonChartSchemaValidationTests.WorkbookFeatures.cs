@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -287,6 +288,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorkbookAdditionalViews_SanitizesInvalidWorkbookViewAttributesForSchemaValidity()
+    {
+        var workbook = CreateWorkbookAdditionalViewsSourceWorkbook();
+        workbook.AdditionalViews!.Views[0].NativeXml = """
+            <workbookView xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" visibility="invalid" minimized="maybe" showHorizontalScroll="maybe" showVerticalScroll="maybe" showSheetTabs="maybe" tabRatio="not-a-number" firstSheet="not-a-number" activeTab="not-a-number" xWindow="not-a-number" windowWidth="not-a-number" />
+            """;
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var bookViews = ReadWorkbookChildElement(saved, "bookViews");
+        var additionalView = bookViews.Elements(bookViews.Name.Namespace + "workbookView").Skip(1).Single();
+        AssertWorkbookViewInvalidAttributesRemoved(additionalView);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorkbookAdditionalViews_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorkbookAdditionalViewsSourceWorkbook());
@@ -312,6 +329,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceWorkbookViews.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookViewAttributesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookAdditionalViewsSourceWorkbook());
+        SetWorkbookViewInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var bookViews = ReadWorkbookChildElement(saved, "bookViews");
+        var primaryView = bookViews.Elements(bookViews.Name.Namespace + "workbookView").First();
+        AssertWorkbookViewInvalidAttributesRemoved(primaryView);
     }
 
     private static Workbook CreateWorkbookFileVersionSourceWorkbook()
@@ -479,5 +522,47 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("additional view"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
+    }
+
+    private static void SetWorkbookViewInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookView = workbookXml.Root!
+            .Element(workbookNs + "bookViews")!
+            .Elements(workbookNs + "workbookView")
+            .First();
+        SetInvalidWorkbookViewAttributes(workbookView);
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    private static void SetInvalidWorkbookViewAttributes(XElement workbookView)
+    {
+        workbookView.SetAttributeValue("visibility", "invalid");
+        workbookView.SetAttributeValue("minimized", "maybe");
+        workbookView.SetAttributeValue("showHorizontalScroll", "maybe");
+        workbookView.SetAttributeValue("showVerticalScroll", "maybe");
+        workbookView.SetAttributeValue("showSheetTabs", "maybe");
+        workbookView.SetAttributeValue("tabRatio", "not-a-number");
+        workbookView.SetAttributeValue("firstSheet", "not-a-number");
+        workbookView.SetAttributeValue("activeTab", "not-a-number");
+        workbookView.SetAttributeValue("xWindow", "not-a-number");
+        workbookView.SetAttributeValue("windowWidth", "not-a-number");
+    }
+
+    private static void AssertWorkbookViewInvalidAttributesRemoved(XElement workbookView)
+    {
+        workbookView.Attribute("visibility").Should().BeNull();
+        workbookView.Attribute("minimized").Should().BeNull();
+        workbookView.Attribute("showHorizontalScroll").Should().BeNull();
+        workbookView.Attribute("showVerticalScroll").Should().BeNull();
+        workbookView.Attribute("showSheetTabs").Should().BeNull();
+        workbookView.Attribute("tabRatio").Should().BeNull();
+        workbookView.Attribute("firstSheet").Should().BeNull();
+        workbookView.Attribute("activeTab").Should().BeNull();
+        workbookView.Attribute("xWindow").Should().BeNull();
+        workbookView.Attribute("windowWidth").Should().BeNull();
     }
 }

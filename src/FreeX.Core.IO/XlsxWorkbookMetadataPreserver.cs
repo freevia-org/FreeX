@@ -380,6 +380,8 @@ internal static class XlsxWorkbookMetadataPreserver
                 ];
                 if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView, modeledPrimaryViewAttributes))
                     changed = true;
+                if (XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(targetView))
+                    changed = true;
                 mergedTargetViewKeys.Add(sourceViewKey);
                 continue;
             }
@@ -424,6 +426,7 @@ internal static class XlsxWorkbookMetadataPreserver
     {
         var clone = new XElement(sourceView);
         RemoveOfficeRevisionAttributes(clone);
+        XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(clone);
         return clone;
     }
 
