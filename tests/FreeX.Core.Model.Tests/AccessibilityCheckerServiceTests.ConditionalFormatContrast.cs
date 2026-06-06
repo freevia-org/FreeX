@@ -1137,6 +1137,49 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAcothScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("ACOTH($A1/50)>0.54", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("ACOTH(-$A1/50)<-0.54", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("ACOTH($A1/100)>1", "B4");
+        AssertFormulaArithmeticContrastLocations("ACOTH(2)>0.54", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ACOTH(-2)<-0.54", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUND(ACOTH(1/TANH(1)),2)=1", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAcothScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(ACOTH($A1/50)>0.54,TRUE,FALSE)", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("AND(ACOTH($A1/50)>0.54,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ACOTH($A1/100))", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAcothScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(ACOTH($A1/50),1)>1.54", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("AVERAGE(ACOTH($A1/50),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatAcothScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("ACOTH()>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(1)>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(-1)>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(0)>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(0.5)>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(-0.5)>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ACOTH(EXP(1000))>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAcotScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("ACOT($A1/100)>0.8", "B1", "B3");
