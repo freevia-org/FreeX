@@ -540,6 +540,30 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatUnaryArithmeticOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("-$A1<-100", "B4");
+        AssertFormulaArithmeticContrastLocations("$A1%>=1", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(-$A1<-100,TRUE,FALSE)", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPowerArithmeticOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("$A1^2>10000", "B4");
+        AssertFormulaArithmeticContrastLocations("($A1-70)^2>=900", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND($A1%>=1,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER($A1^2)", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateUnaryPowerOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("SUM($A1:$A3)%>2", "B1", "B2");
+        AssertFormulaArithmeticContrastLocations("SUM($A1:$A3)^2>70000", "B2");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticReferenceShifting()
     {
         AssertFormulaArithmeticContrastLocations("$A1+$A2>=175", "B1", "B2", "B3");
@@ -561,6 +585,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("MEDIAN($A1)+1>0");
         AssertFormulaArithmeticContrastLocations("$A1&1>0");
         AssertFormulaArithmeticContrastLocations("A0+1>0");
+        AssertFormulaArithmeticContrastLocations("(($A1-$A1)^-1)>0");
+        AssertFormulaArithmeticContrastLocations("-\"5\">0");
+        AssertFormulaArithmeticContrastLocations("MEDIAN($A1)^2>0");
+        AssertFormulaArithmeticContrastLocations("$A1^\"2\">0");
     }
 
     [Fact]
