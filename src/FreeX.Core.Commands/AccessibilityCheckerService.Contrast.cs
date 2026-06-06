@@ -977,6 +977,9 @@ public static partial class AccessibilityCheckerService
             case "SINH":
                 kind = ConditionalFormulaScalarFunctionKind.Sinh;
                 return true;
+            case "ASINH":
+                kind = ConditionalFormulaScalarFunctionKind.Asinh;
+                return true;
             case "COSH":
                 kind = ConditionalFormulaScalarFunctionKind.Cosh;
                 return true;
@@ -1091,6 +1094,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Radians or
             ConditionalFormulaScalarFunctionKind.Sin or
             ConditionalFormulaScalarFunctionKind.Sinh or
+            ConditionalFormulaScalarFunctionKind.Asinh or
             ConditionalFormulaScalarFunctionKind.Cosh or
             ConditionalFormulaScalarFunctionKind.Tanh or
             ConditionalFormulaScalarFunctionKind.Asin or
@@ -1674,6 +1678,7 @@ public static partial class AccessibilityCheckerService
         Radians,
         Sin,
         Sinh,
+        Asinh,
         Cosh,
         Tanh,
         Asin,
@@ -2208,6 +2213,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Radians:
                 case ConditionalFormulaScalarFunctionKind.Sin:
                 case ConditionalFormulaScalarFunctionKind.Sinh:
+                case ConditionalFormulaScalarFunctionKind.Asinh:
                 case ConditionalFormulaScalarFunctionKind.Cosh:
                 case ConditionalFormulaScalarFunctionKind.Tanh:
                 case ConditionalFormulaScalarFunctionKind.Asin:
@@ -2510,6 +2516,9 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sinh:
                     result = Math.Sinh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Asinh:
+                    result = Math.Asinh(first);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cosh:
                     result = Math.Cosh(first);
