@@ -1,10 +1,5 @@
 ﻿using System;
-using System.IO;
-using System.Reflection;
-using FreeX.App.UI;
-using FreeX.Core.Model;
 using FluentAssertions;
-using System.Windows;
 
 namespace FreeX.App.UI.Tests;
 
@@ -13,9 +8,9 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Overlays.cs"));
-        var gridViewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
-        var propertiesSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.cs");
+        var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
+        var propertiesSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Properties.cs");
         var renderManualPageBreaks = source[
             source.IndexOf("private void RenderManualPageBreaks", StringComparison.Ordinal)..
             source.IndexOf("public enum FormulaTraceArrowLayoutKind", StringComparison.Ordinal)];
@@ -36,8 +31,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void FormulaTraceLayoutPlanner_AvoidsPerArrowLinqMetricScansAndLookupAllocations()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "FormulaTraceLayoutPlanner.cs"));
-        var overlaysSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("FormulaTraceLayoutPlanner.cs");
+        var overlaysSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.cs");
         var calculateLayouts = source[
             source.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateLayouts", StringComparison.Ordinal)..
             source.IndexOf("public static void VisitLayouts<TConsumer>", StringComparison.Ordinal)];
@@ -105,8 +100,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void DrawFormulaTraceArrow_ReusesCachedFrozenArrowDrawingsAndArrowHeadGeometry()
     {
-        var overlaysSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Overlays.cs"));
-        var propertiesSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var overlaysSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.cs");
+        var propertiesSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Properties.cs");
         var renderFormulaTraceArrows = overlaysSource[
             overlaysSource.IndexOf("private void RenderFormulaTraceArrows", StringComparison.Ordinal)..
             overlaysSource.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateFormulaTraceArrowLayouts", StringComparison.Ordinal)];
