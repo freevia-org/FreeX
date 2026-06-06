@@ -139,6 +139,9 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_strikethrough_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_increase_font_size_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_decrease_font_size_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_fill_color_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_clear_fill_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_font_color_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_currency_format_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_percent_format_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_comma_style_menu_item=true\" \"$launch_smoke_report\"");

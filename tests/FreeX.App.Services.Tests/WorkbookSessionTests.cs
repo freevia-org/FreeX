@@ -1434,6 +1434,203 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeFontColor_AppliesStylePreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var color = new CellColor(255, 0, 0);
+        sheet.SetCell(a1, new TextValue("value"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(1, 2, 3),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)
+        });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.SetSelectedRangeFontColor(color);
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartFontColor.Should().Be(color);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        var a1Style = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
+        a1Style.FontColor.Should().Be(color);
+        a1Style.FontThemeColor.Should().BeNull();
+        var b1StyleOnly = sheet.GetStyleOnly(b1.Row, b1.Col);
+        b1StyleOnly.Should().NotBeNull();
+        workbook.GetStyle(b1StyleOnly!.Value).FontColor.Should().Be(color);
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .Style!.FontColor.Should().Be(color);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        var restoredA1Style = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
+        restoredA1Style.FontColor.Should().Be(new CellColor(1, 2, 3));
+        restoredA1Style.FontThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1));
+        sheet.GetStyleOnly(b1.Row, b1.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void SetSelectedRangeFillColor_UsesStyleOnlyFormattingForEmptyCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var color = new CellColor(255, 255, 0);
+        sheet.SetStyleOnly(a1.Row, a1.Col, workbook.RegisterStyle(new CellStyle { Bold = true }));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeFillColor(color);
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(a1).Should().BeNull();
+        var styleOnly = sheet.GetStyleOnly(a1.Row, a1.Col);
+        styleOnly.Should().NotBeNull();
+        workbook.GetStyle(styleOnly!.Value).Bold.Should().BeTrue();
+        session.SelectedRangeStartFillColor.Should().Be(color);
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .Style!.FillColor.Should().Be(color);
+    }
+
+    [Fact]
+    public void ClearSelectedRangeFill_ClearsDirectThemeAndPatternFillPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FillColor = new CellColor(255, 255, 0),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            FillPatternStyle = CellFillPatternStyle.Gray125,
+            FillPatternColor = new CellColor(10, 20, 30),
+            FillPatternThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3)
+        });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.ClearSelectedRangeFill();
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartFillColor.Should().BeNull();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+        var style = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
+        style.FillColor.Should().BeNull();
+        style.FillThemeColor.Should().BeNull();
+        style.FillPatternStyle.Should().Be(CellFillPatternStyle.None);
+        style.FillPatternColor.Should().BeNull();
+        style.FillPatternThemeColor.Should().BeNull();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        var restoredStyle = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
+        restoredStyle.FillColor.Should().Be(new CellColor(255, 255, 0));
+        restoredStyle.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2));
+        restoredStyle.FillPatternStyle.Should().Be(CellFillPatternStyle.Gray125);
+        restoredStyle.FillPatternColor.Should().Be(new CellColor(10, 20, 30));
+        restoredStyle.FillPatternThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3));
+    }
+
+    [Fact]
+    public void SetSelectedRangeFillColor_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(1, 2, 3) });
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeFillColor(new CellColor(255, 255, 0));
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FillColor.Should().Be(new CellColor(1, 2, 3));
+    }
+
+    [Fact]
+    public void SetSelectedRangeFontColor_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(1, 2, 3) });
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeFontColor(new CellColor(255, 0, 0));
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FontColor.Should().Be(new CellColor(1, 2, 3));
+    }
+
+    [Fact]
+    public void ClearSelectedRangeFill_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(1, 2, 3) });
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.ClearSelectedRangeFill();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FillColor.Should().Be(new CellColor(1, 2, 3));
+    }
+
+    [Fact]
     public void SetSelectedRangeNumberFormat_AppliesStylePreservesSelectionUndoAndViewportText()
     {
         var workbook = CreateWorkbook();

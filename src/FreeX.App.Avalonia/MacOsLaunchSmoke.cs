@@ -84,6 +84,9 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeStrikethroughMenuItem,
     bool HasNativeIncreaseFontSizeMenuItem,
     bool HasNativeDecreaseFontSizeMenuItem,
+    bool HasNativeFillColorMenuItem,
+    bool HasNativeClearFillMenuItem,
+    bool HasNativeFontColorMenuItem,
     bool HasNativeCurrencyFormatMenuItem,
     bool HasNativePercentFormatMenuItem,
     bool HasNativeCommaStyleMenuItem,
@@ -125,6 +128,9 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeStrikethroughMenuItem &&
         HasNativeIncreaseFontSizeMenuItem &&
         HasNativeDecreaseFontSizeMenuItem &&
+        HasNativeFillColorMenuItem &&
+        HasNativeClearFillMenuItem &&
+        HasNativeFontColorMenuItem &&
         HasNativeCurrencyFormatMenuItem &&
         HasNativePercentFormatMenuItem &&
         HasNativeCommaStyleMenuItem &&
@@ -214,6 +220,9 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}",
                 $"native_increase_font_size_menu_item={FormatBool(snapshot.HasNativeIncreaseFontSizeMenuItem)}",
                 $"native_decrease_font_size_menu_item={FormatBool(snapshot.HasNativeDecreaseFontSizeMenuItem)}",
+                $"native_fill_color_menu_item={FormatBool(snapshot.HasNativeFillColorMenuItem)}",
+                $"native_clear_fill_menu_item={FormatBool(snapshot.HasNativeClearFillMenuItem)}",
+                $"native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}",
                 $"native_currency_format_menu_item={FormatBool(snapshot.HasNativeCurrencyFormatMenuItem)}",
                 $"native_percent_format_menu_item={FormatBool(snapshot.HasNativePercentFormatMenuItem)}",
                 $"native_comma_style_menu_item={FormatBool(snapshot.HasNativeCommaStyleMenuItem)}",

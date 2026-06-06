@@ -137,6 +137,12 @@ public sealed class WorkbookSession
     public double SelectedRangeStartFontSize =>
         GetCellStyle(SelectedRange.Start).FontSize;
 
+    public CellColor SelectedRangeStartFontColor =>
+        GetCellStyle(SelectedRange.Start).FontColor;
+
+    public CellColor? SelectedRangeStartFillColor =>
+        GetCellStyle(SelectedRange.Start).FillColor;
+
     public string SelectedRangeStartNumberFormat =>
         GetCellStyle(SelectedRange.Start).NumberFormat;
 
@@ -503,6 +509,45 @@ public sealed class WorkbookSession
                     new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(FontSize: fontSize)),
                     new SetRowHeightCommand(ActiveSheet.Id, range.Start.Row, range.End.Row, rowHeight)
                 ]));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult SetSelectedRangeFontColor(CellColor fontColor)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(FontColor: fontColor)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult SetSelectedRangeFillColor(CellColor fillColor)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(FillColor: fillColor)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult ClearSelectedRangeFill()
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(ClearFill: true)));
         if (!result.Success)
             return result;
 

@@ -33,6 +33,8 @@ public sealed class MainWindow : Window
     private const double MinimumDisplayedColumnWidth = 54;
     private const double MinimumDisplayedRowHeight = 22;
     private const string NativeWorkbookExtension = ".fxl";
+    private static readonly CellColor DefaultFillColor = new(255, 255, 0);
+    private static readonly CellColor DefaultFontColor = new(255, 0, 0);
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
     private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
@@ -75,6 +77,8 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _strikethroughButton = new();
     private readonly Button _increaseFontSizeButton = new();
     private readonly Button _decreaseFontSizeButton = new();
+    private readonly Button _fillColorButton = new();
+    private readonly Button _fontColorButton = new();
     private readonly Button _currencyFormatButton = new();
     private readonly Button _percentFormatButton = new();
     private readonly Button _commaStyleButton = new();
@@ -105,6 +109,9 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _strikethroughMenuItem = new();
     private readonly NativeMenuItem _increaseFontSizeMenuItem = new();
     private readonly NativeMenuItem _decreaseFontSizeMenuItem = new();
+    private readonly NativeMenuItem _fillColorMenuItem = new();
+    private readonly NativeMenuItem _clearFillMenuItem = new();
+    private readonly NativeMenuItem _fontColorMenuItem = new();
     private readonly NativeMenuItem _currencyFormatMenuItem = new();
     private readonly NativeMenuItem _percentFormatMenuItem = new();
     private readonly NativeMenuItem _commaStyleMenuItem = new();
@@ -296,6 +303,15 @@ public sealed class MainWindow : Window
         _decreaseFontSizeMenuItem.Header = "Decrease Font Size";
         _decreaseFontSizeMenuItem.Click += (_, _) => DecreaseSelectedRangeFontSize();
 
+        _fillColorMenuItem.Header = "Fill Color";
+        _fillColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFillColor();
+
+        _clearFillMenuItem.Header = "No Fill";
+        _clearFillMenuItem.Click += (_, _) => ClearSelectedRangeFill();
+
+        _fontColorMenuItem.Header = "Font Color";
+        _fontColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFontColor();
+
         _currencyFormatMenuItem.Header = "Accounting Number Format";
         _currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();
 
@@ -367,6 +383,9 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_strikethroughMenuItem);
         formatMenu.Items.Add(_increaseFontSizeMenuItem);
         formatMenu.Items.Add(_decreaseFontSizeMenuItem);
+        formatMenu.Items.Add(_fillColorMenuItem);
+        formatMenu.Items.Add(_clearFillMenuItem);
+        formatMenu.Items.Add(_fontColorMenuItem);
         formatMenu.Items.Add(new NativeMenuItemSeparator());
         formatMenu.Items.Add(_currencyFormatMenuItem);
         formatMenu.Items.Add(_percentFormatMenuItem);
@@ -551,6 +570,16 @@ public sealed class MainWindow : Window
         _decreaseFontSizeButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _decreaseFontSizeButton.Click += DecreaseFontSizeButton_Click;
 
+        _fillColorButton.Content = "Fill";
+        _fillColorButton.Padding = new Thickness(10, 4);
+        _fillColorButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _fillColorButton.Click += FillColorButton_Click;
+
+        _fontColorButton.Content = "A";
+        _fontColorButton.Padding = new Thickness(10, 4);
+        _fontColorButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _fontColorButton.Click += FontColorButton_Click;
+
         _currencyFormatButton.Content = "$";
         _currencyFormatButton.Padding = new Thickness(10, 4);
         _currencyFormatButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -665,6 +694,8 @@ public sealed class MainWindow : Window
                     _strikethroughButton,
                     _increaseFontSizeButton,
                     _decreaseFontSizeButton,
+                    _fillColorButton,
+                    _fontColorButton,
                     _currencyFormatButton,
                     _percentFormatButton,
                     _commaStyleButton,
@@ -779,6 +810,8 @@ public sealed class MainWindow : Window
         _strikethroughButton.IsEnabled = isIdle;
         _increaseFontSizeButton.IsEnabled = isIdle;
         _decreaseFontSizeButton.IsEnabled = isIdle;
+        _fillColorButton.IsEnabled = isIdle;
+        _fontColorButton.IsEnabled = isIdle;
         _currencyFormatButton.IsEnabled = isIdle;
         _percentFormatButton.IsEnabled = isIdle;
         _commaStyleButton.IsEnabled = isIdle;
@@ -810,6 +843,9 @@ public sealed class MainWindow : Window
         _strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;
         _increaseFontSizeMenuItem.IsEnabled = _increaseFontSizeButton.IsEnabled;
         _decreaseFontSizeMenuItem.IsEnabled = _decreaseFontSizeButton.IsEnabled;
+        _fillColorMenuItem.IsEnabled = _fillColorButton.IsEnabled;
+        _clearFillMenuItem.IsEnabled = _fillColorButton.IsEnabled;
+        _fontColorMenuItem.IsEnabled = _fontColorButton.IsEnabled;
         _currencyFormatMenuItem.IsEnabled = _currencyFormatButton.IsEnabled;
         _percentFormatMenuItem.IsEnabled = _percentFormatButton.IsEnabled;
         _commaStyleMenuItem.IsEnabled = _commaStyleButton.IsEnabled;
@@ -1490,6 +1526,16 @@ public sealed class MainWindow : Window
         DecreaseSelectedRangeFontSize();
     }
 
+    private void FillColorButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplyDefaultSelectedRangeFillColor();
+    }
+
+    private void FontColorButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplyDefaultSelectedRangeFontColor();
+    }
+
     private void CurrencyFormatButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeCurrencyFormat();
@@ -1889,6 +1935,76 @@ public sealed class MainWindow : Window
         RefreshShell($"Decreased font size for {rangeReference}");
     }
 
+    private void ApplyDefaultSelectedRangeFillColor()
+    {
+        ApplySelectedRangeFillColor(DefaultFillColor);
+    }
+
+    private void ApplySelectedRangeFillColor(CellColor fillColor)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeFillColor(fillColor);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Fill Color failed.");
+            return;
+        }
+
+        RefreshShell($"Applied fill color to {rangeReference}");
+    }
+
+    private void ClearSelectedRangeFill()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.ClearSelectedRangeFill();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "No Fill failed.");
+            return;
+        }
+
+        RefreshShell($"Cleared fill from {rangeReference}");
+    }
+
+    private void ApplyDefaultSelectedRangeFontColor()
+    {
+        ApplySelectedRangeFontColor(DefaultFontColor);
+    }
+
+    private void ApplySelectedRangeFontColor(CellColor fontColor)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeFontColor(fontColor);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Font Color failed.");
+            return;
+        }
+
+        RefreshShell($"Applied font color to {rangeReference}");
+    }
+
     private void ApplySelectedRangeCurrencyFormat()
     {
         ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
@@ -2097,6 +2213,9 @@ public sealed class MainWindow : Window
             HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, "Strikethrough"),
             HasNativeIncreaseFontSizeMenuItem: HasNativeMenuItem(_increaseFontSizeMenuItem, "Increase Font Size", requireGesture: false),
             HasNativeDecreaseFontSizeMenuItem: HasNativeMenuItem(_decreaseFontSizeMenuItem, "Decrease Font Size", requireGesture: false),
+            HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, "Fill Color", requireGesture: false),
+            HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, "No Fill", requireGesture: false),
+            HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, "Font Color", requireGesture: false),
             HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, "Accounting Number Format", requireGesture: false),
             HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, "Percent Style", requireGesture: false),
             HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, "Comma Style", requireGesture: false),

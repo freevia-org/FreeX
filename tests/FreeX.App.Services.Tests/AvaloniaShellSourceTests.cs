@@ -76,6 +76,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _strikethroughMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _increaseFontSizeMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _decreaseFontSizeMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _fillColorMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _clearFillMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _fontColorMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _currencyFormatMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _percentFormatMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _commaStyleMenuItem = new();");
@@ -135,6 +138,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_increaseFontSizeMenuItem.Click += (_, _) => IncreaseSelectedRangeFontSize();");
         source.Should().Contain("_decreaseFontSizeMenuItem.Header = \"Decrease Font Size\";");
         source.Should().Contain("_decreaseFontSizeMenuItem.Click += (_, _) => DecreaseSelectedRangeFontSize();");
+        source.Should().Contain("_fillColorMenuItem.Header = \"Fill Color\";");
+        source.Should().Contain("_fillColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFillColor();");
+        source.Should().Contain("_clearFillMenuItem.Header = \"No Fill\";");
+        source.Should().Contain("_clearFillMenuItem.Click += (_, _) => ClearSelectedRangeFill();");
+        source.Should().Contain("_fontColorMenuItem.Header = \"Font Color\";");
+        source.Should().Contain("_fontColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFontColor();");
         source.Should().Contain("_currencyFormatMenuItem.Header = \"Accounting Number Format\";");
         source.Should().Contain("_currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();");
         source.Should().Contain("_percentFormatMenuItem.Header = \"Percent Style\";");
@@ -179,6 +188,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_strikethroughMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_increaseFontSizeMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_decreaseFontSizeMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_fillColorMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_clearFillMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_fontColorMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_currencyFormatMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_percentFormatMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_commaStyleMenuItem);");
@@ -213,6 +225,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;");
         source.Should().Contain("_increaseFontSizeMenuItem.IsEnabled = _increaseFontSizeButton.IsEnabled;");
         source.Should().Contain("_decreaseFontSizeMenuItem.IsEnabled = _decreaseFontSizeButton.IsEnabled;");
+        source.Should().Contain("_fillColorMenuItem.IsEnabled = _fillColorButton.IsEnabled;");
+        source.Should().Contain("_clearFillMenuItem.IsEnabled = _fillColorButton.IsEnabled;");
+        source.Should().Contain("_fontColorMenuItem.IsEnabled = _fontColorButton.IsEnabled;");
         source.Should().Contain("_currencyFormatMenuItem.IsEnabled = _currencyFormatButton.IsEnabled;");
         source.Should().Contain("_percentFormatMenuItem.IsEnabled = _percentFormatButton.IsEnabled;");
         source.Should().Contain("_commaStyleMenuItem.IsEnabled = _commaStyleButton.IsEnabled;");
@@ -272,6 +287,9 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}");
         smokeSource.Should().Contain("native_increase_font_size_menu_item={FormatBool(snapshot.HasNativeIncreaseFontSizeMenuItem)}");
         smokeSource.Should().Contain("native_decrease_font_size_menu_item={FormatBool(snapshot.HasNativeDecreaseFontSizeMenuItem)}");
+        smokeSource.Should().Contain("native_fill_color_menu_item={FormatBool(snapshot.HasNativeFillColorMenuItem)}");
+        smokeSource.Should().Contain("native_clear_fill_menu_item={FormatBool(snapshot.HasNativeClearFillMenuItem)}");
+        smokeSource.Should().Contain("native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}");
         smokeSource.Should().Contain("native_currency_format_menu_item={FormatBool(snapshot.HasNativeCurrencyFormatMenuItem)}");
         smokeSource.Should().Contain("native_percent_format_menu_item={FormatBool(snapshot.HasNativePercentFormatMenuItem)}");
         smokeSource.Should().Contain("native_comma_style_menu_item={FormatBool(snapshot.HasNativeCommaStyleMenuItem)}");
@@ -309,6 +327,9 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, \"Strikethrough\")");
         windowSource.Should().Contain("HasNativeIncreaseFontSizeMenuItem: HasNativeMenuItem(_increaseFontSizeMenuItem, \"Increase Font Size\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeDecreaseFontSizeMenuItem: HasNativeMenuItem(_decreaseFontSizeMenuItem, \"Decrease Font Size\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, \"Fill Color\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, \"No Fill\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, \"Font Color\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, \"Accounting Number Format\", requireGesture: false)");
         windowSource.Should().Contain("HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, \"Percent Style\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, \"Comma Style\", requireGesture: false)");
@@ -650,6 +671,41 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"Decreased font size for {rangeReference}\");");
         source.Should().Contain("var fontSize = style?.FontSize ?? CellStyle.Default.FontSize;");
         source.Should().Contain("FontSize = fontSize,");
+    }
+
+    [Fact]
+    public void MainWindow_WiresFillAndFontColorThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private static readonly CellColor DefaultFillColor = new(255, 255, 0);");
+        source.Should().Contain("private static readonly CellColor DefaultFontColor = new(255, 0, 0);");
+        source.Should().Contain("private readonly Button _fillColorButton = new();");
+        source.Should().Contain("private readonly Button _fontColorButton = new();");
+        source.Should().Contain("_fillColorButton.Content = \"Fill\";");
+        source.Should().Contain("_fontColorButton.Content = \"A\";");
+        source.Should().Contain("_fillColorButton.Click += FillColorButton_Click;");
+        source.Should().Contain("_fontColorButton.Click += FontColorButton_Click;");
+        source.Should().Contain("_fillColorButton.IsEnabled = isIdle;");
+        source.Should().Contain("_fontColorButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void FillColorButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplyDefaultSelectedRangeFillColor();");
+        source.Should().Contain("private void FontColorButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplyDefaultSelectedRangeFontColor();");
+        source.Should().Contain("private void ApplySelectedRangeFillColor(CellColor fillColor)");
+        source.Should().Contain("var result = _session.SetSelectedRangeFillColor(fillColor);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Fill Color failed.\");");
+        source.Should().Contain("RefreshShell($\"Applied fill color to {rangeReference}\");");
+        source.Should().Contain("private void ClearSelectedRangeFill()");
+        source.Should().Contain("var result = _session.ClearSelectedRangeFill();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"No Fill failed.\");");
+        source.Should().Contain("RefreshShell($\"Cleared fill from {rangeReference}\");");
+        source.Should().Contain("private void ApplySelectedRangeFontColor(CellColor fontColor)");
+        source.Should().Contain("var result = _session.SetSelectedRangeFontColor(fontColor);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Font Color failed.\");");
+        source.Should().Contain("RefreshShell($\"Applied font color to {rangeReference}\");");
+        source.Should().Contain("var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor");
+        source.Should().Contain(": Brush(style.ResolveFontColor(_session.Workbook.Theme));");
     }
 
     [Fact]
