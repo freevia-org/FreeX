@@ -941,6 +941,9 @@ public static partial class AccessibilityCheckerService
             case "ACOS":
                 kind = ConditionalFormulaScalarFunctionKind.Acos;
                 return true;
+            case "ATAN":
+                kind = ConditionalFormulaScalarFunctionKind.Atan;
+                return true;
             case "COS":
                 kind = ConditionalFormulaScalarFunctionKind.Cos;
                 return true;
@@ -1034,6 +1037,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Sin or
             ConditionalFormulaScalarFunctionKind.Asin or
             ConditionalFormulaScalarFunctionKind.Acos or
+            ConditionalFormulaScalarFunctionKind.Atan or
             ConditionalFormulaScalarFunctionKind.Cos or
             ConditionalFormulaScalarFunctionKind.Tan or
             ConditionalFormulaScalarFunctionKind.Value or
@@ -1594,6 +1598,7 @@ public static partial class AccessibilityCheckerService
         Sin,
         Asin,
         Acos,
+        Atan,
         Cos,
         Tan,
         Pi,
@@ -2112,6 +2117,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Sin:
                 case ConditionalFormulaScalarFunctionKind.Asin:
                 case ConditionalFormulaScalarFunctionKind.Acos:
+                case ConditionalFormulaScalarFunctionKind.Atan:
                 case ConditionalFormulaScalarFunctionKind.Cos:
                 case ConditionalFormulaScalarFunctionKind.Tan:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
@@ -2327,6 +2333,9 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = Math.Acos(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Atan:
+                    result = Math.Atan(first);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cos:
                     result = Math.Cos(first);
