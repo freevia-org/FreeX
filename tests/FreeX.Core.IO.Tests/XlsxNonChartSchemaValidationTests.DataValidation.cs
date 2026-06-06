@@ -76,6 +76,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void DataValidationAdditionalTypes_ProducesSchemaValidWorkbook()
+    {
+        using var stream = Save(CreateAdditionalDataValidationTypesSourceWorkbook());
+
+        SchemaErrors(stream).Should().BeEmpty();
+        AssertAdditionalDataValidationTypesAuthored(stream);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithDataValidation_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateDataValidationSourceWorkbook());
@@ -90,6 +99,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         var sheet = workbook.GetSheetAt(0);
         sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadDataValidationsElement(saved)
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceDataValidations.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithAdditionalDataValidationTypes_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateAdditionalDataValidationTypesSourceWorkbook());
+        var sourceDataValidations = ReadDataValidationsElement(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new NumberValue(42));
 
         using var saved = new MemoryStream();
         adapter.Save(workbook, saved);
@@ -134,6 +171,78 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         });
 
         return workbook;
+    }
+
+    private static Workbook CreateAdditionalDataValidationTypesSourceWorkbook()
+    {
+        var workbook = new Workbook("DataValidationAdditionalTypesPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        var decimalValidation = new DataValidation
+        {
+            AppliesTo = Range(sheet, 2, 3, 5, 3),
+            Type = DvType.Decimal,
+            Operator = DvOperator.Between,
+            Formula1 = "0",
+            Formula2 = "1",
+            AlertStyle = DvAlertStyle.Information,
+            ErrorTitle = "Decimal required",
+            ErrorMessage = "Enter a value from 0 through 1"
+        };
+        decimalValidation.AdditionalRanges.Add(Range(sheet, 2, 8, 5, 8));
+        sheet.DataValidations.Add(decimalValidation);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, 2, 4, 5, 4),
+            Type = DvType.Date,
+            Operator = DvOperator.GreaterThanOrEqual,
+            Formula1 = "DATE(2026,1,1)"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, 2, 5, 5, 5),
+            Type = DvType.Time,
+            Operator = DvOperator.Between,
+            Formula1 = "TIME(8,0,0)",
+            Formula2 = "TIME(18,0,0)"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, 2, 6, 5, 6),
+            Type = DvType.TextLength,
+            Operator = DvOperator.LessThanOrEqual,
+            Formula1 = "50"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, 2, 7, 5, 7),
+            Type = DvType.Custom,
+            Formula1 = "LEN(G2)>0"
+        });
+
+        return workbook;
+    }
+
+    private static void AssertAdditionalDataValidationTypesAuthored(Stream stream)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dataValidations = ReadDataValidationsElement(stream);
+        var validations = dataValidations.Elements(worksheetNs + "dataValidation").ToList();
+
+        dataValidations.Attribute("count")!.Value.Should().Be("5");
+        validations
+            .Select(element => element.Attribute("type")?.Value)
+            .Should()
+            .BeEquivalentTo(["decimal", "date", "time", "textLength", "custom"]);
+        validations
+            .Single(element => element.Attribute("type")?.Value == "decimal")
+            .Attribute("sqref")!
+            .Value
+            .Should()
+            .Contain("C2:C5")
+            .And
+            .Contain("H2:H5");
     }
 
     private static XElement ReadDataValidationsElement(Stream stream)
