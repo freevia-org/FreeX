@@ -1,6 +1,6 @@
 # Third-Party License Audit
 
-**Date:** 2026-05-30
+**Date:** 2026-06-06
 
 ## Scope
 
@@ -10,18 +10,20 @@ This audit checked NuGet packages restored by:
 dotnet restore FreeX.slnx --disable-parallel -v:minimal
 ```
 
-The scan covered 15 `project.assets.json` files under `src/` and `tests/`.
+The scan covered 18 `project.assets.json` files under `src/` and `tests/`.
 
 ## Result
 
-- 41 unique restored NuGet packages were found.
+- 66 unique restored NuGet packages were found.
 - Every restored package is listed in [../THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md).
-- Runtime packages use MIT, Apache-2.0, or BSD-3-Clause style licenses.
+- Runtime packages use MIT, Apache-2.0, BSD-3-Clause, or BSD-style package
+  licenses.
 - A package-provided `NOTICE` file was found for Microsoft.NET.ILLink.Tasks
   and is now reflected in [../THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md).
-- Package-provided license files were found for FluentAssertions,
-  Newtonsoft.Json, SharpVectors.Wpf, and System.IO.Packaging and are now
-  reflected in [../THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md).
+- Package-provided license files were found for Avalonia.Angle.Windows.Natives,
+  FluentAssertions, Newtonsoft.Json, SharpVectors.Wpf, and
+  System.IO.Packaging and are now reflected in
+  [../THIRD_PARTY_LICENSES.md](../../THIRD_PARTY_LICENSES.md).
 
 ## Open Compliance Watch Item
 

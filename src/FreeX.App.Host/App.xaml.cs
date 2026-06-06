@@ -3,6 +3,7 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -100,14 +101,8 @@ public partial class App : Application
         services.AddSingleton<FormulaEvaluator>();
         services.AddSingleton<RecalcEngine>();
         services.AddSingleton<IViewportService, ViewportService>();
-        services.AddSingleton<IFileAdapter, XlsxFileAdapter>();
-        services.AddSingleton<IFileAdapter, LegacyXlsFileAdapter>();
-        services.AddSingleton<IFileAdapter, CsvFileAdapter>();
-        services.AddSingleton<IFileAdapter>(_ => new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t'));
-        services.AddSingleton<IFileAdapter>(_ => new DelimitedTextFileAdapter(".tsv", "TSV (Tab-separated values)", '\t'));
-        services.AddSingleton<IFileAdapter>(_ => new DelimitedTextFileAdapter(".tab", "Tab-delimited text", '\t'));
-        services.AddSingleton<IFileAdapter, SpreadsheetXmlFileAdapter>();
-        services.AddSingleton<IFileAdapter, NativeJsonAdapter>();
+        foreach (var adapter in WorkbookFileAdapterCatalog.CreateDefaultAdapters())
+            services.AddSingleton<IFileAdapter>(adapter);
 
         // Workbook (single workbook for now, will expand later)
         services.AddSingleton(_ => NewWorkbookFactory.Create(options));

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -71,7 +72,7 @@ public sealed class OpenWorkbookLoader
                 }
                 return adapter.Load(fileStream);
             });
-        ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
+        WorkbookOpenNormalizer.ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
 
         if (WorkbookFormulaScanner.HasFormulas(workbook) &&
             ShouldRecalculateLoadedFormulas(workbook, adapter, isOpenXmlExcelPackage))
@@ -165,20 +166,6 @@ public sealed class OpenWorkbookLoader
             useAsync: true);
     }
 
-    private static void ApplyTextWorkbookSheetName(Workbook workbook, string extension, string displayName)
-    {
-        if (workbook.Sheets.Count != 1 || !IsTextWorkbookExtension(extension))
-            return;
-
-        workbook.Sheets[0].Name = CreateExcelCompatibleSheetName(displayName);
-    }
-
-    private static bool IsTextWorkbookExtension(string extension) =>
-        extension.Equals(".csv", StringComparison.OrdinalIgnoreCase) ||
-        extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) ||
-        extension.Equals(".tsv", StringComparison.OrdinalIgnoreCase) ||
-        extension.Equals(".tab", StringComparison.OrdinalIgnoreCase);
-
     private static bool IsOpenXmlExcelPackageExtension(string extension) =>
         extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ||
         extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) ||
@@ -200,20 +187,6 @@ public sealed class OpenWorkbookLoader
         return true;
     }
 
-    private static string CreateExcelCompatibleSheetName(string displayName)
-    {
-        var chars = displayName
-            .Trim()
-            .Select(ch => IsInvalidSheetNameCharacter(ch) ? '_' : ch)
-            .ToArray();
-        var sheetName = new string(chars).Trim();
-        if (sheetName.Length == 0)
-            sheetName = "Sheet1";
-        return sheetName.Length <= 31 ? sheetName : sheetName[..31].Trim();
-    }
-
-    private static bool IsInvalidSheetNameCharacter(char ch) =>
-        ch is ':' or '\\' or '/' or '?' or '*' or '[' or ']';
 }
 
 public sealed record OpenProgressUpdate(string Title, string Detail, double? Percent);

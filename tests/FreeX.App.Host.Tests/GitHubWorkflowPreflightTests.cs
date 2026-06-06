@@ -67,6 +67,8 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("must declare an explicit shell");
         script.Should().Contain("must stay within the workflow workspace");
         script.Should().Contain("workflow YAML must use spaces for indentation");
+        script.Should().Contain("$allowedActionMajors");
+        script.Should().Contain("must use supported major");
         script.Should().Contain("Validated $($workflows.Count) GitHub workflow file(s).");
     }
 
@@ -378,6 +380,41 @@ public sealed class GitHubWorkflowPreflightTests
         result.ExitCode.Should().NotBe(0);
         (result.Output + result.Error).Should().Contain("GitHub workflow validation failed");
         (result.Output + result.Error).Should().Contain("actions/checkout@main");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsForUnsupportedKnownActionMajor()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        File.WriteAllText(
+            Path.Combine(temp.Path, "broken.yml"),
+            """
+            name: Broken
+
+            on:
+              workflow_dispatch:
+
+            permissions:
+              contents: read
+
+            jobs:
+              build:
+                runs-on: windows-latest
+                timeout-minutes: 5
+                steps:
+                  - name: Checkout
+                    uses: actions/checkout@v99
+                    with:
+                      persist-credentials: false
+            """);
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-WorkflowDirectory \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain("actions/checkout@v99");
+        (result.Output + result.Error).Should().Contain("must use supported major v6");
     }
 
     private static PowerShellResult RunScriptFromTemporaryWorkingDirectory(string scriptPath, string arguments)

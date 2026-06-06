@@ -26,6 +26,12 @@ if ($workflows.Count -eq 0) {
     throw "No GitHub workflow files were found in $resolvedWorkflowDirectory."
 }
 
+$allowedActionMajors = @{
+    "actions/checkout" = "v6"
+    "actions/setup-dotnet" = "v5"
+    "actions/upload-artifact" = "v7"
+}
+
 $errors = [System.Collections.Generic.List[string]]::new()
 foreach ($workflow in $workflows) {
     $content = Get-Content -LiteralPath $workflow.FullName -Raw
@@ -147,6 +153,13 @@ foreach ($workflow in $workflows) {
 
         if ($actionRef -notmatch "@v\d+$") {
             $errors.Add("$($workflow.Name): action '$actionRef' must be pinned to an explicit major version such as @v7.")
+            continue
+        }
+
+        $actionName = $actionRef.Substring(0, $actionRef.LastIndexOf("@", [System.StringComparison]::Ordinal))
+        $actionMajor = $actionRef.Substring($actionRef.LastIndexOf("@", [System.StringComparison]::Ordinal) + 1)
+        if ($allowedActionMajors.ContainsKey($actionName) -and $allowedActionMajors[$actionName] -ne $actionMajor) {
+            $errors.Add("$($workflow.Name): action '$actionRef' must use supported major $($allowedActionMajors[$actionName]).")
         }
     }
 }

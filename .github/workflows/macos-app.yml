@@ -72,9 +72,25 @@ jobs:
           cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist "$app/Contents/Info.plist"
           plutil -lint "$app/Contents/Info.plist"
           chmod +x "$app/Contents/MacOS/FreeX"
+          test -f "$app/Contents/MacOS/FreeX"
+          test -x "$app/Contents/MacOS/FreeX"
+          test -f "$app/Contents/MacOS/FreeX.dll"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" = "FreeX"
+          if [[ "$runtime" == "osx-arm64" ]]; then
+            lipo -archs "$app/Contents/MacOS/FreeX" | grep -qw arm64
+          else
+            lipo -archs "$app/Contents/MacOS/FreeX" | grep -qw x86_64
+          fi
           codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
           shasum -a 256 "$zip_path" > "$zip_path.sha256"
+          unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
+          rm -rf "$unzip_root"
+          mkdir -p "$unzip_root"
+          unzip -q "$zip_path" -d "$unzip_root"
+          test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
+          test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v7

@@ -9,7 +9,7 @@
   <key>CFBundleExecutable</key>
   <string>FreeX</string>
   <key>CFBundleIdentifier</key>
-  <string>io.github.tonyxmelon.freex</string>
+  <string>io.github.tony-xmelon.freex</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
@@ -24,32 +24,5 @@
   <string>12.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
-  <key>CFBundleDocumentTypes</key>
-  <array>
-    <dict>
-      <key>CFBundleTypeExtensions</key>
-      <array>
-        <string>xlsx</string>
-        <string>xlsm</string>
-        <string>xltx</string>
-        <string>xltm</string>
-        <string>xls</string>
-        <string>xlsb</string>
-        <string>xlt</string>
-        <string>csv</string>
-        <string>tsv</string>
-        <string>tab</string>
-        <string>txt</string>
-        <string>xml</string>
-        <string>fxl</string>
-      </array>
-      <key>CFBundleTypeName</key>
-      <string>Spreadsheet workbook</string>
-      <key>CFBundleTypeRole</key>
-      <string>Viewer</string>
-      <key>LSHandlerRank</key>
-      <string>Alternate</string>
-    </dict>
-  </array>
 </dict>
 </plist>
