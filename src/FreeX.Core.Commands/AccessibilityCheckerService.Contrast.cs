@@ -902,6 +902,9 @@ public static partial class AccessibilityCheckerService
             case "MOD":
                 kind = ConditionalFormulaScalarFunctionKind.Mod;
                 return true;
+            case "VALUE":
+                kind = ConditionalFormulaScalarFunctionKind.Value;
+                return true;
             case "LEN":
                 kind = ConditionalFormulaScalarFunctionKind.Len;
                 return true;
@@ -963,6 +966,7 @@ public static partial class AccessibilityCheckerService
         {
             ConditionalFormulaScalarFunctionKind.Abs or
             ConditionalFormulaScalarFunctionKind.Int or
+            ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
             ConditionalFormulaScalarFunctionKind.Lower or
@@ -1461,6 +1465,7 @@ public static partial class AccessibilityCheckerService
         Int,
         Round,
         Mod,
+        Value,
         Len,
         Upper,
         Lower,
@@ -1944,6 +1949,8 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Round:
                 case ConditionalFormulaScalarFunctionKind.Mod:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Value:
+                    return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Len:
                     if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var lenText))
                     {
@@ -2050,6 +2057,56 @@ public static partial class AccessibilityCheckerService
                 return false;
 
             value = new NumberValue(result);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaValueFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var text) ||
+                !TryParseFormulaValueText(text, out var number))
+            {
+                return false;
+            }
+
+            value = new NumberValue(number);
+            return true;
+        }
+
+        private static bool TryParseFormulaValueText(string text, out double number)
+        {
+            number = 0;
+            var candidate = text.Trim();
+            if (candidate.Length == 0)
+                return false;
+
+            var isPercent = candidate.EndsWith('%');
+            if (isPercent)
+            {
+                candidate = candidate[..^1].TrimEnd();
+                if (candidate.Length == 0)
+                    return false;
+            }
+
+            var styles = System.Globalization.NumberStyles.Float |
+                System.Globalization.NumberStyles.AllowThousands;
+            if (!double.TryParse(candidate, styles, System.Globalization.CultureInfo.InvariantCulture, out number) ||
+                !double.IsFinite(number))
+            {
+                return false;
+            }
+
+            if (isPercent)
+            {
+                number /= 100;
+                if (!double.IsFinite(number))
+                    return false;
+            }
+
             return true;
         }
 
