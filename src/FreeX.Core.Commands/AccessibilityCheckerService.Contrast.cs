@@ -905,6 +905,9 @@ public static partial class AccessibilityCheckerService
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
                 return true;
+            case "SIGN":
+                kind = ConditionalFormulaScalarFunctionKind.Sign;
+                return true;
             case "POWER":
                 kind = ConditionalFormulaScalarFunctionKind.Power;
                 return true;
@@ -982,6 +985,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Abs or
             ConditionalFormulaScalarFunctionKind.Int or
             ConditionalFormulaScalarFunctionKind.Sqrt or
+            ConditionalFormulaScalarFunctionKind.Sign or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -1526,6 +1530,7 @@ public static partial class AccessibilityCheckerService
         Round,
         Mod,
         Sqrt,
+        Sign,
         Power,
         Value,
         Len,
@@ -2030,6 +2035,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Round:
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
+                case ConditionalFormulaScalarFunctionKind.Sign:
                 case ConditionalFormulaScalarFunctionKind.Power:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Value:
@@ -2169,6 +2175,13 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = Math.Sqrt(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Sign:
+                    result = first > 0
+                        ? 1
+                        : first < 0
+                            ? -1
+                            : 0;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Power:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var exponent))
