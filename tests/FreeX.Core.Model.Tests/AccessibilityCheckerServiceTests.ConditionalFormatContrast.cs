@@ -587,6 +587,62 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSumProductScalarComparisons()
+    {
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(3,4)=12", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(\"5\",2)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(TRUE,2)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(DATE(2023,1,2),1)=44928", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSumProductRanges()
+    {
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$A3)>250", "B2");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$A3,$A2:$A4)>16000", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($D1:$D3)=12", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($D1:$D3,$A1:$A3)=1200", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSumProductWrappersPredicatesAndNestedAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("AND(SUMPRODUCT($A1:$A3,$A2:$A4)>16000,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("IF(SUMPRODUCT($A1:$A3)>250,TRUE,FALSE)", "B2");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(SUMPRODUCT($A1:$A3,$A2:$A4))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(SUMPRODUCT($A1:$A3,$A2:$A4),1)>16000", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(SUM($A1:$A2),$A1^2)>1500000", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatSumProductUnsupportedOperands()
+    {
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT()>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$A2,$A1:$A3)>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$B1,$A1:$A2)>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(A0,$A1)>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(NA(),1)>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(KURT($A1),$A1)>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1,KURT($A1))>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1/0,1)>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT(1E308,1E308)>0");
+        AssertFormulaAggregateContrastLocations("SUMPRODUCT($A1:$A3,2)>0");
+
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var label = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1E308));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1E308));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), ErrorValue.Value);
+        sheet.SetCell(label, new TextValue("Overflow source"));
+        AddFormulaContrastRule(sheet, label, label, "SUMPRODUCT($A$1:$A$2)>0");
+        AddFormulaContrastRule(sheet, label, label, "SUMPRODUCT($C$1)=0");
+
+        FindLowContrastCellTextIssues(workbook).Should().BeEmpty();
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPairwiseAggregateScalarComparisons()
     {
         AssertFormulaAggregateContrastLocations("SUMXMY2(3,4)=1", "B1", "B2", "B3", "B4");
