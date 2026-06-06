@@ -8,7 +8,7 @@ internal static class RibbonAdaptiveStateApplicator
 {
     private const double IconOnlySplitButtonDropdownColumnWidth = 14;
     private const double SmallSplitButtonDropdownColumnWidth = 20;
-    private const double LargeSplitButtonDropdownChevronTopMargin = 8;
+    private const double LargeSplitButtonDropdownChevronTopMargin = 7;
 
     private static readonly DependencyProperty CollapsedButtonFootprintTargetsProperty =
         DependencyProperty.RegisterAttached(
