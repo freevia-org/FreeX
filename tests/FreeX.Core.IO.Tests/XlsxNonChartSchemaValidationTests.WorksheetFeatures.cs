@@ -113,6 +113,46 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void WorksheetSortStateAndDataConsolidation_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorksheetSortStateAndDataConsolidationSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorksheetSortStateAndDataConsolidation_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorksheetSortStateAndDataConsolidationSourceWorkbook());
+        var sourceSortState = ReadWorksheetChildElement(source, "sortState");
+        var sourceDataConsolidate = ReadWorksheetChildElement(source, "dataConsolidate");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "sortState")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceSortState.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "dataConsolidate")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceDataConsolidate.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void NamedRanges_ProducesSchemaValidWorkbook()
     {
         var workbook = new Workbook("NamedRanges");
@@ -658,6 +698,53 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             CustomFiltersAnd: false,
             NativeCustomFiltersAttributes: null,
             NativeFilterXmls: []));
+        return workbook;
+    }
+
+    private static Workbook CreateWorksheetSortStateAndDataConsolidationSourceWorkbook()
+    {
+        var workbook = new Workbook("SortConsolidationPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(11));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(9));
+
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            Reference = "A1:B5",
+            CaseSensitive = true,
+            SortMethod = "stroke",
+            Conditions =
+            [
+                new WorksheetSortConditionModel
+                {
+                    Reference = "A2:A5",
+                    Descending = true
+                }
+            ]
+        };
+        sheet.DataConsolidation = new WorksheetDataConsolidationModel
+        {
+            Function = "sum",
+            LeftLabels = true,
+            TopLabels = true,
+            Link = true,
+            References =
+            [
+                new WorksheetDataConsolidationReferenceModel
+                {
+                    Reference = "A1:B5",
+                    Sheet = "Data"
+                }
+            ]
+        };
         return workbook;
     }
 
