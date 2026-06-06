@@ -299,6 +299,49 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesRichInlineStringFontFamiliesForSchemaValidity()
+    {
+        var workbook = new Workbook("RichInlineStringPatchFonts");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Rich inline font"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("editable"));
+
+        var source = Save(workbook);
+        AddCssFontFamilyRichInlineString(source);
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(loaded, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 2), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rFont = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+            .Root!
+            .Element(workbookNs + "sheetData")!
+            .Descendants(workbookNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A1")
+            .Element(workbookNs + "is")!
+            .Element(workbookNs + "r")!
+            .Element(workbookNs + "rPr")!
+            .Element(workbookNs + "rFont")!;
+        rFont.Attribute("val")!.Value.Should().Be("Google Sans");
+
+        saved.Position = 0;
+        SchemaErrors(saved).Should().BeEmpty();
+    }
+
     private static void AddCssFontFamilyRichInlineString(MemoryStream stream)
     {
         stream.Position = 0;
