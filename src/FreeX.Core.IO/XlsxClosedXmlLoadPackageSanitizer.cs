@@ -15,6 +15,7 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasWorksheetSheetViewSchemaIssues,
     bool? HasWorkbookViewSchemaIssues,
     bool? HasWorkbookCalculationPropertySchemaIssues,
+    bool? HasWorkbookFileRecoveryPropertySchemaIssues,
     IReadOnlySet<string>? MergeCellWorksheetPathsToStrip);
 
 internal static class XlsxClosedXmlLoadPackageSanitizer
@@ -84,6 +85,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 NormalizeWorkbookViews(archive);
             if (requirements.HasWorkbookCalculationPropertySchemaIssues)
                 NormalizeWorkbookCalculationProperties(archive);
+            if (requirements.HasWorkbookFileRecoveryPropertySchemaIssues)
+                NormalizeWorkbookFileRecoveryProperties(archive);
             if (requirements.MergeCellWorksheetPathsToStrip is { Count: > 0 } mergeCellWorksheetPaths)
                 RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
             if (requirements.HasDocumentPropertiesPackageGraphIssues)
@@ -195,11 +198,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasWorksheetSheetViewSchemaIssues, archive, HasWorksheetSheetViewSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorkbookViewSchemaIssues, archive, HasWorkbookViewSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorkbookCalculationPropertySchemaIssues, archive, HasWorkbookCalculationPropertySchemaIssues),
+                ResolveKnownOrScan(knownHints.HasWorkbookFileRecoveryPropertySchemaIssues, archive, HasWorkbookFileRecoveryPropertySchemaIssues),
                 knownHints.MergeCellWorksheetPathsToStrip);
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, null);
         }
         finally
         {
@@ -222,7 +226,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hints.HasDocumentPropertiesPackageGraphIssues is not { } hasDocumentPropertiesPackageGraphIssues ||
             hints.HasWorksheetSheetViewSchemaIssues is not { } hasWorksheetSheetViewSchemaIssues ||
             hints.HasWorkbookViewSchemaIssues is not { } hasWorkbookViewSchemaIssues ||
-            hints.HasWorkbookCalculationPropertySchemaIssues is not { } hasWorkbookCalculationPropertySchemaIssues)
+            hints.HasWorkbookCalculationPropertySchemaIssues is not { } hasWorkbookCalculationPropertySchemaIssues ||
+            hints.HasWorkbookFileRecoveryPropertySchemaIssues is not { } hasWorkbookFileRecoveryPropertySchemaIssues)
         {
             return false;
         }
@@ -250,6 +255,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasWorksheetSheetViewSchemaIssues,
             hasWorkbookViewSchemaIssues,
             hasWorkbookCalculationPropertySchemaIssues,
+            hasWorkbookFileRecoveryPropertySchemaIssues,
             hints.MergeCellWorksheetPathsToStrip);
         return true;
     }
@@ -364,6 +370,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasWorksheetSheetViewSchemaIssues,
         bool HasWorkbookViewSchemaIssues,
         bool HasWorkbookCalculationPropertySchemaIssues,
+        bool HasWorkbookFileRecoveryPropertySchemaIssues,
         IReadOnlySet<string>? MergeCellWorksheetPathsToStrip)
     {
         public bool RequiresAny =>
@@ -377,6 +384,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasWorksheetSheetViewSchemaIssues ||
             HasWorkbookViewSchemaIssues ||
             HasWorkbookCalculationPropertySchemaIssues ||
+            HasWorkbookFileRecoveryPropertySchemaIssues ||
             MergeCellWorksheetPathsToStrip is { Count: > 0 };
     }
 
@@ -507,7 +515,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
         if ((requirements.HasPivotPackageMetadata ||
              requirements.HasWorkbookViewSchemaIssues ||
-             requirements.HasWorkbookCalculationPropertySchemaIssues) &&
+             requirements.HasWorkbookCalculationPropertySchemaIssues ||
+             requirements.HasWorkbookFileRecoveryPropertySchemaIssues) &&
             string.Equals(normalizedPath, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
         {
             WriteTransformedWorkbookEntry(sourceEntry, targetArchive);
@@ -572,6 +581,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
         if (workbookXml.Root?.Element(workbookNs + "calcPr") is { } calcPr)
             XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
+        foreach (var fileRecoveryPr in workbookXml.Root?.Elements(workbookNs + "fileRecoveryPr") ?? [])
+            XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
         WriteXmlEntry(sourceEntry, targetArchive, workbookXml);
     }
 
@@ -1223,6 +1234,47 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         {
             XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
+    }
+
+    private static bool HasWorkbookFileRecoveryPropertySchemaIssues(ZipArchive archive)
+    {
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return false;
+
+        try
+        {
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var changed = false;
+            foreach (var fileRecoveryPr in workbookXml.Root?.Elements(XName.Get(
+                         "fileRecoveryPr",
+                         "http://schemas.openxmlformats.org/spreadsheetml/2006/main")) ?? [])
+            {
+                changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
+            }
+
+            return changed;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static void NormalizeWorkbookFileRecoveryProperties(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        var changed = false;
+        foreach (var fileRecoveryPr in workbookXml.Root?.Elements(workbookNs + "fileRecoveryPr") ?? [])
+            changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
+
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
     }
 
     private static void RemoveWorksheetDynamicFilters(ZipArchive archive)
