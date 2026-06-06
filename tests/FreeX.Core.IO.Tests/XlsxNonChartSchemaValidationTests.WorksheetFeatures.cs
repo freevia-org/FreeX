@@ -575,6 +575,52 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetCustomPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetCustomPropertiesSourceWorkbook());
+        SetWorksheetCustomPropertiesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.CustomProperties[0] = sheet.CustomProperties[0] with { Id = 8 };
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetCustomPropertiesSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetCustomPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetCustomPropertiesSourceWorkbook());
+        SetWorksheetCustomPropertiesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetCustomPropertiesSanitized(saved);
+    }
+
 
     [Fact]
     public void WorksheetDiagnostics_ProducesSchemaValidWorkbook()
@@ -2338,6 +2384,57 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
         sheet.CustomProperties.Add(new WorksheetCustomProperty("FreeXModeledProperty", 7));
         return workbook;
+    }
+
+    private static void SetWorksheetCustomPropertiesInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var customProperties = worksheetXml.Root!.Element(worksheetNs + "customProperties")!;
+        customProperties.SetAttributeValue("nativeContainer", "kept");
+        customProperties.Add(
+            new XElement(worksheetNs + "nativeCustomPropertiesChild"),
+            new XElement(
+                worksheetNs + "customPr",
+                new XAttribute("name", ""),
+                new XAttribute("id", "9"),
+                new XAttribute("unsupportedAttr", "removed")));
+
+        var customProperty = customProperties.Element(worksheetNs + "customPr")!;
+        customProperty.SetAttributeValue("unsupportedAttr", "kept");
+        customProperty.Add(new XElement(worksheetNs + "nativeCustomPrChild"));
+        worksheetXml.Root!.Add(new XElement(
+            worksheetNs + "customProperties",
+            new XAttribute("nativeDuplicateContainer", "removed")));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetCustomPropertiesSanitized(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var customProperties = worksheetXml.Root!
+            .Elements(worksheetNs + "customProperties")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        customProperties.Attribute("nativeContainer").Should().BeNull();
+        customProperties.Element(worksheetNs + "nativeCustomPropertiesChild").Should().BeNull();
+
+        var customProperty = customProperties.Elements(worksheetNs + "customPr")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        customProperty.Attribute("name")!.Value.Should().Be("FreeXModeledProperty");
+        customProperty.Attribute("id").Should().BeNull();
+        customProperty.Attribute(relNs + "id")!.Value.Should().NotBeNullOrWhiteSpace();
+        customProperty.Attribute("unsupportedAttr").Should().BeNull();
+        customProperty.Elements().Should().BeEmpty();
     }
 
     private static Workbook CreateWorksheetDiagnosticsSourceWorkbook()
