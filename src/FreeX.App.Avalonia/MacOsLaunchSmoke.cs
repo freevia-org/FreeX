@@ -82,6 +82,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeUnderlineMenuItem,
     bool HasNativeDoubleUnderlineMenuItem,
     bool HasNativeStrikethroughMenuItem,
+    bool HasNativeCurrencyFormatMenuItem,
+    bool HasNativePercentFormatMenuItem,
+    bool HasNativeCommaStyleMenuItem,
+    bool HasNativeIncreaseDecimalMenuItem,
+    bool HasNativeDecreaseDecimalMenuItem,
     bool HasNativeAlignTopMenuItem,
     bool HasNativeAlignMiddleMenuItem,
     bool HasNativeAlignBottomMenuItem,
@@ -116,6 +121,11 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeUnderlineMenuItem &&
         HasNativeDoubleUnderlineMenuItem &&
         HasNativeStrikethroughMenuItem &&
+        HasNativeCurrencyFormatMenuItem &&
+        HasNativePercentFormatMenuItem &&
+        HasNativeCommaStyleMenuItem &&
+        HasNativeIncreaseDecimalMenuItem &&
+        HasNativeDecreaseDecimalMenuItem &&
         HasNativeAlignTopMenuItem &&
         HasNativeAlignMiddleMenuItem &&
         HasNativeAlignBottomMenuItem &&
@@ -198,6 +208,11 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}",
                 $"native_double_underline_menu_item={FormatBool(snapshot.HasNativeDoubleUnderlineMenuItem)}",
                 $"native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}",
+                $"native_currency_format_menu_item={FormatBool(snapshot.HasNativeCurrencyFormatMenuItem)}",
+                $"native_percent_format_menu_item={FormatBool(snapshot.HasNativePercentFormatMenuItem)}",
+                $"native_comma_style_menu_item={FormatBool(snapshot.HasNativeCommaStyleMenuItem)}",
+                $"native_increase_decimal_menu_item={FormatBool(snapshot.HasNativeIncreaseDecimalMenuItem)}",
+                $"native_decrease_decimal_menu_item={FormatBool(snapshot.HasNativeDecreaseDecimalMenuItem)}",
                 $"native_align_top_menu_item={FormatBool(snapshot.HasNativeAlignTopMenuItem)}",
                 $"native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}",
                 $"native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}",

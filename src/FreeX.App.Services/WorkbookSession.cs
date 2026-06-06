@@ -132,6 +132,9 @@ public sealed class WorkbookSession
     public int SelectedRangeStartIndentLevel =>
         GetCellStyle(SelectedRange.Start).IndentLevel;
 
+    public string SelectedRangeStartNumberFormat =>
+        GetCellStyle(SelectedRange.Start).NumberFormat;
+
     public WorkbookSelectionStats SelectionStats =>
         _selectionStatsCache.GetOrCalculate(ActiveSheet, SelectedRange, _selectionStatsRevision);
 
@@ -455,6 +458,27 @@ public sealed class WorkbookSession
         ApplySuccessfulRangeEditResult(result, range);
         return result;
     }
+
+    public WorkbookCellEditResult SetSelectedRangeNumberFormat(string numberFormat)
+    {
+        ArgumentNullException.ThrowIfNull(numberFormat);
+
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(NumberFormat: numberFormat)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult IncreaseSelectedRangeDecimalPlaces() =>
+        SetSelectedRangeNumberFormat(NumberFormatDecimalAdjuster.AddDecimalPlace(SelectedRangeStartNumberFormat));
+
+    public WorkbookCellEditResult DecreaseSelectedRangeDecimalPlaces() =>
+        SetSelectedRangeNumberFormat(NumberFormatDecimalAdjuster.RemoveDecimalPlace(SelectedRangeStartNumberFormat));
 
     public WorkbookCellEditResult UndoLastEdit()
     {

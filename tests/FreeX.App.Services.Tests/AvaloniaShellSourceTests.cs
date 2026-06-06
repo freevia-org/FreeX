@@ -74,6 +74,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _underlineMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _doubleUnderlineMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _strikethroughMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _currencyFormatMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _percentFormatMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _commaStyleMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _increaseDecimalMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _decreaseDecimalMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _alignLeftMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _alignCenterMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _alignRightMenuItem = new();");
@@ -124,6 +129,16 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_strikethroughMenuItem.Header = \"Strikethrough\";");
         source.Should().Contain("_strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);");
         source.Should().Contain("_strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();");
+        source.Should().Contain("_currencyFormatMenuItem.Header = \"Accounting Number Format\";");
+        source.Should().Contain("_currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();");
+        source.Should().Contain("_percentFormatMenuItem.Header = \"Percent Style\";");
+        source.Should().Contain("_percentFormatMenuItem.Click += (_, _) => ApplySelectedRangePercentFormat();");
+        source.Should().Contain("_commaStyleMenuItem.Header = \"Comma Style\";");
+        source.Should().Contain("_commaStyleMenuItem.Click += (_, _) => ApplySelectedRangeCommaStyle();");
+        source.Should().Contain("_increaseDecimalMenuItem.Header = \"Increase Decimal Places\";");
+        source.Should().Contain("_increaseDecimalMenuItem.Click += (_, _) => IncreaseSelectedRangeDecimalPlaces();");
+        source.Should().Contain("_decreaseDecimalMenuItem.Header = \"Decrease Decimal Places\";");
+        source.Should().Contain("_decreaseDecimalMenuItem.Click += (_, _) => DecreaseSelectedRangeDecimalPlaces();");
         source.Should().Contain("_alignTopMenuItem.Header = \"Align Top\";");
         source.Should().Contain("_alignTopMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Top);");
         source.Should().Contain("_alignMiddleMenuItem.Header = \"Align Middle\";");
@@ -156,6 +171,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_underlineMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_doubleUnderlineMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_strikethroughMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_currencyFormatMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_percentFormatMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_commaStyleMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_increaseDecimalMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_decreaseDecimalMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignTopMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignMiddleMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignBottomMenuItem);");
@@ -183,6 +203,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;");
         source.Should().Contain("_doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;");
         source.Should().Contain("_strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;");
+        source.Should().Contain("_currencyFormatMenuItem.IsEnabled = _currencyFormatButton.IsEnabled;");
+        source.Should().Contain("_percentFormatMenuItem.IsEnabled = _percentFormatButton.IsEnabled;");
+        source.Should().Contain("_commaStyleMenuItem.IsEnabled = _commaStyleButton.IsEnabled;");
+        source.Should().Contain("_increaseDecimalMenuItem.IsEnabled = _increaseDecimalButton.IsEnabled;");
+        source.Should().Contain("_decreaseDecimalMenuItem.IsEnabled = _decreaseDecimalButton.IsEnabled;");
         source.Should().Contain("_alignTopMenuItem.IsEnabled = _alignTopButton.IsEnabled;");
         source.Should().Contain("_alignMiddleMenuItem.IsEnabled = _alignMiddleButton.IsEnabled;");
         source.Should().Contain("_alignBottomMenuItem.IsEnabled = _alignBottomButton.IsEnabled;");
@@ -235,6 +260,11 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}");
         smokeSource.Should().Contain("native_double_underline_menu_item={FormatBool(snapshot.HasNativeDoubleUnderlineMenuItem)}");
         smokeSource.Should().Contain("native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}");
+        smokeSource.Should().Contain("native_currency_format_menu_item={FormatBool(snapshot.HasNativeCurrencyFormatMenuItem)}");
+        smokeSource.Should().Contain("native_percent_format_menu_item={FormatBool(snapshot.HasNativePercentFormatMenuItem)}");
+        smokeSource.Should().Contain("native_comma_style_menu_item={FormatBool(snapshot.HasNativeCommaStyleMenuItem)}");
+        smokeSource.Should().Contain("native_increase_decimal_menu_item={FormatBool(snapshot.HasNativeIncreaseDecimalMenuItem)}");
+        smokeSource.Should().Contain("native_decrease_decimal_menu_item={FormatBool(snapshot.HasNativeDecreaseDecimalMenuItem)}");
         smokeSource.Should().Contain("native_align_top_menu_item={FormatBool(snapshot.HasNativeAlignTopMenuItem)}");
         smokeSource.Should().Contain("native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}");
         smokeSource.Should().Contain("native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}");
@@ -265,6 +295,11 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, \"Underline\")");
         windowSource.Should().Contain("HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, \"Double Underline\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, \"Strikethrough\")");
+        windowSource.Should().Contain("HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, \"Accounting Number Format\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, \"Percent Style\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, \"Comma Style\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeIncreaseDecimalMenuItem: HasNativeMenuItem(_increaseDecimalMenuItem, \"Increase Decimal Places\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeDecreaseDecimalMenuItem: HasNativeMenuItem(_decreaseDecimalMenuItem, \"Decrease Decimal Places\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, \"Align Top\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, \"Align Middle\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, \"Align Bottom\", requireGesture: false)");
@@ -574,6 +609,60 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("foreach (var decoration in TextDecorations.Strikethrough)");
         source.Should().Contain("else if (e.Key is Key.D5 or Key.NumPad5 && HasOnlyControlModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeStrikethrough();");
+    }
+
+    [Fact]
+    public void MainWindow_WiresNumberFormatsThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private const string CurrencyNumberFormat = \"$#,##0.00\";");
+        source.Should().Contain("private const string PercentNumberFormat = \"0%\";");
+        source.Should().Contain("private const string CommaNumberFormat = \"#,##0.00\";");
+        source.Should().Contain("private readonly Button _currencyFormatButton = new();");
+        source.Should().Contain("private readonly Button _percentFormatButton = new();");
+        source.Should().Contain("private readonly Button _commaStyleButton = new();");
+        source.Should().Contain("private readonly Button _increaseDecimalButton = new();");
+        source.Should().Contain("private readonly Button _decreaseDecimalButton = new();");
+        source.Should().Contain("_currencyFormatButton.Content = \"$\";");
+        source.Should().Contain("_percentFormatButton.Content = \"%\";");
+        source.Should().Contain("_commaStyleButton.Content = \",\";");
+        source.Should().Contain("_increaseDecimalButton.Content = \"+.0\";");
+        source.Should().Contain("_decreaseDecimalButton.Content = \"-.0\";");
+        source.Should().Contain("_currencyFormatButton.Click += CurrencyFormatButton_Click;");
+        source.Should().Contain("_percentFormatButton.Click += PercentFormatButton_Click;");
+        source.Should().Contain("_commaStyleButton.Click += CommaStyleButton_Click;");
+        source.Should().Contain("_increaseDecimalButton.Click += IncreaseDecimalButton_Click;");
+        source.Should().Contain("_decreaseDecimalButton.Click += DecreaseDecimalButton_Click;");
+        source.Should().Contain("_currencyFormatButton.IsEnabled = isIdle;");
+        source.Should().Contain("_percentFormatButton.IsEnabled = isIdle;");
+        source.Should().Contain("_commaStyleButton.IsEnabled = isIdle;");
+        source.Should().Contain("_increaseDecimalButton.IsEnabled = isIdle;");
+        source.Should().Contain("_decreaseDecimalButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void CurrencyFormatButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void PercentFormatButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void CommaStyleButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void IncreaseDecimalButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void DecreaseDecimalButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void ApplySelectedRangeCurrencyFormat()");
+        source.Should().Contain("ApplySelectedRangeNumberFormat(CurrencyNumberFormat, \"Applied currency format to\", \"Currency format failed.\");");
+        source.Should().Contain("private void ApplySelectedRangePercentFormat()");
+        source.Should().Contain("ApplySelectedRangeNumberFormat(PercentNumberFormat, \"Applied percent format to\", \"Percent format failed.\");");
+        source.Should().Contain("private void ApplySelectedRangeCommaStyle()");
+        source.Should().Contain("ApplySelectedRangeNumberFormat(CommaNumberFormat, \"Applied comma style to\", \"Comma style failed.\");");
+        source.Should().Contain("private void ApplySelectedRangeNumberFormat(string numberFormat, string successAction, string failureMessage)");
+        source.Should().Contain("var result = _session.SetSelectedRangeNumberFormat(numberFormat);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? failureMessage);");
+        source.Should().Contain("RefreshShell($\"{successAction} {rangeReference}\");");
+        source.Should().Contain("private void IncreaseSelectedRangeDecimalPlaces()");
+        source.Should().Contain("var result = _session.IncreaseSelectedRangeDecimalPlaces();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Increase Decimal failed.\");");
+        source.Should().Contain("RefreshShell($\"Increased decimals for {rangeReference}\");");
+        source.Should().Contain("private void DecreaseSelectedRangeDecimalPlaces()");
+        source.Should().Contain("var result = _session.DecreaseSelectedRangeDecimalPlaces();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Decrease Decimal failed.\");");
+        source.Should().Contain("RefreshShell($\"Decreased decimals for {rangeReference}\");");
+        source.Should().Contain("cell.DisplayText,");
     }
 
     [Fact]

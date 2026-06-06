@@ -22,7 +22,10 @@ namespace FreeX.App.Avalonia;
 public sealed class MainWindow : Window
 {
     private const double CellIndentLevelWidth = 12;
+    private const string CommaNumberFormat = "#,##0.00";
+    private const string CurrencyNumberFormat = "$#,##0.00";
     private const double DoubleUnderlineSecondStrokeOffset = 2;
+    private const string PercentNumberFormat = "0%";
     private const double HeaderColumnWidth = 58;
     private const double HeaderRowHeight = 28;
     private const double InitialViewportHeight = 880;
@@ -70,6 +73,11 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _underlineButton = new();
     private readonly ToggleButton _doubleUnderlineButton = new();
     private readonly ToggleButton _strikethroughButton = new();
+    private readonly Button _currencyFormatButton = new();
+    private readonly Button _percentFormatButton = new();
+    private readonly Button _commaStyleButton = new();
+    private readonly Button _increaseDecimalButton = new();
+    private readonly Button _decreaseDecimalButton = new();
     private readonly ToggleButton _alignLeftButton = new();
     private readonly ToggleButton _alignCenterButton = new();
     private readonly ToggleButton _alignRightButton = new();
@@ -93,6 +101,11 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _underlineMenuItem = new();
     private readonly NativeMenuItem _doubleUnderlineMenuItem = new();
     private readonly NativeMenuItem _strikethroughMenuItem = new();
+    private readonly NativeMenuItem _currencyFormatMenuItem = new();
+    private readonly NativeMenuItem _percentFormatMenuItem = new();
+    private readonly NativeMenuItem _commaStyleMenuItem = new();
+    private readonly NativeMenuItem _increaseDecimalMenuItem = new();
+    private readonly NativeMenuItem _decreaseDecimalMenuItem = new();
     private readonly NativeMenuItem _alignLeftMenuItem = new();
     private readonly NativeMenuItem _alignCenterMenuItem = new();
     private readonly NativeMenuItem _alignRightMenuItem = new();
@@ -273,6 +286,21 @@ public sealed class MainWindow : Window
         _strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);
         _strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();
 
+        _currencyFormatMenuItem.Header = "Accounting Number Format";
+        _currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();
+
+        _percentFormatMenuItem.Header = "Percent Style";
+        _percentFormatMenuItem.Click += (_, _) => ApplySelectedRangePercentFormat();
+
+        _commaStyleMenuItem.Header = "Comma Style";
+        _commaStyleMenuItem.Click += (_, _) => ApplySelectedRangeCommaStyle();
+
+        _increaseDecimalMenuItem.Header = "Increase Decimal Places";
+        _increaseDecimalMenuItem.Click += (_, _) => IncreaseSelectedRangeDecimalPlaces();
+
+        _decreaseDecimalMenuItem.Header = "Decrease Decimal Places";
+        _decreaseDecimalMenuItem.Click += (_, _) => DecreaseSelectedRangeDecimalPlaces();
+
         _alignTopMenuItem.Header = "Align Top";
         _alignTopMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Top);
 
@@ -327,6 +355,12 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_underlineMenuItem);
         formatMenu.Items.Add(_doubleUnderlineMenuItem);
         formatMenu.Items.Add(_strikethroughMenuItem);
+        formatMenu.Items.Add(new NativeMenuItemSeparator());
+        formatMenu.Items.Add(_currencyFormatMenuItem);
+        formatMenu.Items.Add(_percentFormatMenuItem);
+        formatMenu.Items.Add(_commaStyleMenuItem);
+        formatMenu.Items.Add(_increaseDecimalMenuItem);
+        formatMenu.Items.Add(_decreaseDecimalMenuItem);
         formatMenu.Items.Add(new NativeMenuItemSeparator());
         formatMenu.Items.Add(_alignTopMenuItem);
         formatMenu.Items.Add(_alignMiddleMenuItem);
@@ -495,6 +529,31 @@ public sealed class MainWindow : Window
         _strikethroughButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _strikethroughButton.Click += StrikethroughButton_Click;
 
+        _currencyFormatButton.Content = "$";
+        _currencyFormatButton.Padding = new Thickness(10, 4);
+        _currencyFormatButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _currencyFormatButton.Click += CurrencyFormatButton_Click;
+
+        _percentFormatButton.Content = "%";
+        _percentFormatButton.Padding = new Thickness(10, 4);
+        _percentFormatButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _percentFormatButton.Click += PercentFormatButton_Click;
+
+        _commaStyleButton.Content = ",";
+        _commaStyleButton.Padding = new Thickness(10, 4);
+        _commaStyleButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _commaStyleButton.Click += CommaStyleButton_Click;
+
+        _increaseDecimalButton.Content = "+.0";
+        _increaseDecimalButton.Padding = new Thickness(10, 4);
+        _increaseDecimalButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _increaseDecimalButton.Click += IncreaseDecimalButton_Click;
+
+        _decreaseDecimalButton.Content = "-.0";
+        _decreaseDecimalButton.Padding = new Thickness(10, 4);
+        _decreaseDecimalButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _decreaseDecimalButton.Click += DecreaseDecimalButton_Click;
+
         _alignTopButton.Content = "Top";
         _alignTopButton.Padding = new Thickness(10, 4);
         _alignTopButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -582,6 +641,11 @@ public sealed class MainWindow : Window
                     _underlineButton,
                     _doubleUnderlineButton,
                     _strikethroughButton,
+                    _currencyFormatButton,
+                    _percentFormatButton,
+                    _commaStyleButton,
+                    _increaseDecimalButton,
+                    _decreaseDecimalButton,
                     _alignTopButton,
                     _alignMiddleButton,
                     _alignBottomButton,
@@ -689,6 +753,11 @@ public sealed class MainWindow : Window
         _underlineButton.IsEnabled = isIdle;
         _doubleUnderlineButton.IsEnabled = isIdle;
         _strikethroughButton.IsEnabled = isIdle;
+        _currencyFormatButton.IsEnabled = isIdle;
+        _percentFormatButton.IsEnabled = isIdle;
+        _commaStyleButton.IsEnabled = isIdle;
+        _increaseDecimalButton.IsEnabled = isIdle;
+        _decreaseDecimalButton.IsEnabled = isIdle;
         _alignLeftButton.IsEnabled = isIdle;
         _alignCenterButton.IsEnabled = isIdle;
         _alignRightButton.IsEnabled = isIdle;
@@ -713,6 +782,11 @@ public sealed class MainWindow : Window
         _underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;
         _doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;
         _strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;
+        _currencyFormatMenuItem.IsEnabled = _currencyFormatButton.IsEnabled;
+        _percentFormatMenuItem.IsEnabled = _percentFormatButton.IsEnabled;
+        _commaStyleMenuItem.IsEnabled = _commaStyleButton.IsEnabled;
+        _increaseDecimalMenuItem.IsEnabled = _increaseDecimalButton.IsEnabled;
+        _decreaseDecimalMenuItem.IsEnabled = _decreaseDecimalButton.IsEnabled;
         _alignLeftMenuItem.IsEnabled = _alignLeftButton.IsEnabled;
         _alignCenterMenuItem.IsEnabled = _alignCenterButton.IsEnabled;
         _alignRightMenuItem.IsEnabled = _alignRightButton.IsEnabled;
@@ -1371,6 +1445,31 @@ public sealed class MainWindow : Window
         ApplySelectedRangeStrikethrough(_strikethroughButton.IsChecked == true);
     }
 
+    private void CurrencyFormatButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeCurrencyFormat();
+    }
+
+    private void PercentFormatButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangePercentFormat();
+    }
+
+    private void CommaStyleButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeCommaStyle();
+    }
+
+    private void IncreaseDecimalButton_Click(object? sender, RoutedEventArgs e)
+    {
+        IncreaseSelectedRangeDecimalPlaces();
+    }
+
+    private void DecreaseDecimalButton_Click(object? sender, RoutedEventArgs e)
+    {
+        DecreaseSelectedRangeDecimalPlaces();
+    }
+
     private void AlignTopButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeVerticalAlignment(CellVAlign.Top);
@@ -1705,6 +1804,81 @@ public sealed class MainWindow : Window
         RefreshShell($"{(enabled ? "Struck through" : "Removed strikethrough from")} {rangeReference}");
     }
 
+    private void ApplySelectedRangeCurrencyFormat()
+    {
+        ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
+    }
+
+    private void ApplySelectedRangePercentFormat()
+    {
+        ApplySelectedRangeNumberFormat(PercentNumberFormat, "Applied percent format to", "Percent format failed.");
+    }
+
+    private void ApplySelectedRangeCommaStyle()
+    {
+        ApplySelectedRangeNumberFormat(CommaNumberFormat, "Applied comma style to", "Comma style failed.");
+    }
+
+    private void ApplySelectedRangeNumberFormat(string numberFormat, string successAction, string failureMessage)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeNumberFormat(numberFormat);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? failureMessage);
+            return;
+        }
+
+        RefreshShell($"{successAction} {rangeReference}");
+    }
+
+    private void IncreaseSelectedRangeDecimalPlaces()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.IncreaseSelectedRangeDecimalPlaces();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Increase Decimal failed.");
+            return;
+        }
+
+        RefreshShell($"Increased decimals for {rangeReference}");
+    }
+
+    private void DecreaseSelectedRangeDecimalPlaces()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.DecreaseSelectedRangeDecimalPlaces();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Decrease Decimal failed.");
+            return;
+        }
+
+        RefreshShell($"Decreased decimals for {rangeReference}");
+    }
+
     private void ApplySelectedRangeWrapText(bool enabled)
     {
         if (_isOpening || _isSaving)
@@ -1836,6 +2010,11 @@ public sealed class MainWindow : Window
             HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, "Underline"),
             HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, "Double Underline", requireGesture: false),
             HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, "Strikethrough"),
+            HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, "Accounting Number Format", requireGesture: false),
+            HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, "Percent Style", requireGesture: false),
+            HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, "Comma Style", requireGesture: false),
+            HasNativeIncreaseDecimalMenuItem: HasNativeMenuItem(_increaseDecimalMenuItem, "Increase Decimal Places", requireGesture: false),
+            HasNativeDecreaseDecimalMenuItem: HasNativeMenuItem(_decreaseDecimalMenuItem, "Decrease Decimal Places", requireGesture: false),
             HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, "Align Top", requireGesture: false),
             HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, "Align Middle", requireGesture: false),
             HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, "Align Bottom", requireGesture: false),

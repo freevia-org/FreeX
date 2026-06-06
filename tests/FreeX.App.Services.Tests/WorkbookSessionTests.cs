@@ -1322,6 +1322,137 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeNumberFormat_AppliesStylePreservesSelectionUndoAndViewportText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new NumberValue(42));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.SetSelectedRangeNumberFormat("$#,##0.00");
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartNumberFormat.Should().Be("$#,##0.00");
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+        var b1StyleOnly = sheet.GetStyleOnly(b1.Row, b1.Col);
+        b1StyleOnly.Should().NotBeNull();
+        workbook.GetStyle(b1StyleOnly!.Value).NumberFormat.Should().Be("$#,##0.00");
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .DisplayText.Should().Be("$42.00");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        session.CanRedo.Should().BeTrue();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).NumberFormat.Should().Be("General");
+        sheet.GetStyleOnly(b1.Row, b1.Col).Should().BeNull();
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .DisplayText.Should().Be("42");
+    }
+
+    [Fact]
+    public void SelectedRangeStartNumberFormat_UsesStyleOnlyFormattingForEmptyCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeNumberFormat("0%");
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(a1).Should().BeNull();
+        sheet.GetStyleOnly(a1.Row, a1.Col).Should().NotBeNull();
+        session.SelectedRangeStartNumberFormat.Should().Be("0%");
+    }
+
+    [Fact]
+    public void IncreaseSelectedRangeDecimalPlaces_UsesSelectedRangeStartFormatAndRefreshesViewportText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new NumberValue(1.2));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.0" });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.IncreaseSelectedRangeDecimalPlaces();
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartNumberFormat.Should().Be("0.00");
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).NumberFormat.Should().Be("0.00");
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .DisplayText.Should().Be("1.20");
+    }
+
+    [Fact]
+    public void DecreaseSelectedRangeDecimalPlaces_UsesSelectedRangeStartFormat()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new NumberValue(1234.567));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.000" });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.DecreaseSelectedRangeDecimalPlaces();
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartNumberFormat.Should().Be("$#,##0.00");
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
+    public void SetSelectedRangeNumberFormat_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new NumberValue(10));
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeNumberFormat("0%");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).NumberFormat.Should().Be("General");
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();

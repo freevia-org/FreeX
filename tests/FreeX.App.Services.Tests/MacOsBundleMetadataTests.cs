@@ -137,6 +137,11 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_underline_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_double_underline_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_strikethrough_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_currency_format_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_percent_format_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_comma_style_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_increase_decimal_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_decrease_decimal_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_top_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_middle_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_align_bottom_menu_item=true\" \"$launch_smoke_report\"");
