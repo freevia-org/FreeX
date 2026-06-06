@@ -95,10 +95,7 @@ public sealed partial class PivotWorkflowDialogTests
 
             fieldList.SelectedItem = "Region";
             formulaBox.SelectionStart = formulaBox.Text.Length;
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             fieldList.RaiseEvent(doubleClick);
 
@@ -188,10 +185,7 @@ public sealed partial class PivotWorkflowDialogTests
 
             fieldList.SelectedIndex = 1;
             formulaBox.SelectionStart = formulaBox.Text.Length;
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             fieldList.RaiseEvent(doubleClick);
 
@@ -218,10 +212,7 @@ public sealed partial class PivotWorkflowDialogTests
 
             itemList.SelectedIndex = 1;
             formulaBox.SelectionStart = formulaBox.Text.Length;
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             itemList.RaiseEvent(doubleClick);
 

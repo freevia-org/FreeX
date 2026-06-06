@@ -47,10 +47,7 @@ public sealed partial class ScenarioManagerDialogTests
             var scenarioList = GetField<ListBox>(dialog, "_scenarioList");
             scenarioList.SelectedItem = null;
 
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
             scenarioList.RaiseEvent(doubleClick);
 
             doubleClick.Handled.Should().BeFalse();

@@ -99,14 +99,7 @@ public sealed partial class OptionsDialogSourceTests
 
 
     private static MouseButtonEventArgs CreateMouseDoubleClickEvent() =>
-
-        new(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
-
-        {
-
-            RoutedEvent = Control.MouseDoubleClickEvent
-
-        };
+        DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
 
 

@@ -1,6 +1,8 @@
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -80,6 +82,12 @@ internal static class DialogSourceTestSupport
         {
         }
     }
+
+    public static MouseButtonEventArgs CreateMouseDoubleClickEvent() =>
+        new(Mouse.PrimaryDevice, 0, MouseButton.Left)
+        {
+            RoutedEvent = Control.MouseDoubleClickEvent
+        };
 
     private static string ReadHostSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", fileName);

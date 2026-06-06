@@ -91,10 +91,7 @@ public sealed class NamedRangeDialogXamlTests
             var namesList = GetControl<ListView>(dialog, "NamesList");
 
             namesList.SelectedItem = null;
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             namesList.RaiseEvent(doubleClick);
 

@@ -15,10 +15,7 @@ public sealed partial class InsertFunctionDialogTests
             var listBox = GetPrivateControl<ListBox>(dialog, "_listBox");
             listBox.SelectedItem = null;
 
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             listBox.RaiseEvent(doubleClick);
 

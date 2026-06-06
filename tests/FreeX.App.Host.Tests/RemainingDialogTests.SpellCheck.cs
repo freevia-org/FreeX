@@ -174,10 +174,7 @@ public sealed partial class RemainingDialogTests
             dialog.Dispatcher.BeginInvoke(() =>
             {
                 suggestionsBox.SelectedItem = "misspelled";
-                suggestionsBox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-                {
-                    RoutedEvent = Control.MouseDoubleClickEvent
-                });
+                suggestionsBox.RaiseEvent(DialogSourceTestSupport.CreateMouseDoubleClickEvent());
 
                 dialog.Dispatcher.BeginInvoke(() =>
                 {
@@ -200,10 +197,7 @@ public sealed partial class RemainingDialogTests
             var suggestionsBox = GetField<ListBox>(dialog, "_suggestionsBox");
 
             suggestionsBox.SelectedItem = null;
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             suggestionsBox.RaiseEvent(doubleClick);
 

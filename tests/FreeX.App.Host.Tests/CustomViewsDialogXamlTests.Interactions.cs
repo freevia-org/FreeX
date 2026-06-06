@@ -26,10 +26,7 @@ public sealed partial class CustomViewsDialogXamlTests
             dialog.Dispatcher.BeginInvoke(() =>
             {
                 viewsList.SelectedIndex = 0;
-                var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-                {
-                    RoutedEvent = Control.MouseDoubleClickEvent
-                };
+                var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
                 viewsList.RaiseEvent(doubleClick);
                 doubleClick.Handled.Should().BeTrue();
 
@@ -59,10 +56,7 @@ public sealed partial class CustomViewsDialogXamlTests
             var viewsList = (ListView)dialog.FindName("ViewsList");
 
             viewsList.SelectedItem = null;
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             viewsList.RaiseEvent(doubleClick);
 

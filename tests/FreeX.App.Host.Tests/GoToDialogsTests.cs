@@ -156,10 +156,7 @@ public sealed class GoToDialogsTests
             {
                 historyList.SelectedItem = "D10";
 
-                var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-                {
-                    RoutedEvent = Control.MouseDoubleClickEvent
-                };
+                var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
                 historyList.RaiseEvent(doubleClick);
                 doubleClick.Handled.Should().BeTrue();
             }, DispatcherPriority.ApplicationIdle);
@@ -181,10 +178,7 @@ public sealed class GoToDialogsTests
             var historyList = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_historyList");
             historyList.SelectedItem = null;
 
-            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-            {
-                RoutedEvent = Control.MouseDoubleClickEvent
-            };
+            var doubleClick = DialogSourceTestSupport.CreateMouseDoubleClickEvent();
 
             historyList.RaiseEvent(doubleClick);
 
