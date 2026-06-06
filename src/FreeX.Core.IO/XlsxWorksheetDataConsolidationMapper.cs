@@ -86,7 +86,13 @@ internal static class XlsxWorksheetDataConsolidationMapper
             {
                 var nativeElement = XElement.Parse(model.NativeXml);
                 if (nativeElement.Name == WorksheetNs + "dataConsolidate")
+                {
+                    XlsxWorksheetDataConsolidationNormalizer.NormalizeElement(nativeElement);
+                    if (!nativeElement.HasAttributes && !nativeElement.HasElements)
+                        return null;
+
                     return nativeElement;
+                }
             }
             catch
             {
@@ -109,6 +115,7 @@ internal static class XlsxWorksheetDataConsolidationMapper
                 model.References.Select(ToXml)));
         }
 
+        XlsxWorksheetDataConsolidationNormalizer.NormalizeElement(element);
         return element.HasAttributes || element.HasElements ? element : null;
     }
 
