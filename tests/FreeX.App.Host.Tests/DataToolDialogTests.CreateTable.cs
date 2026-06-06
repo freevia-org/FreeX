@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -14,7 +13,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void CreateTableDialog_ExposesHeadersCheckboxAndRangePicker()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CreateTableDialog.cs");
 
         source.Should().Contain("_headersBox");
         source.Should().Contain("Content = UiText.Get(\"CreateTable_HeadersCheckBox\")");
@@ -30,7 +29,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void CreateTableDialog_ControlsExposeAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CreateTableDialog.cs");
 
         StaTestRunner.Run(() =>
         {
@@ -64,7 +63,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void CreateTableDialogOpenedFromKeyboard_FocusesRangeBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CreateTableDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -74,7 +73,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void CreateTableDialogInvalidRange_RefocusesAndSelectsRangeBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CreateTableDialog.cs");
 
         source.Should().Contain("FocusRangeBox();");
         source.Should().Contain("private void FocusRangeBox()");
@@ -133,7 +132,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void MainWindow_WiresCreateTableRangePickerToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("new CreateTableDialog(");
         source.Should().Contain("request => ApplyCreateTableRangeSelection(dialog, request)");
@@ -169,7 +168,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void CreateTableDialogRangePicker_RefocusesRangeBoxAfterRequest()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("CreateTableDialog.cs");
         var handlerSource = source[
             source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
             source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];

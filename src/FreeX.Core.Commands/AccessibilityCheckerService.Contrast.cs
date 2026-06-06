@@ -926,6 +926,9 @@ public static partial class AccessibilityCheckerService
             case "LOG":
                 kind = ConditionalFormulaScalarFunctionKind.Log;
                 return true;
+            case "DEGREES":
+                kind = ConditionalFormulaScalarFunctionKind.Degrees;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1008,6 +1011,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Exp or
             ConditionalFormulaScalarFunctionKind.Ln or
             ConditionalFormulaScalarFunctionKind.Log10 or
+            ConditionalFormulaScalarFunctionKind.Degrees or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -1561,6 +1565,7 @@ public static partial class AccessibilityCheckerService
         Ln,
         Log10,
         Log,
+        Degrees,
         Pi,
         Value,
         Len,
@@ -2072,6 +2077,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Ln:
                 case ConditionalFormulaScalarFunctionKind.Log10:
                 case ConditionalFormulaScalarFunctionKind.Log:
+                case ConditionalFormulaScalarFunctionKind.Degrees:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
@@ -2264,6 +2270,9 @@ public static partial class AccessibilityCheckerService
                     }
 
                     result = Math.Log(first, logBase);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Degrees:
+                    result = first * 180d / Math.PI;
                     break;
                 default:
                     return false;

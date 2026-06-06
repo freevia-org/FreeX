@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -172,7 +171,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void DataTableDialog_ExposesReferencePickersForCellInputs()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("DataTableDialog.cs");
 
         source.Should().Contain("UiText.Get(\"DataTable_RowInputLabel\")");
         source.Should().Contain("UiText.Get(\"DataTable_ColumnInputLabel\")");
@@ -194,7 +193,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void DataTableDialog_CellInputEditorsExposeAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("DataTableDialog.cs");
 
         StaTestRunner.Run(() =>
         {
@@ -236,7 +235,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void DataTableDialogOpenedFromKeyboard_FocusesRowInputCell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("DataTableDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -246,7 +245,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void DataTableDialogInvalidInput_RefocusesInvalidCellEntry()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("DataTableDialog.cs");
 
         source.Should().Contain("FocusInvalidInput(error);");
         source.Should().Contain("private void FocusInvalidInput(string? error)");
@@ -258,7 +257,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void DataTableDialogRangePicker_RefocusesSelectedInputAfterRequest()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("DataTableDialog.cs");
         var handlerSource = source[
             source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
             source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
@@ -282,7 +281,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void MainWindow_WiresDataTableReferencePickersToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("new DataTableDialog(");
         source.Should().Contain("request => ApplyDataTableRangeSelection(dialog, request)");

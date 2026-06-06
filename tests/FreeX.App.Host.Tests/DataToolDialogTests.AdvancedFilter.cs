@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -180,8 +179,8 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void AdvancedFilterDialog_ExposesExcelStyleModesAndReferencePickers()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AdvancedFilterDialog.cs"));
-        var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DialogReferencePicker.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
+        var pickerSource = DialogSourceTestSupport.ReadHostSources("DialogReferencePicker.cs");
 
         source.Should().Contain("_filterInPlaceButton");
         source.Should().Contain("_copyToAnotherLocationButton");
@@ -328,7 +327,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void AdvancedFilterDialogOpenedFromKeyboard_FocusesInPlaceAction()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AdvancedFilterDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -339,7 +338,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void AdvancedFilterDialogInvalidRange_RefocusesAndSelectsInvalidRangeInput()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AdvancedFilterDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
 
         source.Should().Contain("FocusInvalidRangeInput(error);");
         source.Should().Contain("private void FocusInvalidRangeInput(string? error)");
@@ -351,7 +350,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void AdvancedFilterRangePicker_RefocusesSelectedInputAfterRequest()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AdvancedFilterDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
         var handlerSource = source[
             source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
             source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
@@ -435,7 +434,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void MainWindow_WiresAdvancedFilterReferencePickersToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("new AdvancedFilterDialog(");
         source.Should().Contain("ResolveSheetIdByName,");
