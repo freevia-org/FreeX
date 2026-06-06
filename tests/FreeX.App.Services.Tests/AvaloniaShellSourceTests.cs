@@ -80,6 +80,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _alignTopMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _alignMiddleMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _alignBottomMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _wrapTextMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -127,6 +128,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_alignMiddleMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Center);");
         source.Should().Contain("_alignBottomMenuItem.Header = \"Align Bottom\";");
         source.Should().Contain("_alignBottomMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom);");
+        source.Should().Contain("_wrapTextMenuItem.Header = \"Wrap Text\";");
+        source.Should().Contain("_wrapTextMenuItem.Click += (_, _) => ToggleSelectedRangeWrapText();");
         source.Should().Contain("_alignLeftMenuItem.Header = \"Align Left\";");
         source.Should().Contain("_alignLeftMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);");
         source.Should().Contain("_alignCenterMenuItem.Header = \"Align Center\";");
@@ -150,6 +153,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_alignTopMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignMiddleMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignBottomMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_wrapTextMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignLeftMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignCenterMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignRightMenuItem);");
@@ -174,6 +178,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_alignTopMenuItem.IsEnabled = _alignTopButton.IsEnabled;");
         source.Should().Contain("_alignMiddleMenuItem.IsEnabled = _alignMiddleButton.IsEnabled;");
         source.Should().Contain("_alignBottomMenuItem.IsEnabled = _alignBottomButton.IsEnabled;");
+        source.Should().Contain("_wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;");
         source.Should().Contain("_alignLeftMenuItem.IsEnabled = _alignLeftButton.IsEnabled;");
         source.Should().Contain("_alignCenterMenuItem.IsEnabled = _alignCenterButton.IsEnabled;");
         source.Should().Contain("_alignRightMenuItem.IsEnabled = _alignRightButton.IsEnabled;");
@@ -223,6 +228,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_align_top_menu_item={FormatBool(snapshot.HasNativeAlignTopMenuItem)}");
         smokeSource.Should().Contain("native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}");
         smokeSource.Should().Contain("native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}");
+        smokeSource.Should().Contain("native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}");
         smokeSource.Should().Contain("native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}");
         smokeSource.Should().Contain("native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}");
         smokeSource.Should().Contain("native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}");
@@ -250,6 +256,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, \"Align Top\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, \"Align Middle\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, \"Align Bottom\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, \"Wrap Text\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, \"Align Left\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, \"Align Center\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, \"Align Right\", requireGesture: false)");
@@ -553,6 +560,32 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("foreach (var decoration in TextDecorations.Strikethrough)");
         source.Should().Contain("else if (e.Key is Key.D5 or Key.NumPad5 && HasOnlyControlModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeStrikethrough();");
+    }
+
+    [Fact]
+    public void MainWindow_WiresWrapTextThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly ToggleButton _wrapTextButton = new();");
+        source.Should().Contain("_wrapTextButton.Content = \"Wrap\";");
+        source.Should().Contain("_wrapTextButton.Click += WrapTextButton_Click;");
+        source.Should().Contain("_wrapTextButton.IsChecked = _session.IsSelectedRangeStartWrapText;");
+        source.Should().Contain("_wrapTextButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void WrapTextButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeWrapText(_wrapTextButton.IsChecked == true);");
+        source.Should().Contain("private void ToggleSelectedRangeWrapText()");
+        source.Should().Contain("ApplySelectedRangeWrapText(!_session.IsSelectedRangeStartWrapText);");
+        source.Should().Contain("private void ApplySelectedRangeWrapText(bool enabled)");
+        source.Should().Contain("var result = _session.SetSelectedRangeWrapText(enabled);");
+        source.Should().Contain("_wrapTextButton.IsChecked = _session.IsSelectedRangeStartWrapText;");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Wrap Text failed.\");");
+        source.Should().Contain("RefreshShell($\"{(enabled ? \"Wrapped\" : \"Unwrapped\")} {rangeReference}\");");
+        source.Should().Contain("var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;");
+        source.Should().Contain("TextWrapping = textWrapping,");
+        source.Should().Contain("TextTrimming = textWrapping == TextWrapping.Wrap");
+        source.Should().Contain("? TextTrimming.None");
+        source.Should().Contain(": TextTrimming.CharacterEllipsis");
     }
 
     [Fact]

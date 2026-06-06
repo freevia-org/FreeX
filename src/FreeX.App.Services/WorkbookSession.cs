@@ -121,6 +121,8 @@ public sealed class WorkbookSession
 
     public bool IsSelectedRangeStartDoubleUnderline => GetCellStyle(SelectedRange.Start).DoubleUnderline;
 
+    public bool IsSelectedRangeStartWrapText => GetCellStyle(SelectedRange.Start).WrapText;
+
     public HorizontalAlignment SelectedRangeStartHorizontalAlignment =>
         GetCellStyle(SelectedRange.Start).HorizontalAlignment;
 
@@ -409,6 +411,19 @@ public sealed class WorkbookSession
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(VAlign: alignment)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult SetSelectedRangeWrapText(bool enabled)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(WrapText: enabled)));
         if (!result.Success)
             return result;
 

@@ -85,6 +85,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeAlignTopMenuItem,
     bool HasNativeAlignMiddleMenuItem,
     bool HasNativeAlignBottomMenuItem,
+    bool HasNativeWrapTextMenuItem,
     bool HasNativeAlignLeftMenuItem,
     bool HasNativeAlignCenterMenuItem,
     bool HasNativeAlignRightMenuItem,
@@ -116,6 +117,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeAlignTopMenuItem &&
         HasNativeAlignMiddleMenuItem &&
         HasNativeAlignBottomMenuItem &&
+        HasNativeWrapTextMenuItem &&
         HasNativeAlignLeftMenuItem &&
         HasNativeAlignCenterMenuItem &&
         HasNativeAlignRightMenuItem &&
@@ -195,6 +197,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_align_top_menu_item={FormatBool(snapshot.HasNativeAlignTopMenuItem)}",
                 $"native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}",
                 $"native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}",
+                $"native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}",
                 $"native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}",
                 $"native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}",
                 $"native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}",

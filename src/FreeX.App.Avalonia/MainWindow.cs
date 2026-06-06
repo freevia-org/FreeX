@@ -75,6 +75,7 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _alignTopButton = new();
     private readonly ToggleButton _alignMiddleButton = new();
     private readonly ToggleButton _alignBottomButton = new();
+    private readonly ToggleButton _wrapTextButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -95,6 +96,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _alignTopMenuItem = new();
     private readonly NativeMenuItem _alignMiddleMenuItem = new();
     private readonly NativeMenuItem _alignBottomMenuItem = new();
+    private readonly NativeMenuItem _wrapTextMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -275,6 +277,9 @@ public sealed class MainWindow : Window
         _alignBottomMenuItem.Header = "Align Bottom";
         _alignBottomMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom);
 
+        _wrapTextMenuItem.Header = "Wrap Text";
+        _wrapTextMenuItem.Click += (_, _) => ToggleSelectedRangeWrapText();
+
         _alignLeftMenuItem.Header = "Align Left";
         _alignLeftMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);
 
@@ -315,6 +320,7 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_alignTopMenuItem);
         formatMenu.Items.Add(_alignMiddleMenuItem);
         formatMenu.Items.Add(_alignBottomMenuItem);
+        formatMenu.Items.Add(_wrapTextMenuItem);
         formatMenu.Items.Add(_alignLeftMenuItem);
         formatMenu.Items.Add(_alignCenterMenuItem);
         formatMenu.Items.Add(_alignRightMenuItem);
@@ -491,6 +497,11 @@ public sealed class MainWindow : Window
         _alignBottomButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _alignBottomButton.Click += AlignBottomButton_Click;
 
+        _wrapTextButton.Content = "Wrap";
+        _wrapTextButton.Padding = new Thickness(10, 4);
+        _wrapTextButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _wrapTextButton.Click += WrapTextButton_Click;
+
         _alignLeftButton.Content = "L";
         _alignLeftButton.Padding = new Thickness(10, 4);
         _alignLeftButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -551,6 +562,7 @@ public sealed class MainWindow : Window
                     _alignTopButton,
                     _alignMiddleButton,
                     _alignBottomButton,
+                    _wrapTextButton,
                     _alignLeftButton,
                     _alignCenterButton,
                     _alignRightButton,
@@ -590,6 +602,7 @@ public sealed class MainWindow : Window
         _alignTopButton.IsChecked = _session.SelectedRangeStartVerticalAlignment == CellVAlign.Top;
         _alignMiddleButton.IsChecked = _session.SelectedRangeStartVerticalAlignment == CellVAlign.Center;
         _alignBottomButton.IsChecked = _session.SelectedRangeStartVerticalAlignment == CellVAlign.Bottom;
+        _wrapTextButton.IsChecked = _session.IsSelectedRangeStartWrapText;
         if (preserveFormulaEdit)
         {
             _formulaBox.CaretIndex = Math.Min(formulaCaretIndex, _formulaBox.Text?.Length ?? 0);
@@ -657,6 +670,7 @@ public sealed class MainWindow : Window
         _alignTopButton.IsEnabled = isIdle;
         _alignMiddleButton.IsEnabled = isIdle;
         _alignBottomButton.IsEnabled = isIdle;
+        _wrapTextButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
@@ -678,6 +692,7 @@ public sealed class MainWindow : Window
         _alignTopMenuItem.IsEnabled = _alignTopButton.IsEnabled;
         _alignMiddleMenuItem.IsEnabled = _alignMiddleButton.IsEnabled;
         _alignBottomMenuItem.IsEnabled = _alignBottomButton.IsEnabled;
+        _wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -942,6 +957,7 @@ public sealed class MainWindow : Window
             selected ? SelectionHeaderForeground : HeaderForeground,
             TextAlignment.Center,
             AvaloniaVerticalAlignment.Center,
+            TextWrapping.NoWrap,
             FontWeight.SemiBold,
             FontStyle.Normal,
             textDecorations: null,
@@ -960,6 +976,7 @@ public sealed class MainWindow : Window
                 Brushes.Black,
                 TextAlignment.Left,
                 AvaloniaVerticalAlignment.Center,
+                TextWrapping.NoWrap,
                 FontWeight.Normal,
                 FontStyle.Normal,
                 textDecorations: null,
@@ -977,6 +994,7 @@ public sealed class MainWindow : Window
             style?.HorizontalAlignment ?? CellHAlign.General,
             cell.RawValue is NumberValue or DateTimeValue);
         var verticalAlignment = MapCellVerticalAlignment(style?.VerticalAlignment ?? CellVAlign.Bottom);
+        var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
         var textDecorations = BuildTextDecorations(style);
@@ -987,6 +1005,7 @@ public sealed class MainWindow : Window
             foreground,
             alignment,
             verticalAlignment,
+            textWrapping,
             weight,
             fontStyle,
             textDecorations,
@@ -1000,13 +1019,14 @@ public sealed class MainWindow : Window
         IBrush foreground,
         TextAlignment textAlignment,
         AvaloniaVerticalAlignment verticalAlignment,
+        TextWrapping textWrapping,
         FontWeight fontWeight,
         FontStyle fontStyle,
         TextDecorationCollection? textDecorations,
         bool selected,
         CellAddress address)
     {
-        var border = CreateCellBorder(text, background, foreground, textAlignment, verticalAlignment, fontWeight, fontStyle, textDecorations, selected);
+        var border = CreateCellBorder(text, background, foreground, textAlignment, verticalAlignment, textWrapping, fontWeight, fontStyle, textDecorations, selected);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -1030,6 +1050,7 @@ public sealed class MainWindow : Window
         IBrush foreground,
         TextAlignment textAlignment,
         AvaloniaVerticalAlignment verticalAlignment,
+        TextWrapping textWrapping,
         FontWeight fontWeight,
         FontStyle fontStyle,
         TextDecorationCollection? textDecorations,
@@ -1050,7 +1071,10 @@ public sealed class MainWindow : Window
                 TextDecorations = textDecorations,
                 Foreground = foreground,
                 TextAlignment = textAlignment,
-                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = textWrapping,
+                TextTrimming = textWrapping == TextWrapping.Wrap
+                    ? TextTrimming.None
+                    : TextTrimming.CharacterEllipsis,
                 VerticalAlignment = verticalAlignment,
             },
         };
@@ -1315,6 +1339,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom);
     }
 
+    private void WrapTextButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeWrapText(_wrapTextButton.IsChecked == true);
+    }
+
     private void AlignLeftButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);
@@ -1474,6 +1503,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeStrikethrough(!_session.IsSelectedRangeStartStrikethrough);
     }
 
+    private void ToggleSelectedRangeWrapText()
+    {
+        ApplySelectedRangeWrapText(!_session.IsSelectedRangeStartWrapText);
+    }
+
     private void ApplySelectedRangeBold(bool enabled)
     {
         if (_isOpening || _isSaving)
@@ -1572,6 +1606,27 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"{(enabled ? "Struck through" : "Removed strikethrough from")} {rangeReference}");
+    }
+
+    private void ApplySelectedRangeWrapText(bool enabled)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeWrapText(enabled);
+        if (!result.Success)
+        {
+            _wrapTextButton.IsChecked = _session.IsSelectedRangeStartWrapText;
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Wrap Text failed.");
+            return;
+        }
+
+        RefreshShell($"{(enabled ? "Wrapped" : "Unwrapped")} {rangeReference}");
     }
 
     private void ApplySelectedRangeHorizontalAlignment(CellHAlign alignment)
@@ -1687,6 +1742,7 @@ public sealed class MainWindow : Window
             HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, "Align Top", requireGesture: false),
             HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, "Align Middle", requireGesture: false),
             HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, "Align Bottom", requireGesture: false),
+            HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, "Wrap Text", requireGesture: false),
             HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, "Align Left", requireGesture: false),
             HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, "Align Center", requireGesture: false),
             HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, "Align Right", requireGesture: false),
