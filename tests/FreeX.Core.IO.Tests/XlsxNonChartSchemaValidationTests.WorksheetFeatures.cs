@@ -615,6 +615,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceIgnoredErrors.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetCellWatchesForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetDiagnosticsSourceWorkbook());
+        SetWorksheetCellWatchesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetCellWatchesSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetCellWatchesForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetDiagnosticsSourceWorkbook());
+        SetWorksheetCellWatchesInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetCellWatchesSanitized(saved);
+    }
+
 
     [Fact]
     public void WorksheetScenarios_ProducesSchemaValidWorkbook()
@@ -2308,6 +2353,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
         workbook.WatchedCells.Add(watchedAddress);
         return workbook;
+    }
+
+    private static void SetWorksheetCellWatchesInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches")!;
+        cellWatches.SetAttributeValue("nativeContainer", "kept");
+        cellWatches.Element(worksheetNs + "cellWatch")!.SetAttributeValue("nativeWatch", "kept");
+        cellWatches.Element(worksheetNs + "cellWatch")!.Add(new XElement(worksheetNs + "nativeCellWatchChild"));
+        cellWatches.Add(
+            new XElement(
+                worksheetNs + "cellWatch",
+                new XAttribute("r", "NotARef"),
+                new XAttribute("nativeWatch", "removed")),
+            new XElement(worksheetNs + "nativeCellWatchesChild"));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetCellWatchesSanitized(MemoryStream stream)
+    {
+        var cellWatches = ReadWorksheetChildElement(stream, "cellWatches");
+        var worksheetNs = cellWatches.Name.Namespace;
+        cellWatches.Attribute("nativeContainer").Should().BeNull();
+        cellWatches.Element(worksheetNs + "nativeCellWatchesChild").Should().BeNull();
+
+        var cellWatch = cellWatches.Elements(worksheetNs + "cellWatch")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        cellWatch.Attribute("r")!.Value.Should().Be("B2");
+        cellWatch.Attribute("nativeWatch").Should().BeNull();
+        cellWatch.Element(worksheetNs + "nativeCellWatchChild").Should().BeNull();
     }
 
     private static Workbook CreateWorksheetScenariosSourceWorkbook()

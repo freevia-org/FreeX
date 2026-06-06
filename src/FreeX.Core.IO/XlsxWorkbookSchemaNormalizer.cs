@@ -18,6 +18,7 @@ internal static class XlsxWorkbookSchemaNormalizer
         XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(archive);
         XlsxWorksheetPhoneticPropertyNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetCellWatchesNormalizer.NormalizeWorksheets(archive);
         NormalizeWorksheets(archive, workbookNs);
 
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
