@@ -1,6 +1,5 @@
 using FluentAssertions;
 using System.Diagnostics;
-using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Windows;
@@ -55,7 +54,7 @@ public sealed class RibbonResizeCoordinatorTests
     [Fact]
     public void FallbackScheduler_UsesRenderPriorityInsteadOfSynchronousSend()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Ribbon.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Ribbon.cs");
         var methodStart = source.IndexOf("private void QueueRibbonFallback", StringComparison.Ordinal);
         var methodEnd = source.IndexOf("internal RibbonFallbackDiagnosticsSnapshot GetRibbonFallbackDiagnosticsForTests", StringComparison.Ordinal);
         var method = source[methodStart..methodEnd];
@@ -71,9 +70,9 @@ public sealed class RibbonResizeCoordinatorTests
     [Fact]
     public void ResizeHotPath_ReusesCachedRibbonPanelOwnerInsteadOfAncestorWalks()
     {
-        var fieldSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
-        var adaptiveSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonAdaptive.cs"));
-        var ribbonSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Ribbon.cs"));
+        var fieldSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var adaptiveSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonAdaptive.cs");
+        var ribbonSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Ribbon.cs");
 
         fieldSource.Should().Contain("Dictionary<TabItem, RibbonActivePanelCacheEntry>");
         fieldSource.Should().Contain("private TabItem? _ribbonAdaptiveControlCacheTab;");
