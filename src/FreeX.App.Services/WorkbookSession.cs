@@ -89,6 +89,38 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveRow = address.Row;
         ActiveSheet.ActiveCol = address.Col;
         FormulaEditAddress = null;
+        EnsureActiveCellVisible();
+    }
+
+    public void MoveActiveCell(int rowDelta, int colDelta)
+    {
+        var address = new CellAddress(
+            ActiveSheet.Id,
+            Offset(ActiveCell.Row, rowDelta, CellAddress.MaxRow),
+            Offset(ActiveCell.Col, colDelta, CellAddress.MaxCol));
+        SelectCell(address);
+    }
+
+    public bool PanViewport(int rowDelta, int colDelta)
+    {
+        var nextTopRow = Offset(ActiveSheet.ViewTopRow ?? GetScrollableRowStart(), rowDelta, CellAddress.MaxRow);
+        var nextLeftCol = Offset(ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart(), colDelta, CellAddress.MaxCol);
+        return SetViewportOrigin(nextTopRow, nextLeftCol);
+    }
+
+    public bool SetViewportOrigin(uint topRow, uint leftCol)
+    {
+        var normalizedTopRow = Math.Clamp(topRow, GetScrollableRowStart(), CellAddress.MaxRow);
+        var normalizedLeftCol = Math.Clamp(leftCol, GetScrollableColumnStart(), CellAddress.MaxCol);
+        var currentTopRow = ActiveSheet.ViewTopRow ?? GetScrollableRowStart();
+        var currentLeftCol = ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart();
+        if (normalizedTopRow == currentTopRow && normalizedLeftCol == currentLeftCol)
+            return false;
+
+        ActiveSheet.ViewTopRow = normalizedTopRow;
+        ActiveSheet.ViewLeftCol = normalizedLeftCol;
+        RefreshViewport();
+        return true;
     }
 
     public bool SelectSheet(SheetId sheetId)
@@ -239,6 +271,125 @@ public sealed class WorkbookSession
     private void RefreshViewport()
     {
         Viewport = BuildViewport();
+    }
+
+    private void EnsureActiveCellVisible()
+    {
+        var changed = false;
+        if (TryGetScrollableRowRange(out var firstRow, out var lastRow) &&
+            !IsFrozenRow(ActiveCell.Row) &&
+            (ActiveCell.Row < firstRow || ActiveCell.Row > lastRow))
+        {
+            ActiveSheet.ViewTopRow = CalculateScrollOrigin(
+                ActiveCell.Row,
+                firstRow,
+                lastRow,
+                ActiveSheet.ViewTopRow ?? GetScrollableRowStart(),
+                CellAddress.MaxRow);
+            changed = true;
+        }
+
+        if (TryGetScrollableColumnRange(out var firstCol, out var lastCol) &&
+            !IsFrozenColumn(ActiveCell.Col) &&
+            (ActiveCell.Col < firstCol || ActiveCell.Col > lastCol))
+        {
+            ActiveSheet.ViewLeftCol = CalculateScrollOrigin(
+                ActiveCell.Col,
+                firstCol,
+                lastCol,
+                ActiveSheet.ViewLeftCol ?? GetScrollableColumnStart(),
+                CellAddress.MaxCol);
+            changed = true;
+        }
+
+        if (changed)
+            RefreshViewport();
+    }
+
+    private bool TryGetScrollableRowRange(out uint firstRow, out uint lastRow)
+    {
+        var frozenRows = ActiveSheet.FrozenRows;
+        firstRow = 1;
+        lastRow = 1;
+        var found = false;
+        foreach (var metric in Viewport.RowMetrics)
+        {
+            if (metric.Row <= frozenRows)
+                continue;
+
+            if (!found)
+            {
+                firstRow = metric.Row;
+                lastRow = metric.Row;
+                found = true;
+            }
+            else
+            {
+                lastRow = metric.Row;
+            }
+        }
+
+        return found;
+    }
+
+    private bool TryGetScrollableColumnRange(out uint firstCol, out uint lastCol)
+    {
+        var frozenCols = ActiveSheet.FrozenCols;
+        firstCol = 1;
+        lastCol = 1;
+        var found = false;
+        foreach (var metric in Viewport.ColMetrics)
+        {
+            if (metric.Col <= frozenCols)
+                continue;
+
+            if (!found)
+            {
+                firstCol = metric.Col;
+                lastCol = metric.Col;
+                found = true;
+            }
+            else
+            {
+                lastCol = metric.Col;
+            }
+        }
+
+        return found;
+    }
+
+    private bool IsFrozenRow(uint row) =>
+        ActiveSheet.FrozenRows > 0 && row <= ActiveSheet.FrozenRows;
+
+    private bool IsFrozenColumn(uint col) =>
+        ActiveSheet.FrozenCols > 0 && col <= ActiveSheet.FrozenCols;
+
+    private uint GetScrollableRowStart() =>
+        Math.Min(CellAddress.MaxRow, Math.Max(1, ActiveSheet.FrozenRows + 1));
+
+    private uint GetScrollableColumnStart() =>
+        Math.Min(CellAddress.MaxCol, Math.Max(1, ActiveSheet.FrozenCols + 1));
+
+    private static uint CalculateScrollOrigin(
+        uint active,
+        uint firstVisible,
+        uint lastVisible,
+        uint currentOrigin,
+        uint max)
+    {
+        if (active < firstVisible)
+            return active;
+
+        if (active > lastVisible)
+            return Offset(currentOrigin, checked((int)(active - lastVisible)), max);
+
+        return currentOrigin;
+    }
+
+    private static uint Offset(uint value, int delta, uint max)
+    {
+        var candidate = (long)value + delta;
+        return (uint)Math.Clamp(candidate, 1, max);
     }
 
     private static IReadOnlyList<FileFormatDescriptor> BuildFormats(

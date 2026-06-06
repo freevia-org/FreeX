@@ -191,6 +191,115 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void MoveActiveCell_PansViewportWhenSelectionMovesPastVisibleRange()
+    {
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 60,
+            viewportWidth: 160);
+        var initialLastRow = session.Viewport.RowMetrics[^1].Row;
+        var initialLastCol = session.Viewport.ColMetrics[^1].Col;
+
+        session.MoveActiveCell((int)initialLastRow, (int)initialLastCol);
+
+        session.ActiveCell.Row.Should().Be(initialLastRow + 1);
+        session.ActiveCell.Col.Should().Be(initialLastCol + 1);
+        session.ActiveSheet.ViewTopRow.Should().Be(2);
+        session.ActiveSheet.ViewLeftCol.Should().Be(2);
+        session.Viewport.RowMetrics.Select(row => row.Row).Should().Contain(session.ActiveCell.Row);
+        session.Viewport.ColMetrics.Select(col => col.Col).Should().Contain(session.ActiveCell.Col);
+    }
+
+    [Fact]
+    public void PanViewport_UpdatesViewOriginAndRefreshesViewport()
+    {
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 60,
+            viewportWidth: 160);
+
+        var changed = session.PanViewport(rowDelta: 2, colDelta: 3);
+
+        changed.Should().BeTrue();
+        session.ActiveSheet.ViewTopRow.Should().Be(3);
+        session.ActiveSheet.ViewLeftCol.Should().Be(4);
+        session.Viewport.RowMetrics.Select(row => row.Row).Should().StartWith([3u]);
+        session.Viewport.ColMetrics.Select(col => col.Col).Should().StartWith([4u]);
+    }
+
+    [Fact]
+    public void PanViewport_ClampsAtWorksheetEdges()
+    {
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.PanViewport(rowDelta: -10, colDelta: -10).Should().BeFalse();
+        session.ActiveSheet.ViewTopRow.Should().BeNull();
+        session.ActiveSheet.ViewLeftCol.Should().BeNull();
+
+        session.SetViewportOrigin(CellAddress.MaxRow, CellAddress.MaxCol).Should().BeTrue();
+        session.PanViewport(rowDelta: 10, colDelta: 10).Should().BeFalse();
+        session.ActiveSheet.ViewTopRow.Should().Be(CellAddress.MaxRow);
+        session.ActiveSheet.ViewLeftCol.Should().Be(CellAddress.MaxCol);
+    }
+
+    [Fact]
+    public void PanViewport_AccountsForFrozenPanes()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.FrozenRows = 1;
+        sheet.FrozenCols = 1;
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(workbook, "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 60,
+            viewportWidth: 160);
+
+        session.SetViewportOrigin(5, 5).Should().BeTrue();
+        session.SetViewportOrigin(1, 1).Should().BeTrue();
+
+        session.ActiveSheet.ViewTopRow.Should().Be(2);
+        session.ActiveSheet.ViewLeftCol.Should().Be(2);
+        session.Viewport.RowMetrics.Select(row => row.Row).Should().StartWith([1u, 2u]);
+        session.Viewport.ColMetrics.Select(col => col.Col).Should().StartWith([1u, 2u]);
+    }
+
+    [Fact]
+    public void SelectCell_PansViewportToDistantSelection()
+    {
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 60,
+            viewportWidth: 160);
+        var target = new CellAddress(session.ActiveSheet.Id, 25, 8);
+
+        session.SelectCell(target);
+
+        session.ActiveCell.Should().Be(target);
+        session.ActiveSheet.ActiveRow.Should().Be(25);
+        session.ActiveSheet.ActiveCol.Should().Be(8);
+        session.Viewport.RowMetrics.Select(row => row.Row).Should().Contain(25);
+        session.Viewport.ColMetrics.Select(col => col.Col).Should().Contain(8);
+    }
+
+    [Fact]
+    public void MoveActiveCell_ClampsAtWorksheetEdges()
+    {
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.MoveActiveCell(-10, -10);
+
+        session.ActiveCell.Should().Be(new CellAddress(session.ActiveSheet.Id, 1, 1));
+    }
+
+    [Fact]
     public void MarkSaved_UpdatesDisplayNameAndClearsDirtyFeatureReport()
     {
         var sourcePath = Path.Combine(Path.GetTempPath(), "Book.xlsx");

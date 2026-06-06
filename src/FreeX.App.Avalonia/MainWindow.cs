@@ -36,6 +36,7 @@ public sealed class MainWindow : Window
     private readonly WorkbookSaveService _saveService = new();
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
+    private readonly ScrollViewer _sheetScrollViewer = new();
     private readonly TextBlock _titleText = new();
     private readonly TextBlock _detailText = new();
     private readonly TextBlock _statusText = new();
@@ -76,12 +77,11 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(sheetTabs, Dock.Bottom);
         root.Children.Add(sheetTabs);
 
-        root.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = _sheetGridHost,
-        });
+        _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        _sheetScrollViewer.Content = _sheetGridHost;
+        _sheetScrollViewer.PointerWheelChanged += SheetScrollViewer_PointerWheelChanged;
+        root.Children.Add(_sheetScrollViewer);
 
         return root;
     }
@@ -450,6 +450,10 @@ public sealed class MainWindow : Window
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
             !e.KeyModifiers.HasFlag(KeyModifiers.Meta))
         {
+            if (_formulaBox.IsFocused)
+                return;
+
+            NavigateActiveCell(e);
             return;
         }
 
@@ -463,6 +467,78 @@ public sealed class MainWindow : Window
             e.Handled = true;
             await OpenWorkbookAsync();
         }
+    }
+
+    private void NavigateActiveCell(KeyEventArgs e)
+    {
+        var pageRows = Math.Max(1, _session.Viewport.RowMetrics.Count - 1);
+        var pageCols = Math.Max(1, _session.Viewport.ColMetrics.Count - 1);
+        var handled = true;
+        switch (e.Key)
+        {
+            case Key.Up:
+                _session.MoveActiveCell(-1, 0);
+                break;
+            case Key.Down:
+                _session.MoveActiveCell(1, 0);
+                break;
+            case Key.Left:
+                _session.MoveActiveCell(0, -1);
+                break;
+            case Key.Right:
+                _session.MoveActiveCell(0, 1);
+                break;
+            case Key.PageUp:
+                _session.MoveActiveCell(-pageRows, 0);
+                break;
+            case Key.PageDown:
+                _session.MoveActiveCell(pageRows, 0);
+                break;
+            case Key.Home:
+                _session.MoveActiveCell(0, 1 - checked((int)_session.ActiveCell.Col));
+                break;
+            case Key.End:
+                _session.MoveActiveCell(0, pageCols);
+                break;
+            default:
+                handled = false;
+                break;
+        }
+
+        if (!handled)
+            return;
+
+        e.Handled = true;
+        RefreshShell("Ready");
+    }
+
+    private void SheetScrollViewer_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        if (_formulaBox.IsFocused)
+            return;
+
+        var vertical = e.Delta.Y;
+        var horizontal = e.Delta.X;
+        var rowDelta = 0;
+        var colDelta = 0;
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ||
+            Math.Abs(horizontal) > Math.Abs(vertical))
+        {
+            var scroll = Math.Abs(horizontal) > 0 ? horizontal : vertical;
+            colDelta = scroll < 0 ? 1 : -1;
+        }
+        else if (Math.Abs(vertical) > 0)
+        {
+            rowDelta = vertical < 0 ? 1 : -1;
+        }
+
+        if (rowDelta == 0 && colDelta == 0)
+            return;
+
+        if (_session.PanViewport(rowDelta * 3, colDelta * 3))
+            RefreshShell("Ready");
+
+        e.Handled = true;
     }
 
     private async Task OpenWorkbookAsync()
