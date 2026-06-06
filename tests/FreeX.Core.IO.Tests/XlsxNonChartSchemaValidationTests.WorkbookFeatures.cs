@@ -112,6 +112,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookFileRecoveryPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookFileRecoveryPropertiesSourceWorkbook());
+        SetWorkbookFileRecoveryInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var fileRecoveryPr = ReadWorkbookChildElement(saved, "fileRecoveryPr");
+        fileRecoveryPr.Attribute("autoRecover").Should().BeNull();
+        fileRecoveryPr.Attribute("crashSave").Should().BeNull();
+        fileRecoveryPr.Attribute("dataExtractLoad").Should().BeNull();
+        fileRecoveryPr.Attribute("repairLoad").Should().BeNull();
+    }
+
+    [Fact]
     public void WorkbookFunctionGroups_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreateWorkbookFunctionGroupsSourceWorkbook()).Should().BeEmpty();
@@ -436,6 +464,20 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
+    }
+
+    private static void SetWorkbookFileRecoveryInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var fileRecoveryPr = workbookXml.Root!.Element(workbookNs + "fileRecoveryPr")!;
+        fileRecoveryPr.SetAttributeValue("autoRecover", "maybe");
+        fileRecoveryPr.SetAttributeValue("crashSave", "maybe");
+        fileRecoveryPr.SetAttributeValue("dataExtractLoad", "maybe");
+        fileRecoveryPr.SetAttributeValue("repairLoad", "maybe");
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
     private static Workbook CreateWorkbookFunctionGroupsSourceWorkbook()
