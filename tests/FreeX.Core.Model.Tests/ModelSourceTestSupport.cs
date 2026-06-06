@@ -12,8 +12,7 @@ internal static class ModelSourceTestSupport
 
     public static string ReadCommandsSourcesMatching(string primaryFileName, string searchPattern)
     {
-        var primaryFile = WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", primaryFileName);
-        var directory = Path.GetDirectoryName(primaryFile)!;
+        var directory = WorkspaceFileLocator.FindContainingDirectory("src", "FreeX.Core.Commands", primaryFileName);
         var files = Directory.EnumerateFiles(directory, searchPattern)
             .OrderBy(static path => path, StringComparer.Ordinal);
 

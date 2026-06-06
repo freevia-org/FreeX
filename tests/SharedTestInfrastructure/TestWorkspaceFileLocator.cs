@@ -25,6 +25,10 @@ internal static class TestWorkspaceFileLocator
             ?? Path.Combine([currentDirectory, .. relativeParts]);
     }
 
+    public static string FindContainingDirectory(params string[] relativeParts) =>
+        Path.GetDirectoryName(Find(relativeParts))
+        ?? throw new DirectoryNotFoundException($"Could not locate workspace directory for {Path.Combine(relativeParts)}.");
+
     public static string ReadAllText(params string[] relativeParts) =>
         File.ReadAllText(Find(relativeParts));
 
