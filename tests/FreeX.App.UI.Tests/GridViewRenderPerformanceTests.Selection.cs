@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Reflection;
 using FreeX.App.UI;
 using FreeX.Core.Model;
@@ -13,7 +12,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSelectionAndHeaders_FastPathSingleCellSelectionsWithMetricLookups()
     {
-        var headerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var headerSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
         var renderSelectedHeaders = headerSource[
             headerSource.IndexOf("private void RenderSelectedHeaders(", StringComparison.Ordinal)..
             headerSource.IndexOf("private void DrawColumnHeader(", StringComparison.Ordinal)];
@@ -26,7 +25,7 @@ public sealed partial class GridViewRenderPerformanceTests
             .Should()
             .BeLessThan(renderSelectedHeaders.IndexOf("BuildColumnHeaderSelectionIntervals", StringComparison.Ordinal));
 
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
+        var selectionSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Selection.cs");
         var renderSelectionRange = selectionSource[
             selectionSource.IndexOf("private void RenderSelectionRange(", StringComparison.Ordinal)..
             selectionSource.IndexOf("private static void DrawSelectionHandle", StringComparison.Ordinal)];
@@ -44,8 +43,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderAutofillPreview_ReusesFrozenStaticDashedPen()
     {
-        var gridViewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
-        var overlaysSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
+        var overlaysSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.cs");
         var renderAutofill = overlaysSource[
             overlaysSource.IndexOf("private void RenderAutofillPreview", StringComparison.Ordinal)..
             overlaysSource.IndexOf("private void RenderMarchingAnts", StringComparison.Ordinal)];
@@ -63,8 +62,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderMarchingAnts_ReusesCachedPhasePens()
     {
-        var gridViewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
-        var overlaysSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
+        var overlaysSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.cs");
         var renderMarchingAnts = overlaysSource[
             overlaysSource.IndexOf("private void RenderMarchingAnts", StringComparison.Ordinal)..
             overlaysSource.IndexOf("private void RenderFormulaTraceArrows", StringComparison.Ordinal)];
@@ -86,8 +85,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void ClipboardRangeAnimationTimer_StopsWhenGridUnloads()
     {
-        var gridViewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
-        var stateSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.State.cs"));
+        var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
+        var stateSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.State.cs");
         var constructorStart = gridViewSource.IndexOf("public GridView()", StringComparison.Ordinal);
         var constructor = gridViewSource[
             constructorStart..
@@ -118,9 +117,9 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void SelectionOnlyInvalidations_ReusePreSelectionLayerCache()
     {
-        var properties = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
-        var dispatch = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
-        var cache = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderSurfaceCache.cs"));
+        var properties = AppUiSourceTestSupport.ReadAppUiSources("GridView.Properties.cs");
+        var dispatch = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderDispatch.cs");
+        var cache = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderSurfaceCache.cs");
         var onRender = dispatch[
             dispatch.IndexOf("protected override void OnRender", StringComparison.Ordinal)..
             dispatch.IndexOf("private void RenderPreSelectionLayers", StringComparison.Ordinal)];
@@ -149,7 +148,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void StableRenderInvalidations_WarmAndReusePreSelectionLayerCache()
     {
-        var cache = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderSurfaceCache.cs"));
+        var cache = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderSurfaceCache.cs");
         var renderWithCache = cache[
             cache.IndexOf("private void RenderPreSelectionLayersWithCache", StringComparison.Ordinal)..
             cache.IndexOf("private static bool CanCachePreSelectionLayers", StringComparison.Ordinal)];
@@ -212,7 +211,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void SelectionOnlyInvalidations_ReuseRenderClipGeometry()
     {
-        var dispatch = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var dispatch = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderDispatch.cs");
         var onRender = dispatch[
             dispatch.IndexOf("protected override void OnRender", StringComparison.Ordinal)..
             dispatch.IndexOf("private RectangleGeometry GetRenderClipGeometry", StringComparison.Ordinal)];
@@ -232,9 +231,9 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void SelectionOnlyInvalidations_SkipEmptyPostSelectionLayers()
     {
-        var dispatch = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
-        var splitPanes = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
-        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var dispatch = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderDispatch.cs");
+        var splitPanes = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
+        var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
         var renderPostSelectionLayers = dispatch[
             dispatch.IndexOf("private void RenderPostSelectionLayers", StringComparison.Ordinal)..
             dispatch.IndexOf("private bool HasPostSelectionLayerWork", StringComparison.Ordinal)];
@@ -268,7 +267,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void ResizeDragInput_ReusesMetricScanHelpersWithoutLinqIterators()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Input.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var resizeMove = source[
             source.IndexOf("if (_resizeTarget == ResizeTarget.Column)", StringComparison.Ordinal)..
             source.IndexOf("public static GridAutoScrollRequest CalculateAutofillEdgeScrollIntent", StringComparison.Ordinal)];
