@@ -192,6 +192,67 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void WorksheetCustomProperties_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorksheetCustomPropertiesSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorksheetCustomProperties_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorksheetCustomPropertiesSourceWorkbook());
+        var sourceCustomProperties = ReadWorksheetChildElement(source, "customProperties");
+        var sourceCustomPropertyPart = ReadWorksheetCustomPropertyPartBytes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "customProperties")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceCustomProperties.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetCustomPropertyPartBytes(saved).Should().Equal(sourceCustomPropertyPart);
+    }
+
+    [Fact]
+    public void LoadedWorkbookFullSave_WhenWorksheetCustomPropertiesChange_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorksheetCustomPropertiesSourceWorkbook());
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.CustomProperties[0] = sheet.CustomProperties[0] with { Id = 8 };
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("change_unsupported_model_delta");
+        SchemaErrors(saved).Should().BeEmpty();
+    }
+
+
+    [Fact]
     public void NamedRanges_ProducesSchemaValidWorkbook()
     {
         var workbook = new Workbook("NamedRanges");
@@ -815,6 +876,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateWorksheetCustomPropertiesSourceWorkbook()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Property"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("FreeXModeledProperty", 7));
+        return workbook;
+    }
+
     private static Workbook CreateSheetProtectionSourceWorkbook()
     {
         var workbook = new Workbook("SheetProtectionPatchSave");
@@ -1104,6 +1176,25 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Single(element => element.Attribute("Type")?.Value == relationshipType);
         var partPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, relationship.Attribute("Target")!.Value);
         return new XElement(LoadPackageXml(archive.GetEntry(partPath)!).Root!);
+    }
+
+    private static byte[] ReadWorksheetCustomPropertyPartBytes(Stream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty";
+        const string worksheetPath = "xl/worksheets/sheet1.xml";
+
+        var relsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var relationship = relsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Single(element => element.Attribute("Type")?.Value == relationshipType);
+        var partPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, relationship.Attribute("Target")!.Value);
+        using var partStream = archive.GetEntry(partPath)!.Open();
+        using var bytes = new MemoryStream();
+        partStream.CopyTo(bytes);
+        return bytes.ToArray();
     }
 
     private static XElement ReadWorksheetRowElement(Stream stream, uint row)
