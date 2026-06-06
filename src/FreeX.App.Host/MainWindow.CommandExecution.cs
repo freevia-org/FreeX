@@ -80,10 +80,11 @@ public partial class MainWindow
 
     private bool TryExecuteApplyStyle(GridRange range, StyleDiff diff, string title)
     {
-        var targetSheetIds = CurrentGroupedEditSheetIds();
-        IWorkbookCommand command = targetSheetIds.Count > 1
-            ? new GroupedApplyStyleCommand(targetSheetIds, range, diff)
-            : new ApplyStyleCommand(_currentSheetId, range, diff);
+        var command = SelectionStyleCommandPlanner.CreateApplyStyleCommand(
+            CurrentGroupedEditSheetIds(),
+            [range],
+            diff,
+            title);
         return TryExecuteCommand(command, title);
     }
 
@@ -91,13 +92,15 @@ public partial class MainWindow
     {
         IWorkbookCommand CreateCommand()
         {
-            var range = SheetGrid.SelectedRange ?? new GridRange(
+            var fallbackRange = new GridRange(
                 new CellAddress(_currentSheetId, 1, 1),
                 new CellAddress(_currentSheetId, 1, 1));
-            var targetSheetIds = CurrentGroupedEditSheetIds();
-            return targetSheetIds.Count > 1
-                ? new GroupedApplyStyleCommand(targetSheetIds, range, diff)
-                : new ApplyStyleCommand(_currentSheetId, range, diff);
+            var ranges = GetCurrentSelectionRanges(fallbackRange);
+            return SelectionStyleCommandPlanner.CreateApplyStyleCommand(
+                CurrentGroupedEditSheetIds(),
+                ranges,
+                diff,
+                title);
         }
 
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
@@ -112,6 +115,15 @@ public partial class MainWindow
 
         ShowCommandError(outcome, title);
         return false;
+    }
+
+    private IReadOnlyList<GridRange> GetCurrentSelectionRanges(GridRange? fallbackRange = null)
+    {
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(SheetGrid.SelectedRange, SheetGrid.SelectedRanges);
+        if (ranges.Count > 0)
+            return ranges;
+
+        return fallbackRange is { } range ? [range] : [];
     }
 
     private bool TryExecuteRepeatableGroupedSheetCommand(
@@ -145,6 +157,42 @@ public partial class MainWindow
         string title,
         Func<SheetId, IWorkbookCommand> createCommand) =>
         TryExecuteRepeatableGroupedSheetCommand(title, createCommand, out _);
+
+    private bool TryExecuteRepeatableCurrentSelectionRangesCommand(
+        string title,
+        GridRange fallbackRange,
+        Func<SheetId, GridRange, IWorkbookCommand> createCommand,
+        out CommandOutcome outcome)
+    {
+        IWorkbookCommand CreateRepeatCommand()
+        {
+            var ranges = GetCurrentSelectionRanges(fallbackRange);
+            return SelectionStyleCommandPlanner.CreateRangeCommand(
+                CurrentGroupedEditSheetIds(),
+                ranges,
+                createCommand,
+                title);
+        }
+
+        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
+        if (outcome.Success)
+        {
+            MarkWorkbookDirty();
+            _repeatPostAction = null;
+            InvalidateNavigationCaches();
+            NotifyOtherWindowsOfWorkbookChange();
+            return true;
+        }
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
+    private bool TryExecuteRepeatableCurrentSelectionRangesCommand(
+        string title,
+        GridRange fallbackRange,
+        Func<SheetId, GridRange, IWorkbookCommand> createCommand) =>
+        TryExecuteRepeatableCurrentSelectionRangesCommand(title, fallbackRange, createCommand, out _);
 
     private bool TryExecuteRepeatableCurrentRangeCommand(
         string title,

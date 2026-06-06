@@ -376,8 +376,17 @@ public partial class MainWindow
         ApplyStyleDiff(new StyleDiff(FontSize: fontSize));
 
         var newHeight = FontSizePlanner.EstimateFittingRowHeight(fontSize);
-        if (!TryExecuteGroupedSheetCommand("Auto Fit Row Height", sheetId =>
-                new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, newHeight)))
+        var ranges = GetCurrentSelectionRanges(range);
+        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
+            CurrentGroupedEditSheetIds(),
+            ranges,
+            (sheetId, currentRange) => new SetRowHeightCommand(
+                sheetId,
+                currentRange.Start.Row,
+                currentRange.End.Row,
+                newHeight),
+            "Auto Fit Row Height");
+        if (!TryExecuteCommand(command, "Auto Fit Row Height"))
             return;
 
         UpdateViewport();
@@ -393,30 +402,15 @@ public partial class MainWindow
 
     private void ApplyRangeBorderPreset(Func<GridRange, CellAddress, StyleDiff> createDiff, string title)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-
-        IWorkbookCommand CreateSheetCommand(SheetId sheetId)
-        {
-            var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
-            var commands = sheetRange
-                .AllCells()
-                .Select(address => (Address: address, Diff: createDiff(sheetRange, address)))
-                .Where(plan => BorderShortcutService.HasBorderChanges(plan.Diff))
-                .Select(plan => (IWorkbookCommand)new ApplyStyleCommand(
-                    sheetId,
-                    new GridRange(plan.Address, plan.Address),
-                    plan.Diff))
-                .ToList();
-
-            return commands.Count == 1
-                ? commands[0]
-                : new CompositeWorkbookCommand(title, commands);
-        }
+        var ranges = GetCurrentSelectionRanges();
+        if (ranges.Count == 0) return;
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        var command = targetSheetIds.Count == 1
-            ? CreateSheetCommand(_currentSheetId)
-            : new CompositeWorkbookCommand(title, targetSheetIds.Select(CreateSheetCommand).ToList());
+        var command = SelectionStyleCommandPlanner.CreatePerCellStyleCommand(
+            targetSheetIds,
+            ranges,
+            createDiff,
+            title);
 
         if (!TryExecuteCommand(command, title))
             return;
@@ -770,9 +764,10 @@ public partial class MainWindow
     private void CfClearRulesMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Clear Conditional Formatting",
-                sheetId => new ClearConditionalFormatsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))))
+                range,
+                (sheetId, currentRange) => new ClearConditionalFormatsCommand(sheetId, currentRange)))
             return;
         UpdateViewport();
     }
@@ -835,11 +830,7 @@ public partial class MainWindow
         var dlg = ConditionalFormatDialogFactory.Create(ruleType, range);
         dlg.Owner = this;
         if (dlg.ShowDialog() != true || dlg.ResultRule is null) return;
-        if (!TryExecuteGroupedSheetCommand(
-                "Conditional Formatting",
-                sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(dlg.ResultRule, sheetId))))
-            return;
-        UpdateViewport();
+        ApplyConditionalFormatPreset(dlg.ResultRule);
     }
 
     private void ApplyDataBarPreset(string style)
@@ -880,9 +871,24 @@ public partial class MainWindow
 
     private void ApplyConditionalFormatPreset(ConditionalFormat rule)
     {
-        if (!TryExecuteGroupedSheetCommand(
+        var ranges = GetCurrentSelectionRanges(rule.AppliesTo);
+        if (ranges.Count == 0)
+            return;
+
+        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
+            CurrentGroupedEditSheetIds(),
+            ranges,
+            (sheetId, currentRange) =>
+            {
+                var sheetRule = GroupedSheetRangePlanner.CloneConditionalFormatForSheet(rule, sheetId);
+                sheetRule.AppliesTo = currentRange;
+                return new ApplyConditionalFormatCommand(sheetId, sheetRule);
+            },
+            "Conditional Formatting");
+        if (!TryExecuteCommand(
+                command,
                 "Conditional Formatting",
-                sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(rule, sheetId))))
+                out _))
             return;
 
         UpdateViewport();
