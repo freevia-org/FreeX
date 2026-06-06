@@ -144,6 +144,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceFunctionGroups.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void WorkbookProperties_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorkbookPropertiesSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorkbookProperties_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookPropertiesSourceWorkbook());
+        var sourceWorkbookProperties = ReadWorkbookChildElement(source, "workbookPr");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "workbookPr")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceWorkbookProperties.ToString(SaveOptions.DisableFormatting));
+    }
+
     private static Workbook CreateWorkbookFileVersionSourceWorkbook()
     {
         var workbook = new Workbook("WorkbookFileVersionPatchSave")
@@ -215,5 +249,25 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("functions"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
+    }
+
+    private static Workbook CreateWorkbookPropertiesSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookPropertiesPatchSave")
+        {
+            Uses1904DateSystem = true,
+            Properties = CreateWorkbookPropertiesMetadata()
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("properties"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        return workbook;
+    }
+
+    private static NativeXmlPreserveBag CreateWorkbookPropertiesMetadata()
+    {
+        var bag = new NativeXmlPreserveBag();
+        bag.Set("workbookPr", """<e defaultThemeVersion="166925" />""");
+        return bag;
     }
 }
