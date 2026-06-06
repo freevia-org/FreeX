@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace FreeX.App.UI.Tests;
 
 internal static class AppUiSourceTestSupport
@@ -11,9 +9,9 @@ internal static class AppUiSourceTestSupport
         string.Join(separator, fileNames.Select(ReadAppUiSource));
 
     private static string ReadAppUiSource(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.FindWithFailureMessage(
+        WorkspaceFileLocator.ReadAllTextWithFailureMessage(
             "Unable to locate workspace file",
             "src",
             "FreeX.App.UI",
-            fileName));
+            fileName);
 }

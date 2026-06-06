@@ -837,6 +837,7 @@ public sealed partial class XlsxFileAdapter
             {
                 NormalizePatchCustomViews(archive, workbook, SourceHasCustomViews);
                 NormalizePatchSharedStrings(archive);
+                NormalizePatchInlineStringFonts(archive);
                 if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
                     NormalizePatchOfficeRevisionAttributes(archive, officeRevisionAttributes);
 
@@ -1085,6 +1086,29 @@ public sealed partial class XlsxFileAdapter
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
+        }
+
+        private static void NormalizePatchInlineStringFonts(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                var changed = false;
+                foreach (var inlineStringFont in root
+                             .Descendants(workbookNs + "is")
+                             .Descendants(workbookNs + "rFont"))
+                {
+                    changed |= XlsxFontNameSanitizer.SanitizeValAttribute(inlineStringFont);
+                }
+
+                if (changed)
+                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
         }
 
         private static void NormalizePatchOfficeRevisionAttributes(

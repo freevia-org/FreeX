@@ -5,13 +5,13 @@ namespace FreeX.Core.Calc.Tests;
 internal static class CalcSourceTestSupport
 {
     public static string ReadCalcSource(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Calc", fileName));
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.Core.Calc", fileName);
 
     public static string ReadCalcSourceFromCurrentDirectoryOrFallback(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback("src", "FreeX.Core.Calc", fileName));
+        WorkspaceFileLocator.ReadAllTextFromCurrentDirectoryOrFallback("src", "FreeX.Core.Calc", fileName);
 
     public static string ReadFormulaSourceFromCurrentDirectoryOrFallback(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback("src", "FreeX.Core.Formula", fileName));
+        WorkspaceFileLocator.ReadAllTextFromCurrentDirectoryOrFallback("src", "FreeX.Core.Formula", fileName);
 
     public static string ReadCalcSourcesMatching(string primaryFileName, string searchPattern)
     {

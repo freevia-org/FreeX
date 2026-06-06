@@ -263,4 +263,109 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(saved).Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookSave_SanitizesRichInlineStringFontFamiliesForSchemaValidity()
+    {
+        var workbook = new Workbook("RichInlineStringFonts");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Rich inline font"));
+
+        var source = Save(workbook);
+        AddCssFontFamilyRichInlineString(source);
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rFont = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+            .Root!
+            .Element(workbookNs + "sheetData")!
+            .Descendants(workbookNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A1")
+            .Element(workbookNs + "is")!
+            .Element(workbookNs + "r")!
+            .Element(workbookNs + "rPr")!
+            .Element(workbookNs + "rFont")!;
+        rFont.Attribute("val")!.Value.Should().Be("Google Sans");
+
+        saved.Position = 0;
+        SchemaErrors(saved).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesRichInlineStringFontFamiliesForSchemaValidity()
+    {
+        var workbook = new Workbook("RichInlineStringPatchFonts");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Rich inline font"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("editable"));
+
+        var source = Save(workbook);
+        AddCssFontFamilyRichInlineString(source);
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(loaded, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 2), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rFont = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!)
+            .Root!
+            .Element(workbookNs + "sheetData")!
+            .Descendants(workbookNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A1")
+            .Element(workbookNs + "is")!
+            .Element(workbookNs + "r")!
+            .Element(workbookNs + "rPr")!
+            .Element(workbookNs + "rFont")!;
+        rFont.Attribute("val")!.Value.Should().Be("Google Sans");
+
+        saved.Position = 0;
+        SchemaErrors(saved).Should().BeEmpty();
+    }
+
+    private static void AddCssFontFamilyRichInlineString(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var cell = worksheetXml.Root!
+            .Element(workbookNs + "sheetData")!
+            .Descendants(workbookNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A1");
+
+        cell.SetAttributeValue("t", "inlineStr");
+        cell.Elements(workbookNs + "v").Remove();
+        cell.Elements(workbookNs + "is").Remove();
+        cell.Add(new XElement(
+            workbookNs + "is",
+            new XElement(
+                workbookNs + "r",
+                new XElement(
+                    workbookNs + "rPr",
+                    new XElement(workbookNs + "rFont", new XAttribute("val", "\"Google Sans\", Roboto, sans-serif")),
+                    new XElement(workbookNs + "sz", new XAttribute("val", "11"))),
+                new XElement(workbookNs + "t", "Rich inline font"))));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
 }

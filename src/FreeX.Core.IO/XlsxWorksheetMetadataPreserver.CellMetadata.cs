@@ -260,7 +260,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
             targetCell.SetAttributeValue("t", "inlineStr");
             targetCell.Elements(workbookNs + "v").Remove();
             targetCell.Elements(workbookNs + "is").Remove();
-            targetCell.Add(new XElement(sourceInlineString));
+            var replacement = new XElement(sourceInlineString);
+            SanitizeRichInlineStringFontNames(replacement, workbookNs);
+            targetCell.Add(replacement);
             changed = true;
         }
 
@@ -386,7 +388,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     targetCell.SetAttributeValue("t", "inlineStr");
                     targetCell.Elements(workbookNs + "v").Remove();
                     targetCell.Elements(workbookNs + "is").Remove();
-                    targetCell.Add(new XElement(nativeMetadata.InlineString));
+                    var replacement = new XElement(nativeMetadata.InlineString);
+                    SanitizeRichInlineStringFontNames(replacement, workbookNs);
+                    targetCell.Add(replacement);
                     changed = true;
                 }
             }
@@ -601,6 +605,12 @@ internal static partial class XlsxWorksheetMetadataPreserver
         inlineString.Elements(workbookNs + "r").Any() ||
         inlineString.Element(workbookNs + "rPh") is not null ||
         inlineString.Element(workbookNs + "phoneticPr") is not null;
+
+    private static void SanitizeRichInlineStringFontNames(XElement inlineString, XNamespace workbookNs)
+    {
+        foreach (var richTextFont in inlineString.Descendants(workbookNs + "rFont"))
+            XlsxFontNameSanitizer.SanitizeValAttribute(richTextFont);
+    }
 
     private static string ReadInlineStringPlainText(XElement inlineString, XNamespace workbookNs)
     {
