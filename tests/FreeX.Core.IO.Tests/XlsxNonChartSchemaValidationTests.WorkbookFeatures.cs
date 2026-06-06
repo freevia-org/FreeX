@@ -246,6 +246,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceCalculationProperties.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void WorkbookViewProperties_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorkbookViewPropertiesSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorkbookViewProperties_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookViewPropertiesSourceWorkbook());
+        var sourceWorkbookViews = ReadWorkbookChildElement(source, "bookViews");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "bookViews")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceWorkbookViews.ToString(SaveOptions.DisableFormatting));
+    }
+
     private static Workbook CreateWorkbookFileVersionSourceWorkbook()
     {
         var workbook = new Workbook("WorkbookFileVersionPatchSave")
@@ -366,6 +400,23 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calculation"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        return workbook;
+    }
+
+    private static Workbook CreateWorkbookViewPropertiesSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookViewPropertiesPatchSave")
+        {
+            ShowSheetTabs = false,
+            SheetTabRatio = 700,
+            FirstVisibleSheetIndex = 0,
+            ActiveSheetIndex = 1
+        };
+        var firstSheet = workbook.AddSheet("Data");
+        var secondSheet = workbook.AddSheet("Report");
+        firstSheet.SetCell(new CellAddress(firstSheet.Id, 1, 1), new TextValue("view"));
+        firstSheet.SetCell(new CellAddress(firstSheet.Id, 2, 2), new NumberValue(24));
+        secondSheet.SetCell(new CellAddress(secondSheet.Id, 1, 1), new TextValue("active"));
         return workbook;
     }
 }

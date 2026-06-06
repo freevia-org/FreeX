@@ -240,7 +240,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void BuildResizeThresholds_SourceAvoidsRedundantSortedSetLinqPasses()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutEngine.cs");
         var method = source.Substring(
             source.IndexOf("public static IReadOnlyList<double> BuildResizeThresholds", StringComparison.Ordinal),
             source.IndexOf("public static IReadOnlyList<int> GetExpandableGroupIndexes", StringComparison.Ordinal) -
@@ -255,7 +255,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void BreakpointThresholds_SourceAvoidsRedundantSortedSetLinqPasses()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveTabProfiles.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveTabProfiles.cs");
         var method = source.Substring(
             source.IndexOf("public static IReadOnlyList<double> GetBreakpointThresholds", StringComparison.Ordinal),
             source.IndexOf("internal static string? ResolveProfileName", StringComparison.Ordinal) -
@@ -270,7 +270,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void Plan_SourceAppliesProfileOverridesInPlace()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutEngine.cs");
         var planStart = source.IndexOf("public static RibbonAdaptiveLayoutResult Plan(", StringComparison.Ordinal);
         planStart = source.IndexOf("public static RibbonAdaptiveLayoutResult Plan(", planStart + 1, StringComparison.Ordinal);
         var method = source.Substring(
@@ -289,7 +289,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void Plan_SourceUsesRollbackBuffersInsteadOfPerAttemptStateSnapshots()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutEngine.cs");
         var method = source.Substring(
             source.IndexOf("private static void ExpandStatesIntoAvailableWidth", StringComparison.Ordinal),
             source.IndexOf("private static bool TryCollapseUnprotectedGroupsToFit", StringComparison.Ordinal) -
@@ -351,7 +351,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void Plan_SourceStaysFreeOfWpfVisualTreeMeasurementWork()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutEngine.cs");
 
         source.Should().NotContain("System.Windows", "the adaptive planner should remain CI-safe and independent of WPF runtime state");
         source.Should().NotContain("FrameworkElement", "the adaptive planner should operate on measured group data rather than controls");
