@@ -15,8 +15,7 @@ internal static class CalcSourceTestSupport
 
     public static string ReadCalcSourcesMatching(string primaryFileName, string searchPattern)
     {
-        var primaryFile = WorkspaceFileLocator.Find("src", "FreeX.Core.Calc", primaryFileName);
-        var directory = Path.GetDirectoryName(primaryFile)!;
+        var directory = WorkspaceFileLocator.FindContainingDirectory("src", "FreeX.Core.Calc", primaryFileName);
         var files = Directory.GetFiles(directory, searchPattern)
             .OrderBy(static file => Path.GetFileName(file), StringComparer.Ordinal);
 
