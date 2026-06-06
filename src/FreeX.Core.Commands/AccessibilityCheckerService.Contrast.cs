@@ -1029,6 +1029,9 @@ public static partial class AccessibilityCheckerService
             case "COS":
                 kind = ConditionalFormulaScalarFunctionKind.Cos;
                 return true;
+            case "COT":
+                kind = ConditionalFormulaScalarFunctionKind.Cot;
+                return true;
             case "TAN":
                 kind = ConditionalFormulaScalarFunctionKind.Tan;
                 return true;
@@ -1133,6 +1136,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Acot or
             ConditionalFormulaScalarFunctionKind.Atan or
             ConditionalFormulaScalarFunctionKind.Cos or
+            ConditionalFormulaScalarFunctionKind.Cot or
             ConditionalFormulaScalarFunctionKind.Tan or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
@@ -1730,6 +1734,7 @@ public static partial class AccessibilityCheckerService
         Atan,
         Atan2,
         Cos,
+        Cot,
         Tan,
         Pi,
         Value,
@@ -2670,6 +2675,13 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cos:
                     result = Math.Cos(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Cot:
+                    var tangent = Math.Tan(first);
+                    if (tangent == 0d || !double.IsFinite(tangent))
+                        return false;
+
+                    result = 1d / tangent;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Tan:
                     result = Math.Tan(first);
