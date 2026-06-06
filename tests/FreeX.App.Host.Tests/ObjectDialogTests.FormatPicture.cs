@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -38,8 +37,8 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void FormatPictureDialog_ExposesExcelStyleTabsAndAspectRatioControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatPictureDialog.cs"));
-        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("FormatPictureDialog.cs");
+        var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         source.Should().Contain("public sealed class FormatPictureDialog");
         source.Should().Contain("Header = UiText.Get(\"FormatPicture_SizeTab\")");
@@ -61,7 +60,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void FormatPictureDialog_ExposesQuickResetActionsForInitialSizeAndCrop()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatPictureDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("FormatPictureDialog.cs");
 
         source.Should().Contain("Content = UiText.Get(\"FormatPicture_ResetSizeButton\")");
         source.Should().Contain("Content = UiText.Get(\"FormatPicture_ResetCropButton\")");
@@ -73,7 +72,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void FormatPictureDialogOpenedFromKeyboard_FocusesHeightBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatPictureDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("FormatPictureDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -85,7 +84,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void FormatPictureDialogInvalidInput_SelectsRelevantTabAndField()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatPictureDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("FormatPictureDialog.cs");
 
         source.Should().Contain("private readonly TabControl _tabs = new();");
         source.Should().Contain("private readonly TabItem _sizeTab = new() { Header = UiText.Get(\"FormatPicture_SizeTab\") };");
@@ -111,7 +110,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void FormatPictureDialog_ResetActionsRestoreInitialFieldText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatPictureDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("FormatPictureDialog.cs");
 
         source.Should().Contain("_widthBox.Text = _initialResult.Width.ToString(CultureInfo.InvariantCulture)");
         source.Should().Contain("_heightBox.Text = _initialResult.Height.ToString(CultureInfo.InvariantCulture)");
