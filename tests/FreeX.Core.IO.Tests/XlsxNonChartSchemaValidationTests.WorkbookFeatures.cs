@@ -280,6 +280,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceWorkbookViews.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void WorkbookAdditionalViews_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorkbookAdditionalViewsSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorkbookAdditionalViews_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookAdditionalViewsSourceWorkbook());
+        var sourceWorkbookViews = ReadWorkbookChildElement(source, "bookViews");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "bookViews")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceWorkbookViews.ToString(SaveOptions.DisableFormatting));
+    }
+
     private static Workbook CreateWorkbookFileVersionSourceWorkbook()
     {
         var workbook = new Workbook("WorkbookFileVersionPatchSave")
@@ -417,6 +451,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         firstSheet.SetCell(new CellAddress(firstSheet.Id, 1, 1), new TextValue("view"));
         firstSheet.SetCell(new CellAddress(firstSheet.Id, 2, 2), new NumberValue(24));
         secondSheet.SetCell(new CellAddress(secondSheet.Id, 1, 1), new TextValue("active"));
+        return workbook;
+    }
+
+    private static Workbook CreateWorkbookAdditionalViewsSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookAdditionalViewsPatchSave")
+        {
+            ShowSheetTabs = false,
+            SheetTabRatio = 700,
+            FirstVisibleSheetIndex = 0,
+            ActiveSheetIndex = 0,
+            AdditionalViews = new WorkbookAdditionalViewsModel
+            {
+                Views =
+                {
+                    new WorkbookAdditionalViewModel
+                    {
+                        NativeXml = """
+                            <workbookView xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" visibility="hidden" minimized="1" showHorizontalScroll="0" showVerticalScroll="0" showSheetTabs="0" tabRatio="700" firstSheet="0" activeTab="0" />
+                            """
+                    }
+                }
+            }
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("additional view"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
     }
 }
