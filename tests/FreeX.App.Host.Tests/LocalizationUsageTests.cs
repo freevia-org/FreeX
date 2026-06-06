@@ -66,7 +66,7 @@ public sealed class LocalizationUsageTests
     [Fact]
     public void AppSourceLocalizationKeys_AllExistInNeutralResources()
     {
-        var sourceRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "UiText.cs"))!;
+        var sourceRoot = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("UiText.cs"))!;
         var resourceKeys = UiText.GetNeutralResourceKeys();
 
         var usedKeys = Directory
@@ -87,7 +87,7 @@ public sealed class LocalizationUsageTests
     [Fact]
     public void AppXamlUserFacingText_UsesLocalizationResources()
     {
-        var sourceRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "UiText.cs"))!;
+        var sourceRoot = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("UiText.cs"))!;
         var offenders = Directory
             .EnumerateFiles(sourceRoot, "*.xaml", SearchOption.AllDirectories)
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
@@ -102,7 +102,7 @@ public sealed class LocalizationUsageTests
     [Fact]
     public void MainWindowMessageAndProgressCalls_DoNotUseInlineUserFacingText()
     {
-        var sourceRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var sourceRoot = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
         var checkedFiles = Directory
             .EnumerateFiles(sourceRoot, "*.cs", SearchOption.TopDirectoryOnly)
             .Where(path =>
@@ -123,7 +123,7 @@ public sealed class LocalizationUsageTests
     [Fact]
     public void AppCodeAutomationMetadata_UsesLocalizationResources()
     {
-        var sourceRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "UiText.cs"))!;
+        var sourceRoot = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("UiText.cs"))!;
         var offenders = Directory
             .EnumerateFiles(sourceRoot, "*.cs", SearchOption.TopDirectoryOnly)
             .SelectMany(FindRawAutomationPropertyText)
@@ -136,7 +136,7 @@ public sealed class LocalizationUsageTests
     [Fact]
     public void HomeRibbonMessageServicePrompts_UseLocalizationResources()
     {
-        var sourceRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var sourceRoot = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
         var checkedFiles = new[]
         {
             Path.Combine(sourceRoot, "MainWindow.CellsCommands.cs"),

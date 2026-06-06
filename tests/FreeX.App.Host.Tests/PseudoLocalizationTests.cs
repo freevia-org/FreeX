@@ -75,7 +75,7 @@ public sealed partial class PseudoLocalizationTests
 
     private static Dictionary<string, string> ReadNeutralValues()
     {
-        var path = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "Strings.resx");
+        var path = DialogSourceTestSupport.FindHostSourceFile("Resources", "Strings.resx");
         return XDocument.Load(path)
             .Descendants("data")
             .ToDictionary(

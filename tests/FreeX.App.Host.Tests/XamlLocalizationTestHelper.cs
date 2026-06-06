@@ -10,7 +10,7 @@ internal static partial class XamlLocalizationTestHelper
 {
     public static string ReadLocalizedXaml(string xamlFileName)
     {
-        var path = WorkspaceFileLocator.Find("src", "FreeX.App.Host", xamlFileName);
+        var path = DialogSourceTestSupport.FindHostSourceFile(xamlFileName);
         return ResolveLocMarkup(File.ReadAllText(path));
     }
 
