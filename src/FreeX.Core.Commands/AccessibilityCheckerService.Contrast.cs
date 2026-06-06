@@ -701,6 +701,7 @@ public static partial class AccessibilityCheckerService
     private const ulong MaxFormulaAggregateRangeCells = 10_000;
     private const int MaxFormulaRoundDigits = 15;
     private const int MaxFormulaFactorialInput = 170;
+    private const int MaxFormulaDoubleFactorialInput = 300;
     private const int MaxFormulaTextSliceLength = 32_767;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
@@ -912,6 +913,9 @@ public static partial class AccessibilityCheckerService
             case "FACT":
                 kind = ConditionalFormulaScalarFunctionKind.Fact;
                 return true;
+            case "FACTDOUBLE":
+                kind = ConditionalFormulaScalarFunctionKind.FactDouble;
+                return true;
             case "MOD":
                 kind = ConditionalFormulaScalarFunctionKind.Mod;
                 return true;
@@ -1052,6 +1056,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Abs or
             ConditionalFormulaScalarFunctionKind.Int or
             ConditionalFormulaScalarFunctionKind.Fact or
+            ConditionalFormulaScalarFunctionKind.FactDouble or
             ConditionalFormulaScalarFunctionKind.Sqrt or
             ConditionalFormulaScalarFunctionKind.SqrtPi or
             ConditionalFormulaScalarFunctionKind.Sign or
@@ -1621,6 +1626,7 @@ public static partial class AccessibilityCheckerService
         RoundDown,
         Trunc,
         Fact,
+        FactDouble,
         Mod,
         Sqrt,
         SqrtPi,
@@ -2148,6 +2154,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.RoundDown:
                 case ConditionalFormulaScalarFunctionKind.Trunc:
                 case ConditionalFormulaScalarFunctionKind.Fact:
+                case ConditionalFormulaScalarFunctionKind.FactDouble:
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
@@ -2334,6 +2341,18 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = FactorialFormulaNumber((int)factorialInput);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.FactDouble:
+                    if (first < 0)
+                        return false;
+
+                    var doubleFactorialInput = Math.Truncate(first);
+                    if (doubleFactorialInput > MaxFormulaDoubleFactorialInput ||
+                        !TryDoubleFactorialFormulaNumber((int)doubleFactorialInput, out result))
+                    {
+                        return false;
+                    }
+
                     break;
                 case ConditionalFormulaScalarFunctionKind.Mod:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var divisor) ||
@@ -2897,6 +2916,20 @@ public static partial class AccessibilityCheckerService
             }
 
             return result;
+        }
+
+        private static bool TryDoubleFactorialFormulaNumber(int value, out double result)
+        {
+            result = 1d;
+            for (var factor = value; factor > 1; factor -= 2)
+            {
+                if (result > double.MaxValue / factor)
+                    return false;
+
+                result *= factor;
+            }
+
+            return double.IsFinite(result);
         }
 
         private bool TryEvaluateFormulaAggregate(
