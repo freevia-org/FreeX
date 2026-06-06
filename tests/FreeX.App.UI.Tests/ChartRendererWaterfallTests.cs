@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.IO;
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
@@ -83,9 +82,7 @@ public sealed class ChartRendererWaterfallTests
     [Fact]
     public void HistogramRenderer_DelegatesBinningToHistogramBinPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.FindWithFailureMessage(
-            "Unable to locate workspace file",
-            "src", "FreeX.App.UI", "ChartRenderer.WaterfallHistogram.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.WaterfallHistogram.cs");
         var histogram = source[
             source.IndexOf("internal static PlotModel BuildHistogramModel", StringComparison.Ordinal)..];
 
