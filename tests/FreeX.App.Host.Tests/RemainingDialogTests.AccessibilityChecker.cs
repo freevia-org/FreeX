@@ -1,7 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -27,7 +26,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void AccessibilityCheckerDialogOpenedFromKeyboard_FocusesIssueText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -38,8 +37,8 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void AccessibilityCheckerDialog_UsesIssueListAndGoToAction()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
-        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
+        var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("public sealed record AccessibilityCheckerDialogResult");
         source.Should().Contain("private readonly ListBox _issueList");
@@ -54,7 +53,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void AccessibilityCheckerDialog_DoubleClickGoToHandlesMouseEvent()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
         var doubleClick = source[
             source.IndexOf("private void IssueList_MouseDoubleClick", StringComparison.Ordinal)..
             source.IndexOf("private void UpdateGoToButtonState", StringComparison.Ordinal)];
@@ -70,7 +69,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void AccessibilityCheckerDialog_CleanStateUsesSingleExcelLikeOkButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
 
         source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
         source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
@@ -79,7 +78,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void AccessibilityCheckerDialog_ResultControlsExposeAutomationNames()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_messageBox, UiText.Get(\"AccessibilityChecker_ResultAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_messageBox, \"AccessibilityCheckerResultText\");");
