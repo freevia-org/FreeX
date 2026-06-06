@@ -359,7 +359,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             adapterSource.Should().NotContain(legacyCall);
         }
 
-        batchSource.Should().Contain("using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);");
+        batchSource.Should().Contain("new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap)");
         batchSource.Should().Contain("internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)");
         batchSource.Should().Contain("XlsxWorksheetProtectionMetadataWriter.Save(session, workbook);");
         batchSource.Should().Contain("XlsxWorksheetHeaderFooterMetadataWriter.Save(session, workbook);");
@@ -413,13 +413,13 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata");
         adapterSource.Should().Contain("XlsxWorksheetPostProcessingMetadataBatchWriter.HasWorksheetElementMetadata");
         adapterSource.Should().NotContain("XlsxWorksheetSingleXmlCellMapper.Save(packageStream, workbook, GetWorksheetPathMap());");
-        batchSource.Should().Contain("using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);");
+        batchSource.Should().Contain("new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap)");
         batchSource.Should().Contain("sheet.SingleXmlCells is not null");
         batchSource.Should().Contain("XlsxWorksheetSmartTagMapper.Save(session, workbook);");
         batchSource.Should().Contain("XlsxWorksheetSortStateMapper.Save(session, workbook);");
         batchSource.Should().Contain("XlsxWorksheetAdditionalViewMapper.Save(session, workbook);");
         batchSource.Should().Contain("XlsxWorksheetDataConsolidationMapper.Save(session, workbook);");
-        batchSource.Should().Contain("XlsxWorksheetSingleXmlCellMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetSingleXmlCellMapper.Save(xlsxStream, workbook, worksheetPathMap);");
         batchSource.Should().Contain("XlsxWorksheetPageSetupMetadataWriter.Save(session, workbook);");
         batchSource.Should().Contain("private static bool HasModeledPrinterAttributes(Workbook workbook)");
         batchSource.Should().Contain("foreach (var sheet in workbook.Sheets)");

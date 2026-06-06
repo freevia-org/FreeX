@@ -1605,6 +1605,10 @@ internal static partial class XlsxCorpusFixtureFactory
     private static void ApplyWorksheetSingleXmlCellsFixup(ZipArchive archive)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        const string singleCellTablePath = "xl/tables/tableSingleCells1.xml";
+        const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
+        const string contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.tableSingleCells+xml";
 
         var worksheetPath = "xl/worksheets/sheet1.xml";
         var worksheetEntry = archive.GetEntry(worksheetPath);
@@ -1613,16 +1617,47 @@ internal static partial class XlsxCorpusFixtureFactory
 
         var worksheetXml = LoadPackageXml(worksheetEntry);
         worksheetXml.Root?.Elements(worksheetNs + "singleXmlCells").Remove();
-        worksheetXml.Root?.Add(new XElement(
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+
+        ReplacePackageXml(archive, singleCellTablePath, new XDocument(new XElement(
             worksheetNs + "singleXmlCells",
-            new XAttribute("nativeSingleXmlCellsAttr", "kept"),
             new XElement(
                 worksheetNs + "singleXmlCell",
                 new XAttribute("id", "1"),
                 new XAttribute("r", "A1"),
-                new XAttribute("xmlCellPrId", "1"),
-                new XAttribute("nativeSingleXmlCellAttr", "cell-kept"))));
-        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+                new XAttribute("connectionId", "1"),
+                new XElement(
+                    worksheetNs + "xmlCellPr",
+                    new XAttribute("id", "1"),
+                    new XAttribute("uniqueName", "SingleXmlCell1"),
+                    new XElement(
+                        worksheetNs + "xmlPr",
+                        new XAttribute("mapId", "1"),
+                        new XAttribute("xpath", "/freex/singleXmlCell1"),
+                        new XAttribute("xmlDataType", "string")))))));
+
+        if (archive.GetEntry("[Content_Types].xml") is { } contentTypesEntry)
+        {
+            var contentTypesXml = LoadPackageXml(contentTypesEntry);
+            EnsureContentTypeOverride(contentTypesXml, $"/{singleCellTablePath}", contentType);
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+        }
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsEntry = archive.GetEntry(worksheetRelsPath);
+        var worksheetRelsXml = worksheetRelsEntry is null
+            ? new XDocument(new XElement(packageRelNs + "Relationships"))
+            : LoadPackageXml(worksheetRelsEntry);
+        worksheetRelsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(element => string.Equals(element.Attribute("Type")?.Value, relationshipType, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        EnsureRelationship(
+            worksheetRelsXml,
+            "rIdSingleXmlCells",
+            relationshipType,
+            "../tables/tableSingleCells1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
     }
 
     private static void ApplyWorksheetCalculationPropertiesFixup(ZipArchive archive)

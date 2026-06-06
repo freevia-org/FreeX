@@ -334,9 +334,7 @@ internal static partial class XlsxCorpusFixtureFactory
             """)),
         "generated-worksheet-single-xml-cells-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <singleXmlCells nativeSingleXmlCellsAttr="kept">
-                <singleXmlCell id="1" r="A1" xmlCellPrId="1" nativeSingleXmlCellAttr="cell-kept"/>
-              </singleXmlCells>
+              <sheetData/>
             </worksheet>
             """)),
         "generated-worksheet-calculation-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """

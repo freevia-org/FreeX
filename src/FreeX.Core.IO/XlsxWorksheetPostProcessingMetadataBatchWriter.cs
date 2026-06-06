@@ -27,8 +27,13 @@ internal static class XlsxWorksheetPostProcessingMetadataBatchWriter
         if (worksheetPathMap is null)
             return;
 
-        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
-        SaveWorksheetElementMetadata(session, workbook);
+        using (var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap))
+        {
+            SaveWorksheetElementMetadata(session, workbook);
+        }
+
+        xlsxStream.Position = 0;
+        XlsxWorksheetSingleXmlCellMapper.Save(xlsxStream, workbook, worksheetPathMap);
     }
 
     public static void Save(
@@ -39,10 +44,15 @@ internal static class XlsxWorksheetPostProcessingMetadataBatchWriter
         if (worksheetPathMap is null)
             return;
 
-        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
-        SaveWorksheetElementMetadata(session, workbook);
-        if (HasModeledPrinterAttributes(workbook))
-            XlsxWorksheetPageSetupMetadataWriter.Save(session, workbook);
+        using (var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap))
+        {
+            SaveWorksheetElementMetadata(session, workbook);
+            if (HasModeledPrinterAttributes(workbook))
+                XlsxWorksheetPageSetupMetadataWriter.Save(session, workbook);
+        }
+
+        xlsxStream.Position = 0;
+        XlsxWorksheetSingleXmlCellMapper.Save(xlsxStream, workbook, worksheetPathMap);
     }
 
     private static bool HasModeledPrinterAttributes(Workbook workbook)
@@ -62,6 +72,5 @@ internal static class XlsxWorksheetPostProcessingMetadataBatchWriter
         XlsxWorksheetSortStateMapper.Save(session, workbook);
         XlsxWorksheetAdditionalViewMapper.Save(session, workbook);
         XlsxWorksheetDataConsolidationMapper.Save(session, workbook);
-        XlsxWorksheetSingleXmlCellMapper.Save(session, workbook);
     }
 }

@@ -12418,12 +12418,22 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        var worksheetText = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
-        worksheetText.Should().Contain("singleXmlCells");
-        worksheetText.Should().Contain("xmlCellPrId=\"1\"");
-        worksheetText.Should().Contain("nativeSingleXmlCellsAttr=\"kept\"");
-        worksheetText.Should().Contain("nativeSingleXmlCellAttr=\"cell-kept\"");
-        worksheetText.Should().NotContain("invalid ");
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!.Element(worksheetNs + "singleXmlCells").Should().BeNull();
+        var singleXmlCells = ReadWorksheetSingleCellTableRootElement(archive);
+        singleXmlCells.Should().NotBeNull();
+        var singleXmlCell = singleXmlCells!.Elements(worksheetNs + "singleXmlCell").Should().ContainSingle().Which;
+        singleXmlCell.Attribute("id")!.Value.Should().Be("1");
+        singleXmlCell.Attribute("r")!.Value.Should().Be("A1");
+        singleXmlCell.Attribute("connectionId")!.Value.Should().Be("1");
+        singleXmlCell.Attribute("nativeSingleXmlCellAttr").Should().BeNull();
+        singleXmlCells.Attribute("nativeSingleXmlCellsAttr").Should().BeNull();
+        singleXmlCell.Element(worksheetNs + "xmlCellPr")!
+            .Element(worksheetNs + "xmlPr")!
+            .Attribute("xmlDataType")!
+            .Value
+            .Should()
+            .Be("string");
     }
 
     [Fact]
@@ -12454,6 +12464,7 @@ public partial class FileAdapterSmokeTests
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         worksheetXml.Root!.Element(worksheetNs + "singleXmlCells").Should().BeNull();
+        ReadWorksheetSingleCellTableRootElement(archive).Should().BeNull();
     }
 
     [Fact]
@@ -12526,14 +12537,19 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var singleXmlCells = worksheetXml.Root!.Element(worksheetNs + "singleXmlCells");
+        worksheetXml.Root!.Element(worksheetNs + "singleXmlCells").Should().BeNull();
+        var singleXmlCells = ReadWorksheetSingleCellTableRootElement(archive);
         singleXmlCells.Should().NotBeNull();
-        singleXmlCells!.Attribute("nativeSingleXmlCellsAttr")!.Value.Should().Be("kept");
+        singleXmlCells!.Attribute("nativeSingleXmlCellsAttr").Should().BeNull();
         var singleXmlCell = singleXmlCells.Elements(worksheetNs + "singleXmlCell").Should().ContainSingle().Which;
         singleXmlCell.Attribute("id")!.Value.Should().Be("1");
         singleXmlCell.Attribute("r")!.Value.Should().Be("A1");
-        singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1");
-        singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept");
+        singleXmlCell.Attribute("connectionId")!.Value.Should().Be("1");
+        singleXmlCell.Attribute("nativeSingleXmlCellAttr").Should().BeNull();
+        var xmlCellPr = singleXmlCell.Element(worksheetNs + "xmlCellPr");
+        xmlCellPr.Should().NotBeNull();
+        xmlCellPr!.Attribute("id")!.Value.Should().Be("1");
+        xmlCellPr.Element(worksheetNs + "xmlPr")!.Attribute("mapId")!.Value.Should().Be("1");
     }
 
     [Fact]
@@ -21936,16 +21952,52 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            const string singleCellTablePath = "xl/tables/tableSingleCells1.xml";
+            const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
+            const string contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.tableSingleCells+xml";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-            worksheetXml.Root!.Add(new XElement(
+            worksheetXml.Root!.Elements(worksheetNs + "singleXmlCells").Remove();
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            ReplacePackageXml(archive, singleCellTablePath, new XDocument(new XElement(
                 worksheetNs + "singleXmlCells",
                 new XElement(
                     worksheetNs + "singleXmlCell",
                     new XAttribute("id", "1"),
                     new XAttribute("r", "A1"),
-                    new XAttribute("xmlCellPrId", "1"))));
-            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+                    new XAttribute("connectionId", "1"),
+                    new XElement(
+                        worksheetNs + "xmlCellPr",
+                        new XAttribute("id", "1"),
+                        new XAttribute("uniqueName", "SingleXmlCell1"),
+                        new XElement(
+                            worksheetNs + "xmlPr",
+                            new XAttribute("mapId", "1"),
+                            new XAttribute("xpath", "/freex/singleXmlCell1"),
+                            new XAttribute("xmlDataType", "string")))))));
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, $"/{singleCellTablePath}", contentType);
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var relsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var relsEntry = archive.GetEntry(relsPath);
+            var relsXml = relsEntry is null
+                ? new XDocument(new XElement(packageRelNs + "Relationships"))
+                : LoadPackageXml(relsEntry);
+            relsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Where(element => element.Attribute("Type")?.Value == relationshipType)
+                .Remove();
+            relsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdSingleXmlCells"),
+                new XAttribute("Type", relationshipType),
+                new XAttribute("Target", "../tables/tableSingleCells1.xml")));
+            ReplacePackageXml(archive, relsPath, relsXml);
         }
 
         packageStream.Position = 0;
@@ -24767,6 +24819,29 @@ public partial class FileAdapterSmokeTests
     {
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static XElement? ReadWorksheetSingleCellTableRootElement(ZipArchive archive)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        const string worksheetPath = "xl/worksheets/sheet1.xml";
+        const string relationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
+
+        var relsEntry = archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels");
+        if (relsEntry is null)
+            return null;
+
+        var relsXml = LoadPackageXml(relsEntry);
+        var relationship = relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(element => element.Attribute("Type")?.Value == relationshipType);
+        var target = relationship?.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+            return null;
+
+        var partPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
+        var entry = archive.GetEntry(partPath);
+        return entry is null ? null : new XElement(LoadPackageXml(entry).Root!);
     }
 
     private static byte[] ReadPackageEntry(byte[] packageBytes, string path)
