@@ -2789,6 +2789,17 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("YEAR(TODAY())>=1900", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("MONTH(NOW())>=1", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAY(TODAY())>=1", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY($A1)=4", "B1", "B3");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY($A1,2)=4", "B2", "B4");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY($A1,14)=1", "B2", "B4");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY(0)=7", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1)=11", "B1", "B2");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1,2)=12", "B1", "B2", "B3");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1,21)=12", "B3");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM(0)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM($A1)=11", "B1", "B2");
+        AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(DATE(2021,1,1))=53", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM(DATE(2021,1,1),21)=53", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -2800,7 +2811,11 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(TODAY()),NOW()>=TODAY())", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("ISNUMBER(YEAR($A1))", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("ISNUMBER(TODAY())", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("IF(WEEKDAY($A1,2)>=4,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(WEEKNUM($A1)),WEEKNUM($A1,21)>=12)", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNUMBER(ISOWEEKNUM($A1))", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEAR($A1)-2023", "B3");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1)+WEEKDAY($A1)=15", "B1");
     }
 
     [Fact]
@@ -2808,6 +2823,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaDateFunctionContrastLocations("SUM(DAY($A1),MONTH($A1))>=19", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("SUM(DAY(TODAY()),MONTH(TODAY()))>=2", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SUM(WEEKDAY($A1),WEEKNUM($A1))=15", "B1");
     }
 
     [Fact]
@@ -2823,6 +2839,18 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("TODAY(1)>0");
         AssertFormulaDateFunctionContrastLocations("NOW(1)>0");
         AssertFormulaDateFunctionContrastLocations("YEAR(A0)>0");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY(\"2023-03-15\")=4");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY($A1,99)>0");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY($A1,1,1)>0");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY(-1)>0");
+        AssertFormulaDateFunctionContrastLocations("WEEKDAY(2958466)>0");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM(\"2023-03-15\")>0");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1,3)>0");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1,1,1)>0");
+        AssertFormulaDateFunctionContrastLocations("WEEKNUM(2958466)>0");
+        AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(\"2021-01-01\")>0");
+        AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM($A1,1)>0");
+        AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(2958466)>0");
     }
 
     [Fact]

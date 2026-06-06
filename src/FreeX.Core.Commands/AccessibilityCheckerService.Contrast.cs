@@ -1192,6 +1192,15 @@ public static partial class AccessibilityCheckerService
             case "NOW":
                 kind = ConditionalFormulaScalarFunctionKind.Now;
                 return true;
+            case "WEEKDAY":
+                kind = ConditionalFormulaScalarFunctionKind.Weekday;
+                return true;
+            case "WEEKNUM":
+                kind = ConditionalFormulaScalarFunctionKind.Weeknum;
+                return true;
+            case "ISOWEEKNUM":
+                kind = ConditionalFormulaScalarFunctionKind.IsoWeeknum;
+                return true;
             case "NA":
                 kind = ConditionalFormulaScalarFunctionKind.Na;
                 return true;
@@ -1283,13 +1292,16 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Trim or
             ConditionalFormulaScalarFunctionKind.Year or
             ConditionalFormulaScalarFunctionKind.Month or
-            ConditionalFormulaScalarFunctionKind.Day => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Day or
+            ConditionalFormulaScalarFunctionKind.IsoWeeknum => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
             ConditionalFormulaScalarFunctionKind.FloorPrecise or
             ConditionalFormulaScalarFunctionKind.Trunc or
             ConditionalFormulaScalarFunctionKind.Delta or
-            ConditionalFormulaScalarFunctionKind.GeStep => argumentCount is 1 or 2,
+            ConditionalFormulaScalarFunctionKind.GeStep or
+            ConditionalFormulaScalarFunctionKind.Weekday or
+            ConditionalFormulaScalarFunctionKind.Weeknum => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.CeilingMath or
             ConditionalFormulaScalarFunctionKind.FloorMath => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Round or
@@ -1966,6 +1978,9 @@ public static partial class AccessibilityCheckerService
         Day,
         Today,
         Now,
+        Weekday,
+        Weeknum,
+        IsoWeeknum,
         Na,
         Row,
         Column,
@@ -2598,6 +2613,9 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Day:
                 case ConditionalFormulaScalarFunctionKind.Today:
                 case ConditionalFormulaScalarFunctionKind.Now:
+                case ConditionalFormulaScalarFunctionKind.Weekday:
+                case ConditionalFormulaScalarFunctionKind.Weeknum:
+                case ConditionalFormulaScalarFunctionKind.IsoWeeknum:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Na:
                     value = ErrorValue.NA;
@@ -3348,6 +3366,35 @@ public static partial class AccessibilityCheckerService
                         _ => ErrorValue.Value
                     };
                     return value is NumberValue;
+                case ConditionalFormulaScalarFunctionKind.Weekday:
+                    if (!TryResolveFormulaFunctionDateSerial(function.Arguments[0], rowOffset, colOffset, out var weekdaySerial) ||
+                        !TryResolveFormulaOptionalReturnType(function, 1, rowOffset, colOffset, defaultValue: 1, out var weekdayReturnType) ||
+                        !TryEvaluateFormulaWeekday(weekdaySerial, weekdayReturnType, out var weekday))
+                    {
+                        return false;
+                    }
+
+                    value = new NumberValue(weekday);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Weeknum:
+                    if (!TryResolveFormulaFunctionDateSerial(function.Arguments[0], rowOffset, colOffset, out var weeknumSerial) ||
+                        !TryResolveFormulaOptionalReturnType(function, 1, rowOffset, colOffset, defaultValue: 1, out var weeknumReturnType) ||
+                        !TryEvaluateFormulaWeeknum(weeknumSerial, weeknumReturnType, out var weeknum))
+                    {
+                        return false;
+                    }
+
+                    value = new NumberValue(weeknum);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.IsoWeeknum:
+                    if (!TryResolveFormulaFunctionDateSerial(function.Arguments[0], rowOffset, colOffset, out var isoSerial) ||
+                        !TryEvaluateFormulaIsoWeeknum(isoSerial, out var isoWeeknum))
+                    {
+                        return false;
+                    }
+
+                    value = new NumberValue(isoWeeknum);
+                    return true;
                 default:
                     return false;
             }
@@ -3499,6 +3546,141 @@ public static partial class AccessibilityCheckerService
                 NumberValue number => TrySerialToDate(number.Value, out date),
                 _ => false
             };
+        }
+
+        private bool TryResolveFormulaFunctionDateSerial(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out double serial)
+        {
+            serial = 0;
+            return TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value) &&
+                TryGetFormulaArithmeticNumber(value, out serial) &&
+                IsValidFormulaWeekDateSerial(serial);
+        }
+
+        private bool TryResolveFormulaOptionalReturnType(
+            ConditionalFormulaScalarFunction function,
+            int argumentIndex,
+            int rowOffset,
+            int colOffset,
+            int defaultValue,
+            out int returnType)
+        {
+            returnType = defaultValue;
+            if (function.Arguments.Count <= argumentIndex)
+                return true;
+
+            if (!TryResolveFormulaFunctionNumber(function.Arguments[argumentIndex], rowOffset, colOffset, out var rawReturnType) ||
+                !double.IsFinite(rawReturnType) ||
+                rawReturnType < int.MinValue ||
+                rawReturnType > int.MaxValue)
+            {
+                return false;
+            }
+
+            returnType = (int)rawReturnType;
+            return true;
+        }
+
+        private static bool TryEvaluateFormulaWeekday(double serial, int returnType, out int weekday)
+        {
+            weekday = 0;
+            var daySerial = (int)Math.Floor(serial);
+            var dow = ((daySerial - 1) % 7 + 7) % 7;
+            weekday = returnType switch
+            {
+                1 => dow + 1,
+                2 or 11 => dow == 0 ? 7 : dow,
+                3 => dow == 0 ? 6 : dow - 1,
+                >= 12 and <= 17 => ((dow - (returnType - 10) + 7) % 7) + 1,
+                _ => 0
+            };
+
+            return weekday != 0 || returnType == 3;
+        }
+
+        private static bool TryEvaluateFormulaWeeknum(double serial, int returnType, out int weeknum)
+        {
+            weeknum = 0;
+            if (returnType == 21)
+                return TryEvaluateFormulaIsoWeeknum(serial, out weeknum);
+
+            var daySerial = (int)Math.Floor(serial);
+            if (daySerial == 0)
+                return true;
+
+            var firstDay = returnType switch
+            {
+                1 or 17 => 6,
+                2 or 11 => 0,
+                12 => 1,
+                13 => 2,
+                14 => 3,
+                15 => 4,
+                16 => 5,
+                _ => -1
+            };
+            if (firstDay < 0)
+                return false;
+
+            try
+            {
+                var date = FormulaExcelSerialToDate(serial);
+                var jan1 = new DateTime(date.Year, 1, 1);
+                var jan1Dow = (FormulaExcelDowToMonIndex(jan1) - firstDay + 7) % 7;
+                var dayOfYear = (date.Date - jan1).Days;
+                weeknum = (dayOfYear + jan1Dow) / 7 + 1;
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryEvaluateFormulaIsoWeeknum(double serial, out int weeknum)
+        {
+            weeknum = 0;
+            if (!IsValidFormulaWeekDateSerial(serial))
+                return false;
+
+            try
+            {
+                var daySerial = (int)Math.Floor(serial);
+                var dowMon0 = FormulaExcelDowToMonIndex(daySerial);
+                var thursdaySerial = daySerial + (3 - dowMon0);
+                var weekYear = FormulaExcelSerialToDate(thursdaySerial).Year;
+                var jan4Serial = (int)Math.Floor(FormulaDateToExcelSerial(new DateTime(weekYear, 1, 4)));
+                var week1MondaySerial = jan4Serial - FormulaExcelDowToMonIndex(jan4Serial);
+                weeknum = (daySerial - week1MondaySerial) / 7 + 1;
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
+        private static bool IsValidFormulaWeekDateSerial(double serial) =>
+            double.IsFinite(serial) && serial >= 0 && serial < 2958466.0;
+
+        private static int FormulaExcelDowToMonIndex(DateTime date)
+        {
+            var serial = (int)Math.Floor(FormulaDateToExcelSerial(date));
+            return FormulaExcelDowToMonIndex(serial);
+        }
+
+        private static int FormulaExcelDowToMonIndex(int serial) => ((serial + 5) % 7 + 7) % 7;
+
+        private static DateTime FormulaExcelSerialToDate(double serial) =>
+            new DateTime(1899, 12, 30).AddDays(serial < 60 ? serial + 1 : serial);
+
+        private static double FormulaDateToExcelSerial(DateTime date)
+        {
+            var serial = (date - new DateTime(1899, 12, 30)).TotalDays;
+            return date < new DateTime(1900, 3, 1) ? serial - 1 : serial;
         }
 
         private static bool TryCreateFormulaDateValue(
