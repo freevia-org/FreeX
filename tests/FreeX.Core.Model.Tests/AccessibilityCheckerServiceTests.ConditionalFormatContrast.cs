@@ -602,6 +602,30 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPositiveMeanAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("GEOMEAN($A1:$A3)>80", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("GEOMEAN($D1:$D3)=12", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(25,$A1,125)>65", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(\"25\",$A1,125)>65", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("HARMEAN($A1:$A2)>90", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("HARMEAN($D1:$D3)=12", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("HARMEAN(25,$A1,125)>50", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("HARMEAN(\"25\",$A1,125)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPositiveMeanWrappersPredicatesAndNestedAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("AND(GEOMEAN($A1:$A2)>85,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("IF(HARMEAN($A1:$A2)>90,TRUE,FALSE)", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(GEOMEAN($A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(HARMEAN($A1:$A2),5)>95", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(SUM($A1:$A2),$A1^2)>1000", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("HARMEAN(SUM($A1:$A2),$A1^2)>300", "B1", "B2", "B3");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatStdDevAggregates()
     {
         AssertFormulaAggregateContrastLocations("STDEV($A1:$A3)>20", "B2", "B3");
@@ -710,6 +734,24 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("AVEDEV($A1/0)>0");
         AssertFormulaAggregateContrastLocations("AVEDEV(1E308,-1E308)>0");
         AssertFormulaAggregateContrastLocations("AVEDEV(A0)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN()>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN($D3:$D5)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(0,$A1)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(-1,$A1)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN($A1/0)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(1E308,1E308)>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(A0)>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN()>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN($D3:$D5)>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN(0,$A1)>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN(-1,$A1)>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN($A1/0)>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN(1E308*1E308)>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN(A0)>0");
         AssertFormulaAggregateContrastLocations("STDEV()>0");
         AssertFormulaAggregateContrastLocations("STDEV($A1)>0");
         AssertFormulaAggregateContrastLocations("STDEV($A1:$A20000)>0");
@@ -791,6 +833,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("PRODUCT(1E308,1E308)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(KURT($A1))>0");
         AssertFormulaAggregateContrastLocations("AVEDEV(KURT($A1))>0");
+        AssertFormulaAggregateContrastLocations("GEOMEAN(KURT($A1))>0");
+        AssertFormulaAggregateContrastLocations("HARMEAN(KURT($A1))>0");
         AssertFormulaAggregateContrastLocations("VAR(KURT($A1))>0");
         AssertFormulaAggregateContrastLocations("VAR.P(KURT($A1))>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK()>0");
