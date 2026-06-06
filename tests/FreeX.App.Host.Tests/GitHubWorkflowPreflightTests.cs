@@ -8,7 +8,7 @@ public sealed class GitHubWorkflowPreflightTests
     [Fact]
     public void CiWorkflow_RunsPreflightBuildAndTestsWithReadOnlyPermissions()
     {
-        var workflow = File.ReadAllText(WorkspaceFileLocator.Find(".github", "workflows", "ci.yml"));
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
 
         workflow.Should().Contain("push:");
         workflow.Should().Contain("pull_request:");
@@ -43,7 +43,7 @@ public sealed class GitHubWorkflowPreflightTests
     [Fact]
     public void GlobalJson_PinsDotNetSdkBandWithFeatureRollForward()
     {
-        var globalJson = File.ReadAllText(WorkspaceFileLocator.Find("global.json"));
+        var globalJson = WorkspaceFileLocator.ReadAllText("global.json");
 
         globalJson.Should().Contain("\"version\": \"10.0.100\"");
         globalJson.Should().Contain("\"rollForward\": \"latestFeature\"");
@@ -52,7 +52,7 @@ public sealed class GitHubWorkflowPreflightTests
     [Fact]
     public void GitHubWorkflowPreflight_ValidatesPinnedActionsAndPermissions()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-GitHubWorkflows.ps1");
 
         script.Should().Contain(".github\\workflows");
         script.Should().Contain("(?:-\\s*)?uses:");

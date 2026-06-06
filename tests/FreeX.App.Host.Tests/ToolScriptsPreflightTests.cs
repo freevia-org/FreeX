@@ -8,7 +8,7 @@ public sealed class ToolScriptsPreflightTests
     [Fact]
     public void ToolScriptsPreflight_ParsesAllPowerShellTools()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
 
         script.Should().Contain("Get-ChildItem -LiteralPath $resolvedScriptDirectory -Filter \"*.ps1\" -File");
         script.Should().Contain("[System.Management.Automation.Language.Parser]::ParseFile");

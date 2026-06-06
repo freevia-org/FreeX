@@ -8,7 +8,7 @@ public sealed class ConflictMarkersPreflightTests
     [Fact]
     public void ConflictMarkersPreflight_ScansTextBackedRepositoryFiles()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-ConflictMarkers.ps1");
 
         script.Should().Contain("[string]$ProjectRoot = \".\"");
         script.Should().Contain("[string[]]$SearchRoots = @()");
