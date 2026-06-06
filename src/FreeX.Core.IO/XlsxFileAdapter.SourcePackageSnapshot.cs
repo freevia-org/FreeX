@@ -70,7 +70,8 @@ public sealed partial class XlsxFileAdapter
     private static string CreateModelFingerprint(Workbook workbook, bool forPatchValidation)
     {
         using var hash = SHA256.Create();
-        using var stream = new CryptoStream(Stream.Null, hash, CryptoStreamMode.Write, leaveOpen: true);
+        using var cryptoStream = new CryptoStream(Stream.Null, hash, CryptoStreamMode.Write, leaveOpen: true);
+        using var stream = new BufferedStream(cryptoStream, bufferSize: 64 * 1024);
         var adapter = new NativeJsonAdapter();
         if (forPatchValidation)
         {
@@ -83,7 +84,8 @@ public sealed partial class XlsxFileAdapter
         }
 
         WriteStyleOnlyFingerprint(workbook, stream);
-        stream.FlushFinalBlock();
+        stream.Flush();
+        cryptoStream.FlushFinalBlock();
         return Convert.ToHexString(hash.Hash ?? []);
     }
 
