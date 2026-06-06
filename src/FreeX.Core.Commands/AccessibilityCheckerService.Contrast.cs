@@ -1049,6 +1049,14 @@ public static partial class AccessibilityCheckerService
             case "DEVSQ":
                 kind = ConditionalFormulaAggregateKind.DevSq;
                 return true;
+            case "STDEV":
+            case "STDEV.S":
+                kind = ConditionalFormulaAggregateKind.StdDevSample;
+                return true;
+            case "STDEVP":
+            case "STDEV.P":
+                kind = ConditionalFormulaAggregateKind.StdDevPopulation;
+                return true;
             case "AVEDEV":
                 kind = ConditionalFormulaAggregateKind.AveDev;
                 return true;
@@ -1522,6 +1530,8 @@ public static partial class AccessibilityCheckerService
         Sum,
         SumSq,
         DevSq,
+        StdDevSample,
+        StdDevPopulation,
         AveDev,
         Product,
         Average,
@@ -2536,6 +2546,8 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.Sum => new NumberValue(numericValues.Sum()),
                 ConditionalFormulaAggregateKind.SumSq => new NumberValue(numericValues.Sum(number => number * number)),
                 ConditionalFormulaAggregateKind.DevSq when numericValues.Count > 0 => new NumberValue(DevSqFormulaNumbers(numericValues)),
+                ConditionalFormulaAggregateKind.StdDevSample when numericValues.Count > 1 => new NumberValue(StandardDeviationFormulaNumbers(numericValues, sample: true)),
+                ConditionalFormulaAggregateKind.StdDevPopulation when numericValues.Count > 0 => new NumberValue(StandardDeviationFormulaNumbers(numericValues, sample: false)),
                 ConditionalFormulaAggregateKind.AveDev when numericValues.Count > 0 => new NumberValue(AveDevFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Product => new NumberValue(numericValues.Aggregate(1d, (product, number) => product * number)),
                 ConditionalFormulaAggregateKind.Average when numericValues.Count > 0 => new NumberValue(numericValues.Average()),
@@ -2562,6 +2574,12 @@ public static partial class AccessibilityCheckerService
             }
 
             return sum;
+        }
+
+        private static double StandardDeviationFormulaNumbers(List<double> numericValues, bool sample)
+        {
+            var denominator = sample ? numericValues.Count - 1 : numericValues.Count;
+            return Math.Sqrt(DevSqFormulaNumbers(numericValues) / denominator);
         }
 
         private static double AveDevFormulaNumbers(List<double> numericValues)
@@ -2742,6 +2760,8 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.Sum or
                 ConditionalFormulaAggregateKind.SumSq or
                 ConditionalFormulaAggregateKind.DevSq or
+                ConditionalFormulaAggregateKind.StdDevSample or
+                ConditionalFormulaAggregateKind.StdDevPopulation or
                 ConditionalFormulaAggregateKind.AveDev or
                 ConditionalFormulaAggregateKind.Product or
                 ConditionalFormulaAggregateKind.Average or
