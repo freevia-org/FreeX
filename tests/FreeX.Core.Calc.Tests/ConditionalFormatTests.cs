@@ -18,12 +18,7 @@ public partial class ConditionalFormatTests
         vp.Cells.Single(c => c.Row == row && c.Col == col);
 
     private static string ReadViewportConditionalFormatEvaluatorSources()
-    {
-        var primaryFile = WorkspaceFileLocator.Find("src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs");
-        var directory = Path.GetDirectoryName(primaryFile)!;
-        var files = Directory.GetFiles(directory, "ViewportConditionalFormatEvaluator*.cs")
-            .OrderBy(static file => Path.GetFileName(file), StringComparer.Ordinal);
-
-        return string.Join(Environment.NewLine, files.Select(File.ReadAllText));
-    }
+        => CalcSourceTestSupport.ReadCalcSourcesMatching(
+            "ViewportConditionalFormatEvaluator.cs",
+            "ViewportConditionalFormatEvaluator*.cs");
 }
