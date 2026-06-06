@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using System.Reflection;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -80,7 +79,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void Render_ExportsAtRequestedRenderScale()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "ChartRenderer.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.cs");
         var render = source[
             source.IndexOf("public static ImageSource? Render(ChartModel chart, ViewportModel viewport, WorkbookTheme? theme, double renderScale)", StringComparison.Ordinal)..
             source.IndexOf("private static PlotModel? BuildPlotModel", StringComparison.Ordinal)];
