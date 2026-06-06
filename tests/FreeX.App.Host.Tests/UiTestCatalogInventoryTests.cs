@@ -388,8 +388,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static int ReadUiEvidenceScreenshotCount()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))
-            ?? throw new DirectoryNotFoundException("Could not locate docs.");
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var artifactDirectory = Path.Combine(docsDirectory, "ui-test-artifacts");
 
         return Directory

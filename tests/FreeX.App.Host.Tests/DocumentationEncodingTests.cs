@@ -9,7 +9,7 @@ public sealed partial class DocumentationEncodingTests
     [Fact]
     public void CurrentUserFacingDocs_DoNotContainMojibake()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var repoDirectory = Directory.GetParent(docsDirectory)!.FullName;
 
         var invalidLines = CurrentDocumentationFiles

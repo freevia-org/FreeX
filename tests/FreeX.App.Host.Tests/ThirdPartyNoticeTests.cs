@@ -40,7 +40,7 @@ public sealed class ThirdPartyNoticeTests
 
     private static IReadOnlyCollection<(string Name, string Version)> FindRestoredPackages()
     {
-        var root = Path.GetDirectoryName(WorkspaceFileLocator.Find("FreeX.slnx"))!;
+        var root = WorkspaceFileLocator.FindWorkspaceRoot();
         var packages = new SortedSet<(string Name, string Version)>();
         foreach (var assetsPath in Directory.EnumerateFiles(root, "project.assets.json", SearchOption.AllDirectories))
         {
