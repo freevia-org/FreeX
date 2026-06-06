@@ -472,6 +472,84 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_DrawingObjectsRespectIncludeObjectsFlag()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "Shape 1"
+        });
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300, IncludeObjects: false));
+
+        viewport.DrawingObjects.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetViewport_DrawingObjectsExposeVisibleBoundsInZOrder()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Name = "Status Box",
+            Width = 90,
+            Height = 44,
+            RotationDegrees = 15
+        };
+        var hiddenPicture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Name = "Hidden Picture",
+            IsVisible = false
+        };
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Name = "Notes",
+            Width = 120,
+            Height = 48
+        };
+        sheet.DrawingShapes.Add(shape);
+        sheet.Pictures.Add(hiddenPicture);
+        sheet.TextBoxes.Add(textBox);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300));
+
+        viewport.DrawingObjects.Select(drawing => drawing.DisplayName)
+            .Should().Equal("Notes", "Status Box");
+        var notes = viewport.DrawingObjects[0];
+        notes.Kind.Should().Be(SelectionPaneObjectKind.TextBox);
+        notes.AnchorRow.Should().Be(3);
+        notes.AnchorCol.Should().Be(2);
+        notes.Left.Should().Be(64);
+        notes.Top.Should().Be(40);
+        notes.Width.Should().Be(120);
+        notes.Height.Should().Be(48);
+
+        var statusBox = viewport.DrawingObjects[1];
+        statusBox.Kind.Should().Be(SelectionPaneObjectKind.Shape);
+        statusBox.AnchorRow.Should().Be(1);
+        statusBox.AnchorCol.Should().Be(1);
+        statusBox.Left.Should().Be(0);
+        statusBox.Top.Should().Be(0);
+        statusBox.Width.Should().Be(90);
+        statusBox.Height.Should().Be(44);
+        statusBox.RotationDegrees.Should().Be(15);
+    }
+
+    [Fact]
     public void HitTest_UniformRowAndColumnSizes_FastPathMatchesExpectedCell()
     {
         // DefaultRowHeight = 20.0 px, DefaultColumnWidth = 8.43 chars → 8.43*8 = 67.44 px.

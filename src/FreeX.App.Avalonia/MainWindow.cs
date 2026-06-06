@@ -22,6 +22,8 @@ public sealed class MainWindow : Window
     private const double HeaderRowHeight = 28;
     private const double InitialViewportHeight = 880;
     private const double InitialViewportWidth = 1440;
+    private const double MinimumDisplayedColumnWidth = 54;
+    private const double MinimumDisplayedRowHeight = 22;
     private const string NativeWorkbookExtension = ".fxl";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
@@ -31,6 +33,9 @@ public sealed class MainWindow : Window
     private static readonly IBrush SelectionBorder = Brush(11, 112, 116);
     private static readonly IBrush SelectionHeaderBackground = Brush(225, 244, 242);
     private static readonly IBrush SelectionHeaderForeground = Brush(13, 86, 89);
+    private static readonly IBrush DrawingObjectBoundsFill = Brush(42, 11, 112, 116);
+    private static readonly IBrush DrawingObjectBoundsBorder = Brush(11, 112, 116);
+    private static readonly IBrush DrawingObjectBoundsForeground = Brush(5, 67, 69);
 
     private readonly WorkbookSessionFactory _sessionFactory = new();
     private readonly WorkbookOpenService _openService = new();
@@ -56,7 +61,7 @@ public sealed class MainWindow : Window
     public MainWindow(IReadOnlyList<string> startupArguments)
     {
         var source = new StartupWorkbookLoader().Load(startupArguments);
-        _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth);
+        _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
 
         Title = $"FreeX - {_session.DisplayName}";
         Width = 1120;
@@ -319,11 +324,11 @@ public sealed class MainWindow : Window
 
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HeaderColumnWidth) });
         foreach (var metric in viewport.ColMetrics)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(54, metric.Width)) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetDisplayedColumnWidth(metric)) });
 
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderRowHeight) });
         foreach (var metric in viewport.RowMetrics)
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Math.Max(22, metric.Height)) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(GetDisplayedRowHeight(metric)) });
 
         AddGridChild(grid, CreateHeaderCell(""), 0, 0);
         for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
@@ -347,8 +352,179 @@ public sealed class MainWindow : Window
             }
         }
 
-        return grid;
+        var overlay = BuildDrawingObjectOverlay(viewport);
+        if (overlay.Children.Count == 0)
+            return grid;
+
+        return new AvaloniaGrid
+        {
+            ClipToBounds = true,
+            Children =
+            {
+                grid,
+                overlay,
+            },
+        };
     }
+
+    private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)
+    {
+        var overlay = new Canvas
+        {
+            Width = CalculateDisplayedGridWidth(viewport),
+            Height = CalculateDisplayedGridHeight(viewport),
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+        };
+
+        if (viewport.DrawingObjects is not { Count: > 0 })
+            return overlay;
+
+        foreach (var drawingObject in viewport.DrawingObjects)
+        {
+            if (!TryGetDisplayedDrawingObjectBounds(
+                    viewport,
+                    drawingObject,
+                    out var left,
+                    out var top,
+                    out var width,
+                    out var height))
+            {
+                continue;
+            }
+
+            var marker = CreateDrawingObjectBoundsMarker(drawingObject, width, height);
+            Canvas.SetLeft(marker, left);
+            Canvas.SetTop(marker, top);
+            overlay.Children.Add(marker);
+        }
+
+        return overlay;
+    }
+
+    private static Border CreateDrawingObjectBoundsMarker(
+        DrawingObjectBounds drawingObject,
+        double width,
+        double height)
+    {
+        var marker = new Border
+        {
+            Width = Math.Max(1, width),
+            Height = Math.Max(1, height),
+            Background = DrawingObjectBoundsFill,
+            BorderBrush = DrawingObjectBoundsBorder,
+            BorderThickness = new Thickness(1.5),
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+        };
+
+        if (width >= 56 && height >= 24)
+        {
+            marker.Child = new TextBlock
+            {
+                Text = drawingObject.DisplayName,
+                FontSize = 11,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = DrawingObjectBoundsForeground,
+                Margin = new Thickness(6, 3),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+        }
+
+        if (Math.Abs(drawingObject.RotationDegrees % 360) > 0.0001)
+        {
+            marker.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+            marker.RenderTransform = new RotateTransform(drawingObject.RotationDegrees);
+        }
+
+        return marker;
+    }
+
+    private static bool TryGetDisplayedDrawingObjectBounds(
+        ViewportModel viewport,
+        DrawingObjectBounds drawingObject,
+        out double left,
+        out double top,
+        out double width,
+        out double height)
+    {
+        left = 0;
+        top = 0;
+        width = 0;
+        height = 0;
+        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, drawingObject.AnchorCol, out var columnLeft) ||
+            !TryGetDisplayedRowTop(viewport.RowMetrics, drawingObject.AnchorRow, out var rowTop))
+        {
+            return false;
+        }
+
+        left = HeaderColumnWidth + columnLeft;
+        top = HeaderRowHeight + rowTop;
+        width = Math.Max(1, drawingObject.Width);
+        height = Math.Max(1, drawingObject.Height);
+        return true;
+    }
+
+    private static bool TryGetDisplayedColumnLeft(
+        IReadOnlyList<ColMetric> columns,
+        uint column,
+        out double left)
+    {
+        left = 0;
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var metric = columns[i];
+            if (metric.Col == column)
+                return true;
+            left += GetDisplayedColumnWidth(metric);
+        }
+
+        left = 0;
+        return false;
+    }
+
+    private static bool TryGetDisplayedRowTop(
+        IReadOnlyList<RowMetric> rows,
+        uint row,
+        out double top)
+    {
+        top = 0;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var metric = rows[i];
+            if (metric.Row == row)
+                return true;
+            top += GetDisplayedRowHeight(metric);
+        }
+
+        top = 0;
+        return false;
+    }
+
+    private static double CalculateDisplayedGridWidth(ViewportModel viewport)
+    {
+        var width = HeaderColumnWidth;
+        foreach (var metric in viewport.ColMetrics)
+            width += GetDisplayedColumnWidth(metric);
+
+        return width;
+    }
+
+    private static double CalculateDisplayedGridHeight(ViewportModel viewport)
+    {
+        var height = HeaderRowHeight;
+        foreach (var metric in viewport.RowMetrics)
+            height += GetDisplayedRowHeight(metric);
+
+        return height;
+    }
+
+    private static double GetDisplayedColumnWidth(ColMetric metric) =>
+        Math.Max(MinimumDisplayedColumnWidth, metric.Width);
+
+    private static double GetDisplayedRowHeight(RowMetric metric) =>
+        Math.Max(MinimumDisplayedRowHeight, metric.Height);
 
     private Border CreateHeaderCell(string text, bool selected = false) =>
         CreateCellBorder(
@@ -820,7 +996,7 @@ public sealed class MainWindow : Window
                 target.Format,
                 progress);
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
-            _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth);
+            _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);
             RefreshShell(_session.StartupStatus);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
@@ -1077,6 +1253,9 @@ public sealed class MainWindow : Window
 
     private static IBrush Brush(byte red, byte green, byte blue) =>
         new SolidColorBrush(Color.FromRgb(red, green, blue));
+
+    private static IBrush Brush(byte alpha, byte red, byte green, byte blue) =>
+        new SolidColorBrush(Color.FromArgb(alpha, red, green, blue));
 
     private static IBrush Brush(CellColor color) =>
         Brush(color.R, color.G, color.B);

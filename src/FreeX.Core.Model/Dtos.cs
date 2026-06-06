@@ -68,7 +68,8 @@ public sealed record ViewportModel(
     FrozenPaneState? FrozenPanes = null,
     IReadOnlyList<OverlayPrimitive> Overlays = null!,
     SplitPaneState? SplitPanes = null,
-    IReadOnlyList<ChartDataCell> ChartDataCells = null!);
+    IReadOnlyList<ChartDataCell> ChartDataCells = null!,
+    IReadOnlyList<DrawingObjectBounds> DrawingObjects = null!);
 
 public sealed record ChartDataCell(
     SheetId SheetId,
@@ -76,6 +77,18 @@ public sealed record ChartDataCell(
     uint Col,
     string DisplayText,
     ScalarValue? RawValue = null);
+
+public sealed record DrawingObjectBounds(
+    SelectionPaneObjectKind Kind,
+    Guid Id,
+    string DisplayName,
+    uint AnchorRow,
+    uint AnchorCol,
+    double Left,
+    double Top,
+    double Width,
+    double Height,
+    double RotationDegrees = 0);
 
 public sealed record RowMetric(uint Row, double Height, double TopOffset);
 public sealed record ColMetric(uint Col, double Width, double LeftOffset);

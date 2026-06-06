@@ -86,4 +86,24 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop");
         source.Should().Contain("desktop.TryShutdown(0);");
     }
+
+    [Fact]
+    public void MainWindow_RendersNonInteractiveDrawingObjectBoundsOverlay()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("_sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true)");
+        source.Should().Contain("_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true)");
+        source.Should().Contain("private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)");
+        source.Should().Contain("viewport.DrawingObjects is not { Count: > 0 }");
+        source.Should().Contain("TryGetDisplayedDrawingObjectBounds(");
+        source.Should().Contain("drawingObject.AnchorCol");
+        source.Should().Contain("drawingObject.AnchorRow");
+        source.Should().Contain("IsHitTestVisible = false");
+        source.Should().Contain("Canvas.SetLeft(marker, left);");
+        source.Should().Contain("Canvas.SetTop(marker, top);");
+        source.Should().Contain("GetDisplayedColumnWidth(metric)");
+        source.Should().Contain("GetDisplayedRowHeight(metric)");
+        source.Should().Contain("new RotateTransform(drawingObject.RotationDegrees)");
+    }
 }

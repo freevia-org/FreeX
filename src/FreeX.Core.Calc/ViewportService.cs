@@ -17,7 +17,7 @@ public sealed partial class ViewportService : IViewportService
         var sheet = workbook.GetSheet(sheetId);
         if (sheet == null)
         {
-            return new ViewportModel([], [], [], null, []);
+            return new ViewportModel([], [], [], null, [], ChartDataCells: [], DrawingObjects: []);
         }
 
         var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight);
@@ -134,7 +134,19 @@ public sealed partial class ViewportService : IViewportService
             ? BuildChartDataCells(workbook, sheet, ref styleCache)
             : [];
 
-        return new ViewportModel(cells, rowMetrics, colMetrics, frozenPanes, [], splitPanes, chartDataCells);
+        var drawingObjects = request.IncludeObjects
+            ? BuildDrawingObjectBounds(sheet, rowMetrics, colMetrics)
+            : [];
+
+        return new ViewportModel(
+            cells,
+            rowMetrics,
+            colMetrics,
+            frozenPanes,
+            [],
+            splitPanes,
+            chartDataCells,
+            drawingObjects);
     }
 
     private static IReadOnlyList<RowMetric> MaterializeRowMetrics(IReadOnlyList<RowMetric> metrics)
@@ -524,7 +536,6 @@ public sealed partial class ViewportService : IViewportService
 
         return chartCells;
     }
-
 
     private static List<DisplayCell> BuildSplitPaneCells(
         Workbook workbook,
