@@ -848,6 +848,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchLegacyCommentFonts(archive);
                 NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
+                NormalizePatchWorksheetPageBreaks(archive);
                 NormalizePatchWorksheetSingleXmlCells(archive);
                 NormalizePatchSingleCellTableParts(archive);
                 NormalizePatchWorksheetAutoFilters(archive);
@@ -1274,6 +1275,27 @@ public sealed partial class XlsxFileAdapter
                 foreach (var element in singleXmlCells)
                     element.Remove();
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
+        }
+
+        private static void NormalizePatchWorksheetPageBreaks(ZipArchive archive)
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                var changed = false;
+                if (root.Element(worksheetNs + "rowBreaks") is { } rowBreaks)
+                    changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(rowBreaks);
+                if (root.Element(worksheetNs + "colBreaks") is { } columnBreaks)
+                    changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(columnBreaks);
+
+                if (changed)
+                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
             }
         }
 
