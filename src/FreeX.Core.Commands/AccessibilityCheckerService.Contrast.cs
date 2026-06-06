@@ -1257,6 +1257,18 @@ public static partial class AccessibilityCheckerService
             case "DELTA":
                 kind = ConditionalFormulaScalarFunctionKind.Delta;
                 return true;
+            case "ERF":
+                kind = ConditionalFormulaScalarFunctionKind.Erf;
+                return true;
+            case "ERF.PRECISE":
+                kind = ConditionalFormulaScalarFunctionKind.ErfPrecise;
+                return true;
+            case "ERFC":
+                kind = ConditionalFormulaScalarFunctionKind.Erfc;
+                return true;
+            case "ERFC.PRECISE":
+                kind = ConditionalFormulaScalarFunctionKind.ErfcPrecise;
+                return true;
             case "GESTEP":
                 kind = ConditionalFormulaScalarFunctionKind.GeStep;
                 return true;
@@ -1321,6 +1333,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Cot or
             ConditionalFormulaScalarFunctionKind.Tan or
             ConditionalFormulaScalarFunctionKind.Arabic or
+            ConditionalFormulaScalarFunctionKind.ErfPrecise or
+            ConditionalFormulaScalarFunctionKind.Erfc or
+            ConditionalFormulaScalarFunctionKind.ErfcPrecise or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -1338,6 +1353,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
             ConditionalFormulaScalarFunctionKind.FloorPrecise or
             ConditionalFormulaScalarFunctionKind.Trunc or
+            ConditionalFormulaScalarFunctionKind.Erf or
             ConditionalFormulaScalarFunctionKind.Delta or
             ConditionalFormulaScalarFunctionKind.GeStep or
             ConditionalFormulaScalarFunctionKind.Weekday or
@@ -2047,6 +2063,10 @@ public static partial class AccessibilityCheckerService
         Columns,
         Areas,
         Delta,
+        Erf,
+        ErfPrecise,
+        Erfc,
+        ErfcPrecise,
         GeStep,
         BitAnd,
         BitOr,
@@ -2608,6 +2628,10 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Cot:
                 case ConditionalFormulaScalarFunctionKind.Tan:
                 case ConditionalFormulaScalarFunctionKind.Delta:
+                case ConditionalFormulaScalarFunctionKind.Erf:
+                case ConditionalFormulaScalarFunctionKind.ErfPrecise:
+                case ConditionalFormulaScalarFunctionKind.Erfc:
+                case ConditionalFormulaScalarFunctionKind.ErfcPrecise:
                 case ConditionalFormulaScalarFunctionKind.GeStep:
                 case ConditionalFormulaScalarFunctionKind.BitAnd:
                 case ConditionalFormulaScalarFunctionKind.BitOr:
@@ -3303,6 +3327,29 @@ public static partial class AccessibilityCheckerService
 
                     result = first == deltaSecond ? 1d : 0d;
                     break;
+                case ConditionalFormulaScalarFunctionKind.Erf:
+                    if (function.Arguments.Count == 2)
+                    {
+                        if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var upper))
+                        {
+                            return false;
+                        }
+
+                        result = FormulaErfApprox(upper) - FormulaErfApprox(first);
+                    }
+                    else
+                    {
+                        result = FormulaErfApprox(first);
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.ErfPrecise:
+                    result = FormulaErfApprox(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Erfc:
+                case ConditionalFormulaScalarFunctionKind.ErfcPrecise:
+                    result = 1d - FormulaErfApprox(first);
+                    break;
                 case ConditionalFormulaScalarFunctionKind.GeStep:
                     var step = 0d;
                     if (function.Arguments.Count == 2 &&
@@ -3378,6 +3425,19 @@ public static partial class AccessibilityCheckerService
 
             result = bitwiseResult;
             return true;
+        }
+
+        private static double FormulaErfApprox(double x)
+        {
+            if (x == 0d)
+                return 0d;
+
+            var sign = Math.Sign(x);
+            var ax = Math.Abs(x);
+            const double p = 0.3275911d;
+            var t = 1d / (1d + p * ax);
+            var y = 1d - (((((1.061405429d * t - 1.453152027d) * t) + 1.421413741d) * t - 0.284496736d) * t + 0.254829592d) * t * Math.Exp(-ax * ax);
+            return sign * y;
         }
 
         private bool TryEvaluateFormulaBitwiseShiftFunction(
