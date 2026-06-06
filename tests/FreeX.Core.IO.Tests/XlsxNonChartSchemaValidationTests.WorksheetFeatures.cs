@@ -1372,6 +1372,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void ManualPageBreaks_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidManualPageBreakSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertManualPageBreaksSanitized(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithManualPageBreaks_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateManualPageBreakSourceWorkbook());
@@ -1402,6 +1411,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceColumnBreaks.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidManualPageBreaksForSchemaValidity()
+    {
+        using var source = Save(CreateManualPageBreakSourceWorkbook());
+        SetManualPageBreakInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertManualPageBreaksSanitized(saved);
     }
 
 
@@ -2284,6 +2317,111 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.RowPageBreaks.Add(20);
         sheet.ColumnPageBreaks.Add(4);
         return workbook;
+    }
+
+    private static Workbook CreateInvalidManualPageBreakSourceWorkbook()
+    {
+        var workbook = new Workbook("ManualPageBreakInvalidSchema");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+        sheet.RowPageBreaks.Add(20);
+        sheet.ColumnPageBreaks.Add(4);
+        sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["manualBreakCount"] = "not-a-number",
+                ["customAttr"] = "row-container-native"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [20] = new(StringComparer.Ordinal)
+                {
+                    ["min"] = "not-a-number",
+                    ["max"] = "not-a-number",
+                    ["man"] = "maybe",
+                    ["pt"] = "maybe",
+                    ["customAttr"] = "row-native"
+                }
+            }
+        };
+        sheet.ColumnPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["manualBreakCount"] = "not-a-number",
+                ["customAttr"] = "col-container-native"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [4] = new(StringComparer.Ordinal)
+                {
+                    ["min"] = "not-a-number",
+                    ["max"] = "not-a-number",
+                    ["man"] = "maybe",
+                    ["pt"] = "maybe",
+                    ["customAttr"] = "col-native"
+                }
+            }
+        };
+        return workbook;
+    }
+
+    private static void SetManualPageBreakInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        SetInvalidPageBreakAttributes(worksheetXml.Root!.Element(worksheetNs + "rowBreaks")!, worksheetNs, "20", "row-native");
+        SetInvalidPageBreakAttributes(worksheetXml.Root!.Element(worksheetNs + "colBreaks")!, worksheetNs, "4", "col-native");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void SetInvalidPageBreakAttributes(
+        XElement pageBreaks,
+        XNamespace worksheetNs,
+        string validBreakId,
+        string customAttr)
+    {
+        pageBreaks.SetAttributeValue("count", "not-a-number");
+        pageBreaks.SetAttributeValue("manualBreakCount", "not-a-number");
+        pageBreaks.SetAttributeValue("customAttr", "container-native");
+        var breakElement = pageBreaks.Elements(worksheetNs + "brk")
+            .Single(element => element.Attribute("id")?.Value == validBreakId);
+        breakElement.SetAttributeValue("min", "not-a-number");
+        breakElement.SetAttributeValue("max", "not-a-number");
+        breakElement.SetAttributeValue("man", "maybe");
+        breakElement.SetAttributeValue("pt", "maybe");
+        breakElement.SetAttributeValue("customAttr", customAttr);
+        pageBreaks.Add(new XElement(
+            worksheetNs + "brk",
+            new XAttribute("id", "not-a-number"),
+            new XAttribute("max", "not-a-number"),
+            new XAttribute("customAttr", "removed-invalid-break")));
+        pageBreaks.Add(new XElement(worksheetNs + "nativePageBreakChild"));
+    }
+
+    private static void AssertManualPageBreaksSanitized(MemoryStream stream)
+    {
+        AssertPageBreaksSanitized(ReadWorksheetChildElement(stream, "rowBreaks"), "20");
+        AssertPageBreaksSanitized(ReadWorksheetChildElement(stream, "colBreaks"), "4");
+    }
+
+    private static void AssertPageBreaksSanitized(XElement pageBreaks, string expectedBreakId)
+    {
+        var worksheetNs = pageBreaks.Name.Namespace;
+        pageBreaks.Attribute("count")!.Value.Should().Be("1");
+        pageBreaks.Attribute("manualBreakCount")!.Value.Should().Be("1");
+        pageBreaks.Attribute("customAttr").Should().BeNull();
+        pageBreaks.Elements().Should().ContainSingle();
+        var breakElement = pageBreaks.Elements(worksheetNs + "brk").Should().ContainSingle().Subject;
+        breakElement.Attribute("id")!.Value.Should().Be(expectedBreakId);
+        breakElement.Attribute("min").Should().BeNull();
+        breakElement.Attribute("max").Should().BeNull();
+        breakElement.Attribute("man").Should().BeNull();
+        breakElement.Attribute("pt").Should().BeNull();
+        breakElement.Attribute("customAttr").Should().BeNull();
     }
 
     private static Workbook CreateMergedCellSourceWorkbook()

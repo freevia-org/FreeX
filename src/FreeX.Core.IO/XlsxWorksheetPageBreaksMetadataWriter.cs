@@ -167,6 +167,7 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
                 manualBreakCount.ToString(CultureInfo.InvariantCulture));
         }
 
+        changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(pageBreaks);
         return changed;
     }
 
