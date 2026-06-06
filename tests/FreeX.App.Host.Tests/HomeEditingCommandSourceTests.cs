@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -69,7 +68,7 @@ public sealed class HomeEditingCommandSourceTests
     [Fact]
     public void EditingCommandHandlers_RouteThroughExpectedPlannersAndDelegates()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeEditing.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
         source.Should().Contain("AutoSumFormulaPlanner.BuildFormula(_workbook.GetSheet(_currentSheetId), func, addr)");
         var autoSumButtonHandler = SourceMethodExtractor.ExtractMethodSource(source, "private void AutoSumPickerBtn_Click(");
