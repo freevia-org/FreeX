@@ -1009,6 +1009,9 @@ public static partial class AccessibilityCheckerService
             case "COSH":
                 kind = ConditionalFormulaScalarFunctionKind.Cosh;
                 return true;
+            case "SECH":
+                kind = ConditionalFormulaScalarFunctionKind.Sech;
+                return true;
             case "TANH":
                 kind = ConditionalFormulaScalarFunctionKind.Tanh;
                 return true;
@@ -1143,6 +1146,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Asinh or
             ConditionalFormulaScalarFunctionKind.Acosh or
             ConditionalFormulaScalarFunctionKind.Cosh or
+            ConditionalFormulaScalarFunctionKind.Sech or
             ConditionalFormulaScalarFunctionKind.Tanh or
             ConditionalFormulaScalarFunctionKind.Atanh or
             ConditionalFormulaScalarFunctionKind.Acoth or
@@ -1744,6 +1748,7 @@ public static partial class AccessibilityCheckerService
         Asinh,
         Acosh,
         Cosh,
+        Sech,
         Tanh,
         Atanh,
         Acoth,
@@ -2292,6 +2297,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Asinh:
                 case ConditionalFormulaScalarFunctionKind.Acosh:
                 case ConditionalFormulaScalarFunctionKind.Cosh:
+                case ConditionalFormulaScalarFunctionKind.Sech:
                 case ConditionalFormulaScalarFunctionKind.Tanh:
                 case ConditionalFormulaScalarFunctionKind.Atanh:
                 case ConditionalFormulaScalarFunctionKind.Acoth:
@@ -2652,6 +2658,13 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cosh:
                     result = Math.Cosh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Sech:
+                    var hyperbolicCosine = Math.Cosh(first);
+                    if (!double.IsFinite(hyperbolicCosine))
+                        return false;
+
+                    result = 1d / hyperbolicCosine;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Tanh:
                     result = Math.Tanh(first);

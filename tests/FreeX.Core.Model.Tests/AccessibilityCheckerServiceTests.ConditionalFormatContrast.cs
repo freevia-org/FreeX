@@ -1478,6 +1478,43 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSechScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("SECH($A1/100)>0.6", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("ABS(SECH(1)-0.6480542736638854)<0.000000000001", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ABS(SECH(0)-1)<0.000000000001", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUND(ACOSH(1/SECH(1)),2)=1", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSechScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(SECH($A1/100)>0.6,TRUE,FALSE)", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("AND(SECH($A1/100)>0.6,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(SECH($A1/100))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSechScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(SECH($A1/100),1)>1.6", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("AVERAGE(SECH($A1/100),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatSechScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("SECH()>0");
+        AssertFormulaArithmeticContrastLocations("SECH($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("SECH(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("SECH($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("SECH(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("SECH(1E308)>0");
+        AssertFormulaArithmeticContrastLocations("SECH(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("SECH(EXP(1000))>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAcotScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("ACOT($A1/100)>0.8", "B1", "B3");
