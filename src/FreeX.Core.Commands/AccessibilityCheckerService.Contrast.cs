@@ -700,6 +700,12 @@ public static partial class AccessibilityCheckerService
 
     private const ulong MaxFormulaAggregateRangeCells = 10_000;
     private const int MaxFormulaRoundDigits = 15;
+    private const int MaxFormulaFactorialInput = 170;
+    private const int MaxFormulaDoubleFactorialInput = 300;
+    private const int MaxFormulaCombinInput = 1_000_000;
+    private const int MaxFormulaCombinIterations = 10_000;
+    private const int MaxFormulaPermutInput = 1_000_000;
+    private const int MaxFormulaPermutIterations = 10_000;
     private const int MaxFormulaTextSliceLength = 32_767;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
@@ -896,11 +902,44 @@ public static partial class AccessibilityCheckerService
             case "INT":
                 kind = ConditionalFormulaScalarFunctionKind.Int;
                 return true;
+            case "EVEN":
+                kind = ConditionalFormulaScalarFunctionKind.Even;
+                return true;
+            case "ODD":
+                kind = ConditionalFormulaScalarFunctionKind.Odd;
+                return true;
             case "ROUND":
                 kind = ConditionalFormulaScalarFunctionKind.Round;
                 return true;
+            case "ROUNDUP":
+                kind = ConditionalFormulaScalarFunctionKind.RoundUp;
+                return true;
+            case "ROUNDDOWN":
+                kind = ConditionalFormulaScalarFunctionKind.RoundDown;
+                return true;
+            case "MROUND":
+                kind = ConditionalFormulaScalarFunctionKind.MRound;
+                return true;
+            case "TRUNC":
+                kind = ConditionalFormulaScalarFunctionKind.Trunc;
+                return true;
+            case "FACT":
+                kind = ConditionalFormulaScalarFunctionKind.Fact;
+                return true;
+            case "FACTDOUBLE":
+                kind = ConditionalFormulaScalarFunctionKind.FactDouble;
+                return true;
             case "MOD":
                 kind = ConditionalFormulaScalarFunctionKind.Mod;
+                return true;
+            case "QUOTIENT":
+                kind = ConditionalFormulaScalarFunctionKind.Quotient;
+                return true;
+            case "COMBIN":
+                kind = ConditionalFormulaScalarFunctionKind.Combin;
+                return true;
+            case "PERMUT":
+                kind = ConditionalFormulaScalarFunctionKind.Permut;
                 return true;
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
@@ -934,6 +973,39 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "SIN":
                 kind = ConditionalFormulaScalarFunctionKind.Sin;
+                return true;
+            case "SINH":
+                kind = ConditionalFormulaScalarFunctionKind.Sinh;
+                return true;
+            case "ASINH":
+                kind = ConditionalFormulaScalarFunctionKind.Asinh;
+                return true;
+            case "ACOSH":
+                kind = ConditionalFormulaScalarFunctionKind.Acosh;
+                return true;
+            case "COSH":
+                kind = ConditionalFormulaScalarFunctionKind.Cosh;
+                return true;
+            case "TANH":
+                kind = ConditionalFormulaScalarFunctionKind.Tanh;
+                return true;
+            case "ATANH":
+                kind = ConditionalFormulaScalarFunctionKind.Atanh;
+                return true;
+            case "ASIN":
+                kind = ConditionalFormulaScalarFunctionKind.Asin;
+                return true;
+            case "ACOS":
+                kind = ConditionalFormulaScalarFunctionKind.Acos;
+                return true;
+            case "ACOT":
+                kind = ConditionalFormulaScalarFunctionKind.Acot;
+                return true;
+            case "ATAN":
+                kind = ConditionalFormulaScalarFunctionKind.Atan;
+                return true;
+            case "ATAN2":
+                kind = ConditionalFormulaScalarFunctionKind.Atan2;
                 return true;
             case "COS":
                 kind = ConditionalFormulaScalarFunctionKind.Cos;
@@ -1017,6 +1089,10 @@ public static partial class AccessibilityCheckerService
         {
             ConditionalFormulaScalarFunctionKind.Abs or
             ConditionalFormulaScalarFunctionKind.Int or
+            ConditionalFormulaScalarFunctionKind.Even or
+            ConditionalFormulaScalarFunctionKind.Odd or
+            ConditionalFormulaScalarFunctionKind.Fact or
+            ConditionalFormulaScalarFunctionKind.FactDouble or
             ConditionalFormulaScalarFunctionKind.Sqrt or
             ConditionalFormulaScalarFunctionKind.SqrtPi or
             ConditionalFormulaScalarFunctionKind.Sign or
@@ -1026,6 +1102,16 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Degrees or
             ConditionalFormulaScalarFunctionKind.Radians or
             ConditionalFormulaScalarFunctionKind.Sin or
+            ConditionalFormulaScalarFunctionKind.Sinh or
+            ConditionalFormulaScalarFunctionKind.Asinh or
+            ConditionalFormulaScalarFunctionKind.Acosh or
+            ConditionalFormulaScalarFunctionKind.Cosh or
+            ConditionalFormulaScalarFunctionKind.Tanh or
+            ConditionalFormulaScalarFunctionKind.Atanh or
+            ConditionalFormulaScalarFunctionKind.Asin or
+            ConditionalFormulaScalarFunctionKind.Acos or
+            ConditionalFormulaScalarFunctionKind.Acot or
+            ConditionalFormulaScalarFunctionKind.Atan or
             ConditionalFormulaScalarFunctionKind.Cos or
             ConditionalFormulaScalarFunctionKind.Tan or
             ConditionalFormulaScalarFunctionKind.Value or
@@ -1038,11 +1124,19 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Day => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Log => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.Round or
+            ConditionalFormulaScalarFunctionKind.RoundUp or
+            ConditionalFormulaScalarFunctionKind.RoundDown or
+            ConditionalFormulaScalarFunctionKind.MRound or
             ConditionalFormulaScalarFunctionKind.Mod or
+            ConditionalFormulaScalarFunctionKind.Quotient or
+            ConditionalFormulaScalarFunctionKind.Combin or
+            ConditionalFormulaScalarFunctionKind.Permut or
             ConditionalFormulaScalarFunctionKind.Power or
+            ConditionalFormulaScalarFunctionKind.Atan2 or
             ConditionalFormulaScalarFunctionKind.Left or
             ConditionalFormulaScalarFunctionKind.Right or
             ConditionalFormulaScalarFunctionKind.Exact => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Trunc => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
@@ -1571,8 +1665,19 @@ public static partial class AccessibilityCheckerService
     {
         Abs,
         Int,
+        Even,
+        Odd,
         Round,
+        RoundUp,
+        RoundDown,
+        MRound,
+        Trunc,
+        Fact,
+        FactDouble,
         Mod,
+        Quotient,
+        Combin,
+        Permut,
         Sqrt,
         SqrtPi,
         Sign,
@@ -1584,6 +1689,17 @@ public static partial class AccessibilityCheckerService
         Degrees,
         Radians,
         Sin,
+        Sinh,
+        Asinh,
+        Acosh,
+        Cosh,
+        Tanh,
+        Atanh,
+        Asin,
+        Acos,
+        Acot,
+        Atan,
+        Atan2,
         Cos,
         Tan,
         Pi,
@@ -2087,8 +2203,19 @@ public static partial class AccessibilityCheckerService
             {
                 case ConditionalFormulaScalarFunctionKind.Abs:
                 case ConditionalFormulaScalarFunctionKind.Int:
+                case ConditionalFormulaScalarFunctionKind.Even:
+                case ConditionalFormulaScalarFunctionKind.Odd:
                 case ConditionalFormulaScalarFunctionKind.Round:
+                case ConditionalFormulaScalarFunctionKind.RoundUp:
+                case ConditionalFormulaScalarFunctionKind.RoundDown:
+                case ConditionalFormulaScalarFunctionKind.MRound:
+                case ConditionalFormulaScalarFunctionKind.Trunc:
+                case ConditionalFormulaScalarFunctionKind.Fact:
+                case ConditionalFormulaScalarFunctionKind.FactDouble:
                 case ConditionalFormulaScalarFunctionKind.Mod:
+                case ConditionalFormulaScalarFunctionKind.Quotient:
+                case ConditionalFormulaScalarFunctionKind.Combin:
+                case ConditionalFormulaScalarFunctionKind.Permut:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
                 case ConditionalFormulaScalarFunctionKind.Sign:
@@ -2100,6 +2227,17 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Degrees:
                 case ConditionalFormulaScalarFunctionKind.Radians:
                 case ConditionalFormulaScalarFunctionKind.Sin:
+                case ConditionalFormulaScalarFunctionKind.Sinh:
+                case ConditionalFormulaScalarFunctionKind.Asinh:
+                case ConditionalFormulaScalarFunctionKind.Acosh:
+                case ConditionalFormulaScalarFunctionKind.Cosh:
+                case ConditionalFormulaScalarFunctionKind.Tanh:
+                case ConditionalFormulaScalarFunctionKind.Atanh:
+                case ConditionalFormulaScalarFunctionKind.Asin:
+                case ConditionalFormulaScalarFunctionKind.Acos:
+                case ConditionalFormulaScalarFunctionKind.Acot:
+                case ConditionalFormulaScalarFunctionKind.Atan:
+                case ConditionalFormulaScalarFunctionKind.Atan2:
                 case ConditionalFormulaScalarFunctionKind.Cos:
                 case ConditionalFormulaScalarFunctionKind.Tan:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
@@ -2220,6 +2358,12 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Int:
                     result = Math.Floor(first);
                     break;
+                case ConditionalFormulaScalarFunctionKind.Even:
+                    result = EvenFormulaNumber(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Odd:
+                    result = OddFormulaNumber(first);
+                    break;
                 case ConditionalFormulaScalarFunctionKind.Round:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var digitsNumber) ||
                         !TryGetFormulaRoundDigits(digitsNumber, out var digits))
@@ -2229,6 +2373,65 @@ public static partial class AccessibilityCheckerService
 
                     result = RoundFormulaNumber(first, digits);
                     break;
+                case ConditionalFormulaScalarFunctionKind.RoundUp:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var roundUpDigitsNumber) ||
+                        !TryGetFormulaRoundDigits(roundUpDigitsNumber, out var roundUpDigits))
+                    {
+                        return false;
+                    }
+
+                    result = RoundUpFormulaNumber(first, roundUpDigits);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.RoundDown:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var roundDownDigitsNumber) ||
+                        !TryGetFormulaRoundDigits(roundDownDigitsNumber, out var roundDownDigits))
+                    {
+                        return false;
+                    }
+
+                    result = RoundDownFormulaNumber(first, roundDownDigits);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.MRound:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var multiple) ||
+                        !TryMRoundFormulaNumber(first, multiple, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Trunc:
+                    var truncDigits = 0;
+                    if (function.Arguments.Count == 2 &&
+                        (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var truncDigitsNumber) ||
+                         !TryGetFormulaRoundDigits(truncDigitsNumber, out truncDigits)))
+                    {
+                        return false;
+                    }
+
+                    result = RoundDownFormulaNumber(first, truncDigits);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Fact:
+                    if (first < 0)
+                        return false;
+
+                    var factorialInput = Math.Truncate(first);
+                    if (factorialInput > MaxFormulaFactorialInput)
+                        return false;
+
+                    result = FactorialFormulaNumber((int)factorialInput);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.FactDouble:
+                    if (first < 0)
+                        return false;
+
+                    var doubleFactorialInput = Math.Truncate(first);
+                    if (doubleFactorialInput > MaxFormulaDoubleFactorialInput ||
+                        !TryDoubleFactorialFormulaNumber((int)doubleFactorialInput, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
                 case ConditionalFormulaScalarFunctionKind.Mod:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var divisor) ||
                         divisor == 0)
@@ -2237,6 +2440,31 @@ public static partial class AccessibilityCheckerService
                     }
 
                     result = first - divisor * Math.Floor(first / divisor);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Quotient:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var denominator) ||
+                        denominator == 0)
+                    {
+                        return false;
+                    }
+
+                    result = Math.Truncate(first / denominator);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Combin:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var numberChosen) ||
+                        !TryCombinFormulaNumber(first, numberChosen, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Permut:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var permutNumberChosen) ||
+                        !TryPermutFormulaNumber(first, permutNumberChosen, out result))
+                    {
+                        return false;
+                    }
+
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                     if (first < 0)
@@ -2303,6 +2531,70 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sin:
                     result = Math.Sin(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Sinh:
+                    result = Math.Sinh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Asinh:
+                    result = Math.Asinh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Acosh:
+                    if (first < 1d)
+                        return false;
+
+                    result = Math.Acosh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Cosh:
+                    result = Math.Cosh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Tanh:
+                    result = Math.Tanh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Atanh:
+                    if (first <= -1d || first >= 1d)
+                        return false;
+
+                    result = Math.Atanh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Asin:
+                    if (first < -1d || first > 1d)
+                        return false;
+
+                    result = Math.Asin(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Acos:
+                    if (first < -1d || first > 1d)
+                        return false;
+
+                    result = Math.Acos(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Acot:
+                    if (first == 0d)
+                    {
+                        result = Math.PI / 2d;
+                        break;
+                    }
+
+                    var reciprocal = 1d / first;
+                    if (!double.IsFinite(reciprocal))
+                        return false;
+
+                    result = Math.Atan(reciprocal);
+                    if (first < 0d)
+                        result += Math.PI;
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Atan:
+                    result = Math.Atan(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Atan2:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var second) ||
+                        first == 0d && second == 0d)
+                    {
+                        return false;
+                    }
+
+                    result = Math.Atan2(second, first);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cos:
                     result = Math.Cos(first);
@@ -2687,6 +2979,230 @@ public static partial class AccessibilityCheckerService
 
             var factor = Math.Pow(10d, -digits);
             return Math.Round(value / factor, 0, MidpointRounding.AwayFromZero) * factor;
+        }
+
+        private static double EvenFormulaNumber(double value)
+        {
+            if (value == 0d)
+                return 0d;
+
+            var magnitude = Math.Abs(value);
+            var evenMagnitude = magnitude <= 2d
+                ? 2d
+                : Math.Ceiling(magnitude / 2d) * 2d;
+            return Math.Sign(value) * evenMagnitude;
+        }
+
+        private static double OddFormulaNumber(double value)
+        {
+            if (value == 0d)
+                return 1d;
+
+            var magnitude = Math.Abs(value);
+            var oddMagnitude = Math.Ceiling(magnitude);
+            if (oddMagnitude % 2d == 0d)
+                oddMagnitude += 1d;
+
+            return Math.Sign(value) * oddMagnitude;
+        }
+
+        private static double RoundUpFormulaNumber(double value, int digits)
+        {
+            if (value == 0)
+                return value;
+
+            var magnitude = Math.Abs(value);
+            var factor = Math.Pow(10d, Math.Abs(digits));
+            if (digits >= 0)
+            {
+                if (magnitude > double.MaxValue / factor)
+                    return value;
+
+                return Math.Sign(value) * RoundUpFormulaScaledMagnitude(magnitude * factor) / factor;
+            }
+
+            return Math.Sign(value) * RoundUpFormulaScaledMagnitude(magnitude / factor) * factor;
+        }
+
+        private static double RoundUpFormulaScaledMagnitude(double value)
+        {
+            var nearest = Math.Round(value, 0, MidpointRounding.AwayFromZero);
+            if (double.IsFinite(nearest) &&
+                Math.Abs(value - nearest) <= 1e-12 * Math.Max(1d, Math.Abs(value)))
+            {
+                return nearest;
+            }
+
+            return Math.Ceiling(value);
+        }
+
+        private static double RoundDownFormulaNumber(double value, int digits)
+        {
+            if (value == 0)
+                return value;
+
+            var magnitude = Math.Abs(value);
+            var factor = Math.Pow(10d, Math.Abs(digits));
+            if (digits >= 0)
+            {
+                if (magnitude > double.MaxValue / factor)
+                    return value;
+
+                return Math.Sign(value) * RoundDownFormulaScaledMagnitude(magnitude * factor) / factor;
+            }
+
+            return Math.Sign(value) * RoundDownFormulaScaledMagnitude(magnitude / factor) * factor;
+        }
+
+        private static double RoundDownFormulaScaledMagnitude(double value)
+        {
+            var nearest = Math.Round(value, 0, MidpointRounding.AwayFromZero);
+            if (double.IsFinite(nearest) &&
+                Math.Abs(value - nearest) <= 1e-12 * Math.Max(1d, Math.Abs(value)))
+            {
+                return nearest;
+            }
+
+            return Math.Floor(value);
+        }
+
+        private static bool TryMRoundFormulaNumber(double number, double multiple, out double result)
+        {
+            result = 0d;
+            if (multiple == 0d || number == 0d)
+                return true;
+
+            if (number > 0d && multiple < 0d ||
+                number < 0d && multiple > 0d)
+            {
+                return false;
+            }
+
+            var roundedMultiple = Math.Round(number / multiple, 0, MidpointRounding.AwayFromZero);
+            result = roundedMultiple * multiple;
+            return double.IsFinite(result);
+        }
+
+        private static double FactorialFormulaNumber(int value)
+        {
+            var result = 1d;
+            for (var factor = 2; factor <= value; factor++)
+            {
+                result *= factor;
+            }
+
+            return result;
+        }
+
+        private static bool TryDoubleFactorialFormulaNumber(int value, out double result)
+        {
+            result = 1d;
+            for (var factor = value; factor > 1; factor -= 2)
+            {
+                if (result > double.MaxValue / factor)
+                    return false;
+
+                result *= factor;
+            }
+
+            return double.IsFinite(result);
+        }
+
+        private static bool TryCombinFormulaNumber(double number, double numberChosen, out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaCombinInteger(number, out var n) ||
+                !TryGetFormulaCombinInteger(numberChosen, out var k) ||
+                k > n)
+            {
+                return false;
+            }
+
+            k = Math.Min(k, n - k);
+            if (k > MaxFormulaCombinIterations)
+                return false;
+
+            result = 1d;
+            for (var i = 1; i <= k; i++)
+            {
+                var factor = (double)(n - k + i) / i;
+                if (!double.IsFinite(factor) ||
+                    factor <= 0d ||
+                    result > double.MaxValue / factor)
+                {
+                    return false;
+                }
+
+                result *= factor;
+                if (!double.IsFinite(result))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaCombinInteger(double value, out int integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value) ||
+                value < 0d)
+                return false;
+
+            var truncated = Math.Truncate(value);
+            if (!double.IsFinite(truncated) ||
+                truncated > MaxFormulaCombinInput)
+            {
+                return false;
+            }
+
+            integer = (int)truncated;
+            return true;
+        }
+
+        private static bool TryPermutFormulaNumber(double number, double numberChosen, out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaPermutInteger(number, out var n) ||
+                !TryGetFormulaPermutInteger(numberChosen, out var k) ||
+                k > n ||
+                k > MaxFormulaPermutIterations)
+            {
+                return false;
+            }
+
+            result = 1d;
+            for (var factor = n - k + 1; factor <= n; factor++)
+            {
+                if (factor <= 0 ||
+                    result > double.MaxValue / factor)
+                {
+                    return false;
+                }
+
+                result *= factor;
+                if (!double.IsFinite(result))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaPermutInteger(double value, out int integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value) ||
+                value < 0d)
+                return false;
+
+            var truncated = Math.Truncate(value);
+            if (!double.IsFinite(truncated) ||
+                truncated > MaxFormulaPermutInput)
+            {
+                return false;
+            }
+
+            integer = (int)truncated;
+            return true;
         }
 
         private bool TryEvaluateFormulaAggregate(

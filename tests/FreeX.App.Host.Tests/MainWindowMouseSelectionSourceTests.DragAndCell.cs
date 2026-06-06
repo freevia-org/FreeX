@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -8,8 +7,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void DragSelectionRequestsEdgeAutoScrollDuringMouseMove()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseMoveStart = source.IndexOf("private void SheetGrid_MouseMove", StringComparison.Ordinal);
         var helperStart = source.IndexOf("private void RequestSelectionDragAutoScroll", StringComparison.Ordinal);
@@ -39,8 +37,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void DragSelectionMouseMoveCancelsWhenLeftButtonIsReleased()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseMove = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseMove", StringComparison.Ordinal)..
@@ -79,10 +76,8 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void CtrlMouseSelectionAddsNonContiguousRangesWithoutBreakingHyperlinkOpen()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var mouseDownStart = selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal);
         var textInputStart = selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal);
@@ -107,8 +102,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void CtrlMouseSelectionHidesValidationDropdownBeforeAddingRange()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var addSelection = selectionSource[
             selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
@@ -124,8 +118,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void ShiftCellMouseSelectionHidesValidationDropdownBeforeExtendingRange()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseDown = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
@@ -144,8 +137,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void DragRangeExtensionHidesValidationDropdownBeforeReplacingSelection()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var extendSelection = selectionSource[
             selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
@@ -161,8 +153,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void RangeMouseSelectionClearsStaleCommentPreviewBeforeReplacingSelection()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var extendSelection = selectionSource[
             selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
@@ -188,8 +179,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void DragSelectionNoOpsUnchangedTargetsBeforeRefreshingUiState()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var extendSelection = selectionSource[
             selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
@@ -211,8 +201,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void DragMouseMoveClearsStaleCommentPreviewWhenPointerLeavesCells()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseMove = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseMove", StringComparison.Ordinal)..
@@ -231,8 +220,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void FormulaRangeMouseSelectionClearsTransientCellUiBeforeReplacingSelection()
     {
-        var formulaReferenceSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.FormulaReferenceEditing.cs"));
+        var formulaReferenceSource = DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaReferenceEditing.cs");
 
         var formulaRangeSelection = formulaReferenceSource[
             formulaReferenceSource.IndexOf("private bool TryApplyFormulaRangeSelection", StringComparison.Ordinal)..

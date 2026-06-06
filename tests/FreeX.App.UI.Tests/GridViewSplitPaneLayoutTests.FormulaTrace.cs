@@ -2,7 +2,6 @@ using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 using System.Diagnostics;
-using System.IO;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -217,8 +216,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void FormulaTraceLayoutPlanner_StopsSingleMetricLookupsOnceSortedMetricsPassAddress()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "FormulaTraceLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("FormulaTraceLayoutPlanner.cs");
         var metricLookup = source[
             source.IndexOf("private readonly struct FormulaTraceMetricLookup", StringComparison.Ordinal)..
             source.IndexOf("private static bool TryGetMarkerHit", StringComparison.Ordinal)];

@@ -7,8 +7,7 @@ public sealed class XlsxWorksheetPageMarginsMetadataWriterPerformanceTests
     [Fact]
     public void Save_SkipsSheetsWithoutPageMarginsMetadataWithoutLinqFiltering()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src", "FreeX.Core.IO", "XlsxWorksheetPageMarginsMetadataWriter.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetPageMarginsMetadataWriter.cs");
 
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
         source.Should().Contain("var metadata = sheet.PageMarginsMetadata;");

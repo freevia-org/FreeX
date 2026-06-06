@@ -10,13 +10,9 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_StreamsOccupiedCellsWithoutCopyingUsedCellDictionary()
     {
-        var servicePath = WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "AccessibilityCheckerService.cs");
-        var serviceDirectory = Path.GetDirectoryName(servicePath)!;
-        var source = string.Join(
-            Environment.NewLine,
-            Directory.EnumerateFiles(serviceDirectory, "AccessibilityCheckerService*.cs")
-                .OrderBy(path => path)
-                .Select(File.ReadAllText));
+        var source = ModelSourceTestSupport.ReadCommandsSourcesMatching(
+            "AccessibilityCheckerService.cs",
+            "AccessibilityCheckerService*.cs");
 
         source.Should().NotContain("GetUsedCells()");
         source.Should().Contain("GetOccupiedCellMap()");

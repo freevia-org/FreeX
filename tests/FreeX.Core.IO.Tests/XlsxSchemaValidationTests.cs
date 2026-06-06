@@ -141,6 +141,112 @@ public sealed class XlsxSchemaValidationTests
         AssertChartExAlternateContent(drawing.Xml, drawing.RelId);
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithClassicChart_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookWithChart(ChartType.Column));
+        var sourceChartPart = ReadPackageEntryBytes(source, "xl/charts/chart1.xml");
+        var sourceDrawingPart = ReadPackageEntryBytes(source, "xl/drawings/drawing1.xml");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 4), new TextValue("outside chart source"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadPackageEntryBytes(saved, "xl/charts/chart1.xml").Should().Equal(sourceChartPart);
+        ReadPackageEntryBytes(saved, "xl/drawings/drawing1.xml").Should().Equal(sourceDrawingPart);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithChartEx_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookWithChart(ChartType.Histogram));
+        var chartPart = FindSingleEntryByContentType(source, ChartExContentType);
+        var colorStylePart = FindSingleEntryByContentType(source, ChartExColorStyleContentType);
+        var stylePart = FindSingleEntryByContentType(source, ChartExStyleContentType);
+        var sourceParts = new[]
+        {
+            chartPart,
+            GetRelationshipPartPath(chartPart),
+            colorStylePart,
+            stylePart
+        };
+        var sourcePartBytes = sourceParts.ToDictionary(part => part, part => ReadPackageEntryBytes(source, part));
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 4), new TextValue("outside chartEx source"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        foreach (var part in sourceParts)
+            ReadPackageEntryBytes(saved, part).Should().Equal(sourcePartBytes[part]);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var drawing = FindDrawingForChartExPart(savedArchive, chartPart);
+        AssertChartExAlternateContent(drawing.Xml, drawing.RelId);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithPivotChart_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreatePivotChartWorkbook());
+        var sourceParts = new[]
+        {
+            "xl/workbook.xml",
+            "xl/drawings/drawing1.xml",
+            "xl/drawings/_rels/drawing1.xml.rels",
+            "xl/charts/chart1.xml",
+            "xl/pivotCache/pivotCacheDefinition1.xml",
+            "xl/pivotTables/pivotTable1.xml",
+            "xl/pivotTables/_rels/pivotTable1.xml.rels"
+        };
+        var sourcePartBytes = sourceParts.ToDictionary(part => part, part => ReadPackageEntryBytes(source, part));
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PivotTables.Should().ContainSingle();
+        sheet.Charts.Should().ContainSingle().Which.IsPivotChart.Should().BeTrue();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("outside pivot chart source"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        foreach (var part in sourceParts)
+            ReadPackageEntryBytes(saved, part).Should().Equal(sourcePartBytes[part]);
+    }
+
     private static Workbook CreateWorkbookWithChart(ChartType chartType)
     {
         var workbook = new Workbook("ChartExValid");
@@ -164,6 +270,67 @@ public sealed class XlsxSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreatePivotChartWorkbook()
+    {
+        var workbook = new Workbook("PivotChartSchema");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("outside"));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = sourceRange.ToString(),
+            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml",
+            RecordCount = 2,
+            CreatedVersion = 8,
+            MinRefreshableVersion = 4
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Category"));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", 4));
+        workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = sourceRange,
+            TargetRange = new GridRange(
+                new CellAddress(sheet.Id, 6, 4),
+                new CellAddress(sheet.Id, 9, 5)),
+            PackagePart = "xl/pivotTables/pivotTable1.xml"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
+        sheet.PivotTables.Add(pivot);
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = pivot.TargetRange,
+            IsPivotChart = true,
+            PivotTableName = pivot.Name,
+            PivotCacheId = pivot.CacheId,
+            Title = "Pivot Chart",
+            Left = 20,
+            Top = 20,
+            Width = 420,
+            Height = 280
+        });
+
+        return workbook;
+    }
+
     private static MemoryStream Save(Workbook workbook)
     {
         var stream = new MemoryStream();
@@ -175,12 +342,60 @@ public sealed class XlsxSchemaValidationTests
     private static System.Collections.Generic.List<string> SchemaErrors(Workbook workbook)
     {
         using var stream = Save(workbook);
-        using var document = SpreadsheetDocument.Open(stream, false);
+        return SchemaErrors(stream);
+    }
+
+    private static System.Collections.Generic.List<string> SchemaErrors(Stream stream)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        if (stream.CanSeek)
+            stream.Position = originalPosition;
+        copy.Position = 0;
+        using var document = SpreadsheetDocument.Open(copy, false);
         var validator = new OpenXmlValidator(FileFormatVersions.Microsoft365);
         return validator.Validate(document)
             .Where(error => error.ErrorType == ValidationErrorType.Schema)
             .Select(error => $"{error.Description} @ {error.Path?.XPath}")
             .ToList();
+    }
+
+    private static byte[] ReadPackageEntryBytes(Stream stream, string entryName)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+        byte[] result;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var entryStream = archive.GetEntry(entryName)!.Open())
+        using (var bytes = new MemoryStream())
+        {
+            entryStream.CopyTo(bytes);
+            result = bytes.ToArray();
+        }
+
+        if (stream.CanSeek)
+            stream.Position = originalPosition;
+        return result;
+    }
+
+    private static string FindSingleEntryByContentType(Stream stream, string contentType)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+        string partName;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            partName = FindSinglePartByContentType(LoadPackageXml(archive, "[Content_Types].xml"), contentType);
+        }
+
+        if (stream.CanSeek)
+            stream.Position = originalPosition;
+        return ToEntryName(partName);
     }
 
     private static XDocument LoadPackageXml(ZipArchive archive, string entryName)

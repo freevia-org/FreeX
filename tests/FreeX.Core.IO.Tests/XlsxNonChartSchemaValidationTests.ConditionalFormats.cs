@@ -147,6 +147,37 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(workbook).Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithStandardConditionalFormats_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateStandardConditionalFormatsSourceWorkbook());
+        var sourceConditionalFormattings = ReadWorksheetChildElements(source, "conditionalFormatting")
+            .Select(element => element.ToString(SaveOptions.DisableFormatting))
+            .ToArray();
+        sourceConditionalFormattings.Should().HaveCount(6);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElements(saved, "conditionalFormatting")
+            .Select(element => element.ToString(SaveOptions.DisableFormatting))
+            .Should()
+            .Equal(sourceConditionalFormattings);
+    }
+
 
     [Fact]
     public void ConditionalFormat_DifferentialStyleWithFontNumberAndFill_ProducesSchemaValidWorkbook()
@@ -250,13 +281,106 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateStandardConditionalFormatsSourceWorkbook()
+    {
+        var workbook = new Workbook("ConditionalFormatStandardPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 1, 5, 1),
+            Priority = 1,
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinThresholdType = CfThresholdType.Min,
+            MidThresholdType = CfThresholdType.Percentile,
+            MidThresholdValue = "50",
+            MaxThresholdType = CfThresholdType.Max,
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 2, 5, 2),
+            Priority = 2,
+            RuleType = CfRuleType.DataBar,
+            DataBarShowValue = false,
+            DataBarMinLength = 5,
+            DataBarMaxLength = 95,
+            DataBarColor = new RgbColor(91, 155, 213),
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 3, 5, 3),
+            Priority = 3,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "4Arrows",
+            IconSetShowValue = false,
+            IconSetReverse = true,
+            IconSetThresholds =
+            {
+                new CfThresholdModel(CfThresholdType.Percent, "0"),
+                new CfThresholdModel(CfThresholdType.Percent, "25"),
+                new CfThresholdModel(CfThresholdType.Percent, "50"),
+                new CfThresholdModel(CfThresholdType.Percent, "75"),
+            },
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 4, 5, 4),
+            Priority = 4,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.Between,
+            Value1 = "10",
+            Value2 = "50",
+            StopIfTrue = true,
+            FormatIfTrue = new CellStyle
+            {
+                Bold = true,
+                FillColor = new CellColor(255, 242, 204)
+            },
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 5, 5, 5),
+            Priority = 5,
+            RuleType = CfRuleType.Formula,
+            FormulaText = "E2>20",
+            FormatIfTrue = new CellStyle
+            {
+                Italic = true,
+                FontColor = new CellColor(192, 0, 0)
+            },
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 6, 5, 6),
+            Priority = 6,
+            RuleType = CfRuleType.Top10,
+            TopBottomRank = 2,
+            FormatIfTrue = new CellStyle
+            {
+                FillColor = new CellColor(198, 239, 206)
+            },
+        });
+
+        return workbook;
+    }
+
     private static XElement ReadWorksheetChildElement(Stream stream, string localName)
+    {
+        return ReadWorksheetChildElements(stream, localName).Single();
+    }
+
+    private static IReadOnlyList<XElement> ReadWorksheetChildElements(Stream stream, string localName)
     {
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        return new XElement(worksheetXml.Root!.Element(worksheetNs + localName)!);
+        return worksheetXml.Root!
+            .Elements(worksheetNs + localName)
+            .Select(element => new XElement(element))
+            .ToList();
     }
 
 }

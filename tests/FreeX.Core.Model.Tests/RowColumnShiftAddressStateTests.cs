@@ -388,8 +388,8 @@ public sealed class RowColumnShiftAddressStateTests
     [Fact]
     public void AddressStateStyleOnlyClear_UsesSheetClearAllPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(
-            "src", "FreeX.Core.Commands", "RowColumnShiftHelpers.AddressState.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSourceFromCurrentDirectoryOrFallback(
+            "RowColumnShiftHelpers.AddressState.cs");
 
         source.Should().Contain("sheet.ClearStyleOnlyEntries();");
         source.Should().NotContain("GetStyleOnlyEntries().ToList()");

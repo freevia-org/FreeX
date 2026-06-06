@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
-using System.IO;
 
 namespace FreeX.App.UI.Tests;
 
@@ -336,8 +335,7 @@ public sealed class GridViewAutofillTests
     [Fact]
     public void CalculateDragTarget_FindsSourceBoundsWithSingleMetricPasses()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridAutofillPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridAutofillPlanner.cs");
         var dragTarget = source[
             source.IndexOf("public static CellAddress? CalculateDragTarget", StringComparison.Ordinal)..
             source.IndexOf("public static bool IsOnHandle", StringComparison.Ordinal)];
@@ -491,8 +489,7 @@ public sealed class GridViewAutofillTests
     [Fact]
     public void GridViewMouseMove_UsesCrossCursorOverAutofillHandle()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Input.cs");
         var cursorAssignment = source[
             source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
             source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];

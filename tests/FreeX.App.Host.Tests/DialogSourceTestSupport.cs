@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Xml.Linq;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -11,6 +12,19 @@ internal static class DialogSourceTestSupport
 
     public static string ReadHostSourcesWithSeparator(string separator, params string[] fileNames) =>
         string.Join(separator, fileNames.Select(ReadHostSource));
+
+    public static string ReadAppUiSources(params string[] fileNames) =>
+        ReadAppUiSourcesWithSeparator(Environment.NewLine, fileNames);
+
+    public static string ReadAppUiSourcesWithSeparator(string separator, params string[] fileNames) =>
+        string.Join(separator, fileNames.Select(ReadAppUiSource));
+
+    public static string FindHostSourceFile(params string[] relativeParts) =>
+        WorkspaceFileLocator.Find(
+            new[] { "src", "FreeX.App.Host" }.Concat(relativeParts).ToArray());
+
+    public static XDocument LoadHostXamlDocument(params string[] relativeParts) =>
+        XDocument.Load(FindHostSourceFile(relativeParts));
 
     public static string ReadClassSource(string fileName, string startMarker, string endMarker)
     {
@@ -37,5 +51,8 @@ internal static class DialogSourceTestSupport
     }
 
     private static string ReadHostSource(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName));
+        File.ReadAllText(FindHostSourceFile(fileName));
+
+    private static string ReadAppUiSource(string fileName) =>
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", fileName));
 }

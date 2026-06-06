@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 using OxyPlot;
@@ -34,8 +33,7 @@ public sealed class ChartTrendlineCalculatorTests
     [Fact]
     public void Calculate_MovingAverage_UsesRollingWindowWithoutPerPointLinq()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartTrendlineCalculator.cs");
         var movingAverage = source[
             source.IndexOf("private static IReadOnlyList<DataPoint> CalculateMovingAverageTrendline", StringComparison.Ordinal)..
             source.IndexOf("private static IReadOnlyList<DataPoint> CalculatePolynomialTrendline", StringComparison.Ordinal)];
@@ -50,8 +48,7 @@ public sealed class ChartTrendlineCalculatorTests
     [Fact]
     public void Calculate_RegressionTrendlines_AggregatePointsInSinglePasses()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartTrendlineCalculator.cs");
         var regressionBlock = source[
             source.IndexOf("private static IReadOnlyList<DataPoint> CalculateLinearTrendline", StringComparison.Ordinal)..
             source.IndexOf("private static IReadOnlyList<DataPoint> CalculateMovingAverageTrendline", StringComparison.Ordinal)];
@@ -67,8 +64,7 @@ public sealed class ChartTrendlineCalculatorTests
     [Fact]
     public void Calculate_PolynomialTrendline_AggregatesLeastSquaresInputsWithoutLinqPasses()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartTrendlineCalculator.cs");
         var polynomialBlock = source[
             source.IndexOf("private static IReadOnlyList<DataPoint> CalculatePolynomialTrendline", StringComparison.Ordinal)..
             source.IndexOf("private static double EvaluatePolynomial", StringComparison.Ordinal)];
@@ -84,8 +80,7 @@ public sealed class ChartTrendlineCalculatorTests
     [Fact]
     public void TryCalculateRSquared_AggregatesMatchesWithoutIntermediateListOrLinqPasses()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartTrendlineCalculator.cs");
         var rSquaredBlock = source[
             source.IndexOf("public static bool TryCalculateRSquared", StringComparison.Ordinal)..
             source.IndexOf("private static bool TryInterpolateTrendY", StringComparison.Ordinal)];

@@ -277,7 +277,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> ReadVisibleTopLevelRibbonTabs()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         return document
@@ -292,7 +292,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> ReadContextualRibbonTabs()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         return document
@@ -307,7 +307,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> ReadDialogTypeNames()
     {
-        var hostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))
+        var hostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))
             ?? throw new DirectoryNotFoundException("Could not locate FreeX.App.Host.");
         var dialogNames = new SortedSet<string>(StringComparer.Ordinal);
 
@@ -343,8 +343,8 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static KeyboardShortcutUsageCounts ReadKeyboardShortcutUsageCounts()
     {
-        var matcher = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "KeyboardShortcutMatcher.CommandRules.cs"));
-        var dispatcher = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var matcher = DialogSourceTestSupport.ReadHostSources("KeyboardShortcutMatcher.CommandRules.cs");
+        var dispatcher = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         return new KeyboardShortcutUsageCounts(
             CommandShortcutRuleDeclaration().Matches(matcher).Count,

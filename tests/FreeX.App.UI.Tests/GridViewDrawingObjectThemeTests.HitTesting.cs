@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Windows;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -160,7 +159,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectHitTesting_UsesIndexedReverseLoops()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.ObjectDrag.cs");
         var hitTestBlock = source[
             source.IndexOf("private (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) HitTestDrawingObject", StringComparison.Ordinal)..
             source.IndexOf("private static bool ContainsInclusive", StringComparison.Ordinal)];
@@ -174,7 +173,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectHitTesting_UsesRotatedBodyChecks()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.ObjectDrag.cs");
 
         source.Should().Contain("ContainsRotatedInclusive(rect, pos, textBox.RotationDegrees)");
         source.Should().Contain("ContainsRotatedInclusive(rect, pos, picture.RotationDegrees)");

@@ -8,7 +8,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ZoomCustomDialog_ReturnsFocusToWorksheetAfterAcceptOrCancel()
     {
-        var viewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        var viewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
         var method = ExtractMethodSource(viewSource, "private void ZoomCustomMenuItem_Click(");
 
         method.Should().Contain("try");
@@ -24,12 +24,12 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void DrawingAndPictureController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var drawingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Drawing.cs");
 
         File.Exists(drawingSourcePath).Should().BeTrue();
-        var drawingSource = File.ReadAllText(drawingSourcePath);
+        var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         mainSource.Should().NotContain("private void InsertPictureBtn_Click(");
         mainSource.Should().NotContain("private void PictureCropBtn_Click(");
@@ -49,7 +49,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void InsertPicture_UsesGuardedSingleFileDialogAndOwnedReadFailureMessage()
     {
-        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         drawingSource.Should().Contain("Title = UiText.Get(\"MainWindowDialog_InsertPictureTitle\")");
         drawingSource.Should().Contain("Filter = UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
@@ -67,7 +67,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void DrawingCommands_UseOwnedNoTargetMessages()
     {
-        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         foreach (var key in new[]
         {
@@ -99,12 +99,12 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PageLayoutCommands_LiveOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var pageLayoutSourcePath = Path.Combine(appHostDirectory, "MainWindow.PageLayout.cs");
 
         File.Exists(pageLayoutSourcePath).Should().BeTrue();
-        var pageLayoutSource = File.ReadAllText(pageLayoutSourcePath);
+        var pageLayoutSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
 
         mainSource.Should().NotContain("private void PageLayoutDeferredBtn_Click(");
         mainSource.Should().NotContain("private void ThemeBtn_Click(");
@@ -122,7 +122,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void SheetBackgroundImport_UsesNativeImageDialogGuardrailsAndOwnedWarnings()
     {
-        var pageLayoutSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
+        var pageLayoutSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
 
         pageLayoutSource.Should().Contain("private void BackgroundChooseMenuItem_Click(");
         pageLayoutSource.Should().Contain("Title = UiText.Get(\"MainWindowDialog_SheetBackgroundTitle\")");
@@ -149,7 +149,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void HelpExternalLinks_RouteThroughGuardedOwnedMessageHelper()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("private void OpenExternalHelpLink(string url, string title)");
         // External links route through the single guarded launcher (scheme allowlist enforced there),
@@ -165,7 +165,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void InsertSparkline_UsesDialogLocationForInitialInsertAndOwnedValidationWarnings()
     {
-        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.InsertCommands.cs"));
+        var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
         var method = ExtractMethodSource(insertSource, "private void InsertSparkline(");
 
         method.Should().Contain("new SparklineDialog(");
@@ -186,10 +186,10 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void HyperlinkDialogAndCtrlClick_RouteThroughSetAndNavigatePlans()
     {
-        var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "KeyboardShortcutMatcher.CommandRules.cs"));
-        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
-        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.InsertCommands.cs"));
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var keyboardSource = DialogSourceTestSupport.ReadHostSources("KeyboardShortcutMatcher.CommandRules.cs");
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         keyboardSource.Should().Contain("KeyboardCommandShortcut.InsertHyperlink");
         commandSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertHyperlink, InsertLinkBtn_Click)");
@@ -210,7 +210,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindow_RoutesColorChoicesThroughColorPickerDialog()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().NotContain("input.Split(',')");
         source.Should().Contain("private bool TryShowColorPicker(");
@@ -222,7 +222,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void SpellCheckWorkflow_RoutesDistinctDialogActionsToIntendedResults()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("SpellCheckDialogAction.ReplaceAll");
         source.Should().Contain("SpellCheckDialogAction.IgnoreAll");
@@ -237,7 +237,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("TryExecuteCommand(command, \"Spell Check\")");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
 
-        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SpellCheckWorkflowPlanner.cs"));
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("SpellCheckWorkflowPlanner.cs");
         plannerSource.Should().Contain("ContainsIgnoredWord(ignoredWords, issue.Word)");
         plannerSource.Should().Contain("ignoredIssues.Contains(CreateIssueKey(issue))");
         plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
@@ -247,10 +247,10 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RemainingStatusWorkflows_OpenNamedDialogsInsteadOfMessageBoxes()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
-        var pageLayoutSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
-        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
-        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        _ = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var pageLayoutSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
+        var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
+        var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         pageLayoutSource.Should().Contain("new PageBreakDialog");
         dataSource.Should().Contain("new GoalSeekStatusDialog");
@@ -261,7 +261,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ScenarioShow_IsRepeatableForF4WithoutReopeningDialog()
     {
-        var scenarioSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs"));
+        var scenarioSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ScenarioCommands.cs");
 
         scenarioSource.Should().Contain("_commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name))");
         scenarioSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
@@ -272,7 +272,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void AdvancedFilterDialogApply_IsRepeatableForF4WithoutReopeningDialog()
     {
-        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         dataSource.Should().Contain("var result = dialog.Result;");
         dataSource.Should().Contain("_commandBus.ExecuteRepeatable(");
@@ -288,7 +288,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void GoalSeekAndForecastSheet_DialogWorkflowsAreNotBlindF4Repeatable()
     {
-        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
         var goalSeekMethod = ExtractMethodSource(dataSource, "private void GoalSeekBtn_Click(");
         var forecastMethod = ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(");
 
@@ -309,7 +309,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RowAndColumnDimensionDialogs_AreRepeatableForF4AgainstCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CellsCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
 
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         source.Should().Contain("\"Row Height\",");
@@ -324,7 +324,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Row Height\"");
         source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Column Width\"");
 
-        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RowColumnDimensionPlanner.cs"));
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("RowColumnDimensionPlanner.cs");
         plannerSource.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
         plannerSource.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
         plannerSource.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, height)");
@@ -336,7 +336,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ConditionalFormattingEllipsisCommands_UseRuleFamilyDialogFactory()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("ConditionalFormatDialogFactory.Create(ruleType, range)");
         source.Should().NotContain("new ConditionalFormatDialog(ruleType, range)");
@@ -345,7 +345,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ConditionalFormattingRulesManager_ApplyUsesSameWorkbookCommandAsOk()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("new ManageConditionalFormatsDialog(");
         source.Should().Contain("applyRules: ApplyManagedConditionalFormatRules)");
@@ -358,7 +358,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ConditionalFormattingRulesManager_WiresAppliesToRangePickerCallback()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("requestAppliesToRangeSelection: request => ApplyConditionalFormatAppliesToRangeSelection(dlg, request)");
         source.Should().Contain("private void ApplyConditionalFormatAppliesToRangeSelection(");
@@ -373,7 +373,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PivotTableDesignCommands_OpenOptionsDialogInsteadOfCyclingLayoutState()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var source = ReadPivotCommandSource();
 
         xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open PivotTable layout and style options.");
@@ -407,8 +407,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PictureCropRibbon_OffersCropAndResetCropMenuActions()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
         xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open crop controls for the selected or most recent inserted picture.");
@@ -426,10 +426,10 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindowCommandPartials_UseMessageServiceNotDirectMessageBox()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
 
         // Verify the service wiring exists in the constructor.
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         mainSource.Should().Contain("IUserMessageService messageService");
         mainSource.Should().Contain("_messageService = messageService;");
 
@@ -453,7 +453,7 @@ public sealed partial class MainWindowSourceHygieneTests
         {
             var partialPath = Path.Combine(appHostDirectory, partial);
             if (!File.Exists(partialPath)) continue;
-            var partialSource = File.ReadAllText(partialPath);
+            var partialSource = DialogSourceTestSupport.ReadHostSources(partial);
             partialSource.Should()
                 .NotContain("MessageBox.Show(", because: $"{partial} should delegate to _messageService");
         }

@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
-using System.IO;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -74,8 +73,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void SplitPaneCellLayoutPlanner_IndexesMergeRowsBySmallerIntersectedSide()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneCellLayoutPlanner.cs");
         var addMergeRows = source[
             source.IndexOf("private static void AddMergeRows", StringComparison.Ordinal)..
             source.IndexOf("private static void AddMergeRow(", StringComparison.Ordinal)];
@@ -89,8 +87,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void SplitPaneCellLayoutPlanner_PrunesMergedRegionsOutsideQueriedPaneColumns()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneCellLayoutPlanner.cs");
         var createIndex = source[
             source.IndexOf("public static MergeRangeIndex Create", StringComparison.Ordinal)..
             source.IndexOf("private static void AddMergeRows", StringComparison.Ordinal)];
@@ -241,8 +238,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void RenderSplitPaneCells_DrawsCommentIndicatorsForCommentOnlyPaneCells()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderSplitPaneCells = source[
             source.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)..
             source.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];

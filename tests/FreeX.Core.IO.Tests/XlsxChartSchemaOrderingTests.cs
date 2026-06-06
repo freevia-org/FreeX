@@ -56,6 +56,90 @@ public sealed class XlsxChartSchemaOrderingTests
         AssertChildOrder(pieChart.Element(ChartNs + "dLbls")!, "numFmt", "spPr", "txPr", "dLblPos", "showVal", "showPercent");
     }
 
+    [Fact]
+    public void LineChart_WithGuideLinesAndUpDownBars_ProducesSchemaValidOrder()
+    {
+        var saved = SaveBytes(CreateLineGuideChartWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+
+        var chartXml = LoadChartXml(saved);
+        var lineChart = chartXml.Descendants(ChartNs + "lineChart").Should().ContainSingle().Subject;
+        AssertChildOrder(lineChart, "grouping", "ser", "dropLines", "hiLowLines", "upDownBars", "axId");
+
+        var dropLines = lineChart.Element(ChartNs + "dropLines");
+        dropLines.Should().NotBeNull();
+        AssertChildOrder(dropLines!, "spPr");
+
+        var highLowLines = lineChart.Element(ChartNs + "hiLowLines");
+        highLowLines.Should().NotBeNull();
+        AssertChildOrder(highLowLines!, "spPr");
+
+        var upDownBars = lineChart.Element(ChartNs + "upDownBars");
+        upDownBars.Should().NotBeNull();
+        AssertChildOrder(upDownBars!, "gapWidth", "upBars", "downBars");
+    }
+
+    [Fact]
+    public void ColumnChart_WithErrorBarsAndComboSecondaryLines_ProducesSchemaValidOrder()
+    {
+        var saved = SaveBytes(CreateColumnComboChartWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+
+        var chartXml = LoadChartXml(saved);
+        var barChart = chartXml.Descendants(ChartNs + "barChart").Should().ContainSingle().Subject;
+        var lineCharts = chartXml.Descendants(ChartNs + "lineChart").ToList();
+        lineCharts.Should().HaveCount(2);
+
+        AssertChildOrder(barChart, "barDir", "grouping", "ser", "gapWidth", "overlap", "axId");
+
+        var barSeries = barChart.Elements(ChartNs + "ser").Should().ContainSingle().Subject;
+        AssertChildOrder(barSeries, "idx", "order", "tx", "spPr", "errBars", "cat", "val");
+
+        var errorBars = barSeries.Element(ChartNs + "errBars");
+        errorBars.Should().NotBeNull();
+        AssertChildOrder(errorBars!, "errDir", "errBarType", "errValType", "noEndCap", "val", "spPr");
+        errorBars.Element(ChartNs + "errBarType")!.Attribute("val")!.Value.Should().Be("plus");
+        errorBars.Element(ChartNs + "errValType")!.Attribute("val")!.Value.Should().Be("percentage");
+        errorBars.Element(ChartNs + "val")!.Attribute("val")!.Value.Should().Be("12.5");
+
+        lineCharts.SelectMany(chart => chart.Elements(ChartNs + "ser")).Should().HaveCount(2);
+        lineCharts[0].Elements(ChartNs + "axId").Select(element => element.Attribute("val")!.Value)
+            .Should().Equal("48650112", "48672768");
+        lineCharts[1].Elements(ChartNs + "axId").Select(element => element.Attribute("val")!.Value)
+            .Should().Equal("48650112", "48672769");
+
+        chartXml.Descendants(ChartNs + "catAx").Should().ContainSingle();
+        chartXml.Descendants(ChartNs + "valAx").Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void ThreeDColumnChart_WithMetadataAndPrintSettings_ProducesSchemaValidOrder()
+    {
+        var saved = SaveBytes(CreateRichMetadataChartWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+
+        var chartXml = LoadChartXml(saved);
+        AssertAllChartTextPropertiesStartWithBodyProperties(chartXml);
+
+        var chartSpace = chartXml.Root!;
+        AssertChildOrder(chartSpace, "date1904", "lang", "roundedCorners", "style", "clrMapOvr", "protection", "chart", "spPr", "txPr", "externalData", "printSettings");
+        AssertChildOrder(chartSpace.Element(ChartNs + "protection")!, "chartObject", "data", "formatting", "selection", "userInterface");
+
+        var chart = chartSpace.Element(ChartNs + "chart")!;
+        AssertChildOrder(chart, "title", "autoTitleDeleted", "view3D", "floor", "sideWall", "backWall", "plotArea", "legend", "plotVisOnly", "dispBlanksAs", "showDLblsOverMax");
+
+        var view3D = chart.Element(ChartNs + "view3D");
+        view3D.Should().NotBeNull();
+        AssertChildOrder(view3D!, "rotX", "hPercent", "rotY", "depthPercent", "rAngAx", "perspective");
+
+        var printSettings = chartSpace.Element(ChartNs + "printSettings");
+        printSettings.Should().NotBeNull();
+        AssertChildOrder(printSettings!, "headerFooter", "pageMargins", "pageSetup");
+    }
+
     private static Workbook CreateLineChartWorkbook()
     {
         var workbook = new Workbook("ChartSchemaOrderingLine");
@@ -153,6 +237,229 @@ public sealed class XlsxChartSchemaOrderingTests
             TrendlineLabelFontSize = 9,
             TrendlineLabelNumberFormatCode = "0.00",
             TrendlineLabelNumberFormatSourceLinked = false
+        });
+
+        return workbook;
+    }
+
+    private static Workbook CreateLineGuideChartWorkbook()
+    {
+        var workbook = new Workbook("ChartSchemaOrderingLineGuides");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Target"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(22));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(28));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3)),
+            ShowDropLines = true,
+            ShowHighLowLines = true,
+            ShowUpDownBars = true,
+            DropLineColor = new CellColor(91, 155, 213),
+            DropLineThickness = 1.5,
+            DropLineDashStyle = ChartLineDashStyle.Dot,
+            HighLowLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
+            HighLowLineThickness = 2,
+            HighLowLineDashStyle = ChartLineDashStyle.Dash,
+            UpDownBarGapWidth = 180,
+            UpBarFillColor = new CellColor(112, 173, 71),
+            UpBarBorderColor = new CellColor(84, 130, 53),
+            UpBarBorderThickness = 1,
+            DownBarFillColor = new CellColor(192, 0, 0),
+            DownBarBorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            DownBarBorderThickness = 2
+        });
+
+        return workbook;
+    }
+
+    private static Workbook CreateColumnComboChartWorkbook()
+    {
+        var workbook = new Workbook("ChartSchemaOrderingCombo");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Units"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("Margin"));
+
+        for (uint row = 2; row <= 5; row++)
+        {
+            var offset = row - 1;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"M{offset}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(offset * 100));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(70 + (offset * 8)));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(0.15 + (offset * 0.02)));
+        }
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            Title = "Sales, units, and margin",
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 4)),
+            BarGapWidth = 150,
+            BarOverlap = 0,
+            ShowErrorBars = true,
+            ErrorBarKind = ChartErrorBarKind.Percentage,
+            ErrorBarDirection = ChartErrorBarDirection.Plus,
+            ErrorBarValue = 12.5,
+            ErrorBarEndCaps = false,
+            ErrorBarColor = new CellColor(192, 0, 0),
+            ErrorBarThickness = 2.25,
+            ErrorBarDashStyle = ChartLineDashStyle.Dot,
+            ShowSecondaryAxis = true,
+            SecondaryAxisSeriesIndexes = [2],
+            UseComboLineForSecondarySeries = true,
+            ComboLineSeriesIndexes = [1, 2],
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(68, 114, 196),
+                    StrokeColor: new CellColor(47, 85, 151),
+                    StrokeThickness: 1),
+                new ChartSeriesFormat(
+                    1,
+                    StrokeColor: new CellColor(112, 173, 71),
+                    StrokeThickness: 1.75,
+                    DashStyle: ChartLineDashStyle.Dash),
+                new ChartSeriesFormat(
+                    2,
+                    StrokeColor: new CellColor(192, 0, 0),
+                    StrokeThickness: 1.75,
+                    DashStyle: ChartLineDashStyle.Dot)
+            ]
+        });
+
+        return workbook;
+    }
+
+    private static Workbook CreateRichMetadataChartWorkbook()
+    {
+        var workbook = new Workbook("ChartSchemaOrderingMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.ThreeDColumn,
+            Title = "Sales",
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
+            Uses1904DateSystem = true,
+            Language = "en-US",
+            RoundedCorners = true,
+            ChartStyleId = 42,
+            ColorMapOverride = new ChartColorMapOverrideModel
+            {
+                OverrideMappings =
+                {
+                    ["accent1"] = "accent2"
+                }
+            },
+            Protection = new ChartProtectionModel
+            {
+                ChartObject = true,
+                Data = true,
+                Formatting = false,
+                Selection = true,
+                UserInterface = true
+            },
+            AutoTitleDeleted = true,
+            ThreeDView = new Chart3DViewModel
+            {
+                RotationX = 20,
+                HeightPercent = 150,
+                RotationY = 30,
+                DepthPercent = 200,
+                RightAngleAxes = false,
+                Perspective = 45
+            },
+            FloorFormat = new ChartSurfaceFormatModel
+            {
+                FillColor = new CellColor(217, 234, 211),
+                BorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent6),
+                BorderThickness = 1
+            },
+            SideWallFormat = new ChartSurfaceFormatModel
+            {
+                FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+                BorderColor = new CellColor(192, 0, 0),
+                BorderThickness = 2
+            },
+            BackWallFormat = new ChartSurfaceFormatModel
+            {
+                FillColor = new CellColor(217, 225, 242),
+                BorderColor = new CellColor(68, 114, 196),
+                BorderThickness = 3
+            },
+            ChartAreaFillColor = new CellColor(255, 255, 255),
+            ChartDefaultTextColor = new CellColor(25, 35, 45),
+            ChartDefaultFontSize = 13,
+            ExternalData = new ChartExternalDataModel
+            {
+                RelationshipId = "rIdExternalData1",
+                RelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+                Target = "linked-source.xlsx",
+                TargetMode = "External",
+                AutoUpdate = true
+            },
+            PrintSettings = new ChartPrintSettingsModel
+            {
+                PageMargins = new ChartPageMarginsModel
+                {
+                    Left = 0.7,
+                    Right = 0.7,
+                    Top = 0.75,
+                    Bottom = 0.75,
+                    Header = 0.3,
+                    Footer = 0.3
+                },
+                PageSetup = new ChartPageSetupModel
+                {
+                    PaperSize = "9",
+                    Orientation = "landscape",
+                    Copies = 2,
+                    FirstPageNumber = 5,
+                    HorizontalDpi = 600,
+                    VerticalDpi = 600,
+                    BlackAndWhite = true,
+                    Draft = false
+                },
+                HeaderFooter = new ChartHeaderFooterModel
+                {
+                    DifferentOddEven = true,
+                    DifferentFirst = true,
+                    AlignWithMargins = false,
+                    OddHeader = "&CSales chart",
+                    OddFooter = "&P of &N",
+                    EvenHeader = "&LConfidential",
+                    EvenFooter = "&RPrepared",
+                    FirstHeader = "&CFirst page",
+                    FirstFooter = "&D"
+                }
+            },
+            ShowLegend = true,
+            LegendPosition = ChartLegendPosition.Bottom,
+            ShowDataInHiddenRowsAndColumns = true,
+            BlankDisplayMode = ChartBlankDisplayMode.Zero,
+            ShowDataLabelsOverMaximum = true
         });
 
         return workbook;

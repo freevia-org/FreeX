@@ -850,7 +850,42 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaArithmeticContrastLocations("ABS($A1-100)>=25", "B1", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("INT($A1/10)>=10", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN($A1/50)>2", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(-$A1/50)<-2", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(1.2)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(3)=4", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(-1.2)=-2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(-3)=-4", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(2)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(-2)=-2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(0)=0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ROUND($A1/3,0)>=33", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1/100,1)>=1", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP(-$A1/100,1)<=-1", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1,-1)>=100", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1/100,1)>=1", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN(-1.29,1)=-1.2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1,-1)>=100", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("MROUND($A1,30)>=120", "B4");
+        AssertFormulaArithmeticContrastLocations("MROUND(-$A1,-30)<=-120", "B4");
+        AssertFormulaArithmeticContrastLocations("MROUND($A1,0)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MROUND(10,3)=9", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MROUND(10,4)=12", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MROUND(1.5,1)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MROUND(-10,-3)=-9", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MROUND(-1.5,-1)=-2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("TRUNC($A1/100,1)>=1", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("TRUNC(-1.29,1)=-1.2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("TRUNC($A1,-1)>=100", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("TRUNC(1.99)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("TRUNC($A1/100)>=1", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("FACT($A1/25)>20", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("FACT(5.9)=120", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE($A1/25)>7", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(7)=105", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(8)=384", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(7.9)=105", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(0)=1", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("MOD($A1,2)=0", "B2");
         AssertFormulaArithmeticContrastLocations("SQRT($A1)>=10", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("SQRTPI($A1)>18", "B4");
@@ -874,6 +909,32 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("ROUND(RADIANS(180),2)=3.14", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SIN(RADIANS($A1))>0.95", "B1", "B2", "B3");
         AssertFormulaArithmeticContrastLocations("ROUND(SIN(PI()/2),2)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("SINH($A1/100)>1", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ASINH(0)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ASINH($A1/100)>0.88", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ASINH(-$A1/100)<-0.88", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUND(ASINH(SINH(1)),2)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ASINH(1E308)>700", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ACOSH(1)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ACOSH($A1/50)>1.2", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUND(ACOSH(COSH(1)),2)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ACOSH(1E308)>700", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COSH($A1/100)>1.5", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("TANH($A1/100)>0.75", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ATANH(0)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ATANH(0.5)>0.54", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ATANH(-0.5)<-0.54", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ATANH($A1/200)>0.54", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUND(ATANH(TANH(1)),2)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ASIN(SIN(RADIANS($A1)))>1", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("ASIN($A1/100)>1", "B2");
+        AssertFormulaArithmeticContrastLocations("ACOS(COS(RADIANS($A1)))>1.5", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ACOS($A1/100)>0.7", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("ATAN($A1/100)>0.7", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ATAN(TAN(RADIANS($A1)))>1", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("ATAN2($A1,100)>0.8", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("ATAN2(0,$A1)>1.5", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUND(ATAN2(1,1),2)=0.79", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("COS(RADIANS($A1))<0", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("ROUND(COS(PI()),2)=-1", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("TAN(RADIANS($A1))>3", "B1", "B3");
@@ -884,11 +945,263 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatQuotientScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,25)>=4", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(5,2)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(-5,2)=-2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(5,-2)=-2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(-5,-2)=2", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatQuotientScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(QUOTIENT($A1,25)>=4,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(QUOTIENT($A1,25)>=4,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(QUOTIENT($A1,25))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISEVEN(QUOTIENT($A1,25))", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatQuotientScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(QUOTIENT($A1,25),1)>=5", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(QUOTIENT($A1,25),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatQuotientScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,2,1)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,0)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(1E308*1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(1E308,1E-308)>0");
+        AssertFormulaArithmeticContrastLocations("QUOTIENT(EXP(1000),2)>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCombinScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1/25,2)>=6", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5,2)=10", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(6,4)=15", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(0,0)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5.9,2.9)=10", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5.9,0.9)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5.9,5.9)=1", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCombinScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(COMBIN($A1/25,2)>=6,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(COMBIN($A1/25,2)>=6,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(COMBIN($A1/25,2))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISEVEN(COMBIN($A1/25,2))", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCombinScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(COMBIN($A1/25,2),1)>=7", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(COMBIN($A1/25,2),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatCombinScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("COMBIN()>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,2,1)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(-1,0)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(-0.2,0)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5,-1)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5,-0.2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(2,3)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1/0,2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(1E308*1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(EXP(1000),2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(2000,1000)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(100000,50000)>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPermutScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1/25,2)>=12", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5,2)=20", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(6,4)=360", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(0,0)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5.9,2.9)=20", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5.9,0.9)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5.9,5.9)=120", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPermutScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(PERMUT($A1/25,2)>=12,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(PERMUT($A1/25,2)>=12,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(PERMUT($A1/25,2))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISODD(PERMUT($A1/25,1))", "B1", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPermutScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(PERMUT($A1/25,2),1)>=13", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(PERMUT($A1/25,2),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatPermutScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("PERMUT()>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,2,1)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(-1,0)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(-0.2,0)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5,-1)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(5,-0.2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(2,3)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1/0,2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(1E308*1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(EXP(1000),2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT($A1,EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(2000,1000)>0");
+        AssertFormulaArithmeticContrastLocations("PERMUT(100000,50000)>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("ODD($A1/40)>3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(-$A1/40)<-3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(1.2)=3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(2)=3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(3)=3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(-1.2)=-3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(-2)=-3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(-3)=-3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(0)=1", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(ODD($A1/40)>3,TRUE,FALSE)", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(ODD($A1/50)>=3,$C1=\"Open\")", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ODD($A1/50))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISODD(ODD($A1/50))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(ODD($A1/40),1)>4", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatOddScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("ODD()>0");
+        AssertFormulaArithmeticContrastLocations("ODD($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ODD(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ODD($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ODD(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ODD(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ODD(EXP(1000))>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAcotScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("ACOT($A1/100)>0.8", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("ACOT(-$A1/100)>2.3", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ABS(ACOT(1)-PI()/4)<0.000000000001", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ACOT(0)=PI()/2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ABS(ACOT(-1)-3*PI()/4)<0.000000000001", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAcotScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(ACOT($A1/100)>0.8,TRUE,FALSE)", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("AND(ACOT($A1/100)>0.8,$C1=\"Closed\")", "B1");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ACOT($A1/100))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAcotScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(ACOT($A1/100),1)>1.8", "B1", "B3");
+        AssertFormulaAggregateContrastLocations("AVERAGE(ACOT($A1/100),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatAcotScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("ACOT()>0");
+        AssertFormulaArithmeticContrastLocations("ACOT($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ACOT(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOT($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOT(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ACOT(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ACOT(EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("ACOT(5E-324)>0");
+        AssertFormulaArithmeticContrastLocations("ACOT(-5E-324)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatScalarFunctionWrappers()
     {
         AssertFormulaArithmeticContrastLocations("IF(ABS($A1-100)>=25,TRUE,FALSE)", "B1", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("AND(ROUND($A1/3,0)>=33,$C1=\"Open\")", "B4");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(ROUND($A1/3,0))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(EVEN($A1/50)>2,TRUE,FALSE)", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(EVEN($A1/50)>=2,$C1=\"Open\")", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(EVEN($A1/50))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ROUNDUP($A1/100,1)>=1,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(ROUNDUP($A1/100,1)>=1,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ROUNDUP($A1/100,1))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ROUNDDOWN($A1/100,1)>=1,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(ROUNDDOWN($A1/100,1)>=1,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ROUNDDOWN($A1/100,1))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(MROUND($A1,30)>=120,TRUE,FALSE)", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(MROUND($A1,30)>=90,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(MROUND($A1,30))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(TRUNC($A1/100,1)>=1,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(TRUNC($A1/100,1)>=1,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(TRUNC($A1/100))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(FACT($A1/25)>20,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(FACT($A1/25)>20,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(FACT($A1/25))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(FACTDOUBLE($A1/25)>7,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(FACTDOUBLE($A1/25)>7,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(FACTDOUBLE($A1/25))", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("IF(SQRT($A1)>=10,TRUE,FALSE)", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("AND(SQRT($A1)>=10,$C1=\"Open\")", "B4");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(SQRT($A1))", "B1", "B2", "B3", "B4");
@@ -922,6 +1235,36 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("IF(SIN(RADIANS($A1))<0.9,TRUE,FALSE)", "B4");
         AssertFormulaArithmeticContrastLocations("AND(SIN(RADIANS($A1))>0.95,$C1=\"Closed\")", "B1", "B2");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(SIN(RADIANS($A1)))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(SINH($A1/100)>1,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(SINH($A1/100)>1,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(SINH($A1/100))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ASINH($A1/100)>0.88,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(ASINH($A1/100)>0.88,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ASINH($A1/100))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ACOSH($A1/50)>1.2,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(ACOSH($A1/50)>1.2,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ACOSH($A1/100))", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(COSH($A1/100)>1.5,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(COSH($A1/100)>1.5,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(COSH($A1/100))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(TANH($A1/100)>0.75,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(TANH($A1/100)>0.75,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(TANH($A1/100))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ATANH($A1/200)>0.54,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(ATANH($A1/200)>0.54,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ATANH($A1/200))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ASIN(SIN(RADIANS($A1)))>1,TRUE,FALSE)", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("AND(ASIN(SIN(RADIANS($A1)))>1,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ASIN(SIN(RADIANS($A1))))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ACOS($A1/100)>0.7,TRUE,FALSE)", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("AND(ACOS(COS(RADIANS($A1)))>1.5,$C1=\"Closed\")", "B2");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ACOS($A1/100))", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("IF(ATAN($A1/100)>0.7,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(ATAN(TAN(RADIANS($A1)))>1,$C1=\"Closed\")", "B1");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ATAN($A1/100))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ATAN2($A1,100)>0.8,TRUE,FALSE)", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("AND(ATAN2(100,$A1)>0.8,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ATAN2($A1,100))", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("IF(COS(RADIANS($A1))<0,TRUE,FALSE)", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("AND(COS(RADIANS($A1))<0,$C1=\"Closed\")", "B2");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(COS(RADIANS($A1)))", "B1", "B2", "B3", "B4");
@@ -938,6 +1281,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateScalarFunctionArguments()
     {
         AssertFormulaAggregateContrastLocations("SUM(ABS($A1-100),MOD($A1,2))>=25", "B1", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(EVEN($A1/50),1)>3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ROUNDUP($A1/100,1),1)>=2", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ROUNDDOWN($A1/100,1),1)>=2", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(MROUND($A1,30),1)>=121", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(TRUNC($A1/100,1),1)>=2", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(FACT($A1/25),1)>20", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(FACTDOUBLE($A1/25),1)>8", "B2", "B4");
         AssertFormulaAggregateContrastLocations("SUM(SQRT($A1),1)>10", "B2", "B4");
         AssertFormulaAggregateContrastLocations("SUM(SQRTPI($A1),1)>18", "B2", "B4");
         AssertFormulaAggregateContrastLocations("SUM(SIGN($A1-100),1)>1", "B4");
@@ -951,6 +1301,16 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("SUM(DEGREES($A1/100),1)>58", "B2", "B4");
         AssertFormulaAggregateContrastLocations("SUM(RADIANS($A1),1)>2.5", "B2", "B4");
         AssertFormulaAggregateContrastLocations("SUM(SIN(RADIANS($A1)),1)>1.95", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("SUM(SINH($A1/100),1)>2", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ASINH($A1/100),1)>1.88", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ACOSH($A1/50),1)>2.2", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(COSH($A1/100),1)>2.5", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(TANH($A1/100),1)>1.75", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ATANH($A1/200),1)>1.54", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ASIN(SIN(RADIANS($A1))),1)>2", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("SUM(ACOS(COS(RADIANS($A1))),1)>2.5", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ATAN($A1/100),1)>1.7", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(ATAN2($A1,100),1)>1.8", "B1", "B3");
         AssertFormulaAggregateContrastLocations("SUM(COS(RADIANS($A1)),1)>1.2", "B1", "B3");
         AssertFormulaAggregateContrastLocations("SUM(TAN(RADIANS($A1)),1)>4", "B1", "B3");
         AssertFormulaAggregateContrastLocations("SUM(PI(),$A1)>103", "B2", "B4");
@@ -961,11 +1321,70 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaArithmeticContrastLocations("ABS($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("ROUND($A1)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1,0,1)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1,0,1)>0");
+        AssertFormulaArithmeticContrastLocations("TRUNC()>0");
+        AssertFormulaArithmeticContrastLocations("TRUNC($A1,0,1)>0");
+        AssertFormulaArithmeticContrastLocations("MROUND($A1)>0");
+        AssertFormulaArithmeticContrastLocations("MROUND($A1,10,1)>0");
+        AssertFormulaArithmeticContrastLocations("MROUND(\"10\",3)>0");
+        AssertFormulaArithmeticContrastLocations("MROUND($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("MROUND($A1&\"x\",10)>0");
+        AssertFormulaArithmeticContrastLocations("MROUND(KURT($A1),10)>0");
+        AssertFormulaArithmeticContrastLocations("MROUND($A1,-10)>0");
+        AssertFormulaArithmeticContrastLocations("MROUND(1E308*1E308,10)>0");
+        AssertFormulaArithmeticContrastLocations("MROUND($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("MROUND(1E308,0.1)>0");
         AssertFormulaArithmeticContrastLocations("MOD($A1)>0");
         AssertFormulaArithmeticContrastLocations("MOD($A1,0)>0");
         AssertFormulaArithmeticContrastLocations("ROUND($A1,999999)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1,999999)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1,999999)>0");
+        AssertFormulaArithmeticContrastLocations("TRUNC($A1,999999)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP(\"5\",0)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1,\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP($A1&\"x\",0)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP(KURT($A1),0)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDUP(1E308*1E308,0)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN(\"5\",0)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1,\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN($A1&\"x\",0)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN(KURT($A1),0)>0");
+        AssertFormulaArithmeticContrastLocations("ROUNDDOWN(1E308*1E308,0)>0");
+        AssertFormulaArithmeticContrastLocations("TRUNC(\"5\",0)>0");
+        AssertFormulaArithmeticContrastLocations("TRUNC($A1,\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("TRUNC($A1&\"x\",0)>0");
+        AssertFormulaArithmeticContrastLocations("TRUNC(KURT($A1),0)>0");
+        AssertFormulaArithmeticContrastLocations("TRUNC(1E308*1E308,0)>0");
+        AssertFormulaArithmeticContrastLocations("FACT()>0");
+        AssertFormulaArithmeticContrastLocations("FACT($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("FACT(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("FACT($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("FACT(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("FACT(-1)>0");
+        AssertFormulaArithmeticContrastLocations("FACT(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("FACT(EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("FACT(171)>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE()>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(-1)>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(301)>0");
         AssertFormulaArithmeticContrastLocations("ABS(\"5\")>0");
         AssertFormulaArithmeticContrastLocations("ABS($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("EVEN()>0");
+        AssertFormulaArithmeticContrastLocations("EVEN($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("EVEN(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("EVEN($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("EVEN(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("EVEN(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("EVEN(EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("SQRT()>0");
         AssertFormulaArithmeticContrastLocations("SQRT($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("SQRT(-$A1)>0");
@@ -1050,6 +1469,86 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("SIN($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("SIN(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("SIN(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("SINH()>0");
+        AssertFormulaArithmeticContrastLocations("SINH($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("SINH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("SINH($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("SINH(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("SINH(1E308)>0");
+        AssertFormulaArithmeticContrastLocations("SINH(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ASINH()>0");
+        AssertFormulaArithmeticContrastLocations("ASINH($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ASINH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ASINH($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ASINH(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ASINH(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ASINH(EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH()>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH(0)>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH(-1)>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ACOSH(EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("COSH()>0");
+        AssertFormulaArithmeticContrastLocations("COSH($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("COSH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("COSH($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("COSH(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("COSH(1E308)>0");
+        AssertFormulaArithmeticContrastLocations("COSH(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("TANH()>0");
+        AssertFormulaArithmeticContrastLocations("TANH($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("TANH(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("TANH($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("TANH(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("TANH(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ATANH()>0");
+        AssertFormulaArithmeticContrastLocations("ATANH($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ATANH(\"0.5\")>0");
+        AssertFormulaArithmeticContrastLocations("ATANH($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ATANH(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ATANH(1)>0");
+        AssertFormulaArithmeticContrastLocations("ATANH(-1)>0");
+        AssertFormulaArithmeticContrastLocations("ATANH(2)>0");
+        AssertFormulaArithmeticContrastLocations("ATANH(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ATANH(EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("ASIN()>0");
+        AssertFormulaArithmeticContrastLocations("ASIN($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(\"0.5\")>0");
+        AssertFormulaArithmeticContrastLocations("ASIN($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(2)>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(-2)>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ACOS()>0");
+        AssertFormulaArithmeticContrastLocations("ACOS($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ACOS(\"0.5\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOS($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ACOS(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ACOS(2)>0");
+        AssertFormulaArithmeticContrastLocations("ACOS(-2)>0");
+        AssertFormulaArithmeticContrastLocations("ACOS(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN()>0");
+        AssertFormulaArithmeticContrastLocations("ATAN($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ATAN($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ATAN(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ATAN(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2()>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2($A1)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2($A1,1,2)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2(\"5\",$A1)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2($A1,\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2($A1&\"x\",1)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2(KURT($A1),1)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2(1E308*1E308,$A1)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2(0,0)>0");
+        AssertFormulaArithmeticContrastLocations("ATAN2($A1-$A1,0)>0");
         AssertFormulaArithmeticContrastLocations("COS()>0");
         AssertFormulaArithmeticContrastLocations("COS($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("COS(\"5\")>0");

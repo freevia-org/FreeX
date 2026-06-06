@@ -243,10 +243,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
     [Fact]
     public void BuildCommands_SourceKeepsStateCacheOnHotPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
-            "WorksheetContextMenuPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorksheetContextMenuPlanner.cs");
 
         source.Should().Contain("WorksheetCommandCache[GetStateCacheIndex(state)]");
         source.Should().Contain("private static readonly IReadOnlyList<WorksheetContextMenuCommand>[] WorksheetCommandCache");

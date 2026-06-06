@@ -12,13 +12,13 @@ internal static class RibbonXamlCatalogSnapshotReader
 
     public static RibbonCatalog ReadMainWindow()
     {
-        var path = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml");
+        var path = DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml");
         return Read(path);
     }
 
     public static RibbonXamlCatalogSnapshot ReadMainWindowSnapshot()
     {
-        var path = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml");
+        var path = DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml");
         return ReadSnapshot(path);
     }
 

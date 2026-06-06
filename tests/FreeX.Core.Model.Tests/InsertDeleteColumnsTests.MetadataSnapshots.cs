@@ -7,10 +7,7 @@ public partial class InsertDeleteColumnsTests
     [Fact]
     public void ColumnCommands_UseCompactMetadataSnapshotsForUndo()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.Core.Commands",
-            "InsertDeleteColumnsCommand.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSource("InsertDeleteColumnsCommand.cs");
 
         source.Should().Contain("private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;");
         source.Should().Contain("CaptureDictionary(sheet.ColumnWidths)");

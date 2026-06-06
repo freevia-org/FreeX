@@ -156,8 +156,7 @@ public partial class XlsxFeatureInspectorTests
     [Fact]
     public void InspectRelationships_AvoidsLowercaseStringAllocations()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", "XlsxFeatureInspector.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxFeatureInspector.cs");
         var relationshipInspection = source[
             source.IndexOf("private static IReadOnlyList<XlsxUnsupportedFeatureKind> InspectRelationships", StringComparison.Ordinal)..
             source.IndexOf("private static bool IsSupportedChartPart", StringComparison.Ordinal)];

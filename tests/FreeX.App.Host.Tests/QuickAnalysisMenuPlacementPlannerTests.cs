@@ -2,7 +2,6 @@ using FluentAssertions;
 using FreeX.Core.Model;
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Windows;
 
@@ -68,10 +67,7 @@ public sealed class QuickAnalysisMenuPlacementPlannerTests
     [Fact]
     public void BuildAnchor_UsesIndexedMetricScans()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
-            "QuickAnalysisMenuPlacementPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("QuickAnalysisMenuPlacementPlanner.cs");
 
         var method = source[
             source.IndexOf("public static Point BuildAnchor", StringComparison.Ordinal)..

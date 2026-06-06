@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,12 +7,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void SheetTabsController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var sheetTabsSourcePath = Path.Combine(appHostDirectory, "MainWindow.SheetTabs.cs");
-
-        File.Exists(sheetTabsSourcePath).Should().BeTrue();
-        var sheetTabsSource = File.ReadAllText(sheetTabsSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var sheetTabsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
         mainSource.Should().NotContain("private void RefreshSheetTabs()");
         mainSource.Should().NotContain("private void SheetTab_MouseLeftButtonDown(");
@@ -31,12 +26,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var contextMenuSourcePath = Path.Combine(appHostDirectory, "MainWindow.WorksheetContextMenu.cs");
-
-        File.Exists(contextMenuSourcePath).Should().BeTrue();
-        var contextMenuSource = File.ReadAllText(contextMenuSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         mainSource.Should().NotContain("private void OnGridContextMenuRequested(");
         mainSource.Should().NotContain("private void ExecuteWorksheetContextMenuAction(");
@@ -52,12 +43,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void SelectionAndGridInteractionController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var selectionSourcePath = Path.Combine(appHostDirectory, "MainWindow.Selection.cs");
-
-        File.Exists(selectionSourcePath).Should().BeTrue();
-        var selectionSource = File.ReadAllText(selectionSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         mainSource.Should().NotContain("private void SelectRow(");
         mainSource.Should().NotContain("private void SheetGrid_MouseDown(");
@@ -84,18 +71,10 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void InlineEditingController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var editingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Editing.cs");
-        var dropdownSourcePath = Path.Combine(appHostDirectory, "MainWindow.EditingDropdowns.cs");
-        var formulaReferenceSourcePath = Path.Combine(appHostDirectory, "MainWindow.FormulaReferenceEditing.cs");
-
-        File.Exists(editingSourcePath).Should().BeTrue();
-        File.Exists(dropdownSourcePath).Should().BeTrue();
-        File.Exists(formulaReferenceSourcePath).Should().BeTrue();
-        var editingSource = File.ReadAllText(editingSourcePath);
-        var dropdownSource = File.ReadAllText(dropdownSourcePath);
-        var formulaReferenceSource = File.ReadAllText(formulaReferenceSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
+        var dropdownSource = DialogSourceTestSupport.ReadHostSources("MainWindow.EditingDropdowns.cs");
+        var formulaReferenceSource = DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaReferenceEditing.cs");
 
         mainSource.Should().NotContain("private void EnterEditMode(");
         mainSource.Should().NotContain("private void ShowInlineEditor(");
@@ -129,7 +108,6 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void InlineEditing_StartsWithCaretAtEndInsteadOfSelectingAll()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
         var editingSource = ReadEditingSource();
 
         editingSource.Should().NotContain("_inlineEditor.SelectAll();");
@@ -140,12 +118,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void GridStatusAndResizeController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var gridSourcePath = Path.Combine(appHostDirectory, "MainWindow.GridStatus.cs");
-
-        File.Exists(gridSourcePath).Should().BeTrue();
-        var gridSource = File.ReadAllText(gridSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var gridSource = DialogSourceTestSupport.ReadHostSources("MainWindow.GridStatus.cs");
 
         mainSource.Should().NotContain("private void RefreshStatusBar(");
         mainSource.Should().NotContain("private void OnColumnResizing(");
@@ -170,9 +144,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void SheetTabs_UseContextualNavigationArrowsInsteadOfAHorizontalScrollbar()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
-        var xamlCodeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
+        var xamlCodeBehind = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var navigationStart = source.IndexOf("private void UpdateSheetTabNavigation()", StringComparison.Ordinal);
         var navigationEnd = source.IndexOf("private void BringCurrentSheetTabIntoView()", navigationStart, StringComparison.Ordinal);
         navigationStart.Should().BeGreaterThanOrEqualTo(0);
@@ -313,7 +287,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void SheetTabsChromeAndViewport_UseNoOpGuardsForRepeatedManyTabNavigationUpdates()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
         var chromeSource = ExtractMethodSource(source, "private void UpdateSheetTabsChromeLayer()");
         var viewportSource = ExtractMethodSource(source, "private void UpdateSheetTabViewportWidth()");
 
@@ -348,7 +322,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void WorksheetContextMenuPickFromDropDown_ReusesActiveDropdownPath()
     {
         var source =
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs")) +
+            DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs") +
             ReadEditingSource();
 
         source.Should().Contain("case WorksheetContextMenuAction.PickFromDropDown:");
@@ -358,7 +332,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuQuickAnalysis_ReusesCtrlQPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("case WorksheetContextMenuAction.QuickAnalysis:");
         source.Should().Contain("ShowQuickAnalysisMenu();");
@@ -367,7 +341,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenu_UsesAccessKeyHeaders()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("Header = command.AccessHeader");
     }
@@ -375,7 +349,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void KeyboardWorksheetContextMenu_IsAnchoredToActiveCell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("OpenKeyboardContextMenu()");
         source.Should().Contain("TryGetCellOverlayRect(address)");
@@ -388,7 +362,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void KeyboardWorksheetContextMenu_FocusesFirstEnabledMenuItem()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("menu.Opened += WorksheetContextMenu_Opened;");
         source.Should().Contain("private static void WorksheetContextMenu_Opened(object sender, RoutedEventArgs e)");
@@ -399,10 +373,10 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void KeyboardContextMenu_RoutesFocusedSheetTabToSheetTabMenu()
     {
-        var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
-        var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var sheetTabsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         contextMenuSource.Should().Contain("if (TryOpenFocusedSheetTabContextMenu())");
         sheetTabsSource.Should().Contain("private bool TryOpenFocusedSheetTabContextMenu()");
@@ -416,7 +390,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void KeyboardSheetTabContextMenu_FocusesFirstEnabledMenuItem()
     {
-        var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var sheetTabsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
         sheetTabsSource.Should().Contain("contextMenu.Opened += SheetTabContextMenu_Opened;");
         sheetTabsSource.Should().Contain("private static void SheetTabContextMenu_Opened(object sender, RoutedEventArgs e)");
@@ -427,8 +401,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FocusedSheetTabs_HandleArrowNavigationBeforeWorksheetNavigation()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var sheetTabsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
         var focusAdjacentSource = ExtractMethodSource(sheetTabsSource, "private bool FocusAdjacentVisibleSheetTab(");
         var focusEdgeSource = ExtractMethodSource(sheetTabsSource, "private bool FocusEdgeVisibleSheetTab(");
 
@@ -451,8 +425,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void F6StatusBar_FocusesFirstZoomControlBeforeSliderFallback()
     {
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         keyboardFocusSource.Should().Contain("return FocusStatusBar();");
         keyboardFocusSource.Should().Contain("private bool FocusStatusBar()");
@@ -464,8 +438,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void F6ShellFocusCycle_IncludesVisiblePivotFieldListTaskPane()
     {
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         keyboardFocusSource.Should().Contain("ShellFocusTarget.TaskPane");
         keyboardFocusSource.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
@@ -483,8 +457,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void F6ShellFocusCycle_IncludesVisibleSlicerTimelineTaskPane()
     {
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         keyboardFocusSource.Should().Contain("IsDescendantOf(focusedElement, SlicerTimelinePane)");
         keyboardFocusSource.Should().Contain("private bool FocusVisibleTaskPane()");
@@ -504,8 +478,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FocusedStatusBar_TabTraversalIsNotHijackedByWorksheetMovement()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
 
         selectionSource.Should().Contain("if (TryHandleFocusedStatusBarKeyboardNavigation(e))");
         keyboardFocusSource.Should().Contain("private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
@@ -520,8 +494,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void StatusBarSelectionStatistics_SurfaceSeparatesCountAndNumericalCount()
     {
-        var gridStatusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.GridStatus.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var gridStatusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.GridStatus.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         xaml.Should().Contain("x:Name=\"StatusStatsPanel\"");
         xaml.Should().Contain("x:Name=\"StatusCountText\"");
@@ -537,7 +511,7 @@ public sealed partial class MainWindowSourceHygieneTests
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText)");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusSumText, state.SumText)");
         gridStatusSource.Should().Contain("_statusBarDisplayStateCache.GetReady(UiText.Get(\"MainWindow_Text_Ready\"))");
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "StatusBarDisplayState.cs"))
+        DialogSourceTestSupport.ReadHostSources("StatusBarDisplayState.cs")
             .Should()
             .Contain("FormatStatusText(\"StatusBar_CountFormat\", stats.Count)")
             .And.Contain("FormatStatusText(\"StatusBar_NumericalCountFormat\", stats.NumericalCount)")
@@ -549,9 +523,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FocusedPivotFieldListTaskPane_TabTraversalIsNotHijackedByWorksheetMovement()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         selectionSource.Should().Contain("if (TryHandleFocusedTaskPaneKeyboardNavigation(e))");
         keyboardFocusSource.Should().Contain("private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
@@ -568,7 +542,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FocusedPivotFieldListTaskPane_EscapeReturnsFocusToWorksheet()
     {
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
         var taskPaneNavigationStart = keyboardFocusSource.IndexOf(
             "private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)",
             StringComparison.Ordinal);
@@ -589,7 +563,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FocusedRibbon_TabAndArrowKeysRequestFocusTraversal()
     {
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
 
         keyboardFocusSource.Should().Contain("MoveFocusedRibbonElement(focusedElement, Keyboard.Modifiers == ModifierKeys.Shift");
         keyboardFocusSource.Should().Contain("FocusNavigationDirection.Previous");
@@ -607,7 +581,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenu_UsesObjectAwareTargetKind()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("GetWorksheetContextMenuTargetKind(actualAddr)");
         source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
@@ -626,7 +600,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenu_UsesRowAndColumnSelectionTargetKinds()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
         source.Should().Contain("SelectionRangeService.IsWholeRowSelection(selectedRange)");
@@ -638,8 +612,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ThreadedCommentShortcut_UsesDistinctThreadedCommentWorkflow()
     {
-        var keyboard = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var keyboard = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         keyboard.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewThreadedCommentBtn_Click)");
         keyboard.Should().NotContain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewCommentBtn_Click)");
@@ -652,7 +626,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuNewComment_ReusesThreadedCommentWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("case WorksheetContextMenuAction.NewComment:");
         source.Should().Contain("ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());");
@@ -661,8 +635,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuEditAndDeleteComment_UseThreadedCommentWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
-        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("case WorksheetContextMenuAction.EditComment:");
         source.Should().Contain("case WorksheetContextMenuAction.DeleteComment:");
@@ -674,7 +648,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuResolveComment_UsesThreadedCommentResolveCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("case WorksheetContextMenuAction.ResolveComment:");
         source.Should().Contain("case WorksheetContextMenuAction.UnresolveComment:");
@@ -687,8 +661,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuShowNotes_UsesNoteOnlyWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
-        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorksheetContextMenuPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("WorksheetContextMenuPlanner.cs");
 
         source.Should().Contain("case WorksheetContextMenuAction.ShowNotes:");
         source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs());");
@@ -700,7 +674,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ReviewCommentAndNoteNavigation_KeepsThreadedCommentsAndNotesSeparate()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("CommentNavigationPlanner.FormatThreadedCommentList(sheet.ThreadedComments)");
         source.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
@@ -718,7 +692,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void Selection_UpdatesVisibleCommentPreviewForSelectionAndHover()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         source.Should().Contain("UpdateCommentPreview(addr)");
         source.Should().Contain("UpdateCommentPreview(hitAddr.Value)");
@@ -745,9 +719,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_ReusesFullFilterDialogResultRouting()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
         var editingSource = ReadEditingSource();
-        var dataFilterSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.DataFilterCommands.cs"));
+        var dataFilterSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
         editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
         dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
@@ -759,7 +732,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void AutoFilterKeyboardDropdown_UsesExcelStyleMenuPlanner()
     {
         var source = ReadEditingSource();
-        var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialog.cs"));
+        var dialog = DialogSourceTestSupport.ReadHostSources("AutoFilterDialog.cs");
 
         source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
@@ -770,7 +743,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_ExposesCriteriaSuggestionPicker()
     {
-        var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialog.cs"));
+        var dialog = DialogSourceTestSupport.ReadHostSources("AutoFilterDialog.cs");
 
         dialog.Should().Contain("_criteriaSuggestionBox");
         dialog.Should().Contain("GetCriteriaSuggestions(menuPlan)");
@@ -780,9 +753,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void GridResizeSnapshots_LiveWithGridStatusController()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var gridStatusSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.GridStatus.cs"));
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var gridStatusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.GridStatus.cs");
 
         mainSource.Should().NotContain("private sealed record ColumnResizeSnapshot(");
         mainSource.Should().NotContain("private sealed record RowResizeSnapshot(");

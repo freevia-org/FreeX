@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
@@ -15,8 +14,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_ReusesThemeEffectWithinRenderPass()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
         var renderTextBoxes = source[
             source.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)..
             source.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
@@ -45,10 +43,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_CullsOffscreenObjectsBeforeExpensiveWork()
     {
-        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
+        var pictures = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
 
         var renderCharts = drawingObjects[
             drawingObjects.IndexOf("private void RenderCharts", StringComparison.Ordinal)..
@@ -115,8 +111,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesAuthoredEffectPresetMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
         var authoredEffect = source[
             source.IndexOf("private void DrawShapeAuthoredEffect", StringComparison.Ordinal)..
             source.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)];
@@ -302,10 +297,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesThemeGlowForTextBoxesAndShapesOnly()
     {
-        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
+        var pictures = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var textBoxThemeEffect = drawingObjects[
             drawingObjects.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)];
@@ -326,10 +319,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesThemeSoftEdgesForTextBoxesAndShapesOnly()
     {
-        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
+        var pictures = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var textBoxThemeEffect = drawingObjects[
             drawingObjects.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)];
@@ -351,10 +342,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesThemeBevelAndThreeDRotationForShapesOnly()
     {
-        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
+        var pictures = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var renderCharts = drawingObjects[
             drawingObjects.IndexOf("private void RenderCharts", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)];
@@ -392,10 +381,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesThemeInnerShadowsForTextBoxesAndShapesOnly()
     {
-        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
+        var pictures = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var renderTextBox = drawingObjects[
             drawingObjects.IndexOf("private void RenderTextBox", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
@@ -425,8 +412,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void DrawingObjectRendering_UsesAuthoredGradientDirectionMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
 
         source.Should().Contain("shape.GetEffectiveGradientFillDirection()");
         source.Should().Contain("DrawingShapeGradientDirection.Horizontal");
@@ -439,8 +425,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void NativeSlicerRendering_DrawsSelectedTilesWithoutMaterializingArray()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
         var drawSlicer = source[
             source.IndexOf("private void DrawNativeSlicerControl", StringComparison.Ordinal)..
             source.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)];
@@ -455,11 +440,12 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void GridView_ExposesObjectDisplayModeForExcelPlaceholderRendering()
     {
-        var source =
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderDispatch.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjectLayerCache.cs"));
-        var propertiesSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSourcesWithSeparator(
+            "",
+            "GridView.cs",
+            "GridView.RenderDispatch.cs",
+            "GridView.DrawingObjectLayerCache.cs");
+        var propertiesSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Properties.cs");
 
         source.Should().Contain("public enum GridObjectDisplayMode");
         propertiesSource.Should().Contain("ObjectDisplayModeProperty");

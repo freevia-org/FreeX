@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Commands;
@@ -55,8 +54,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void PrintSettingsPanel_ExposesOrientationPaperSizeMarginsAndScalingControls()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewSettingsPanelFactory.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PrintPreviewSettingsPanelFactory.cs");
 
         source.Should().ContainAny("PageOrientation", "Orientation");
         source.Should().ContainAny("PaperSize", "paperSize");
@@ -67,8 +65,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void PrintPreview_ExposesKeyboardedGridlineAndHeadingToggles()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewSettingsPanelFactory.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PrintPreviewSettingsPanelFactory.cs");
 
         source.Should().Contain("PrintGridlines");
         source.Should().Contain("PrintHeadings");
@@ -77,8 +74,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void PrintSettings_IncludesIgnorePrintAreaOption()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintSettingsPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PrintSettingsPlanner.cs");
 
         source.Should().Contain("IgnorePrintArea");
     }
@@ -179,8 +175,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void FormatCellsDialog_ExposesNumberAlignmentFontFillBorderAndProtectionTabs()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("FormatCellsDialog.xaml.cs");
 
         source.Should().ContainAll(
             "FormatCellsDialogTab.Number",
@@ -216,8 +211,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void FormatCellsFontTab_ExposesStrikethroughSuperscriptAndSubscript()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("FormatCellsDialog.xaml.cs");
 
         source.Should().ContainAll("Strikethrough", "Superscript", "Subscript");
     }
@@ -247,8 +241,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void ThreadedCommentDialog_SupportsCtrlEnterReplySubmissionAndAccessKeys()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ThreadedCommentDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ThreadedCommentDialog.cs");
 
         // Ctrl+Enter submits the reply - confirmed via Key.Enter + ModifierKeys.Control
         source.Should().Contain("Key.Enter");
@@ -280,8 +273,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void AutoFilterDropdown_UsesExcelStyleMenuPlannerWithInitialKeyboardFocus()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.EditingDropdowns.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.EditingDropdowns.cs");
 
         source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
@@ -290,8 +282,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void AutoFilterDropdownPlanner_SupportsCriteriaSuggestionsAndFilterFamilySubmenus()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDropdownPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterDropdownPlanner.cs");
 
         source.Should().ContainAll(
             "CriteriaSuggestions",
@@ -302,8 +293,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void DataFilterCommands_UsesFilterPromptPlannerForTopBottomAverageAndCriterionFilters()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
         source.Should().Contain("FilterPromptPlanner.TryPlan");
         source.Should().Contain("promptPlan.CreateCommand");
@@ -324,8 +314,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void QuickAnalysisMenu_CoversFormattingChartsAndTotalsGroups()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "QuickAnalysisPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("QuickAnalysisPlanner.cs");
 
         // QuickAnalysisPlanner.Format/Chart/Total factory methods correspond to the three groups
         source.Should().ContainAll("\"Formatting\"", "\"Charts\"", "\"Totals\"");
@@ -334,8 +323,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void QuickAnalysisMenu_AnchorsToCellRangeBottomRightCornerOnKeyboardActivation()
     {
-        var plannerSource = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "QuickAnalysisMenuPlacementPlanner.cs"));
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("QuickAnalysisMenuPlacementPlanner.cs");
 
         // Anchor is computed from the last visible row and column in the selection,
         // placing the menu at the selection's visible bottom-right corner.
@@ -358,8 +346,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RibbonKeyTipMode_EntersTopLevelModeAndBadgesAreClampedInsideOverlay()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonKeyTipOverlayPlacement.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonKeyTipOverlayPlacement.cs");
 
         // Badge positions are clamped inside the overlay window so keytips remain visible
         source.Should().ContainAny("Clamp", "clamp", "Math.Min", "Math.Max");
@@ -390,8 +377,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void ShellFocusCycle_SkipsUnavailableTaskPanesInsteadOfFailingFocusAttempts()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
 
         source.Should().Contain("CycleShellFocus");
         source.Should().ContainAny("PivotTable", "task pane", "taskPane", "TaskPane");
@@ -402,8 +388,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RibbonFocus_TabAndShiftTabNavigateWithinRibbonSurface()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
 
         source.Should().ContainAny("RibbonTabStrip", "ribbonTab", "FocusedRibbon", "_ribbon");
         source.Should().Contain("Tab");
@@ -434,8 +419,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void WorksheetContextMenu_IncludesPasteSpecialInsertDeleteAndFormatCellsItems()
     {
-        var plannerSource = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorksheetContextMenuPlanner.cs"));
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("WorksheetContextMenuPlanner.cs");
 
         plannerSource.Should().ContainAll(
             "Paste Special",
@@ -459,8 +443,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RepeatLastAction_RoutesToCommandBusRepeatLastWithSelectionTracking()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CommandExecution.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CommandExecution.cs");
 
         source.Should().Contain("ExecuteRepeatLast");
         source.Should().Contain("_commandBus.RepeatLast");
@@ -469,8 +452,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RepeatLastAction_SupportsTryExecuteRepeatableVariantsForGroupedSheetAndCurrentRangeCommands()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CommandExecution.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CommandExecution.cs");
 
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand");
         source.Should().Contain("TryExecuteRepeatableCurrentRangeCommand");
@@ -480,8 +462,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RepeatLastAction_FillDownAndFillRightAreWiredToRepeatablePaths()
     {
-        var homeEditingSource = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeEditing.cs"));
+        var homeEditingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
         homeEditingSource.Should().ContainAny("FillDown", "FillRight");
         homeEditingSource.Should().Contain("TryExecuteRepeatableCurrentRangeCommand");
@@ -492,8 +473,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void AltKeytipMode_OpensFileBackstageOrSelectsRibbonTabs()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "KeyboardShortcutMatcher.CommandRules.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("KeyboardShortcutMatcher.CommandRules.cs");
 
         // Alt key opens keytip mode via F10 path in the dispatcher
         source.Should().Contain("ShowKeyTips");
@@ -502,8 +482,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RibbonKeyTipMode_ClosesOnEscape()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonKeyTipMode.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonKeyTipMode.cs");
 
         // Escape exits keytip mode
         source.Should().ContainAny("Escape", "escape", "Key.Escape");
@@ -512,8 +491,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RibbonKeytipRouter_SupportsTopLevelTabsAndBackstageFile()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonTopLevelKeyTipRouter.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonTopLevelKeyTipRouter.cs");
 
         source.Should().Contain("BackstageFile");
         source.Should().Contain("RibbonTab");
@@ -522,8 +500,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RibbonKeytipMode_CoversQatTabFormulaBarAndSheetTabBadges()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
 
         source.Should().ContainAny("FormulaBar", "formulaBar", "NameBox", "nameBox");
     }

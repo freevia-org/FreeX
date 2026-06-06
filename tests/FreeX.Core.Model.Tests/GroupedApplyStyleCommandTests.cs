@@ -83,7 +83,7 @@ public sealed class GroupedApplyStyleCommandTests
     [Fact]
     public void Apply_UsesStyleDiffRegistrationCache()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "GroupedApplyStyleCommand.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSource("GroupedApplyStyleCommand.cs");
         var apply = source[
             source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
             source.IndexOf("public void Revert", StringComparison.Ordinal)];

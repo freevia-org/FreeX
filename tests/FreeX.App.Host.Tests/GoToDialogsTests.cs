@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -107,7 +106,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void GoToDialog_ExposesKeyboardAccessKeysForReferenceAndButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoToDialog.cs");
 
         source.Should().Contain("Content = UiText.Get(\"GoTo_GoTo2\")");
         source.Should().Contain("UiText.Get(\"GoTo_RecentReferencesAndDefinedNames\")");
@@ -125,7 +124,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void GoToDialog_ExposesUIANamesAndHelpTextForReferenceSurfaces()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoToDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_historyList, UiText.Get(\"GoTo_GoTo\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(_historyList, UiText.Get(\"GoTo_ListsRecentReferencesAndDefinedNamesAvailableForNavigation\"));");
@@ -136,7 +135,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void GoToDialogOpenedFromKeyboard_FocusesReferenceBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoToDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -198,7 +197,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void GoToDialogInvalidReference_RefocusesAndSelectsReferenceBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoToDialog.cs");
 
         source.Should().Contain("FocusReferenceInput();");
         source.Should().Contain("private void FocusReferenceInput()");
@@ -210,7 +209,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void MainWindow_GoToDialogRoutesSpecialSelectionThroughGoToSpecialService()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeEditing.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
         source.Should().Contain("new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges)");
         source.Should().Contain("dialog.SelectedSpecialKind is { } specialKind");
@@ -223,8 +222,8 @@ public sealed class GoToDialogsTests
     [Fact]
     public void MainWindow_NameBoxEnterRoutesTypedReferenceThroughGoToParser()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
 
         xaml.Should().Contain("KeyDown=\"CellAddressBox_KeyDown\"");
         editingSource.Should().Contain("if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)");
@@ -237,7 +236,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void MainWindow_NameBoxEscapeCancelsTypedReference()
     {
-        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
+        var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
 
         editingSource.Should().Contain("if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)");
         editingSource.Should().Contain("RestoreCellAddressBoxText();");
@@ -270,7 +269,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void GoToSpecialDialog_ExposesKeyboardAccessKeysForChoicesAndButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToSpecialDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoToSpecialDialog.cs");
 
         foreach (var expected in new[]
         {
@@ -315,7 +314,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void GoToSpecialDialog_ExposesExcelConstantsAndFormulasSuboptions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToSpecialDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoToSpecialDialog.cs");
 
         source.Should().Contain("Content = UiText.Get(\"GoToSpecial_Numbers\")");
         source.Should().Contain("Content = UiText.Get(\"GoToSpecial_Text\")");
@@ -331,7 +330,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void GoToSpecialDialogOpenedFromKeyboard_FocusesFirstChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToSpecialDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoToSpecialDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -391,7 +390,7 @@ public sealed class GoToDialogsTests
     [Fact]
     public void MainWindow_GoToSpecialPassesDialogValueTypeOptionsToService()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeEditing.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
         source.Should().Contain("dialog.SelectedOptions");
         source.Should().Contain("SelectGoToSpecialMatches(specialKind, dialog.SelectedSpecialOptions, showEmptyMessage: true)");

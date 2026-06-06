@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -8,8 +7,7 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void InsertDeleteContextMenuActionsRouteToExistingWorksheetMutationCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("case WorksheetContextMenuAction.InsertCells:");
         source.Should().Contain("InsertCellsMenuItem_Click(this, new RoutedEventArgs());");
@@ -32,8 +30,7 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void ObjectContextMenuActionsRouteToExistingPictureShapeAndAltTextCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         source.Should().Contain("case WorksheetContextMenuAction.FormatPicture:");
         source.Should().Contain("PictureSizeBtn_Click(this, new RoutedEventArgs());");
@@ -63,8 +60,7 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void GridContextMenuClearsTransientCellUiBeforeOpeningMenu()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         var contextMenuRequested = source[
             source.IndexOf("private void OnGridContextMenuRequested", StringComparison.Ordinal)..
@@ -83,8 +79,7 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     [Fact]
     public void ContextMenuStateSkipsValidationLookupWhenSheetHasNoValidationRules()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         var stateMethod = source[
             source.IndexOf("private WorksheetContextMenuState GetWorksheetContextMenuState", StringComparison.Ordinal)..];

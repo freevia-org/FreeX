@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
@@ -13,7 +12,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void PictureRenderer_DrawsSelectionAdornerForPictureAtActiveCell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var adorner = source[
             source.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)..
             source.IndexOf("private static bool HasPictureCrop", StringComparison.Ordinal)];
@@ -33,7 +32,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void PictureRenderer_ReusesFrozenStaticResources()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var renderStart = source.IndexOf("private void RenderPictures", StringComparison.Ordinal);
         var renderEnd = source.IndexOf("private static bool HasPictureCrop", StringComparison.Ordinal);
         renderStart.Should().BeGreaterThanOrEqualTo(0);
@@ -80,7 +79,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void WorksheetBackgroundRenderer_ReusesFrozenTiledBrush()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var renderWorksheetBackground = source[
             source.IndexOf("private void RenderWorksheetBackground", StringComparison.Ordinal)..
             source.IndexOf("private ImageBrush GetWorksheetBackgroundBrush", StringComparison.Ordinal)];

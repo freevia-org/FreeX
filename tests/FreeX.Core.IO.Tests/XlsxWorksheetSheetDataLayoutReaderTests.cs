@@ -312,6 +312,5 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
     }
 
     private static string Source(string fileName) =>
-        File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", fileName));
+        TestWorkspaceFiles.ReadCoreIoSource(fileName);
 }

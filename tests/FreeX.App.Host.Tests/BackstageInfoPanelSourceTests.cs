@@ -8,7 +8,7 @@ public sealed class BackstageInfoPanelSourceTests
     [Fact]
     public void InfoPanel_ExposesCommandActionButtonsWithStableNames()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var expectedNames = new[]
@@ -33,7 +33,7 @@ public sealed class BackstageInfoPanelSourceTests
     [Fact]
     public void InfoPanel_ExposesRicherFileAndProtectionProperties()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var propertyFields = new[]

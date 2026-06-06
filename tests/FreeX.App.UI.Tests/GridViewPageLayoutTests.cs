@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
-using System.IO;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -70,8 +69,7 @@ public sealed class GridViewPageLayoutTests
     [Fact]
     public void PageMarginGuideLayoutPlanner_CalculatesVisibleEdgesWithSingleMetricPasses()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "PageMarginGuideLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("PageMarginGuideLayoutPlanner.cs");
         var calculateGuide = source[
             source.IndexOf("public static PageMarginGuideLayout? CalculateGuide", StringComparison.Ordinal)..
             source.IndexOf("public static WorksheetPageMarginEdge? HitTestGuide", StringComparison.Ordinal)];

@@ -252,13 +252,13 @@ internal static partial class XlsxChartXmlWriter
         if (chart.Protection is not { } protection)
             return null;
 
-        var element = new XElement(chartNs + "protection");
-        AddOptionalBoolAttribute(element, "chartObject", protection.ChartObject);
-        AddOptionalBoolAttribute(element, "data", protection.Data);
-        AddOptionalBoolAttribute(element, "formatting", protection.Formatting);
-        AddOptionalBoolAttribute(element, "selection", protection.Selection);
-        AddOptionalBoolAttribute(element, "userInterface", protection.UserInterface);
-        return element.HasAttributes ? element : null;
+        var element = new XElement(chartNs + "protection",
+            ToChartBooleanValueXml(chartNs, "chartObject", protection.ChartObject),
+            ToChartBooleanValueXml(chartNs, "data", protection.Data),
+            ToChartBooleanValueXml(chartNs, "formatting", protection.Formatting),
+            ToChartBooleanValueXml(chartNs, "selection", protection.Selection),
+            ToChartBooleanValueXml(chartNs, "userInterface", protection.UserInterface));
+        return element.HasElements ? element : null;
     }
 
     private static XElement? ToChartPrintSettingsXml(ChartModel chart, XNamespace chartNs)
@@ -267,9 +267,9 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         var element = new XElement(chartNs + "printSettings",
+            ToChartHeaderFooterXml(printSettings.HeaderFooter, chartNs),
             ToChartPageMarginsXml(printSettings.PageMargins, chartNs),
-            ToChartPageSetupXml(printSettings.PageSetup, chartNs),
-            ToChartHeaderFooterXml(printSettings.HeaderFooter, chartNs));
+            ToChartPageSetupXml(printSettings.PageSetup, chartNs));
         return element.HasElements ? element : null;
     }
 
@@ -300,7 +300,6 @@ internal static partial class XlsxChartXmlWriter
             element.SetAttributeValue("orientation", pageSetup.Orientation);
         if (pageSetup.Copies is { } copies)
             element.SetAttributeValue("copies", copies.ToString(CultureInfo.InvariantCulture));
-        AddOptionalBoolAttribute(element, "usePrinterDefaults", pageSetup.UsePrinterDefaults);
         AddOptionalIntAttribute(element, "firstPageNumber", pageSetup.FirstPageNumber);
         AddOptionalIntAttribute(element, "horizontalDpi", pageSetup.HorizontalDpi);
         AddOptionalIntAttribute(element, "verticalDpi", pageSetup.VerticalDpi);

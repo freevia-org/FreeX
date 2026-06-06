@@ -13,7 +13,7 @@ public sealed partial class CsvFileAdapterTests
     [Fact]
     public void Save_ScansCellsWithoutCopyingUsedCellDictionary()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "CsvFileAdapter.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoSource("CsvFileAdapter.cs");
 
         source.Should().NotContain(
             "GetUsedCells()",
@@ -23,7 +23,7 @@ public sealed partial class CsvFileAdapterTests
     [Fact]
     public void Save_GroupsCellsByRowInsteadOfIndexingEveryCoordinate()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "CsvFileAdapter.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoSource("CsvFileAdapter.cs");
 
         source.Should().NotContain("Dictionary<(uint Row, uint Col), Cell>");
         source.Should().NotContain("TryGetValue((r, c)");
@@ -32,7 +32,7 @@ public sealed partial class CsvFileAdapterTests
     [Fact]
     public void Save_StreamsRowsWithoutPerRowStringArrayJoin()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "CsvFileAdapter.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoSource("CsvFileAdapter.cs");
 
         source.Should().NotContain("new string[endCol - startCol + 1]");
         source.Should().NotContain("string.Join(',', parts)");
@@ -41,8 +41,7 @@ public sealed partial class CsvFileAdapterTests
     [Fact]
     public void Load_ReusesAccessibleMemoryStreamBufferBeforeCopying()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", "DelimitedTextWorkbookReader.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoSource("DelimitedTextWorkbookReader.cs");
 
         source.Should().Contain("TryGetBuffer(out var sourceBytes)");
         source.Should().NotContain(
@@ -53,8 +52,7 @@ public sealed partial class CsvFileAdapterTests
     [Fact]
     public void Load_CoercesPlainNumbersBeforeExpensiveDateTimeProbes()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", "DelimitedTextWorkbookReader.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoSource("DelimitedTextWorkbookReader.cs");
         var start = source.IndexOf("private static ScalarValue CoerceValue", StringComparison.Ordinal);
         var end = source.IndexOf("private static bool TryReadError", start, StringComparison.Ordinal);
         var coerceValue = source[start..end];
