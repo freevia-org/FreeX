@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -71,7 +70,7 @@ public sealed partial class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialogOpenedFromKeyboard_FocusesActiveTabFirstControl()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("FormatCellsDialog.xaml.cs");
 
         source.Should().Contain("FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -161,7 +160,7 @@ public sealed partial class FormatCellsDialogXamlTests
         source.Should().Contain("PickColorInto(DlgFillPatternColorBox, allowNoColor: true, UiText.Get(\"FormatCells_PatternColorTitle\"))");
         source.Should().Contain("Title = title");
 
-        var borderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.Border.cs"));
+        var borderSource = DialogSourceTestSupport.ReadHostSources("FormatCellsDialog.Border.cs");
         borderSource.Should().Contain("PickColorInto(DlgBorderLineColorBox, allowNoColor: false, UiText.Get(\"FormatCells_BorderColorTitle\"))");
         borderSource.Should().Contain("PickColorInto(DlgBorderTopColorBox, allowNoColor: false, UiText.Get(\"FormatCells_TopBorderColorTitle\"))");
         borderSource.Should().Contain("PickColorInto(DlgBorderRightColorBox, allowNoColor: false, UiText.Get(\"FormatCells_RightBorderColorTitle\"))");
