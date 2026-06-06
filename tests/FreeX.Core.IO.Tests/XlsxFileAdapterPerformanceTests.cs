@@ -377,6 +377,9 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().Contain("ref string? currentModelFingerprint");
         snapshotSource.Should().Contain("currentModelFingerprint,");
         snapshotSource.Should().Contain("GetModelFingerprint(workbook, currentModelFingerprint)");
+        snapshotSource.Should().Contain("using var cryptoStream = new CryptoStream(Stream.Null, hash, CryptoStreamMode.Write, leaveOpen: true);");
+        snapshotSource.Should().Contain("using var stream = new BufferedStream(cryptoStream, bufferSize: 64 * 1024);");
+        snapshotSource.Should().Contain("cryptoStream.FlushFinalBlock();");
         snapshotSource.Should().Contain("TryPrepareLoadedPackageSnapshotForEdit(Workbook workbook, out string? blockReason)");
         snapshotSource.Should().Contain("TryEnsureCellPatchBaseline(");
         snapshotSource.Should().Contain("preparedPackage.TryEnsureCellPatchEligibility(workbook, out preparedPackage, out _);");
