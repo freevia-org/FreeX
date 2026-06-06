@@ -954,6 +954,9 @@ public static partial class AccessibilityCheckerService
             case "GCD":
                 kind = ConditionalFormulaScalarFunctionKind.Gcd;
                 return true;
+            case "LCM":
+                kind = ConditionalFormulaScalarFunctionKind.Lcm;
+                return true;
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
                 return true;
@@ -1160,7 +1163,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
             ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
-            ConditionalFormulaScalarFunctionKind.Gcd => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
+            ConditionalFormulaScalarFunctionKind.Gcd or
+            ConditionalFormulaScalarFunctionKind.Lcm => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
             ConditionalFormulaScalarFunctionKind.Today or
             ConditionalFormulaScalarFunctionKind.Now or
             ConditionalFormulaScalarFunctionKind.Na or
@@ -1701,6 +1705,7 @@ public static partial class AccessibilityCheckerService
         Permut,
         PermutationA,
         Gcd,
+        Lcm,
         Sqrt,
         SqrtPi,
         Sign,
@@ -2243,6 +2248,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Permut:
                 case ConditionalFormulaScalarFunctionKind.PermutationA:
                 case ConditionalFormulaScalarFunctionKind.Gcd:
+                case ConditionalFormulaScalarFunctionKind.Lcm:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
                 case ConditionalFormulaScalarFunctionKind.Sign:
@@ -2515,6 +2521,12 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = gcdResult;
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Lcm:
+                    if (!TryLcmFormulaNumber(function, first, rowOffset, colOffset, out var lcmResult))
+                        return false;
+
+                    result = lcmResult;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                     if (first < 0)
@@ -3403,6 +3415,47 @@ public static partial class AccessibilityCheckerService
             }
 
             return first;
+        }
+
+        private bool TryLcmFormulaNumber(
+            ConditionalFormulaScalarFunction function,
+            double first,
+            int rowOffset,
+            int colOffset,
+            out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaGcdInteger(first, out var lcm))
+                return false;
+
+            var hasZeroOperand = lcm == 0;
+            for (var i = 1; i < function.Arguments.Count; i++)
+            {
+                if (!TryResolveFormulaFunctionNumber(function.Arguments[i], rowOffset, colOffset, out var number) ||
+                    !TryGetFormulaGcdInteger(number, out var next))
+                {
+                    return false;
+                }
+
+                if (next == 0)
+                {
+                    hasZeroOperand = true;
+                    continue;
+                }
+
+                if (hasZeroOperand)
+                    continue;
+
+                var gcd = GcdFormulaIntegers(lcm, next);
+                var quotient = lcm / gcd;
+                if (quotient > long.MaxValue / next)
+                    return false;
+
+                lcm = quotient * next;
+            }
+
+            result = hasZeroOperand ? 0d : lcm;
+            return double.IsFinite(result);
         }
 
         private bool TryEvaluateFormulaAggregate(
