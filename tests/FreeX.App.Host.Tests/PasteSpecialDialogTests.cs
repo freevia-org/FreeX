@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -113,7 +112,7 @@ public sealed class PasteSpecialDialogTests
     [Fact]
     public void PasteChoices_FollowExcelDialogOrder()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PasteSpecialDialog.Controls.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PasteSpecialDialog.Controls.cs");
         var expectedOrder = new[]
         {
             "AddPasteChoice(grid, _rbAll,",
@@ -227,7 +226,7 @@ public sealed class PasteSpecialDialogTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesDefaultAllChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PasteSpecialDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PasteSpecialDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
