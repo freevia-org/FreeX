@@ -16,6 +16,9 @@ internal static class WorkspaceFileLocator
     public static string FindToolScript(string fileName) =>
         Find("tools", fileName);
 
+    public static string FindAppHostTestsDirectory() =>
+        TestWorkspaceFileLocator.FindContainingDirectory("tests", "FreeX.App.Host.Tests", "FormulaEditingUiE2eTests.cs");
+
     public static string FindWithFailureMessage(string message, params string[] relativeParts) =>
         TestWorkspaceFileLocator.FindWithFailureMessage(message, relativeParts);
 

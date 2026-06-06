@@ -125,7 +125,6 @@ internal static partial class XlsxCorpusFixtureFactory
 
     private static byte[] ReadFixtureBytes(string fileName)
     {
-        var path = TestWorkspaceFiles.FindWorkspaceFile("tests", "FreeX.Core.IO.Tests", "Fixtures", fileName);
-        return File.ReadAllBytes(path);
+        return TestWorkspaceFiles.ReadWorkspaceBytes("tests", "FreeX.Core.IO.Tests", "Fixtures", fileName);
     }
 }

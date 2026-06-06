@@ -38,6 +38,9 @@ internal static class TestWorkspaceFileLocator
     public static string[] ReadAllLines(params string[] relativeParts) =>
         File.ReadAllLines(Find(relativeParts));
 
+    public static byte[] ReadAllBytes(params string[] relativeParts) =>
+        File.ReadAllBytes(Find(relativeParts));
+
     public static string ReadAllTextFromCurrentDirectoryOrFallback(params string[] relativeParts) =>
         File.ReadAllText(FindFromCurrentDirectoryOrFallback(relativeParts));
 
