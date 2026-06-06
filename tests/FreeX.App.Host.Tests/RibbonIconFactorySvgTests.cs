@@ -208,10 +208,7 @@ public sealed class RibbonIconFactorySvgTests
     [Fact]
     public void AppHostProject_CopiesSvgCommandIconsInsteadOfPreRenderedPngs()
     {
-        var projectFile = WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
-            "FreeX.App.Host.csproj");
+        var projectFile = DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj");
         var project = File.ReadAllText(projectFile);
 
         project.Should().Contain(@"Resources\CommandIconsSvg\**\*.svg");
@@ -222,7 +219,7 @@ public sealed class RibbonIconFactorySvgTests
     public void HomeRibbonLargeCommandArtwork_UsesDistinctSvgFiles()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeX.App.Host.csproj"))!,
+            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
             "Resources",
             "CommandIconsSvg");
 
@@ -263,9 +260,7 @@ public sealed class RibbonIconFactorySvgTests
     [Fact]
     public void HelpIcon_UsesCenteredPathQuestionMark()
     {
-        var iconPath = WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
+        var iconPath = DialogSourceTestSupport.FindHostSourceFile(
             "Resources",
             "CommandIconsSvg",
             "help.svg");
@@ -283,7 +278,7 @@ public sealed class RibbonIconFactorySvgTests
     public void SizeSpecificSvgCommandIcons_DoNotUseDocumentPlaceholderArtwork()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeX.App.Host.csproj"))!,
+            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
             "Resources",
             "CommandIconsSvg");
 
@@ -313,7 +308,7 @@ public sealed class RibbonIconFactorySvgTests
     public void CommandIconAssets_OnlyUseSizeVariantsForPixelCrispAlignmentLines()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeX.App.Host.csproj"))!,
+            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
             "Resources",
             "CommandIconsSvg");
 
@@ -358,7 +353,7 @@ public sealed class RibbonIconFactorySvgTests
     public void CommandIconAssets_DoNotContainEmptyShellSvgs()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeX.App.Host.csproj"))!,
+            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
             "Resources",
             "CommandIconsSvg");
 
@@ -417,9 +412,7 @@ public sealed class RibbonIconFactorySvgTests
     [InlineData("shape-gradient.svg")]
     public void AcceptedIconReviewCommands_HaveDedicatedNonblankSvgArtwork(string fileName)
     {
-        var iconPath = WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
+        var iconPath = DialogSourceTestSupport.FindHostSourceFile(
             "Resources",
             "CommandIconsSvg",
             fileName);

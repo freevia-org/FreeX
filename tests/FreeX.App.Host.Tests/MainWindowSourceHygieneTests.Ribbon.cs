@@ -788,7 +788,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindow_UsesVisibleFreeXBrandingAndWindowIcon()
     {
-        var iconPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "FreeX.ico");
+        var iconPath = DialogSourceTestSupport.FindHostSourceFile("Resources", "FreeX.ico");
         var theme = DialogSourceTestSupport.ReadHostSources("Resources\\ThemeResources.xaml");
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
         var project = DialogSourceTestSupport.ReadHostSources("FreeX.App.Host.csproj");
