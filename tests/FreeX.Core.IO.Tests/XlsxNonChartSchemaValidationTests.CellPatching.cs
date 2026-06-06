@@ -49,6 +49,45 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be("inserted");
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_RewritingStyleOnlyCellWithExtensionList_ProducesSchemaValidWorkbook()
+    {
+        using var source = CreateStyleOnlyCellExtensionPatchSourceWorkbook();
+        SchemaErrors(source).Should().BeEmpty();
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        var styleOnlyStyleId = sheet.GetStyleOnly(1, 1);
+        styleOnlyStyleId.Should().NotBeNull();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = new TextValue("filled"),
+            StyleId = styleOnlyStyleId!.Value
+        });
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var cell = ReadCellElement(saved, "A1");
+        cell.Elements().Select(element => element.Name.LocalName).Should().Equal("is", "extLst");
+        cell.Element(worksheetNs + "is")!.Value.Should().Be("filled");
+        cell.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")
+            .Should()
+            .NotBeNull();
+    }
+
     private static MemoryStream CreateRowExtensionInsertSourceWorkbook()
     {
         var workbook = new Workbook("RowExtensionInsertPatchSave");
@@ -57,6 +96,18 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         var stream = Save(workbook);
         AddFirstRowExtensionList(stream);
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static MemoryStream CreateStyleOnlyCellExtensionPatchSourceWorkbook()
+    {
+        var workbook = new Workbook("StyleOnlyCellExtensionPatchSave");
+        var styleId = workbook.RegisterStyle(new CellStyle { Bold = true });
+        workbook.AddSheet("Data").SetStyleOnly(1, 1, styleId);
+
+        var stream = Save(workbook);
+        AddStyleOnlyCellExtensionList(stream);
         stream.Position = 0;
         return stream;
     }
@@ -81,6 +132,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                 worksheetNs + "ext",
                 new XAttribute("uri", "{FREEX-ROW-EXTENSION}"),
                 new XElement(freexNs + "rowExt", new XAttribute("value", "row-extension")))));
+
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AddStyleOnlyCellExtensionList(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var cell = worksheetXml
+            .Root!
+            .Element(worksheetNs + "sheetData")!
+            .Descendants(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A1");
+
+        cell.Elements(worksheetNs + "extLst").Remove();
+        cell.Add(new XElement(
+            worksheetNs + "extLst",
+            new XElement(
+                worksheetNs + "ext",
+                new XAttribute("uri", "{FREEX-STYLE-ONLY-CELL-EXTENSION}"),
+                new XElement(freexNs + "cellExt", new XAttribute("value", "style-only-cell-extension")))));
 
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }

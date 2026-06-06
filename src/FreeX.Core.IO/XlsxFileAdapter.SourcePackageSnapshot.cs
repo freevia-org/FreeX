@@ -5825,7 +5825,7 @@ public sealed partial class XlsxFileAdapter
             ScalarValue value,
             string? sourceStyleIndex)
         {
-            if (cell.Elements().Any())
+            if (cell.Elements().Any(child => child.Name != worksheetNs + "extLst"))
                 return false;
 
             ApplyCellStyle(cell, sourceStyleIndex);
