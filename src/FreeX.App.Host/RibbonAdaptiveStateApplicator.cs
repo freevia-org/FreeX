@@ -6,6 +6,9 @@ namespace FreeX.App.Host;
 
 internal static class RibbonAdaptiveStateApplicator
 {
+    private const double IconOnlySplitButtonDropdownColumnWidth = 14;
+    private const double SmallSplitButtonDropdownColumnWidth = 18;
+
     private static readonly DependencyProperty CollapsedButtonFootprintTargetsProperty =
         DependencyProperty.RegisterAttached(
             "CollapsedButtonFootprintTargets",
@@ -444,20 +447,37 @@ internal static class RibbonAdaptiveStateApplicator
         }
 
         var smallGrid = snapshot.SmallGrid!;
+        var dropdownColumn = GetSmallButtonDropdownColumn(smallGrid);
         if (level == MainWindow.RibbonCompactLevel.IconOnly)
         {
+            if (dropdownColumn is not null)
+            {
+                SetIfChanged(
+                    dropdownColumn,
+                    ColumnDefinition.WidthProperty,
+                    new GridLength(IconOnlySplitButtonDropdownColumnWidth));
+            }
+
             SetIfChanged(smallGrid, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             // Keep the command icon aligned with 24px icon-only peers while the menu lane extends to the right.
             SetIfChanged(
                 smallGrid,
                 FrameworkElement.MarginProperty,
-                GetSmallButtonDropdownColumn(smallGrid) is { } dropdownColumn
+                dropdownColumn is not null
                     ? new Thickness(-dropdownColumn.Width.Value, 0, 0, 0)
                     : new Thickness(0));
             SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center);
         }
         else
         {
+            if (dropdownColumn is not null)
+            {
+                SetIfChanged(
+                    dropdownColumn,
+                    ColumnDefinition.WidthProperty,
+                    new GridLength(SmallSplitButtonDropdownColumnWidth));
+            }
+
             SetIfChanged(smallGrid, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
             SetIfChanged(smallGrid, FrameworkElement.MarginProperty, new Thickness(0));
             SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Left);
