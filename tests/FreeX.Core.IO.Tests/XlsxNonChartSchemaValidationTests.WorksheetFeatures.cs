@@ -1299,6 +1299,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidNativePhoneticPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreatePhoneticPropertiesSourceWorkbook());
+        SetWorksheetPhoneticPropertiesInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetPhoneticPropertiesSanitized(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_SanitizesInvalidPhoneticPropertiesForSchemaValidity()
     {
         using var source = Save(CreatePhoneticPropertiesSourceWorkbook());
@@ -1323,6 +1344,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         phoneticPr.Attribute("fontId")!.Value.Should().Be("0");
         phoneticPr.Attribute("type").Should().BeNull();
         phoneticPr.Attribute("alignment")!.Value.Should().Be("center");
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidNativePhoneticPropertiesForSchemaValidity()
+    {
+        using var source = Save(CreatePhoneticPropertiesSourceWorkbook());
+        SetWorksheetPhoneticPropertiesInvalidNativeMetadata(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(77));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetPhoneticPropertiesSanitized(saved);
     }
 
 
@@ -2478,6 +2523,28 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         phoneticPr.SetAttributeValue("type", type);
         phoneticPr.SetAttributeValue("alignment", alignment);
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void SetWorksheetPhoneticPropertiesInvalidNativeMetadata(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var phoneticPr = worksheetXml.Root!.Element(workbookNs + "phoneticPr")!;
+        phoneticPr.SetAttributeValue("nativeOnly", "kept");
+        phoneticPr.Add(new XElement(workbookNs + "nativePhoneticPrChild"));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetPhoneticPropertiesSanitized(MemoryStream stream)
+    {
+        var phoneticPr = ReadWorksheetChildElement(stream, "phoneticPr");
+        phoneticPr.Attribute("fontId")!.Value.Should().Be("1");
+        phoneticPr.Attribute("type")!.Value.Should().Be("fullwidthKatakana");
+        phoneticPr.Attribute("alignment")!.Value.Should().Be("center");
+        phoneticPr.Attribute("nativeOnly").Should().BeNull();
+        phoneticPr.Elements().Should().BeEmpty();
     }
 
     private static Workbook CreateWorksheetOutlineAndFormatSourceWorkbook()
