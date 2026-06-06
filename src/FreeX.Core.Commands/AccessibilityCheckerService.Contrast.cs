@@ -708,6 +708,8 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaPermutInput = 1_000_000;
     private const int MaxFormulaPermutIterations = 10_000;
     private const int MaxFormulaPermutationAInput = int.MaxValue;
+    private const int MaxFormulaGcdArgumentCount = 255;
+    private const double MaxFormulaGcdInputExclusive = 9_223_372_036_854_775_808d;
     private const int MaxFormulaTextSliceLength = 32_767;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
@@ -949,6 +951,9 @@ public static partial class AccessibilityCheckerService
             case "PERMUTATIONA":
                 kind = ConditionalFormulaScalarFunctionKind.PermutationA;
                 return true;
+            case "GCD":
+                kind = ConditionalFormulaScalarFunctionKind.Gcd;
+                return true;
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
                 return true;
@@ -1155,6 +1160,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
             ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.Gcd => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
             ConditionalFormulaScalarFunctionKind.Today or
             ConditionalFormulaScalarFunctionKind.Now or
             ConditionalFormulaScalarFunctionKind.Na or
@@ -1694,6 +1700,7 @@ public static partial class AccessibilityCheckerService
         Combina,
         Permut,
         PermutationA,
+        Gcd,
         Sqrt,
         SqrtPi,
         Sign,
@@ -2235,6 +2242,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Combina:
                 case ConditionalFormulaScalarFunctionKind.Permut:
                 case ConditionalFormulaScalarFunctionKind.PermutationA:
+                case ConditionalFormulaScalarFunctionKind.Gcd:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
                 case ConditionalFormulaScalarFunctionKind.Sign:
@@ -2501,6 +2509,12 @@ public static partial class AccessibilityCheckerService
                         return false;
                     }
 
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Gcd:
+                    if (!TryGcdFormulaNumber(function, first, rowOffset, colOffset, out var gcdResult))
+                        return false;
+
+                    result = gcdResult;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                     if (first < 0)
@@ -3333,6 +3347,62 @@ public static partial class AccessibilityCheckerService
 
             integer = (int)truncated;
             return true;
+        }
+
+        private bool TryGcdFormulaNumber(
+            ConditionalFormulaScalarFunction function,
+            double first,
+            int rowOffset,
+            int colOffset,
+            out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaGcdInteger(first, out var gcd))
+                return false;
+
+            for (var i = 1; i < function.Arguments.Count; i++)
+            {
+                if (!TryResolveFormulaFunctionNumber(function.Arguments[i], rowOffset, colOffset, out var number) ||
+                    !TryGetFormulaGcdInteger(number, out var next))
+                {
+                    return false;
+                }
+
+                gcd = GcdFormulaIntegers(gcd, next);
+            }
+
+            result = gcd;
+            return double.IsFinite(result);
+        }
+
+        private static bool TryGetFormulaGcdInteger(double value, out long integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value) ||
+                value < 0d ||
+                value >= MaxFormulaGcdInputExclusive)
+            {
+                return false;
+            }
+
+            var truncated = Math.Truncate(value);
+            if (!double.IsFinite(truncated))
+                return false;
+
+            integer = (long)truncated;
+            return true;
+        }
+
+        private static long GcdFormulaIntegers(long first, long second)
+        {
+            while (second != 0)
+            {
+                var next = second;
+                second = first % second;
+                first = next;
+            }
+
+            return first;
         }
 
         private bool TryEvaluateFormulaAggregate(

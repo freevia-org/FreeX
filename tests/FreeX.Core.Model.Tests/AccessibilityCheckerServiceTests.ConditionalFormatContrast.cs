@@ -1206,6 +1206,60 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatGcdScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("GCD($A1,50)=25", "B1", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("GCD($A1,50)>=50", "B2");
+        AssertFormulaArithmeticContrastLocations("GCD(8,12)=4", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("GCD(5.9,2.1)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("GCD(0,0)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("GCD(18,24,30)=6", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("GCD($A1,50,25)=25", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("GCD($A1/10,2.9)=2", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatGcdScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(GCD($A1,50)>=50,TRUE,FALSE)", "B2");
+        AssertFormulaArithmeticContrastLocations("AND(GCD($A1,50)=25,$C1=\"Open\")", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(GCD($A1,50))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISEVEN(GCD($A1,50))", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatGcdScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(GCD($A1,50),1)>26", "B2");
+        AssertFormulaAggregateContrastLocations("AVERAGE(GCD($A1,50),$A1)>60", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatGcdScalarFunctionUnsupportedOperands()
+    {
+        var tooManyArguments = $"GCD({string.Join(",", Enumerable.Repeat("1", 256))})>0";
+
+        AssertFormulaArithmeticContrastLocations("GCD()>0");
+        AssertFormulaArithmeticContrastLocations(tooManyArguments);
+        AssertFormulaArithmeticContrastLocations("GCD(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("GCD($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("GCD($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("GCD(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("GCD($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("GCD(-1,1)>0");
+        AssertFormulaArithmeticContrastLocations("GCD(-0.2,1)>0");
+        AssertFormulaArithmeticContrastLocations("GCD(1,-1)>0");
+        AssertFormulaArithmeticContrastLocations("GCD(1,-0.2)>0");
+        AssertFormulaArithmeticContrastLocations("GCD($A1/0,1)>0");
+        AssertFormulaArithmeticContrastLocations("GCD(1E308*1E308,1)>0");
+        AssertFormulaArithmeticContrastLocations("GCD($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("GCD(EXP(1000),1)>0");
+        AssertFormulaArithmeticContrastLocations("GCD($A1,EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("GCD(1E20,1)>0");
+        AssertFormulaArithmeticContrastLocations("GCD($A1,1E20)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("ODD($A1/40)>3", "B4");
