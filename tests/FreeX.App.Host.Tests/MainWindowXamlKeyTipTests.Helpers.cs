@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -100,15 +99,11 @@ public sealed partial class MainWindowXamlKeyTipTests
 
     private static string ReadPivotCommandSource()
     {
-        return string.Join(
-            "\n",
-            new[]
-            {
-                "MainWindow.PivotCommands.cs",
-                "MainWindow.PivotAdvancedCommands.cs",
-                "MainWindow.PivotChartCommands.cs",
-                "MainWindow.PivotDesignCommands.cs",
-                "MainWindow.PivotSlicerTimeline.cs"
-            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName))));
+        return DialogSourceTestSupport.ReadHostSources(
+            "MainWindow.PivotCommands.cs",
+            "MainWindow.PivotAdvancedCommands.cs",
+            "MainWindow.PivotChartCommands.cs",
+            "MainWindow.PivotDesignCommands.cs",
+            "MainWindow.PivotSlicerTimeline.cs");
     }
 }
