@@ -273,11 +273,11 @@ public partial class MainWindow
     private void ClearAllMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Clear All",
-                sheetId =>
+                range,
+                (sheetId, currentRange) =>
                 {
-                    var currentRange = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
                     return new CompositeWorkbookCommand(
                         "Clear All",
                         [
@@ -300,9 +300,10 @@ public partial class MainWindow
     private void ClearCommentsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Clear Comments and Notes",
-                sheetId => new ClearCommentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+                range,
+                (sheetId, currentRange) => new ClearCommentsCommand(sheetId, currentRange)))
             return;
 
         UpdateViewport();
@@ -311,9 +312,10 @@ public partial class MainWindow
     private void ClearHyperlinksMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Clear Hyperlinks",
-                sheetId => new ClearHyperlinksCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+                range,
+                (sheetId, currentRange) => new ClearHyperlinksCommand(sheetId, currentRange)))
             return;
         UpdateViewport();
     }
@@ -321,9 +323,10 @@ public partial class MainWindow
     private void RemoveHyperlinks()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Remove Hyperlinks",
-                sheetId => new RemoveHyperlinksCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+                range,
+                (sheetId, currentRange) => new RemoveHyperlinksCommand(sheetId, currentRange)))
             return;
         UpdateViewport();
     }
@@ -331,9 +334,10 @@ public partial class MainWindow
     private void ClearValues()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Clear Contents",
-                sheetId => new ClearContentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
+                range,
+                (sheetId, currentRange) => new ClearContentsCommand(sheetId, currentRange),
                 out var outcome))
             return;
 
