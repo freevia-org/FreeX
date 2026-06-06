@@ -10,6 +10,9 @@ internal static class WorkspaceFileLocator
     internal static string FindFromCurrentDirectoryOrFallback(params string[] relativeParts) =>
         global::TestWorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(relativeParts);
 
+    internal static string FindContainingDirectory(params string[] relativeParts) =>
+        global::TestWorkspaceFileLocator.FindContainingDirectory(relativeParts);
+
     internal static string ReadAllText(params string[] relativeParts) =>
         global::TestWorkspaceFileLocator.ReadAllText(relativeParts);
 
