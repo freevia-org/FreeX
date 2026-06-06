@@ -145,11 +145,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_decreaseFontSizeMenuItem.Header = \"Decrease Font Size\";");
         source.Should().Contain("_decreaseFontSizeMenuItem.Click += (_, _) => DecreaseSelectedRangeFontSize();");
         source.Should().Contain("_fillColorMenuItem.Header = \"Fill Color\";");
-        source.Should().Contain("_fillColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFillColor();");
+        source.Should().Contain("_fillColorMenuItem.Menu = CreateNativeColorPaletteMenu(ColorPaletteTarget.Fill, includeClearFill: true);");
         source.Should().Contain("_clearFillMenuItem.Header = \"No Fill\";");
         source.Should().Contain("_clearFillMenuItem.Click += (_, _) => ClearSelectedRangeFill();");
         source.Should().Contain("_fontColorMenuItem.Header = \"Font Color\";");
-        source.Should().Contain("_fontColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFontColor();");
+        source.Should().Contain("_fontColorMenuItem.Menu = CreateNativeColorPaletteMenu(ColorPaletteTarget.Font, includeClearFill: false);");
         source.Should().Contain("_horizontalTextMenuItem.Header = \"Horizontal\";");
         source.Should().Contain("ApplySelectedRangeTextRotation(0, \"Set horizontal text for\", \"Horizontal Text failed.\");");
         source.Should().Contain("_angleCounterclockwiseMenuItem.Header = \"Angle Counterclockwise\";");
@@ -320,6 +320,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_fill_color_menu_item={FormatBool(snapshot.HasNativeFillColorMenuItem)}");
         smokeSource.Should().Contain("native_clear_fill_menu_item={FormatBool(snapshot.HasNativeClearFillMenuItem)}");
         smokeSource.Should().Contain("native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}");
+        smokeSource.Should().Contain("native_fill_color_swatch_count={snapshot.NativeFillColorSwatchCount}");
+        smokeSource.Should().Contain("native_font_color_swatch_count={snapshot.NativeFontColorSwatchCount}");
         smokeSource.Should().Contain("native_cell_styles_menu_item={FormatBool(snapshot.HasNativeCellStylesMenuItem)}");
         smokeSource.Should().Contain("native_cell_styles_preset_count={snapshot.NativeCellStylesPresetCount}");
         smokeSource.Should().Contain("native_horizontal_text_menu_item={FormatBool(snapshot.HasNativeHorizontalTextMenuItem)}");
@@ -368,6 +370,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, \"Fill Color\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, \"No Fill\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, \"Font Color\", requireGesture: false)");
+        windowSource.Should().Contain("NativeFillColorSwatchCount: nativeFillColorSwatchCount");
+        windowSource.Should().Contain("NativeFontColorSwatchCount: nativeFontColorSwatchCount");
         windowSource.Should().Contain("HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, \"Cell Styles\", requireGesture: false)");
         windowSource.Should().Contain("NativeCellStylesPresetCount: nativeCellStylesPresetCount");
         windowSource.Should().Contain("HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, \"Horizontal\", requireGesture: false)");
@@ -724,20 +728,31 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("private static readonly CellColor DefaultFillColor = new(255, 255, 0);");
-        source.Should().Contain("private static readonly CellColor DefaultFontColor = new(255, 0, 0);");
-        source.Should().Contain("private readonly Button _fillColorButton = new();");
-        source.Should().Contain("private readonly Button _fontColorButton = new();");
+        source.Should().NotContain("DefaultFillColor");
+        source.Should().NotContain("DefaultFontColor");
+        source.Should().Contain("private enum ColorPaletteTarget");
+        source.Should().Contain("private readonly DropDownButton _fillColorButton = new();");
+        source.Should().Contain("private readonly DropDownButton _fontColorButton = new();");
         source.Should().Contain("_fillColorButton.Content = \"Fill\";");
         source.Should().Contain("_fontColorButton.Content = \"A\";");
-        source.Should().Contain("_fillColorButton.Click += FillColorButton_Click;");
-        source.Should().Contain("_fontColorButton.Click += FontColorButton_Click;");
+        source.Should().Contain("_fillColorButton.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);");
+        source.Should().Contain("_fontColorButton.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Font, includeClearFill: false);");
         source.Should().Contain("_fillColorButton.IsEnabled = isIdle;");
         source.Should().Contain("_fontColorButton.IsEnabled = isIdle;");
-        source.Should().Contain("private void FillColorButton_Click(object? sender, RoutedEventArgs e)");
-        source.Should().Contain("ApplyDefaultSelectedRangeFillColor();");
-        source.Should().Contain("private void FontColorButton_Click(object? sender, RoutedEventArgs e)");
-        source.Should().Contain("ApplyDefaultSelectedRangeFontColor();");
+        source.Should().Contain("private MenuFlyout CreateColorPaletteFlyout(ColorPaletteTarget target, bool includeClearFill)");
+        source.Should().Contain("items.AddRange(CellColorPalettePlanner.BuildDefaultSwatches().Select(swatch => CreateColorSwatchMenuItem(swatch, target)));");
+        source.Should().Contain("private MenuItem CreateColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)");
+        source.Should().Contain("Icon = CreateColorSwatchIcon(swatch.Color),");
+        source.Should().Contain("menuItem.Click += (_, _) => ApplySelectedRangePaletteColor(swatch.Color, target);");
+        source.Should().Contain("private NativeMenu CreateNativeColorPaletteMenu(ColorPaletteTarget target, bool includeClearFill)");
+        source.Should().Contain("menu.Items.Add(CreateNativeColorSwatchMenuItem(swatch, target));");
+        source.Should().Contain("private NativeMenuItem CreateNativeColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)");
+        source.Should().Contain("private void ApplySelectedRangePaletteColor(CellColor color, ColorPaletteTarget target)");
+        source.Should().Contain("case ColorPaletteTarget.Fill:");
+        source.Should().Contain("ApplySelectedRangeFillColor(color);");
+        source.Should().Contain("case ColorPaletteTarget.Font:");
+        source.Should().Contain("ApplySelectedRangeFontColor(color);");
+        source.Should().Contain("private static Border CreateColorSwatchIcon(CellColor color)");
         source.Should().Contain("private void ApplySelectedRangeFillColor(CellColor fillColor)");
         source.Should().Contain("var result = _session.SetSelectedRangeFillColor(fillColor);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Fill Color failed.\");");
@@ -750,6 +765,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.SetSelectedRangeFontColor(fontColor);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Font Color failed.\");");
         source.Should().Contain("RefreshShell($\"Applied font color to {rangeReference}\");");
+        source.Should().Contain("var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);");
+        source.Should().Contain("var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);");
+        source.Should().Contain("private static int CountNativeColorPaletteSwatches(NativeMenu? menu)");
         source.Should().Contain("var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor");
         source.Should().Contain(": Brush(style.ResolveFontColor(_session.Workbook.Theme));");
     }

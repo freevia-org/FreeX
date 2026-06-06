@@ -88,6 +88,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeFillColorMenuItem,
     bool HasNativeClearFillMenuItem,
     bool HasNativeFontColorMenuItem,
+    int NativeFillColorSwatchCount,
+    int NativeFontColorSwatchCount,
     bool HasNativeCellStylesMenuItem,
     int NativeCellStylesPresetCount,
     bool HasNativeHorizontalTextMenuItem,
@@ -140,6 +142,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeFillColorMenuItem &&
         HasNativeClearFillMenuItem &&
         HasNativeFontColorMenuItem &&
+        NativeFillColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
+        NativeFontColorSwatchCount == CellColorPalettePlanner.BuildDefaultSwatches().Count &&
         HasNativeCellStylesMenuItem &&
         NativeCellStylesPresetCount == Enum.GetValues<CellStylePreset>().Length &&
         HasNativeHorizontalTextMenuItem &&
@@ -240,6 +244,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_fill_color_menu_item={FormatBool(snapshot.HasNativeFillColorMenuItem)}",
                 $"native_clear_fill_menu_item={FormatBool(snapshot.HasNativeClearFillMenuItem)}",
                 $"native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}",
+                $"native_fill_color_swatch_count={snapshot.NativeFillColorSwatchCount}",
+                $"native_font_color_swatch_count={snapshot.NativeFontColorSwatchCount}",
                 $"native_cell_styles_menu_item={FormatBool(snapshot.HasNativeCellStylesMenuItem)}",
                 $"native_cell_styles_preset_count={snapshot.NativeCellStylesPresetCount}",
                 $"native_horizontal_text_menu_item={FormatBool(snapshot.HasNativeHorizontalTextMenuItem)}",

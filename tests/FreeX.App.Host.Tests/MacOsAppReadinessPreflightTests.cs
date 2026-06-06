@@ -21,6 +21,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("dotnet-version: 10.0.x");
         script.Should().Contain("--framework net10.0");
         script.Should().Contain("--output \"$app/Contents/MacOS\"");
+        script.Should().Contain("native_fill_color_swatch_count=69");
+        script.Should().Contain("native_font_color_swatch_count=69");
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
         script.Should().Contain("native_horizontal_text_menu_item=true");
@@ -290,6 +292,10 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_paste_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_clear_contents_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_bold_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_fill_color_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_font_color_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_fill_color_swatch_count=69" "$artifact_root/launch.txt"
+                      grep -q "native_font_color_swatch_count=69" "$artifact_root/launch.txt"
                       grep -q "native_cell_styles_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_cell_styles_preset_count=33" "$artifact_root/launch.txt"
                       grep -q "native_horizontal_text_menu_item=true" "$artifact_root/launch.txt"
@@ -359,6 +365,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files) => await Task.CompletedTask;
                 private static void RenderCell(CellStyle? style)
                 {
+                    CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
+                    CellColorPalettePlanner.BuildDefaultSwatches();
                     AddStyledCellBorderOverlay(content, style);
                 }
                 private static bool HasVisibleCellBorder(CellStyle? style) => true;
@@ -390,7 +398,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_cut_menu_item= native_copy_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item=";
+                public string Report => "native_cut_menu_item= native_copy_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item=";
             }
             """);
 

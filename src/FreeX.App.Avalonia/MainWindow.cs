@@ -30,6 +30,12 @@ public sealed class MainWindow : Window
         Left
     }
 
+    private enum ColorPaletteTarget
+    {
+        Fill,
+        Font
+    }
+
     private const double CellIndentLevelWidth = 12;
     private const string CommaNumberFormat = "#,##0.00";
     private const string CurrencyNumberFormat = "$#,##0.00";
@@ -42,8 +48,6 @@ public sealed class MainWindow : Window
     private const double MinimumDisplayedColumnWidth = 54;
     private const double MinimumDisplayedRowHeight = 22;
     private const string NativeWorkbookExtension = ".fxl";
-    private static readonly CellColor DefaultFillColor = new(255, 255, 0);
-    private static readonly CellColor DefaultFontColor = new(255, 0, 0);
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(241, 243, 246);
     private static readonly IBrush HeaderForeground = Brush(73, 80, 93);
@@ -86,8 +90,8 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _strikethroughButton = new();
     private readonly Button _increaseFontSizeButton = new();
     private readonly Button _decreaseFontSizeButton = new();
-    private readonly Button _fillColorButton = new();
-    private readonly Button _fontColorButton = new();
+    private readonly DropDownButton _fillColorButton = new();
+    private readonly DropDownButton _fontColorButton = new();
     private readonly DropDownButton _cellStylesButton = new();
     private readonly DropDownButton _orientationButton = new();
     private readonly Button _currencyFormatButton = new();
@@ -322,13 +326,13 @@ public sealed class MainWindow : Window
         _decreaseFontSizeMenuItem.Click += (_, _) => DecreaseSelectedRangeFontSize();
 
         _fillColorMenuItem.Header = "Fill Color";
-        _fillColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFillColor();
+        _fillColorMenuItem.Menu = CreateNativeColorPaletteMenu(ColorPaletteTarget.Fill, includeClearFill: true);
 
         _clearFillMenuItem.Header = "No Fill";
         _clearFillMenuItem.Click += (_, _) => ClearSelectedRangeFill();
 
         _fontColorMenuItem.Header = "Font Color";
-        _fontColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFontColor();
+        _fontColorMenuItem.Menu = CreateNativeColorPaletteMenu(ColorPaletteTarget.Font, includeClearFill: false);
 
         _cellStylesMenuItem.Header = "Cell Styles";
         _cellStylesMenuItem.Menu = CreateNativeCellStylesMenu();
@@ -626,12 +630,12 @@ public sealed class MainWindow : Window
         _fillColorButton.Content = "Fill";
         _fillColorButton.Padding = new Thickness(10, 4);
         _fillColorButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        _fillColorButton.Click += FillColorButton_Click;
+        _fillColorButton.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
 
         _fontColorButton.Content = "A";
         _fontColorButton.Padding = new Thickness(10, 4);
         _fontColorButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        _fontColorButton.Click += FontColorButton_Click;
+        _fontColorButton.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Font, includeClearFill: false);
 
         _cellStylesButton.Content = "Styles";
         _cellStylesButton.Padding = new Thickness(10, 4);
@@ -1445,6 +1449,81 @@ public sealed class MainWindow : Window
         return displayRotation == 0 ? null : new RotateTransform(-displayRotation);
     }
 
+    private MenuFlyout CreateColorPaletteFlyout(ColorPaletteTarget target, bool includeClearFill)
+    {
+        var items = new List<MenuItem>();
+        if (includeClearFill)
+        {
+            var clearFillItem = new MenuItem { Header = "No Fill" };
+            clearFillItem.Click += (_, _) => ClearSelectedRangeFill();
+            items.Add(clearFillItem);
+        }
+
+        items.AddRange(CellColorPalettePlanner.BuildDefaultSwatches().Select(swatch => CreateColorSwatchMenuItem(swatch, target)));
+        return new MenuFlyout { ItemsSource = items };
+    }
+
+    private MenuItem CreateColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)
+    {
+        var menuItem = new MenuItem
+        {
+            Header = swatch.Hex,
+            Icon = CreateColorSwatchIcon(swatch.Color),
+        };
+        menuItem.Click += (_, _) => ApplySelectedRangePaletteColor(swatch.Color, target);
+        return menuItem;
+    }
+
+    private NativeMenu CreateNativeColorPaletteMenu(ColorPaletteTarget target, bool includeClearFill)
+    {
+        var menu = new NativeMenu();
+        if (includeClearFill)
+        {
+            var clearFillItem = new NativeMenuItem { Header = "No Fill" };
+            clearFillItem.Click += (_, _) => ClearSelectedRangeFill();
+            menu.Items.Add(clearFillItem);
+        }
+
+        foreach (var swatch in CellColorPalettePlanner.BuildDefaultSwatches())
+            menu.Items.Add(CreateNativeColorSwatchMenuItem(swatch, target));
+
+        return menu;
+    }
+
+    private NativeMenuItem CreateNativeColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)
+    {
+        var menuItem = new NativeMenuItem { Header = swatch.Hex };
+        menuItem.Click += (_, _) => ApplySelectedRangePaletteColor(swatch.Color, target);
+        return menuItem;
+    }
+
+    private void ApplySelectedRangePaletteColor(CellColor color, ColorPaletteTarget target)
+    {
+        switch (target)
+        {
+            case ColorPaletteTarget.Fill:
+                ApplySelectedRangeFillColor(color);
+                break;
+            case ColorPaletteTarget.Font:
+                ApplySelectedRangeFontColor(color);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(target), target, null);
+        }
+    }
+
+    private static Border CreateColorSwatchIcon(CellColor color) =>
+        new()
+        {
+            Width = 16,
+            Height = 16,
+            Background = Brush(color),
+            BorderBrush = GridLine,
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 6, 0),
+            IsHitTestVisible = false,
+        };
+
     private MenuFlyout CreateCellStylesFlyout() =>
         new()
         {
@@ -1760,16 +1839,6 @@ public sealed class MainWindow : Window
     private void DecreaseFontSizeButton_Click(object? sender, RoutedEventArgs e)
     {
         DecreaseSelectedRangeFontSize();
-    }
-
-    private void FillColorButton_Click(object? sender, RoutedEventArgs e)
-    {
-        ApplyDefaultSelectedRangeFillColor();
-    }
-
-    private void FontColorButton_Click(object? sender, RoutedEventArgs e)
-    {
-        ApplyDefaultSelectedRangeFontColor();
     }
 
     private void CurrencyFormatButton_Click(object? sender, RoutedEventArgs e)
@@ -2171,11 +2240,6 @@ public sealed class MainWindow : Window
         RefreshShell($"Decreased font size for {rangeReference}");
     }
 
-    private void ApplyDefaultSelectedRangeFillColor()
-    {
-        ApplySelectedRangeFillColor(DefaultFillColor);
-    }
-
     private void ApplySelectedRangeFillColor(CellColor fillColor)
     {
         if (_isOpening || _isSaving)
@@ -2214,11 +2278,6 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"Cleared fill from {rangeReference}");
-    }
-
-    private void ApplyDefaultSelectedRangeFontColor()
-    {
-        ApplySelectedRangeFontColor(DefaultFontColor);
     }
 
     private void ApplySelectedRangeFontColor(CellColor fontColor)
@@ -2465,6 +2524,8 @@ public sealed class MainWindow : Window
             .Items
             .OfType<NativeMenuItem>()
             .Count(item => item.Header is not null) ?? 0;
+        var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);
+        var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);
 
         return new MacOsLaunchSmokeSnapshot(
             WindowShown: IsVisible,
@@ -2497,6 +2558,8 @@ public sealed class MainWindow : Window
             HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, "Fill Color", requireGesture: false),
             HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, "No Fill", requireGesture: false),
             HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, "Font Color", requireGesture: false),
+            NativeFillColorSwatchCount: nativeFillColorSwatchCount,
+            NativeFontColorSwatchCount: nativeFontColorSwatchCount,
             HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, "Cell Styles", requireGesture: false),
             NativeCellStylesPresetCount: nativeCellStylesPresetCount,
             HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, "Horizontal", requireGesture: false),
@@ -2525,6 +2588,12 @@ public sealed class MainWindow : Window
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
         (!requireGesture || item.Gesture is not null);
+
+    private static int CountNativeColorPaletteSwatches(NativeMenu? menu) =>
+        menu?
+            .Items
+            .OfType<NativeMenuItem>()
+            .Count(item => item.Header?.ToString()?.StartsWith("#", StringComparison.Ordinal) == true) ?? 0;
 
     private static bool HasOnlyCommandModifier(KeyModifiers modifiers)
     {

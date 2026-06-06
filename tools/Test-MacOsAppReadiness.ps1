@@ -419,6 +419,10 @@ function Test-MacOsWorkflow {
         "native_paste_menu_item=true",
         "native_clear_contents_menu_item=true",
         "native_bold_menu_item=true",
+        "native_fill_color_menu_item=true",
+        "native_font_color_menu_item=true",
+        "native_fill_color_swatch_count=69",
+        "native_font_color_swatch_count=69",
         "native_cell_styles_menu_item=true",
         "native_cell_styles_preset_count=33",
         "native_horizontal_text_menu_item=true",
@@ -468,6 +472,8 @@ function Test-SourceWiring {
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
+                "CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true)",
+                "CellColorPalettePlanner.BuildDefaultSwatches()",
                 "AddStyledCellBorderOverlay(content, style);",
                 "private static bool HasVisibleCellBorder(CellStyle? style)",
                 "internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()"
@@ -486,6 +492,8 @@ function Test-SourceWiring {
                 "native_copy_menu_item=",
                 "native_clear_contents_menu_item=",
                 "native_bold_menu_item=",
+                "native_fill_color_swatch_count=",
+                "native_font_color_swatch_count=",
                 "native_cell_styles_menu_item=",
                 "native_cell_styles_preset_count=",
                 "native_horizontal_text_menu_item=",
