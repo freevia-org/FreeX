@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -85,7 +84,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void TopLevelKeyTipHandling_WaitsForVisibleContextualTabPrefixes()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyTips.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
 
         var prefixGuardIndex = source.IndexOf("HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence)", StringComparison.Ordinal);
         var topLevelRouteIndex = source.IndexOf("TryHandleTopLevelRibbonKeyTip(topLevelSequence)", StringComparison.Ordinal);
