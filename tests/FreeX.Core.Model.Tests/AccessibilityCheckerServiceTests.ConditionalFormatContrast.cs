@@ -2330,6 +2330,37 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatEngineeringScalarFunctions()
+    {
+        AssertFormulaArithmeticContrastLocations("DELTA($A1,75)", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("DELTA($A1-75)", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("GESTEP($A1)", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("GESTEP($A1,100)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("BITAND($A1,8)>0", "B1", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("BITOR($A1,4)=79", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("BITXOR($A1,5)=120", "B4");
+        AssertFormulaArithmeticContrastLocations("BITLSHIFT($A1,1)>200", "B4");
+        AssertFormulaArithmeticContrastLocations("BITRSHIFT($A1,2)=18", "B1", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatEngineeringScalarFunctionWrappers()
+    {
+        AssertFormulaArithmeticContrastLocations("AND(GESTEP($A1,100),$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(DELTA($A1,75),TRUE,FALSE)", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("AND(BITAND($A1,8),$C1=\"Open\")", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(BITXOR($A1,5)=120,TRUE,FALSE)", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(BITLSHIFT($A1,1))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBitShiftNegativeDirection()
+    {
+        AssertFormulaArithmeticContrastLocations("BITLSHIFT($A1,-2)=18", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("BITRSHIFT($A1,-1)>200", "B4");
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatScalarFunctionUnsupportedOperands()
     {
         AssertFormulaArithmeticContrastLocations("ABS($A1,1)>0");
@@ -2576,6 +2607,29 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("TAN(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("PI(1)>0");
         AssertFormulaArithmeticContrastLocations("PI($A1)>0");
+        AssertFormulaArithmeticContrastLocations("DELTA()>0");
+        AssertFormulaArithmeticContrastLocations("DELTA($A1,75,0)>0");
+        AssertFormulaArithmeticContrastLocations("DELTA(\"75\",75)>0");
+        AssertFormulaArithmeticContrastLocations("DELTA(1E308*1E308,0)>0");
+        AssertFormulaArithmeticContrastLocations("GESTEP()>0");
+        AssertFormulaArithmeticContrastLocations("GESTEP($A1,100,0)>0");
+        AssertFormulaArithmeticContrastLocations("GESTEP(\"100\",100)>0");
+        AssertFormulaArithmeticContrastLocations("GESTEP($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("BITAND($A1)>0");
+        AssertFormulaArithmeticContrastLocations("BITAND($A1,1,2)>0");
+        AssertFormulaArithmeticContrastLocations("BITAND(1.5,1)>0");
+        AssertFormulaArithmeticContrastLocations("BITAND($A1,1.5)>0");
+        AssertFormulaArithmeticContrastLocations("BITAND(1E308*1E308,1)>0");
+        AssertFormulaArithmeticContrastLocations("BITOR(-1,1)>0");
+        AssertFormulaArithmeticContrastLocations("BITOR(281474976710656,1)>0");
+        AssertFormulaArithmeticContrastLocations("BITXOR(1,281474976710656)>0");
+        AssertFormulaArithmeticContrastLocations("BITLSHIFT($A1)>0");
+        AssertFormulaArithmeticContrastLocations("BITLSHIFT(281474976710655,1)>0");
+        AssertFormulaArithmeticContrastLocations("BITLSHIFT(1,54)>0");
+        AssertFormulaArithmeticContrastLocations("BITLSHIFT(1,1.5)>0");
+        AssertFormulaArithmeticContrastLocations("BITRSHIFT(1,54)>0");
+        AssertFormulaArithmeticContrastLocations("BITRSHIFT(1,-54)>0");
+        AssertFormulaArithmeticContrastLocations("BITRSHIFT(KURT($A1),1)>0");
         AssertFormulaArithmeticContrastLocations("KURT($A1)>0");
     }
 
