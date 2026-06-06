@@ -42,12 +42,8 @@ public sealed class WorkbookSession
         Workbook = source.Workbook;
         CurrentFilePath = source.OpenedAsTemplate ? null : source.SourcePath;
         CurrentXlsxFeatureReport = source.FeatureReport;
-        SaveFormats = adapters
-            .SelectMany(adapter => adapter.Formats)
-            .Where(format => format.CanSave)
-            .GroupBy(format => FileFormatResolver.NormalizeExtension(format.Extension), StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .ToList();
+        OpenFormats = BuildFormats(adapters, static format => format.CanOpen);
+        SaveFormats = BuildFormats(adapters, static format => format.CanSave);
 
         var selection = _sheetSelectionService.EnsureActiveSheet(Workbook);
         ActiveSheet = selection.Sheet;
@@ -82,6 +78,8 @@ public sealed class WorkbookSession
             : Path.GetFileName(CurrentFilePath);
 
     public string StartupStatus => FormatStartupStatus(_source);
+
+    public IReadOnlyList<FileFormatDescriptor> OpenFormats { get; }
 
     public IReadOnlyList<FileFormatDescriptor> SaveFormats { get; }
 
@@ -145,6 +143,34 @@ public sealed class WorkbookSession
             return false;
 
         return TryResolveSaveTarget(CurrentFilePath, out target, out _);
+    }
+
+    public bool TryResolveOpenTarget(string path, out WorkbookOpenTarget? target, out string message)
+    {
+        target = null;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            message = "Open requires a local file path.";
+            return false;
+        }
+
+        var openPath = path.Trim();
+        if (!TryGetExtension(openPath, out var extension))
+        {
+            message = "Unsupported file type.";
+            return false;
+        }
+
+        var adapter = FileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
+        if (adapter is null || format is null)
+        {
+            message = $"Unsupported file type: {extension}.";
+            return false;
+        }
+
+        target = new WorkbookOpenTarget(openPath, adapter, extension, format);
+        message = "";
+        return true;
     }
 
     public bool TryResolveSaveTarget(string path, out FileSaveTarget? target, out string message)
@@ -215,6 +241,16 @@ public sealed class WorkbookSession
         Viewport = BuildViewport();
     }
 
+    private static IReadOnlyList<FileFormatDescriptor> BuildFormats(
+        IReadOnlyList<IFileAdapter> adapters,
+        Func<FileFormatDescriptor, bool> predicate) =>
+        adapters
+            .SelectMany(adapter => adapter.Formats)
+            .Where(predicate)
+            .GroupBy(format => FileFormatResolver.NormalizeExtension(format.Extension), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+
     private ViewportModel BuildViewport() =>
         _viewportService.GetViewport(
             Workbook,
@@ -240,6 +276,37 @@ public sealed class WorkbookSession
 
     private static bool IsXlsxPath(string path) =>
         string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryGetExtension(string path, out string extension)
+    {
+        try
+        {
+            if (path.Contains('\0', StringComparison.Ordinal) ||
+                path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            {
+                extension = "";
+                return false;
+            }
+
+            extension = Path.GetExtension(path) ?? "";
+            return !string.IsNullOrWhiteSpace(extension);
+        }
+        catch (ArgumentException)
+        {
+            extension = "";
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            extension = "";
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            extension = "";
+            return false;
+        }
+    }
 
     private static CellAddress GetInitialActiveCell(Sheet sheet) =>
         new(sheet.Id, Math.Max(1, sheet.ActiveRow ?? 1), Math.Max(1, sheet.ActiveCol ?? 1));

@@ -10,9 +10,11 @@ public sealed class MacOsBundleMetadataTests
     {
         var plistPath = RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Packaging", "macos", "Info.plist");
         var plist = XDocument.Load(plistPath);
+        var project = XDocument.Load(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj"));
 
         PlistString(plist, "CFBundleDisplayName").Should().Be("FreeX");
         PlistString(plist, "CFBundleExecutable").Should().Be("FreeX");
+        PlistString(plist, "CFBundleExecutable").Should().Be(ProjectProperty(project, "AssemblyName"));
         PlistString(plist, "CFBundleIdentifier").Should().Be("io.github.tony-xmelon.freex");
         PlistString(plist, "CFBundlePackageType").Should().Be("APPL");
         PlistString(plist, "LSMinimumSystemVersion").Should().Be("12.0");
@@ -20,18 +22,21 @@ public sealed class MacOsBundleMetadataTests
 
         PlistValue(plist, "CFBundleDocumentTypes")
             .Should()
-            .BeNull("the preview app only handles startup argv paths, not macOS open-document events yet");
+            .BeNull("the preview app has in-app Open support but does not handle macOS open-document events yet");
     }
 
     [Fact]
     public void MacOsWorkflow_VerifiesPublishedBundleBeforeUploadingArtifact()
     {
         var workflow = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml"));
+        var project = XDocument.Load(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj"));
+        var runtimes = ProjectProperty(project, "RuntimeIdentifiers")!.Split(';', StringSplitOptions.RemoveEmptyEntries);
 
         workflow.Should().Contain("runs-on: macos-latest");
         workflow.Should().Contain("runtime:");
-        workflow.Should().Contain("osx-arm64");
-        workflow.Should().Contain("osx-x64");
+        foreach (var runtime in runtimes)
+            workflow.Should().Contain(runtime);
+
         workflow.Should().Contain("dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj");
         workflow.Should().Contain("--self-contained true");
         workflow.Should().Contain("-p:UseAppHost=true");
@@ -41,6 +46,10 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("codesign --verify --deep --strict");
         workflow.Should().Contain("unzip -q");
         workflow.Should().Contain("test -x \"$unzip_root/FreeX.app/Contents/MacOS/FreeX\"");
+        workflow.Should().Contain("(cd \"$artifact_root\" && shasum -a 256 \"$zip_name\" > \"$zip_name.sha256\")");
+        workflow.Should().Contain("codesign --verify --deep --strict \"$unzip_root/FreeX.app\"");
+        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip");
+        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256");
         workflow.Should().Contain("if-no-files-found: error");
     }
 
@@ -63,4 +72,11 @@ public sealed class MacOsBundleMetadataTests
 
         return null;
     }
+
+    private static string? ProjectProperty(XDocument project, string name) =>
+        project.Root?
+            .Elements("PropertyGroup")
+            .Elements(name)
+            .Select(element => element.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 }

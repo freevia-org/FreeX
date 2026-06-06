@@ -37,4 +37,36 @@ public sealed class WorkbookSessionFactory
             viewportWidth,
             includeObjects);
     }
+
+    public WorkbookSession CreateOpened(
+        WorkbookOpenTarget target,
+        WorkbookOpenResult result,
+        double viewportHeight,
+        double viewportWidth,
+        bool includeObjects = false,
+        IEnumerable<IFileAdapter>? adapters = null,
+        IViewportService? viewportService = null)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(result);
+
+        result.Workbook.Name = Path.GetFileName(target.Path);
+        var source = new StartupWorkbookLoadResult(
+            result.Workbook,
+            result.Workbook.Name,
+            $"Opened {FileFormatResolver.NormalizeExtension(target.Extension)}.",
+            IsFallback: false,
+            SourcePath: target.Path,
+            OpenedAsTemplate: result.OpenedAsTemplate,
+            FeatureReport: result.FeatureReport,
+            LoadWarnings: result.LoadWarnings);
+
+        return Create(
+            source,
+            viewportHeight,
+            viewportWidth,
+            includeObjects,
+            adapters,
+            viewportService);
+    }
 }

@@ -54,7 +54,8 @@ jobs:
           output_root="$RUNNER_TEMP/freex-$runtime"
           app="$output_root/FreeX.app"
           artifact_root="$GITHUB_WORKSPACE/artifacts"
-          zip_path="$artifact_root/freex-$runtime-macos-app.zip"
+          zip_name="freex-$runtime-macos-app.zip"
+          zip_path="$artifact_root/$zip_name"
 
           rm -rf "$output_root"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root"
@@ -84,13 +85,14 @@ jobs:
           codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict "$app"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
-          shasum -a 256 "$zip_path" > "$zip_path.sha256"
+          (cd "$artifact_root" && shasum -a 256 "$zip_name" > "$zip_name.sha256")
           unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
           rm -rf "$unzip_root"
           mkdir -p "$unzip_root"
           unzip -q "$zip_path" -d "$unzip_root"
           test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
           test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
+          codesign --verify --deep --strict "$unzip_root/FreeX.app"
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v7

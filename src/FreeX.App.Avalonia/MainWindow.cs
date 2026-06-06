@@ -31,7 +31,8 @@ public sealed class MainWindow : Window
     private static readonly IBrush SelectionHeaderBackground = Brush(225, 244, 242);
     private static readonly IBrush SelectionHeaderForeground = Brush(13, 86, 89);
 
-    private readonly WorkbookSession _session;
+    private readonly WorkbookSessionFactory _sessionFactory = new();
+    private readonly WorkbookOpenService _openService = new();
     private readonly WorkbookSaveService _saveService = new();
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
@@ -40,14 +41,17 @@ public sealed class MainWindow : Window
     private readonly TextBlock _statusText = new();
     private readonly TextBlock _cellAddressText = new();
     private readonly TextBox _formulaBox = new();
+    private readonly Button _openButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _saveAsButton = new();
+    private WorkbookSession _session;
+    private bool _isOpening;
     private bool _isSaving;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
     {
         var source = new StartupWorkbookLoader().Load(startupArguments);
-        _session = new WorkbookSessionFactory().Create(source, ViewportHeight, ViewportWidth);
+        _session = _sessionFactory.Create(source, ViewportHeight, ViewportWidth);
 
         Title = $"FreeX - {_session.DisplayName}";
         Width = 1120;
@@ -118,6 +122,11 @@ public sealed class MainWindow : Window
         _statusText.FontSize = 12;
         _statusText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
 
+        _openButton.Content = "Open";
+        _openButton.Padding = new Thickness(10, 4);
+        _openButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _openButton.Click += OpenButton_Click;
+
         _saveButton.Content = "Save";
         _saveButton.Padding = new Thickness(10, 4);
         _saveButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -156,6 +165,7 @@ public sealed class MainWindow : Window
                 {
                     _titleText,
                     _detailText,
+                    _openButton,
                     _saveButton,
                     _saveAsButton,
                     _cellAddressText,
@@ -184,9 +194,10 @@ public sealed class MainWindow : Window
 
     private void UpdateSaveButton()
     {
-        _saveButton.IsEnabled = !_isSaving && _session.CanSaveCurrentSource(out _);
+        _openButton.IsEnabled = !_isOpening && !_isSaving && StorageProvider.CanOpen;
+        _saveButton.IsEnabled = !_isOpening && !_isSaving && _session.CanSaveCurrentSource(out _);
         _saveButton.Content = _session.IsDirty ? "Save*" : "Save";
-        _saveAsButton.IsEnabled = !_isSaving && StorageProvider.CanSave;
+        _saveAsButton.IsEnabled = !_isOpening && !_isSaving && StorageProvider.CanSave;
     }
 
     private Control BuildSheetTabs()
@@ -429,17 +440,118 @@ public sealed class MainWindow : Window
         await SaveWorkbookAsAsync();
     }
 
+    private async void OpenButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await OpenWorkbookAsync();
+    }
+
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.S ||
-            (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
-             !e.KeyModifiers.HasFlag(KeyModifiers.Meta)))
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
+            !e.KeyModifiers.HasFlag(KeyModifiers.Meta))
         {
             return;
         }
 
-        e.Handled = true;
-        await SaveCurrentWorkbookAsync();
+        if (e.Key == Key.S)
+        {
+            e.Handled = true;
+            await SaveCurrentWorkbookAsync();
+        }
+        else if (e.Key == Key.O)
+        {
+            e.Handled = true;
+            await OpenWorkbookAsync();
+        }
+    }
+
+    private async Task OpenWorkbookAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (_session.IsDirty)
+        {
+            ShowOpenIssue("Save changes before opening another workbook.");
+            return;
+        }
+
+        if (!StorageProvider.CanOpen)
+        {
+            ShowOpenIssue("Open unavailable on this platform.");
+            return;
+        }
+
+        var fileTypes = BuildOpenFileTypes();
+        if (fileTypes.Count == 0)
+        {
+            ShowOpenIssue("No open formats are available.");
+            return;
+        }
+
+        var storageFiles = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open Workbook",
+            AllowMultiple = false,
+            FileTypeFilter = fileTypes,
+        });
+
+        var storageFile = storageFiles.FirstOrDefault();
+        if (storageFile is null)
+            return;
+
+        using (storageFile)
+        {
+            var path = storageFile.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                ShowOpenIssue("Open requires a local file path.");
+                return;
+            }
+
+            if (!_session.TryResolveOpenTarget(path, out var target, out var message))
+            {
+                ShowOpenIssue(message);
+                return;
+            }
+
+            await OpenWorkbookFromTargetAsync(target!);
+        }
+    }
+
+    private async Task OpenWorkbookFromTargetAsync(WorkbookOpenTarget target)
+    {
+        try
+        {
+            _isOpening = true;
+            UpdateSaveButton();
+            _statusText.Text = "Opening...";
+            _statusText.Foreground = Brush(67, 113, 83);
+            var progress = new Progress<WorkbookOpenProgressUpdate>(
+                update =>
+                {
+                    _statusText.Text = FormatOpenStatus(update);
+                    _statusText.Foreground = Brush(67, 113, 83);
+                });
+
+            var result = await _openService.LoadAsync(
+                target.Path,
+                target.Adapter,
+                target.Extension,
+                target.Format,
+                progress);
+            _session = _sessionFactory.CreateOpened(target, result, ViewportHeight, ViewportWidth);
+            RefreshShell(_session.StartupStatus);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
+        {
+            ShowOpenIssue($"Open failed: {ex.Message}");
+        }
+        finally
+        {
+            _isOpening = false;
+            UpdateSaveButton();
+        }
     }
 
     private async Task SaveCurrentWorkbookAsync()
@@ -565,7 +677,44 @@ public sealed class MainWindow : Window
             .ToList();
     }
 
+    private IReadOnlyList<FilePickerFileType> BuildOpenFileTypes()
+    {
+        var formats = _session.OpenFormats.ToList();
+        var patterns = formats
+            .Select(format => FileFormatResolver.NormalizeExtension(format.Extension))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(extension => $"*{extension}")
+            .ToList();
+        if (patterns.Count == 0)
+            return [];
+
+        var fileTypes = new List<FilePickerFileType>
+        {
+            new("All supported workbooks")
+            {
+                Patterns = patterns,
+            },
+        };
+
+        fileTypes.AddRange(formats.Select(format =>
+        {
+            var extension = FileFormatResolver.NormalizeExtension(format.Extension);
+            return new FilePickerFileType(format.FormatName)
+            {
+                Patterns = [$"*{extension}"],
+            };
+        }));
+
+        return fileTypes;
+    }
+
     private void ShowSaveIssue(string message)
+    {
+        _statusText.Text = message;
+        _statusText.Foreground = Brush(143, 74, 18);
+    }
+
+    private void ShowOpenIssue(string message)
     {
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
@@ -583,6 +732,16 @@ public sealed class MainWindow : Window
             WorkbookSavePhase.Writing => "Writing file...",
             WorkbookSavePhase.Completed => "Saved",
             _ => "Saving..."
+        };
+
+    private static string FormatOpenStatus(WorkbookOpenProgressUpdate update) =>
+        update.Phase switch
+        {
+            WorkbookOpenPhase.Reading => "Reading file...",
+            WorkbookOpenPhase.Inspecting => "Inspecting workbook...",
+            WorkbookOpenPhase.Parsing => "Opening workbook...",
+            WorkbookOpenPhase.Calculating => "Calculating workbook...",
+            _ => "Opening..."
         };
 
     private static string FormatCellReference(CellAddress address) =>

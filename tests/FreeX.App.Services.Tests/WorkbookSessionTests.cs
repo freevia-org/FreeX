@@ -51,6 +51,92 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void TryResolveOpenTarget_UsesOpenCapableFormats()
+    {
+        var adapter = new TestFileAdapter(formats: [
+            new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false),
+            new FileFormatDescriptor(".fxl", "FreeX Workbook", CanOpen: true, CanSave: true)
+        ]);
+        var session = new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(CreateWorkbook(), "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 240,
+            viewportWidth: 320,
+            adapters: [adapter]);
+
+        var resolved = session.TryResolveOpenTarget("  Book.XLSM  ", out var target, out var message);
+
+        resolved.Should().BeTrue();
+        message.Should().BeEmpty();
+        target.Should().NotBeNull();
+        target!.Path.Should().Be("Book.XLSM");
+        target.Adapter.Should().BeSameAs(adapter);
+        target.Extension.Should().Be(".XLSM");
+        target.Format.FormatName.Should().Be("XLSM Macro-Enabled Workbook");
+        session.OpenFormats.Should().Contain(format => format.Extension == ".xlsm");
+        session.SaveFormats.Should().NotContain(format => format.Extension == ".xlsm");
+    }
+
+    [Fact]
+    public void TryResolveOpenTarget_RejectsUnsupportedAndMalformedPaths()
+    {
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.TryResolveOpenTarget("Book.unsupported", out var unsupportedTarget, out var unsupportedMessage)
+            .Should().BeFalse();
+        unsupportedTarget.Should().BeNull();
+        unsupportedMessage.Should().Contain(".unsupported");
+
+        session.TryResolveOpenTarget("bad\0Book.xlsx", out var malformedTarget, out var malformedMessage)
+            .Should().BeFalse();
+        malformedTarget.Should().BeNull();
+        malformedMessage.Should().Be("Unsupported file type.");
+    }
+
+    [Fact]
+    public void CreateOpened_CreatesTemplateSessionWithOpenMetadata()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Budget.xltx");
+        var format = new FileFormatDescriptor(
+            ".xltx",
+            "XLTX Template",
+            CanOpen: true,
+            CanSave: false,
+            OpensAsTemplate: true);
+        var adapter = new TestFileAdapter(formats: [format]);
+        var workbook = CreateWorkbook("Template");
+        var featureReport = new XlsxFeatureReport(
+        [
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Charts, "xl/charts/chart1.xml")
+        ]);
+        var target = new WorkbookOpenTarget(path, adapter, ".xltx", format);
+        var result = new WorkbookOpenResult(
+            workbook,
+            featureReport,
+            "Budget",
+            OpenedAsTemplate: true,
+            LoadWarnings: ["Unsupported chart metadata retained."]);
+
+        var session = new WorkbookSessionFactory().CreateOpened(
+            target,
+            result,
+            viewportHeight: 240,
+            viewportWidth: 320,
+            adapters: [adapter]);
+
+        session.CurrentFilePath.Should().BeNull();
+        session.CurrentXlsxFeatureReport.Should().BeSameAs(featureReport);
+        session.DisplayName.Should().Be("Budget.xltx");
+        session.Workbook.Name.Should().Be("Budget.xltx");
+        session.StartupStatus.Should().Contain("Opened as template.");
+        session.StartupStatus.Should().Contain("Unsupported XLSX features detected.");
+        session.StartupStatus.Should().Contain("1 load warning.");
+    }
+
+    [Fact]
     public void CommitCellText_MarksDirtyAndRecalculatesDependents()
     {
         var workbook = CreateWorkbook();
