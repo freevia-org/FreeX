@@ -5886,7 +5886,11 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
-            rowElement.Add(cellElement);
+            var extensionList = rowElement.Element(worksheetNs + "extLst");
+            if (extensionList is null)
+                rowElement.Add(cellElement);
+            else
+                extensionList.AddBeforeSelf(cellElement);
         }
 
         private static void UpdateDimension(
