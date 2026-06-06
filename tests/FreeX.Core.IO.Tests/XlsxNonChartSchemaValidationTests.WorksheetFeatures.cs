@@ -140,6 +140,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorksheetDataConsolidation_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        var workbook = CreateWorksheetSortStateAndDataConsolidationSourceWorkbook();
+        var dataConsolidation = workbook.GetSheetAt(0).DataConsolidation!;
+        dataConsolidation.Function = "invalid";
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "dataConsolidate")
+            .Attribute("function")
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorksheetSortStateAndDataConsolidation_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorksheetSortStateAndDataConsolidationSourceWorkbook());
@@ -199,6 +215,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         condition.Attribute("sortBy").Should().BeNull();
         condition.Attribute("dxfId").Should().BeNull();
         condition.Attribute("iconId").Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidDataConsolidationAttributesForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetSortStateAndDataConsolidationSourceWorkbook());
+        SetWorksheetDataConsolidationInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var dataConsolidate = ReadWorksheetChildElement(saved, "dataConsolidate");
+        var dataRefs = dataConsolidate.Element(dataConsolidate.Name.Namespace + "dataRefs")!;
+        dataConsolidate.Attribute("function").Should().BeNull();
+        dataConsolidate.Attribute("leftLabels").Should().BeNull();
+        dataConsolidate.Attribute("topLabels").Should().BeNull();
+        dataConsolidate.Attribute("link").Should().BeNull();
+        dataRefs.Attribute("count")!.Value.Should().Be("1");
     }
 
 
@@ -1203,6 +1249,21 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         condition.SetAttributeValue("sortBy", "invalid");
         condition.SetAttributeValue("dxfId", "not-a-number");
         condition.SetAttributeValue("iconId", "not-a-number");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void SetWorksheetDataConsolidationInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var dataConsolidate = worksheetXml.Root!.Element(workbookNs + "dataConsolidate")!;
+        dataConsolidate.SetAttributeValue("function", "invalid");
+        dataConsolidate.SetAttributeValue("leftLabels", "maybe");
+        dataConsolidate.SetAttributeValue("topLabels", "maybe");
+        dataConsolidate.SetAttributeValue("link", "maybe");
+        dataConsolidate.Element(workbookNs + "dataRefs")!.SetAttributeValue("count", "not-a-number");
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
