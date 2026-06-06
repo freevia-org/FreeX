@@ -592,6 +592,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaTextFunctionContrastLocations("LOWER($C1)=\"closed\"", "B1", "B2");
         AssertFormulaTextFunctionContrastLocations("LEFT($C1,1)=\"C\"", "B1", "B2");
         AssertFormulaTextFunctionContrastLocations("RIGHT(LOWER($C1),4)=\"open\"", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,2,3)=\"los\"", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("MID(LOWER($C1),1,4)=\"open\"", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,99,3)=\"\"", "B1", "B2", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,1,0)=\"\"", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -604,13 +608,16 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextFunctionsInWrappers()
     {
         AssertFormulaTextFunctionContrastLocations("AND(UPPER($C1)=\"OPEN\",$A1>=100)", "B4");
+        AssertFormulaTextFunctionContrastLocations("AND(MID($C1,1,1)=\"O\",$A1>=100)", "B4");
         AssertFormulaTextFunctionContrastLocations("IF($A1>=100,LEN($C1),FALSE)", "B2", "B4");
+        AssertFormulaTextFunctionContrastLocations("IF($A1>=100,MID($C1,1,1)=\"O\",FALSE)", "B4");
     }
 
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextFunctionPredicates()
     {
         AssertFormulaTextFunctionContrastLocations("ISTEXT(LEFT($C1,1))", "B1", "B2", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("ISTEXT(MID($C1,2,2))", "B1", "B2", "B3", "B4");
         AssertFormulaTextFunctionContrastLocations("ISNUMBER(LEN($C1))", "B1", "B2", "B3", "B4");
     }
 
@@ -618,7 +625,9 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextFunctionArithmeticAndAggregateArguments()
     {
         AssertFormulaTextFunctionContrastLocations("LEN($C1)+1>5", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("LEN(MID($C1,2,3))=3", "B1", "B2", "B3", "B4");
         AssertFormulaTextFunctionContrastLocations("COUNTA(LEFT($C1,1))>0", "B1", "B2", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("COUNTA(MID($C1,1,1))>0", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -654,6 +663,15 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaTextFunctionContrastLocations("LEFT($C1,-1)=\"\"");
         AssertFormulaTextFunctionContrastLocations("LEFT($C1,999999)=\"Closed\"");
         AssertFormulaTextFunctionContrastLocations("LEFT($C1,1.5)=\"C\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,0,1)=\"\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,1.5,1)=\"\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,999999,1)=\"\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,1,-1)=\"\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,1,1.5)=\"C\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,1,999999)=\"Closed\"");
+        AssertFormulaTextFunctionContrastLocations("MID($A1,1,1)=\"7\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1&\"x\",1,1)=\"O\"");
+        AssertFormulaTextFunctionContrastLocations("MID($C1,1)=\"C\"");
         AssertFormulaTextFunctionContrastLocations("LEN($A1)>0");
         AssertFormulaTextFunctionContrastLocations("CONCAT($C1,\"x\")=\"Openx\"");
         AssertFormulaTextFunctionContrastLocations("LEFT($C1&\"x\",1)=\"O\"");
