@@ -12,7 +12,7 @@ public sealed partial class OptionsDialogSourceTests
     public void OptionsDialog_ExposesProofingCustomDictionaryControlsAndAutomationMetadata()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         xaml.Should().Contain("Custom dictionary");
         xaml.Should().Contain("x:Name=\"ProofingCustomDictionaryWordsList\"");
