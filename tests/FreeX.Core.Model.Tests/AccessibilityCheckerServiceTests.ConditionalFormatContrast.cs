@@ -974,6 +974,58 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCombinScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1/25,2)>=6", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5,2)=10", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(6,4)=15", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(0,0)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5.9,2.9)=10", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5.9,0.9)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5.9,5.9)=1", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCombinScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(COMBIN($A1/25,2)>=6,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(COMBIN($A1/25,2)>=6,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(COMBIN($A1/25,2))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISEVEN(COMBIN($A1/25,2))", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCombinScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(COMBIN($A1/25,2),1)>=7", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(COMBIN($A1/25,2),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatCombinScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("COMBIN()>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,2,1)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(-1,0)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(5,-1)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(2,3)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1/0,2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(1E308*1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(EXP(1000),2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN($A1,EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(1E308,2)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(2000,1000)>0");
+        AssertFormulaArithmeticContrastLocations("COMBIN(100000,50000)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("ODD($A1/40)>3", "B4");
