@@ -1525,6 +1525,60 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMultinomialScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,1)>=101", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(2,3)=10", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(2.9,3.1)=10", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(0,0)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(1,2,3)=60", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1/25,2)>=20", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMultinomialScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(MULTINOMIAL($A1,1)>=101,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(MULTINOMIAL($A1,1)>=101,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(MULTINOMIAL($A1,1))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISEVEN(MULTINOMIAL($A1,1))", "B1", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMultinomialScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(MULTINOMIAL(2,3),1)=11", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(MULTINOMIAL($A1,1),1)>=102", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(MULTINOMIAL($A1,1),$A1)>100", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatMultinomialScalarFunctionUnsupportedOperands()
+    {
+        var tooManyArguments = $"MULTINOMIAL({string.Join(",", Enumerable.Repeat("1", 256))})>0";
+
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL()>0");
+        AssertFormulaArithmeticContrastLocations(tooManyArguments);
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(-1,1)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(-0.2,1)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(1,-1)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(1,-0.2)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1/0,1)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(1E308*1E308,1)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(EXP(1000),1)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(1E308,1)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(2000,1000)>0");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(100000,50000)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatGcdScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("GCD($A1,50)=25", "B1", "B3", "B4");

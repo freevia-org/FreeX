@@ -709,6 +709,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaPermutIterations = 10_000;
     private const int MaxFormulaPermutationAInput = int.MaxValue;
     private const int MaxFormulaGcdArgumentCount = 255;
+    private const int MaxFormulaMultinomialArgumentCount = 255;
     private const double MaxFormulaGcdInputExclusive = 9_223_372_036_854_775_808d;
     private const int MaxFormulaTextSliceLength = 32_767;
     private const double FormulaSecZeroCosineTolerance = 1E-15d;
@@ -971,6 +972,9 @@ public static partial class AccessibilityCheckerService
             case "PERMUTATIONA":
                 kind = ConditionalFormulaScalarFunctionKind.PermutationA;
                 return true;
+            case "MULTINOMIAL":
+                kind = ConditionalFormulaScalarFunctionKind.Multinomial;
+                return true;
             case "GCD":
                 kind = ConditionalFormulaScalarFunctionKind.Gcd;
                 return true;
@@ -1213,6 +1217,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
             ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.Multinomial => argumentCount is >= 1 and <= MaxFormulaMultinomialArgumentCount,
             ConditionalFormulaScalarFunctionKind.Gcd or
             ConditionalFormulaScalarFunctionKind.Lcm => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
             ConditionalFormulaScalarFunctionKind.Today or
@@ -1760,6 +1765,7 @@ public static partial class AccessibilityCheckerService
         Combina,
         Permut,
         PermutationA,
+        Multinomial,
         Gcd,
         Lcm,
         Sqrt,
@@ -2315,6 +2321,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Combina:
                 case ConditionalFormulaScalarFunctionKind.Permut:
                 case ConditionalFormulaScalarFunctionKind.PermutationA:
+                case ConditionalFormulaScalarFunctionKind.Multinomial:
                 case ConditionalFormulaScalarFunctionKind.Gcd:
                 case ConditionalFormulaScalarFunctionKind.Lcm:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
@@ -2674,6 +2681,12 @@ public static partial class AccessibilityCheckerService
                         return false;
                     }
 
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Multinomial:
+                    if (!TryMultinomialFormulaNumber(function, first, rowOffset, colOffset, out var multinomialResult))
+                        return false;
+
+                    result = multinomialResult;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Gcd:
                     if (!TryGcdFormulaNumber(function, first, rowOffset, colOffset, out var gcdResult))
@@ -3651,6 +3664,75 @@ public static partial class AccessibilityCheckerService
                 return false;
 
             integer = (int)truncated;
+            return true;
+        }
+
+        private bool TryMultinomialFormulaNumber(
+            ConditionalFormulaScalarFunction function,
+            double first,
+            int rowOffset,
+            int colOffset,
+            out double result)
+        {
+            result = 1d;
+            if (!TryGetFormulaMultinomialInteger(first, out var firstInteger))
+                return false;
+
+            long runningSum = 0;
+            if (!TryAppendMultinomialTerm(firstInteger, ref runningSum, ref result))
+                return false;
+
+            for (var i = 1; i < function.Arguments.Count; i++)
+            {
+                if (!TryResolveFormulaFunctionNumber(function.Arguments[i], rowOffset, colOffset, out var number) ||
+                    !TryGetFormulaMultinomialInteger(number, out var next) ||
+                    !TryAppendMultinomialTerm(next, ref runningSum, ref result))
+                {
+                    return false;
+                }
+            }
+
+            return double.IsFinite(result);
+        }
+
+        private static bool TryGetFormulaMultinomialInteger(double value, out int integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value) ||
+                value < 0d)
+            {
+                return false;
+            }
+
+            var truncated = Math.Truncate(value);
+            if (!double.IsFinite(truncated) ||
+                truncated > int.MaxValue)
+            {
+                return false;
+            }
+
+            integer = (int)truncated;
+            return true;
+        }
+
+        private static bool TryAppendMultinomialTerm(
+            int argument,
+            ref long runningSum,
+            ref double result)
+        {
+            var nextSum = runningSum + argument;
+            if (nextSum > int.MaxValue ||
+                !TryCombinFormulaIntegers((int)nextSum, argument, out var term) ||
+                result > double.MaxValue / term)
+            {
+                return false;
+            }
+
+            result *= term;
+            if (!double.IsFinite(result))
+                return false;
+
+            runningSum = nextSum;
             return true;
         }
 
