@@ -56,6 +56,40 @@ public sealed class XlsxChartSchemaOrderingTests
         AssertChildOrder(pieChart.Element(ChartNs + "dLbls")!, "numFmt", "spPr", "txPr", "dLblPos", "showVal", "showPercent");
     }
 
+    [Fact]
+    public void ColumnChart_WithErrorBarsAndComboSecondaryLines_ProducesSchemaValidOrder()
+    {
+        var saved = SaveBytes(CreateColumnComboChartWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+
+        var chartXml = LoadChartXml(saved);
+        var barChart = chartXml.Descendants(ChartNs + "barChart").Should().ContainSingle().Subject;
+        var lineCharts = chartXml.Descendants(ChartNs + "lineChart").ToList();
+        lineCharts.Should().HaveCount(2);
+
+        AssertChildOrder(barChart, "barDir", "grouping", "ser", "gapWidth", "overlap", "axId");
+
+        var barSeries = barChart.Elements(ChartNs + "ser").Should().ContainSingle().Subject;
+        AssertChildOrder(barSeries, "idx", "order", "tx", "spPr", "errBars", "cat", "val");
+
+        var errorBars = barSeries.Element(ChartNs + "errBars");
+        errorBars.Should().NotBeNull();
+        AssertChildOrder(errorBars!, "errDir", "errBarType", "errValType", "noEndCap", "val", "spPr");
+        errorBars.Element(ChartNs + "errBarType")!.Attribute("val")!.Value.Should().Be("plus");
+        errorBars.Element(ChartNs + "errValType")!.Attribute("val")!.Value.Should().Be("percentage");
+        errorBars.Element(ChartNs + "val")!.Attribute("val")!.Value.Should().Be("12.5");
+
+        lineCharts.SelectMany(chart => chart.Elements(ChartNs + "ser")).Should().HaveCount(2);
+        lineCharts[0].Elements(ChartNs + "axId").Select(element => element.Attribute("val")!.Value)
+            .Should().Equal("48650112", "48672768");
+        lineCharts[1].Elements(ChartNs + "axId").Select(element => element.Attribute("val")!.Value)
+            .Should().Equal("48650112", "48672769");
+
+        chartXml.Descendants(ChartNs + "catAx").Should().ContainSingle();
+        chartXml.Descendants(ChartNs + "valAx").Should().HaveCount(2);
+    }
+
     private static Workbook CreateLineChartWorkbook()
     {
         var workbook = new Workbook("ChartSchemaOrderingLine");
@@ -153,6 +187,66 @@ public sealed class XlsxChartSchemaOrderingTests
             TrendlineLabelFontSize = 9,
             TrendlineLabelNumberFormatCode = "0.00",
             TrendlineLabelNumberFormatSourceLinked = false
+        });
+
+        return workbook;
+    }
+
+    private static Workbook CreateColumnComboChartWorkbook()
+    {
+        var workbook = new Workbook("ChartSchemaOrderingCombo");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Units"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("Margin"));
+
+        for (uint row = 2; row <= 5; row++)
+        {
+            var offset = row - 1;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"M{offset}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(offset * 100));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(70 + (offset * 8)));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(0.15 + (offset * 0.02)));
+        }
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            Title = "Sales, units, and margin",
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 4)),
+            BarGapWidth = 150,
+            BarOverlap = 0,
+            ShowErrorBars = true,
+            ErrorBarKind = ChartErrorBarKind.Percentage,
+            ErrorBarDirection = ChartErrorBarDirection.Plus,
+            ErrorBarValue = 12.5,
+            ErrorBarEndCaps = false,
+            ErrorBarColor = new CellColor(192, 0, 0),
+            ErrorBarThickness = 2.25,
+            ErrorBarDashStyle = ChartLineDashStyle.Dot,
+            ShowSecondaryAxis = true,
+            SecondaryAxisSeriesIndexes = [2],
+            UseComboLineForSecondarySeries = true,
+            ComboLineSeriesIndexes = [1, 2],
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(68, 114, 196),
+                    StrokeColor: new CellColor(47, 85, 151),
+                    StrokeThickness: 1),
+                new ChartSeriesFormat(
+                    1,
+                    StrokeColor: new CellColor(112, 173, 71),
+                    StrokeThickness: 1.75,
+                    DashStyle: ChartLineDashStyle.Dash),
+                new ChartSeriesFormat(
+                    2,
+                    StrokeColor: new CellColor(192, 0, 0),
+                    StrokeThickness: 1.75,
+                    DashStyle: ChartLineDashStyle.Dot)
+            ]
         });
 
         return workbook;
