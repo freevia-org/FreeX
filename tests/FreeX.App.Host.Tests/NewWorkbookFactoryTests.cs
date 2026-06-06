@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -66,8 +65,8 @@ public sealed class NewWorkbookFactoryTests
     [Fact]
     public void AppAndFileNew_RouteFullOptionsIntoFactory()
     {
-        var appSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var appSource = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         appSource.Should().Contain("NewWorkbookFactory.Create(options)");
         backstageSource.Should().Contain("NewWorkbookFactory.Create(_options)");
