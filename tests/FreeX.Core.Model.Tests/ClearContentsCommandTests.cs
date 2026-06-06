@@ -133,7 +133,7 @@ public sealed class ClearContentsCommandTests
     [Fact]
     public void ClearContents_DoesNotMaterializeRangeForProtectionPreflight()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "ClearContentsCommand.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSource("ClearContentsCommand.cs");
         var apply = source[
             source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
             source.IndexOf("public void Revert", StringComparison.Ordinal)];
