@@ -261,10 +261,7 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void SaveWorkbookReferences_UsesIndexedSheetLookup()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.Save.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.Save.cs");
 
         source.Should().Contain("workbook.GetSheet(address.Sheet)");
         source.Should().Contain("workbook.GetSheet(change.Address.Sheet)");
@@ -275,10 +272,7 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void SaveWorkbookReferences_AvoidsLinqProjectionChains()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.Save.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.Save.cs");
 
         source.Should().Contain("WatchedCells = ToWatchedCellDtos(workbook)");
         source.Should().Contain("Scenarios = ToScenarioDtos(workbook)");
@@ -293,14 +287,8 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void SaveCellWriters_StreamAddressesInsteadOfAllocatingA1Strings()
     {
-        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.Save.cs"));
-        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.CellDto.cs"));
+        var saveSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.Save.cs");
+        var dtoSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.CellDto.cs");
 
         saveSource.Should().Contain("CellDtoJsonConverter.WriteCell(");
         saveSource.Should().Contain("row,");
@@ -314,14 +302,8 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void SaveCellWriters_StreamScalarValuesWithoutAllocatingFormattedNumberStrings()
     {
-        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.Save.cs"));
-        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.CellDto.cs"));
+        var saveSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.Save.cs");
+        var dtoSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.CellDto.cs");
 
         saveSource.Should().Contain("cell.Value,");
         saveSource.Should().NotContain("SerializeWithType(cell.Value)");
@@ -333,14 +315,8 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void LoadCellReader_MapsValueTypesWithoutAllocatingPerCellStrings()
     {
-        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.cs"));
-        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.CellDto.cs"));
+        var adapterSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.cs");
+        var dtoSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.CellDto.cs");
 
         dtoSource.Should().Contain("ParsedValueType");
         dtoSource.Should().Contain("ReadValueTypeToken");
@@ -352,14 +328,8 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void LoadCellReader_ParsesNumericValuesWithoutAllocatingPerCellStrings()
     {
-        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.cs"));
-        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.CellDto.cs"));
+        var adapterSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.cs");
+        var dtoSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.CellDto.cs");
 
         dtoSource.Should().Contain("TryReadFiniteNumberToken(ref reader, out var number)");
         dtoSource.Should().Contain("dto.HasParsedNumericValue = true;");
@@ -372,14 +342,8 @@ public sealed class NativeJsonAdapterPerformanceTests
     [Fact]
     public void LoadDenseCells_PreSizesSheetCellStorage()
     {
-        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.cs"));
-        var dtoSource = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src",
-            "FreeX.Core.IO",
-            "NativeJsonAdapter.CellDto.cs"));
+        var adapterSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.cs");
+        var dtoSource = TestWorkspaceFiles.ReadCoreIoRepoSource("NativeJsonAdapter.CellDto.cs");
 
         adapterSource.Should().Contain("sheet.EnsureCellCapacity(cellDtos.Count);");
         dtoSource.Should().Contain("public int Count => _items?.Count ?? SourceSheet?.CellCount ?? 0;");
