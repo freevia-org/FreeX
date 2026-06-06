@@ -7,9 +7,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using FreeX.App.Services;
-using FreeX.Core.Calc;
-using FreeX.Core.Commands;
-using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -34,14 +31,8 @@ public sealed class MainWindow : Window
     private static readonly IBrush SelectionHeaderBackground = Brush(225, 244, 242);
     private static readonly IBrush SelectionHeaderForeground = Brush(13, 86, 89);
 
-    private readonly StartupWorkbookLoadResult _source;
-    private readonly IReadOnlyList<IFileAdapter> _adapters = WorkbookFileAdapterCatalog.CreateDefaultAdapters();
+    private readonly WorkbookSession _session;
     private readonly WorkbookSaveService _saveService = new();
-    private readonly WorkbookSheetSelectionService _sheetSelectionService = new();
-    private readonly Workbook _workbook;
-    private readonly IViewportService _viewportService = new ViewportService();
-    private readonly RecalcEngine _recalcEngine = new(new DependencyGraph(), new FormulaEvaluator());
-    private readonly WorkbookCellEditService _cellEditService;
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
     private readonly TextBlock _titleText = new();
@@ -51,32 +42,14 @@ public sealed class MainWindow : Window
     private readonly TextBox _formulaBox = new();
     private readonly Button _saveButton = new();
     private readonly Button _saveAsButton = new();
-    private Sheet _sheet;
-    private ViewportModel _viewport = new([], [], [], null, []);
-    private CellAddress _activeCell;
-    private CellAddress? _formulaEditAddress;
-    private string? _currentFilePath;
-    private XlsxFeatureReport? _currentXlsxFeatureReport;
-    private bool _isDirty;
     private bool _isSaving;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
     {
-        _source = new StartupWorkbookLoader().Load(startupArguments);
-        _workbook = _source.Workbook;
-        _sheet = _sheetSelectionService.EnsureActiveSheet(_workbook).Sheet;
-        _activeCell = GetInitialActiveCell(_sheet);
-        _currentFilePath = _source.OpenedAsTemplate ? null : _source.SourcePath;
-        _currentXlsxFeatureReport = _source.FeatureReport;
+        var source = new StartupWorkbookLoader().Load(startupArguments);
+        _session = new WorkbookSessionFactory().Create(source, ViewportHeight, ViewportWidth);
 
-        var commandBus = new CommandBus(
-            _ => new WorkbookCommandContext(_workbook),
-            (workbookId, ctx) => XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(ctx.Workbook, out _));
-        _cellEditService = new WorkbookCellEditService(commandBus, _recalcEngine);
-        _recalcEngine.RebuildFormulaDependencies(_workbook);
-        _viewport = GetViewport();
-
-        Title = $"FreeX - {_source.DisplayName}";
+        Title = $"FreeX - {_session.DisplayName}";
         Width = 1120;
         Height = 720;
         MinWidth = 820;
@@ -84,22 +57,8 @@ public sealed class MainWindow : Window
         Background = WindowBackground;
         Content = BuildContent();
         KeyDown += MainWindow_KeyDown;
-        RefreshShell(FormatStartupStatus(_source));
+        RefreshShell(_session.StartupStatus);
     }
-
-    private static CellAddress GetInitialActiveCell(Sheet sheet) =>
-        new(sheet.Id, Math.Max(1, sheet.ActiveRow ?? 1), Math.Max(1, sheet.ActiveCol ?? 1));
-
-    private ViewportModel GetViewport() =>
-        _viewportService.GetViewport(
-            _workbook,
-            _sheet.Id,
-            new ViewportRequest(
-                _sheet.ViewTopRow ?? 1,
-                _sheet.ViewLeftCol ?? 1,
-                AvailableHeight: ViewportHeight,
-                AvailableWidth: ViewportWidth,
-                IncludeObjects: false));
 
     private Control BuildContent()
     {
@@ -180,7 +139,7 @@ public sealed class MainWindow : Window
         _formulaBox.FontSize = 12;
         _formulaBox.Padding = new Thickness(8, 4);
         _formulaBox.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        _formulaBox.GotFocus += (_, _) => _formulaEditAddress = _activeCell;
+        _formulaBox.GotFocus += (_, _) => _session.BeginFormulaEdit(_session.ActiveCell);
         _formulaBox.KeyDown += FormulaBox_KeyDown;
 
         return new Border
@@ -211,43 +170,34 @@ public sealed class MainWindow : Window
     {
         _sheetGridHost.Content = BuildSheetGrid();
         _sheetTabsHost.Content = BuildSheetTabs();
-        _titleText.Text = CurrentDisplayName;
-        _detailText.Text = $"{_sheet.Name}  |  {_viewport.RowMetrics.Count} rows x {_viewport.ColMetrics.Count} columns";
-        _cellAddressText.Text = FormatCellReference(_activeCell);
-        _formulaBox.Text = FormatEditText(_sheet.GetCell(_activeCell), _activeCell);
+        _titleText.Text = _session.DisplayName;
+        _detailText.Text = $"{_session.ActiveSheet.Name}  |  {_session.Viewport.RowMetrics.Count} rows x {_session.Viewport.ColMetrics.Count} columns";
+        _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
+        _formulaBox.Text = FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
         _statusText.Text = status;
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);
-        Title = $"FreeX - {CurrentDisplayName}{(_isDirty ? " *" : "")}";
+        Title = $"FreeX - {_session.DisplayName}{(_session.IsDirty ? " *" : "")}";
         UpdateSaveButton();
     }
 
     private void UpdateSaveButton()
     {
-        _saveButton.IsEnabled = !_isSaving && CanSaveCurrentSource(out _);
-        _saveButton.Content = _isDirty ? "Save*" : "Save";
+        _saveButton.IsEnabled = !_isSaving && _session.CanSaveCurrentSource(out _);
+        _saveButton.Content = _session.IsDirty ? "Save*" : "Save";
         _saveAsButton.IsEnabled = !_isSaving && StorageProvider.CanSave;
     }
 
     private Control BuildSheetTabs()
     {
-        var selection = _sheetSelectionService.EnsureActiveSheet(_workbook);
-        if (_sheet.Id != selection.Sheet.Id)
-        {
-            _sheet = selection.Sheet;
-            _activeCell = GetInitialActiveCell(_sheet);
-            _formulaEditAddress = null;
-            _viewport = GetViewport();
-        }
-
         var panel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 4,
         };
 
-        foreach (var tab in selection.Tabs)
+        foreach (var tab in _session.SheetTabs)
         {
             var button = new Button
             {
@@ -277,37 +227,38 @@ public sealed class MainWindow : Window
 
     private Control BuildSheetGrid()
     {
-        var cellsByAddress = _viewport.Cells.ToDictionary(cell => (cell.Row, cell.Col));
+        var viewport = _session.Viewport;
+        var cellsByAddress = viewport.Cells.ToDictionary(cell => (cell.Row, cell.Col));
         var grid = new AvaloniaGrid
         {
             Background = Brushes.White,
         };
 
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HeaderColumnWidth) });
-        foreach (var metric in _viewport.ColMetrics)
+        foreach (var metric in viewport.ColMetrics)
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(54, metric.Width)) });
 
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderRowHeight) });
-        foreach (var metric in _viewport.RowMetrics)
+        foreach (var metric in viewport.RowMetrics)
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Math.Max(22, metric.Height)) });
 
         AddGridChild(grid, CreateHeaderCell(""), 0, 0);
-        for (var colIndex = 0; colIndex < _viewport.ColMetrics.Count; colIndex++)
+        for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
         {
-            var col = _viewport.ColMetrics[colIndex].Col;
-            var selected = col == _activeCell.Col;
+            var col = viewport.ColMetrics[colIndex].Col;
+            var selected = col == _session.ActiveCell.Col;
             AddGridChild(grid, CreateHeaderCell(CellAddress.NumberToColumnName(col), selected), 0, colIndex + 1);
         }
 
-        for (var rowIndex = 0; rowIndex < _viewport.RowMetrics.Count; rowIndex++)
+        for (var rowIndex = 0; rowIndex < viewport.RowMetrics.Count; rowIndex++)
         {
-            var row = _viewport.RowMetrics[rowIndex].Row;
-            var selectedRow = row == _activeCell.Row;
+            var row = viewport.RowMetrics[rowIndex].Row;
+            var selectedRow = row == _session.ActiveCell.Row;
             AddGridChild(grid, CreateHeaderCell(row.ToString(), selectedRow), rowIndex + 1, 0);
 
-            for (var colIndex = 0; colIndex < _viewport.ColMetrics.Count; colIndex++)
+            for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
             {
-                var col = _viewport.ColMetrics[colIndex].Col;
+                var col = viewport.ColMetrics[colIndex].Col;
                 cellsByAddress.TryGetValue((row, col), out var cell);
                 AddGridChild(grid, CreateCell(cell, row, col), rowIndex + 1, colIndex + 1);
             }
@@ -328,8 +279,8 @@ public sealed class MainWindow : Window
     private Border CreateCell(DisplayCell cell, uint row, uint col)
     {
         var hasCell = cell.Row != 0 && cell.Col != 0;
-        var selected = row == _activeCell.Row && col == _activeCell.Col;
-        var address = new CellAddress(_sheet.Id, row, col);
+        var selected = row == _session.ActiveCell.Row && col == _session.ActiveCell.Col;
+        var address = new CellAddress(_session.ActiveSheet.Id, row, col);
 
         if (!hasCell)
             return CreateInteractiveCellBorder(
@@ -342,12 +293,12 @@ public sealed class MainWindow : Window
                 address);
 
         var style = cell.Style;
-        var background = style?.ResolveFillColor(_workbook.Theme) is { } fillColor
+        var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor
             ? Brush(fillColor)
             : Brushes.White;
         var foreground = style is null
             ? Brushes.Black
-            : Brush(style.ResolveFontColor(_workbook.Theme));
+            : Brush(style.ResolveFontColor(_session.Workbook.Theme));
         var alignment = cell.RawValue is NumberValue or DateTimeValue
             ? TextAlignment.Right
             : TextAlignment.Left;
@@ -416,30 +367,21 @@ public sealed class MainWindow : Window
 
     private void SelectCell(CellAddress address)
     {
-        _activeCell = address;
-        _sheet.ActiveRow = address.Row;
-        _sheet.ActiveCol = address.Col;
-        _formulaEditAddress = null;
+        _session.SelectCell(address);
         RefreshShell("Ready");
     }
 
     private void SelectSheet(SheetId sheetId)
     {
-        var selection = _sheetSelectionService.SelectSheet(_workbook, sheetId);
-        if (_sheet.Id == selection.Sheet.Id)
+        if (!_session.SelectSheet(sheetId))
             return;
 
-        _sheet = selection.Sheet;
-        _activeCell = GetInitialActiveCell(_sheet);
-        _formulaEditAddress = null;
-        _viewport = GetViewport();
-        RefreshShell($"Selected {_sheet.Name}");
+        RefreshShell($"Selected {_session.ActiveSheet.Name}");
     }
 
     private void BeginFormulaEdit(CellAddress address)
     {
-        _activeCell = address;
-        _formulaEditAddress = address;
+        _session.BeginFormulaEdit(address);
         RefreshShell("Ready");
         _formulaBox.Focus();
         _formulaBox.CaretIndex = _formulaBox.Text?.Length ?? 0;
@@ -456,7 +398,7 @@ public sealed class MainWindow : Window
         }
         else if (e.Key == Key.Escape)
         {
-            _formulaEditAddress = null;
+            _session.CancelFormulaEdit();
             RefreshShell("Ready");
             e.Handled = true;
         }
@@ -464,13 +406,8 @@ public sealed class MainWindow : Window
 
     private void CommitFormulaBox()
     {
-        var address = _formulaEditAddress ?? _activeCell;
-        var result = _cellEditService.CommitCellText(
-            _workbook,
-            _sheet.Id,
-            address,
-            _formulaBox.Text ?? "",
-            useR1C1ReferenceStyle: false);
+        var address = _session.FormulaEditAddress ?? _session.ActiveCell;
+        var result = _session.CommitCellText(_formulaBox.Text ?? "");
 
         if (!result.Success)
         {
@@ -479,10 +416,6 @@ public sealed class MainWindow : Window
             return;
         }
 
-        _activeCell = address;
-        _formulaEditAddress = null;
-        _isDirty = true;
-        _viewport = GetViewport();
         RefreshShell($"Edited {FormatCellReference(address)}");
     }
 
@@ -514,7 +447,7 @@ public sealed class MainWindow : Window
         if (_isSaving)
             return;
 
-        if (CanSaveCurrentSource(out var target))
+        if (_session.CanSaveCurrentSource(out var target))
         {
             await SaveWorkbookToTargetAsync(target!);
             return;
@@ -544,7 +477,7 @@ public sealed class MainWindow : Window
         var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Save Workbook",
-            SuggestedFileName = BuildSuggestedSaveAsFileName(),
+            SuggestedFileName = _session.BuildSuggestedSaveAsFileName(NativeWorkbookExtension),
             DefaultExtension = NativeWorkbookExtension[1..],
             FileTypeChoices = fileTypes,
             SuggestedFileType = fileTypes[0],
@@ -563,8 +496,8 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            path = EnsureSaveExtension(path);
-            if (!TryResolveSaveTarget(path, out var target, out var message))
+            path = WorkbookSession.EnsureSaveExtension(path, NativeWorkbookExtension);
+            if (!_session.TryResolveSaveTarget(path, out var target, out var message))
             {
                 ShowSaveIssue(message);
                 return;
@@ -589,11 +522,8 @@ public sealed class MainWindow : Window
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
-            await _saveService.SaveAsync(target.Path, target.Adapter, _workbook, progress);
-            _isDirty = false;
-            _currentFilePath = target.Path;
-            _currentXlsxFeatureReport = null;
-            _workbook.Name = Path.GetFileName(target.Path);
+            await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
+            _session.MarkSaved(target.Path);
             RefreshShell($"Saved {Path.GetFileName(target.Path)}");
         }
         catch (Exception ex)
@@ -607,56 +537,9 @@ public sealed class MainWindow : Window
         }
     }
 
-    private bool CanSaveCurrentSource(out FileSaveTarget? target)
-    {
-        target = null;
-        if (string.IsNullOrWhiteSpace(_currentFilePath))
-            return false;
-
-        return TryResolveSaveTarget(_currentFilePath, out target, out _);
-    }
-
-    private bool TryResolveSaveTarget(string path, out FileSaveTarget? target, out string message)
-    {
-        target = null;
-        if (!FileSavePlanner.TryResolveExistingPath(path, _adapters, out var resolvedTarget) ||
-            resolvedTarget is null)
-        {
-            message = "Unsupported save format.";
-            return false;
-        }
-
-        if (!CanWriteTarget(resolvedTarget.Path, out message))
-            return false;
-
-        target = resolvedTarget;
-        message = "";
-        return true;
-    }
-
-    private bool CanWriteTarget(string path, out string message)
-    {
-        if (IsXlsxPath(path) && _currentXlsxFeatureReport?.HasUnsupportedFeatures == true)
-        {
-            message = "Save As FreeX Workbook to avoid dropping unsupported XLSX features.";
-            return false;
-        }
-
-        message = "";
-        return true;
-    }
-
-    private static bool IsXlsxPath(string path) =>
-        string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase);
-
     private IReadOnlyList<FilePickerFileType> BuildSaveFileTypes()
     {
-        var formats = _adapters
-            .SelectMany(adapter => adapter.Formats)
-            .Where(format => format.CanSave)
-            .GroupBy(format => FileFormatResolver.NormalizeExtension(format.Extension), StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .ToList();
+        var formats = _session.SaveFormats.ToList();
 
         var nativeIndex = formats.FindIndex(format =>
             string.Equals(
@@ -682,68 +565,16 @@ public sealed class MainWindow : Window
             .ToList();
     }
 
-    private string BuildSuggestedSaveAsFileName()
-    {
-        var sourceName = string.IsNullOrWhiteSpace(_workbook.Name)
-            ? CurrentDisplayName
-            : _workbook.Name;
-        var baseName = Path.GetFileNameWithoutExtension(sourceName);
-        if (string.IsNullOrWhiteSpace(baseName))
-            baseName = "Workbook";
-
-        return baseName + NativeWorkbookExtension;
-    }
-
-    private static string EnsureSaveExtension(string path)
-    {
-        try
-        {
-            return string.IsNullOrWhiteSpace(Path.GetExtension(path))
-                ? path + NativeWorkbookExtension
-                : path;
-        }
-        catch (ArgumentException)
-        {
-            return path;
-        }
-        catch (NotSupportedException)
-        {
-            return path;
-        }
-        catch (PathTooLongException)
-        {
-            return path;
-        }
-    }
-
     private void ShowSaveIssue(string message)
     {
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
     }
 
-    private string CurrentDisplayName =>
-        string.IsNullOrWhiteSpace(_currentFilePath)
-            ? _source.DisplayName
-            : Path.GetFileName(_currentFilePath);
-
     private bool ShouldUseWarningStatusColor(string status) =>
-        _source.IsFallback ||
+        _session.IsFallback ||
         status.Contains("Unsupported XLSX", StringComparison.Ordinal) ||
         status.Contains("load warning", StringComparison.OrdinalIgnoreCase);
-
-    private static string FormatStartupStatus(StartupWorkbookLoadResult source)
-    {
-        var status = source.Status;
-        if (source.OpenedAsTemplate)
-            status += " Opened as template.";
-        if (source.FeatureReport?.HasUnsupportedFeatures == true)
-            status += " Unsupported XLSX features detected.";
-        if (source.LoadWarnings is { Count: > 0 } warnings)
-            status += $" {warnings.Count} load warning{(warnings.Count == 1 ? "" : "s")}.";
-
-        return status;
-    }
 
     private static string FormatSaveStatus(WorkbookSaveProgressUpdate update) =>
         update.Phase switch

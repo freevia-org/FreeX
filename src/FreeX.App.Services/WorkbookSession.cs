@@ -1,0 +1,259 @@
+using FreeX.Core.IO;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Services;
+
+public sealed class WorkbookSession
+{
+    private readonly IReadOnlyList<IFileAdapter> _adapters;
+    private readonly StartupWorkbookLoadResult _source;
+    private readonly WorkbookCellEditService _cellEditService;
+    private readonly WorkbookSheetSelectionService _sheetSelectionService;
+    private readonly IViewportService _viewportService;
+    private readonly double _viewportHeight;
+    private readonly double _viewportWidth;
+    private readonly bool _includeObjects;
+
+    internal WorkbookSession(
+        StartupWorkbookLoadResult source,
+        IReadOnlyList<IFileAdapter> adapters,
+        WorkbookCellEditService cellEditService,
+        WorkbookSheetSelectionService sheetSelectionService,
+        IViewportService viewportService,
+        double viewportHeight,
+        double viewportWidth,
+        bool includeObjects)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(adapters);
+        ArgumentNullException.ThrowIfNull(cellEditService);
+        ArgumentNullException.ThrowIfNull(sheetSelectionService);
+        ArgumentNullException.ThrowIfNull(viewportService);
+
+        _source = source;
+        _adapters = adapters;
+        _cellEditService = cellEditService;
+        _sheetSelectionService = sheetSelectionService;
+        _viewportService = viewportService;
+        _viewportHeight = viewportHeight;
+        _viewportWidth = viewportWidth;
+        _includeObjects = includeObjects;
+
+        Workbook = source.Workbook;
+        CurrentFilePath = source.OpenedAsTemplate ? null : source.SourcePath;
+        CurrentXlsxFeatureReport = source.FeatureReport;
+        SaveFormats = adapters
+            .SelectMany(adapter => adapter.Formats)
+            .Where(format => format.CanSave)
+            .GroupBy(format => FileFormatResolver.NormalizeExtension(format.Extension), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+
+        var selection = _sheetSelectionService.EnsureActiveSheet(Workbook);
+        ActiveSheet = selection.Sheet;
+        SheetTabs = selection.Tabs;
+        ActiveCell = GetInitialActiveCell(ActiveSheet);
+        Viewport = BuildViewport();
+    }
+
+    public Workbook Workbook { get; }
+
+    public Sheet ActiveSheet { get; private set; }
+
+    public ViewportModel Viewport { get; private set; }
+
+    public CellAddress ActiveCell { get; private set; }
+
+    public CellAddress? FormulaEditAddress { get; private set; }
+
+    public IReadOnlyList<WorkbookSheetTab> SheetTabs { get; private set; }
+
+    public string? CurrentFilePath { get; private set; }
+
+    public XlsxFeatureReport? CurrentXlsxFeatureReport { get; private set; }
+
+    public bool IsDirty { get; private set; }
+
+    public bool IsFallback => _source.IsFallback;
+
+    public string DisplayName =>
+        string.IsNullOrWhiteSpace(CurrentFilePath)
+            ? _source.DisplayName
+            : Path.GetFileName(CurrentFilePath);
+
+    public string StartupStatus => FormatStartupStatus(_source);
+
+    public IReadOnlyList<FileFormatDescriptor> SaveFormats { get; }
+
+    public void SelectCell(CellAddress address)
+    {
+        ActiveCell = address;
+        ActiveSheet.ActiveRow = address.Row;
+        ActiveSheet.ActiveCol = address.Col;
+        FormulaEditAddress = null;
+    }
+
+    public bool SelectSheet(SheetId sheetId)
+    {
+        var selection = _sheetSelectionService.SelectSheet(Workbook, sheetId);
+        SheetTabs = selection.Tabs;
+        if (ActiveSheet.Id == selection.Sheet.Id)
+            return false;
+
+        ActiveSheet = selection.Sheet;
+        ActiveCell = GetInitialActiveCell(ActiveSheet);
+        FormulaEditAddress = null;
+        RefreshViewport();
+        return true;
+    }
+
+    public void BeginFormulaEdit(CellAddress address)
+    {
+        ActiveCell = address;
+        FormulaEditAddress = address;
+    }
+
+    public void CancelFormulaEdit()
+    {
+        FormulaEditAddress = null;
+    }
+
+    public WorkbookCellEditResult CommitCellText(string text, bool useR1C1ReferenceStyle = false)
+    {
+        var address = FormulaEditAddress ?? ActiveCell;
+        var result = _cellEditService.CommitCellText(
+            Workbook,
+            ActiveSheet.Id,
+            address,
+            text,
+            useR1C1ReferenceStyle);
+
+        if (!result.Success)
+            return result;
+
+        ActiveCell = address;
+        FormulaEditAddress = null;
+        IsDirty = true;
+        RefreshViewport();
+        return result;
+    }
+
+    public bool CanSaveCurrentSource(out FileSaveTarget? target)
+    {
+        target = null;
+        if (string.IsNullOrWhiteSpace(CurrentFilePath))
+            return false;
+
+        return TryResolveSaveTarget(CurrentFilePath, out target, out _);
+    }
+
+    public bool TryResolveSaveTarget(string path, out FileSaveTarget? target, out string message)
+    {
+        target = null;
+        if (!FileSavePlanner.TryResolveExistingPath(path, _adapters, out var resolvedTarget) ||
+            resolvedTarget is null)
+        {
+            message = "Unsupported save format.";
+            return false;
+        }
+
+        if (!CanWriteTarget(resolvedTarget.Path, out message))
+            return false;
+
+        target = resolvedTarget;
+        message = "";
+        return true;
+    }
+
+    public void MarkSaved(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        IsDirty = false;
+        CurrentFilePath = path;
+        CurrentXlsxFeatureReport = null;
+        Workbook.Name = Path.GetFileName(path);
+    }
+
+    public string BuildSuggestedSaveAsFileName(string defaultExtension)
+    {
+        var normalizedExtension = FileFormatResolver.NormalizeExtension(defaultExtension);
+        var sourceName = string.IsNullOrWhiteSpace(Workbook.Name)
+            ? DisplayName
+            : Workbook.Name;
+        var baseName = Path.GetFileNameWithoutExtension(sourceName);
+        if (string.IsNullOrWhiteSpace(baseName))
+            baseName = "Workbook";
+
+        return baseName + normalizedExtension;
+    }
+
+    public static string EnsureSaveExtension(string path, string defaultExtension)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(Path.GetExtension(path))
+                ? path + FileFormatResolver.NormalizeExtension(defaultExtension)
+                : path;
+        }
+        catch (ArgumentException)
+        {
+            return path;
+        }
+        catch (NotSupportedException)
+        {
+            return path;
+        }
+        catch (PathTooLongException)
+        {
+            return path;
+        }
+    }
+
+    private void RefreshViewport()
+    {
+        Viewport = BuildViewport();
+    }
+
+    private ViewportModel BuildViewport() =>
+        _viewportService.GetViewport(
+            Workbook,
+            ActiveSheet.Id,
+            new ViewportRequest(
+                ActiveSheet.ViewTopRow ?? 1,
+                ActiveSheet.ViewLeftCol ?? 1,
+                AvailableHeight: _viewportHeight,
+                AvailableWidth: _viewportWidth,
+                IncludeObjects: _includeObjects));
+
+    private bool CanWriteTarget(string path, out string message)
+    {
+        if (IsXlsxPath(path) && CurrentXlsxFeatureReport?.HasUnsupportedFeatures == true)
+        {
+            message = "Save As FreeX Workbook to avoid dropping unsupported XLSX features.";
+            return false;
+        }
+
+        message = "";
+        return true;
+    }
+
+    private static bool IsXlsxPath(string path) =>
+        string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase);
+
+    private static CellAddress GetInitialActiveCell(Sheet sheet) =>
+        new(sheet.Id, Math.Max(1, sheet.ActiveRow ?? 1), Math.Max(1, sheet.ActiveCol ?? 1));
+
+    private static string FormatStartupStatus(StartupWorkbookLoadResult source)
+    {
+        var status = source.Status;
+        if (source.OpenedAsTemplate)
+            status += " Opened as template.";
+        if (source.FeatureReport?.HasUnsupportedFeatures == true)
+            status += " Unsupported XLSX features detected.";
+        if (source.LoadWarnings is { Count: > 0 } warnings)
+            status += $" {warnings.Count} load warning{(warnings.Count == 1 ? "" : "s")}.";
+
+        return status;
+    }
+}
