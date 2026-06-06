@@ -917,6 +917,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceMergeCells.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidMergedCellsForSchemaValidity()
+    {
+        using var source = Save(CreateMergedCellSourceWorkbook());
+        SetMergedCellInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 1), new TextValue("full-save edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertMergedCellsSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidMergedCellsForSchemaValidity()
+    {
+        using var source = Save(CreateMergedCellSourceWorkbook());
+        SetMergedCellInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("merged edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertMergedCellsSanitized(saved);
+    }
+
 
     [Fact]
     public void Comments_ProducesSchemaValidWorkbook()
@@ -2751,6 +2796,47 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.AddMergedRegion(Range(sheet, 1, 1, 1, 3));
         sheet.AddMergedRegion(Range(sheet, 2, 4, 4, 4));
         return workbook;
+    }
+
+    private static void SetMergedCellInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var mergeCells = worksheetXml.Root!.Element(worksheetNs + "mergeCells")!;
+        mergeCells.SetAttributeValue("count", "not-a-number");
+        mergeCells.SetAttributeValue("nativeMergeContainerAttr", "kept");
+        var mergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
+            .Single(element => element.Attribute("ref")?.Value == "A1:C1");
+        mergeCell.SetAttributeValue("nativeMergeCellAttr", "kept");
+        mergeCell.Add(new XElement(worksheetNs + "nativeMergeCellChild"));
+        mergeCells.Add(new XElement(
+            worksheetNs + "mergeCell",
+            new XAttribute("ref", "not-a-range"),
+            new XAttribute("nativeMergeCellAttr", "removed")));
+        mergeCells.Add(new XElement(worksheetNs + "nativeMergeCellsChild"));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertMergedCellsSanitized(MemoryStream stream)
+    {
+        var mergeCells = ReadWorksheetChildElement(stream, "mergeCells");
+        var worksheetNs = mergeCells.Name.Namespace;
+        mergeCells.Attribute("count")!.Value.Should().Be("2");
+        mergeCells.Attribute("nativeMergeContainerAttr").Should().BeNull();
+        mergeCells.Element(worksheetNs + "nativeMergeCellsChild").Should().BeNull();
+        mergeCells.Elements(worksheetNs + "mergeCell").Should().HaveCount(2);
+
+        var firstMergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
+            .Single(element => element.Attribute("ref")?.Value == "A1:C1");
+        firstMergeCell.Attribute("nativeMergeCellAttr").Should().BeNull();
+        firstMergeCell.Element(worksheetNs + "nativeMergeCellChild").Should().BeNull();
+
+        mergeCells.Elements(worksheetNs + "mergeCell")
+            .Select(element => element.Attribute("ref")?.Value)
+            .Should()
+            .NotContain("not-a-range");
     }
 
     private static Workbook CreateNamedRangeSourceWorkbook()

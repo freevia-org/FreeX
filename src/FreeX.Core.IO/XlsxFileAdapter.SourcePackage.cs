@@ -66,6 +66,7 @@ public sealed partial class XlsxFileAdapter
             XlsxUnsupportedConditionalFormattingPreserver.Preserve(sourceArchive, generatedArchive);
 
         XlsxWorksheetGridXmlNormalizer.NormalizeWorksheets(generatedArchive);
+        XlsxWorksheetMergeCellsNormalizer.NormalizeWorksheets(generatedArchive);
         return sourceParts;
     }
 
