@@ -2937,6 +2937,81 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateValueFunctionOperands()
+    {
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)=1", "B1");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)=60", "B2", "B3");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE(\"3/1/1900\")=61", FormulaDateValueTimeValueAllLocations);
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)=45292", "B4", "B5");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)=45306", "B6");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)=45293", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTimeValueFunctionOperands()
+    {
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($C1)=0", "B1");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($C1)=0.5", "B2", "B6");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations(
+            "ABS(TIMEVALUE($C1)-0.999988425925926)<0.000000000001",
+            "B3",
+            "B5");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($C1)=0.25", "B4", "B7");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations(
+            "ABS(TIMEVALUE(\"1900-02-29 23:59:59\")-0.999988425925926)<0.000000000001",
+            FormulaDateValueTimeValueAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateValueTimeValueWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("IF(DATEVALUE($A1)>60,TRUE,FALSE)", "B4", "B5", "B6", "B7");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("AND(DATEVALUE($A1)>60,$D1)", "B4", "B5", "B7");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNUMBER(DATEVALUE($A1))", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)+1=45294", "B7");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("SUM(DATEVALUE($A1),1)=45307", "B6");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("IF(TIMEVALUE($C1)>=0.5,TRUE,FALSE)", "B2", "B3", "B5", "B6");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("AND(ISNUMBER(TIMEVALUE($C1)),TIMEVALUE($C1)<0.5)", "B1", "B4", "B7");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($C1)*24=6", "B4", "B7");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("SUM(TIMEVALUE($C1),0.75)=1", "B4", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateValueTimeValueErrorPredicates()
+    {
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"12:00 PM\"))", FormulaDateValueTimeValueAllLocations);
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(TIMEVALUE(\"2024-01-02\"))", FormulaDateValueTimeValueAllLocations);
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"Open\"))", FormulaDateValueTimeValueAllLocations);
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNA(TIMEVALUE(NA()))", FormulaDateValueTimeValueAllLocations);
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNA(DATEVALUE(NA()))", FormulaDateValueTimeValueAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatDateValueTimeValueUnsupportedOperands()
+    {
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE()>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1,1)>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($D1)>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE(42)>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE(\"12:00 PM\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE(\"23:59:59\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE(\"Open\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE(\"\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE(#VALUE!)>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1&\"x\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE()>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($C1,1)>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE($D1)>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE(0.5)>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE(\"1/2/2024\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE(\"2024-01-02\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE(\"2/29/1900\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE(\"Open\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE(\"\")>0");
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("TIMEVALUE(#N/A)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArabicFunctionOperands()
     {
         AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1)=12", "B1");
@@ -3852,6 +3927,59 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 5), new TextValue(groupSeparator));
     }
 
+    private static Workbook CreateFormulaDateValueTimeValueFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 10, 2);
+
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 1, "1/1/1900", "00:00:00", flag: true, "First Excel date");
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 2, "2/29/1900", "12:00:00", flag: true, "Fake leap date");
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 3, "1900-02-29 23:59:59", "23:59:59", flag: false, "Fake leap date-time");
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 4, "January 2024", "1/2/2024 6:00 AM", flag: true, "Month year text");
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 5, "Jan-2024", "1900-02-29 23:59:59", flag: true, "Short month text");
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 6, "2024-01-15", "12:00 PM", flag: false, "ISO date text");
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 7, "1/2/2024 6:00 AM", "2/29/1900 6:00 AM", flag: true, "Date-time text");
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 8, "12:00 PM", "2024-01-02", flag: true, "Wrong component text");
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 9, "Open", string.Empty, flag: true, "Invalid text");
+        SetFormulaDateValueTimeValueFunctionContrastRow(sheet, 10, new NumberValue(45293), ErrorValue.NA, flag: true, "Non-text source");
+
+        return workbook;
+    }
+
+    private static void SetFormulaDateValueTimeValueFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        string dateText,
+        string timeText,
+        bool flag,
+        string label) =>
+        SetFormulaDateValueTimeValueFunctionContrastRow(
+            sheet,
+            row,
+            new TextValue(dateText),
+            new TextValue(timeText),
+            flag,
+            label);
+
+    private static void SetFormulaDateValueTimeValueFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue dateSource,
+        ScalarValue timeSource,
+        bool flag,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), dateSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), timeSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), new BoolValue(flag));
+    }
+
     private static Workbook CreateFormulaBaseConversionFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -4223,6 +4351,20 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaNumberValueFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaDateValueTimeValueFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaDateValueTimeValueFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
@@ -4334,6 +4476,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaPredicateAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];
+
+    private static string[] FormulaDateValueTimeValueAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10"];
 
     private static string[] FormulaArabicRomanAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];
