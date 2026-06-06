@@ -67,6 +67,12 @@ Run the UI lane separately only when a task explicitly requests UI tests, touche
 
 Success means the UI Release test lane reports zero failed tests. The `Tester Release` workflow remains a full release gate and still runs both the default and UI test lanes before publishing.
 
+## macOS Portable Lane
+
+The CI workflow also runs a macOS portable lane on GitHub-hosted macOS runners. This lane builds and tests `FreeX.DefaultTests.slnx` only, proving that the `Core.*` projects and non-UI tests remain portable while the app is still WPF-first.
+
+Success means the macOS Release build and non-UI test lane report zero failed tests. This lane does not build `FreeX.slnx`, `FreeX.UiTests.slnx`, `App.Host`, `App.UI`, WPF UI tests, Excel COM tools, tester-release artifacts, or macOS app packages. See [planning/multiplatform-macos-port.md](../planning/multiplatform-macos-port.md) for the macOS-first port plan.
+
 ## Conservative Rerun Fallback
 
 The old serial/no-build-server command shape is no longer the default because it makes routine verification significantly slower. Use it only as a one-time rerun after clearing stale processes when a command fails because of stale build-server, shared-compiler, node-reuse, or output-lock state:
