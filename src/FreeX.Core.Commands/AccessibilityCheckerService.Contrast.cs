@@ -958,6 +958,9 @@ public static partial class AccessibilityCheckerService
             case UnaryOpNode { Operator: UnaryOperator.Percent, Operand: NumberNode number }:
                 argument = LiteralFormulaAggregateArgument(new NumberValue(number.Value / 100d));
                 return true;
+            case FormulaNode scalar when TryCreateFormulaOperand(scalar, out var operand):
+                argument = OperandFormulaAggregateArgument(operand);
+                return true;
             default:
                 return false;
         }
@@ -976,6 +979,21 @@ public static partial class AccessibilityCheckerService
             true,
             true,
             null);
+
+    private static ConditionalFormulaAggregateArgument OperandFormulaAggregateArgument(ConditionalFormulaOperand operand) =>
+        new(
+            ConditionalFormulaAggregateArgumentKind.Operand,
+            null,
+            0,
+            0,
+            true,
+            true,
+            0,
+            0,
+            true,
+            true,
+            null,
+            operand);
 
     private static int CompareFormulaValues(ScalarValue left, ScalarValue right)
     {
@@ -1309,13 +1327,15 @@ public static partial class AccessibilityCheckerService
         uint EndCol,
         bool IsEndRowAbsolute,
         bool IsEndColAbsolute,
-        string? SheetName);
+        string? SheetName,
+        ConditionalFormulaOperand? Operand = null);
 
     private enum ConditionalFormulaAggregateArgumentKind
     {
         Literal,
         Reference,
-        Range
+        Range,
+        Operand
     }
 
     private sealed class ConditionalFormatEvaluationCache(
@@ -1826,6 +1846,19 @@ public static partial class AccessibilityCheckerService
                     }
 
                     return true;
+                case ConditionalFormulaAggregateArgumentKind.Operand:
+                    if (!argument.Operand.HasValue ||
+                        !TryResolveFormulaOperand(argument.Operand.Value, rowOffset, colOffset, out var operandValue))
+                    {
+                        return false;
+                    }
+
+                    return AppendFormulaAggregateValue(
+                        operandValue,
+                        aggregateKind,
+                        isDirectArgument: true,
+                        numericValues,
+                        ref nonBlankCount);
                 default:
                     return false;
             }

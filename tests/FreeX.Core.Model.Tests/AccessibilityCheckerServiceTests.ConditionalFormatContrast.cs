@@ -509,6 +509,45 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateScalarOperandArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM($A1+25,$A1%,-$A1)>=26", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE($A1,$A1/2)>70", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateNestedAndPowerArguments()
+    {
+        AssertFormulaAggregateContrastLocations("MIN(SUM($A1:$A2),$A1^2)>175", "B3");
+        AssertFormulaAggregateContrastLocations("MAX(SUM($A1:$A2),$A1^2)>10000", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateCountEvaluatedArguments()
+    {
+        AssertFormulaAggregateContrastLocations("COUNT($A1+1,$D1)>1", "B2");
+        AssertFormulaAggregateContrastLocations("COUNTA($D1,$A1+1)>1", "B1", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateArgumentReferenceShifting()
+    {
+        AssertFormulaAggregateContrastLocations("SUM($A1+25,$A2)>175", "B1", "B2", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatAggregateUnsupportedOperandArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM($D1&\"x\")>0");
+        AssertFormulaAggregateContrastLocations("COUNTA($D1&\"x\")>0");
+        AssertFormulaAggregateContrastLocations("SUM($A1/0)>0");
+        AssertFormulaAggregateContrastLocations("SUM(1E308*1E308)>0");
+        AssertFormulaAggregateContrastLocations("SUM(MEDIAN($A1)+1)>0");
+        AssertFormulaAggregateContrastLocations("SUM(\"n/a\"+$A1)>0");
+        AssertFormulaAggregateContrastLocations("SUM(SUM($A1:$A20000))>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
