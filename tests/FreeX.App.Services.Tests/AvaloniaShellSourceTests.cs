@@ -65,6 +65,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _saveAsMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _undoMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _redoMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _copyMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _pasteMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -80,11 +82,19 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_redoMenuItem.Header = \"Redo\";");
         source.Should().Contain("_redoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);");
         source.Should().Contain("_redoMenuItem.Click += (_, _) => RedoLastEdit();");
+        source.Should().Contain("_copyMenuItem.Header = \"Copy\";");
+        source.Should().Contain("_copyMenuItem.Gesture = new KeyGesture(Key.C, KeyModifiers.Meta);");
+        source.Should().Contain("_copyMenuItem.Click += async (_, _) => await CopyActiveCellToClipboardAsync();");
+        source.Should().Contain("_pasteMenuItem.Header = \"Paste\";");
+        source.Should().Contain("_pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);");
+        source.Should().Contain("_pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();");
         source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
         source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
         source.Should().Contain("_quitMenuItem.Click += (_, _) => TryQuitApplication();");
         source.Should().Contain("editMenu.Items.Add(_undoMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_redoMenuItem);");
+        source.Should().Contain("editMenu.Items.Add(_copyMenuItem);");
+        source.Should().Contain("editMenu.Items.Add(_pasteMenuItem);");
         source.Should().Contain("Header = \"Edit\"");
         source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
         source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
@@ -93,6 +103,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;");
         source.Should().Contain("_undoMenuItem.IsEnabled = _undoButton.IsEnabled;");
         source.Should().Contain("_redoMenuItem.IsEnabled = _redoButton.IsEnabled;");
+        source.Should().Contain("_copyMenuItem.IsEnabled = _copyButton.IsEnabled;");
+        source.Should().Contain("_pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;");
         source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("await SaveWorkbookAsAsync();");
         source.Should().Contain("TryQuitApplication()");
@@ -126,6 +138,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_edit_menu={FormatBool(snapshot.HasNativeEditMenu)}");
         smokeSource.Should().Contain("native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}");
         smokeSource.Should().Contain("native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}");
+        smokeSource.Should().Contain("native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}");
+        smokeSource.Should().Contain("native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}");
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
@@ -137,6 +151,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeEditMenu: hasNativeEditMenu");
         windowSource.Should().Contain("HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, \"Undo\")");
         windowSource.Should().Contain("HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, \"Redo\")");
+        windowSource.Should().Contain("HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, \"Copy\")");
+        windowSource.Should().Contain("HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, \"Paste\")");
         windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
 
@@ -241,5 +257,35 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ApplyEditHistoryResult(_session.UndoLastEdit(), \"Undid last edit\");");
         source.Should().Contain("ApplyEditHistoryResult(_session.RedoLastEdit(), \"Redid last edit\");");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Edit history unavailable.\");");
+    }
+
+    [Fact]
+    public void MainWindow_WiresClipboardCopyPasteThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly Button _copyButton = new();");
+        source.Should().Contain("private readonly Button _pasteButton = new();");
+        source.Should().Contain("_copyButton.Content = \"Copy\";");
+        source.Should().Contain("_pasteButton.Content = \"Paste\";");
+        source.Should().Contain("_copyButton.Click += CopyButton_Click;");
+        source.Should().Contain("_pasteButton.Click += PasteButton_Click;");
+        source.Should().Contain("_copyButton.IsEnabled = isIdle;");
+        source.Should().Contain("_pasteButton.IsEnabled = isIdle;");
+        source.Should().Contain("private async Task CopyActiveCellToClipboardAsync()");
+        source.Should().Contain("private async Task PasteClipboardTextAsync()");
+        source.Should().Contain("using Avalonia.Input.Platform;");
+        source.Should().Contain("TopLevel.GetTopLevel(this)?.Clipboard");
+        source.Should().Contain("await clipboard.SetTextAsync(_session.CopyActiveCellText());");
+        source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
+        source.Should().Contain("string.IsNullOrEmpty(text)");
+        source.Should().Contain("_session.PasteExternalTextAtActiveCell(text)");
+        source.Should().Contain("if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.C or Key.V)");
+        source.Should().Contain("else if (e.Key == Key.C)");
+        source.Should().Contain("await CopyActiveCellToClipboardAsync();");
+        source.Should().Contain("else if (e.Key == Key.V)");
+        source.Should().Contain("await PasteClipboardTextAsync();");
+        source.Should().Contain("ShowEditIssue(\"Clipboard unavailable on this platform.\");");
+        source.Should().Contain("ShowEditIssue(\"Clipboard does not contain text.\");");
     }
 }

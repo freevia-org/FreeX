@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -55,11 +56,15 @@ public sealed class MainWindow : Window
     private readonly Button _saveAsButton = new();
     private readonly Button _undoButton = new();
     private readonly Button _redoButton = new();
+    private readonly Button _copyButton = new();
+    private readonly Button _pasteButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private readonly NativeMenuItem _undoMenuItem = new();
     private readonly NativeMenuItem _redoMenuItem = new();
+    private readonly NativeMenuItem _copyMenuItem = new();
+    private readonly NativeMenuItem _pasteMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -196,6 +201,14 @@ public sealed class MainWindow : Window
         _redoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);
         _redoMenuItem.Click += (_, _) => RedoLastEdit();
 
+        _copyMenuItem.Header = "Copy";
+        _copyMenuItem.Gesture = new KeyGesture(Key.C, KeyModifiers.Meta);
+        _copyMenuItem.Click += async (_, _) => await CopyActiveCellToClipboardAsync();
+
+        _pasteMenuItem.Header = "Paste";
+        _pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);
+        _pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();
+
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
@@ -210,6 +223,9 @@ public sealed class MainWindow : Window
         var editMenu = new NativeMenu();
         editMenu.Items.Add(_undoMenuItem);
         editMenu.Items.Add(_redoMenuItem);
+        editMenu.Items.Add(new NativeMenuItemSeparator());
+        editMenu.Items.Add(_copyMenuItem);
+        editMenu.Items.Add(_pasteMenuItem);
 
         _nativeMenu = new NativeMenu();
         _nativeMenu.Items.Add(new NativeMenuItem
@@ -277,6 +293,16 @@ public sealed class MainWindow : Window
         _redoButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _redoButton.Click += RedoButton_Click;
 
+        _copyButton.Content = "Copy";
+        _copyButton.Padding = new Thickness(10, 4);
+        _copyButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _copyButton.Click += CopyButton_Click;
+
+        _pasteButton.Content = "Paste";
+        _pasteButton.Padding = new Thickness(10, 4);
+        _pasteButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _pasteButton.Click += PasteButton_Click;
+
         _cellAddressText.Width = 72;
         _cellAddressText.FontSize = 12;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
@@ -310,6 +336,8 @@ public sealed class MainWindow : Window
                     _saveAsButton,
                     _undoButton,
                     _redoButton,
+                    _copyButton,
+                    _pasteButton,
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
@@ -385,12 +413,16 @@ public sealed class MainWindow : Window
         _saveAsButton.IsEnabled = isIdle && StorageProvider.CanSave;
         _undoButton.IsEnabled = isIdle && _session.CanUndo;
         _redoButton.IsEnabled = isIdle && _session.CanRedo;
+        _copyButton.IsEnabled = isIdle;
+        _pasteButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _undoMenuItem.IsEnabled = _undoButton.IsEnabled;
         _redoMenuItem.IsEnabled = _redoButton.IsEnabled;
+        _copyMenuItem.IsEnabled = _copyButton.IsEnabled;
+        _pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -879,6 +911,16 @@ public sealed class MainWindow : Window
         RedoLastEdit();
     }
 
+    private async void CopyButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await CopyActiveCellToClipboardAsync();
+    }
+
+    private async void PasteButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await PasteClipboardTextAsync();
+    }
+
     private void UndoLastEdit()
     {
         if (_isOpening || _isSaving)
@@ -910,6 +952,59 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell(successStatus);
+    }
+
+    private async Task CopyActiveCellToClipboardAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var cellReference = FormatCellReference(_session.ActiveCell);
+        await clipboard.SetTextAsync(_session.CopyActiveCellText());
+        RefreshShell($"Copied {cellReference}");
+    }
+
+    private async Task PasteClipboardTextAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        if (string.IsNullOrEmpty(text))
+        {
+            ShowEditIssue("Clipboard does not contain text.");
+            return;
+        }
+
+        var destination = _session.ActiveCell;
+        var result = _session.PasteExternalTextAtActiveCell(text);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Paste failed.");
+            return;
+        }
+
+        RefreshShell($"Pasted at {FormatCellReference(destination)}");
     }
 
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
@@ -969,6 +1064,8 @@ public sealed class MainWindow : Window
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
             HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, "Undo"),
             HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, "Redo"),
+            HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, "Copy"),
+            HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
@@ -988,7 +1085,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y)
+        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.C or Key.V)
             return;
 
         if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
@@ -1005,6 +1102,16 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             RedoLastEdit();
+        }
+        else if (e.Key == Key.C)
+        {
+            e.Handled = true;
+            await CopyActiveCellToClipboardAsync();
+        }
+        else if (e.Key == Key.V)
+        {
+            e.Handled = true;
+            await PasteClipboardTextAsync();
         }
         else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {

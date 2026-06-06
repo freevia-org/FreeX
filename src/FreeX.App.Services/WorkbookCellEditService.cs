@@ -36,6 +36,14 @@ public sealed class WorkbookCellEditService
         return ApplyHistoryOutcome(workbook, _commandBus.Redo(workbook.Id));
     }
 
+    public WorkbookCellEditResult ExecuteEditCommand(Workbook workbook, IWorkbookCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(command);
+
+        return ApplyHistoryOutcome(workbook, _commandBus.Execute(workbook.Id, command));
+    }
+
     public WorkbookCellEditResult CommitCellText(
         Workbook workbook,
         SheetId sheetId,
@@ -50,23 +58,7 @@ public sealed class WorkbookCellEditService
             throw new ArgumentException("The edit address must belong to the target sheet.", nameof(address));
 
         var newCell = CellEntryParser.CreateCell(text, address, useR1C1ReferenceStyle);
-        var outcome = _commandBus.Execute(workbook.Id, new EditCellsCommand(sheetId, [(address, newCell)]));
-        if (!outcome.Success)
-        {
-            return new WorkbookCellEditResult(
-                false,
-                outcome.ErrorMessage,
-                outcome.AffectedCells ?? [],
-                RecalcReport: null);
-        }
-
-        var affectedCells = outcome.AffectedCells ?? [address];
-        UpdateFormulaDependencies(workbook, affectedCells);
-        var recalcReport = workbook.CalculationMode == WorkbookCalculationMode.Automatic
-            ? _recalcEngine.Recalculate(workbook, affectedCells)
-            : null;
-
-        return new WorkbookCellEditResult(true, null, affectedCells, recalcReport);
+        return ExecuteEditCommand(workbook, new EditCellsCommand(sheetId, [(address, newCell)]));
     }
 
     private WorkbookCellEditResult ApplyHistoryOutcome(Workbook workbook, CommandOutcome outcome)

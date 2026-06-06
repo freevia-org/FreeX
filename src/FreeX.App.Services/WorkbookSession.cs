@@ -1,3 +1,4 @@
+using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -184,6 +185,31 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulEditResult(result, address);
+        return result;
+    }
+
+    public string CopyActiveCellText()
+    {
+        var range = new GridRange(ActiveCell, ActiveCell);
+        return ClipboardSerializer.Serialize(Viewport, range);
+    }
+
+    public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText = false)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var destination = ActiveCell;
+        var rows = ClipboardSerializer.Deserialize(text);
+        var command = PasteCommandFactory.CreateExternalTextPasteCommand(
+            ActiveSheet.Id,
+            destination,
+            rows,
+            preserveText);
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, destination);
         return result;
     }
 

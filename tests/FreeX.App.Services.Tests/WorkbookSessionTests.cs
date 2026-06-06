@@ -251,6 +251,130 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void CopyActiveCellText_SerializesActiveCellDisplayTextForClipboard()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(b2, new TextValue("North\tWest"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b2);
+
+        var text = session.CopyActiveCellText();
+
+        text.Should().Be("\"North\tWest\"");
+    }
+
+    [Fact]
+    public void PasteExternalTextAtActiveCell_PastesTabularTextAndMarksDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var b3 = new CellAddress(sheet.Id, 3, 2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(b3);
+
+        var result = session.PasteExternalTextAtActiveCell("10\tWest\r\nName");
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(
+            b3,
+            new CellAddress(sheet.Id, 3, 3),
+            new CellAddress(sheet.Id, 4, 2));
+        session.IsDirty.Should().BeTrue();
+        session.ActiveCell.Should().Be(b3);
+        session.CanUndo.Should().BeTrue();
+        sheet.GetValue(b3).Should().Be(new NumberValue(10));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 3)).Should().Be(new TextValue("West"));
+        sheet.GetValue(new CellAddress(sheet.Id, 4, 2)).Should().Be(new TextValue("Name"));
+        sheet.GetCell(new CellAddress(sheet.Id, 4, 3)).Should().BeNull();
+    }
+
+    [Fact]
+    public void PasteExternalTextAtActiveCell_CanPreserveNumericLookingFieldsAsText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.PasteExternalTextAtActiveCell("00123", preserveText: true);
+
+        result.Success.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("00123"));
+    }
+
+    [Fact]
+    public void PasteExternalTextAtActiveCell_RecalculatesDependentsAndUndoRestoresThem()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetFormula(b1, "A1+1");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var paste = session.PasteExternalTextAtActiveCell("4");
+        sheet.GetCell(a1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(4);
+        sheet.GetCell(b1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(5);
+
+        var undo = session.UndoLastEdit();
+
+        paste.Success.Should().BeTrue();
+        undo.Success.Should().BeTrue();
+        session.CanRedo.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(1);
+        sheet.GetCell(b1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(2);
+    }
+
+    [Fact]
+    public void PasteExternalTextAtActiveCell_RejectsOutOfBoundsPasteWithoutMutation()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var edge = new CellAddress(sheet.Id, 1, CellAddress.MaxCol);
+        sheet.SetCell(edge, new TextValue("keep"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(edge);
+
+        var result = session.PasteExternalTextAtActiveCell("A\tB");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("bounds");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        session.ActiveCell.Should().Be(edge);
+        sheet.GetValue(edge).Should().Be(new TextValue("keep"));
+    }
+
+    [Fact]
     public void SelectSheet_UpdatesActiveSheetCellTabsAndViewport()
     {
         var workbook = CreateWorkbook();
