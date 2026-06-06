@@ -21,26 +21,42 @@ public static class RibbonAdaptiveLayoutPlanner
         if (width <= availableWidth)
             return states;
 
-        for (var index = groups.Count - 1; index >= 0; index--)
+        while (width > availableWidth &&
+               TryFallbackNextGroup(states, groups, ref width))
         {
-            var group = groups[index];
-            states[index] = RibbonAdaptiveGroupState.SmallWithLabels;
-            width = ReplaceWidth(width, group, RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.SmallWithLabels);
-            if (width <= availableWidth)
-                return states;
-
-            states[index] = RibbonAdaptiveGroupState.IconOnly;
-            width = ReplaceWidth(width, group, RibbonAdaptiveGroupState.SmallWithLabels, RibbonAdaptiveGroupState.IconOnly);
-            if (width <= availableWidth)
-                return states;
-
-            states[index] = RibbonAdaptiveGroupState.Collapsed;
-            width = ReplaceWidth(width, group, RibbonAdaptiveGroupState.IconOnly, RibbonAdaptiveGroupState.Collapsed);
-            if (width <= availableWidth)
-                return states;
         }
 
         return states;
+    }
+
+    private static bool TryFallbackNextGroup(
+        RibbonAdaptiveGroupState[] states,
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        ref double width)
+    {
+        for (var targetValue = (int)RibbonAdaptiveGroupState.SmallWithLabels;
+             targetValue <= (int)RibbonAdaptiveGroupState.Collapsed;
+             targetValue++)
+        {
+            var targetState = (RibbonAdaptiveGroupState)targetValue;
+            for (var index = groups.Count - 1; index >= 0; index--)
+            {
+                var currentState = states[index];
+                if ((int)currentState >= targetValue)
+                    continue;
+
+                var currentWidth = WidthFor(groups[index], currentState);
+                var targetWidth = WidthFor(groups[index], targetState);
+                if (targetWidth >= currentWidth - 0.5)
+                    continue;
+
+                states[index] = targetState;
+                width = width - currentWidth + targetWidth;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static IReadOnlyList<RibbonAdaptiveGroupState> ApplyBreakpointOverrides(
@@ -48,13 +64,6 @@ public static class RibbonAdaptiveLayoutPlanner
         IReadOnlyList<string> groupNames,
         IReadOnlyList<RibbonAdaptiveGroupState> plannedStates) =>
         RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(availableWidth, groupNames, plannedStates);
-
-    private static double ReplaceWidth(
-        double width,
-        RibbonAdaptiveGroup group,
-        RibbonAdaptiveGroupState previousState,
-        RibbonAdaptiveGroupState nextState) =>
-        width - WidthFor(group, previousState) + WidthFor(group, nextState);
 
     private static double WidthFor(RibbonAdaptiveGroup group, RibbonAdaptiveGroupState state) =>
         state switch

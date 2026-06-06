@@ -220,10 +220,12 @@ public partial class MainWindow
         var protectedGroupIndexes = GetMeasuredRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, groupProfileKeys, availableWidth, selectedTabHeader);
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
-            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(
+            if (!RibbonAdaptiveLayoutEngine.TryFallbackOneMoreGroup(
                     plannedStates,
-                    preserveFirstGroup: primaryIndex == 0,
+                    adaptiveGroups,
+                    primaryIndex == 0,
                     protectedGroupIndexes,
+                    availableWidth,
                     out var changedIndex,
                     out previousState))
             {
@@ -496,10 +498,12 @@ public partial class MainWindow
             selectedTabHeader);
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
-            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(
+            if (!RibbonAdaptiveLayoutEngine.TryFallbackOneMoreGroup(
                     plannedStates,
-                    preserveFirstGroup: availableWidth > 760,
+                    adaptiveGroups,
+                    availableWidth > 760,
                     protectedGroupIndexes,
+                    availableWidth,
                     out var changedIndex,
                     out var previousState))
             {
@@ -520,10 +524,12 @@ public partial class MainWindow
             : runtimeVisibilityProtectedGroupIndexes;
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
-            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(
+            if (!RibbonAdaptiveLayoutEngine.TryFallbackOneMoreGroup(
                     plannedStates,
-                    preserveFirstGroup: false,
+                    adaptiveGroups,
+                    false,
                     relaxedProtectedGroupIndexes,
+                    availableWidth,
                     out var changedIndex,
                     out var previousState))
             {
@@ -1464,6 +1470,7 @@ public partial class MainWindow
         bool hasContentLayout,
         RibbonCommandContentLayout contentLayout,
         bool isLargeButton,
+        bool hasDropdownChevron,
         bool hasCompactWidths,
         double fullWidth,
         double compactWidth,
@@ -1482,6 +1489,7 @@ public partial class MainWindow
         public bool HasContentLayout { get; } = hasContentLayout;
         public RibbonCommandContentLayout ContentLayout { get; } = contentLayout;
         public bool IsLargeButton { get; } = isLargeButton;
+        public bool HasDropdownChevron { get; } = hasDropdownChevron;
         public bool HasCompactWidths { get; } = hasCompactWidths;
         public double FullWidth { get; } = fullWidth;
         public double CompactWidth { get; } = compactWidth;
@@ -1574,6 +1582,7 @@ public partial class MainWindow
         var hasContentLayout = content is not null &&
             RibbonMetadata.TryGetCommandContentLayout(content, out contentLayout);
         var isLargeButton = hasContentLayout && contentLayout == RibbonCommandContentLayout.Large;
+        var hasDropdownChevron = descendants.Any(RibbonMetadata.IsDropdownChevron);
         var hasCompactWidths = RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth);
         var labels = descendants
             .OfType<TextBlock>()
@@ -1603,6 +1612,7 @@ public partial class MainWindow
             hasContentLayout,
             contentLayout,
             isLargeButton,
+            hasDropdownChevron,
             hasCompactWidths,
             fullWidth,
             compactWidth,
