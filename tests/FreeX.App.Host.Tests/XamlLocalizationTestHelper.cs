@@ -1,4 +1,3 @@
-using System.IO;
 using System.Security;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -10,8 +9,7 @@ internal static partial class XamlLocalizationTestHelper
 {
     public static string ReadLocalizedXaml(string xamlFileName)
     {
-        var path = DialogSourceTestSupport.FindHostSourceFile(xamlFileName);
-        return ResolveLocMarkup(File.ReadAllText(path));
+        return ResolveLocMarkup(DialogSourceTestSupport.ReadHostSourceFile(xamlFileName));
     }
 
     public static XDocument LoadLocalizedXaml(string xamlFileName) =>
