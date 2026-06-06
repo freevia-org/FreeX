@@ -10,11 +10,7 @@ public sealed partial class DataValidationDialogTests
 {
     private static T GetControl<T>(DataValidationDialog dialog, string name)
         where T : class
-    {
-        var field = typeof(DataValidationDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, name);
 
     private static void InvokePrivate(DataValidationDialog dialog, string methodName)
     {

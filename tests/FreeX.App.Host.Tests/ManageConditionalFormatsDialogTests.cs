@@ -17,11 +17,7 @@ public sealed partial class ManageConditionalFormatsDialogTests
 
     private static T GetControl<T>(ManageConditionalFormatsDialog dialog, string name)
         where T : class
-    {
-        var field = typeof(ManageConditionalFormatsDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, name);
 
     private static IReadOnlyList<string> ScopeContents(ComboBox scope) =>
         scope.Items

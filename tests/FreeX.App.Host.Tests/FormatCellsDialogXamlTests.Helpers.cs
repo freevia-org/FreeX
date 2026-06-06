@@ -39,11 +39,7 @@ public sealed partial class FormatCellsDialogXamlTests
 
     private static T GetControl<T>(FormatCellsDialog dialog, string name)
         where T : class
-    {
-        var field = typeof(FormatCellsDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, name);
 
     private static string PreviewForFormat(string format)
     {
