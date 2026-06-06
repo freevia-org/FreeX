@@ -121,6 +121,9 @@ public sealed class WorkbookSession
 
     public bool IsSelectedRangeStartDoubleUnderline => GetCellStyle(SelectedRange.Start).DoubleUnderline;
 
+    public HorizontalAlignment SelectedRangeStartHorizontalAlignment =>
+        GetCellStyle(SelectedRange.Start).HorizontalAlignment;
+
     public WorkbookSelectionStats SelectionStats =>
         _selectionStatsCache.GetOrCalculate(ActiveSheet, SelectedRange, _selectionStatsRevision);
 
@@ -377,6 +380,19 @@ public sealed class WorkbookSession
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             new ApplyStyleCommand(ActiveSheet.Id, range, CreateDoubleUnderlineStyleDiff(enabled)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult SetSelectedRangeHorizontalAlignment(HorizontalAlignment alignment)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(HAlign: alignment)));
         if (!result.Success)
             return result;
 

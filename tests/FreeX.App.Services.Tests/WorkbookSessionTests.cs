@@ -959,6 +959,85 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeHorizontalAlignment_AppliesStylePreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.SetSelectedRangeHorizontalAlignment(HorizontalAlignment.Center);
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartHorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        var b1StyleOnly = sheet.GetStyleOnly(b1.Row, b1.Col);
+        b1StyleOnly.Should().NotBeNull();
+        workbook.GetStyle(b1StyleOnly!.Value).HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+        sheet.GetStyleOnly(b1.Row, b1.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void SelectedRangeStartHorizontalAlignment_UsesStyleOnlyFormattingForEmptyCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        session.SetSelectedRangeHorizontalAlignment(HorizontalAlignment.Right);
+
+        sheet.GetCell(a1).Should().BeNull();
+        sheet.GetStyleOnly(a1.Row, a1.Col).Should().NotBeNull();
+        session.SelectedRangeStartHorizontalAlignment.Should().Be(HorizontalAlignment.Right);
+    }
+
+    [Fact]
+    public void SetSelectedRangeHorizontalAlignment_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeHorizontalAlignment(HorizontalAlignment.Right);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).HorizontalAlignment.Should().Be(HorizontalAlignment.General);
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();

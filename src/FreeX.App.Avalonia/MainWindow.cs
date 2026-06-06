@@ -14,6 +14,7 @@ using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
+using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -67,6 +68,9 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _underlineButton = new();
     private readonly ToggleButton _doubleUnderlineButton = new();
     private readonly ToggleButton _strikethroughButton = new();
+    private readonly ToggleButton _alignLeftButton = new();
+    private readonly ToggleButton _alignCenterButton = new();
+    private readonly ToggleButton _alignRightButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -81,6 +85,9 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _underlineMenuItem = new();
     private readonly NativeMenuItem _doubleUnderlineMenuItem = new();
     private readonly NativeMenuItem _strikethroughMenuItem = new();
+    private readonly NativeMenuItem _alignLeftMenuItem = new();
+    private readonly NativeMenuItem _alignCenterMenuItem = new();
+    private readonly NativeMenuItem _alignRightMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -252,6 +259,15 @@ public sealed class MainWindow : Window
         _strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);
         _strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();
 
+        _alignLeftMenuItem.Header = "Align Left";
+        _alignLeftMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);
+
+        _alignCenterMenuItem.Header = "Align Center";
+        _alignCenterMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Center);
+
+        _alignRightMenuItem.Header = "Align Right";
+        _alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);
+
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
@@ -279,6 +295,10 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_underlineMenuItem);
         formatMenu.Items.Add(_doubleUnderlineMenuItem);
         formatMenu.Items.Add(_strikethroughMenuItem);
+        formatMenu.Items.Add(new NativeMenuItemSeparator());
+        formatMenu.Items.Add(_alignLeftMenuItem);
+        formatMenu.Items.Add(_alignCenterMenuItem);
+        formatMenu.Items.Add(_alignRightMenuItem);
 
         _nativeMenu = new NativeMenu();
         _nativeMenu.Items.Add(new NativeMenuItem
@@ -437,6 +457,21 @@ public sealed class MainWindow : Window
         _strikethroughButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _strikethroughButton.Click += StrikethroughButton_Click;
 
+        _alignLeftButton.Content = "L";
+        _alignLeftButton.Padding = new Thickness(10, 4);
+        _alignLeftButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _alignLeftButton.Click += AlignLeftButton_Click;
+
+        _alignCenterButton.Content = "C";
+        _alignCenterButton.Padding = new Thickness(10, 4);
+        _alignCenterButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _alignCenterButton.Click += AlignCenterButton_Click;
+
+        _alignRightButton.Content = "R";
+        _alignRightButton.Padding = new Thickness(10, 4);
+        _alignRightButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _alignRightButton.Click += AlignRightButton_Click;
+
         _cellAddressText.Width = 72;
         _cellAddressText.FontSize = 12;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
@@ -479,6 +514,9 @@ public sealed class MainWindow : Window
                     _underlineButton,
                     _doubleUnderlineButton,
                     _strikethroughButton,
+                    _alignLeftButton,
+                    _alignCenterButton,
+                    _alignRightButton,
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
@@ -509,6 +547,9 @@ public sealed class MainWindow : Window
         _underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;
         _doubleUnderlineButton.IsChecked = _session.IsSelectedRangeStartDoubleUnderline;
         _strikethroughButton.IsChecked = _session.IsSelectedRangeStartStrikethrough;
+        _alignLeftButton.IsChecked = _session.SelectedRangeStartHorizontalAlignment == CellHAlign.Left;
+        _alignCenterButton.IsChecked = _session.SelectedRangeStartHorizontalAlignment == CellHAlign.Center;
+        _alignRightButton.IsChecked = _session.SelectedRangeStartHorizontalAlignment == CellHAlign.Right;
         if (preserveFormulaEdit)
         {
             _formulaBox.CaretIndex = Math.Min(formulaCaretIndex, _formulaBox.Text?.Length ?? 0);
@@ -570,6 +611,9 @@ public sealed class MainWindow : Window
         _underlineButton.IsEnabled = isIdle;
         _doubleUnderlineButton.IsEnabled = isIdle;
         _strikethroughButton.IsEnabled = isIdle;
+        _alignLeftButton.IsEnabled = isIdle;
+        _alignCenterButton.IsEnabled = isIdle;
+        _alignRightButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
@@ -585,6 +629,9 @@ public sealed class MainWindow : Window
         _underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;
         _doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;
         _strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;
+        _alignLeftMenuItem.IsEnabled = _alignLeftButton.IsEnabled;
+        _alignCenterMenuItem.IsEnabled = _alignCenterButton.IsEnabled;
+        _alignRightMenuItem.IsEnabled = _alignRightButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -878,9 +925,9 @@ public sealed class MainWindow : Window
         var foreground = style is null
             ? Brushes.Black
             : Brush(style.ResolveFontColor(_session.Workbook.Theme));
-        var alignment = cell.RawValue is NumberValue or DateTimeValue
-            ? TextAlignment.Right
-            : TextAlignment.Left;
+        var alignment = MapCellTextAlignment(
+            style?.HorizontalAlignment ?? CellHAlign.General,
+            cell.RawValue is NumberValue or DateTimeValue);
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
         var textDecorations = BuildTextDecorations(style);
@@ -989,6 +1036,16 @@ public sealed class MainWindow : Window
 
         return decorations;
     }
+
+    private static TextAlignment MapCellTextAlignment(CellHAlign horizontalAlignment, bool isNumericOrDate) =>
+        horizontalAlignment switch
+        {
+            CellHAlign.Left => TextAlignment.Left,
+            CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
+            CellHAlign.Right => TextAlignment.Right,
+            CellHAlign.General when isNumericOrDate => TextAlignment.Right,
+            _ => TextAlignment.Left
+        };
 
     private void SelectCell(CellAddress address)
     {
@@ -1181,6 +1238,21 @@ public sealed class MainWindow : Window
     private void StrikethroughButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeStrikethrough(_strikethroughButton.IsChecked == true);
+    }
+
+    private void AlignLeftButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);
+    }
+
+    private void AlignCenterButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeHorizontalAlignment(CellHAlign.Center);
+    }
+
+    private void AlignRightButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);
     }
 
     private void UndoLastEdit()
@@ -1427,6 +1499,26 @@ public sealed class MainWindow : Window
         RefreshShell($"{(enabled ? "Struck through" : "Removed strikethrough from")} {rangeReference}");
     }
 
+    private void ApplySelectedRangeHorizontalAlignment(CellHAlign alignment)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeHorizontalAlignment(alignment);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Alignment failed.");
+            return;
+        }
+
+        RefreshShell($"Aligned {rangeReference} {FormatHorizontalAlignmentStatus(alignment)}");
+    }
+
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
     {
         e.DragEffects = TrySelectDroppedWorkbookPath(e, out _, out _)
@@ -1497,6 +1589,9 @@ public sealed class MainWindow : Window
             HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, "Underline"),
             HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, "Double Underline", requireGesture: false),
             HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, "Strikethrough"),
+            HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, "Align Left", requireGesture: false),
+            HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, "Align Center", requireGesture: false),
+            HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, "Align Right", requireGesture: false),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
@@ -2150,6 +2245,15 @@ public sealed class MainWindow : Window
             ? start
             : $"{start}:{end}";
     }
+
+    private static string FormatHorizontalAlignmentStatus(CellHAlign alignment) =>
+        alignment switch
+        {
+            CellHAlign.Left => "left",
+            CellHAlign.Center => "center",
+            CellHAlign.Right => "right",
+            _ => "general"
+        };
 
     private static string FormatEditText(Cell? cell, CellAddress address)
     {

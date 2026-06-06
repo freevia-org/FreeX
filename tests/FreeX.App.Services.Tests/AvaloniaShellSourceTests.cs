@@ -74,6 +74,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _underlineMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _doubleUnderlineMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _strikethroughMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _alignLeftMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _alignCenterMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _alignRightMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -115,6 +118,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_strikethroughMenuItem.Header = \"Strikethrough\";");
         source.Should().Contain("_strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);");
         source.Should().Contain("_strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();");
+        source.Should().Contain("_alignLeftMenuItem.Header = \"Align Left\";");
+        source.Should().Contain("_alignLeftMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);");
+        source.Should().Contain("_alignCenterMenuItem.Header = \"Align Center\";");
+        source.Should().Contain("_alignCenterMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Center);");
+        source.Should().Contain("_alignRightMenuItem.Header = \"Align Right\";");
+        source.Should().Contain("_alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);");
         source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
         source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
         source.Should().Contain("_quitMenuItem.Click += (_, _) => TryQuitApplication();");
@@ -129,6 +138,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_underlineMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_doubleUnderlineMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_strikethroughMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_alignLeftMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_alignCenterMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_alignRightMenuItem);");
         source.Should().Contain("Header = \"Edit\"");
         source.Should().Contain("Header = \"Format\"");
         source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
@@ -147,6 +159,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;");
         source.Should().Contain("_doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;");
         source.Should().Contain("_strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;");
+        source.Should().Contain("_alignLeftMenuItem.IsEnabled = _alignLeftButton.IsEnabled;");
+        source.Should().Contain("_alignCenterMenuItem.IsEnabled = _alignCenterButton.IsEnabled;");
+        source.Should().Contain("_alignRightMenuItem.IsEnabled = _alignRightButton.IsEnabled;");
         source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("await SaveWorkbookAsAsync();");
         source.Should().Contain("TryQuitApplication()");
@@ -190,6 +205,9 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}");
         smokeSource.Should().Contain("native_double_underline_menu_item={FormatBool(snapshot.HasNativeDoubleUnderlineMenuItem)}");
         smokeSource.Should().Contain("native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}");
+        smokeSource.Should().Contain("native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}");
+        smokeSource.Should().Contain("native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}");
+        smokeSource.Should().Contain("native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}");
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
@@ -211,6 +229,9 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, \"Underline\")");
         windowSource.Should().Contain("HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, \"Double Underline\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, \"Strikethrough\")");
+        windowSource.Should().Contain("HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, \"Align Left\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, \"Align Center\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, \"Align Right\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
 
@@ -511,6 +532,45 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("foreach (var decoration in TextDecorations.Strikethrough)");
         source.Should().Contain("else if (e.Key is Key.D5 or Key.NumPad5 && HasOnlyControlModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeStrikethrough();");
+    }
+
+    [Fact]
+    public void MainWindow_WiresHorizontalAlignmentThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("using CellHAlign = FreeX.Core.Model.HorizontalAlignment;");
+        source.Should().Contain("private readonly ToggleButton _alignLeftButton = new();");
+        source.Should().Contain("private readonly ToggleButton _alignCenterButton = new();");
+        source.Should().Contain("private readonly ToggleButton _alignRightButton = new();");
+        source.Should().Contain("_alignLeftButton.Content = \"L\";");
+        source.Should().Contain("_alignCenterButton.Content = \"C\";");
+        source.Should().Contain("_alignRightButton.Content = \"R\";");
+        source.Should().Contain("_alignLeftButton.Click += AlignLeftButton_Click;");
+        source.Should().Contain("_alignCenterButton.Click += AlignCenterButton_Click;");
+        source.Should().Contain("_alignRightButton.Click += AlignRightButton_Click;");
+        source.Should().Contain("_alignLeftButton.IsChecked = _session.SelectedRangeStartHorizontalAlignment == CellHAlign.Left;");
+        source.Should().Contain("_alignCenterButton.IsChecked = _session.SelectedRangeStartHorizontalAlignment == CellHAlign.Center;");
+        source.Should().Contain("_alignRightButton.IsChecked = _session.SelectedRangeStartHorizontalAlignment == CellHAlign.Right;");
+        source.Should().Contain("_alignLeftButton.IsEnabled = isIdle;");
+        source.Should().Contain("_alignCenterButton.IsEnabled = isIdle;");
+        source.Should().Contain("_alignRightButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void AlignLeftButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);");
+        source.Should().Contain("private void AlignCenterButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeHorizontalAlignment(CellHAlign.Center);");
+        source.Should().Contain("private void AlignRightButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);");
+        source.Should().Contain("private void ApplySelectedRangeHorizontalAlignment(CellHAlign alignment)");
+        source.Should().Contain("var result = _session.SetSelectedRangeHorizontalAlignment(alignment);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Alignment failed.\");");
+        source.Should().Contain("RefreshShell($\"Aligned {rangeReference} {FormatHorizontalAlignmentStatus(alignment)}\");");
+        source.Should().Contain("MapCellTextAlignment(");
+        source.Should().Contain("style?.HorizontalAlignment ?? CellHAlign.General");
+        source.Should().Contain("private static TextAlignment MapCellTextAlignment(CellHAlign horizontalAlignment, bool isNumericOrDate)");
+        source.Should().Contain("CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,");
+        source.Should().Contain("CellHAlign.General when isNumericOrDate => TextAlignment.Right,");
+        source.Should().Contain("private static string FormatHorizontalAlignmentStatus(CellHAlign alignment)");
     }
 
     [Fact]

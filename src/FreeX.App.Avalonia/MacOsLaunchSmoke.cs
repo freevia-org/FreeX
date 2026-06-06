@@ -82,6 +82,9 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeUnderlineMenuItem,
     bool HasNativeDoubleUnderlineMenuItem,
     bool HasNativeStrikethroughMenuItem,
+    bool HasNativeAlignLeftMenuItem,
+    bool HasNativeAlignCenterMenuItem,
+    bool HasNativeAlignRightMenuItem,
     bool HasNativeQuitMenuItem)
 {
     public bool IsPassed =>
@@ -107,6 +110,9 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeUnderlineMenuItem &&
         HasNativeDoubleUnderlineMenuItem &&
         HasNativeStrikethroughMenuItem &&
+        HasNativeAlignLeftMenuItem &&
+        HasNativeAlignCenterMenuItem &&
+        HasNativeAlignRightMenuItem &&
         HasNativeQuitMenuItem;
 }
 
@@ -180,6 +186,9 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}",
                 $"native_double_underline_menu_item={FormatBool(snapshot.HasNativeDoubleUnderlineMenuItem)}",
                 $"native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}",
+                $"native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}",
+                $"native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}",
+                $"native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}",
                 $"native_quit_menu_item={FormatBool(snapshot.HasNativeQuitMenuItem)}",
             ]);
     }
