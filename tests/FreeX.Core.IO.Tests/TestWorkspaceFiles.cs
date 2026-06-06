@@ -20,6 +20,9 @@ internal static class TestWorkspaceFiles
     internal static string[] ReadWorkspaceLines(params string[] relativeParts) =>
         TestWorkspaceFileLocator.ReadAllLines(relativeParts);
 
+    internal static byte[] ReadWorkspaceBytes(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllBytes(relativeParts);
+
     internal static string ReadRepoText(params string[] relativeParts) =>
         TestWorkspaceFileLocator.ReadAllTextFromCurrentDirectoryOrFallback(relativeParts);
 

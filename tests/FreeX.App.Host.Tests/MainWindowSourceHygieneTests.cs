@@ -40,7 +40,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void LiveUiE2eAppProcessLaunch_IsCentralizedInSharedHarness()
     {
-        var testsDirectory = new DirectoryInfo(WorkspaceFileLocator.Find("tests", "FreeX.App.Host.Tests", "FormulaEditingUiE2eTests.cs")).Parent!;
+        var testsDirectory = new DirectoryInfo(WorkspaceFileLocator.FindAppHostTestsDirectory());
         var testSources = testsDirectory
             .EnumerateFiles("*.cs", SearchOption.AllDirectories)
             .Where(file => !string.Equals(file.Name, "MainWindowSourceHygieneTests.cs", StringComparison.Ordinal))
