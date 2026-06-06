@@ -693,6 +693,41 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatValueFunctionOperands()
+    {
+        AssertFormulaValueFunctionContrastLocations("VALUE($C1)=99.5", "B1");
+        AssertFormulaValueFunctionContrastLocations("VALUE($C1)>=1000", "B2");
+        AssertFormulaValueFunctionContrastLocations("VALUE($C1)=0.5", "B3");
+        AssertFormulaValueFunctionContrastLocations("VALUE($C1)<0", "B4");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"1,234.5\")>1000", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"50%\")=0.5", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatValueFunctionWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaValueFunctionContrastLocations("IF(VALUE($C1)>0,TRUE,FALSE)", "B1", "B2", "B3");
+        AssertFormulaValueFunctionContrastLocations("AND(VALUE($C1)>0,$A1)", "B1", "B2");
+        AssertFormulaValueFunctionContrastLocations("ISNUMBER(VALUE($C1))", "B1", "B2", "B3", "B4");
+        AssertFormulaValueFunctionContrastLocations("VALUE($C1)+1=100.5", "B1");
+        AssertFormulaValueFunctionContrastLocations("SUM(VALUE($C1),1)>1000", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatValueFunctionUnsupportedOperands()
+    {
+        AssertFormulaValueFunctionContrastLocations("VALUE()>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE($C1,1)>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE($A1)>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE(42)>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"Open\")>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"\")>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"1E309\")>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"50%%\")>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE($C1&\"x\")>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateFunctionOperands()
     {
         AssertFormulaDateFunctionContrastLocations("YEAR($A1)=2023", "B1", "B2", "B4");
@@ -1230,6 +1265,39 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue(status));
     }
 
+    private static Workbook CreateFormulaValueFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 7, 2);
+
+        SetFormulaValueFunctionContrastRow(sheet, 1, new TextValue("99.5"), flag: true, "Decimal text");
+        SetFormulaValueFunctionContrastRow(sheet, 2, new TextValue("1,234.5"), flag: true, "Thousands text");
+        SetFormulaValueFunctionContrastRow(sheet, 3, new TextValue("50%"), flag: false, "Percent text");
+        SetFormulaValueFunctionContrastRow(sheet, 4, new TextValue(" -12.25 "), flag: true, "Negative text");
+        SetFormulaValueFunctionContrastRow(sheet, 5, new TextValue("Open"), flag: true, "Invalid text");
+        SetFormulaValueFunctionContrastRow(sheet, 6, new TextValue(string.Empty), flag: true, "Empty text");
+        SetFormulaValueFunctionContrastRow(sheet, 7, new NumberValue(75), flag: true, "Numeric source");
+
+        return workbook;
+    }
+
+    private static void SetFormulaValueFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue source,
+        bool flag,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new BoolValue(flag));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), source);
+    }
+
     private static Workbook CreateFormulaDateFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -1404,6 +1472,19 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaPaddedTextFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaValueFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaValueFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
