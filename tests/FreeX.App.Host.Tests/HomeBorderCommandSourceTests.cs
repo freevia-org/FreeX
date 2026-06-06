@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -79,7 +78,7 @@ public sealed class HomeBorderCommandSourceTests
     [Fact]
     public void BorderMenuHandlers_RouteThroughBorderServicesAndFormatCells()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         SourceMethodExtractor.ExtractMethodSource(source, "private void BorderPickerBtn_Click(")
             .Should().Contain("ApplySelectedBorderPreset();");

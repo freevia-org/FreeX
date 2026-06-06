@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -16,7 +15,7 @@ public sealed partial class ChartDialogTests
     public void ChartDialogs_LabelEditableHelperControlsWithTargets()
     {
         var source = ReadChartDialogSource();
-        var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartDialogHelpers.cs"));
+        var helperSource = DialogSourceTestSupport.ReadHostSources("ChartDialogHelpers.cs");
 
         foreach (var expected in new[]
         {

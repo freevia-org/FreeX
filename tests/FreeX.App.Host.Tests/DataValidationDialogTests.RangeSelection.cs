@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using FreeX.App.Host;
@@ -164,7 +163,7 @@ public sealed partial class DataValidationDialogTests
     [Fact]
     public void RangePickerButtons_RefocusFormulaInputAfterRequest()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.xaml.cs");
         var handlerSource = source[
             source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
             source.IndexOf("private static void SelectComboItemByTag", StringComparison.Ordinal)];

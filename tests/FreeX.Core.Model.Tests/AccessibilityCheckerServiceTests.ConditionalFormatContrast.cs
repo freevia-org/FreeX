@@ -622,6 +622,31 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextSearchFunctionOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("FIND(\"los\",$C1)>1", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("FIND(\"e\",$C1,4)>0", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"open\",$C1)=1", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"E\",LOWER($C1))>0", "B1", "B2", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("EXACT($C1,\"Open\")", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextSearchFunctionsInWrappers()
+    {
+        AssertFormulaTextFunctionContrastLocations("AND(SEARCH(\"open\",$C1),$A1>=100)", "B4");
+        AssertFormulaTextFunctionContrastLocations("IF(SEARCH(\"open\",$C1),TRUE,FALSE)", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextSearchFunctionPredicatesArithmeticAndAggregateArguments()
+    {
+        AssertFormulaTextFunctionContrastLocations("ISNUMBER(SEARCH(\"open\",$C1))", "B3", "B4");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"e\",$C1)+1>4", "B1", "B2");
+        AssertFormulaTextFunctionContrastLocations("SUM(SEARCH(\"o\",LOWER($C1)))>0", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatTextFunctionUnsupportedOperands()
     {
         AssertFormulaTextFunctionContrastLocations("LEN($C1,1)>0");
@@ -636,6 +661,20 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatTextSearchFunctionUnsupportedOperands()
+    {
+        AssertFormulaTextFunctionContrastLocations("FIND(\"x\",$C1)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,0)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,1.5)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1,999999)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"\",$C1)>0");
+        AssertFormulaTextFunctionContrastLocations("FIND(\"o\")>0");
+        AssertFormulaTextFunctionContrastLocations("EXACT($C1)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$A1)>0");
+        AssertFormulaTextFunctionContrastLocations("SEARCH(\"o\",$C1&\"x\")>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateFunctionOperands()
     {
         AssertFormulaDateFunctionContrastLocations("YEAR($A1)=2023", "B1", "B2", "B4");
@@ -643,14 +682,22 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("DAY($A1)>=16", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DATE(2023,3,15)=$A1", "B1");
         AssertFormulaDateFunctionContrastLocations("YEAR(DATE(2023,3,15))=2023", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("TODAY()<=NOW()", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("NOW()-TODAY()>=0", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("YEAR(TODAY())>=1900", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("MONTH(NOW())>=1", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAY(TODAY())>=1", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateFunctionWrappers()
     {
         AssertFormulaDateFunctionContrastLocations("IF(DAY($A1)>=16,TRUE,FALSE)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("IF(TODAY()<=NOW(),TRUE,FALSE)", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("AND(YEAR($A1)=2023,$C1=\"Open\")", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(TODAY()),NOW()>=TODAY())", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("ISNUMBER(YEAR($A1))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNUMBER(TODAY())", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEAR($A1)-2023", "B3");
     }
 
@@ -658,6 +705,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateDateFunctionArguments()
     {
         AssertFormulaDateFunctionContrastLocations("SUM(DAY($A1),MONTH($A1))>=19", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SUM(DAY(TODAY()),MONTH(TODAY()))>=2", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -670,7 +718,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("YEAR(\"2023-03-15\")=2023");
         AssertFormulaDateFunctionContrastLocations("YEAR($A1,1)=2023");
         AssertFormulaDateFunctionContrastLocations("YEAR(1E308)>0");
-        AssertFormulaDateFunctionContrastLocations("TODAY()=$A1");
+        AssertFormulaDateFunctionContrastLocations("TODAY(1)>0");
+        AssertFormulaDateFunctionContrastLocations("NOW(1)>0");
         AssertFormulaDateFunctionContrastLocations("YEAR(A0)>0");
     }
 
