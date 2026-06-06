@@ -15370,7 +15370,7 @@ public partial class FileAdapterSmokeTests
         var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
         printOptions.Should().NotBeNull();
         printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1");
-        printOptions.Attribute("customAttr")!.Value.Should().Be("print-native");
+        printOptions.Attribute("customAttr").Should().BeNull();
         printOptions.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid printOptions attr");
     }
 
@@ -15411,14 +15411,9 @@ public partial class FileAdapterSmokeTests
         pageSetup.Should().NotBeNull();
         pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
         pageSetup.Attribute("copies")!.Value.Should().Be("3");
-        pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
+        pageSetup.Attribute("customAttr").Should().BeNull();
         worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
-        pageSetup.Element(worksheetNs + "nativePageSetupChild").Should().NotBeNull();
-        pageSetup.Element(worksheetNs + "nativePageSetupChild")!
-            .Attribute("value")!
-            .Value
-            .Should()
-            .Be("kept");
+        pageSetup.Element(worksheetNs + "nativePageSetupChild").Should().BeNull();
     }
 
     [Fact]
@@ -15561,8 +15556,7 @@ public partial class FileAdapterSmokeTests
         pageMargins.Attribute("header")!.Value.Should().Be("0.35");
         pageMargins.Attribute("footer").Should().NotBeNull();
         pageMargins.Attribute("footer")!.Value.Should().Be("0.45");
-        pageMargins.Attribute("customAttr").Should().NotBeNull();
-        pageMargins.Attribute("customAttr")!.Value.Should().Be("page-margins-native");
+        pageMargins.Attribute("customAttr").Should().BeNull();
         pageMargins.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid pageMargins attr");
     }
 
@@ -15600,8 +15594,7 @@ public partial class FileAdapterSmokeTests
         var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
 
         headerFooter.Should().NotBeNull();
-        headerFooter!.Attribute("nativeHeaderFooterAttr").Should().NotBeNull();
-        headerFooter.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept");
+        headerFooter!.Attribute("nativeHeaderFooterAttr").Should().BeNull();
         headerFooter.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center");
     }
@@ -15679,7 +15672,7 @@ public partial class FileAdapterSmokeTests
         var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
         printOptions.Should().NotBeNull();
         printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1");
-        printOptions.Attribute("customAttr")!.Value.Should().Be("print-native");
+        printOptions.Attribute("customAttr").Should().BeNull();
         printOptions.Attribute("gridLines")?.Value.Should().NotBe("1");
         printOptions.Attribute("headings")?.Value.Should().NotBe("1");
         printOptions.Attribute("horizontalCentered")?.Value.Should().NotBe("1");
@@ -15778,7 +15771,7 @@ public partial class FileAdapterSmokeTests
         pageSetup.Should().NotBeNull();
         pageSetup!.Attribute("usePrinterDefaults")?.Value.Should().NotBe("1");
         pageSetup.Attribute("copies")?.Value.Should().NotBe("3");
-        pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
+        pageSetup.Attribute("customAttr").Should().BeNull();
         pageSetup.Attribute("orientation")?.Value.Should().NotBe("landscape");
         pageSetup.Attribute("paperSize")?.Value.Should().NotBe("5");
         pageSetup.Attribute("fitToWidth")?.Value.Should().NotBe("2");

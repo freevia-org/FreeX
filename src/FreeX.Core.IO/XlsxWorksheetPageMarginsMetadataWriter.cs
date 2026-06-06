@@ -63,6 +63,7 @@ internal static class XlsxWorksheetPageMarginsMetadataWriter
                 }
             }
 
+            XlsxWorksheetPageLayoutNormalizer.NormalizePageMargins(pageMargins);
             session.MarkDirty(worksheetEdit);
         }
     }

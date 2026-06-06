@@ -61,6 +61,7 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
                 }
             }
 
+            XlsxWorksheetPageLayoutNormalizer.NormalizeHeaderFooter(headerFooter);
             session.MarkDirty(worksheetEdit);
         }
     }

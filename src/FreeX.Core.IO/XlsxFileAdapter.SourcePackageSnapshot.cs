@@ -848,6 +848,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchLegacyCommentFonts(archive);
                 NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
+                NormalizePatchWorksheetPageLayout(archive);
                 NormalizePatchWorksheetPageBreaks(archive);
                 NormalizePatchWorksheetSingleXmlCells(archive);
                 NormalizePatchSingleCellTableParts(archive);
@@ -1275,6 +1276,20 @@ public sealed partial class XlsxFileAdapter
                 foreach (var element in singleXmlCells)
                     element.Remove();
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
+        }
+
+        private static void NormalizePatchWorksheetPageLayout(ZipArchive archive)
+        {
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                if (XlsxWorksheetPageLayoutNormalizer.NormalizeWorksheetRoot(root))
+                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
             }
         }
 
