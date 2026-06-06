@@ -201,6 +201,76 @@ internal static class RibbonAdaptiveLayoutEngine
         return false;
     }
 
+    public static bool TryFallbackOneMoreGroup(
+        RibbonAdaptiveGroupState[] states,
+        bool preserveFirstGroup,
+        IReadOnlySet<int>? protectedGroupIndexes = null)
+        => TryFallbackOneMoreGroup(
+            states,
+            preserveFirstGroup,
+            protectedGroupIndexes,
+            out _,
+            out _);
+
+    public static bool TryFallbackOneMoreGroup(
+        RibbonAdaptiveGroupState[] states,
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        bool preserveFirstGroup,
+        double availableWidth,
+        IReadOnlySet<int>? protectedGroupIndexes = null)
+        => TryFallbackOneMoreGroup(
+            states,
+            groups,
+            preserveFirstGroup,
+            protectedGroupIndexes,
+            availableWidth,
+            out _,
+            out _);
+
+    public static bool TryFallbackOneMoreGroup(
+        RibbonAdaptiveGroupState[] states,
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        bool preserveFirstGroup,
+        IReadOnlySet<int>? protectedGroupIndexes,
+        double availableWidth,
+        out int changedIndex,
+        out RibbonAdaptiveGroupState previousState)
+    {
+        var rollbackCount = 0;
+        return TryFallbackOneMoreGroupCore(
+            states,
+            groups,
+            availableWidth,
+            preserveFirstGroup,
+            protectedGroupIndexes,
+            null,
+            null,
+            ref rollbackCount,
+            out changedIndex,
+            out previousState);
+    }
+
+    public static bool TryFallbackOneMoreGroup(
+        RibbonAdaptiveGroupState[] states,
+        bool preserveFirstGroup,
+        IReadOnlySet<int>? protectedGroupIndexes,
+        out int changedIndex,
+        out RibbonAdaptiveGroupState previousState)
+    {
+        var rollbackCount = 0;
+        return TryFallbackOneMoreGroupCore(
+            states,
+            null,
+            double.PositiveInfinity,
+            preserveFirstGroup,
+            protectedGroupIndexes,
+            null,
+            null,
+            ref rollbackCount,
+            out changedIndex,
+            out previousState);
+    }
+
     private static bool TryCollapseOneMoreGroupCore(
         RibbonAdaptiveGroupState[] states,
         bool preserveFirstGroup,
@@ -221,6 +291,79 @@ internal static class RibbonAdaptiveLayoutEngine
             RecordStateChange(i, states[i], rollbackIndexes, rollbackStates, ref rollbackCount);
             states[i] = RibbonAdaptiveGroupState.Collapsed;
             return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryFallbackOneMoreGroupCore(
+        RibbonAdaptiveGroupState[] states,
+        IReadOnlyList<RibbonAdaptiveGroup>? groups,
+        double availableWidth,
+        bool preserveFirstGroup,
+        IReadOnlySet<int>? protectedGroupIndexes,
+        int[]? rollbackIndexes,
+        RibbonAdaptiveGroupState[]? rollbackStates,
+        ref int rollbackCount,
+        out int changedIndex,
+        out RibbonAdaptiveGroupState previousState)
+    {
+        changedIndex = -1;
+        previousState = default;
+        var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
+        if (groups is not null)
+        {
+            for (var targetValue = (int)RibbonAdaptiveGroupState.SmallWithLabels;
+                 targetValue <= (int)RibbonAdaptiveGroupState.Collapsed;
+                 targetValue++)
+            {
+                var targetState = (RibbonAdaptiveGroupState)targetValue;
+                for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
+                {
+                    if (i >= groups.Count ||
+                        (int)states[i] >= targetValue)
+                    {
+                        continue;
+                    }
+
+                    if (protectedGroupIndexes?.Contains(i) == true)
+                        continue;
+
+                    var currentWidth = GetGroupWidth(groups[i], states[i], availableWidth);
+                    var targetWidth = GetGroupWidth(groups[i], targetState, availableWidth);
+                    if (targetWidth >= currentWidth - 0.5)
+                        continue;
+
+                    changedIndex = i;
+                    previousState = states[i];
+                    RecordStateChange(i, states[i], rollbackIndexes, rollbackStates, ref rollbackCount);
+                    states[i] = targetState;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        for (var stateValue = (int)RibbonAdaptiveGroupState.Full;
+             stateValue <= (int)RibbonAdaptiveGroupState.IconOnly;
+             stateValue++)
+        {
+            var state = (RibbonAdaptiveGroupState)stateValue;
+            for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
+            {
+                if (states[i] != state)
+                    continue;
+
+                if (protectedGroupIndexes?.Contains(i) == true)
+                    continue;
+
+                changedIndex = i;
+                previousState = states[i];
+                RecordStateChange(i, states[i], rollbackIndexes, rollbackStates, ref rollbackCount);
+                states[i] = (RibbonAdaptiveGroupState)(stateValue + 1);
+                return true;
+            }
         }
 
         return false;
@@ -267,7 +410,12 @@ internal static class RibbonAdaptiveLayoutEngine
             availableWidth,
             selectedTabHeader);
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
-               TryCollapseOneMoreGroup(states, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
+               TryFallbackOneMoreGroup(
+                   states,
+                   groups,
+                   availableWidth > 760,
+                   availableWidth,
+                   protectedGroupIndexes))
         {
         }
 
@@ -275,7 +423,12 @@ internal static class RibbonAdaptiveLayoutEngine
             return;
 
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
-               TryCollapseOneMoreGroup(states, preserveFirstGroup: false, protectedGroupIndexes))
+               TryFallbackOneMoreGroup(
+                   states,
+                   groups,
+                   false,
+                   availableWidth,
+                   protectedGroupIndexes))
         {
         }
     }
@@ -411,13 +564,17 @@ internal static class RibbonAdaptiveLayoutEngine
         ref int rollbackCount)
     {
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
-               TryCollapseOneMoreGroupCore(
+               TryFallbackOneMoreGroupCore(
                    states,
-                   preserveFirstGroup: false,
+                   groups,
+                   availableWidth,
+                   false,
                    protectedGroupIndexes,
                    rollbackIndexes,
                    rollbackStates,
-                   ref rollbackCount))
+                   ref rollbackCount,
+                   out _,
+                   out _))
         {
         }
 
@@ -464,22 +621,26 @@ internal static class RibbonAdaptiveLayoutEngine
         if (groups.Count == 0)
             yield break;
 
-        var states = Enumerable
-            .Repeat(RibbonAdaptiveGroupState.Full, groups.Count)
-            .ToArray();
+        var states = new RibbonAdaptiveGroupState[groups.Count];
+        Array.Fill(states, RibbonAdaptiveGroupState.Full);
         yield return MeasureStates(groups, states, fixedChromeWidth, double.PositiveInfinity);
 
-        for (var i = groups.Count - 1; i >= 0; i--)
+        while (TryFallbackOneMoreGroup(
+                   states,
+                   preserveFirstGroup: false,
+                   protectedGroupIndexes: null,
+                   out _,
+                   out var previousState))
         {
-            states[i] = RibbonAdaptiveGroupState.SmallWithLabels;
-            yield return MeasureStates(groups, states, fixedChromeWidth, double.PositiveInfinity);
-
-            states[i] = RibbonAdaptiveGroupState.IconOnly;
-            yield return MeasureStates(groups, states, fixedChromeWidth, double.PositiveInfinity);
-
-            states[i] = RibbonAdaptiveGroupState.Collapsed;
-            yield return MeasureStates(groups, states, fixedChromeWidth, 1200);
-            yield return MeasureStates(groups, states, fixedChromeWidth, 800);
+            if (previousState == RibbonAdaptiveGroupState.IconOnly)
+            {
+                yield return MeasureStates(groups, states, fixedChromeWidth, 1200);
+                yield return MeasureStates(groups, states, fixedChromeWidth, 800);
+            }
+            else
+            {
+                yield return MeasureStates(groups, states, fixedChromeWidth, double.PositiveInfinity);
+            }
         }
     }
 

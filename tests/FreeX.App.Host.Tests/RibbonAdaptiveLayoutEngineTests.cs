@@ -446,6 +446,53 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             RibbonAdaptiveGroupState.Collapsed);
     }
 
+    [Fact]
+    public void TryFallbackOneMoreGroup_UsesWidthAwareStagedFallbacks()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Clipboard", 100, 100, 62, 50),
+            new RibbonAdaptiveGroup("Font", 200, 150, 96, 52),
+            new RibbonAdaptiveGroup("Alignment", 180, 132, 88, 56)
+        };
+        var states = new[]
+        {
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full
+        };
+
+        RibbonAdaptiveLayoutEngine.TryFallbackOneMoreGroup(
+            states,
+            groups,
+            preserveFirstGroup: false,
+            availableWidth: 900,
+            protectedGroupIndexes: null,
+            changedIndex: out var firstChangedIndex,
+            previousState: out var firstPreviousState)
+            .Should()
+            .BeTrue();
+        RibbonAdaptiveLayoutEngine.TryFallbackOneMoreGroup(
+            states,
+            groups,
+            preserveFirstGroup: false,
+            availableWidth: 900,
+            protectedGroupIndexes: null,
+            changedIndex: out var secondChangedIndex,
+            previousState: out var secondPreviousState)
+            .Should()
+            .BeTrue();
+
+        firstChangedIndex.Should().Be(2);
+        firstPreviousState.Should().Be(RibbonAdaptiveGroupState.Full);
+        secondChangedIndex.Should().Be(1);
+        secondPreviousState.Should().Be(RibbonAdaptiveGroupState.Full);
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.SmallWithLabels,
+            RibbonAdaptiveGroupState.SmallWithLabels);
+    }
+
     [Theory]
     [InlineData(RibbonAdaptiveGroupState.Collapsed, RibbonAdaptiveGroupState.IconOnly, true)]
     [InlineData(RibbonAdaptiveGroupState.IconOnly, RibbonAdaptiveGroupState.SmallWithLabels, true)]
