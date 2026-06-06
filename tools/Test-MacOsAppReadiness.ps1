@@ -416,6 +416,7 @@ function Test-MacOsWorkflow {
         "native_cut_menu_item=true",
         "native_copy_menu_item=true",
         "native_paste_menu_item=true",
+        "native_clear_contents_menu_item=true",
         'bundle_icon=$('
     )
 
@@ -469,7 +470,8 @@ function Test-SourceWiring {
                 "HasNativeFileMenu &&",
                 "HasNativeEditMenu &&",
                 "native_cut_menu_item=",
-                "native_copy_menu_item="
+                "native_copy_menu_item=",
+                "native_clear_contents_menu_item="
             )
             OrderedPairs = @()
         },

@@ -130,6 +130,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_cut_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_copy_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_paste_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_clear_contents_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_quit_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256");

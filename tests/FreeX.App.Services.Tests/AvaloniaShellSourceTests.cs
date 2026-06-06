@@ -68,6 +68,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _cutMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _copyMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _pasteMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _clearContentsMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -92,6 +93,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_pasteMenuItem.Header = \"Paste\";");
         source.Should().Contain("_pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);");
         source.Should().Contain("_pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();");
+        source.Should().Contain("_clearContentsMenuItem.Header = \"Clear Contents\";");
+        source.Should().Contain("_clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);");
+        source.Should().Contain("_clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();");
         source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
         source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
         source.Should().Contain("_quitMenuItem.Click += (_, _) => TryQuitApplication();");
@@ -100,6 +104,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("editMenu.Items.Add(_cutMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_copyMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_pasteMenuItem);");
+        source.Should().Contain("editMenu.Items.Add(_clearContentsMenuItem);");
         source.Should().Contain("Header = \"Edit\"");
         source.Should().Contain("NativeMenu.SetMenu(this, _nativeMenu);");
         source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
@@ -111,6 +116,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_cutMenuItem.IsEnabled = _cutButton.IsEnabled;");
         source.Should().Contain("_copyMenuItem.IsEnabled = _copyButton.IsEnabled;");
         source.Should().Contain("_pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;");
+        source.Should().Contain("_clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;");
         source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("await SaveWorkbookAsAsync();");
         source.Should().Contain("TryQuitApplication()");
@@ -147,6 +153,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_cut_menu_item={FormatBool(snapshot.HasNativeCutMenuItem)}");
         smokeSource.Should().Contain("native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}");
         smokeSource.Should().Contain("native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}");
+        smokeSource.Should().Contain("native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}");
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
@@ -161,6 +168,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, \"Cut\")");
         windowSource.Should().Contain("HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, \"Copy\")");
         windowSource.Should().Contain("HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, \"Paste\")");
+        windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, \"Clear Contents\")");
         windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
 
@@ -308,5 +316,23 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await PasteClipboardTextAsync();");
         source.Should().Contain("ShowEditIssue(\"Clipboard unavailable on this platform.\");");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Paste failed.\");");
+    }
+
+    [Fact]
+    public void MainWindow_WiresClearContentsThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly Button _clearContentsButton = new();");
+        source.Should().Contain("_clearContentsButton.Content = \"Clear\";");
+        source.Should().Contain("_clearContentsButton.Click += ClearContentsButton_Click;");
+        source.Should().Contain("_clearContentsButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void ClearContentsButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void ClearSelectedRangeContents()");
+        source.Should().Contain("var result = _session.ClearSelectedRangeContents();");
+        source.Should().Contain("RefreshShell($\"Cleared {rangeReference}\");");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Clear Contents failed.\");");
+        source.Should().Contain("if (e.Key == Key.Delete)");
+        source.Should().Contain("ClearSelectedRangeContents();");
     }
 }

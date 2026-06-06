@@ -281,6 +281,19 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult ClearSelectedRangeContents()
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ClearContentsCommand(ActiveSheet.Id, range));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult UndoLastEdit()
     {
         var result = _cellEditService.UndoLastEdit(Workbook);
@@ -420,6 +433,18 @@ public sealed class WorkbookSession
         ActiveSheet.ActiveRow = address.Row;
         ActiveSheet.ActiveCol = address.Col;
         SelectedRange = new GridRange(address, address);
+        FormulaEditAddress = null;
+        IsDirty = true;
+        RefreshViewport();
+        EnsureActiveCellVisible();
+    }
+
+    private void ApplySuccessfulRangeEditResult(WorkbookCellEditResult result, GridRange selectedRange)
+    {
+        ActiveCell = selectedRange.Start;
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
+        SelectedRange = selectedRange;
         FormulaEditAddress = null;
         IsDirty = true;
         RefreshViewport();

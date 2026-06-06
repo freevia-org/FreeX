@@ -441,6 +441,42 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void ClearSelectedRangeContents_ClearsValuesAndFormulasPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new NumberValue(10));
+        sheet.SetFormula(b1, "A1+1");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.ClearSelectedRangeContents();
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(a1, b1);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        sheet.GetCell(a1)!.Value.Should().Be(BlankValue.Instance);
+        sheet.GetCell(b1)!.FormulaText.Should().BeNull();
+        sheet.GetCell(b1)!.Value.Should().Be(BlankValue.Instance);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        session.CanRedo.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().Be(new NumberValue(10));
+        sheet.GetCell(b1)!.FormulaText.Should().Be("A1+1");
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();

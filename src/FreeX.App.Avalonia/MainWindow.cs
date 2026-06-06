@@ -59,6 +59,7 @@ public sealed class MainWindow : Window
     private readonly Button _cutButton = new();
     private readonly Button _copyButton = new();
     private readonly Button _pasteButton = new();
+    private readonly Button _clearContentsButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -67,6 +68,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _cutMenuItem = new();
     private readonly NativeMenuItem _copyMenuItem = new();
     private readonly NativeMenuItem _pasteMenuItem = new();
+    private readonly NativeMenuItem _clearContentsMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -215,6 +217,10 @@ public sealed class MainWindow : Window
         _pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);
         _pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();
 
+        _clearContentsMenuItem.Header = "Clear Contents";
+        _clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);
+        _clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();
+
         _quitMenuItem.Header = "Quit FreeX";
         _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
         _quitMenuItem.Click += (_, _) => TryQuitApplication();
@@ -233,6 +239,8 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_cutMenuItem);
         editMenu.Items.Add(_copyMenuItem);
         editMenu.Items.Add(_pasteMenuItem);
+        editMenu.Items.Add(new NativeMenuItemSeparator());
+        editMenu.Items.Add(_clearContentsMenuItem);
 
         _nativeMenu = new NativeMenu();
         _nativeMenu.Items.Add(new NativeMenuItem
@@ -315,6 +323,11 @@ public sealed class MainWindow : Window
         _pasteButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _pasteButton.Click += PasteButton_Click;
 
+        _clearContentsButton.Content = "Clear";
+        _clearContentsButton.Padding = new Thickness(10, 4);
+        _clearContentsButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _clearContentsButton.Click += ClearContentsButton_Click;
+
         _cellAddressText.Width = 72;
         _cellAddressText.FontSize = 12;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
@@ -351,6 +364,7 @@ public sealed class MainWindow : Window
                     _cutButton,
                     _copyButton,
                     _pasteButton,
+                    _clearContentsButton,
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
@@ -429,6 +443,7 @@ public sealed class MainWindow : Window
         _cutButton.IsEnabled = isIdle;
         _copyButton.IsEnabled = isIdle;
         _pasteButton.IsEnabled = isIdle;
+        _clearContentsButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
@@ -438,6 +453,7 @@ public sealed class MainWindow : Window
         _cutMenuItem.IsEnabled = _cutButton.IsEnabled;
         _copyMenuItem.IsEnabled = _copyButton.IsEnabled;
         _pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;
+        _clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -959,6 +975,11 @@ public sealed class MainWindow : Window
         await PasteClipboardTextAsync();
     }
 
+    private void ClearContentsButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ClearSelectedRangeContents();
+    }
+
     private void UndoLastEdit()
     {
         if (_isOpening || _isSaving)
@@ -1059,6 +1080,25 @@ public sealed class MainWindow : Window
         RefreshShell($"Pasted at {FormatCellReference(destination)}");
     }
 
+    private void ClearSelectedRangeContents()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.ClearSelectedRangeContents();
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Clear Contents failed.");
+            return;
+        }
+
+        RefreshShell($"Cleared {rangeReference}");
+    }
+
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
     {
         e.DragEffects = TrySelectDroppedWorkbookPath(e, out _, out _)
@@ -1119,6 +1159,7 @@ public sealed class MainWindow : Window
             HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, "Cut"),
             HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, "Copy"),
             HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
+            HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
@@ -1133,6 +1174,13 @@ public sealed class MainWindow : Window
         {
             if (_formulaBox.IsFocused)
                 return;
+
+            if (e.Key == Key.Delete)
+            {
+                e.Handled = true;
+                ClearSelectedRangeContents();
+                return;
+            }
 
             NavigateActiveCell(e);
             return;
