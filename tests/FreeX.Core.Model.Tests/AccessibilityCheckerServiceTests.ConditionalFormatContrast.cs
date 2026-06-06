@@ -1260,6 +1260,61 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLcmScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("LCM($A1,50)=150", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("LCM($A1,50)>=200", "B4");
+        AssertFormulaArithmeticContrastLocations("LCM($A1)=75", "B1", "B3");
+        AssertFormulaArithmeticContrastLocations("LCM(4,6)=12", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("LCM(5.9,2.1)=10", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("LCM(0,5)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("LCM(3,4,5)=60", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("LCM($A1/10,2.9)=10", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLcmScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(LCM($A1,50)>=200,TRUE,FALSE)", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(LCM($A1,50)=150,$C1=\"Open\")", "B3");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(LCM($A1,50))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISEVEN(LCM($A1,50))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatLcmScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(LCM($A1,50),1)>200", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(LCM($A1,50),$A1)>100", "B1", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatLcmScalarFunctionUnsupportedOperands()
+    {
+        var tooManyArguments = $"LCM({string.Join(",", Enumerable.Repeat("1", 256))})>0";
+
+        AssertFormulaArithmeticContrastLocations("LCM()>0");
+        AssertFormulaArithmeticContrastLocations(tooManyArguments);
+        AssertFormulaArithmeticContrastLocations("LCM(\"5\",2)>0");
+        AssertFormulaArithmeticContrastLocations("LCM($A1,\"2\")>0");
+        AssertFormulaArithmeticContrastLocations("LCM($A1&\"x\",2)>0");
+        AssertFormulaArithmeticContrastLocations("LCM(KURT($A1),2)>0");
+        AssertFormulaArithmeticContrastLocations("LCM($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("LCM(-1,1)>0");
+        AssertFormulaArithmeticContrastLocations("LCM(-0.2,1)>0");
+        AssertFormulaArithmeticContrastLocations("LCM(1,-1)>0");
+        AssertFormulaArithmeticContrastLocations("LCM(1,-0.2)>0");
+        AssertFormulaArithmeticContrastLocations("LCM($A1/0,1)>0");
+        AssertFormulaArithmeticContrastLocations("LCM(1E308*1E308,1)>0");
+        AssertFormulaArithmeticContrastLocations("LCM($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("LCM(EXP(1000),1)>0");
+        AssertFormulaArithmeticContrastLocations("LCM($A1,EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("LCM(1E20,1)>0");
+        AssertFormulaArithmeticContrastLocations("LCM($A1,1E20)>0");
+        AssertFormulaArithmeticContrastLocations("LCM(3037000500,3037000501)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("ODD($A1/40)>3", "B4");
