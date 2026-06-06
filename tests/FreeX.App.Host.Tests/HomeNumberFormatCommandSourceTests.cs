@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -27,7 +26,7 @@ public sealed class HomeNumberFormatCommandSourceTests
     [Fact]
     public void HomeNumberFormatHandlers_ApplyExpectedStyleDiffs()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("private void CurrencyBtn_Click(object sender, RoutedEventArgs e)    => ApplyStyleDiff(new StyleDiff(NumberFormat: \"$#,##0.00\"));");
         source.Should().Contain("private void PercentBtn_Click(object sender, RoutedEventArgs e)     => ApplyStyleDiff(new StyleDiff(NumberFormat: \"0%\"));");
@@ -53,8 +52,8 @@ public sealed class HomeNumberFormatCommandSourceTests
     [Fact]
     public void HomeNumberFormatDropdown_SourceUsesProjectionPlannerAndOpensFormatCellsNumberTab()
     {
-        var startupSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Startup.cs"));
-        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var startupSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Startup.cs");
+        var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         startupSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
         formattingSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options[selectedIndex]");
@@ -64,8 +63,8 @@ public sealed class HomeNumberFormatCommandSourceTests
     [Fact]
     public void DecimalPlaceHandlers_UseDecimalAdjusterThroughRepeatableStyleDiff()
     {
-        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
-        var workbookUiStateSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
+        var workbookUiStateSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
 
         formattingSource.Should().Contain("NumberFormatDecimalAdjuster.AddDecimalPlace(style.NumberFormat)");
         formattingSource.Should().Contain("NumberFormatDecimalAdjuster.RemoveDecimalPlace(style.NumberFormat)");
