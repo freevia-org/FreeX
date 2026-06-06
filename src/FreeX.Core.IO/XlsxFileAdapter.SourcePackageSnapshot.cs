@@ -1519,12 +1519,6 @@ public sealed partial class XlsxFileAdapter
 
             foreach (var sheet in workbook.Sheets)
             {
-                if (sheet.CustomProperties.Count > 0)
-                {
-                    blockReason = "workbook_postprocessing_custom_properties";
-                    return true;
-                }
-
                 if (sheet.Charts.Any(chart => ChartRequiresFullSavePostProcessing(workbook, sheet, chart)))
                 {
                     blockReason = "workbook_postprocessing_charts";
@@ -1710,12 +1704,6 @@ public sealed partial class XlsxFileAdapter
                         out var worksheetGuardInfo))
                 {
                     blockReason = "package_guard_worksheet_xml";
-                    return false;
-                }
-
-                if (worksheetGuardInfo.HasCustomProperties)
-                {
-                    blockReason = "package_guard_worksheet_custom_properties";
                     return false;
                 }
 
