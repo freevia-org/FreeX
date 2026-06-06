@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -11,7 +10,7 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void DialogLayout_PinsActionButtonsBelowScrollableDropdownContent()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterDialog.cs");
 
         source.Should().Contain("SizeToContent = SizeToContent.Height");
         source.Should().Contain("var root = new DockPanel { Margin = new Thickness(10), LastChildFill = true };");
