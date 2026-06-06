@@ -766,6 +766,42 @@ public static partial class AccessibilityCheckerService
                     cell.IsColAbsolute,
                     cell.SheetName);
                 return true;
+            case RangeRefNode range:
+                operand = FormulaReferenceRangeOperand(
+                    range.Start.Row,
+                    range.Start.ColumnNumber,
+                    range.Start.IsRowAbsolute,
+                    range.Start.IsColAbsolute,
+                    range.End.Row,
+                    range.End.ColumnNumber,
+                    range.End.IsRowAbsolute,
+                    range.End.IsColAbsolute,
+                    range.SheetName ?? range.Start.SheetName);
+                return true;
+            case FullColumnRangeRefNode range:
+                operand = FormulaReferenceRangeOperand(
+                    1,
+                    CellAddress.ColumnNameToNumber(range.StartColumnName),
+                    true,
+                    range.IsStartAbsolute,
+                    CellAddress.MaxRow,
+                    CellAddress.ColumnNameToNumber(range.EndColumnName),
+                    true,
+                    range.IsEndAbsolute,
+                    range.SheetName);
+                return true;
+            case FullRowRangeRefNode range:
+                operand = FormulaReferenceRangeOperand(
+                    range.StartRow,
+                    1,
+                    range.IsStartAbsolute,
+                    true,
+                    range.EndRow,
+                    CellAddress.MaxCol,
+                    range.IsEndAbsolute,
+                    true,
+                    range.SheetName);
+                return true;
             case NumberNode number:
                 operand = LiteralFormulaOperand(new NumberValue(number.Value));
                 return true;
@@ -799,6 +835,31 @@ public static partial class AccessibilityCheckerService
 
     private static ConditionalFormulaOperand LiteralFormulaOperand(ScalarValue value) =>
         new(ConditionalFormulaOperandKind.Literal, value, 0, 0, true, true, null);
+
+    private static ConditionalFormulaOperand FormulaReferenceRangeOperand(
+        uint row,
+        uint col,
+        bool isRowAbsolute,
+        bool isColAbsolute,
+        uint endRow,
+        uint endCol,
+        bool isEndRowAbsolute,
+        bool isEndColAbsolute,
+        string? sheetName) =>
+        new(
+            ConditionalFormulaOperandKind.ReferenceRange,
+            null,
+            row,
+            col,
+            isRowAbsolute,
+            isColAbsolute,
+            sheetName,
+            default,
+            null,
+            null,
+            null,
+            null,
+            new ConditionalFormulaReferenceRange(endRow, endCol, isEndRowAbsolute, isEndColAbsolute));
 
     private static bool TryCreateFormulaUnaryOperand(
         UnaryOpNode unary,
@@ -1140,6 +1201,15 @@ public static partial class AccessibilityCheckerService
             case "COLUMN":
                 kind = ConditionalFormulaScalarFunctionKind.Column;
                 return true;
+            case "ROWS":
+                kind = ConditionalFormulaScalarFunctionKind.Rows;
+                return true;
+            case "COLUMNS":
+                kind = ConditionalFormulaScalarFunctionKind.Columns;
+                return true;
+            case "AREAS":
+                kind = ConditionalFormulaScalarFunctionKind.Areas;
+                return true;
             case "DELTA":
                 kind = ConditionalFormulaScalarFunctionKind.Delta;
                 return true;
@@ -1257,6 +1327,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Pi => argumentCount == 0,
             ConditionalFormulaScalarFunctionKind.Row or
             ConditionalFormulaScalarFunctionKind.Column => argumentCount is 0 or 1,
+            ConditionalFormulaScalarFunctionKind.Rows or
+            ConditionalFormulaScalarFunctionKind.Columns or
+            ConditionalFormulaScalarFunctionKind.Areas => argumentCount == 1,
             _ => false
         };
 
@@ -1783,12 +1856,14 @@ public static partial class AccessibilityCheckerService
         IReadOnlyList<ConditionalFormulaAggregateArgument>? AggregateArguments = null,
         ConditionalFormulaArithmetic? Arithmetic = null,
         ConditionalFormulaUnary? Unary = null,
-        ConditionalFormulaScalarFunction? ScalarFunction = null);
+        ConditionalFormulaScalarFunction? ScalarFunction = null,
+        ConditionalFormulaReferenceRange? ReferenceRange = null);
 
     private enum ConditionalFormulaOperandKind
     {
         Literal,
         Reference,
+        ReferenceRange,
         Unary,
         Arithmetic,
         Aggregate,
@@ -1807,6 +1882,12 @@ public static partial class AccessibilityCheckerService
     private sealed record ConditionalFormulaScalarFunction(
         ConditionalFormulaScalarFunctionKind Kind,
         IReadOnlyList<ConditionalFormulaOperand> Arguments);
+
+    private readonly record struct ConditionalFormulaReferenceRange(
+        uint EndRow,
+        uint EndCol,
+        bool IsEndRowAbsolute,
+        bool IsEndColAbsolute);
 
     private enum ConditionalFormulaScalarFunctionKind
     {
@@ -1888,6 +1969,9 @@ public static partial class AccessibilityCheckerService
         Na,
         Row,
         Column,
+        Rows,
+        Columns,
+        Areas,
         Delta,
         GeStep,
         BitAnd,
@@ -2521,6 +2605,10 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Row:
                 case ConditionalFormulaScalarFunctionKind.Column:
                     return TryEvaluateFormulaRowColumnFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Rows:
+                case ConditionalFormulaScalarFunctionKind.Columns:
+                case ConditionalFormulaScalarFunctionKind.Areas:
+                    return TryEvaluateFormulaReferenceDimensionFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
             }
@@ -2550,6 +2638,38 @@ public static partial class AccessibilityCheckerService
 
             value = new NumberValue(function.Kind == ConditionalFormulaScalarFunctionKind.Row ? row : col);
             return true;
+        }
+
+        private bool TryEvaluateFormulaReferenceDimensionFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (function.Arguments.Count != 1 ||
+                !TryResolveFormulaReferenceRange(
+                    function.Arguments[0],
+                    rowOffset,
+                    colOffset,
+                    out _,
+                    out var startRow,
+                    out var startCol,
+                    out var endRow,
+                    out var endCol))
+            {
+                return false;
+            }
+
+            value = function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.Rows => new NumberValue(endRow - startRow + 1),
+                ConditionalFormulaScalarFunctionKind.Columns => new NumberValue(endCol - startCol + 1),
+                ConditionalFormulaScalarFunctionKind.Areas => new NumberValue(1),
+                _ => ErrorValue.Value
+            };
+
+            return value is NumberValue;
         }
 
         private bool TryEvaluateFormulaNumericScalarFunction(
@@ -4675,6 +4795,52 @@ public static partial class AccessibilityCheckerService
             targetSheet = resolvedSheet;
             row = shiftedRow.Value;
             col = shiftedCol.Value;
+            return true;
+        }
+
+        private bool TryResolveFormulaReferenceRange(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out Sheet targetSheet,
+            out uint startRow,
+            out uint startCol,
+            out uint endRow,
+            out uint endCol)
+        {
+            targetSheet = default!;
+            startRow = 0;
+            startCol = 0;
+            endRow = 0;
+            endCol = 0;
+
+            if (operand.Kind != ConditionalFormulaOperandKind.ReferenceRange ||
+                operand.ReferenceRange is not { } range)
+            {
+                return false;
+            }
+
+            var shiftedStartRow = ShiftFormulaRow(operand.Row, operand.IsRowAbsolute, rowOffset);
+            var shiftedStartCol = ShiftFormulaColumn(operand.Col, operand.IsColAbsolute, colOffset);
+            var shiftedEndRow = ShiftFormulaRow(range.EndRow, range.IsEndRowAbsolute, rowOffset);
+            var shiftedEndCol = ShiftFormulaColumn(range.EndCol, range.IsEndColAbsolute, colOffset);
+            if (!shiftedStartRow.HasValue ||
+                !shiftedStartCol.HasValue ||
+                !shiftedEndRow.HasValue ||
+                !shiftedEndCol.HasValue)
+            {
+                return false;
+            }
+
+            var resolvedSheet = operand.SheetName is null ? sheet : workbook.GetSheet(operand.SheetName);
+            if (resolvedSheet is null)
+                return false;
+
+            targetSheet = resolvedSheet;
+            startRow = Math.Min(shiftedStartRow.Value, shiftedEndRow.Value);
+            startCol = Math.Min(shiftedStartCol.Value, shiftedEndCol.Value);
+            endRow = Math.Max(shiftedStartRow.Value, shiftedEndRow.Value);
+            endCol = Math.Max(shiftedStartCol.Value, shiftedEndCol.Value);
             return true;
         }
 

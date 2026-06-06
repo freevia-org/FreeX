@@ -74,6 +74,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         changed |= SetOptionalIntAttribute(pageSetup, "copies", sheet.PrintCopies);
         changed |= SetOptionalIntAttribute(pageSetup, "verticalDpi", sheet.PrintQualityVerticalDpi);
         changed |= ApplyNativePageSetupMetadata(pageSetup, sheet.PageSetupMetadata);
+        changed |= XlsxWorksheetPageLayoutNormalizer.NormalizePageSetup(pageSetup);
         return changed;
     }
 
@@ -112,6 +113,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         var changed = false;
         changed |= SetOptionalBoolAttribute(pageSetupProperties, "fitToPage", sheet.FitToPage);
         changed |= SetOptionalBoolAttribute(pageSetupProperties, "autoPageBreaks", sheet.AutoPageBreaks);
+        changed |= XlsxWorksheetPageLayoutNormalizer.NormalizeSheetPropertiesPageLayout(sheetProperties!);
         return changed;
     }
 
@@ -142,6 +144,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         changed |= SetOptionalBoolAttribute(outlineProperties, "summaryRight", sheet.OutlineSummaryRight);
         changed |= SetOptionalBoolAttribute(outlineProperties, "showOutlineSymbols", sheet.ShowOutlineSymbols);
         changed |= SetOptionalBoolAttribute(outlineProperties, "applyStyles", sheet.ApplyOutlineStyles);
+        changed |= XlsxWorksheetPageLayoutNormalizer.NormalizeSheetPropertiesPageLayout(sheetProperties!);
         return changed;
     }
 
