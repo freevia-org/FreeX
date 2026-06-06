@@ -119,10 +119,7 @@ public sealed class RibbonIconFactorySvgTests
     [Fact]
     public void BackstageRecentPinButtons_RequestDistinctPinAndUnpinSvgArtwork()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
-            "MainWindow.xaml"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         xaml.Should().Contain("CommandName=\"Pin to list\" Kind=\"Pin\"");
         xaml.Should().Contain("CommandName=\"Unpin from list\" Kind=\"Pin\"");
