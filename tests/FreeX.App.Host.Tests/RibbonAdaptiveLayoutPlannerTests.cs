@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -78,7 +77,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void Plan_SourceAvoidsLinqScaffoldingOnRepeatedFitChecks()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutPlanner.cs");
         source.Should().Contain("Array.Fill(states, RibbonAdaptiveGroupState.Full)");
         source.Should().Contain("for (var index = groups.Count - 1; index >= 0; index--)");
         source.Should().Contain("for (var index = 0; index < groups.Count; index++)");
