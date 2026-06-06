@@ -17185,7 +17185,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetPhoneticProperties()
+    public void XlsxAdapter_LoadedWorkbookSave_DropsUnsupportedWorksheetPhoneticProperties()
     {
         var workbook = new Workbook("PhoneticPropertiesRetentionTest");
         var sheet = workbook.AddSheet("Data");
@@ -17213,7 +17213,7 @@ public partial class FileAdapterSmokeTests
         phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1");
         phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana");
         phoneticProperties.Attribute("alignment")!.Value.Should().Be("center");
-        phoneticProperties.Attribute("nativeOnly")!.Value.Should().Be("kept");
+        phoneticProperties.Attribute("nativeOnly").Should().BeNull();
     }
 
     [Fact]
@@ -17344,11 +17344,7 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
 
-        phoneticProperties.Should().NotBeNull();
-        phoneticProperties!.Attribute("fontId").Should().BeNull();
-        phoneticProperties.Attribute("type").Should().BeNull();
-        phoneticProperties.Attribute("alignment").Should().BeNull();
-        phoneticProperties.Attribute("nativeOnly")!.Value.Should().Be("kept");
+        phoneticProperties.Should().BeNull();
     }
 
     [Fact]
