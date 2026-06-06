@@ -78,6 +78,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void AutoFilter_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateAutoFilterSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithAutoFilter_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateAutoFilterSourceWorkbook());
+        var sourceAutoFilter = ReadWorksheetChildElement(source, "autoFilter");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "autoFilter")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceAutoFilter.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void NamedRanges_ProducesSchemaValidWorkbook()
     {
         var workbook = new Workbook("NamedRanges");
@@ -467,6 +502,37 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         table.Columns.Add(new StructuredTableColumnModel(2, "Value"));
         sheet.StructuredTables.Add(table);
 
+        return workbook;
+    }
+
+    private static Workbook CreateAutoFilterSourceWorkbook()
+    {
+        var workbook = new Workbook("AutoFilterPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new BlankValue());
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(16));
+
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B5", null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["North"],
+            IncludeBlank: true));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            1,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [new WorksheetAutoFilterCustomFilterModel("greaterThan", "10")],
+            CustomFiltersAnd: false,
+            NativeCustomFiltersAttributes: null,
+            NativeFilterXmls: []));
         return workbook;
     }
 
