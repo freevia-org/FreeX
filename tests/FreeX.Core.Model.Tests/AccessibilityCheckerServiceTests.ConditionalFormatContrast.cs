@@ -931,6 +931,47 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("ODD($A1/40)>3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(-$A1/40)<-3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(1.2)=3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(2)=3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(3)=3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(-1.2)=-3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(-2)=-3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(-3)=-3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ODD(0)=1", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(ODD($A1/40)>3,TRUE,FALSE)", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(ODD($A1/50)>=3,$C1=\"Open\")", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ODD($A1/50))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISODD(ODD($A1/50))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatOddScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(ODD($A1/40),1)>4", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatOddScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("ODD()>0");
+        AssertFormulaArithmeticContrastLocations("ODD($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ODD(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ODD($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ODD(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ODD(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ODD(EXP(1000))>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatScalarFunctionWrappers()
     {
         AssertFormulaArithmeticContrastLocations("IF(ABS($A1-100)>=25,TRUE,FALSE)", "B1", "B3", "B4");
