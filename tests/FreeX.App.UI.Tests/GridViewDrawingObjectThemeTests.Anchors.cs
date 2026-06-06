@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Windows;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -93,8 +92,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void TryCreateDrawingAnchorRect_UsesSinglePassAnchorMetricLookups()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridDrawingObjectPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridDrawingObjectPlanner.cs");
         var anchorRange = source[
             source.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)..
             source.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)];
@@ -119,12 +117,9 @@ public sealed partial class GridViewDrawingObjectThemeTests
     [Fact]
     public void AnchoredObjectRendering_UsesSharedSinglePassMetricPlanner()
     {
-        var planner = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridDrawingObjectPlanner.cs"));
-        var drawingObjects = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
-        var pictures = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var planner = AppUiSourceTestSupport.ReadAppUiSources("GridDrawingObjectPlanner.cs");
+        var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
+        var pictures = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var plannerMethod = planner[
             planner.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)..
             planner.IndexOf("public static string GetNativeControlCaption", StringComparison.Ordinal)];
