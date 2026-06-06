@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using System.Reflection;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -191,8 +190,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void ChartDataTableAnnotations_BuildRowsWithoutListJoinPipelines()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartRenderer.Annotations.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.Annotations.cs");
         var dataTableAnnotations = source[
             source.IndexOf("private static void AddChartDataTableAnnotations", StringComparison.Ordinal)..
             source.IndexOf("private static int AppendChartDataTablePart", StringComparison.Ordinal)];

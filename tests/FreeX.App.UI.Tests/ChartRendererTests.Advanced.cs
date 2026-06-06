@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -112,8 +111,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void AdvancedFamilyRenderers_AvoidLinqAggregateAndOutlierScaffolding()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartRenderer.AdvancedFamilies.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.AdvancedFamilies.cs");
 
         source.Should().NotContain(".Sum(");
         source.Should().NotContain(".Max(");
@@ -126,8 +124,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void AdvancedFamilyRenderers_AggregateTotalsWhileCollectingValues()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartRenderer.AdvancedFamilies.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.AdvancedFamilies.cs");
         var pareto = source[
             source.IndexOf("internal static PlotModel BuildParetoModel", StringComparison.Ordinal)..
             source.IndexOf("internal static PlotModel BuildBoxAndWhiskerModel", StringComparison.Ordinal)];
@@ -148,8 +145,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void StockRenderer_BuildsDateAxisXValuesWithoutLinqScaffolding()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartRenderer.Stock.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.Stock.cs");
 
         source.Should().NotContain("Enumerable.Range");
         source.Should().NotContain(".Select(DateTimeAxis.ToDouble)");
@@ -390,8 +386,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void SurfaceRenderer_AvoidsMinMaxLinqScaffolding()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartRenderer.Surface.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.Surface.cs");
 
         source.Should().NotContain("surfaceValues.Min(");
         source.Should().NotContain("surfaceValues.Max(");

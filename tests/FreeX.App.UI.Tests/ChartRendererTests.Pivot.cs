@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using System.Reflection;
 using FluentAssertions;
 using FreeX.App.UI;
@@ -46,8 +45,7 @@ public sealed partial class ChartRendererTests
     [Fact]
     public void PivotChartFieldButtons_AddAnnotationsWithoutCaptionList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "ChartRenderer.Annotations.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.Annotations.cs");
         var fieldButtons = source[
             source.IndexOf("private static void AddPivotChartFieldButtons", StringComparison.Ordinal)..
             source.IndexOf("private static void AddPivotChartFieldButtonAnnotation", StringComparison.Ordinal)];
