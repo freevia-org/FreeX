@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using static FreeX.App.Host.Tests.LocalizedXamlTestSupport;
 
@@ -34,7 +33,7 @@ public sealed class PivotDesignCommandSourceTests
     [Fact]
     public void PivotDesignHandlers_RouteThroughExpectedOptionsDialogStyleGalleryAndCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotDesignCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
 
         source.Should().Contain("private void PivotGrandTotalsBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("private void PivotSubtotalsBtn_Click(object sender, RoutedEventArgs e)");
