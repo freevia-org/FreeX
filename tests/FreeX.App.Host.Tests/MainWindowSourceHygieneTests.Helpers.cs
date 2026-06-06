@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -7,25 +6,19 @@ public sealed partial class MainWindowSourceHygieneTests
 {
     private static string ReadEditingSource()
     {
-        return string.Join(
+        return DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             "\n",
-            new[]
-            {
-                "MainWindow.Editing.cs",
-                "MainWindow.EditingDropdowns.cs",
-                "MainWindow.FormulaReferenceEditing.cs"
-            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName))));
+            "MainWindow.Editing.cs",
+            "MainWindow.EditingDropdowns.cs",
+            "MainWindow.FormulaReferenceEditing.cs");
     }
 
     private static string ReadChartCommandSource()
     {
-        return string.Join(
+        return DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             "\n",
-            new[]
-            {
-                "MainWindow.ChartCommands.cs",
-                "MainWindow.ChartAxisCommands.cs"
-            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName))));
+            "MainWindow.ChartCommands.cs",
+            "MainWindow.ChartAxisCommands.cs");
     }
 
     private static void AssertChartButtonRoutesTo(string xaml, string content, string clickHandler, bool isDeferred)
@@ -90,16 +83,13 @@ public sealed partial class MainWindowSourceHygieneTests
 
     private static string ReadPivotCommandSource()
     {
-        return string.Join(
+        return DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             "\n",
-            new[]
-            {
-                "MainWindow.PivotCommands.cs",
-                "MainWindow.PivotAdvancedCommands.cs",
-                "MainWindow.PivotChartCommands.cs",
-                "MainWindow.PivotDesignCommands.cs",
-                "MainWindow.PivotSlicerTimeline.cs"
-            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", fileName))));
+            "MainWindow.PivotCommands.cs",
+            "MainWindow.PivotAdvancedCommands.cs",
+            "MainWindow.PivotChartCommands.cs",
+            "MainWindow.PivotDesignCommands.cs",
+            "MainWindow.PivotSlicerTimeline.cs");
     }
 
     private static string ExtractMethodSource(string source, string signature)
