@@ -704,6 +704,8 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaDoubleFactorialInput = 300;
     private const int MaxFormulaCombinInput = 1_000_000;
     private const int MaxFormulaCombinIterations = 10_000;
+    private const int MaxFormulaPermutInput = 1_000_000;
+    private const int MaxFormulaPermutIterations = 10_000;
     private const int MaxFormulaTextSliceLength = 32_767;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
@@ -936,6 +938,9 @@ public static partial class AccessibilityCheckerService
             case "COMBIN":
                 kind = ConditionalFormulaScalarFunctionKind.Combin;
                 return true;
+            case "PERMUT":
+                kind = ConditionalFormulaScalarFunctionKind.Permut;
+                return true;
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
                 return true;
@@ -1109,6 +1114,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Quotient or
             ConditionalFormulaScalarFunctionKind.Combin or
+            ConditionalFormulaScalarFunctionKind.Permut or
             ConditionalFormulaScalarFunctionKind.Power or
             ConditionalFormulaScalarFunctionKind.Atan2 or
             ConditionalFormulaScalarFunctionKind.Left or
@@ -1655,6 +1661,7 @@ public static partial class AccessibilityCheckerService
         Mod,
         Quotient,
         Combin,
+        Permut,
         Sqrt,
         SqrtPi,
         Sign,
@@ -2188,6 +2195,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Quotient:
                 case ConditionalFormulaScalarFunctionKind.Combin:
+                case ConditionalFormulaScalarFunctionKind.Permut:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
                 case ConditionalFormulaScalarFunctionKind.Sign:
@@ -2421,6 +2429,14 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Combin:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var numberChosen) ||
                         !TryCombinFormulaNumber(first, numberChosen, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Permut:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var permutNumberChosen) ||
+                        !TryPermutFormulaNumber(first, permutNumberChosen, out result))
                     {
                         return false;
                     }
@@ -3080,6 +3096,52 @@ public static partial class AccessibilityCheckerService
             var truncated = Math.Truncate(value);
             if (!double.IsFinite(truncated) ||
                 truncated > MaxFormulaCombinInput)
+            {
+                return false;
+            }
+
+            integer = (int)truncated;
+            return true;
+        }
+
+        private static bool TryPermutFormulaNumber(double number, double numberChosen, out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaPermutInteger(number, out var n) ||
+                !TryGetFormulaPermutInteger(numberChosen, out var k) ||
+                k > n ||
+                k > MaxFormulaPermutIterations)
+            {
+                return false;
+            }
+
+            result = 1d;
+            for (var factor = n - k + 1; factor <= n; factor++)
+            {
+                if (factor <= 0 ||
+                    result > double.MaxValue / factor)
+                {
+                    return false;
+                }
+
+                result *= factor;
+                if (!double.IsFinite(result))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetFormulaPermutInteger(double value, out int integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value) ||
+                value < 0d)
+                return false;
+
+            var truncated = Math.Truncate(value);
+            if (!double.IsFinite(truncated) ||
+                truncated > MaxFormulaPermutInput)
             {
                 return false;
             }
