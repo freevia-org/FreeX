@@ -84,6 +84,7 @@ public sealed class HomeAlignmentCommandSourceTests
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: 0))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: 45))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: -45))");
+        source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: 255))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: 90))");
     }
 

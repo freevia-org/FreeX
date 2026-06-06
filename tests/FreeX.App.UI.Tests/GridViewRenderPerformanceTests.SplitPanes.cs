@@ -19,9 +19,10 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
 
         renderSplitPaneCells.Should().Contain("_underlinePenCache.Clear();");
-        renderSplitPaneCells.Should().Contain("if (style?.DoubleUnderline == true)");
-        renderSplitPaneCells.Should().Contain("UnderlinePenForTextBrush(textBrush, _underlinePenCache)");
-        renderSplitPaneCells.Should().Contain("dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));");
+        renderSplitPaneCells.Should().Contain("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);");
+        source.Should().Contain("if (style?.DoubleUnderline == true)");
+        source.Should().Contain("UnderlinePenForTextBrush(textBrush, underlinePenCache)");
+        source.Should().Contain("dc.DrawLine(underlinePen, new Point(textLayout.TextPoint.X, uY), new Point(textLayout.TextPoint.X + text.Width, uY));");
         renderSplitPaneCells.Should().NotContain("new Pen(textBrush");
     }
 
@@ -389,7 +390,7 @@ public sealed partial class GridViewRenderPerformanceTests
         renderSplitPaneCells.Should().Contain("var textClipRect = layout.TextClipRect;");
         conditionalIconBlock.Should().Contain("rect = iconLayout.TextRect;");
         conditionalIconBlock.Should().Contain("textClipRect = AdjustConditionalIconTextClipRect(layout.TextClipRect, rect);");
-        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textPoint);");
+        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout);");
         renderSplitPaneCells.Should().Contain("if (shouldClipText)");
         renderSplitPaneCells.Should().Contain("dc.PushClip(GetCellClipGeometry(textClipRect));");
         renderSplitPaneCells.Should().Contain("private static Rect AdjustConditionalIconTextClipRect(Rect clipRect, Rect textRect)");
@@ -403,14 +404,14 @@ public sealed partial class GridViewRenderPerformanceTests
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
 
-        renderSplitPaneCells.Should().Contain("var textPoint = new Point(Math.Round(textX), Math.Round(textY));");
-        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textPoint);");
+        renderSplitPaneCells.Should().Contain("var textLayout = CalculateCellTextRenderLayout(");
+        renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout);");
         renderSplitPaneCells.IndexOf("dc.PushClip(GetCellClipGeometry(textClipRect));", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(renderSplitPaneCells.IndexOf("dc.DrawText(text, textPoint);", StringComparison.Ordinal));
+            .BeLessThan(renderSplitPaneCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);", StringComparison.Ordinal));
         renderSplitPaneCells.LastIndexOf("dc.Pop();", StringComparison.Ordinal)
             .Should()
-            .BeGreaterThan(renderSplitPaneCells.IndexOf("dc.DrawText(text, textPoint);", StringComparison.Ordinal));
+            .BeGreaterThan(renderSplitPaneCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -430,7 +431,7 @@ public sealed partial class GridViewRenderPerformanceTests
         renderSplitPaneCells.Should().Contain("var wrapTextAlignment = TextAlignment.Left;");
         renderSplitPaneCells.Should().Contain("if (!useDefaultTextLayout && wrapText)");
         renderSplitPaneCells.Should().Contain("useDefaultWrappedTextLayout = CanUseDefaultWrappedFormattedText(style);");
-        renderSplitPaneCells.Should().Contain("GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
+        renderSplitPaneCells.Should().Contain("GetDefaultWrappedFormattedText(renderText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
         textSetup.Should().NotContain("CreateCellTypeface");
         textSetup.Should().NotContain("BrushForCellColor");
         renderSplitPaneCells.Should().Contain("text.MaxTextWidth = wrapMaxTextWidth;");
