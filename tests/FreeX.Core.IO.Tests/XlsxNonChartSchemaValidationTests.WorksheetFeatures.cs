@@ -89,6 +89,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(workbook).Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithNamedRanges_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateNamedRangeSourceWorkbook());
+        var sourceDefinedNames = ReadWorkbookChildElement(source, "definedNames");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "definedNames")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceDefinedNames.ToString(SaveOptions.DisableFormatting));
+    }
+
 
     [Fact]
     public void MergedCells_ProducesSchemaValidWorkbook()
@@ -268,6 +296,22 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.StructuredTables.Add(table);
 
         return workbook;
+    }
+
+    private static Workbook CreateNamedRangeSourceWorkbook()
+    {
+        var workbook = new Workbook("NamedRangePatchSave");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+        workbook.DefineNamedRange("MyRange", Range(sheet, 2, 1, 5, 1));
+        workbook.DefineNamedRange("SingleCell", Range(sheet, 1, 1, 1, 1));
+        return workbook;
+    }
+
+    private static XElement ReadWorkbookChildElement(Stream stream, string localName)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return new XElement(ReadPackageRootElement(stream, "xl/workbook.xml").Element(workbookNs + localName)!);
     }
 
     private static MemoryStream CreateLegacyCommentSourcePackage() =>
