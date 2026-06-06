@@ -462,6 +462,7 @@ internal static class XlsxWorkbookMetadataWriter
         calcPr.SetAttributeValue(
             "iterateDelta",
             workbook.MaxCalculationChange is { } maxChange ? maxChange.ToString(CultureInfo.InvariantCulture) : null);
+        XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
 
         return true;
 

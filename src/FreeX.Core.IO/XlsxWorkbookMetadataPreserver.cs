@@ -271,7 +271,9 @@ internal static class XlsxWorkbookMetadataPreserver
         var targetCalculationProperties = targetRoot.Element(workbookNs + "calcPr");
         if (targetCalculationProperties is null)
         {
-            targetRoot.Add(new XElement(sourceCalculationProperties));
+            var cloned = new XElement(sourceCalculationProperties);
+            XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(cloned);
+            targetRoot.Add(cloned);
             return true;
         }
 
@@ -300,6 +302,9 @@ internal static class XlsxWorkbookMetadataPreserver
             targetCalculationProperties.SetAttributeValue(attribute.Name, attribute.Value);
             changed = true;
         }
+
+        if (XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(targetCalculationProperties))
+            changed = true;
 
         return changed;
     }
