@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,10 +7,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindowFileDrop_WiresWindowDropToWorkbookPlannerAndOpenFile()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var xaml = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml"));
-        var source = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.FileDrop.cs"));
-        var planner = File.ReadAllText(Path.Combine(appHostDirectory, "WorkbookDropPlanner.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.FileDrop.cs");
+        var planner = DialogSourceTestSupport.ReadHostSources("WorkbookDropPlanner.cs");
 
         xaml.Should().Contain("AllowDrop=\"True\"");
         xaml.Should().Contain("DragOver=\"MainWindow_DragOver\"");
@@ -24,12 +22,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageAndFileController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var backstageSourcePath = Path.Combine(appHostDirectory, "MainWindow.Backstage.cs");
-
-        File.Exists(backstageSourcePath).Should().BeTrue();
-        var backstageSource = File.ReadAllText(backstageSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         mainSource.Should().NotContain("private void ShowStartScreen()");
         mainSource.Should().NotContain("private void UpdateSsRecentList(");
@@ -49,7 +43,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void BackstageSaveAs_ForcesSaveDialogInsteadOfExistingPathSave()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("MainWindow.xaml");
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         xaml.ShouldContainLocalizedAttribute("Text", "Save _As");
         xaml.Should().Contain("CommandName=\"Save As\"");
@@ -62,7 +56,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageOpenAndSave_UseFormatDescriptorRegistry()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         backstageSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters)");
         backstageSource.Should().Contain("FileDialogFilterBuilder.BuildSaveFilter(_fileAdapters)");
@@ -73,7 +67,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageOpenAndSaveDialogs_DeclareNativeDialogGuardrails()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         backstageSource.Should().Contain("new Microsoft.Win32.OpenFileDialog");
         backstageSource.Should().Contain("Filter = filter");
@@ -97,9 +91,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void FileNewSaveSaveAsAndClose_RouteThroughDirtyPromptAndOwnedMessages()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
-        var lifecycleSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookLifecycle.cs"));
-        var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var lifecycleSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookLifecycle.cs");
+        var keyboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
         newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
@@ -184,7 +178,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageOpen_FocusesHomeNavigationForKeyboardUsers()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         backstageSource.Should().Contain("StartScreenOverlay.Visibility = Visibility.Visible;");
         backstageSource.Should().Contain("FocusBackstageHomeNavigation();");
@@ -196,8 +190,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageSidebar_UpDownKeysMoveThroughNavigation()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         xaml.Should().Contain("PreviewKeyDown=\"StartScreenOverlay_PreviewKeyDown\"");
         xaml.Should().Contain("x:Name=\"StartScreenSidebar\"");
@@ -212,7 +206,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageSidebar_HomeEndKeysMoveToNavigationEdges()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         backstageSource.Should().Contain("e.Key is not (Key.Up or Key.Down or Key.Home or Key.End)");
         backstageSource.Should().Contain("Key.Home => FocusNavigationDirection.First");
@@ -222,7 +216,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageOverlay_CyclesTabFocusWithinOverlay()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         xaml.Should().Contain("x:Name=\"StartScreenOverlay\"");
         xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
@@ -232,8 +226,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageContextMenu_UsesFocusedBackstageElementBeforeWorksheetFallback()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         selectionSource.Should().Contain("if (commandShortcut == KeyboardCommandShortcut.OpenContextMenu && TryOpenFocusedBackstageContextMenu())");
         selectionSource.IndexOf("TryOpenFocusedBackstageContextMenu()", StringComparison.Ordinal)
@@ -250,7 +244,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageContextMenu_FocusesFirstEnabledMenuItem()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         backstageSource.Should().Contain("menu.Opened += BackstageContextMenu_Opened;");
         backstageSource.Should().Contain("private static void BackstageContextMenu_Opened(object sender, RoutedEventArgs e)");
@@ -261,8 +255,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageF6_CyclesWithinOverlayBeforeWorkbookShellFallback()
     {
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         const string backstageRoute = "if (IsStartScreenVisible() && TryHandleBackstageShellFocusCycle";
         const string workbookFallback = "ExecuteCommandShortcut(commandShortcut, this, e);";
@@ -279,7 +273,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void GetData_IncludesDelimitedTextAndSpreadsheetMlAdapters()
     {
-        var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         dataCommandsSource.Should().Contain("\".csv\", \".txt\", \".tsv\", \".tab\", \".xml\"");
     }
@@ -287,7 +281,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void GetData_CsvImportFlowGuardsNativeDialogAndRefreshesImportedCells()
     {
-        var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
         dataCommandsSource.Should().Contain("new Microsoft.Win32.OpenFileDialog");
@@ -315,7 +309,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void RefreshAll_RoutesToCalculateNow()
     {
-        var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         dataCommandsSource.Should().Contain("private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click(sender, e);");
     }
@@ -323,12 +317,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void PrintAndExportController_LivesOutsideMainWindowCodeBehind()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
-        var printSourcePath = Path.Combine(appHostDirectory, "MainWindow.PrintExport.cs");
-
-        File.Exists(printSourcePath).Should().BeTrue();
-        var printSource = File.ReadAllText(printSourcePath);
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var printSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
 
         mainSource.Should().NotContain("private void PrintButton_Click(");
         mainSource.Should().NotContain("private void ExportPdfButton_Click(");
@@ -344,9 +334,8 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ShareWorkbookWorkflow_RoutesUnsavedAndSavedFilesThroughPlannerAndShareService()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var reviewSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.ReviewCommands.cs"));
-        var backstageSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Backstage.cs"));
+        var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var shareMethod = ExtractMethodSource(reviewSource, "private async Task ShareWorkbookAsync(");
 
         shareMethod.Should().Contain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
@@ -363,7 +352,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageOpenProgressAndUnsupportedWarnings_UseOwnedDialogsAndRecoverOverlay()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
         var saveWarningMethod = ExtractMethodSource(backstageSource, "private bool ConfirmUnsupportedXlsxFeatureSave()");
         var openWarningMethod = ExtractMethodSource(backstageSource, "private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()");
@@ -392,7 +381,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void OnlineTemplatesExcludedCommand_UsesOwnedMessageRoute()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var methodStart = backstageSource.IndexOf("private void SsMoreTemplatesBtn_Click", StringComparison.Ordinal);
         var nextMethodStart = backstageSource.IndexOf("private void SsOptionsBtn_Click", methodStart, StringComparison.Ordinal);
 
@@ -408,7 +397,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ExportWorkflow_SurfacesPlannedPdfAndXpsPaths()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PrintExport.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
 
         source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
@@ -422,7 +411,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ExportPdfXpsSaveDialog_DeclaresNativeGuardrailsAndOwnedMessages()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PrintExport.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
         var exportMethod = ExtractMethodSource(source, "private void ExportPdfButton_Click(");
         var exportPdfMethod = ExtractMethodSource(source, "private bool ExportAsPdf(");
         var exportXpsMethod = ExtractMethodSource(source, "private bool ExportAsXps(");
@@ -463,9 +452,9 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void CtrlP_RoutesThroughBackstagePrintEntryPoint()
     {
-        var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var keyboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         backstageSource.Should().Contain("private void OpenPrintBackstage()");
         backstageSource.Should().Contain("SsPrintNavBtn.Focus();");
@@ -479,11 +468,12 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void BackstagePrint_OpensPreviewWithSettingsAndNativePrintPath()
     {
-        var printSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PrintExport.cs"));
-        var previewSource =
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewDialog.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewDialog.Helpers.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintPreviewDialog.Layout.cs"));
+        var printSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
+        var previewSource = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
+            string.Empty,
+            "PrintPreviewDialog.cs",
+            "PrintPreviewDialog.Helpers.cs",
+            "PrintPreviewDialog.Layout.cs");
 
         printSource.Should().Contain("var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);");
         printSource.Should().Contain("PrintSettingsPlanner.Build(sheet)");
