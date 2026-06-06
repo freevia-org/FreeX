@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.App.UI;
-using System.IO;
 using System.Reflection;
 
 namespace FreeX.App.Host.Tests;
@@ -10,7 +9,7 @@ public sealed class QuickAnalysisHoverPreviewTests
     [Fact]
     public void QuickAnalysisHoverAndKeyboardFocus_SetAndClearGridPreviewRange()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
         source.Should().Contain("item.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;");
         source.Should().Contain("item.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;");
@@ -27,7 +26,7 @@ public sealed class QuickAnalysisHoverPreviewTests
     [Fact]
     public void QuickAnalysisHoverAndKeyboardFocus_SetAndClearGridPreviewVisual()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
         source.Should().Contain("MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind)");
         source.Should().Contain("ApplyQuickAnalysisPreview(null, GridQuickAnalysisPreviewVisualKind.None)");
