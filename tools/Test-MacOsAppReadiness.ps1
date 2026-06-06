@@ -468,6 +468,8 @@ function Test-SourceWiring {
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
+                "AddStyledCellBorderOverlay(content, style);",
+                "private static bool HasVisibleCellBorder(CellStyle? style)",
                 "internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()"
             )
             OrderedPairs = @()

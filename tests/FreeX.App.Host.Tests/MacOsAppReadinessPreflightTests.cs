@@ -29,6 +29,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
         script.Should().Contain("IActivatableLifetime");
         script.Should().Contain("OpenActivatedFilesAsync");
+        script.Should().Contain("AddStyledCellBorderOverlay(content, style);");
+        script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("Portable macOS source contains forbidden token");
     }
 
@@ -355,6 +357,11 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private const string NativeWorkbookExtension = ".fxl";
                 public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files) => await Task.CompletedTask;
+                private static void RenderCell(CellStyle? style)
+                {
+                    AddStyledCellBorderOverlay(content, style);
+                }
+                private static bool HasVisibleCellBorder(CellStyle? style) => true;
                 internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot() => new();
             }
             """);

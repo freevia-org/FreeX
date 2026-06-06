@@ -13,6 +13,7 @@ using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 using CellVAlign = FreeX.Core.Model.VerticalAlignment;
@@ -21,6 +22,14 @@ namespace FreeX.App.Avalonia;
 
 public sealed class MainWindow : Window
 {
+    private enum CellBorderEdge
+    {
+        Top,
+        Right,
+        Bottom,
+        Left
+    }
+
     private const double CellIndentLevelWidth = 12;
     private const string CommaNumberFormat = "#,##0.00";
     private const string CurrencyNumberFormat = "$#,##0.00";
@@ -1250,7 +1259,8 @@ public sealed class MainWindow : Window
             selected,
             address,
             indentPadding,
-            textRotation);
+            textRotation,
+            style);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -1267,7 +1277,8 @@ public sealed class MainWindow : Window
         bool selected,
         CellAddress address,
         double indentPadding = 0,
-        int textRotation = 0)
+        int textRotation = 0,
+        CellStyle? style = null)
     {
         var border = CreateCellBorder(
             text,
@@ -1282,7 +1293,8 @@ public sealed class MainWindow : Window
             textDecorations,
             selected,
             indentPadding,
-            textRotation);
+            textRotation,
+            style);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -1313,7 +1325,8 @@ public sealed class MainWindow : Window
         TextDecorationCollection? textDecorations,
         bool selected,
         double indentPadding = 0,
-        int textRotation = 0)
+        int textRotation = 0,
+        CellStyle? style = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -1331,6 +1344,7 @@ public sealed class MainWindow : Window
                 ? TextTrimming.None
                 : TextTrimming.CharacterEllipsis,
             VerticalAlignment = verticalAlignment,
+            Margin = new Thickness(8 + indentPadding, 0, 8, 0),
         };
         if (CreateTextRotationTransform(textRotation) is { } transform)
         {
@@ -1338,16 +1352,84 @@ public sealed class MainWindow : Window
             textBlock.RenderTransform = transform;
         }
 
+        var content = new AvaloniaGrid { ClipToBounds = true };
+        content.Children.Add(textBlock);
+        AddStyledCellBorderOverlay(content, style);
+
         return new Border
         {
             Background = background,
             BorderBrush = selected ? SelectionBorder : GridLine,
             BorderThickness = new Thickness(1),
             ClipToBounds = true,
-            Padding = new Thickness(8 + indentPadding, 0, 8, 0),
-            Child = textBlock,
+            Child = content,
         };
     }
+
+    private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style)
+    {
+        if (style is not { } visibleStyle || !HasVisibleCellBorder(visibleStyle))
+            return;
+
+        AddStyledCellBorderEdge(content, visibleStyle.BorderTop, CellBorderEdge.Top);
+        AddStyledCellBorderEdge(content, visibleStyle.BorderRight, CellBorderEdge.Right);
+        AddStyledCellBorderEdge(content, visibleStyle.BorderBottom, CellBorderEdge.Bottom);
+        AddStyledCellBorderEdge(content, visibleStyle.BorderLeft, CellBorderEdge.Left);
+    }
+
+    private static bool HasVisibleCellBorder(CellStyle? style) =>
+        style is not null &&
+        (style.BorderTop.Style != BorderStyle.None ||
+         style.BorderRight.Style != BorderStyle.None ||
+         style.BorderBottom.Style != BorderStyle.None ||
+         style.BorderLeft.Style != BorderStyle.None);
+
+    private static void AddStyledCellBorderEdge(AvaloniaGrid content, CellBorder border, CellBorderEdge edge)
+    {
+        if (border.Style == BorderStyle.None)
+            return;
+
+        var thickness = GetDisplayedCellBorderThickness(border.Style);
+        var edgeStrip = new Border
+        {
+            Background = Brush(border.Color),
+            IsHitTestVisible = false,
+        };
+
+        switch (edge)
+        {
+            case CellBorderEdge.Top:
+                edgeStrip.Height = thickness;
+                edgeStrip.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+                edgeStrip.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+                break;
+            case CellBorderEdge.Right:
+                edgeStrip.Width = thickness;
+                edgeStrip.HorizontalAlignment = AvaloniaHorizontalAlignment.Right;
+                edgeStrip.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
+                break;
+            case CellBorderEdge.Bottom:
+                edgeStrip.Height = thickness;
+                edgeStrip.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+                edgeStrip.VerticalAlignment = AvaloniaVerticalAlignment.Bottom;
+                break;
+            case CellBorderEdge.Left:
+                edgeStrip.Width = thickness;
+                edgeStrip.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+                edgeStrip.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
+                break;
+        }
+
+        content.Children.Add(edgeStrip);
+    }
+
+    private static double GetDisplayedCellBorderThickness(BorderStyle style) =>
+        style switch
+        {
+            BorderStyle.Medium => 1.5,
+            BorderStyle.Thick => 2.5,
+            _ => 1
+        };
 
     private static string FormatTextForRotation(string text, int textRotation) =>
         textRotation == 255 && text.Length > 1

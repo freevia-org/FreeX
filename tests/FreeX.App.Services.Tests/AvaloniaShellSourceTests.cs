@@ -957,7 +957,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var indentPadding = GetCellIndentPadding(style);");
         source.Should().Contain("private static double GetCellIndentPadding(CellStyle? style)");
         source.Should().Contain("Math.Clamp(style.IndentLevel, 0, 15) * CellIndentLevelWidth;");
-        source.Should().Contain("Padding = new Thickness(8 + indentPadding, 0, 8, 0),");
+        source.Should().Contain("Margin = new Thickness(8 + indentPadding, 0, 8, 0),");
     }
 
     [Fact]
@@ -1037,6 +1037,28 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,");
         source.Should().Contain("CellHAlign.General when isNumericOrDate => TextAlignment.Right,");
         source.Should().Contain("private static string FormatHorizontalAlignmentStatus(CellHAlign alignment)");
+    }
+
+    [Fact]
+    public void MainWindow_RendersCellStyleBordersFromWorkbookStyles()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private enum CellBorderEdge");
+        source.Should().Contain("style);");
+        source.Should().Contain("AddStyledCellBorderOverlay(content, style);");
+        source.Should().Contain("private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style)");
+        source.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
+        source.Should().Contain("style.BorderTop.Style != BorderStyle.None");
+        source.Should().Contain("style.BorderRight.Style != BorderStyle.None");
+        source.Should().Contain("style.BorderBottom.Style != BorderStyle.None");
+        source.Should().Contain("style.BorderLeft.Style != BorderStyle.None");
+        source.Should().Contain("private static void AddStyledCellBorderEdge(AvaloniaGrid content, CellBorder border, CellBorderEdge edge)");
+        source.Should().Contain("Background = Brush(border.Color)");
+        source.Should().Contain("GetDisplayedCellBorderThickness(border.Style)");
+        source.Should().Contain("BorderStyle.Medium => 1.5");
+        source.Should().Contain("BorderStyle.Thick => 2.5");
+        source.Should().Contain("IsHitTestVisible = false");
     }
 
     [Fact]
