@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using FreeX.App.Services;
 using FreeX.Core.IO;
@@ -8,20 +7,14 @@ namespace FreeX.App.Host;
 
 public sealed class OpenWorkbookLoader
 {
-    private readonly Action<Workbook> _recalculateAllFormulas;
-    private readonly Func<Stream, XlsxFeatureReport> _inspectXlsx;
-    private readonly bool _hasCustomInspectXlsx;
-    private readonly long _maxFileBytes;
+    private readonly WorkbookOpenService _openService;
 
     public OpenWorkbookLoader(
         Action<Workbook> recalculateAllFormulas,
         Func<Stream, XlsxFeatureReport>? inspectXlsx = null,
         long maxFileBytes = WorkbookOpenSizeGuard.DefaultMaxFileBytes)
     {
-        _recalculateAllFormulas = recalculateAllFormulas;
-        _inspectXlsx = inspectXlsx ?? XlsxFeatureInspector.Inspect;
-        _hasCustomInspectXlsx = inspectXlsx is not null;
-        _maxFileBytes = maxFileBytes;
+        _openService = new WorkbookOpenService(recalculateAllFormulas, inspectXlsx, maxFileBytes);
     }
 
     public async Task<OpenWorkbookResult> LoadAsync(
@@ -31,162 +24,39 @@ public sealed class OpenWorkbookLoader
         FileFormatDescriptor format,
         IProgress<OpenProgressUpdate> progress)
     {
-        WorkbookOpenSizeGuard.EnsureFileWithinLimit(new FileInfo(path).Length, _maxFileBytes);
-        ReportReadingProgress(progress);
+        ArgumentNullException.ThrowIfNull(progress);
 
-        XlsxFeatureReport? featureReport = null;
-        var isOpenXmlExcelPackage = IsOpenXmlExcelPackageExtension(extension);
-        var inspectFeaturesDuringLoad = isOpenXmlExcelPackage && adapter is XlsxFileAdapter && !_hasCustomInspectXlsx;
-        if (isOpenXmlExcelPackage && !inspectFeaturesDuringLoad)
-        {
-            featureReport = await RunStageAsync(
-                progress,
-                "inspecting",
-                8,
-                16,
-                TimeSpan.FromSeconds(4),
-                () =>
-                {
-                    using var fileStream = OpenFileStream(path);
-                    return _inspectXlsx(fileStream);
-                });
-        }
-
-        IReadOnlyList<string> loadWarnings = [];
-        var parseStartPercent = inspectFeaturesDuringLoad ? 8 : 16;
-        var workbook = await RunStageAsync(
-            progress,
-            "parsing",
-            parseStartPercent,
-            90,
-            TimeSpan.FromSeconds(45),
-            () =>
-            {
-                using var fileStream = OpenFileStream(path);
-                if (adapter is XlsxFileAdapter xlsxAdapter)
-                {
-                    var result = xlsxAdapter.LoadWithWarnings(fileStream, inspectFeaturesDuringLoad);
-                    loadWarnings = result.Warnings;
-                    featureReport ??= result.FeatureReport;
-                    return result.Workbook;
-                }
-                return adapter.Load(fileStream);
-            });
-        WorkbookOpenNormalizer.ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
-
-        if (WorkbookFormulaScanner.HasFormulas(workbook) &&
-            ShouldRecalculateLoadedFormulas(workbook, adapter, isOpenXmlExcelPackage))
-        {
-            await RunStageAsync(
-                progress,
-                "calculating",
-                90,
-                98,
-                TimeSpan.FromSeconds(12),
-                () =>
-                {
-                    _recalculateAllFormulas(workbook);
-                    if (adapter is XlsxFileAdapter xlsxAdapter)
-                        xlsxAdapter.RebaseLoadedPackageSnapshot(workbook);
-                    return true;
-                });
-        }
-        else
-        {
-            progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail("calculating", TimeSpan.Zero), 98));
-        }
+        var result = await _openService.LoadAsync(
+            path,
+            adapter,
+            extension,
+            format,
+            new Progress<WorkbookOpenProgressUpdate>(
+                update => progress.Report(ToHostProgressUpdate(update)))).ConfigureAwait(false);
 
         return new OpenWorkbookResult(
-            workbook,
-            featureReport,
-            Path.GetFileNameWithoutExtension(path),
-            format.OpensAsTemplate,
-            loadWarnings);
+            result.Workbook,
+            result.FeatureReport,
+            result.DisplayName,
+            result.OpenedAsTemplate,
+            result.LoadWarnings);
     }
 
-    private static async Task<T> RunStageAsync<T>(
-        IProgress<OpenProgressUpdate> progress,
-        string detail,
-        double startPercent,
-        double endPercent,
-        TimeSpan expectedDuration,
-        Func<T> work)
-    {
-        progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail(detail, TimeSpan.Zero), startPercent));
-        using var cancellation = new CancellationTokenSource();
-        var progressTask = ReportStageProgressAsync(
-            progress,
-            detail,
-            startPercent,
-            endPercent,
-            expectedDuration,
-            cancellation.Token);
+    private static OpenProgressUpdate ToHostProgressUpdate(WorkbookOpenProgressUpdate update) =>
+        new(
+            OpenWorkbookProgressPlanner.ProgressTitle(),
+            OpenWorkbookProgressPlanner.FormatLoadingFileDetail(PhaseDetail(update.Phase), update.Elapsed),
+            update.Percent);
 
-        try
+    private static string PhaseDetail(WorkbookOpenPhase phase) =>
+        phase switch
         {
-            return await Task.Run(work);
-        }
-        finally
-        {
-            cancellation.Cancel();
-            try { await progressTask; }
-            catch (OperationCanceledException) { }
-            progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail(detail, TimeSpan.Zero), endPercent));
-        }
-    }
-
-    private static async Task ReportStageProgressAsync(
-        IProgress<OpenProgressUpdate> progress,
-        string detail,
-        double startPercent,
-        double endPercent,
-        TimeSpan expectedDuration,
-        CancellationToken cancellationToken)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
-        while (await timer.WaitForNextTickAsync(cancellationToken))
-        {
-            var percent = OpenWorkbookProgressPlanner.CalculateStageProgress(startPercent, endPercent, stopwatch.Elapsed, expectedDuration);
-            progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail(detail, stopwatch.Elapsed), percent));
-        }
-    }
-
-    private static void ReportReadingProgress(IProgress<OpenProgressUpdate> progress) =>
-        progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail("reading", TimeSpan.Zero), 8));
-
-    private static FileStream OpenFileStream(string path)
-    {
-        return new FileStream(
-            path,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            bufferSize: 1024 * 128,
-            useAsync: true);
-    }
-
-    private static bool IsOpenXmlExcelPackageExtension(string extension) =>
-        extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ||
-        extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) ||
-        extension.Equals(".xltx", StringComparison.OrdinalIgnoreCase) ||
-        extension.Equals(".xltm", StringComparison.OrdinalIgnoreCase);
-
-    private static bool ShouldRecalculateLoadedFormulas(
-        Workbook workbook,
-        IFileAdapter adapter,
-        bool isOpenXmlExcelPackage)
-    {
-        if (isOpenXmlExcelPackage && adapter is XlsxFileAdapter)
-        {
-            return workbook.FullCalculationOnLoad ||
-                   workbook.ForceFullCalculation ||
-                   workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad);
-        }
-
-        return true;
-    }
-
+            WorkbookOpenPhase.Reading => "reading",
+            WorkbookOpenPhase.Inspecting => "inspecting",
+            WorkbookOpenPhase.Parsing => "parsing",
+            WorkbookOpenPhase.Calculating => "calculating",
+            _ => phase.ToString().ToLowerInvariant()
+        };
 }
 
 public sealed record OpenProgressUpdate(string Title, string Detail, double? Percent);

@@ -6,13 +6,16 @@ public sealed class StartupWorkbookLoader
 {
     private readonly IReadOnlyList<IFileAdapter> _adapters;
     private readonly Func<string, bool, StartupWorkbookLoadResult> _fallbackFactory;
+    private readonly WorkbookOpenService _openService;
 
     public StartupWorkbookLoader(
         IEnumerable<IFileAdapter>? adapters = null,
-        Func<string, bool, StartupWorkbookLoadResult>? fallbackFactory = null)
+        Func<string, bool, StartupWorkbookLoadResult>? fallbackFactory = null,
+        WorkbookOpenService? openService = null)
     {
         _adapters = (adapters ?? WorkbookFileAdapterCatalog.CreateDefaultAdapters()).ToList();
         _fallbackFactory = fallbackFactory ?? PortPreviewWorkbookFactory.Create;
+        _openService = openService ?? new WorkbookOpenService();
     }
 
     public StartupWorkbookLoadResult Load(IReadOnlyList<string> startupArguments)
@@ -25,26 +28,26 @@ public sealed class StartupWorkbookLoader
             return _fallbackFactory("Showing sample workbook.", false);
 
         var extension = Path.GetExtension(filePath);
-        var adapter = FileFormatResolver.FindOpenAdapter(_adapters, extension, out _);
-        if (adapter is null)
+        var adapter = FileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
+        if (adapter is null || format is null)
             return _fallbackFactory($"Unsupported file type: {extension}.", true);
 
         try
         {
-            using var stream = File.OpenRead(filePath);
-            var workbook = adapter.Load(stream);
-            var displayName = Path.GetFileNameWithoutExtension(filePath);
-            workbook.Name = Path.GetFileName(filePath);
-            WorkbookOpenNormalizer.ApplyTextWorkbookSheetName(workbook, extension, displayName);
+            var result = _openService
+                .LoadAsync(filePath, adapter, extension, format)
+                .GetAwaiter()
+                .GetResult();
+            result.Workbook.Name = Path.GetFileName(filePath);
 
             return new StartupWorkbookLoadResult(
-                workbook,
-                workbook.Name,
+                result.Workbook,
+                result.Workbook.Name,
                 $"Opened {extension}.",
                 IsFallback: false,
                 SourcePath: filePath);
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {
             return _fallbackFactory($"Open failed: {ex.Message}", true);
         }
