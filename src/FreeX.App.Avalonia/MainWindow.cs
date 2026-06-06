@@ -538,6 +538,17 @@ public sealed class MainWindow : Window
         await OpenWorkbookPathAsync(path!);
     }
 
+    public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)
+    {
+        if (!TrySelectOpenableLocalWorkbookPath(files, out var path, out var message))
+        {
+            ShowOpenIssue(message);
+            return;
+        }
+
+        await OpenWorkbookPathAsync(path!);
+    }
+
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
@@ -729,6 +740,19 @@ public sealed class MainWindow : Window
 
     private bool TrySelectDroppedWorkbookPath(DragEventArgs e, out string? path, out string message)
     {
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null)
+        {
+            path = null;
+            message = "Drop a supported local workbook file.";
+            return false;
+        }
+
+        return TrySelectOpenableLocalWorkbookPath(files, out path, out message);
+    }
+
+    private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message)
+    {
         path = null;
         if (_isOpening || _isSaving)
         {
@@ -739,13 +763,6 @@ public sealed class MainWindow : Window
         if (_session.IsDirty)
         {
             message = "Save changes before opening another workbook.";
-            return false;
-        }
-
-        var files = e.DataTransfer.TryGetFiles();
-        if (files is null)
-        {
-            message = "Drop a supported local workbook file.";
             return false;
         }
 

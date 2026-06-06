@@ -15,8 +15,27 @@ public sealed class App : Application
         Styles.Add(new FluentTheme());
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.MainWindow = new MainWindow(StartupArguments);
+        {
+            var mainWindow = new MainWindow(StartupArguments);
+            desktop.MainWindow = mainWindow;
+
+            if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
+                activatableLifetime.Activated += async (_, args) => await MainWindow_ActivatedAsync(mainWindow, args);
+        }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async Task MainWindow_ActivatedAsync(MainWindow mainWindow, ActivatedEventArgs args)
+    {
+        if (args is not FileActivatedEventArgs fileArgs ||
+            fileArgs.Kind != ActivationKind.File)
+        {
+            return;
+        }
+
+        mainWindow.Show();
+        mainWindow.Activate();
+        await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);
     }
 }

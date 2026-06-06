@@ -5,6 +5,32 @@ namespace FreeX.App.Services.Tests;
 public sealed class AvaloniaShellSourceTests
 {
     [Fact]
+    public void App_WiresMacOsFileActivationToMainWindowOpenPipeline()
+    {
+        var appSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
+        var programSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
+        var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        programSource.Should().NotContain("DisableAvaloniaAppDelegate");
+        appSource.Should().Contain("new MainWindow(StartupArguments)");
+        appSource.Should().Contain("desktop.MainWindow = mainWindow;");
+        appSource.Should().Contain("this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime");
+        appSource.Should().Contain("activatableLifetime.Activated += async (_, args) => await MainWindow_ActivatedAsync(mainWindow, args);");
+        appSource.Should().Contain("args is not FileActivatedEventArgs fileArgs");
+        appSource.Should().Contain("fileArgs.Kind != ActivationKind.File");
+        appSource.Should().Contain("mainWindow.Show();");
+        appSource.Should().Contain("mainWindow.Activate();");
+        appSource.Should().Contain("await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);");
+
+        windowSource.Should().Contain("public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)");
+        windowSource.Should().Contain("private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message)");
+        windowSource.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var message)");
+        windowSource.Should().Contain("file.TryGetLocalPath()");
+        windowSource.Should().Contain("ShowOpenIssue(message);");
+        windowSource.Should().Contain("await OpenWorkbookPathAsync(path!)");
+    }
+
+    [Fact]
     public void MainWindow_WiresDroppedWorkbookFilesToSharedOpenPipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -14,6 +40,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("DragDrop.AddDragOverHandler(this, MainWindow_DragOver);");
         source.Should().Contain("DragDrop.AddDropHandler(this, MainWindow_Drop);");
         source.Should().Contain("e.DataTransfer.TryGetFiles()");
+        source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out path, out message)");
         source.Should().Contain("file.TryGetLocalPath()");
         source.Should().Contain("_isOpening || _isSaving");
         source.Should().Contain("_session.IsDirty");
