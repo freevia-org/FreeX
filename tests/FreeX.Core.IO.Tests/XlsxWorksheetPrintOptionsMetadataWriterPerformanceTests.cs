@@ -7,8 +7,7 @@ public sealed class XlsxWorksheetPrintOptionsMetadataWriterPerformanceTests
     [Fact]
     public void Save_SkipsSheetsWithoutPrintOptionsMetadataWithoutLinqFiltering()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindRepoFile(
-            "src", "FreeX.Core.IO", "XlsxWorksheetPrintOptionsMetadataWriter.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetPrintOptionsMetadataWriter.cs");
 
         source.Should().Contain("foreach (var sheet in workbook.Sheets)");
         source.Should().Contain("var metadata = sheet.PrintOptionsMetadata;");

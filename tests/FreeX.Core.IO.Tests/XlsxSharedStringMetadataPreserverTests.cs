@@ -98,8 +98,7 @@ public sealed class XlsxSharedStringMetadataPreserverTests
     [Fact]
     public void UniqueSharedStringLookup_AvoidsLinqGroupingAllocations()
     {
-        var source = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", "XlsxSharedStringMetadataPreserver.cs"));
+        var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxSharedStringMetadataPreserver.cs");
         var method = source[
             source.IndexOf("private static Dictionary<string, XElement> GetUniqueSharedStringsByPlainText", StringComparison.Ordinal)..
             source.IndexOf("private static bool HasRichSharedStringMetadata", StringComparison.Ordinal)];
