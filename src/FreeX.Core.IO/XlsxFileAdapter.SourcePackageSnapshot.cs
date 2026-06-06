@@ -378,7 +378,8 @@ public sealed partial class XlsxFileAdapter
         bool? SourceNeedsPackageGraphNormalization = null,
         XlsxOfficeRevisionAttributeFacts? SourceOfficeRevisionAttributes = null)
     {
-        private const int FingerprintCellLimit = 25_000;
+        private const int FingerprintCellLimit = 100_000;
+        private const int FingerprintCompressedStyleOnlyCellLimit = 1_250_000;
         private const int CellPatchBaselineLimit = 2_000_000;
         private const int CellPatchChangeLimit = 4_096;
         private const string DrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
@@ -3210,6 +3211,7 @@ public sealed partial class XlsxFileAdapter
         private static bool ShouldCaptureModelFingerprint(Workbook workbook)
         {
             var cellCount = 0;
+            var styleOnlyCellCount = 0;
             foreach (var sheet in workbook.Sheets)
             {
                 cellCount += sheet.CellCount;
@@ -3219,12 +3221,13 @@ public sealed partial class XlsxFileAdapter
                 if (!sheet.HasStyleOnlyCells)
                     continue;
 
-                foreach (var _ in sheet.GetStyleOnlyEntries())
-                {
-                    cellCount++;
-                    if (cellCount > FingerprintCellLimit)
-                        return false;
-                }
+                styleOnlyCellCount += sheet.StyleOnlyCellCount;
+                if (styleOnlyCellCount > FingerprintCompressedStyleOnlyCellLimit)
+                    return false;
+
+                if (sheet.StyleOnlyCellCount > FingerprintCellLimit &&
+                    !sheet.TryGetCompressedStyleOnlyRuns(out _))
+                    return false;
             }
 
             return true;
