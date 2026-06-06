@@ -199,7 +199,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     [Fact]
     public void FreeXOptions_DoesNotUseDebugWriteLineForPersistenceFailures()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeXOptions.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("FreeXOptions.cs");
 
         source.Should().NotContain("Debug.WriteLine");
         source.Should().Contain(nameof(FreeXOptions.LastPersistenceError));

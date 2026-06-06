@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using FluentAssertions;
 
@@ -103,7 +102,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
     [Fact]
     public void CommandKeyTipComboBoxInvocation_ExplicitlyFocusesComboBoxBeforeOpening()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyTips.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
 
         var comboStart = source.IndexOf("if (match is ComboBox comboBox)", StringComparison.Ordinal);
         var openDropDown = "comboBox.IsDropDownOpen = true;";

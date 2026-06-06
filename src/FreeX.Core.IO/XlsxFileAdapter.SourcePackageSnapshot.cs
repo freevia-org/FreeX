@@ -5233,7 +5233,7 @@ public sealed partial class XlsxFileAdapter
 
         private sealed record XlsxSourceCellStyleInfo(
             XlsxSourceCellStyleIndexLookup PopulatedCells,
-            XlsxSourceStyleOnlyCellEntry[] StyleOnlyCells);
+            XlsxSourceStyleOnlyCellCollection StyleOnlyCells);
 
         private static XlsxSourceCellStyleInfo? ReadSourceCellStyleIndexes(
             SheetXmlLayout layout,
@@ -5305,7 +5305,7 @@ public sealed partial class XlsxFileAdapter
             return sourceStyleIndex;
         }
 
-        private static XlsxSourceStyleOnlyCellEntry[] ReadSourceStyleOnlyCells(
+        private static XlsxSourceStyleOnlyCellCollection ReadSourceStyleOnlyCells(
             IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
             Sheet sheet,
             Dictionary<int, string?> sourceStyleIndexCache,
@@ -5345,17 +5345,17 @@ public sealed partial class XlsxFileAdapter
                     sourceStyleIndex));
             }
 
-            return SortSourceStyleOnlyCells(result);
+            return XlsxSourceStyleOnlyCellCollection.FromCells(SortSourceStyleOnlyCells(result));
         }
 
-        private static XlsxSourceStyleOnlyCellEntry[] ReadCompressedSourceStyleOnlyCells(
+        private static XlsxSourceStyleOnlyCellCollection ReadCompressedSourceStyleOnlyCells(
             IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
             IReadOnlyList<StyleOnlyRun> runs,
             Dictionary<int, string?> sourceStyleIndexCache,
             Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
             HashSet<StyleId> ambiguousStyleIds)
         {
-            List<XlsxSourceStyleOnlyCellEntry>? result = null;
+            List<XlsxSourceStyleOnlyRunEntry>? result = null;
             var runIndex = 0;
             foreach (var (row, col, styleIndex) in explicitStyleOnlyCells)
             {
@@ -5372,21 +5372,46 @@ public sealed partial class XlsxFileAdapter
                 if (!StyleOnlyRunContainsCell(run, row, col))
                     continue;
 
-                result ??= new List<XlsxSourceStyleOnlyCellEntry>();
                 var sourceStyleIndex = GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex);
                 AddSourceStyleIndex(
                     sourceStyleIndexesByStyleId,
                     ambiguousStyleIds,
                     run.StyleId,
                     sourceStyleIndex);
-                result.Add(new XlsxSourceStyleOnlyCellEntry(
+                AddCompressedSourceStyleOnlyCell(
+                    ref result,
                     row,
                     col,
                     run.StyleId,
-                    sourceStyleIndex));
+                    sourceStyleIndex);
             }
 
-            return result is { Count: > 0 } ? result.ToArray() : [];
+            return XlsxSourceStyleOnlyCellCollection.FromRuns(result is { Count: > 0 } ? result.ToArray() : []);
+        }
+
+        private static void AddCompressedSourceStyleOnlyCell(
+            ref List<XlsxSourceStyleOnlyRunEntry>? result,
+            uint row,
+            uint col,
+            StyleId styleId,
+            string? sourceStyleIndex)
+        {
+            result ??= [];
+            if (result.Count > 0)
+            {
+                var last = result[^1];
+                if (last.Row == row &&
+                    last.StyleId == styleId &&
+                    string.Equals(last.SourceStyleIndex, sourceStyleIndex, StringComparison.Ordinal) &&
+                    last.EndCol != uint.MaxValue &&
+                    col == last.EndCol + 1)
+                {
+                    result[^1] = last with { EndCol = col };
+                    return;
+                }
+            }
+
+            result.Add(new XlsxSourceStyleOnlyRunEntry(row, col, col, styleId, sourceStyleIndex));
         }
 
         private static bool StyleOnlyRunIsBeforeCell(StyleOnlyRun run, uint row, uint col) =>
@@ -5461,7 +5486,7 @@ public sealed partial class XlsxFileAdapter
 
             return new XlsxSourceCellStyleInfo(
                 new XlsxDictionarySourceCellStyleIndexLookup(result),
-                SortSourceStyleOnlyCells(styleOnlyCells));
+                XlsxSourceStyleOnlyCellCollection.FromCells(SortSourceStyleOnlyCells(styleOnlyCells)));
         }
 
         private static IReadOnlyDictionary<CellAddress, XlsxSourceHyperlink> ReadSourceHyperlinks(
@@ -7383,7 +7408,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyDictionary<CellAddress, XlsxSourceComment> SourceComments,
         XlsxWorksheetViewBaseline View,
         XlsxWorksheetTablePatchBaseline Tables,
-        XlsxSourceStyleOnlyCellEntry[] SourceStyleOnlyCells,
+        XlsxSourceStyleOnlyCellCollection SourceStyleOnlyCells,
         XlsxPatchCellEntry[] Cells)
     {
         public bool TryGetCell(uint row, uint col, out XlsxPatchCell cell)
@@ -7415,34 +7440,8 @@ public sealed partial class XlsxFileAdapter
             return false;
         }
 
-        public bool TryGetSourceStyleOnlyCell(uint row, uint col, out XlsxSourceStyleOnlyCellEntry cell)
-        {
-            var low = 0;
-            var high = SourceStyleOnlyCells.Length - 1;
-            while (low <= high)
-            {
-                var mid = low + ((high - low) / 2);
-                ref readonly var entry = ref SourceStyleOnlyCells[mid];
-                var compare = entry.CompareTo(row, col);
-                if (compare < 0)
-                {
-                    low = mid + 1;
-                    continue;
-                }
-
-                if (compare > 0)
-                {
-                    high = mid - 1;
-                    continue;
-                }
-
-                cell = entry;
-                return true;
-            }
-
-            cell = default;
-            return false;
-        }
+        public bool TryGetSourceStyleOnlyCell(uint row, uint col, out XlsxSourceStyleOnlyCellEntry cell) =>
+            SourceStyleOnlyCells.TryGet(row, col, out cell);
 
         public XlsxPatchCellEntry[] WithAppliedCellChanges(IReadOnlyList<XlsxCellValuePatch> changes)
         {
@@ -7508,37 +7507,8 @@ public sealed partial class XlsxFileAdapter
             return cells;
         }
 
-        public XlsxSourceStyleOnlyCellEntry[] WithConsumedSourceStyleOnlyCells(IReadOnlyList<XlsxCellValuePatch> changes)
-        {
-            if (SourceStyleOnlyCells.Length == 0 ||
-                CountConsumedSourceStyleOnlyCells(changes) == 0)
-            {
-                return SourceStyleOnlyCells;
-            }
-
-            var result = new List<XlsxSourceStyleOnlyCellEntry>(SourceStyleOnlyCells.Length);
-            foreach (var entry in SourceStyleOnlyCells)
-            {
-                var consumed = false;
-                foreach (var change in changes)
-                {
-                    if (change.ConsumesSourceStyleOnlyCell &&
-                        change.Row == entry.Row &&
-                        change.Col == entry.Col)
-                    {
-                        consumed = true;
-                        break;
-                    }
-                }
-
-                if (!consumed)
-                    result.Add(entry);
-            }
-
-            return result.Count == SourceStyleOnlyCells.Length
-                ? SourceStyleOnlyCells
-                : result.ToArray();
-        }
+        public XlsxSourceStyleOnlyCellCollection WithConsumedSourceStyleOnlyCells(IReadOnlyList<XlsxCellValuePatch> changes) =>
+            SourceStyleOnlyCells.WithConsumed(changes);
     }
 
     private static int CountCellPatchChanges(
@@ -7573,6 +7543,183 @@ public sealed partial class XlsxFileAdapter
         return count;
     }
 
+    private sealed class XlsxSourceStyleOnlyCellCollection
+    {
+        public static XlsxSourceStyleOnlyCellCollection Empty { get; } = new([], []);
+
+        private readonly XlsxSourceStyleOnlyCellEntry[] _cells;
+        private readonly XlsxSourceStyleOnlyRunEntry[] _runs;
+
+        private XlsxSourceStyleOnlyCellCollection(
+            XlsxSourceStyleOnlyCellEntry[] cells,
+            XlsxSourceStyleOnlyRunEntry[] runs)
+        {
+            _cells = cells;
+            _runs = runs;
+        }
+
+        private bool IsEmpty => _cells.Length == 0 && _runs.Length == 0;
+
+        public static XlsxSourceStyleOnlyCellCollection FromCells(XlsxSourceStyleOnlyCellEntry[] cells) =>
+            cells.Length == 0 ? Empty : new XlsxSourceStyleOnlyCellCollection(cells, []);
+
+        public static XlsxSourceStyleOnlyCellCollection FromRuns(XlsxSourceStyleOnlyRunEntry[] runs) =>
+            runs.Length == 0 ? Empty : new XlsxSourceStyleOnlyCellCollection([], runs);
+
+        public bool TryGet(uint row, uint col, out XlsxSourceStyleOnlyCellEntry cell)
+        {
+            if (_runs.Length > 0)
+                return TryGetFromRuns(row, col, out cell);
+
+            var low = 0;
+            var high = _cells.Length - 1;
+            while (low <= high)
+            {
+                var mid = low + ((high - low) / 2);
+                ref readonly var entry = ref _cells[mid];
+                var compare = entry.CompareTo(row, col);
+                if (compare < 0)
+                {
+                    low = mid + 1;
+                    continue;
+                }
+
+                if (compare > 0)
+                {
+                    high = mid - 1;
+                    continue;
+                }
+
+                cell = entry;
+                return true;
+            }
+
+            cell = default;
+            return false;
+        }
+
+        public XlsxSourceStyleOnlyCellCollection WithConsumed(IReadOnlyList<XlsxCellValuePatch> changes)
+        {
+            if (IsEmpty || CountConsumedSourceStyleOnlyCells(changes) == 0)
+                return this;
+
+            var consumedCells = GetConsumedSourceStyleOnlyCells(changes);
+            return _runs.Length > 0
+                ? WithoutConsumedRunCells(consumedCells)
+                : WithoutConsumedCellEntries(consumedCells);
+        }
+
+        private bool TryGetFromRuns(uint row, uint col, out XlsxSourceStyleOnlyCellEntry cell)
+        {
+            var low = 0;
+            var high = _runs.Length - 1;
+            while (low <= high)
+            {
+                var mid = low + ((high - low) / 2);
+                ref readonly var run = ref _runs[mid];
+                var compare = run.CompareTo(row, col);
+                if (compare < 0)
+                {
+                    low = mid + 1;
+                    continue;
+                }
+
+                if (compare > 0)
+                {
+                    high = mid - 1;
+                    continue;
+                }
+
+                cell = new XlsxSourceStyleOnlyCellEntry(row, col, run.StyleId, run.SourceStyleIndex);
+                return true;
+            }
+
+            cell = default;
+            return false;
+        }
+
+        private XlsxSourceStyleOnlyCellCollection WithoutConsumedCellEntries(
+            IReadOnlyList<(uint Row, uint Col)> consumedCells)
+        {
+            var result = new List<XlsxSourceStyleOnlyCellEntry>(_cells.Length);
+            foreach (var entry in _cells)
+            {
+                if (!ContainsCell(consumedCells, entry.Row, entry.Col))
+                    result.Add(entry);
+            }
+
+            return result.Count == _cells.Length ? this : FromCells(result.ToArray());
+        }
+
+        private XlsxSourceStyleOnlyCellCollection WithoutConsumedRunCells(
+            IReadOnlyList<(uint Row, uint Col)> consumedCells)
+        {
+            var result = new List<XlsxSourceStyleOnlyRunEntry>(_runs.Length);
+            var consumedIndex = 0;
+            var changed = false;
+            foreach (var run in _runs)
+            {
+                while (consumedIndex < consumedCells.Count && CellIsBeforeRun(consumedCells[consumedIndex], run))
+                    consumedIndex++;
+
+                var startCol = run.StartCol;
+                while (consumedIndex < consumedCells.Count &&
+                       consumedCells[consumedIndex].Row == run.Row &&
+                       consumedCells[consumedIndex].Col <= run.EndCol)
+                {
+                    var consumedCol = consumedCells[consumedIndex].Col;
+                    if (consumedCol >= startCol)
+                    {
+                        changed = true;
+                        if (consumedCol > startCol)
+                            result.Add(run with { StartCol = startCol, EndCol = consumedCol - 1 });
+
+                        startCol = consumedCol == uint.MaxValue ? uint.MaxValue : consumedCol + 1;
+                    }
+
+                    consumedIndex++;
+                }
+
+                if (startCol <= run.EndCol)
+                    result.Add(run with { StartCol = startCol });
+            }
+
+            return changed ? FromRuns(result.ToArray()) : this;
+        }
+
+        private static IReadOnlyList<(uint Row, uint Col)> GetConsumedSourceStyleOnlyCells(
+            IReadOnlyList<XlsxCellValuePatch> changes)
+        {
+            var consumedCells = new List<(uint Row, uint Col)>();
+            foreach (var change in changes)
+            {
+                if (change.ConsumesSourceStyleOnlyCell)
+                    consumedCells.Add((change.Row, change.Col));
+            }
+
+            consumedCells.Sort(static (left, right) =>
+            {
+                var rowCompare = left.Row.CompareTo(right.Row);
+                return rowCompare != 0 ? rowCompare : left.Col.CompareTo(right.Col);
+            });
+            return consumedCells;
+        }
+
+        private static bool ContainsCell(IReadOnlyList<(uint Row, uint Col)> cells, uint row, uint col)
+        {
+            foreach (var cell in cells)
+            {
+                if (cell.Row == row && cell.Col == col)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool CellIsBeforeRun((uint Row, uint Col) cell, XlsxSourceStyleOnlyRunEntry run) =>
+            cell.Row < run.Row || cell.Row == run.Row && cell.Col < run.StartCol;
+    }
+
     private readonly record struct XlsxSourceStyleOnlyCellEntry(
         uint Row,
         uint Col,
@@ -7593,6 +7740,25 @@ public sealed partial class XlsxFileAdapter
             return rowCompare != 0
                 ? rowCompare
                 : Col.CompareTo(col);
+        }
+    }
+
+    private readonly record struct XlsxSourceStyleOnlyRunEntry(
+        uint Row,
+        uint StartCol,
+        uint EndCol,
+        StyleId StyleId,
+        string? SourceStyleIndex)
+    {
+        public int CompareTo(uint row, uint col)
+        {
+            if (Row < row || Row == row && EndCol < col)
+                return -1;
+
+            if (Row > row || Row == row && StartCol > col)
+                return 1;
+
+            return 0;
         }
     }
 
