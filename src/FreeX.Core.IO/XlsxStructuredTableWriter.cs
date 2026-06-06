@@ -260,13 +260,17 @@ internal static class XlsxStructuredTableWriter
         (table.NativeStyleInfoAttributes?.Count > 0) ||
         (table.NativeStyleInfoChildXmls?.Count > 0);
 
-    private static XElement ToAutoFilterXml(StructuredTableModel table, XNamespace workbookNs) =>
-        AddAutoFilterNativeMetadata(new XElement(
+    private static XElement ToAutoFilterXml(StructuredTableModel table, XNamespace workbookNs)
+    {
+        var element = AddAutoFilterNativeMetadata(new XElement(
             workbookNs + "autoFilter",
             new XAttribute("ref", table.Range.ToString()),
             table.FilterColumns.Select(filterColumn => ToFilterColumnXml(filterColumn, workbookNs))),
             table,
             workbookNs);
+        XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
+        return element;
+    }
 
     private static XElement AddAutoFilterNativeMetadata(
         XElement element,
