@@ -920,6 +920,15 @@ public static partial class AccessibilityCheckerService
             case "RIGHT":
                 kind = ConditionalFormulaScalarFunctionKind.Right;
                 return true;
+            case "FIND":
+                kind = ConditionalFormulaScalarFunctionKind.Find;
+                return true;
+            case "SEARCH":
+                kind = ConditionalFormulaScalarFunctionKind.Search;
+                return true;
+            case "EXACT":
+                kind = ConditionalFormulaScalarFunctionKind.Exact;
+                return true;
             case "DATE":
                 kind = ConditionalFormulaScalarFunctionKind.Date;
                 return true;
@@ -955,7 +964,10 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Round or
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Left or
-            ConditionalFormulaScalarFunctionKind.Right => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Right or
+            ConditionalFormulaScalarFunctionKind.Exact => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Find or
+            ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
             _ => false
         };
@@ -1443,6 +1455,9 @@ public static partial class AccessibilityCheckerService
         Trim,
         Left,
         Right,
+        Find,
+        Search,
+        Exact,
         Date,
         Year,
         Month,
@@ -1949,6 +1964,18 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Left:
                 case ConditionalFormulaScalarFunctionKind.Right:
                     return TryEvaluateFormulaTextSliceFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Find:
+                case ConditionalFormulaScalarFunctionKind.Search:
+                    return TryEvaluateFormulaTextSearchFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Exact:
+                    if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var firstText) ||
+                        !TryResolveFormulaFunctionText(function.Arguments[1], rowOffset, colOffset, out var secondText))
+                    {
+                        return false;
+                    }
+
+                    value = new BoolValue(string.Equals(firstText, secondText, StringComparison.Ordinal));
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Date:
                 case ConditionalFormulaScalarFunctionKind.Year:
                 case ConditionalFormulaScalarFunctionKind.Month:
@@ -2064,6 +2091,44 @@ public static partial class AccessibilityCheckerService
             value = function.Kind == ConditionalFormulaScalarFunctionKind.Left
                 ? new TextValue(text[..actualLength])
                 : new TextValue(text[(text.Length - actualLength)..]);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaTextSearchFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var findText) ||
+                string.IsNullOrEmpty(findText) ||
+                !TryResolveFormulaFunctionText(function.Arguments[1], rowOffset, colOffset, out var withinText))
+            {
+                return false;
+            }
+
+            var startIndex = 0;
+            if (function.Arguments.Count == 3)
+            {
+                if (!TryResolveFormulaFunctionNumber(function.Arguments[2], rowOffset, colOffset, out var startNumber) ||
+                    !TryGetFormulaTextSearchStart(startNumber, out startIndex))
+                {
+                    return false;
+                }
+            }
+
+            if (startIndex > withinText.Length)
+                return false;
+
+            var comparison = function.Kind == ConditionalFormulaScalarFunctionKind.Find
+                ? StringComparison.Ordinal
+                : StringComparison.OrdinalIgnoreCase;
+            var foundIndex = withinText.IndexOf(findText, startIndex, comparison);
+            if (foundIndex < 0)
+                return false;
+
+            value = new NumberValue(foundIndex + 1);
             return true;
         }
 
@@ -2226,6 +2291,22 @@ public static partial class AccessibilityCheckerService
             }
 
             length = (int)rounded;
+            return true;
+        }
+
+        private static bool TryGetFormulaTextSearchStart(double value, out int startIndex)
+        {
+            startIndex = 0;
+            var rounded = Math.Round(value);
+            if (!double.IsFinite(rounded) ||
+                Math.Abs(value - rounded) > 1e-9 ||
+                rounded < 1 ||
+                rounded > MaxFormulaTextSliceLength)
+            {
+                return false;
+            }
+
+            startIndex = (int)rounded - 1;
             return true;
         }
 
