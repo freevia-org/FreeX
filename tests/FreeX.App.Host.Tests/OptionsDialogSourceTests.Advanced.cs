@@ -1,5 +1,4 @@
-﻿using System.IO;
-using System.Windows.Controls;
+﻿using System.Windows.Controls;
 using FreeX.App.Host;
 using FluentAssertions;
 
@@ -11,7 +10,7 @@ public sealed partial class OptionsDialogSourceTests
     public void OptionsDialog_ExposesExcelLikeAdvancedAndDisplayAffordances()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         xaml.Should().Contain("x:Name=\"PanelAdvanced\"");
         xaml.Should().Contain("Editing options");
@@ -84,7 +83,7 @@ public sealed partial class OptionsDialogSourceTests
     public void OptionsDialog_MoveAfterEnterToggleControlsDirectionEnabledState()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         xaml.Should().Contain("Checked=\"MoveAfterEnter_Changed\"");
         xaml.Should().Contain("Unchecked=\"MoveAfterEnter_Changed\"");
@@ -97,7 +96,7 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void Viewport_MapsObjectPlaceholderOptionToGridDisplayMode()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
         source.Should().Contain("SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch");
         source.Should().Contain("FreeXObjectDisplay.Placeholders => FreeX.App.UI.GridObjectDisplayMode.Placeholders");
