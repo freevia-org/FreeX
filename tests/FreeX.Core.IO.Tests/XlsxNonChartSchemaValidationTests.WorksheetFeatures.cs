@@ -253,6 +253,46 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void WorksheetDiagnostics_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorksheetDiagnosticsSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorksheetDiagnostics_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorksheetDiagnosticsSourceWorkbook());
+        var sourceCellWatches = ReadWorksheetChildElement(source, "cellWatches");
+        var sourceIgnoredErrors = ReadWorksheetChildElement(source, "ignoredErrors");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "cellWatches")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceCellWatches.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "ignoredErrors")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceIgnoredErrors.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void NamedRanges_ProducesSchemaValidWorkbook()
     {
         var workbook = new Workbook("NamedRanges");
@@ -884,6 +924,21 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
         sheet.CustomProperties.Add(new WorksheetCustomProperty("FreeXModeledProperty", 7));
+        return workbook;
+    }
+
+    private static Workbook CreateWorksheetDiagnosticsSourceWorkbook()
+    {
+        var workbook = new Workbook("WorksheetDiagnosticsPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        var ignoredAddress = new CellAddress(sheet.Id, 1, 1);
+        var watchedAddress = new CellAddress(sheet.Id, 2, 2);
+
+        sheet.SetCell(ignoredAddress, new TextValue("00123"));
+        sheet.GetCell(ignoredAddress.Row, ignoredAddress.Col)!.IgnoreFormulaError = true;
+        sheet.SetFormula(watchedAddress, "A1+1");
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
+        workbook.WatchedCells.Add(watchedAddress);
         return workbook;
     }
 
