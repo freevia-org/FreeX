@@ -1502,6 +1502,56 @@ public sealed class XlsxLoadedWorkbookPatchSaveTests
     }
 
     [Fact]
+    public void Save_LoadedWorkbookWithAttributedSharedFormulaCachedValueEdit_PatchesCacheAndPreservesFormulaMetadata()
+    {
+        const string sharedFormula = """<f t="shared" ref="A1:A1" si="0">1+1</f>""";
+        var sourceBytes = CreateFormulaSourcePackage(sharedFormula);
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        PrepareLoadedWorkbookForEdit(workbook);
+
+        var cell = workbook.GetSheetAt(0).GetCell(1, 1)!;
+        cell.FormulaText.Should().Be("1+1");
+        cell.Value = new NumberValue(5);
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        var savedBytes = saved.ToArray();
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        adapter.LastSaveDiagnostics.CellChangeCount.Should().Be(1);
+        ReadPackageEntry(savedBytes, "xl/workbook.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/workbook.xml"));
+        ReadPackageEntry(savedBytes, "xl/calcChain.xml")
+            .Should()
+            .Equal(ReadPackageEntry(sourceBytes, "xl/calcChain.xml"));
+        ReadCellFormula(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("1+1");
+        ReadCellFormulaAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "t")
+            .Should()
+            .Be("shared");
+        ReadCellFormulaAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "ref")
+            .Should()
+            .Be("A1:A1");
+        ReadCellFormulaAttribute(savedBytes, "xl/worksheets/sheet1.xml", "A1", "si")
+            .Should()
+            .Be("0");
+        ReadCellText(savedBytes, "xl/worksheets/sheet1.xml", "A1")
+            .Should()
+            .Be("5");
+
+        using var reload = new MemoryStream(savedBytes, writable: false);
+        var reloadedCell = adapter.Load(reload).GetSheetAt(0).GetCell(1, 1)!;
+        reloadedCell.FormulaText.Should().Be("1+1");
+        reloadedCell.Value.Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
     public void Save_LoadedWorkbookWithWorksheetViewMetadataEdit_PatchesSourcePackage()
     {
         var sourceBytes = CreateSourcePackage();
