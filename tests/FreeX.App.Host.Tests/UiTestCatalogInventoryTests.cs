@@ -343,8 +343,8 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static KeyboardShortcutUsageCounts ReadKeyboardShortcutUsageCounts()
     {
-        var matcher = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "KeyboardShortcutMatcher.CommandRules.cs"));
-        var dispatcher = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var matcher = DialogSourceTestSupport.ReadHostSources("KeyboardShortcutMatcher.CommandRules.cs");
+        var dispatcher = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         return new KeyboardShortcutUsageCounts(
             CommandShortcutRuleDeclaration().Matches(matcher).Count,
