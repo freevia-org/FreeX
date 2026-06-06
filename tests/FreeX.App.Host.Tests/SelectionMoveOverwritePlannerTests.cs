@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -76,7 +75,7 @@ public sealed class SelectionMoveOverwritePlannerTests
     [Fact]
     public void MainWindowSelectionMove_WarnsBeforeOverwritingDestinationData()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CellsCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
         var method = SourceMethodExtractor.ExtractMethodSource(
             source,
             "private void OnSelectionMoveRequested(");
