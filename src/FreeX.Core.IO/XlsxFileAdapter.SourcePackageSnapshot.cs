@@ -836,6 +836,7 @@ public sealed partial class XlsxFileAdapter
             using (var archive = new ZipArchive(patchedPackage, ZipArchiveMode.Update, leaveOpen: true))
             {
                 NormalizePatchCustomViews(archive, workbook, SourceHasCustomViews);
+                NormalizePatchWorkbookViews(archive);
                 NormalizePatchSharedStrings(archive);
                 NormalizePatchInlineStringFonts(archive);
                 NormalizePatchThemeTypefaces(archive);
@@ -1072,6 +1073,22 @@ public sealed partial class XlsxFileAdapter
             }
 
             return changed;
+        }
+
+        private static void NormalizePatchWorkbookViews(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return;
+
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var bookViews = workbookXml.Root?.Element(workbookNs + "bookViews");
+            if (bookViews is not null &&
+                XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+            }
         }
 
         private static void NormalizePatchSharedStrings(ZipArchive archive)

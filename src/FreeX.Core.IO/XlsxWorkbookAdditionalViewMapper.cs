@@ -103,6 +103,7 @@ internal static class XlsxWorkbookAdditionalViewMapper
                 if (nativeElement.Name == WorkbookNs + "workbookView")
                 {
                     RemoveOfficeRevisionAttributes(nativeElement);
+                    XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(nativeElement);
                     return nativeElement;
                 }
             }
@@ -118,6 +119,7 @@ internal static class XlsxWorkbookAdditionalViewMapper
         var element = new XElement(WorkbookNs + "workbookView");
         ApplyNativeAttributes(element, model.NativeAttributes);
         RemoveOfficeRevisionAttributes(element);
+        XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(element);
         return element;
     }
 
