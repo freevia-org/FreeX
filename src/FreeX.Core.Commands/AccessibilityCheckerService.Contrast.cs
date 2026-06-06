@@ -1049,6 +1049,9 @@ public static partial class AccessibilityCheckerService
             case "DEVSQ":
                 kind = ConditionalFormulaAggregateKind.DevSq;
                 return true;
+            case "AVEDEV":
+                kind = ConditionalFormulaAggregateKind.AveDev;
+                return true;
             case "PRODUCT":
                 kind = ConditionalFormulaAggregateKind.Product;
                 return true;
@@ -1519,6 +1522,7 @@ public static partial class AccessibilityCheckerService
         Sum,
         SumSq,
         DevSq,
+        AveDev,
         Product,
         Average,
         Median,
@@ -2532,6 +2536,7 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.Sum => new NumberValue(numericValues.Sum()),
                 ConditionalFormulaAggregateKind.SumSq => new NumberValue(numericValues.Sum(number => number * number)),
                 ConditionalFormulaAggregateKind.DevSq when numericValues.Count > 0 => new NumberValue(DevSqFormulaNumbers(numericValues)),
+                ConditionalFormulaAggregateKind.AveDev when numericValues.Count > 0 => new NumberValue(AveDevFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Product => new NumberValue(numericValues.Aggregate(1d, (product, number) => product * number)),
                 ConditionalFormulaAggregateKind.Average when numericValues.Count > 0 => new NumberValue(numericValues.Average()),
                 ConditionalFormulaAggregateKind.Median when numericValues.Count > 0 => new NumberValue(MedianFormulaNumbers(numericValues)),
@@ -2557,6 +2562,16 @@ public static partial class AccessibilityCheckerService
             }
 
             return sum;
+        }
+
+        private static double AveDevFormulaNumbers(List<double> numericValues)
+        {
+            var average = numericValues.Average();
+            var sum = 0d;
+            for (var i = 0; i < numericValues.Count; i++)
+                sum += Math.Abs(numericValues[i] - average);
+
+            return sum / numericValues.Count;
         }
 
         private static double MedianFormulaNumbers(List<double> numericValues)
@@ -2727,6 +2742,7 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.Sum or
                 ConditionalFormulaAggregateKind.SumSq or
                 ConditionalFormulaAggregateKind.DevSq or
+                ConditionalFormulaAggregateKind.AveDev or
                 ConditionalFormulaAggregateKind.Product or
                 ConditionalFormulaAggregateKind.Average or
                 ConditionalFormulaAggregateKind.Median or

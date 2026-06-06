@@ -582,6 +582,26 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAveDevAggregate()
+    {
+        AssertFormulaAggregateContrastLocations("AVEDEV($A1:$A3)>20", "B3");
+        AssertFormulaAggregateContrastLocations("AVEDEV($A1:$A2)=12.5", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("AVEDEV($D1:$D3)=0", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("AVEDEV(25,$A1,125)>35", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVEDEV(\"25\",$A1,125)>35", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAveDevWrappersPredicatesAndNestedAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("AND(AVEDEV($A1:$A2)>=12.5,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("IF(AVEDEV($A1:$A3)>20,TRUE,FALSE)", "B3");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(AVEDEV($A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(AVEDEV($A1:$A2),12.5)=25", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("AVEDEV(SUM($A1:$A2),$A1^2)>4000", "B2", "B4");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatProductAggregate()
     {
         AssertFormulaAggregateContrastLocations("PRODUCT($A1)>100", "B4");
@@ -637,6 +657,13 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("DEVSQ($A1/0)>0");
         AssertFormulaAggregateContrastLocations("DEVSQ(1E308,0)>0");
         AssertFormulaAggregateContrastLocations("DEVSQ(A0)>0");
+        AssertFormulaAggregateContrastLocations("AVEDEV()>0");
+        AssertFormulaAggregateContrastLocations("AVEDEV($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("AVEDEV(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("AVEDEV($D3:$D5)>0");
+        AssertFormulaAggregateContrastLocations("AVEDEV($A1/0)>0");
+        AssertFormulaAggregateContrastLocations("AVEDEV(1E308,-1E308)>0");
+        AssertFormulaAggregateContrastLocations("AVEDEV(A0)>0");
     }
 
     [Fact]
@@ -687,6 +714,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("PRODUCT(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(1E308,1E308)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(STDEV($A1))>0");
+        AssertFormulaAggregateContrastLocations("AVEDEV(STDEV($A1))>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK()>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK($D1:$D20000)>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK($D1&\"x\")>0");
