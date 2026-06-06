@@ -2777,6 +2777,77 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArabicFunctionOperands()
+    {
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1)=12", "B1");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1)=-4", "B2");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1)=0", "B3");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1)=1999", "B4");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1)=99", "B5");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC(\"  xm  \")=990", FormulaArabicRomanAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArabicFunctionWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1)+1=13", "B1");
+        AssertFormulaArabicRomanFunctionContrastLocations("SUM(ARABIC($C1),1)=100", "B5");
+        AssertFormulaArabicRomanFunctionContrastLocations("ISNUMBER(ARABIC($C1))", "B1", "B2", "B3", "B4", "B5");
+        AssertFormulaArabicRomanFunctionContrastLocations("IF(ARABIC($C1),TRUE,FALSE)", "B1", "B2", "B4", "B5");
+        AssertFormulaArabicRomanFunctionContrastLocations("AND(ARABIC($C1)>0,$A1)", "B1", "B4", "B5");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatArabicFunctionUnsupportedOperands()
+    {
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC()>0");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1,1)>0");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($A1)>0");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC(42)>0");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC(TRUE)>0");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC(\"IIV\")>0");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC(\"-   \")>0");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC(\"MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\")>0");
+        AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1&\"X\")>0");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatRomanFunctionOperands()
+    {
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1)=\"XII\"", "B1");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,TRUE)=\"XLIX\"", "B2");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,FALSE)=\"IL\"", "B2");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1)=\"\"", "B3");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,4)=\"IM\"", "B4");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN(944,2)=\"CMXLIV\"", FormulaArabicRomanAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatRomanFunctionWrappersPredicatesAndTextComparisons()
+    {
+        AssertFormulaArabicRomanFunctionContrastLocations("EXACT(ROMAN($D1,4),\"IM\")", "B4");
+        AssertFormulaArabicRomanFunctionContrastLocations("ISTEXT(ROMAN($D1))", "B1", "B2", "B3", "B4", "B5", "B7");
+        AssertFormulaArabicRomanFunctionContrastLocations("AND(EXACT(ROMAN($D1),\"XII\"),$A1)", "B1");
+        AssertFormulaArabicRomanFunctionContrastLocations("IF(EXACT(ROMAN($D1,4),\"IL\"),TRUE,FALSE)", "B2");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN(SUM($D1,0),4)=\"CCLV\"", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatRomanFunctionUnsupportedOperands()
+    {
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN()=\"\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,1,1)=\"\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($C1)=\"XII\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,5)=\"XII\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,-1)=\"XII\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN($D1,\"4\")=\"XII\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN(4000)=\"MMMM\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN(-1)=\"\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN(1E308*1E308)=\"\"");
+        AssertFormulaArabicRomanFunctionContrastLocations("ROMAN(A0)=\"\"");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateFunctionOperands()
     {
         AssertFormulaDateFunctionContrastLocations("YEAR($A1)=2023", "B1", "B2", "B4");
@@ -3583,6 +3654,50 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), source);
     }
 
+    private static Workbook CreateFormulaArabicRomanFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 7, 2);
+
+        SetFormulaArabicRomanFunctionContrastRow(sheet, 1, 12.9, "XII", true, "Roman twelve");
+        SetFormulaArabicRomanFunctionContrastRow(sheet, 2, 49, " -iv ", true, "Negative four");
+        SetFormulaArabicRomanFunctionContrastRow(sheet, 3, 0, string.Empty, true, "Empty roman");
+        SetFormulaArabicRomanFunctionContrastRow(sheet, 4, 999, "  MIM  ", true, "Permissive high");
+        SetFormulaArabicRomanFunctionContrastRow(sheet, 5, 99, "IC", true, "Permissive compact");
+        SetFormulaArabicRomanFunctionContrastRow(sheet, 6, 4000, "IIV", true, "Invalid roman");
+        SetFormulaArabicRomanFunctionContrastRow(sheet, 7, 255.8, new NumberValue(75), true, "Numeric roman source");
+
+        return workbook;
+    }
+
+    private static void SetFormulaArabicRomanFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        double number,
+        string romanText,
+        bool flag,
+        string label) =>
+        SetFormulaArabicRomanFunctionContrastRow(sheet, row, number, new TextValue(romanText), flag, label);
+
+    private static void SetFormulaArabicRomanFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        double number,
+        ScalarValue romanSource,
+        bool flag,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new BoolValue(flag));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), romanSource);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(number));
+    }
+
     private static Workbook CreateFormulaDateFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -3801,6 +3916,19 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaArabicRomanFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaArabicRomanFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaDateFunctionContrastLocations(
         string formulaText,
         params string[] expectedLocations)
@@ -3877,6 +4005,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"];
 
     private static string[] FormulaPredicateAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];
+
+    private static string[] FormulaArabicRomanAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];
 
     private static void AddFormulaContrastRule(

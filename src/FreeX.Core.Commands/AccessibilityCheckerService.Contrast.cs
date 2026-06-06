@@ -716,7 +716,6 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaBitwiseShift = 53;
     private const int MaxFormulaTextSliceLength = 32_767;
     private const double FormulaSecZeroCosineTolerance = 1E-15d;
-
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
         ast is (BooleanNode
             or CellRefNode
@@ -1141,6 +1140,12 @@ public static partial class AccessibilityCheckerService
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
+            case "ARABIC":
+                kind = ConditionalFormulaScalarFunctionKind.Arabic;
+                return true;
+            case "ROMAN":
+                kind = ConditionalFormulaScalarFunctionKind.Roman;
+                return true;
             case "VALUE":
                 kind = ConditionalFormulaScalarFunctionKind.Value;
                 return true;
@@ -1315,6 +1320,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Sec or
             ConditionalFormulaScalarFunctionKind.Cot or
             ConditionalFormulaScalarFunctionKind.Tan or
+            ConditionalFormulaScalarFunctionKind.Arabic or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -1328,6 +1334,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Second or
             ConditionalFormulaScalarFunctionKind.IsoWeeknum => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Log or
+            ConditionalFormulaScalarFunctionKind.Roman or
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
             ConditionalFormulaScalarFunctionKind.FloorPrecise or
             ConditionalFormulaScalarFunctionKind.Trunc or
@@ -2001,6 +2008,8 @@ public static partial class AccessibilityCheckerService
         Cot,
         Tan,
         Pi,
+        Arabic,
+        Roman,
         Value,
         Len,
         Upper,
@@ -2111,6 +2120,9 @@ public static partial class AccessibilityCheckerService
         Sheet sheet,
         IReadOnlyDictionary<(uint Row, uint Col), Cell> occupiedCells)
     {
+        private static readonly IReadOnlyDictionary<string, int> FormulaArabicRomanRemainders =
+            BuildFormulaArabicRemainderMap();
+
         private readonly Dictionary<ConditionalFormat, Dictionary<string, int>> _valueCounts = new();
         private readonly Dictionary<ConditionalFormat, RangeAverage> _averages = new();
         private readonly Dictionary<ConditionalFormat, HashSet<CellAddress>?> _topBottomMatches = new();
@@ -2606,6 +2618,10 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Arabic:
+                    return TryEvaluateFormulaArabicFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Roman:
+                    return TryEvaluateFormulaRomanFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Value:
                     return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Len:
@@ -2690,6 +2706,98 @@ public static partial class AccessibilityCheckerService
                 default:
                     return false;
             }
+        }
+
+        private bool TryEvaluateFormulaArabicFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaOperand(function.Arguments[0], rowOffset, colOffset, out var source) ||
+                source is not TextValue textValue)
+            {
+                return false;
+            }
+
+            var text = textValue.Value.Trim();
+            if (text.Length == 0)
+            {
+                value = new NumberValue(0);
+                return true;
+            }
+
+            if (text.Length > 255)
+                return false;
+
+            var negative = text[0] == '-';
+            if (negative)
+            {
+                text = text[1..].TrimStart();
+                if (text.Length == 0 || text.Length > 255)
+                    return false;
+            }
+
+            if (!TryParseFormulaArabicRoman(text, out var result))
+                return false;
+
+            value = new NumberValue(negative ? -result : result);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaRomanFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFunctionNumber(function.Arguments[0], rowOffset, colOffset, out var number) ||
+                !double.IsFinite(number))
+            {
+                return false;
+            }
+
+            var form = 0;
+            if (function.Arguments.Count == 2 &&
+                !TryResolveFormulaRomanForm(function.Arguments[1], rowOffset, colOffset, out form))
+            {
+                return false;
+            }
+
+            var truncated = (int)Math.Truncate(number);
+            if (truncated is < 0 or > 3999)
+                return false;
+
+            value = new TextValue(ToFormulaRoman(truncated, form));
+            return true;
+        }
+
+        private bool TryResolveFormulaRomanForm(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out int form)
+        {
+            form = 0;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is BoolValue boolean)
+            {
+                form = boolean.Value ? 0 : 4;
+                return true;
+            }
+
+            if (!TryGetFormulaArithmeticNumber(value, out var number) ||
+                !double.IsFinite(number))
+            {
+                return false;
+            }
+
+            form = (int)Math.Truncate(number);
+            return form is >= 0 and <= 4;
         }
 
         private bool TryEvaluateFormulaRowColumnFunction(
@@ -3898,6 +4006,109 @@ public static partial class AccessibilityCheckerService
 
             value = new NumberValue(foundIndex + 1);
             return true;
+        }
+
+        private static bool TryParseFormulaArabicRoman(string text, out int result)
+        {
+            result = 0;
+            var normalized = text.ToUpperInvariant();
+            if (normalized.Any(static c => c is not ('I' or 'V' or 'X' or 'L' or 'C' or 'D' or 'M')))
+                return false;
+
+            var thousands = 0;
+            while (thousands < normalized.Length && normalized[thousands] == 'M')
+                thousands++;
+
+            var remainder = normalized[thousands..];
+            if (!FormulaArabicRomanRemainders.TryGetValue(remainder, out var remainderValue))
+                return false;
+
+            result = thousands * 1000 + remainderValue;
+            return result <= 255000;
+        }
+
+        private static IReadOnlyDictionary<string, int> BuildFormulaArabicRemainderMap()
+        {
+            var map = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var number = 0; number < 1000; number++)
+            {
+                for (var form = 0; form <= 4; form++)
+                    map.TryAdd(ToFormulaRoman(number, form), number);
+            }
+
+            return map;
+        }
+
+        private static string ToFormulaRoman(int number, int form)
+        {
+            if (number == 0)
+                return string.Empty;
+
+            var remaining = number;
+            var builder = new System.Text.StringBuilder();
+            foreach (var (value, symbol) in FormulaRomanTokens(form))
+            {
+                while (remaining >= value)
+                {
+                    builder.Append(symbol);
+                    remaining -= value;
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private static (int Value, string Symbol)[] FormulaRomanTokens(int form)
+        {
+            var tokens = new List<(int Value, string Symbol)>
+            {
+                (1000, "M"),
+                (900, "CM"),
+                (500, "D"),
+                (400, "CD"),
+                (100, "C"),
+                (90, "XC"),
+                (50, "L"),
+                (40, "XL"),
+                (10, "X"),
+                (9, "IX"),
+                (5, "V"),
+                (4, "IV"),
+                (1, "I")
+            };
+
+            if (form >= 1)
+            {
+                tokens.Add((950, "LM"));
+                tokens.Add((450, "LD"));
+                tokens.Add((95, "VC"));
+                tokens.Add((45, "VL"));
+            }
+
+            if (form >= 2)
+            {
+                tokens.Add((990, "XM"));
+                tokens.Add((490, "XD"));
+                tokens.Add((99, "IC"));
+                tokens.Add((49, "IL"));
+            }
+
+            if (form >= 3)
+            {
+                tokens.Add((995, "VM"));
+                tokens.Add((495, "VD"));
+            }
+
+            if (form >= 4)
+            {
+                tokens.Add((999, "IM"));
+                tokens.Add((499, "ID"));
+            }
+
+            return tokens
+                .OrderByDescending(static token => token.Value)
+                .ThenBy(static token => token.Symbol.Length)
+                .ToArray();
         }
 
         private bool TryResolveFormulaFunctionNumber(
