@@ -252,6 +252,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void SheetProtection_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateSheetProtectionSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithSheetProtection_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateSheetProtectionSourceWorkbook());
+        var sourceSheetProtection = ReadWorksheetChildElement(source, "sheetProtection");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "sheetProtection")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceSheetProtection.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void FreezePanes_ProducesSchemaValidWorkbook()
     {
         var workbook = new Workbook("FreezePanes");
@@ -533,6 +568,18 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             CustomFiltersAnd: false,
             NativeCustomFiltersAttributes: null,
             NativeFilterXmls: []));
+        return workbook;
+    }
+
+    private static Workbook CreateSheetProtectionSourceWorkbook()
+    {
+        var workbook = new Workbook("SheetProtectionPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Locked"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(2));
+        sheet.IsProtected = true;
+        sheet.ProtectionPassword = "secret";
         return workbook;
     }
 
