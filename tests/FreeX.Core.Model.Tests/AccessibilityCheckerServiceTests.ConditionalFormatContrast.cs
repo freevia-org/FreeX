@@ -945,6 +945,50 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCeilingScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("CEILING($A1,30)>=120", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING($A1,0)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING(10,3)=12", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING(-10,3)=-9", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING(-10,-3)=-12", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("CEILING(-1.5,1)=-1", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCeilingScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(CEILING($A1,30)>=120,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(CEILING($A1,30)>=90,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(CEILING($A1,30))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISEVEN(CEILING($A1,25))", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatCeilingScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(CEILING($A1,30),1)>=121", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(CEILING($A1,30),$A1)>110", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatCeilingScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("CEILING($A1)>0");
+        AssertFormulaArithmeticContrastLocations("CEILING($A1,10,1)>0");
+        AssertFormulaArithmeticContrastLocations("CEILING(\"10\",3)>0");
+        AssertFormulaArithmeticContrastLocations("CEILING($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("CEILING($A1&\"x\",10)>0");
+        AssertFormulaArithmeticContrastLocations("CEILING(KURT($A1),10)>0");
+        AssertFormulaArithmeticContrastLocations("CEILING($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("CEILING($A1,-10)>0");
+        AssertFormulaArithmeticContrastLocations("CEILING(1E308*1E308,10)>0");
+        AssertFormulaArithmeticContrastLocations("CEILING($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("CEILING(1E308,0.1)>0");
+        AssertFormulaArithmeticContrastLocations("CEILING(EXP(1000),2)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatQuotientScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,25)>=4", "B2", "B4");
