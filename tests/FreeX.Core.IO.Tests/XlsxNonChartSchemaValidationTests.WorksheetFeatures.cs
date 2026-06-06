@@ -84,6 +84,43 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void AutoFilter_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidAutoFilterSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var autoFilter = ReadWorksheetChildElement(saved, "autoFilter");
+        var worksheetNs = autoFilter.Name.Namespace;
+        var columns = autoFilter.Elements(worksheetNs + "filterColumn").ToArray();
+        columns.Should().HaveCount(6);
+
+        columns[0].Attribute("hiddenButton").Should().BeNull();
+        columns[0].Attribute("showButton").Should().BeNull();
+        var filters = columns[0].Element(worksheetNs + "filters")!;
+        filters.Attribute("blank").Should().BeNull();
+        filters.Attribute("calendarType").Should().BeNull();
+        filters.Elements(worksheetNs + "dateGroupItem").Should().BeEmpty();
+
+        var customFilters = columns[1].Element(worksheetNs + "customFilters")!;
+        customFilters.Attribute("and").Should().BeNull();
+        customFilters.Element(worksheetNs + "customFilter")!.Attribute("operator").Should().BeNull();
+
+        var top10 = columns[2].Element(worksheetNs + "top10")!;
+        top10.Attribute("top").Should().BeNull();
+        top10.Attribute("percent").Should().BeNull();
+        top10.Attribute("val")!.Value.Should().Be("10");
+        top10.Attribute("filterVal").Should().BeNull();
+
+        var dynamicFilter = columns[3].Element(worksheetNs + "dynamicFilter")!;
+        dynamicFilter.Attribute("type")!.Value.Should().Be("aboveAverage");
+        dynamicFilter.Attribute("val").Should().BeNull();
+        dynamicFilter.Attribute("maxVal").Should().BeNull();
+
+        columns[4].Element(worksheetNs + "colorFilter").Should().BeNull();
+        columns[5].Element(worksheetNs + "iconFilter").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithAutoFilter_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateAutoFilterSourceWorkbook());
@@ -109,6 +146,46 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceAutoFilter.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidAutoFilterAttributesForSchemaValidity()
+    {
+        using var source = Save(CreateAutoFilterSourceWorkbook());
+        SetWorksheetAutoFilterInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var autoFilter = ReadWorksheetChildElement(saved, "autoFilter");
+        var worksheetNs = autoFilter.Name.Namespace;
+        var firstColumn = autoFilter.Elements(worksheetNs + "filterColumn").First();
+        firstColumn.Attribute("hiddenButton").Should().BeNull();
+        firstColumn.Attribute("showButton").Should().BeNull();
+        var filters = firstColumn.Element(worksheetNs + "filters")!;
+        filters.Attribute("blank").Should().BeNull();
+        filters.Attribute("calendarType").Should().BeNull();
+        filters.Elements(worksheetNs + "dateGroupItem").Should().BeEmpty();
+
+        var customFilters = autoFilter
+            .Elements(worksheetNs + "filterColumn")
+            .Skip(1)
+            .First()
+            .Element(worksheetNs + "customFilters")!;
+        customFilters.Attribute("and").Should().BeNull();
+        customFilters.Element(worksheetNs + "customFilter")!.Attribute("operator").Should().BeNull();
     }
 
 
@@ -1264,6 +1341,123 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateInvalidAutoFilterSourceWorkbook()
+    {
+        var workbook = new Workbook("AutoFilterInvalidSchema");
+        var sheet = workbook.AddSheet("Data");
+        string[] headers = ["Region", "Custom", "Top", "Dynamic", "Color", "Icon"];
+        for (uint col = 1; col <= 6; col++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, 1, col), new TextValue(headers[(int)col - 1]));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, col), new NumberValue(col * 10));
+        }
+
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:F2", null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["North"],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: null,
+            ColorFilter: null,
+            IconFilter: null,
+            DateGroups:
+            [
+                new WorksheetAutoFilterDateGroupItemModel(
+                    YearRaw: "not-a-number",
+                    DateTimeGrouping: "invalid")
+            ],
+            NativeFiltersAttributes: new Dictionary<string, string>
+            {
+                ["blank"] = "maybe",
+                ["calendarType"] = "invalid"
+            },
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["hiddenButton"] = "maybe",
+                ["showButton"] = "maybe"
+            }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            1,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [new WorksheetAutoFilterCustomFilterModel("invalid", "A")],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: "maybe",
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: null,
+            ColorFilter: null,
+            IconFilter: null,
+            NativeFilterXmls: []));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            2,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: new WorksheetAutoFilterTop10Model(
+                TopRaw: "maybe",
+                PercentRaw: "maybe",
+                ValueRaw: "not-a-number",
+                FilterValueRaw: "not-a-number"),
+            DynamicFilter: null,
+            NativeFilterXmls: []));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            3,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: new WorksheetAutoFilterDynamicFilterModel(
+                Type: "invalid",
+                ValueRaw: "not-a-number",
+                MaxValueRaw: "not-a-number"),
+            NativeFilterXmls: []));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            4,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: null,
+            ColorFilter: new WorksheetAutoFilterColorFilterModel(
+                DifferentialFormatIdRaw: "not-a-number",
+                CellColorRaw: "maybe"),
+            NativeFilterXmls: []));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            5,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: null,
+            ColorFilter: null,
+            IconFilter: new WorksheetAutoFilterIconFilterModel(
+                IconSet: "invalid",
+                IconIdRaw: "not-a-number"),
+            DateGroups: [],
+            NativeFiltersAttributes: null,
+            NativeFilterXmls: []));
+        return workbook;
+    }
+
     private static Workbook CreateWorksheetSortStateAndDataConsolidationSourceWorkbook()
     {
         var workbook = new Workbook("SortConsolidationPatchSave");
@@ -1309,6 +1503,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             ]
         };
         return workbook;
+    }
+
+    private static void SetWorksheetAutoFilterInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var autoFilter = worksheetXml.Root!.Element(workbookNs + "autoFilter")!;
+        var firstColumn = autoFilter.Elements(workbookNs + "filterColumn").First();
+        firstColumn.SetAttributeValue("hiddenButton", "maybe");
+        firstColumn.SetAttributeValue("showButton", "maybe");
+        var filters = firstColumn.Element(workbookNs + "filters")!;
+        filters.SetAttributeValue("blank", "maybe");
+        filters.SetAttributeValue("calendarType", "invalid");
+        filters.Add(new XElement(
+            workbookNs + "dateGroupItem",
+            new XAttribute("year", "not-a-number"),
+            new XAttribute("dateTimeGrouping", "invalid")));
+
+        var customFilters = autoFilter
+            .Elements(workbookNs + "filterColumn")
+            .Skip(1)
+            .First()
+            .Element(workbookNs + "customFilters")!;
+        customFilters.SetAttributeValue("and", "maybe");
+        customFilters.Element(workbookNs + "customFilter")!.SetAttributeValue("operator", "invalid");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
     private static void SetWorksheetSortStateInvalidAttributes(MemoryStream stream)

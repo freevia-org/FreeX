@@ -69,7 +69,11 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             try
             {
                 var element = XElement.Parse(autoFilter.NativeXml);
-                return element.Name == worksheetNs + "autoFilter" ? element : null;
+                if (element.Name != worksheetNs + "autoFilter")
+                    return null;
+
+                XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
+                return element;
             }
             catch
             {
@@ -101,6 +105,7 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
                 element.Add(nativeChild);
         }
 
+        XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
         return element;
     }
 

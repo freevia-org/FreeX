@@ -847,6 +847,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchLegacyCommentFonts(archive);
                 NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
+                NormalizePatchWorksheetAutoFilters(archive);
                 NormalizePatchWorksheetSortStates(archive);
                 NormalizePatchWorksheetDataConsolidation(archive);
                 if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
@@ -1276,6 +1277,25 @@ public sealed partial class XlsxFileAdapter
                 var sortState = root.Element(workbookNs + "sortState");
                 if (sortState is not null &&
                     XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState))
+                {
+                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+                }
+            }
+        }
+
+        private static void NormalizePatchWorksheetAutoFilters(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                var autoFilter = root.Element(workbookNs + "autoFilter");
+                if (autoFilter is not null &&
+                    XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
                 {
                     XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
                 }
