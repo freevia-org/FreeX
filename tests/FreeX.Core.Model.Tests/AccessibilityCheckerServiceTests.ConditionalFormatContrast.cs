@@ -777,6 +777,36 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatRowColumnFunctionOperands()
+    {
+        AssertFormulaRowColumnFunctionContrastLocations("ROW()=2", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMN()=3", "C1", "C2");
+        AssertFormulaRowColumnFunctionContrastLocations("ROW(A2)=3", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMN(C1)=4", "C1", "C2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatRowColumnFunctionWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaRowColumnFunctionContrastLocations("MOD(ROW(),2)=0", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("AND(COLUMN()=3,ROW()=1)", "C1");
+        AssertFormulaRowColumnFunctionContrastLocations("IF(ROW()=2,COLUMN()=4,FALSE)", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("ISNUMBER(ROW())", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("SUM(ROW(),COLUMN())=5", "D1", "C2");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatRowColumnFunctionUnsupportedOperands()
+    {
+        AssertFormulaRowColumnFunctionContrastLocations("ROW(1)>0");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMN(\"A1\")>0");
+        AssertFormulaRowColumnFunctionContrastLocations("ROW($A1,$B1)>0");
+        AssertFormulaRowColumnFunctionContrastLocations("ROW($A1:$A2)>0");
+        AssertFormulaRowColumnFunctionContrastLocations("ROW(A0)>0");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMN(Missing!A1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -1357,6 +1387,27 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new BoolValue(flag));
     }
 
+    private static Workbook CreateFormulaRowColumnFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 2, 4);
+
+        for (uint row = 1; row <= 2; row++)
+        {
+            for (uint col = 2; col <= 4; col++)
+            {
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), new TextValue($"Label {row}:{col}"));
+            }
+        }
+
+        return workbook;
+    }
+
     private static Workbook CreateFormulaReferencePredicateContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -1511,6 +1562,19 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaDateBooleanArithmeticContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaRowColumnFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaRowColumnFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)

@@ -953,6 +953,12 @@ public static partial class AccessibilityCheckerService
             case "NOW":
                 kind = ConditionalFormulaScalarFunctionKind.Now;
                 return true;
+            case "ROW":
+                kind = ConditionalFormulaScalarFunctionKind.Row;
+                return true;
+            case "COLUMN":
+                kind = ConditionalFormulaScalarFunctionKind.Column;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -985,6 +991,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Today or
             ConditionalFormulaScalarFunctionKind.Now => argumentCount == 0,
+            ConditionalFormulaScalarFunctionKind.Row or
+            ConditionalFormulaScalarFunctionKind.Column => argumentCount is 0 or 1,
             _ => false
         };
 
@@ -1481,7 +1489,9 @@ public static partial class AccessibilityCheckerService
         Month,
         Day,
         Today,
-        Now
+        Now,
+        Row,
+        Column
     }
 
     private enum ConditionalFormulaAggregateKind
@@ -1525,6 +1535,8 @@ public static partial class AccessibilityCheckerService
         private readonly Dictionary<ConditionalFormat, RangeAverage> _averages = new();
         private readonly Dictionary<ConditionalFormat, HashSet<CellAddress>?> _topBottomMatches = new();
         private readonly Dictionary<ConditionalFormat, ConditionalFormulaExpression?> _formulaExpressions = new();
+        private uint _formulaCurrentRow;
+        private uint _formulaCurrentCol;
 
         public bool HasDuplicateValue(ConditionalFormat rule, ScalarValue value) =>
             TryGetValueCount(rule, value, out var count) && count > 1;
@@ -1556,6 +1568,8 @@ public static partial class AccessibilityCheckerService
 
             var rowOffset = (int)address.Row - (int)rule.AppliesTo.Start.Row;
             var colOffset = (int)address.Col - (int)rule.AppliesTo.Start.Col;
+            _formulaCurrentRow = address.Row;
+            _formulaCurrentCol = address.Col;
             return EvaluateFormulaExpression(expression, rowOffset, colOffset) == true;
         }
 
@@ -2007,9 +2021,38 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Today:
                 case ConditionalFormulaScalarFunctionKind.Now:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Row:
+                case ConditionalFormulaScalarFunctionKind.Column:
+                    return TryEvaluateFormulaRowColumnFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
             }
+        }
+
+        private bool TryEvaluateFormulaRowColumnFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (function.Arguments.Count == 0)
+            {
+                value = new NumberValue(function.Kind == ConditionalFormulaScalarFunctionKind.Row
+                    ? _formulaCurrentRow
+                    : _formulaCurrentCol);
+                return true;
+            }
+
+            var reference = function.Arguments[0];
+            if (reference.Kind != ConditionalFormulaOperandKind.Reference ||
+                !TryResolveFormulaReference(reference, rowOffset, colOffset, out _, out var row, out var col))
+            {
+                return false;
+            }
+
+            value = new NumberValue(function.Kind == ConditionalFormulaScalarFunctionKind.Row ? row : col);
+            return true;
         }
 
         private bool TryEvaluateFormulaNumericScalarFunction(
