@@ -905,6 +905,9 @@ public static partial class AccessibilityCheckerService
             case "SQRT":
                 kind = ConditionalFormulaScalarFunctionKind.Sqrt;
                 return true;
+            case "POWER":
+                kind = ConditionalFormulaScalarFunctionKind.Power;
+                return true;
             case "VALUE":
                 kind = ConditionalFormulaScalarFunctionKind.Value;
                 return true;
@@ -989,6 +992,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Day => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Round or
             ConditionalFormulaScalarFunctionKind.Mod or
+            ConditionalFormulaScalarFunctionKind.Power or
             ConditionalFormulaScalarFunctionKind.Left or
             ConditionalFormulaScalarFunctionKind.Right or
             ConditionalFormulaScalarFunctionKind.Exact => argumentCount == 2,
@@ -1522,6 +1526,7 @@ public static partial class AccessibilityCheckerService
         Round,
         Mod,
         Sqrt,
+        Power,
         Value,
         Len,
         Upper,
@@ -2025,6 +2030,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Round:
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
+                case ConditionalFormulaScalarFunctionKind.Power:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Value:
                     return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
@@ -2163,6 +2169,14 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = Math.Sqrt(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Power:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var exponent))
+                    {
+                        return false;
+                    }
+
+                    result = Math.Pow(first, exponent);
                     break;
                 default:
                     return false;
