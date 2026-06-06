@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
@@ -161,6 +162,8 @@ public sealed class MainWindow : Window
     private bool _isOpening;
     private bool _isSaving;
     private bool _isUpdatingWorksheetScrollBars;
+    private SelectionPaneObjectKind? _selectedDrawingObjectKind;
+    private Guid? _selectedDrawingObjectId;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
     {
@@ -1056,7 +1059,7 @@ public sealed class MainWindow : Window
             Width = CalculateDisplayedGridWidth(viewport),
             Height = CalculateDisplayedGridHeight(viewport),
             ClipToBounds = true,
-            IsHitTestVisible = false,
+            IsHitTestVisible = true,
         };
 
         if (viewport.DrawingObjects is not { Count: > 0 })
@@ -1075,7 +1078,7 @@ public sealed class MainWindow : Window
                 continue;
             }
 
-            var visual = CreateDrawingObjectVisual(drawingObject, width, height);
+            var visual = CreateSelectableDrawingObjectVisual(drawingObject, width, height);
             Canvas.SetLeft(visual, left);
             Canvas.SetTop(visual, top);
             overlay.Children.Add(visual);
@@ -1083,6 +1086,89 @@ public sealed class MainWindow : Window
 
         return overlay;
     }
+
+    private Control CreateSelectableDrawingObjectVisual(
+        DrawingObjectBounds drawingObject,
+        double width,
+        double height)
+    {
+        var visual = CreateDrawingObjectVisual(drawingObject, width, height);
+        var selected = IsSelectedDrawingObject(drawingObject);
+        var container = new AvaloniaGrid
+        {
+            Width = Math.Max(1, width),
+            Height = Math.Max(1, height),
+            Background = Brushes.Transparent,
+            ClipToBounds = false,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Focusable = true,
+        };
+
+        AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
+        AutomationProperties.SetName(container, $"{FormatDrawingObjectKind(drawingObject.Kind)} {drawingObject.DisplayName}");
+        AutomationProperties.SetHelpText(container, "Selects this drawing object preview in the workbook viewport.");
+        AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
+
+        container.PointerPressed += (_, args) =>
+        {
+            if (args.GetCurrentPoint(container).Properties.IsLeftButtonPressed)
+            {
+                SelectDrawingObject(drawingObject);
+                args.Handled = true;
+            }
+        };
+        container.KeyDown += (_, args) =>
+        {
+            if (args.Key is Key.Enter or Key.Space)
+            {
+                SelectDrawingObject(drawingObject);
+                args.Handled = true;
+            }
+        };
+
+        container.Children.Add(visual);
+        if (selected)
+            container.Children.Add(CreateSelectedDrawingObjectAdorner());
+
+        return container;
+    }
+
+    private void SelectDrawingObject(DrawingObjectBounds drawingObject)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        _selectedDrawingObjectKind = drawingObject.Kind;
+        _selectedDrawingObjectId = drawingObject.Id;
+        RefreshShell($"Selected {FormatDrawingObjectKind(drawingObject.Kind)}: {drawingObject.DisplayName}");
+    }
+
+    private bool IsSelectedDrawingObject(DrawingObjectBounds drawingObject) =>
+        _selectedDrawingObjectKind == drawingObject.Kind &&
+        _selectedDrawingObjectId == drawingObject.Id;
+
+    private void ClearSelectedDrawingObject()
+    {
+        _selectedDrawingObjectKind = null;
+        _selectedDrawingObjectId = null;
+    }
+
+    private static Border CreateSelectedDrawingObjectAdorner() =>
+        new()
+        {
+            BorderBrush = SelectionBorder,
+            BorderThickness = new Thickness(2),
+            IsHitTestVisible = false,
+        };
+
+    private static string FormatDrawingObjectKind(SelectionPaneObjectKind kind) =>
+        kind switch
+        {
+            SelectionPaneObjectKind.Picture => "Picture",
+            SelectionPaneObjectKind.Shape => "Shape",
+            SelectionPaneObjectKind.TextBox => "Text box",
+            _ => "Drawing object"
+        };
 
     private static Control CreateDrawingObjectVisual(
         DrawingObjectBounds drawingObject,
@@ -1844,6 +1930,7 @@ public sealed class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        ClearSelectedDrawingObject();
         _session.SelectCell(address);
         RefreshShell("Ready");
     }
@@ -1853,6 +1940,7 @@ public sealed class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        ClearSelectedDrawingObject();
         _session.SelectRange(new GridRange(_session.ActiveCell, address));
         RefreshShell("Ready");
     }
@@ -1865,11 +1953,13 @@ public sealed class MainWindow : Window
         if (!_session.SelectSheet(sheetId))
             return;
 
+        ClearSelectedDrawingObject();
         RefreshShell($"Selected {_session.ActiveSheet.Name}");
     }
 
     private void BeginFormulaEdit(CellAddress address, string? initialText = null)
     {
+        ClearSelectedDrawingObject();
         _session.BeginFormulaEdit(address);
         RefreshShell("Ready");
         var originalText = _formulaBox.Text ?? "";
@@ -2991,6 +3081,7 @@ public sealed class MainWindow : Window
         if (!handled)
             return;
 
+        ClearSelectedDrawingObject();
         e.Handled = true;
         RefreshShell("Ready");
     }
@@ -3224,6 +3315,7 @@ public sealed class MainWindow : Window
                 progress);
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             _session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);
+            ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)

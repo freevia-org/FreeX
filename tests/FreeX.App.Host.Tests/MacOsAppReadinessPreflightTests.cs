@@ -37,6 +37,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CreateNativePasteSpecialMenu()");
         script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
         script.Should().Contain("AddStyledCellBorderOverlay(content, style);");
+        script.Should().Contain("CreateSelectableDrawingObjectVisual(drawingObject, width, height)");
+        script.Should().Contain("AutomationProperties.SetItemStatus(container, selected ? `\"Selected`\" : `\"Not selected`\")");
         script.Should().Contain("CreateDrawingObjectVisual(drawingObject, width, height)");
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
@@ -389,6 +391,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     CreateNativePasteSpecialMenu();
                     PasteSpecialClipboardAtActiveCell(text, mode, options);
                     CellColorPalettePlanner.BuildDefaultSwatches();
+                    CreateSelectableDrawingObjectVisual(drawingObject, width, height);
+                    AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
+                    AutomationProperties.SetHelpText(container, "Selects this drawing object preview in the workbook viewport.");
+                    AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
+                    container.PointerPressed += (_, args) => { };
+                    if (args.Key is Key.Enter or Key.Space) { }
+                    CreateSelectedDrawingObjectAdorner();
+                    ClearSelectedDrawingObject();
                     CreateDrawingObjectVisual(drawingObject, width, height);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
