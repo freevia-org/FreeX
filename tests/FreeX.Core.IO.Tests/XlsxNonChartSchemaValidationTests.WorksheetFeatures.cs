@@ -293,6 +293,41 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void WorksheetScenarios_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorksheetScenariosSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorksheetScenarios_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorksheetScenariosSourceWorkbook());
+        var sourceScenarios = ReadWorksheetChildElement(source, "scenarios");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "scenarios")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceScenarios.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void NamedRanges_ProducesSchemaValidWorkbook()
     {
         var workbook = new Workbook("NamedRanges");
@@ -939,6 +974,26 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetFormula(watchedAddress, "A1+1");
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(12));
         workbook.WatchedCells.Add(watchedAddress);
+        return workbook;
+    }
+
+    private static Workbook CreateWorksheetScenariosSourceWorkbook()
+    {
+        var workbook = new Workbook("WorksheetScenariosPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("manual"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Result"));
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "BestCase",
+            [
+                new ScenarioCellValue(new CellAddress(sheet.Id, 1, 1), new NumberValue(42)),
+                new ScenarioCellValue(new CellAddress(sheet.Id, 1, 2), new TextValue("Seattle"))
+            ],
+            "Scenario comment",
+            Hidden: true,
+            Locked: true,
+            User: "FreeXTest"));
         return workbook;
     }
 
