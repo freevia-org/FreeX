@@ -119,6 +119,27 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorksheetSortState_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        var workbook = CreateWorksheetSortStateAndDataConsolidationSourceWorkbook();
+        var sortState = workbook.GetSheetAt(0).SortState!;
+        sortState.SortMethod = "invalid";
+        sortState.Conditions[0].SortBy = "invalid";
+        sortState.Conditions[0].DxfId = "not-a-number";
+        sortState.Conditions[0].IconId = "not-a-number";
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var savedSortState = ReadWorksheetChildElement(saved, "sortState");
+        var savedCondition = savedSortState.Element(savedSortState.Name.Namespace + "sortCondition")!;
+        savedSortState.Attribute("sortMethod").Should().BeNull();
+        savedCondition.Attribute("sortBy").Should().BeNull();
+        savedCondition.Attribute("dxfId").Should().BeNull();
+        savedCondition.Attribute("iconId").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorksheetSortStateAndDataConsolidation_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorksheetSortStateAndDataConsolidationSourceWorkbook());
@@ -149,6 +170,35 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceDataConsolidate.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidSortStateAttributesForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetSortStateAndDataConsolidationSourceWorkbook());
+        SetWorksheetSortStateInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var sortState = ReadWorksheetChildElement(saved, "sortState");
+        var condition = sortState.Element(sortState.Name.Namespace + "sortCondition")!;
+        sortState.Attribute("sortMethod").Should().BeNull();
+        condition.Attribute("sortBy").Should().BeNull();
+        condition.Attribute("dxfId").Should().BeNull();
+        condition.Attribute("iconId").Should().BeNull();
     }
 
 
@@ -1139,6 +1189,21 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             ]
         };
         return workbook;
+    }
+
+    private static void SetWorksheetSortStateInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sortState = worksheetXml.Root!.Element(workbookNs + "sortState")!;
+        sortState.SetAttributeValue("sortMethod", "invalid");
+        var condition = sortState.Element(workbookNs + "sortCondition")!;
+        condition.SetAttributeValue("sortBy", "invalid");
+        condition.SetAttributeValue("dxfId", "not-a-number");
+        condition.SetAttributeValue("iconId", "not-a-number");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
     private static Workbook CreateWorksheetSingleXmlCellsSourceWorkbook()
