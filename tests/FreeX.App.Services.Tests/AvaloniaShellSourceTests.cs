@@ -476,7 +476,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Double Underline failed.\");");
         source.Should().Contain("RefreshShell($\"{(enabled ? \"Double underlined\" : \"Removed double underline from\")} {rangeReference}\");");
         source.Should().Contain("var textDecorations = BuildTextDecorations(style);");
+        source.Should().Contain("private const double DoubleUnderlineSecondStrokeOffset = 2;");
         source.Should().Contain("if (style.Underline || style.DoubleUnderline)");
+        source.Should().Contain("if (style.DoubleUnderline)");
+        source.Should().Contain("Location = TextDecorationLocation.Underline,");
+        source.Should().Contain("StrokeThickness = 1,");
+        source.Should().Contain("StrokeThicknessUnit = TextDecorationUnit.Pixel,");
+        source.Should().Contain("StrokeOffset = DoubleUnderlineSecondStrokeOffset,");
+        source.Should().Contain("StrokeOffsetUnit = TextDecorationUnit.Pixel,");
         source.Should().Contain("ToggleSelectedRangeDoubleUnderline();");
     }
 

@@ -19,6 +19,7 @@ namespace FreeX.App.Avalonia;
 
 public sealed class MainWindow : Window
 {
+    private const double DoubleUnderlineSecondStrokeOffset = 2;
     private const double HeaderColumnWidth = 58;
     private const double HeaderRowHeight = 28;
     private const double InitialViewportHeight = 880;
@@ -966,6 +967,18 @@ public sealed class MainWindow : Window
         {
             foreach (var decoration in TextDecorations.Underline)
                 decorations.Add(decoration);
+
+            if (style.DoubleUnderline)
+            {
+                decorations.Add(new TextDecoration
+                {
+                    Location = TextDecorationLocation.Underline,
+                    StrokeThickness = 1,
+                    StrokeThicknessUnit = TextDecorationUnit.Pixel,
+                    StrokeOffset = DoubleUnderlineSecondStrokeOffset,
+                    StrokeOffsetUnit = TextDecorationUnit.Pixel,
+                });
+            }
         }
 
         if (style.Strikethrough)
