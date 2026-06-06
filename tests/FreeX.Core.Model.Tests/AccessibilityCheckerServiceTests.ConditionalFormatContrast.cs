@@ -2856,6 +2856,43 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatReferenceDimensionFunctions()
+    {
+        AssertFormulaRowColumnFunctionContrastLocations("ROWS($A$1:$C$2)=2", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMNS($A$1:$C$2)=3", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("AREAS($A$1:$C$2)=1", "B1", "C1", "D1", "B2", "C2", "D2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatReferenceDimensionFullRowAndColumnFunctions()
+    {
+        AssertFormulaRowColumnFunctionContrastLocations("ROWS($A:$A)=1048576", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMNS($A:$C)=3", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("ROWS($1:$3)=3", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMNS($1:$1)=16384", "B1", "C1", "D1", "B2", "C2", "D2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatReferenceDimensionFunctionWrappers()
+    {
+        AssertFormulaRowColumnFunctionContrastLocations("IF(ROWS($A$1:$A$2)=2,TRUE,FALSE)", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("AND(COLUMNS($A$1:$C$1)=3,AREAS($A$1:$C$1))", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("ISNUMBER(ROWS($A$1:$A$2))", "B1", "C1", "D1", "B2", "C2", "D2");
+        AssertFormulaRowColumnFunctionContrastLocations("ROWS($A$1:$A$2)+COLUMNS($A$1:$C$1)=5", "B1", "C1", "D1", "B2", "C2", "D2");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatReferenceDimensionFunctionUnsupportedOperands()
+    {
+        AssertFormulaRowColumnFunctionContrastLocations("ROWS(1)>0");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMNS(\"A1\")>0");
+        AssertFormulaRowColumnFunctionContrastLocations("AREAS($A$1,$B$1)>0");
+        AssertFormulaRowColumnFunctionContrastLocations("ROWS(Missing!$A$1:$A$2)>0");
+        AssertFormulaRowColumnFunctionContrastLocations("COLUMNS(A0:A1)>0");
+        AssertFormulaRowColumnFunctionContrastLocations("ROWS(SEQUENCE(2))>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
