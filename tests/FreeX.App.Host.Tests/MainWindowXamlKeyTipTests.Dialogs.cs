@@ -11,7 +11,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void DialogEntryPointButtons_HaveStableAutomationIds()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace local = "clr-namespace:FreeX.App.Host";
 
@@ -50,7 +50,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void HelpExternalEntryPoints_ExposeStableAutomationAndHonestHelpText()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace local = "clr-namespace:FreeX.App.Host";
 
@@ -108,7 +108,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ReviewShowComments_DisclosesDialogListBehavior()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -127,7 +127,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ReviewCommentCommands_ExposeThreadedCommentsAndSimpleNotesDistinctly()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -171,7 +171,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void InsertCommentCommand_ReusesThreadedCommentWorkflow()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
@@ -189,7 +189,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void SpellingTooltip_DisclosesKnownCorrectionsBaseline()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -206,7 +206,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void AccessibilityTooltip_DisclosesCurrentCheckerCoverage()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -224,7 +224,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ReviewProofingEntryPoints_ExposeStableAutomationMetadata()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -247,7 +247,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void AllowEditRangesTooltip_DisclosesRangeManagerWorkflow()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -267,7 +267,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void AltTextTooltip_DisclosesSelectedCellAnchoredObjectTarget()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -281,7 +281,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ArrangeAllTooltip_DisclosesStoredArrangementState()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -297,7 +297,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ZoomToSelectionTooltip_DisclosesGridViewportFit()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -312,7 +312,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void SplitTooltip_DisclosesFrozenPaneCleanup()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -326,7 +326,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void FreezePanesTooltip_DisclosesSplitPaneCleanup()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -340,7 +340,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ProtectSheetTooltip_DisclosesSetProtectionWorkflow()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -357,7 +357,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ProtectWorkbookTooltip_DisclosesStructureProtectionWorkflow()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -373,7 +373,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ErrorCheckingButton_ExposesOptionsEntryPoint()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -404,7 +404,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void DeferredCommandButtons_DescribeDeferredStatusInTooltip()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 

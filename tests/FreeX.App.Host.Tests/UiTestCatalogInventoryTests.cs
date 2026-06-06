@@ -277,7 +277,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> ReadVisibleTopLevelRibbonTabs()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         return document
@@ -292,7 +292,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> ReadContextualRibbonTabs()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         return document

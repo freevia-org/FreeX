@@ -10,7 +10,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableEntryPoint_IsAvailableOnInsertRibbon()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -26,7 +26,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableRefreshEntryPoint_IsAvailableOnInsertRibbon()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -42,7 +42,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableShowDetailsEntryPoint_IsAvailableOnInsertRibbon()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -90,7 +90,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotChartEntryPoint_IsAvailableOnInsertRibbon()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -107,7 +107,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_HasExcelLikeZonesAndCommands()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -154,7 +154,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_SearchAppearsBeforeAvailableFieldsList()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -172,7 +172,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_RemoveButton_ExposesVisibleAccessKey()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var removeButton = document
@@ -196,7 +196,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_ExposesFieldDropdownCommands()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -280,7 +280,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_SupportsDragDropReordering()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = ReadPivotCommandSource();
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -306,7 +306,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableAvailableFields_ExposeExcelStyleCheckboxToggles()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = ReadPivotCommandSource();
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -331,7 +331,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void PivotTableSelectItems_UsesCheckboxFilterDialog()
     {
         var mainWindowSource = ReadPivotCommandSource();
-        var dialogXaml = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotFieldFilterDialog.xaml"));
+        var dialogXaml = DialogSourceTestSupport.LoadHostXamlDocument("PivotFieldFilterDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -355,8 +355,8 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void PivotTableRuleFilters_UseDialogChrome()
     {
         var mainWindowSource = ReadPivotCommandSource();
-        var labelDialog = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotLabelFilterDialog.xaml"));
-        var valueDialog = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFilterDialog.xaml"));
+        var labelDialog = DialogSourceTestSupport.LoadHostXamlDocument("PivotLabelFilterDialog.xaml");
+        var valueDialog = DialogSourceTestSupport.LoadHostXamlDocument("PivotValueFilterDialog.xaml");
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         mainWindowSource.Should().Contain("new PivotLabelFilterDialog");
@@ -399,7 +399,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void SlicerTimelinePane_ExposesInteractivePivotFilters()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = ReadPivotCommandSource();
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -428,7 +428,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableContextualTabs_ExposeAnalyzeAndDesignCommands()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
