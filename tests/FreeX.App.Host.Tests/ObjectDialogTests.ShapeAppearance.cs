@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
@@ -11,7 +10,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void ShapeGradientDialog_LabelsStopRgbEditorsWithAccessKeyTargets()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ShapeGradientDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ShapeGradientDialog.cs");
 
         source.Should().Contain("UiText.Get(\"ShapeGradient_GradientStopsGroup\")");
         source.Should().Contain("AddStopRow(grid, 0, UiText.Get(\"ShapeGradient_Stop1ColorLabel\"), _startColorBox");
@@ -24,7 +23,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void ShapeGradientDialogOpenedFromKeyboard_FocusesStartColorBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ShapeGradientDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ShapeGradientDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -34,7 +33,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void ShapeGradientDialogInvalidColor_ShowsOwnedWarningAndRefocusesFirstInvalidColor()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ShapeGradientDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ShapeGradientDialog.cs");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("UiText.Get(\"ShapeGradient_InvalidRgbColorMessage\")");
@@ -185,7 +184,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void ShapeEffectsDialog_LabelsPresetComboWithAccessKeyTarget()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ShapeEffectsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ShapeEffectsDialog.cs");
 
         source.Should().Contain("Content = UiText.Get(\"ShapeEffects_EffectLabel\")");
         source.Should().Contain("Target = _effectBox");
@@ -206,7 +205,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void ShapeGradientDialog_ExposesColorPickerButtonsForStartAndEndColors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ShapeGradientDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ShapeGradientDialog.cs");
 
         source.Should().Contain("_startColorButton");
         source.Should().Contain("_endColorButton");
