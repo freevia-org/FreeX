@@ -874,6 +874,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("ROUND(RADIANS(180),2)=3.14", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SIN(RADIANS($A1))>0.95", "B1", "B2", "B3");
         AssertFormulaArithmeticContrastLocations("ROUND(SIN(PI()/2),2)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ASIN(SIN(RADIANS($A1)))>1", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("ASIN($A1/100)>1", "B2");
         AssertFormulaArithmeticContrastLocations("COS(RADIANS($A1))<0", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("ROUND(COS(PI()),2)=-1", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("TAN(RADIANS($A1))>3", "B1", "B3");
@@ -922,6 +924,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("IF(SIN(RADIANS($A1))<0.9,TRUE,FALSE)", "B4");
         AssertFormulaArithmeticContrastLocations("AND(SIN(RADIANS($A1))>0.95,$C1=\"Closed\")", "B1", "B2");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(SIN(RADIANS($A1)))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(ASIN(SIN(RADIANS($A1)))>1,TRUE,FALSE)", "B1", "B2", "B3");
+        AssertFormulaArithmeticContrastLocations("AND(ASIN(SIN(RADIANS($A1)))>1,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ASIN(SIN(RADIANS($A1))))", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("IF(COS(RADIANS($A1))<0,TRUE,FALSE)", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("AND(COS(RADIANS($A1))<0,$C1=\"Closed\")", "B2");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(COS(RADIANS($A1)))", "B1", "B2", "B3", "B4");
@@ -951,6 +956,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("SUM(DEGREES($A1/100),1)>58", "B2", "B4");
         AssertFormulaAggregateContrastLocations("SUM(RADIANS($A1),1)>2.5", "B2", "B4");
         AssertFormulaAggregateContrastLocations("SUM(SIN(RADIANS($A1)),1)>1.95", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("SUM(ASIN(SIN(RADIANS($A1))),1)>2", "B1", "B2", "B3");
         AssertFormulaAggregateContrastLocations("SUM(COS(RADIANS($A1)),1)>1.2", "B1", "B3");
         AssertFormulaAggregateContrastLocations("SUM(TAN(RADIANS($A1)),1)>4", "B1", "B3");
         AssertFormulaAggregateContrastLocations("SUM(PI(),$A1)>103", "B2", "B4");
@@ -1050,6 +1056,14 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("SIN($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("SIN(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("SIN(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("ASIN()>0");
+        AssertFormulaArithmeticContrastLocations("ASIN($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(\"0.5\")>0");
+        AssertFormulaArithmeticContrastLocations("ASIN($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(2)>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(-2)>0");
+        AssertFormulaArithmeticContrastLocations("ASIN(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("COS()>0");
         AssertFormulaArithmeticContrastLocations("COS($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("COS(\"5\")>0");
