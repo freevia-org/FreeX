@@ -194,4 +194,69 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(stream).Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithX14DataBarConditionalFormat_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateX14DataBarConditionalFormatSourceWorkbook());
+        var sourceConditionalFormatting = ReadWorksheetChildElement(source, "conditionalFormatting");
+        var sourceExtensionList = ReadWorksheetChildElement(source, "extLst");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "conditionalFormatting")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceConditionalFormatting.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "extLst")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceExtensionList.ToString(SaveOptions.DisableFormatting));
+    }
+
+    private static Workbook CreateX14DataBarConditionalFormatSourceWorkbook()
+    {
+        var workbook = new Workbook("ConditionalFormatPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, 2, 1, 5, 1),
+            Priority = 1,
+            RuleType = CfRuleType.DataBar,
+            DataBarShowValue = true,
+            DataBarGradient = false,
+            DataBarBorder = true,
+            DataBarAxisPosition = "middle",
+            DataBarAxisColor = new RgbColor(0, 0, 0),
+            DataBarNegativeFillColor = new RgbColor(255, 0, 0),
+            DataBarNegativeBorderColor = new RgbColor(255, 0, 0),
+        });
+
+        return workbook;
+    }
+
+    private static XElement ReadWorksheetChildElement(Stream stream, string localName)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        return new XElement(worksheetXml.Root!.Element(worksheetNs + localName)!);
+    }
+
 }
