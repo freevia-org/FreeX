@@ -992,6 +992,9 @@ public static partial class AccessibilityCheckerService
             case "ATANH":
                 kind = ConditionalFormulaScalarFunctionKind.Atanh;
                 return true;
+            case "ACOTH":
+                kind = ConditionalFormulaScalarFunctionKind.Acoth;
+                return true;
             case "ASIN":
                 kind = ConditionalFormulaScalarFunctionKind.Asin;
                 return true;
@@ -1108,6 +1111,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Cosh or
             ConditionalFormulaScalarFunctionKind.Tanh or
             ConditionalFormulaScalarFunctionKind.Atanh or
+            ConditionalFormulaScalarFunctionKind.Acoth or
             ConditionalFormulaScalarFunctionKind.Asin or
             ConditionalFormulaScalarFunctionKind.Acos or
             ConditionalFormulaScalarFunctionKind.Acot or
@@ -1695,6 +1699,7 @@ public static partial class AccessibilityCheckerService
         Cosh,
         Tanh,
         Atanh,
+        Acoth,
         Asin,
         Acos,
         Acot,
@@ -2233,6 +2238,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Cosh:
                 case ConditionalFormulaScalarFunctionKind.Tanh:
                 case ConditionalFormulaScalarFunctionKind.Atanh:
+                case ConditionalFormulaScalarFunctionKind.Acoth:
                 case ConditionalFormulaScalarFunctionKind.Asin:
                 case ConditionalFormulaScalarFunctionKind.Acos:
                 case ConditionalFormulaScalarFunctionKind.Acot:
@@ -2555,6 +2561,16 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = Math.Atanh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Acoth:
+                    if (!double.IsFinite(first) || Math.Abs(first) <= 1d)
+                        return false;
+
+                    var acothRatio = (first + 1d) / (first - 1d);
+                    if (!double.IsFinite(acothRatio) || acothRatio <= 0d)
+                        return false;
+
+                    result = 0.5d * Math.Log(acothRatio);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Asin:
                     if (first < -1d || first > 1d)
