@@ -587,6 +587,63 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPairwiseAggregateScalarComparisons()
+    {
+        AssertFormulaAggregateContrastLocations("SUMXMY2(3,4)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMX2MY2(3,4)=-7", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMX2PY2(3,4)=25", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMXMY2(TRUE,\"3\")=4", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMXMY2(DATE(2023,1,2),DATE(2023,1,1))=1", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPairwiseAggregateRangeComparisons()
+    {
+        AssertFormulaAggregateContrastLocations("SUMXMY2($A1:$A3,$A2:$A4)>3000", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUMX2MY2($A1:$A3,$A2:$A4)<0", "B1", "B2", "B3");
+        AssertFormulaAggregateContrastLocations("SUMX2PY2($A1:$A3,$A2:$A4)>30000", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPairwiseAggregateWrappersAndPredicates()
+    {
+        AssertFormulaAggregateContrastLocations("AND(SUMXMY2($A1:$A3,$A2:$A4)>3000,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("IF(SUMX2PY2($A1:$A3,$A2:$A4)>30000,TRUE,FALSE)", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(SUMX2MY2($A1:$A3,$A2:$A4))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPairwiseAggregateNesting()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(SUMXMY2($A1:$A3,$A2:$A4),1)>3000", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUMXMY2(SUM($A1:$A2),$A1^2)>30000000", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatPairwiseAggregateSkipsReferencedNonNumericPairs()
+    {
+        AssertFormulaAggregateContrastLocations("SUMXMY2($D1:$D3,$A1:$A3)=7744", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUMX2PY2($D1:$D3,$E1:$E3)=0", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatPairwiseAggregateUnsupportedOperands()
+    {
+        AssertFormulaAggregateContrastLocations("SUMXMY2($A1)>0");
+        AssertFormulaAggregateContrastLocations("SUMX2MY2($A1,$A2,$A3)>0");
+        AssertFormulaAggregateContrastLocations("SUMX2PY2()>0");
+        AssertFormulaAggregateContrastLocations("SUMXMY2(\"n/a\",1)>0");
+        AssertFormulaAggregateContrastLocations("SUMXMY2(\"1E309\",1)>0");
+        AssertFormulaAggregateContrastLocations("SUMX2PY2(1E308,1)>0");
+        AssertFormulaAggregateContrastLocations("SUMXMY2(1E308*1E308,1)>0");
+        AssertFormulaAggregateContrastLocations("SUMXMY2($A1:$A2,$A1:$A3)>0");
+        AssertFormulaAggregateContrastLocations("SUMXMY2($A1:$A20000,$A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("SUMXMY2(A0,$A1)>0");
+        AssertFormulaAggregateContrastLocations("SUMXMY2(KURT($A1),$A1)>0");
+        AssertFormulaAggregateContrastLocations("SUMXMY2($A1,KURT($A1))>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDevSqAggregate()
     {
         AssertFormulaAggregateContrastLocations("DEVSQ($A1:$A3)>400", "B1", "B2", "B3");
