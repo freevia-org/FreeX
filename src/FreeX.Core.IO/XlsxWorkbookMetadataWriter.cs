@@ -146,6 +146,7 @@ internal static class XlsxWorkbookMetadataWriter
         primaryView.SetAttributeValue("tabRatio", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.SheetTabRatio, 0, 1000));
         primaryView.SetAttributeValue("firstSheet", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.FirstVisibleSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
         primaryView.SetAttributeValue("activeTab", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.ActiveSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
+        XlsxWorkbookViewNormalizer.NormalizeWorkbookViewElement(primaryView);
 
         return true;
     }

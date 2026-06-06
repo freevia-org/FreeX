@@ -701,6 +701,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             hasWorksheetDynamicFilters,
             null,
             null,
+            null,
             mergeCellWorksheetPathsToStrip);
     }
 

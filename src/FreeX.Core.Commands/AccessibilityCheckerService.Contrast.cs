@@ -925,6 +925,9 @@ public static partial class AccessibilityCheckerService
             case "MROUND":
                 kind = ConditionalFormulaScalarFunctionKind.MRound;
                 return true;
+            case "CEILING":
+                kind = ConditionalFormulaScalarFunctionKind.Ceiling;
+                return true;
             case "TRUNC":
                 kind = ConditionalFormulaScalarFunctionKind.Trunc;
                 return true;
@@ -1172,6 +1175,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.RoundUp or
             ConditionalFormulaScalarFunctionKind.RoundDown or
             ConditionalFormulaScalarFunctionKind.MRound or
+            ConditionalFormulaScalarFunctionKind.Ceiling or
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Quotient or
             ConditionalFormulaScalarFunctionKind.Combin or
@@ -1720,6 +1724,7 @@ public static partial class AccessibilityCheckerService
         RoundUp,
         RoundDown,
         MRound,
+        Ceiling,
         Trunc,
         Fact,
         FactDouble,
@@ -2269,6 +2274,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.RoundUp:
                 case ConditionalFormulaScalarFunctionKind.RoundDown:
                 case ConditionalFormulaScalarFunctionKind.MRound:
+                case ConditionalFormulaScalarFunctionKind.Ceiling:
                 case ConditionalFormulaScalarFunctionKind.Trunc:
                 case ConditionalFormulaScalarFunctionKind.Fact:
                 case ConditionalFormulaScalarFunctionKind.FactDouble:
@@ -2464,6 +2470,14 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.MRound:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var multiple) ||
                         !TryMRoundFormulaNumber(first, multiple, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Ceiling:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var significance) ||
+                        !TryCeilingFormulaNumber(first, significance, out result))
                     {
                         return false;
                     }
@@ -3230,6 +3244,22 @@ public static partial class AccessibilityCheckerService
 
             var roundedMultiple = Math.Round(number / multiple, 0, MidpointRounding.AwayFromZero);
             result = roundedMultiple * multiple;
+            return double.IsFinite(result);
+        }
+
+        private static bool TryCeilingFormulaNumber(double number, double significance, out double result)
+        {
+            result = 0d;
+            if (!double.IsFinite(number) || !double.IsFinite(significance))
+                return false;
+
+            if (significance == 0d)
+                return true;
+
+            if (number > 0d && significance < 0d)
+                return false;
+
+            result = Math.Ceiling(number / significance) * significance;
             return double.IsFinite(result);
         }
 

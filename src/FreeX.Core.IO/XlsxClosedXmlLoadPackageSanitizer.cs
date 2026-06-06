@@ -13,6 +13,7 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasWorksheetDynamicFilters,
     bool? HasDocumentPropertiesPackageGraphIssues,
     bool? HasWorksheetSheetViewSchemaIssues,
+    bool? HasWorkbookViewSchemaIssues,
     IReadOnlySet<string>? MergeCellWorksheetPathsToStrip);
 
 internal static class XlsxClosedXmlLoadPackageSanitizer
@@ -78,6 +79,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 RemoveWorksheetDynamicFilters(archive);
             if (requirements.HasWorksheetSheetViewSchemaIssues)
                 NormalizeWorksheetSheetViews(archive);
+            if (requirements.HasWorkbookViewSchemaIssues)
+                NormalizeWorkbookViews(archive);
             if (requirements.MergeCellWorksheetPathsToStrip is { Count: > 0 } mergeCellWorksheetPaths)
                 RemoveWorksheetMergeCells(archive, mergeCellWorksheetPaths);
             if (requirements.HasDocumentPropertiesPackageGraphIssues)
@@ -187,11 +190,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters, archive, HasWorksheetDynamicFilters),
                 ResolveKnownOrScan(knownHints.HasDocumentPropertiesPackageGraphIssues, archive, HasDocumentPropertiesPackageGraphIssues),
                 ResolveKnownOrScan(knownHints.HasWorksheetSheetViewSchemaIssues, archive, HasWorksheetSheetViewSchemaIssues),
+                ResolveKnownOrScan(knownHints.HasWorkbookViewSchemaIssues, archive, HasWorkbookViewSchemaIssues),
                 knownHints.MergeCellWorksheetPathsToStrip);
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, null);
         }
         finally
         {
@@ -212,7 +216,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hints.HasDrawingPackageParts is not { } hasDrawingPackageParts ||
             hints.HasWorksheetDynamicFilters is not { } hasWorksheetDynamicFilters ||
             hints.HasDocumentPropertiesPackageGraphIssues is not { } hasDocumentPropertiesPackageGraphIssues ||
-            hints.HasWorksheetSheetViewSchemaIssues is not { } hasWorksheetSheetViewSchemaIssues)
+            hints.HasWorksheetSheetViewSchemaIssues is not { } hasWorksheetSheetViewSchemaIssues ||
+            hints.HasWorkbookViewSchemaIssues is not { } hasWorkbookViewSchemaIssues)
         {
             return false;
         }
@@ -238,6 +243,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasWorksheetDynamicFilters,
             hasDocumentPropertiesPackageGraphIssues,
             hasWorksheetSheetViewSchemaIssues,
+            hasWorkbookViewSchemaIssues,
             hints.MergeCellWorksheetPathsToStrip);
         return true;
     }
@@ -350,6 +356,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasWorksheetDynamicFilters,
         bool HasDocumentPropertiesPackageGraphIssues,
         bool HasWorksheetSheetViewSchemaIssues,
+        bool HasWorkbookViewSchemaIssues,
         IReadOnlySet<string>? MergeCellWorksheetPathsToStrip)
     {
         public bool RequiresAny =>
@@ -361,6 +368,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasWorksheetDynamicFilters ||
             HasDocumentPropertiesPackageGraphIssues ||
             HasWorksheetSheetViewSchemaIssues ||
+            HasWorkbookViewSchemaIssues ||
             MergeCellWorksheetPathsToStrip is { Count: > 0 };
     }
 
@@ -489,7 +497,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return WriteTransformedChartsheetEntry(sourceEntry, targetArchive);
         }
 
-        if (requirements.HasPivotPackageMetadata &&
+        if ((requirements.HasPivotPackageMetadata || requirements.HasWorkbookViewSchemaIssues) &&
             string.Equals(normalizedPath, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase))
         {
             WriteTransformedWorkbookEntry(sourceEntry, targetArchive);
@@ -550,6 +558,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var workbookXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
         workbookXml.Root?.Elements(workbookNs + "pivotCaches").Remove();
+        if (workbookXml.Root?.Element(workbookNs + "bookViews") is { } bookViews)
+            XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
         WriteXmlEntry(sourceEntry, targetArchive, workbookXml);
     }
 
@@ -1126,6 +1136,43 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
             }
+        }
+    }
+
+    private static bool HasWorkbookViewSchemaIssues(ZipArchive archive)
+    {
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return false;
+
+        try
+        {
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var bookViews = workbookXml.Root?.Element(XName.Get(
+                "bookViews",
+                "http://schemas.openxmlformats.org/spreadsheetml/2006/main"));
+            return bookViews is not null &&
+                   XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static void NormalizeWorkbookViews(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        var bookViews = workbookXml.Root?.Element(workbookNs + "bookViews");
+        if (bookViews is not null &&
+            XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews))
+        {
+            XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
         }
     }
 
