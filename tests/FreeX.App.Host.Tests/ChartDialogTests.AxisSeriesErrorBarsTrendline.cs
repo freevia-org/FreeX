@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -41,7 +40,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartTrendlineOptionsDialogOpenedFromKeyboard_FocusesShowTrendlineChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartTrendlineOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartTrendlineOptionsDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -52,7 +51,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartTrendlineOptionsDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartTrendlineOptionsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartTrendlineOptionsDialog.cs");
 
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartTrendline_InvalidPeriodMessage\"), _periodBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartTrendline_InvalidOrderMessage\"), _orderBox);");
@@ -107,7 +106,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartErrorBarsDialogOpenedFromKeyboard_FocusesShowErrorBarsChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartErrorBarsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -118,7 +117,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartErrorBarsDialog_ValueEditorExposesAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartErrorBarsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_valueBox, UiText.Get(\"ChartErrorBars_ValueAutomationName\"));");
     }
@@ -126,7 +125,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartErrorBarsDialogInvalidValue_ShowsOwnedWarningAndRefocusesValueBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartErrorBarsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
 
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartErrorBars_InvalidValueMessage\"), _valueBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
@@ -185,7 +184,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartAxisFormatDialogOpenedFromKeyboard_FocusesMinimumBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartAxisFormatDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartAxisFormatDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -197,7 +196,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartAxisFormatDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartAxisFormatDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartAxisFormatDialog.cs");
 
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidMinimumMessage\"), _minimumBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidMaximumMessage\"), _maximumBox);");
@@ -250,7 +249,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartSeriesFormatDialogOpenedFromKeyboard_FocusesSeriesSelector()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartSeriesFormatDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartSeriesFormatDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -261,7 +260,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartSeriesFormatDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartSeriesFormatDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartSeriesFormatDialog.cs");
 
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _strokeBox);");

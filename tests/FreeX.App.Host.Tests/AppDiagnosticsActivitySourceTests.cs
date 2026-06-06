@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,10 +7,10 @@ public sealed class AppDiagnosticsActivitySourceTests
     [Fact]
     public void MainWindow_RecordsSafeWorkbookAndExportActivityEvents()
     {
-        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
-        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
-        var exportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PrintExport.cs"));
+        var mainWindowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
+        var exportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
 
         mainWindowSource.Should().Contain("IAppDiagnostics? diagnostics = null");
         mainWindowSource.Should().Contain("RecordDiagnosticEvent");
@@ -33,8 +32,8 @@ public sealed class AppDiagnosticsActivitySourceTests
     [Fact]
     public void MainWindow_RecordsCentralCommandAndDialogUsageEvents()
     {
-        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CommandExecution.cs"));
-        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.CommandExecution.cs");
+        var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
 
         commandSource.Should().Contain("RecordDiagnosticEvent(\"command_invoked\"");
         commandSource.Should().Contain("[\"command\"] = title");
@@ -46,8 +45,8 @@ public sealed class AppDiagnosticsActivitySourceTests
     [Fact]
     public void MainWindow_RecordsManualUpdateCheckUsageEvent()
     {
-        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         reviewSource.Should().Contain("private void CheckForUpdatesBtn_Click(");
         reviewSource.Should().Contain("RecordDiagnosticEvent(\"update_check_opened\"");
