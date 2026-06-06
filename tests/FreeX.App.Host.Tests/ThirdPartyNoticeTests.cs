@@ -9,7 +9,7 @@ public sealed class ThirdPartyNoticeTests
     [Fact]
     public void ThirdPartyNotices_ListEveryRestoredNuGetPackage()
     {
-        var notices = File.ReadAllText(WorkspaceFileLocator.Find("THIRD_PARTY_NOTICES.md"));
+        var notices = WorkspaceFileLocator.ReadAllText("THIRD_PARTY_NOTICES.md");
         var packages = FindRestoredPackages();
 
         packages.Should().NotBeEmpty();
@@ -22,9 +22,9 @@ public sealed class ThirdPartyNoticeTests
     [Fact]
     public void ThirdPartyNotices_CallOutLicenseTextAndFluentAssertionsCommercialUse()
     {
-        var notices = File.ReadAllText(WorkspaceFileLocator.Find("THIRD_PARTY_NOTICES.md"));
-        var licenses = File.ReadAllText(WorkspaceFileLocator.Find("THIRD_PARTY_LICENSES.md"));
-        var audit = File.ReadAllText(WorkspaceFileLocator.Find("docs", "legal/third-party-license-audit-2026-05-30.md"));
+        var notices = WorkspaceFileLocator.ReadAllText("THIRD_PARTY_NOTICES.md");
+        var licenses = WorkspaceFileLocator.ReadAllText("THIRD_PARTY_LICENSES.md");
+        var audit = WorkspaceFileLocator.ReadAllText("docs", "legal/third-party-license-audit-2026-05-30.md");
 
         notices.Should().Contain("[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)");
         notices.Should().Contain("FluentAssertions 8.9.0 is a test/development dependency only");

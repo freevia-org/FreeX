@@ -9,7 +9,7 @@ public sealed class TestDistributionPlanTests
     [Fact]
     public void DistributionPlan_MarksImplementedDistributionPhasesComplete()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
+        var source = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
         source.Should().Contain("| 4. Hosted release channel | Complete |");
         source.Should().Contain("| 5. Crash analytics | Complete |");
@@ -21,7 +21,7 @@ public sealed class TestDistributionPlanTests
     [Fact]
     public void DistributionPlan_DocumentsPhaseSixUsageAnalyticsContract()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
+        var source = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
         source.Should().Contain("6. Lightweight usage analytics");
         source.Should().Contain("app lifecycle");
@@ -36,7 +36,7 @@ public sealed class TestDistributionPlanTests
     [Fact]
     public void DistributionPlan_DocumentsPhaseSevenAutoUpdateReadiness()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
+        var source = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
         source.Should().Contain("7. Auto-update readiness");
         source.Should().Contain("Help > Check for Updates");
@@ -49,7 +49,7 @@ public sealed class TestDistributionPlanTests
     [Fact]
     public void DistributionPlan_DocumentsDefaultAgentBuildVerificationCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
+        var source = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
 
         source.Should().Contain("## Default Agent Build Verification");
         source.Should().Contain("tools\\Test-RepositoryPreflight.ps1");
@@ -84,8 +84,8 @@ public sealed class TestDistributionPlanTests
     [Fact]
     public void DistributionPlan_DocumentsAccessibilityValidationGate()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/test-distribution.md"));
-        var outstanding = File.ReadAllText(WorkspaceFileLocator.Find("docs", "planning/outstanding-build.md"));
+        var source = WorkspaceFileLocator.ReadAllText("docs", "release/test-distribution.md");
+        var outstanding = WorkspaceFileLocator.ReadAllText("docs", "planning/outstanding-build.md");
 
         source.Should().Contain("| 8. Accessibility validation | Complete");
         source.Should().Contain("Keyboard-only smoke validation");
@@ -101,7 +101,7 @@ public sealed class TestDistributionPlanTests
     [Fact]
     public void TesterReleaseChecklist_CapturesReleaseAndAccessibilityGateEvidence()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "release/tester-release-checklist.md"));
+        var source = WorkspaceFileLocator.ReadAllText("docs", "release/tester-release-checklist.md");
 
         source.Should().Contain("Tester Release");
         source.Should().Contain("release_notes");
