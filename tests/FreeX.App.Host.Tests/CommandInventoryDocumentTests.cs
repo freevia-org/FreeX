@@ -158,8 +158,7 @@ public sealed class CommandInventoryDocumentTests
 
     private static CommandInventory LoadInventory()
     {
-        var path = WorkspaceFileLocator.Find("docs", "parity/command-inventory.json");
-        var json = File.ReadAllText(path);
+        var json = WorkspaceFileLocator.ReadAllText("docs", "parity", "command-inventory.json");
         var inventory = JsonSerializer.Deserialize<CommandInventory>(
             json,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
