@@ -21,6 +21,9 @@ internal static class TestWorkspaceFiles
     internal static string ReadCoreIoRepoSource(string fileName) =>
         File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", fileName));
 
+    internal static string ReadCoreModelRepoSource(string fileName) =>
+        File.ReadAllText(FindRepoFile("src", "FreeX.Core.Model", fileName));
+
     private static string? FindFileUpward(string root, string[] relativeParts)
     {
         var directory = new DirectoryInfo(root);
