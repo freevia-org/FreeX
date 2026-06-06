@@ -990,6 +990,9 @@ public static partial class AccessibilityCheckerService
             case "SIN":
                 kind = ConditionalFormulaScalarFunctionKind.Sin;
                 return true;
+            case "CSC":
+                kind = ConditionalFormulaScalarFunctionKind.Csc;
+                return true;
             case "SINH":
                 kind = ConditionalFormulaScalarFunctionKind.Sinh;
                 return true;
@@ -1127,6 +1130,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Degrees or
             ConditionalFormulaScalarFunctionKind.Radians or
             ConditionalFormulaScalarFunctionKind.Sin or
+            ConditionalFormulaScalarFunctionKind.Csc or
             ConditionalFormulaScalarFunctionKind.Sinh or
             ConditionalFormulaScalarFunctionKind.Asinh or
             ConditionalFormulaScalarFunctionKind.Acosh or
@@ -1725,6 +1729,7 @@ public static partial class AccessibilityCheckerService
         Degrees,
         Radians,
         Sin,
+        Csc,
         Sinh,
         Asinh,
         Acosh,
@@ -2270,6 +2275,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Degrees:
                 case ConditionalFormulaScalarFunctionKind.Radians:
                 case ConditionalFormulaScalarFunctionKind.Sin:
+                case ConditionalFormulaScalarFunctionKind.Csc:
                 case ConditionalFormulaScalarFunctionKind.Sinh:
                 case ConditionalFormulaScalarFunctionKind.Asinh:
                 case ConditionalFormulaScalarFunctionKind.Acosh:
@@ -2604,6 +2610,13 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sin:
                     result = Math.Sin(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Csc:
+                    var sine = Math.Sin(first);
+                    if (sine == 0d || !double.IsFinite(sine))
+                        return false;
+
+                    result = 1d / sine;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sinh:
                     result = Math.Sinh(first);
