@@ -84,12 +84,12 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void DialogEntryPointHandlers_UseOwnedActivatedDialogs()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var source = string.Join(
-            Environment.NewLine,
+        var source = DialogSourceTestSupport.ReadHostSources(
             Directory.GetFiles(appHostDirectory, "MainWindow*.cs")
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .Select(File.ReadAllText));
-        var invokeButtonSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutomationInvokeButton.cs"));
+                .Select(path => Path.GetFileName(path)!)
+                .ToArray());
+        var invokeButtonSource = DialogSourceTestSupport.ReadHostSources("AutomationInvokeButton.cs");
 
         source.Should().Contain("ShowOwnedDialog(");
         source.Should().Contain("ShowOwnedMessage(");
@@ -174,7 +174,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.InsertCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
 
         var insertCommentButton = document
             .Descendants(presentation + "Button")
