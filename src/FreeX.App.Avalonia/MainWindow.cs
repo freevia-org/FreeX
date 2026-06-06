@@ -43,6 +43,8 @@ public sealed class MainWindow : Window
     private readonly ContentControl _sheetGridHost = new();
     private readonly ContentControl _sheetTabsHost = new();
     private readonly ScrollViewer _sheetScrollViewer = new();
+    private readonly ScrollBar _verticalWorksheetScrollBar = new();
+    private readonly ScrollBar _horizontalWorksheetScrollBar = new();
     private readonly TextBlock _titleText = new();
     private readonly TextBlock _detailText = new();
     private readonly TextBlock _statusText = new();
@@ -57,6 +59,7 @@ public sealed class MainWindow : Window
     private WorkbookSession _session;
     private bool _isOpening;
     private bool _isSaving;
+    private bool _isUpdatingWorksheetScrollBars;
 
     public MainWindow(IReadOnlyList<string> startupArguments)
     {
@@ -88,14 +91,61 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(sheetTabs, Dock.Bottom);
         root.Children.Add(sheetTabs);
 
+        root.Children.Add(BuildWorksheetViewportChrome());
+
+        return root;
+    }
+
+    private Control BuildWorksheetViewportChrome()
+    {
         _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.Content = _sheetGridHost;
         _sheetScrollViewer.SizeChanged += SheetScrollViewer_SizeChanged;
         _sheetScrollViewer.PointerWheelChanged += SheetScrollViewer_PointerWheelChanged;
-        root.Children.Add(_sheetScrollViewer);
 
-        return root;
+        _verticalWorksheetScrollBar.Orientation = Orientation.Vertical;
+        _verticalWorksheetScrollBar.Width = 16;
+        _verticalWorksheetScrollBar.AllowAutoHide = false;
+        _verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
+
+        _horizontalWorksheetScrollBar.Orientation = Orientation.Horizontal;
+        _horizontalWorksheetScrollBar.Height = 16;
+        _horizontalWorksheetScrollBar.AllowAutoHide = false;
+        _horizontalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
+
+        var chrome = new AvaloniaGrid
+        {
+            Background = Brushes.White,
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = GridLength.Auto },
+            },
+            RowDefinitions =
+            {
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                new RowDefinition { Height = GridLength.Auto },
+            },
+        };
+
+        AddGridChild(chrome, _sheetScrollViewer, 0, 0);
+        AddGridChild(chrome, _verticalWorksheetScrollBar, 0, 1);
+        AddGridChild(chrome, _horizontalWorksheetScrollBar, 1, 0);
+        AddGridChild(
+            chrome,
+            new Border
+            {
+                Width = 16,
+                Height = 16,
+                Background = HeaderBackground,
+                BorderBrush = ToolbarBorder,
+                BorderThickness = new Thickness(1, 1, 0, 0),
+            },
+            1,
+            1);
+
+        return chrome;
     }
 
     private Control BuildSheetTabsChrome()
@@ -262,7 +312,34 @@ public sealed class MainWindow : Window
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);
         Title = $"FreeX - {_session.DisplayName}{(_session.IsDirty ? " *" : "")}";
+        UpdateViewportScrollBars();
         UpdateSaveButton();
+    }
+
+    private void UpdateViewportScrollBars()
+    {
+        var state = WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport);
+        _isUpdatingWorksheetScrollBars = true;
+        try
+        {
+            ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);
+            ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);
+        }
+        finally
+        {
+            _isUpdatingWorksheetScrollBars = false;
+        }
+    }
+
+    private static void ApplyWorksheetScrollAxis(ScrollBar scrollBar, WorkbookViewportScrollAxis axis)
+    {
+        scrollBar.Minimum = axis.Minimum;
+        scrollBar.Maximum = axis.Maximum;
+        scrollBar.ViewportSize = axis.ViewportSize;
+        scrollBar.SmallChange = axis.SmallChange;
+        scrollBar.LargeChange = axis.LargeChange;
+        scrollBar.Value = Math.Clamp(axis.Value, axis.Minimum, axis.Maximum);
+        scrollBar.IsEnabled = axis.IsEnabled;
     }
 
     private void UpdateSaveButton()
@@ -844,6 +921,19 @@ public sealed class MainWindow : Window
 
         if (_session.UpdateViewportSize(viewportHeight, viewportWidth))
             RefreshShell(string.IsNullOrWhiteSpace(_statusText.Text) ? "Ready" : _statusText.Text);
+    }
+
+    private void WorksheetScrollBar_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_isUpdatingWorksheetScrollBars)
+            return;
+
+        var (topRow, leftCol) = WorkbookViewportScrollPlanner.CalculateViewportOrigin(
+            _session.ActiveSheet,
+            _verticalWorksheetScrollBar.Value,
+            _horizontalWorksheetScrollBar.Value);
+        if (_session.SetViewportOrigin(topRow, leftCol))
+            RefreshShell("Ready");
     }
 
     private async Task OpenWorkbookAsync()

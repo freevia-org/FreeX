@@ -106,4 +106,27 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("GetDisplayedRowHeight(metric)");
         source.Should().Contain("new RotateTransform(drawingObject.RotationDegrees)");
     }
+
+    [Fact]
+    public void MainWindow_WiresManualWorksheetScrollBarsToSessionViewport()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly ScrollBar _verticalWorksheetScrollBar = new();");
+        source.Should().Contain("private readonly ScrollBar _horizontalWorksheetScrollBar = new();");
+        source.Should().Contain("private bool _isUpdatingWorksheetScrollBars;");
+        source.Should().Contain("root.Children.Add(BuildWorksheetViewportChrome());");
+        source.Should().Contain("_sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;");
+        source.Should().Contain("_sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;");
+        source.Should().Contain("_verticalWorksheetScrollBar.Orientation = Orientation.Vertical;");
+        source.Should().Contain("_horizontalWorksheetScrollBar.Orientation = Orientation.Horizontal;");
+        source.Should().Contain("_verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;");
+        source.Should().Contain("_horizontalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;");
+        source.Should().Contain("WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)");
+        source.Should().Contain("ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);");
+        source.Should().Contain("ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);");
+        source.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
+        source.Should().Contain("_session.SetViewportOrigin(topRow, leftCol)");
+        source.Should().Contain("UpdateViewportScrollBars();");
+    }
 }
