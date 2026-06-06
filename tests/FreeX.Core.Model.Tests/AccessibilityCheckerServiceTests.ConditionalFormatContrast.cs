@@ -509,6 +509,61 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
+    {
+        AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticLogicalWrapper()
+    {
+        AssertFormulaArithmeticContrastLocations("AND($A1+25>=125,$C1=\"Open\")", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticIfBranch()
+    {
+        AssertFormulaArithmeticContrastLocations("IF($A1>=100,$A1-100,FALSE)", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticPredicatesAndTruthiness()
+    {
+        AssertFormulaArithmeticContrastLocations("$A1-75", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER($A1+1)", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateArithmeticOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("SUM($A1:$A3)/2>=125", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticReferenceShifting()
+    {
+        AssertFormulaArithmeticContrastLocations("$A1+$A2>=175", "B1", "B2", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticDateAndBooleanOperands()
+    {
+        AssertFormulaDateBooleanArithmeticContrastLocations("$A1+$C1>45001", "B3");
+        AssertFormulaDateBooleanArithmeticContrastLocations("$A1+TRUE>45001", "B2", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatArithmeticUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("$A1/0>0");
+        AssertFormulaArithmeticContrastLocations("\"5\"+$A1>80");
+        AssertFormulaArithmeticContrastLocations("1E308*1E308>0");
+        AssertFormulaArithmeticContrastLocations("MEDIAN($A1)+1>0");
+        AssertFormulaArithmeticContrastLocations("$A1&1>0");
+        AssertFormulaArithmeticContrastLocations("A0+1>0");
+    }
+
+    [Fact]
     public void FindIssues_DoesNotMatchFormulaConditionalFormatBooleanFunctionsWithArguments()
     {
         AssertFormulaBooleanContrastLocations("=TRUE(1)");
@@ -887,6 +942,35 @@ public sealed partial class AccessibilityCheckerServiceTests
             sheet.SetCell(new CellAddress(sheet.Id, row, 4), optionalValue);
     }
 
+    private static Workbook CreateFormulaDateBooleanArithmeticContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 3, 2);
+
+        SetFormulaDateBooleanArithmeticContrastRow(sheet, 1, dateSerial: 45000, flag: true, "Current closed");
+        SetFormulaDateBooleanArithmeticContrastRow(sheet, 2, dateSerial: 45001, flag: false, "Next inactive");
+        SetFormulaDateBooleanArithmeticContrastRow(sheet, 3, dateSerial: 45001, flag: true, "Next active");
+
+        return workbook;
+    }
+
+    private static void SetFormulaDateBooleanArithmeticContrastRow(
+        Sheet sheet,
+        uint row,
+        double dateSerial,
+        bool flag,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new DateTimeValue(dateSerial));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new BoolValue(flag));
+    }
+
     private static Workbook CreateFormulaReferencePredicateContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -967,6 +1051,30 @@ public sealed partial class AccessibilityCheckerServiceTests
     private static void AssertFormulaAggregateContrastLocations(string formulaText, params string[] expectedLocations)
     {
         var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaArithmeticContrastLocations(string formulaText, params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaDateBooleanArithmeticContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaDateBooleanArithmeticContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)
