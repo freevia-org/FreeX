@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -62,7 +61,7 @@ public sealed class HomeCellsCommandSourceTests
     [Fact]
     public void CellsCommandHandlers_RouteThroughInsertDeleteDimensionAndFormatCellsCommands()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CellsCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
 
         SourceMethodExtractor.ExtractMethodSource(source, "private void InsertPickerBtn_Click(")
             .Should().Contain("InsertCellsMenuItem_Click(sender, e);");
@@ -99,7 +98,7 @@ public sealed class HomeCellsCommandSourceTests
     [Fact]
     public void SheetVisibilityCommands_ShareSheetTabVisibilityWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
         source.Should().Contain("private void SheetCtxHide_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("HideSheet(tab.Id);");
@@ -117,7 +116,7 @@ public sealed class HomeCellsCommandSourceTests
     [Fact]
     public void TabColorCommand_SharesSheetTabColorWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
         source.Should().Contain("private void SheetCtxTabColor_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("ColorSheetTab(tab.Id);");
