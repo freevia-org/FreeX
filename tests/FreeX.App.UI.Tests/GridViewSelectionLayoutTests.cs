@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
-using System.IO;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -291,8 +290,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void CalculateQuickAnalysisDataBarPreviewRects_CalculatesMaxWithoutNumericCellList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "QuickAnalysisPreviewLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("QuickAnalysisPreviewLayoutPlanner.cs");
         var publicDataBars = source[
             source.IndexOf("public static IReadOnlyList<Rect> CalculateDataBarPreviewRects", StringComparison.Ordinal)..
             source.IndexOf("internal static void VisitDataBarPreviewRects", StringComparison.Ordinal)];
@@ -325,8 +323,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void CalculateQuickAnalysisCellAndSparklinePreviews_AvoidFilteredMetricLists()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "QuickAnalysisPreviewLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("QuickAnalysisPreviewLayoutPlanner.cs");
         var cellPreview = source[
             source.IndexOf("internal static void VisitCellPreviewRects", StringComparison.Ordinal)..
             source.IndexOf("public static IReadOnlyList<Rect> CalculateSparklinePreviewRects", StringComparison.Ordinal)];
@@ -353,8 +350,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void QuickAnalysisRendering_StreamsPreviewRectsWithoutMaterializingLists()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Selection.cs");
         var renderPreview = source[
             source.IndexOf("private void RenderQuickAnalysisPreview", StringComparison.Ordinal)..
             source.IndexOf("private static void DrawQuickAnalysisColumnChartPreview", StringComparison.Ordinal)];
@@ -382,8 +378,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void QuickAnalysisChartPreviewRendering_ReusesCoefficientTables()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Selection.cs");
         var chartPreviewRendering = source[
             source.IndexOf("private static void DrawQuickAnalysisColumnChartPreview", StringComparison.Ordinal)..
             source.IndexOf("private void RenderSelection", StringComparison.Ordinal)];
@@ -404,8 +399,7 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void SelectionEdgeLookup_StopsAfterRangeEdgesAreFound()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Selection.cs");
         var getRangePixels = source[
             source.IndexOf("private (double? top, double? left, double? bottom, double? right) GetRangePixels(", StringComparison.Ordinal)..
             source.IndexOf("public static Rect? CalculateVisibleSelectionRect", StringComparison.Ordinal)];
@@ -420,10 +414,8 @@ public sealed class GridViewSelectionLayoutTests
     [Fact]
     public void RenderSelectionRange_UsesUnifiedVisibleSelectionLayout()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
-        var planner = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "SelectionMarqueeLayoutPlanner.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Selection.cs");
+        var planner = AppUiSourceTestSupport.ReadAppUiSources("SelectionMarqueeLayoutPlanner.cs");
         var renderSelectionRange = rendering[
             rendering.IndexOf("private void RenderSelectionRange", StringComparison.Ordinal)..
             rendering.IndexOf("private void RenderSelectionHandle", StringComparison.Ordinal)];

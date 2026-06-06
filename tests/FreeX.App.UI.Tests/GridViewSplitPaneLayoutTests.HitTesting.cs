@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
-using System.IO;
 using System.Windows;
 
 namespace FreeX.App.UI.Tests;
@@ -60,8 +59,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void HitTestViewportCell_StopsMetricScansOnceSortedEdgesPassPointer()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var hitTestMetrics = source[
             source.IndexOf("private static CellAddress? HitTestMetrics", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneClipRects CalculateSplitPaneClipRects", StringComparison.Ordinal)];
@@ -76,8 +74,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void HitTestViewportCell_ReusesRowHeaderWidthWithinHitTest()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var hitTestViewportCell = source[
             source.IndexOf("public static CellAddress? HitTestViewportCell", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneRegion HitTestSplitPaneRegion", StringComparison.Ordinal)];
@@ -98,8 +95,7 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void HitTestViewportCell_ReusesSplitDividerLayoutForRegionClassification()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var hitTestViewportCell = source[
             source.IndexOf("public static CellAddress? HitTestViewportCell", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneRegion HitTestSplitPaneRegion", StringComparison.Ordinal)];
