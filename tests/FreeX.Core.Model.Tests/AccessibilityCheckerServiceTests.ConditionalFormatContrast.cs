@@ -548,6 +548,43 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatScalarFunctionOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("ABS($A1-100)>=25", "B1", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("INT($A1/10)>=10", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUND($A1/3,0)>=33", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("MOD($A1,2)=0", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatScalarFunctionWrappers()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(ABS($A1-100)>=25,TRUE,FALSE)", "B1", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(ROUND($A1/3,0)>=33,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(ROUND($A1/3,0))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MOD($A1,2)", "B1", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateScalarFunctionArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(ABS($A1-100),MOD($A1,2))>=25", "B1", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("ABS($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("ROUND($A1)>0");
+        AssertFormulaArithmeticContrastLocations("MOD($A1)>0");
+        AssertFormulaArithmeticContrastLocations("MOD($A1,0)>0");
+        AssertFormulaArithmeticContrastLocations("ROUND($A1,999999)>0");
+        AssertFormulaArithmeticContrastLocations("ABS(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("ABS($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("SQRT($A1)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
