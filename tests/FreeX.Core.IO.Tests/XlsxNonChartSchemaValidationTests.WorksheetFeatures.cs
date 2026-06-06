@@ -406,6 +406,61 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void WorksheetOutlineAndFormat_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorksheetOutlineAndFormatSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorksheetOutlineAndFormat_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorksheetOutlineAndFormatSourceWorkbook());
+        var sourceSheetProperties = ReadWorksheetChildElement(source, "sheetPr");
+        var sourceSheetFormat = ReadWorksheetChildElement(source, "sheetFormatPr");
+        var sourceColumns = ReadWorksheetChildElement(source, "cols");
+        var sourceRow3 = ReadWorksheetRowElement(source, 3);
+        var sourceRow4 = ReadWorksheetRowElement(source, 4);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "sheetPr")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceSheetProperties.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "sheetFormatPr")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceSheetFormat.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "cols")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceColumns.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetRowElement(saved, 3)
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceRow3.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetRowElement(saved, 4)
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceRow4.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void PageLayout_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreatePageLayoutSourceWorkbook()).Should().BeEmpty();
@@ -649,6 +704,37 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateWorksheetOutlineAndFormatSourceWorkbook()
+    {
+        var workbook = new Workbook("WorksheetOutlineAndFormatPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+        sheet.DefaultColumnWidth = 10.5;
+        sheet.DefaultRowHeight = 24.0;
+        sheet.ColumnWidths[2] = 14.25;
+        sheet.ColumnWidths[3] = 16.5;
+        sheet.RowHeights[3] = 28.0;
+        sheet.RowOutlineLevels[3] = 1;
+        sheet.RowOutlineLevels[4] = 2;
+        sheet.ColOutlineLevels[2] = 1;
+        sheet.ColOutlineLevels[3] = 2;
+        sheet.OutlineSummaryBelow = false;
+        sheet.OutlineSummaryRight = false;
+        sheet.ShowOutlineSymbols = false;
+        sheet.ApplyOutlineStyles = true;
+        sheet.SheetFormatMetadata = CreateWorksheetOutlineSheetFormatMetadata();
+        return workbook;
+    }
+
+    private static NativeXmlPreserveBag CreateWorksheetOutlineSheetFormatMetadata()
+    {
+        var bag = new NativeXmlPreserveBag();
+        bag.Set(
+            "sheetFormatPr",
+            """<e baseColWidth="12" zeroHeight="0" thickTop="1" thickBottom="0" outlineLevelRow="2" outlineLevelCol="2" />""");
+        return bag;
+    }
+
     private static Workbook CreatePageLayoutSourceWorkbook()
     {
         var workbook = new Workbook("PageLayoutPatchSave");
@@ -848,6 +934,18 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         stream.Position = 0;
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         return new XElement(LoadPackageXml(archive.GetEntry(entryName)!).Root!);
+    }
+
+    private static XElement ReadWorksheetRowElement(Stream stream, uint row)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        return new XElement(worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Elements(worksheetNs + "row")
+            .Single(element => element.Attribute("r")?.Value == $"{row}"));
     }
 
 }
