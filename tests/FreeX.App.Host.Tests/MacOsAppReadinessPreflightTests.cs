@@ -31,6 +31,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
         script.Should().Contain("IActivatableLifetime");
         script.Should().Contain("OpenActivatedFilesAsync");
+        script.Should().Contain("CreateNativePasteSpecialMenu()");
+        script.Should().Contain("PasteSpecialClipboardAtActiveCell(text, mode, options)");
         script.Should().Contain("AddStyledCellBorderOverlay(content, style);");
         script.Should().Contain("CreateDrawingObjectVisual(drawingObject, width, height)");
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
@@ -292,6 +294,7 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_cut_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_copy_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_paste_menu_item=true" "$artifact_root/launch.txt"
+                      grep -q "native_paste_special_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_clear_contents_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_bold_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_fill_color_menu_item=true" "$artifact_root/launch.txt"
@@ -368,6 +371,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 private static void RenderCell(CellStyle? style)
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
+                    CreateNativePasteSpecialMenu();
+                    PasteSpecialClipboardAtActiveCell(text, mode, options);
                     CellColorPalettePlanner.BuildDefaultSwatches();
                     CreateDrawingObjectVisual(drawingObject, width, height);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
@@ -402,7 +407,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasNativeCellStylesMenuItem { get; }
                 private bool HasNativeCopyMenuItem { get; }
                 public int NativeCellStylesPresetCount { get; }
-                public string Report => "native_cut_menu_item= native_copy_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item=";
+                public string Report => "native_cut_menu_item= native_copy_menu_item= native_paste_special_menu_item= native_clear_contents_menu_item= native_bold_menu_item= native_fill_color_swatch_count= native_font_color_swatch_count= native_cell_styles_menu_item= native_cell_styles_preset_count= native_horizontal_text_menu_item= native_angle_counterclockwise_menu_item= native_angle_clockwise_menu_item= native_vertical_text_menu_item= native_rotate_text_up_menu_item= native_rotate_text_down_menu_item=";
             }
             """);
 

@@ -296,7 +296,7 @@ public sealed class WorkbookSession
         if (_internalClipboard is { } internalClipboard)
         {
             if (text is null || string.Equals(internalClipboard.Text, text, StringComparison.Ordinal))
-                return PasteInternalClipboardAtActiveCell(internalClipboard);
+                return PasteInternalClipboardAtActiveCell(internalClipboard, PasteCellsMode.All, default);
 
             _internalClipboard = null;
         }
@@ -311,6 +311,34 @@ public sealed class WorkbookSession
         }
 
         return PasteExternalTextAtActiveCell(text, preserveText);
+    }
+
+    public WorkbookCellEditResult PasteSpecialClipboardAtActiveCell(
+        string? text,
+        PasteCellsMode mode,
+        PasteSpecialOptions options)
+    {
+        if (!Enum.IsDefined(mode))
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Paste Special mode is not supported.",
+                [],
+                RecalcReport: null);
+        }
+
+        if (_internalClipboard is not { } internalClipboard ||
+            (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
+        {
+            _internalClipboard = null;
+            return new WorkbookCellEditResult(
+                false,
+                "Paste Special requires copied FreeX cells.",
+                [],
+                RecalcReport: null);
+        }
+
+        return PasteInternalClipboardAtActiveCell(internalClipboard, mode, options);
     }
 
     public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText = false)
@@ -762,7 +790,10 @@ public sealed class WorkbookSession
     private static StyleDiff CreateDoubleUnderlineStyleDiff(bool enabled) =>
         new(DoubleUnderline: enabled, Underline: enabled ? false : null, Strikethrough: enabled ? false : null);
 
-    private WorkbookCellEditResult PasteInternalClipboardAtActiveCell(InternalClipboard clipboard)
+    private WorkbookCellEditResult PasteInternalClipboardAtActiveCell(
+        InternalClipboard clipboard,
+        PasteCellsMode mode,
+        PasteSpecialOptions options)
     {
         var destination = ActiveCell;
         var command = PasteCommandFactory.CreateInternalPasteCommand(
@@ -771,9 +802,9 @@ public sealed class WorkbookSession
             clipboard.SourceRange,
             clipboard.Cells,
             destination,
-            PasteCellsMode.All,
-            default);
-        if (ShouldClearCutSourceAfterPaste(clipboard, destination))
+            mode,
+            options);
+        if (ShouldClearCutSourceAfterPaste(clipboard, destination, mode, options))
         {
             command = new CompositeWorkbookCommand(
                 "Cut and Paste",
@@ -807,15 +838,22 @@ public sealed class WorkbookSession
         return new InternalClipboard(range, cells, text, isCut);
     }
 
-    private static bool ShouldClearCutSourceAfterPaste(InternalClipboard clipboard, CellAddress destination)
+    private static bool ShouldClearCutSourceAfterPaste(
+        InternalClipboard clipboard,
+        CellAddress destination,
+        PasteCellsMode mode,
+        PasteSpecialOptions options)
     {
-        if (!clipboard.IsCut)
+        if (!clipboard.IsCut || mode == PasteCellsMode.Formats)
             return false;
+
+        var rowCount = options.Transpose ? clipboard.SourceRange.ColCount : clipboard.SourceRange.RowCount;
+        var colCount = options.Transpose ? clipboard.SourceRange.RowCount : clipboard.SourceRange.ColCount;
 
         if (!TryGetRectangleEnd(
                 destination,
-                clipboard.SourceRange.RowCount,
-                clipboard.SourceRange.ColCount,
+                rowCount,
+                colCount,
                 out var pastedEnd))
         {
             return false;

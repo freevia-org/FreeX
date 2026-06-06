@@ -68,6 +68,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _cutMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _copyMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _pasteMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _pasteSpecialMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _clearContentsMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _boldMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _italicMenuItem = new();");
@@ -123,6 +124,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_pasteMenuItem.Header = \"Paste\";");
         source.Should().Contain("_pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);");
         source.Should().Contain("_pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();");
+        source.Should().Contain("_pasteSpecialMenuItem.Header = \"Paste Special\";");
+        source.Should().Contain("_pasteSpecialMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Alt);");
+        source.Should().Contain("_pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();");
         source.Should().Contain("_clearContentsMenuItem.Header = \"Clear Contents\";");
         source.Should().Contain("_clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);");
         source.Should().Contain("_clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();");
@@ -198,6 +202,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("editMenu.Items.Add(_cutMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_copyMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_pasteMenuItem);");
+        source.Should().Contain("editMenu.Items.Add(_pasteSpecialMenuItem);");
         source.Should().Contain("editMenu.Items.Add(_clearContentsMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_boldMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_italicMenuItem);");
@@ -241,6 +246,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_cutMenuItem.IsEnabled = _cutButton.IsEnabled;");
         source.Should().Contain("_copyMenuItem.IsEnabled = _copyButton.IsEnabled;");
         source.Should().Contain("_pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;");
+        source.Should().Contain("_pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;");
         source.Should().Contain("_clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;");
         source.Should().Contain("_boldMenuItem.IsEnabled = _boldButton.IsEnabled;");
         source.Should().Contain("_italicMenuItem.IsEnabled = _italicButton.IsEnabled;");
@@ -309,6 +315,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_cut_menu_item={FormatBool(snapshot.HasNativeCutMenuItem)}");
         smokeSource.Should().Contain("native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}");
         smokeSource.Should().Contain("native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}");
+        smokeSource.Should().Contain("native_paste_special_menu_item={FormatBool(snapshot.HasNativePasteSpecialMenuItem)}");
         smokeSource.Should().Contain("native_clear_contents_menu_item={FormatBool(snapshot.HasNativeClearContentsMenuItem)}");
         smokeSource.Should().Contain("native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}");
         smokeSource.Should().Contain("native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}");
@@ -359,6 +366,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, \"Cut\")");
         windowSource.Should().Contain("HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, \"Copy\")");
         windowSource.Should().Contain("HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, \"Paste\")");
+        windowSource.Should().Contain("HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, \"Paste Special\")");
         windowSource.Should().Contain("HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, \"Clear Contents\")");
         windowSource.Should().Contain("HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, \"Bold\")");
         windowSource.Should().Contain("HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, \"Italic\")");
@@ -526,24 +534,39 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly Button _cutButton = new();");
         source.Should().Contain("private readonly Button _copyButton = new();");
         source.Should().Contain("private readonly Button _pasteButton = new();");
+        source.Should().Contain("private readonly DropDownButton _pasteSpecialButton = new();");
         source.Should().Contain("_cutButton.Content = \"Cut\";");
         source.Should().Contain("_copyButton.Content = \"Copy\";");
         source.Should().Contain("_pasteButton.Content = \"Paste\";");
+        source.Should().Contain("_pasteSpecialButton.Content = \"Paste Special\";");
+        source.Should().Contain("_pasteSpecialButton.Flyout = CreatePasteSpecialFlyout();");
         source.Should().Contain("_cutButton.Click += CutButton_Click;");
         source.Should().Contain("_copyButton.Click += CopyButton_Click;");
         source.Should().Contain("_pasteButton.Click += PasteButton_Click;");
         source.Should().Contain("_cutButton.IsEnabled = isIdle;");
         source.Should().Contain("_copyButton.IsEnabled = isIdle;");
         source.Should().Contain("_pasteButton.IsEnabled = isIdle;");
+        source.Should().Contain("_pasteSpecialButton.IsEnabled = isIdle;");
         source.Should().Contain("private async Task CutSelectedRangeToClipboardAsync()");
         source.Should().Contain("private async Task CopySelectedRangeToClipboardAsync()");
         source.Should().Contain("private async Task PasteClipboardTextAsync()");
+        source.Should().Contain("private async Task PasteSpecialClipboardTextAsync(");
+        source.Should().Contain("private MenuFlyout CreatePasteSpecialFlyout()");
+        source.Should().Contain("private NativeMenu CreateNativePasteSpecialMenu()");
+        source.Should().Contain("CreatePasteSpecialMenuItem(\"Values\", PasteCellsMode.Values, default)");
+        source.Should().Contain("CreatePasteSpecialMenuItem(\"Formulas\", PasteCellsMode.Formulas, default)");
+        source.Should().Contain("CreatePasteSpecialMenuItem(\"Formats\", PasteCellsMode.Formats, default)");
+        source.Should().Contain("CreatePasteSpecialMenuItem(\"Transpose\", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true))");
+        source.Should().Contain("CreatePasteSpecialMenuItem(\"Skip Blanks\", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true))");
+        source.Should().Contain("new PasteSpecialOptions(Operation: PasteSpecialOperation.Add)");
         source.Should().Contain("using Avalonia.Input.Platform;");
+        source.Should().Contain("using FreeX.Core.Commands;");
         source.Should().Contain("TopLevel.GetTopLevel(this)?.Clipboard");
         source.Should().Contain("await clipboard.SetTextAsync(_session.CutSelectedRangeText());");
         source.Should().Contain("await clipboard.SetTextAsync(_session.CopySelectedRangeText());");
         source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
         source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text)");
+        source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options)");
         source.Should().Contain("_session.SelectedRange.Contains(address)");
         source.Should().Contain("private bool IsSelectedColumn(uint col)");
         source.Should().Contain("private bool IsSelectedRow(uint row)");
@@ -558,6 +581,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await CopySelectedRangeToClipboardAsync();");
         source.Should().Contain("else if (e.Key == Key.V)");
         source.Should().Contain("await PasteClipboardTextAsync();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Paste Special failed.\");");
         source.Should().Contain("ShowEditIssue(\"Clipboard unavailable on this platform.\");");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Paste failed.\");");
     }

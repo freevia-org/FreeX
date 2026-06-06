@@ -10,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -85,6 +86,7 @@ public sealed class MainWindow : Window
     private readonly Button _cutButton = new();
     private readonly Button _copyButton = new();
     private readonly Button _pasteButton = new();
+    private readonly DropDownButton _pasteSpecialButton = new();
     private readonly Button _clearContentsButton = new();
     private readonly ToggleButton _boldButton = new();
     private readonly ToggleButton _italicButton = new();
@@ -119,6 +121,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _cutMenuItem = new();
     private readonly NativeMenuItem _copyMenuItem = new();
     private readonly NativeMenuItem _pasteMenuItem = new();
+    private readonly NativeMenuItem _pasteSpecialMenuItem = new();
     private readonly NativeMenuItem _clearContentsMenuItem = new();
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
@@ -299,6 +302,10 @@ public sealed class MainWindow : Window
         _pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);
         _pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();
 
+        _pasteSpecialMenuItem.Header = "Paste Special";
+        _pasteSpecialMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Alt);
+        _pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();
+
         _clearContentsMenuItem.Header = "Clear Contents";
         _clearContentsMenuItem.Gesture = new KeyGesture(Key.Delete);
         _clearContentsMenuItem.Click += (_, _) => ClearSelectedRangeContents();
@@ -424,6 +431,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_cutMenuItem);
         editMenu.Items.Add(_copyMenuItem);
         editMenu.Items.Add(_pasteMenuItem);
+        editMenu.Items.Add(_pasteSpecialMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
         editMenu.Items.Add(_clearContentsMenuItem);
 
@@ -556,6 +564,11 @@ public sealed class MainWindow : Window
         _pasteButton.Padding = new Thickness(10, 4);
         _pasteButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _pasteButton.Click += PasteButton_Click;
+
+        _pasteSpecialButton.Content = "Paste Special";
+        _pasteSpecialButton.Padding = new Thickness(10, 4);
+        _pasteSpecialButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _pasteSpecialButton.Flyout = CreatePasteSpecialFlyout();
 
         _clearContentsButton.Content = "Clear";
         _clearContentsButton.Padding = new Thickness(10, 4);
@@ -756,6 +769,7 @@ public sealed class MainWindow : Window
                     _cutButton,
                     _copyButton,
                     _pasteButton,
+                    _pasteSpecialButton,
                     _clearContentsButton,
                     _boldButton,
                     _italicButton,
@@ -874,6 +888,7 @@ public sealed class MainWindow : Window
         _cutButton.IsEnabled = isIdle;
         _copyButton.IsEnabled = isIdle;
         _pasteButton.IsEnabled = isIdle;
+        _pasteSpecialButton.IsEnabled = isIdle;
         _clearContentsButton.IsEnabled = isIdle;
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
@@ -909,6 +924,7 @@ public sealed class MainWindow : Window
         _cutMenuItem.IsEnabled = _cutButton.IsEnabled;
         _copyMenuItem.IsEnabled = _copyButton.IsEnabled;
         _pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;
+        _pasteSpecialMenuItem.IsEnabled = _pasteSpecialButton.IsEnabled;
         _clearContentsMenuItem.IsEnabled = _clearContentsButton.IsEnabled;
         _boldMenuItem.IsEnabled = _boldButton.IsEnabled;
         _italicMenuItem.IsEnabled = _italicButton.IsEnabled;
@@ -1579,6 +1595,61 @@ public sealed class MainWindow : Window
         return displayRotation == 0 ? null : new RotateTransform(-displayRotation);
     }
 
+    private MenuFlyout CreatePasteSpecialFlyout() =>
+        new()
+        {
+            ItemsSource = CreatePasteSpecialMenuItems().ToArray(),
+        };
+
+    private IEnumerable<MenuItem> CreatePasteSpecialMenuItems()
+    {
+        yield return CreatePasteSpecialMenuItem("Values", PasteCellsMode.Values, default);
+        yield return CreatePasteSpecialMenuItem("Formulas", PasteCellsMode.Formulas, default);
+        yield return CreatePasteSpecialMenuItem("Formats", PasteCellsMode.Formats, default);
+        yield return CreatePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true));
+        yield return CreatePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true));
+        yield return CreatePasteSpecialMenuItem("Add", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+        yield return CreatePasteSpecialMenuItem("Subtract", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Subtract));
+        yield return CreatePasteSpecialMenuItem("Multiply", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Multiply));
+        yield return CreatePasteSpecialMenuItem("Divide", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Divide));
+    }
+
+    private MenuItem CreatePasteSpecialMenuItem(
+        string header,
+        PasteCellsMode mode,
+        PasteSpecialOptions options)
+    {
+        var menuItem = new MenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteSpecialClipboardTextAsync(mode, options, header);
+        return menuItem;
+    }
+
+    private NativeMenu CreateNativePasteSpecialMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Values", PasteCellsMode.Values, default));
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Formulas", PasteCellsMode.Formulas, default));
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Formats", PasteCellsMode.Formats, default));
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Transpose", PasteCellsMode.All, new PasteSpecialOptions(Transpose: true)));
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Skip Blanks", PasteCellsMode.All, new PasteSpecialOptions(SkipBlanks: true)));
+        menu.Items.Add(new NativeMenuItemSeparator());
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Add", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Add)));
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Subtract", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Subtract)));
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Multiply", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Multiply)));
+        menu.Items.Add(CreateNativePasteSpecialMenuItem("Divide", PasteCellsMode.All, new PasteSpecialOptions(Operation: PasteSpecialOperation.Divide)));
+        return menu;
+    }
+
+    private NativeMenuItem CreateNativePasteSpecialMenuItem(
+        string header,
+        PasteCellsMode mode,
+        PasteSpecialOptions options)
+    {
+        var menuItem = new NativeMenuItem { Header = header };
+        menuItem.Click += async (_, _) => await PasteSpecialClipboardTextAsync(mode, options, header);
+        return menuItem;
+    }
+
     private MenuFlyout CreateColorPaletteFlyout(ColorPaletteTarget target, bool includeClearFill)
     {
         var items = new List<MenuItem>();
@@ -2141,6 +2212,36 @@ public sealed class MainWindow : Window
         RefreshShell($"Pasted at {FormatCellReference(destination)}");
     }
 
+    private async Task PasteSpecialClipboardTextAsync(
+        PasteCellsMode mode,
+        PasteSpecialOptions options,
+        string label)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        var destination = _session.ActiveCell;
+        var result = _session.PasteSpecialClipboardAtActiveCell(text, mode, options);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? "Paste Special failed.");
+            return;
+        }
+
+        RefreshShell($"Pasted {label} at {FormatCellReference(destination)}");
+    }
+
     private void ClearSelectedRangeContents()
     {
         if (_isOpening || _isSaving)
@@ -2677,6 +2778,7 @@ public sealed class MainWindow : Window
             HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, "Cut"),
             HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, "Copy"),
             HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
+            HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, "Paste Special"),
             HasNativeClearContentsMenuItem: HasNativeMenuItem(_clearContentsMenuItem, "Clear Contents"),
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
             HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, "Italic"),

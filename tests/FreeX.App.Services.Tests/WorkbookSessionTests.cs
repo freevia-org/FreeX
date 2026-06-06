@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -438,6 +439,92 @@ public sealed class WorkbookSessionTests
         result.Success.Should().BeTrue();
         sheet.GetValue(a1).Should().Be(new TextValue("source"));
         sheet.GetValue(c1).Should().Be(new TextValue("external"));
+    }
+
+    [Fact]
+    public void PasteSpecialClipboardAtActiveCell_ValuesModePreservesDestinationStyleAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        var sourceStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(0xFF, 0xFF, 0) });
+        var destinationStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(0xC0, 0, 0) });
+        sheet.SetCell(a1, new Cell { Value = new NumberValue(42), StyleId = sourceStyle });
+        sheet.SetStyleOnly(c3.Row, c3.Col, destinationStyle);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectCell(c3);
+
+        var result = session.PasteSpecialClipboardAtActiveCell(clipboardText, PasteCellsMode.Values, default);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().ContainSingle().Which.Should().Be(c3);
+        session.SelectedRange.Should().Be(new GridRange(c3, c3));
+        sheet.GetCell(c3)!.Value.Should().Be(new NumberValue(42));
+        workbook.GetStyle(sheet.GetCell(c3)!.StyleId).FontColor.Should().Be(new CellColor(0xC0, 0, 0));
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetCell(c3).Should().BeNull();
+        sheet.GetStyleOnly(c3.Row, c3.Col).Should().Be(destinationStyle);
+    }
+
+    [Fact]
+    public void PasteSpecialClipboardAtActiveCell_RejectsChangedPlatformClipboardText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("source"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.CopySelectedRangeText();
+        session.SelectCell(c1);
+
+        var result = session.PasteSpecialClipboardAtActiveCell("external", PasteCellsMode.Values, default);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Paste Special requires copied FreeX cells.");
+        sheet.GetCell(c1).Should().BeNull();
+    }
+
+    [Fact]
+    public void PasteSpecialClipboardAtActiveCell_FormatsModeDoesNotClearCutSource()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var sourceStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(0x33, 0x99, 0x66) });
+        sheet.SetCell(a1, new Cell { Value = new TextValue("source"), StyleId = sourceStyle });
+        sheet.SetCell(c1, new TextValue("destination"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        var clipboardText = session.CutSelectedRangeText();
+        session.SelectCell(c1);
+
+        var result = session.PasteSpecialClipboardAtActiveCell(clipboardText, PasteCellsMode.Formats, default);
+
+        result.Success.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("source"));
+        sheet.GetValue(c1).Should().Be(new TextValue("destination"));
+        sheet.GetCell(c1)!.StyleId.Should().Be(sourceStyle);
     }
 
     [Fact]
