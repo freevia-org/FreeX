@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Xml.Linq;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -17,6 +18,10 @@ internal static class DialogSourceTestSupport
 
     public static string ReadAppUiSourcesWithSeparator(string separator, params string[] fileNames) =>
         string.Join(separator, fileNames.Select(ReadAppUiSource));
+
+    public static XDocument LoadHostXamlDocument(params string[] relativeParts) =>
+        XDocument.Load(WorkspaceFileLocator.Find(
+            new[] { "src", "FreeX.App.Host" }.Concat(relativeParts).ToArray()));
 
     public static string ReadClassSource(string fileName, string startMarker, string endMarker)
     {
