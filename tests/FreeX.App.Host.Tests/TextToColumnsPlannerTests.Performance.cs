@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -9,7 +8,7 @@ public sealed partial class TextToColumnsPlannerTests
     [Fact]
     public void SplitFixedWidthText_SourceAvoidsEmptyBreakNormalizationAndPreallocatesParts()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsSplitter.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("TextToColumnsSplitter.cs");
 
         source.Should().Contain("if (breakPositions.Count == 0)");
         source.Should().Contain("new List<string>(positions.Count + 1)");
@@ -18,7 +17,7 @@ public sealed partial class TextToColumnsPlannerTests
     [Fact]
     public void SplitText_SourceAvoidsDelimiterArrayAllocation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsSplitter.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("TextToColumnsSplitter.cs");
 
         source.Should().Contain("private static bool IsDelimiter(char ch, string delimiters)");
         source.Should().NotContain("delimiters.Distinct().ToArray()");
