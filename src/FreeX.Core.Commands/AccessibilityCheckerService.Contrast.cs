@@ -928,6 +928,9 @@ public static partial class AccessibilityCheckerService
             case "CEILING":
                 kind = ConditionalFormulaScalarFunctionKind.Ceiling;
                 return true;
+            case "CEILING.MATH":
+                kind = ConditionalFormulaScalarFunctionKind.CeilingMath;
+                return true;
             case "CEILING.PRECISE":
             case "ISO.CEILING":
                 kind = ConditionalFormulaScalarFunctionKind.IsoCeiling;
@@ -1184,6 +1187,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
             ConditionalFormulaScalarFunctionKind.FloorPrecise or
             ConditionalFormulaScalarFunctionKind.Trunc => argumentCount is 1 or 2,
+            ConditionalFormulaScalarFunctionKind.CeilingMath => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Round or
             ConditionalFormulaScalarFunctionKind.RoundUp or
             ConditionalFormulaScalarFunctionKind.RoundDown or
@@ -1738,6 +1742,7 @@ public static partial class AccessibilityCheckerService
         RoundDown,
         MRound,
         Ceiling,
+        CeilingMath,
         IsoCeiling,
         Floor,
         FloorPrecise,
@@ -2291,6 +2296,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.RoundDown:
                 case ConditionalFormulaScalarFunctionKind.MRound:
                 case ConditionalFormulaScalarFunctionKind.Ceiling:
+                case ConditionalFormulaScalarFunctionKind.CeilingMath:
                 case ConditionalFormulaScalarFunctionKind.IsoCeiling:
                 case ConditionalFormulaScalarFunctionKind.Floor:
                 case ConditionalFormulaScalarFunctionKind.FloorPrecise:
@@ -2497,6 +2503,27 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Ceiling:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var significance) ||
                         !TryCeilingFormulaNumber(first, significance, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.CeilingMath:
+                    var ceilingMathSignificance = 1d;
+                    if (function.Arguments.Count >= 2 &&
+                        !TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out ceilingMathSignificance))
+                    {
+                        return false;
+                    }
+
+                    var ceilingMathMode = 0d;
+                    if (function.Arguments.Count == 3 &&
+                        !TryResolveFormulaFunctionNumber(function.Arguments[2], rowOffset, colOffset, out ceilingMathMode))
+                    {
+                        return false;
+                    }
+
+                    if (!TryCeilingMathFormulaNumber(first, ceilingMathSignificance, ceilingMathMode, out result))
                     {
                         return false;
                     }
@@ -3315,6 +3342,22 @@ public static partial class AccessibilityCheckerService
                 return false;
 
             result = Math.Ceiling(number / significance) * significance;
+            return double.IsFinite(result);
+        }
+
+        private static bool TryCeilingMathFormulaNumber(double number, double significance, double mode, out double result)
+        {
+            result = 0d;
+            if (!double.IsFinite(number) || !double.IsFinite(significance) || !double.IsFinite(mode))
+                return false;
+
+            if (number == 0d || significance == 0d)
+                return true;
+
+            var multiple = Math.Abs(significance);
+            result = number < 0d && mode != 0d
+                ? Math.Floor(number / multiple) * multiple
+                : Math.Ceiling(number / multiple) * multiple;
             return double.IsFinite(result);
         }
 
