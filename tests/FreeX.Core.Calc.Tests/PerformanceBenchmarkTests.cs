@@ -284,10 +284,7 @@ public class PerformanceBenchmarkTests
     [Fact]
     public void LeafFormulaRootRecalc_SkipsEvaluationOrderScaffoldingBeforeDirtySetBuild()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(
-            "src",
-            "FreeX.Core.Calc",
-            "RecalcEngine.cs"));
+        var source = CalcSourceTestSupport.ReadCalcSourceFromCurrentDirectoryOrFallback("RecalcEngine.cs");
         var recalculate = source[
             source.IndexOf("var evaluationPlan = plan;", StringComparison.Ordinal)..
             source.IndexOf("foreach (var addr in directFormulaRoots ?? evaluationPlan.OrderedCells)", StringComparison.Ordinal)];
@@ -521,10 +518,7 @@ public class PerformanceBenchmarkTests
     [Fact]
     public void RebuildFormulaDependencies_SkipsFormulaFreeSheetsBeforeEnumeratingCells()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(
-            "src",
-            "FreeX.Core.Calc",
-            "RecalcEngine.cs"));
+        var source = CalcSourceTestSupport.ReadCalcSourceFromCurrentDirectoryOrFallback("RecalcEngine.cs");
         var rebuild = source[
             source.IndexOf("public void RebuildFormulaDependencies", StringComparison.Ordinal)..
             source.IndexOf("public RecalcReport RecalculateAllFormulas", StringComparison.Ordinal)];
@@ -664,10 +658,7 @@ public class PerformanceBenchmarkTests
     [BenchmarkFact]
     public void Benchmark_DynamicArraySort_AvoidsLinqIndexListScaffolding()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(
-            "src",
-            "FreeX.Core.Formula",
-            "BuiltInFunctions.DynamicArrays.FilterSort.cs"));
+        var source = CalcSourceTestSupport.ReadFormulaSourceFromCurrentDirectoryOrFallback("BuiltInFunctions.DynamicArrays.FilterSort.cs");
 
         source.Should().NotContain(
             "Enumerable.Range(0, arr.RowCount).ToList()",
@@ -686,10 +677,7 @@ public class PerformanceBenchmarkTests
     [BenchmarkFact]
     public void Benchmark_SplitPaneViewportCells_LazilyAllocatesDedupeSet()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(
-            "src",
-            "FreeX.Core.Calc",
-            "ViewportService.cs"));
+        var source = CalcSourceTestSupport.ReadCalcSourceFromCurrentDirectoryOrFallback("ViewportService.cs");
         var buildSplitPaneCells = source[
             source.IndexOf("private static List<DisplayCell> BuildSplitPaneCells", StringComparison.Ordinal)..];
         buildSplitPaneCells = buildSplitPaneCells[..buildSplitPaneCells.IndexOf("private static void AddDisplayCell", StringComparison.Ordinal)];
@@ -752,10 +740,7 @@ public class PerformanceBenchmarkTests
     [Fact]
     public void SparseOccupiedViewportCells_SkipsOccupiedMapScanWhenUsedRangeMissesViewport()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(
-            "src",
-            "FreeX.Core.Calc",
-            "ViewportService.cs"));
+        var source = CalcSourceTestSupport.ReadCalcSourceFromCurrentDirectoryOrFallback("ViewportService.cs");
         var getViewport = source[
             source.IndexOf("public ViewportModel GetViewport", StringComparison.Ordinal)..
             source.IndexOf("private static int EstimateDisplayCellCapacity", StringComparison.Ordinal)];
