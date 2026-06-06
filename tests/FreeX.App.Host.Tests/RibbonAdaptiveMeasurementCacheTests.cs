@@ -359,13 +359,13 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
     [Fact]
     public void AdaptiveResizeHotPath_UsesValueTypeKeysForWidthAndStateCaches()
     {
-        var fieldsSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var fieldsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         fieldsSource.Should().Contain("Dictionary<RibbonAdaptiveLayoutPlanCacheEntryKey, RibbonAdaptiveLayoutResult>");
         fieldsSource.Should().Contain("Dictionary<RibbonCorrectionCacheKey, IReadOnlyList<RibbonAdaptiveGroupState>>");
         fieldsSource.Should().Contain("Dictionary<RibbonMeasuredOverflowCacheKey, bool>");
         fieldsSource.Should().Contain("RibbonAppliedStateKey? _lastRibbonAdaptiveAppliedStateKey");
 
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonAdaptive.cs");
         const string keyHelperStart = "private static RibbonAdaptiveLayoutPlanCacheEntryKey CreateRibbonAdaptiveLayoutPlanCacheEntryKey";
         const string keyHelperEnd = "private string CreateRibbonAdaptiveMeasurementCacheKey";
         var hotPathKeyHelpers = source.Substring(
