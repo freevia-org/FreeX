@@ -221,7 +221,7 @@ public sealed class CustomViewCommandTests
     [Fact]
     public void CustomViewCommands_DelegateStatePlanning()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.Core.Commands", "CustomViewCommands.cs"));
+        var source = ModelSourceTestSupport.ReadCommandsSource("CustomViewCommands.cs");
 
         source.Should().Contain("CustomViewStatePlanner.FindViewIndex(workbook, name)");
         source.Should().Contain("CustomViewStatePlanner.CaptureSheetState(sheet)");
