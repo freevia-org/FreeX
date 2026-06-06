@@ -44,6 +44,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void StructuredTableAutoFilter_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidStructuredTableAutoFilterSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var autoFilter = ReadPackageRootElement(saved, "xl/tables/table1.xml")
+            .Element(XName.Get("autoFilter", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"))!;
+        var workbookNs = autoFilter.Name.Namespace;
+        var columns = autoFilter.Elements(workbookNs + "filterColumn").ToArray();
+        columns.Should().HaveCount(3);
+
+        columns[0].Attribute("hiddenButton").Should().BeNull();
+        columns[0].Attribute("showButton").Should().BeNull();
+        columns[0].Element(workbookNs + "filters")!.Attribute("blank").Should().BeNull();
+
+        var customFilters = columns[1].Element(workbookNs + "customFilters")!;
+        customFilters.Attribute("and").Should().BeNull();
+        customFilters.Element(workbookNs + "customFilter")!.Attribute("operator").Should().BeNull();
+
+        var top10 = columns[2].Element(workbookNs + "top10")!;
+        top10.Attribute("top").Should().BeNull();
+        top10.Attribute("percent").Should().BeNull();
+        top10.Attribute("val")!.Value.Should().Be("10");
+        top10.Attribute("filterVal").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithStructuredTable_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateStructuredTableSourceWorkbook());
@@ -74,6 +101,44 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceTableParts.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidStructuredTableAutoFilterForSchemaValidity()
+    {
+        using var source = Save(CreateStructuredTableSourceWorkbook());
+        SetStructuredTableAutoFilterInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var autoFilter = ReadPackageRootElement(saved, "xl/tables/table1.xml")
+            .Element(XName.Get("autoFilter", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"))!;
+        var workbookNs = autoFilter.Name.Namespace;
+        var firstColumn = autoFilter.Elements(workbookNs + "filterColumn").First();
+        firstColumn.Attribute("hiddenButton").Should().BeNull();
+        firstColumn.Attribute("showButton").Should().BeNull();
+        firstColumn.Element(workbookNs + "filters")!.Attribute("blank").Should().BeNull();
+
+        var customFilters = autoFilter
+            .Elements(workbookNs + "filterColumn")
+            .Skip(1)
+            .First()
+            .Element(workbookNs + "customFilters")!;
+        customFilters.Attribute("and").Should().BeNull();
+        customFilters.Element(workbookNs + "customFilter")!.Attribute("operator").Should().BeNull();
     }
 
 
@@ -1310,6 +1375,66 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateInvalidStructuredTableAutoFilterSourceWorkbook()
+    {
+        var workbook = new Workbook("StructuredTableAutoFilterInvalidSchema");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Rank"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(20));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = Range(sheet, 1, 1, 3, 3),
+            HasAutoFilter = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Name"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Value"));
+        table.Columns.Add(new StructuredTableColumnModel(3, "Rank"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: false,
+            NativeFilterXmls: [],
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["hiddenButton"] = "maybe",
+                ["showButton"] = "maybe"
+            }));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(
+            1,
+            [],
+            IncludeBlank: false,
+            CustomFilters: [new StructuredTableCustomFilterModel("invalid", "1")],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: "maybe",
+            NativeCustomFiltersAttributes: null,
+            NativeFilterXmls: []));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(
+            2,
+            [],
+            IncludeBlank: false,
+            NativeFilterXmls:
+            [
+                """
+                <top10 xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" top="maybe" percent="maybe" val="not-a-number" filterVal="not-a-number" />
+                """
+            ]));
+        sheet.StructuredTables.Add(table);
+        return workbook;
+    }
+
     private static Workbook CreateAutoFilterSourceWorkbook()
     {
         var workbook = new Workbook("AutoFilterPatchSave");
@@ -1503,6 +1628,36 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             ]
         };
         return workbook;
+    }
+
+    private static void SetStructuredTableAutoFilterInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+        var autoFilter = tableXml.Root!.Element(workbookNs + "autoFilter")!;
+        autoFilter.Add(
+            new XElement(
+                workbookNs + "filterColumn",
+                new XAttribute("colId", "0"),
+                new XAttribute("hiddenButton", "maybe"),
+                new XAttribute("showButton", "maybe"),
+                new XElement(
+                    workbookNs + "filters",
+                    new XAttribute("blank", "maybe"),
+                    new XElement(workbookNs + "filter", new XAttribute("val", "A")))),
+            new XElement(
+                workbookNs + "filterColumn",
+                new XAttribute("colId", "1"),
+                new XElement(
+                    workbookNs + "customFilters",
+                    new XAttribute("and", "maybe"),
+                    new XElement(
+                        workbookNs + "customFilter",
+                        new XAttribute("operator", "invalid"),
+                        new XAttribute("val", "1")))));
+        ReplacePackageXml(archive, "xl/tables/table1.xml", tableXml);
     }
 
     private static void SetWorksheetAutoFilterInvalidAttributes(MemoryStream stream)

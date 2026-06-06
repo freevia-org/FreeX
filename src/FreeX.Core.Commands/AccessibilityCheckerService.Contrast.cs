@@ -938,6 +938,9 @@ public static partial class AccessibilityCheckerService
             case "FLOOR":
                 kind = ConditionalFormulaScalarFunctionKind.Floor;
                 return true;
+            case "FLOOR.MATH":
+                kind = ConditionalFormulaScalarFunctionKind.FloorMath;
+                return true;
             case "FLOOR.PRECISE":
                 kind = ConditionalFormulaScalarFunctionKind.FloorPrecise;
                 return true;
@@ -1187,7 +1190,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
             ConditionalFormulaScalarFunctionKind.FloorPrecise or
             ConditionalFormulaScalarFunctionKind.Trunc => argumentCount is 1 or 2,
-            ConditionalFormulaScalarFunctionKind.CeilingMath => argumentCount is >= 1 and <= 3,
+            ConditionalFormulaScalarFunctionKind.CeilingMath or
+            ConditionalFormulaScalarFunctionKind.FloorMath => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Round or
             ConditionalFormulaScalarFunctionKind.RoundUp or
             ConditionalFormulaScalarFunctionKind.RoundDown or
@@ -1745,6 +1749,7 @@ public static partial class AccessibilityCheckerService
         CeilingMath,
         IsoCeiling,
         Floor,
+        FloorMath,
         FloorPrecise,
         Trunc,
         Fact,
@@ -2299,6 +2304,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.CeilingMath:
                 case ConditionalFormulaScalarFunctionKind.IsoCeiling:
                 case ConditionalFormulaScalarFunctionKind.Floor:
+                case ConditionalFormulaScalarFunctionKind.FloorMath:
                 case ConditionalFormulaScalarFunctionKind.FloorPrecise:
                 case ConditionalFormulaScalarFunctionKind.Trunc:
                 case ConditionalFormulaScalarFunctionKind.Fact:
@@ -2546,6 +2552,27 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Floor:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var floorSignificance) ||
                         !TryFloorFormulaNumber(first, floorSignificance, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.FloorMath:
+                    var floorMathSignificance = 1d;
+                    if (function.Arguments.Count >= 2 &&
+                        !TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out floorMathSignificance))
+                    {
+                        return false;
+                    }
+
+                    var floorMathMode = 0d;
+                    if (function.Arguments.Count == 3 &&
+                        !TryResolveFormulaFunctionNumber(function.Arguments[2], rowOffset, colOffset, out floorMathMode))
+                    {
+                        return false;
+                    }
+
+                    if (!TryFloorMathFormulaNumber(first, floorMathSignificance, floorMathMode, out result))
                     {
                         return false;
                     }
@@ -3402,6 +3429,22 @@ public static partial class AccessibilityCheckerService
 
             var multiple = Math.Abs(significance);
             result = Math.Floor(number / multiple) * multiple;
+            return double.IsFinite(result);
+        }
+
+        private static bool TryFloorMathFormulaNumber(double number, double significance, double mode, out double result)
+        {
+            result = 0d;
+            if (!double.IsFinite(number) || !double.IsFinite(significance) || !double.IsFinite(mode))
+                return false;
+
+            if (number == 0d || significance == 0d)
+                return true;
+
+            var multiple = Math.Abs(significance);
+            result = number < 0d && mode != 0d
+                ? Math.Truncate(number / multiple) * multiple
+                : Math.Floor(number / multiple) * multiple;
             return double.IsFinite(result);
         }
 

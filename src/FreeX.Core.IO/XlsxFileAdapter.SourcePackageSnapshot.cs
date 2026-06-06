@@ -848,6 +848,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
                 NormalizePatchWorksheetAutoFilters(archive);
+                NormalizePatchStructuredTableAutoFilters(archive);
                 NormalizePatchWorksheetSortStates(archive);
                 NormalizePatchWorksheetDataConsolidation(archive);
                 if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
@@ -1298,6 +1299,25 @@ public sealed partial class XlsxFileAdapter
                     XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
                 {
                     XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+                }
+            }
+        }
+
+        private static void NormalizePatchStructuredTableAutoFilters(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var tableEntry in archive.Entries.Where(IsStructuredTableXmlEntry).ToList())
+            {
+                var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
+                var root = tableXml.Root;
+                if (root is null)
+                    continue;
+
+                var autoFilter = root.Element(workbookNs + "autoFilter");
+                if (autoFilter is not null &&
+                    XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
+                {
+                    XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
                 }
             }
         }
@@ -3229,6 +3249,14 @@ public sealed partial class XlsxFileAdapter
         {
             var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
             return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                   path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                   !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsStructuredTableXmlEntry(ZipArchiveEntry entry)
+        {
+            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            return path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) &&
                    path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                    !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
         }
