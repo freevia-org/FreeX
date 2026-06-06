@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace FreeX.Core.IO.Tests;
 
 internal static class TestWorkspaceFiles
@@ -11,8 +9,7 @@ internal static class TestWorkspaceFiles
         TestWorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(relativeParts);
 
     internal static string FindWorkspaceFileDirectory(params string[] relativeParts) =>
-        Path.GetDirectoryName(FindWorkspaceFile(relativeParts))
-        ?? throw new DirectoryNotFoundException($"Could not locate workspace directory for {Path.Combine(relativeParts)}.");
+        TestWorkspaceFileLocator.FindContainingDirectory(relativeParts);
 
     internal static string ReadWorkspaceText(params string[] relativeParts) =>
         TestWorkspaceFileLocator.ReadAllText(relativeParts);

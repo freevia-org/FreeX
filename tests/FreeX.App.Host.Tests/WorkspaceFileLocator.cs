@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace FreeX.App.Host.Tests;
 
 internal static class WorkspaceFileLocator
@@ -8,10 +6,10 @@ internal static class WorkspaceFileLocator
         TestWorkspaceFileLocator.Find(relativeParts);
 
     public static string FindWorkspaceRoot() =>
-        Path.GetDirectoryName(Find("FreeX.slnx"))!;
+        TestWorkspaceFileLocator.FindContainingDirectory("FreeX.slnx");
 
     public static string FindDocsDirectory() =>
-        Path.GetDirectoryName(Find("docs", "README.md"))!;
+        TestWorkspaceFileLocator.FindContainingDirectory("docs", "README.md");
 
     public static string FindToolScript(string fileName) =>
         Find("tools", fileName);
