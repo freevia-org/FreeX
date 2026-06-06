@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -51,7 +50,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void TextToColumnsDestinationPicker_RefocusesDestinationAfterRequest()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.Delimiters.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("TextToColumnsDialog.Delimiters.cs");
         var handlerSource = source[source.IndexOf("private DockPanel CreateReferenceEditor", StringComparison.Ordinal)..];
 
         handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
@@ -62,7 +61,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void MainWindow_WiresTextToColumnsDestinationPickerToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("new TextToColumnsDialog(");
         source.Should().Contain("request => ApplyTextToColumnsRangeSelection(dialog, request)");
@@ -128,7 +127,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void TextToColumnsCommand_WarnsBeforeOverwritingDestinationData()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("FindOverwriteTargets");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_TextToColumnsReplaceDataPrompt\")");
