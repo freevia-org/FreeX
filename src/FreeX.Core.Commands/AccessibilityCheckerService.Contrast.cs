@@ -700,6 +700,7 @@ public static partial class AccessibilityCheckerService
 
     private const ulong MaxFormulaAggregateRangeCells = 10_000;
     private const int MaxFormulaRoundDigits = 15;
+    private const int MaxFormulaTextSliceLength = 32_767;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
         ast is (BooleanNode
@@ -901,6 +902,24 @@ public static partial class AccessibilityCheckerService
             case "MOD":
                 kind = ConditionalFormulaScalarFunctionKind.Mod;
                 return true;
+            case "LEN":
+                kind = ConditionalFormulaScalarFunctionKind.Len;
+                return true;
+            case "UPPER":
+                kind = ConditionalFormulaScalarFunctionKind.Upper;
+                return true;
+            case "LOWER":
+                kind = ConditionalFormulaScalarFunctionKind.Lower;
+                return true;
+            case "TRIM":
+                kind = ConditionalFormulaScalarFunctionKind.Trim;
+                return true;
+            case "LEFT":
+                kind = ConditionalFormulaScalarFunctionKind.Left;
+                return true;
+            case "RIGHT":
+                kind = ConditionalFormulaScalarFunctionKind.Right;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -913,9 +932,15 @@ public static partial class AccessibilityCheckerService
         kind switch
         {
             ConditionalFormulaScalarFunctionKind.Abs or
-            ConditionalFormulaScalarFunctionKind.Int => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Int or
+            ConditionalFormulaScalarFunctionKind.Len or
+            ConditionalFormulaScalarFunctionKind.Upper or
+            ConditionalFormulaScalarFunctionKind.Lower or
+            ConditionalFormulaScalarFunctionKind.Trim => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Round or
-            ConditionalFormulaScalarFunctionKind.Mod => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Mod or
+            ConditionalFormulaScalarFunctionKind.Left or
+            ConditionalFormulaScalarFunctionKind.Right => argumentCount == 2,
             _ => false
         };
 
@@ -1395,7 +1420,13 @@ public static partial class AccessibilityCheckerService
         Abs,
         Int,
         Round,
-        Mod
+        Mod,
+        Len,
+        Upper,
+        Lower,
+        Trim,
+        Left,
+        Right
     }
 
     private enum ConditionalFormulaAggregateKind
@@ -1851,11 +1882,67 @@ public static partial class AccessibilityCheckerService
         {
             value = ErrorValue.Value;
             if (operand.ScalarFunction is not { } function ||
-                !FormulaScalarFunctionArityMatches(function.Kind, function.Arguments.Count) ||
-                !TryResolveFormulaFunctionNumber(function.Arguments[0], rowOffset, colOffset, out var first))
+                !FormulaScalarFunctionArityMatches(function.Kind, function.Arguments.Count))
             {
                 return false;
             }
+
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.Abs:
+                case ConditionalFormulaScalarFunctionKind.Int:
+                case ConditionalFormulaScalarFunctionKind.Round:
+                case ConditionalFormulaScalarFunctionKind.Mod:
+                    return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Len:
+                    if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var lenText))
+                    {
+                        return false;
+                    }
+
+                    value = new NumberValue(lenText.Length);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Upper:
+                    if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var upperText))
+                    {
+                        return false;
+                    }
+
+                    value = new TextValue(upperText.ToUpperInvariant());
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Lower:
+                    if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var lowerText))
+                    {
+                        return false;
+                    }
+
+                    value = new TextValue(lowerText.ToLowerInvariant());
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Trim:
+                    if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var trimText))
+                    {
+                        return false;
+                    }
+
+                    value = new TextValue(trimText.Trim());
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Left:
+                case ConditionalFormulaScalarFunctionKind.Right:
+                    return TryEvaluateFormulaTextSliceFunction(function, rowOffset, colOffset, out value);
+                default:
+                    return false;
+            }
+        }
+
+        private bool TryEvaluateFormulaNumericScalarFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFunctionNumber(function.Arguments[0], rowOffset, colOffset, out var first))
+                return false;
 
             double result;
             switch (function.Kind)
@@ -1895,6 +1982,27 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
+        private bool TryEvaluateFormulaTextSliceFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var text) ||
+                !TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var lengthNumber) ||
+                !TryGetFormulaTextSliceLength(lengthNumber, out var length))
+            {
+                return false;
+            }
+
+            var actualLength = Math.Min(length, text.Length);
+            value = function.Kind == ConditionalFormulaScalarFunctionKind.Left
+                ? new TextValue(text[..actualLength])
+                : new TextValue(text[(text.Length - actualLength)..]);
+            return true;
+        }
+
         private bool TryResolveFormulaFunctionNumber(
             ConditionalFormulaOperand operand,
             int rowOffset,
@@ -1904,6 +2012,23 @@ public static partial class AccessibilityCheckerService
             number = 0;
             return TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value) &&
                 TryGetFormulaArithmeticNumber(value, out number);
+        }
+
+        private bool TryResolveFormulaFunctionText(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out string text)
+        {
+            text = string.Empty;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value) ||
+                value is not TextValue textValue)
+            {
+                return false;
+            }
+
+            text = textValue.Value;
+            return true;
         }
 
         private static bool TryGetFormulaRoundDigits(double value, out int digits)
@@ -1919,6 +2044,22 @@ public static partial class AccessibilityCheckerService
             }
 
             digits = (int)rounded;
+            return true;
+        }
+
+        private static bool TryGetFormulaTextSliceLength(double value, out int length)
+        {
+            length = 0;
+            var rounded = Math.Round(value);
+            if (!double.IsFinite(rounded) ||
+                Math.Abs(value - rounded) > 1e-9 ||
+                rounded < 0 ||
+                rounded > MaxFormulaTextSliceLength)
+            {
+                return false;
+            }
+
+            length = (int)rounded;
             return true;
         }
 
