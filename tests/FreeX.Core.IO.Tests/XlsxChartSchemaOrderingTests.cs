@@ -57,6 +57,30 @@ public sealed class XlsxChartSchemaOrderingTests
     }
 
     [Fact]
+    public void LineChart_WithGuideLinesAndUpDownBars_ProducesSchemaValidOrder()
+    {
+        var saved = SaveBytes(CreateLineGuideChartWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+
+        var chartXml = LoadChartXml(saved);
+        var lineChart = chartXml.Descendants(ChartNs + "lineChart").Should().ContainSingle().Subject;
+        AssertChildOrder(lineChart, "grouping", "ser", "dropLines", "hiLowLines", "upDownBars", "axId");
+
+        var dropLines = lineChart.Element(ChartNs + "dropLines");
+        dropLines.Should().NotBeNull();
+        AssertChildOrder(dropLines!, "spPr");
+
+        var highLowLines = lineChart.Element(ChartNs + "hiLowLines");
+        highLowLines.Should().NotBeNull();
+        AssertChildOrder(highLowLines!, "spPr");
+
+        var upDownBars = lineChart.Element(ChartNs + "upDownBars");
+        upDownBars.Should().NotBeNull();
+        AssertChildOrder(upDownBars!, "gapWidth", "upBars", "downBars");
+    }
+
+    [Fact]
     public void ColumnChart_WithErrorBarsAndComboSecondaryLines_ProducesSchemaValidOrder()
     {
         var saved = SaveBytes(CreateColumnComboChartWorkbook());
@@ -187,6 +211,48 @@ public sealed class XlsxChartSchemaOrderingTests
             TrendlineLabelFontSize = 9,
             TrendlineLabelNumberFormatCode = "0.00",
             TrendlineLabelNumberFormatSourceLinked = false
+        });
+
+        return workbook;
+    }
+
+    private static Workbook CreateLineGuideChartWorkbook()
+    {
+        var workbook = new Workbook("ChartSchemaOrderingLineGuides");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Target"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(22));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(28));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3)),
+            ShowDropLines = true,
+            ShowHighLowLines = true,
+            ShowUpDownBars = true,
+            DropLineColor = new CellColor(91, 155, 213),
+            DropLineThickness = 1.5,
+            DropLineDashStyle = ChartLineDashStyle.Dot,
+            HighLowLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
+            HighLowLineThickness = 2,
+            HighLowLineDashStyle = ChartLineDashStyle.Dash,
+            UpDownBarGapWidth = 180,
+            UpBarFillColor = new CellColor(112, 173, 71),
+            UpBarBorderColor = new CellColor(84, 130, 53),
+            UpBarBorderThickness = 1,
+            DownBarFillColor = new CellColor(192, 0, 0),
+            DownBarBorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            DownBarBorderThickness = 2
         });
 
         return workbook;
