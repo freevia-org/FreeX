@@ -905,6 +905,9 @@ public static partial class AccessibilityCheckerService
             case "ROUNDDOWN":
                 kind = ConditionalFormulaScalarFunctionKind.RoundDown;
                 return true;
+            case "TRUNC":
+                kind = ConditionalFormulaScalarFunctionKind.Trunc;
+                return true;
             case "MOD":
                 kind = ConditionalFormulaScalarFunctionKind.Mod;
                 return true;
@@ -1079,6 +1082,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Left or
             ConditionalFormulaScalarFunctionKind.Right or
             ConditionalFormulaScalarFunctionKind.Exact => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Trunc => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
@@ -1610,6 +1614,7 @@ public static partial class AccessibilityCheckerService
         Round,
         RoundUp,
         RoundDown,
+        Trunc,
         Mod,
         Sqrt,
         SqrtPi,
@@ -2135,6 +2140,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Round:
                 case ConditionalFormulaScalarFunctionKind.RoundUp:
                 case ConditionalFormulaScalarFunctionKind.RoundDown:
+                case ConditionalFormulaScalarFunctionKind.Trunc:
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
@@ -2300,6 +2306,17 @@ public static partial class AccessibilityCheckerService
                     }
 
                     result = RoundDownFormulaNumber(first, roundDownDigits);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Trunc:
+                    var truncDigits = 0;
+                    if (function.Arguments.Count == 2 &&
+                        (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var truncDigitsNumber) ||
+                         !TryGetFormulaRoundDigits(truncDigitsNumber, out truncDigits)))
+                    {
+                        return false;
+                    }
+
+                    result = RoundDownFormulaNumber(first, truncDigits);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Mod:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var divisor) ||
