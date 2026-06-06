@@ -850,6 +850,15 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaArithmeticContrastLocations("ABS($A1-100)>=25", "B1", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("INT($A1/10)>=10", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN($A1/50)>2", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(-$A1/50)<-2", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(1.2)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(3)=4", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(-1.2)=-2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(-3)=-4", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(2)=2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(-2)=-2", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("EVEN(0)=0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("ROUND($A1/3,0)>=33", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("ROUNDUP($A1/100,1)>=1", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("ROUNDUP(-$A1/100,1)<=-1", "B2", "B4");
@@ -927,6 +936,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("IF(ABS($A1-100)>=25,TRUE,FALSE)", "B1", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("AND(ROUND($A1/3,0)>=33,$C1=\"Open\")", "B4");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(ROUND($A1/3,0))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(EVEN($A1/50)>2,TRUE,FALSE)", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(EVEN($A1/50)>=2,$C1=\"Open\")", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(EVEN($A1/50))", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("IF(ROUNDUP($A1/100,1)>=1,TRUE,FALSE)", "B2", "B4");
         AssertFormulaArithmeticContrastLocations("AND(ROUNDUP($A1/100,1)>=1,$C1=\"Open\")", "B4");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(ROUNDUP($A1/100,1))", "B1", "B2", "B3", "B4");
@@ -1015,6 +1027,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateScalarFunctionArguments()
     {
         AssertFormulaAggregateContrastLocations("SUM(ABS($A1-100),MOD($A1,2))>=25", "B1", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(EVEN($A1/50),1)>3", "B4");
         AssertFormulaAggregateContrastLocations("SUM(ROUNDUP($A1/100,1),1)>=2", "B2", "B4");
         AssertFormulaAggregateContrastLocations("SUM(ROUNDDOWN($A1/100,1),1)>=2", "B2", "B4");
         AssertFormulaAggregateContrastLocations("SUM(MROUND($A1,30),1)>=121", "B4");
@@ -1108,6 +1121,13 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(301)>0");
         AssertFormulaArithmeticContrastLocations("ABS(\"5\")>0");
         AssertFormulaArithmeticContrastLocations("ABS($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("EVEN()>0");
+        AssertFormulaArithmeticContrastLocations("EVEN($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("EVEN(\"5\")>0");
+        AssertFormulaArithmeticContrastLocations("EVEN($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("EVEN(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("EVEN(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("EVEN(EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("SQRT()>0");
         AssertFormulaArithmeticContrastLocations("SQRT($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("SQRT(-$A1)>0");
