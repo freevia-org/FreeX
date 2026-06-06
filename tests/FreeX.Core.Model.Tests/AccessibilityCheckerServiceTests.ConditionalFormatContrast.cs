@@ -1122,6 +1122,51 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFloorPreciseScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,30)>=90", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1)>=100", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,0)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(10,3)=9", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(10,-3)=9", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(-10,3)=-12", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(-10,-3)=-12", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(-1.5,1)=-2", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFloorPreciseScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(FLOOR.PRECISE($A1,30)>=90,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(FLOOR.PRECISE($A1,30)>=60,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(FLOOR.PRECISE($A1))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ISEVEN(FLOOR.PRECISE($A1,25))", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFloorPreciseScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(FLOOR.PRECISE($A1,30),1)>=91", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(FLOOR.PRECISE($A1,30),$A1)>110", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatFloorPreciseScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE()>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,10,1)>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(\"10\",3)>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,\"10\")>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1&\"x\",10)>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(KURT($A1),10)>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(1E308*1E308,10)>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE($A1,1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(1E308,0.1)>0");
+        AssertFormulaArithmeticContrastLocations("FLOOR.PRECISE(EXP(1000),2)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatQuotientScalarFunctionComparisons()
     {
         AssertFormulaArithmeticContrastLocations("QUOTIENT($A1,25)>=4", "B2", "B4");
