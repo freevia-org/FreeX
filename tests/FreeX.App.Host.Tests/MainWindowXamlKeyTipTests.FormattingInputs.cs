@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -12,7 +11,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void EditableFontSizeBox_CommitsTypedKeyboardInputWithEnter()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -34,7 +33,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void EditableFontNameBox_CommitsTypedKeyboardInputWithEnter()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -56,7 +55,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void EditableFontBoxes_CommitTypedKeyboardInputWhenFocusLeaves()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
