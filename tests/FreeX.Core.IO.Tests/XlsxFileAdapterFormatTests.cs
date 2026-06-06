@@ -368,21 +368,21 @@ public sealed class XlsxFileAdapterFormatTests
     [Fact]
     public void LoadPath_AvoidsFullPackageToArrayCopies()
     {
-        var adapterSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
-        var saveSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
-        var savePostProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var diagnosticsSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetDiagnosticsMapper.cs"));
-        var sanitizerSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
-        var worksheetMetadataSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.cs"))
+        var adapterSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.cs");
+        var saveSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.Save.cs");
+        var savePostProcessingSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.SavePostProcessing.cs");
+        var diagnosticsSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxWorksheetDiagnosticsMapper.cs");
+        var sanitizerSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxClosedXmlLoadPackageSanitizer.cs");
+        var worksheetMetadataSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxWorksheetMetadataPreserver.cs")
             .ReplaceLineEndings("\n");
-        var worksheetCellMetadataSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.CellMetadata.cs"));
-        var worksheetMergeHelpersSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetMetadataPreserver.MergeHelpers.cs"));
-        var drawingPartMergerSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxWorksheetDrawingPartMerger.cs"));
-        var pivotReferencePreserverSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxPivotXmlReferencePreserver.cs"));
-        var tableReferencePreserverSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxStructuredTableReferencePreserver.cs"));
-        var styleOnlyStripperSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
-        var sheetXmlLayoutSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
-        var sourcePackageSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"))
+        var worksheetCellMetadataSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxWorksheetMetadataPreserver.CellMetadata.cs");
+        var worksheetMergeHelpersSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxWorksheetMetadataPreserver.MergeHelpers.cs");
+        var drawingPartMergerSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxWorksheetDrawingPartMerger.cs");
+        var pivotReferencePreserverSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxPivotXmlReferencePreserver.cs");
+        var tableReferencePreserverSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxStructuredTableReferencePreserver.cs");
+        var styleOnlyStripperSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxClosedXmlStyleOnlyCellStripper.cs");
+        var sheetXmlLayoutSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.SheetXmlLayout.cs");
+        var sourcePackageSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.SourcePackage.cs")
             .ReplaceLineEndings("\n");
         var preserveSourcePackageParts = sourcePackageSource[
             sourcePackageSource.IndexOf("private static SourcePackagePartSummary PreserveSourcePackageParts", StringComparison.Ordinal)..
@@ -515,8 +515,7 @@ public sealed class XlsxFileAdapterFormatTests
     [Fact]
     public void SavePostProcessing_UsesSourcePackageReplayOnlyForLoadedWorkbooks()
     {
-        var savePostProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"))
+        var savePostProcessingSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.SavePostProcessing.cs")
             .ReplaceLineEndings("\n");
         var adapter = new XlsxFileAdapter();
         var freshWorkbook = CreateSimpleWorkbook("fresh");
@@ -579,10 +578,8 @@ public sealed class XlsxFileAdapterFormatTests
     [Fact]
     public void SavePostProcessing_CapturesRefreshedSourcePackageWithoutIntermediateStreamCopy()
     {
-        var savePostProcessingSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
-        var snapshotSource = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile(
-            "src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+        var savePostProcessingSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.SavePostProcessing.cs");
+        var snapshotSource = TestWorkspaceFiles.ReadCoreIoSource("XlsxFileAdapter.SourcePackageSnapshot.cs");
 
         savePostProcessingSource.Should().Contain("currentModelFingerprint,");
         savePostProcessingSource.Should().Contain("sourcePackage?.WorksheetsWithPreservableSourceMetadata");
