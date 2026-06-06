@@ -71,7 +71,7 @@ public sealed class UserTestPublishScriptTests
     public void PublishScript_EnglishOnlyTesterExeExcludesLocalizedSatelliteResources()
     {
         var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
-        var projectPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeX.App.Host.csproj");
+        var projectPath = DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj");
         var script = File.ReadAllText(scriptPath);
         var project = File.ReadAllText(projectPath);
 
