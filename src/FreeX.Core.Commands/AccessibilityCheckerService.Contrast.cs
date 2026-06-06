@@ -1222,6 +1222,9 @@ public static partial class AccessibilityCheckerService
             case "DAYS":
                 kind = ConditionalFormulaScalarFunctionKind.Days;
                 return true;
+            case "DATEDIF":
+                kind = ConditionalFormulaScalarFunctionKind.Datedif;
+                return true;
             case "DAYS360":
                 kind = ConditionalFormulaScalarFunctionKind.Days360;
                 return true;
@@ -1361,7 +1364,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
             ConditionalFormulaScalarFunctionKind.Date or
-            ConditionalFormulaScalarFunctionKind.Time => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.Time or
+            ConditionalFormulaScalarFunctionKind.Datedif => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Multinomial => argumentCount is >= 1 and <= MaxFormulaMultinomialArgumentCount,
             ConditionalFormulaScalarFunctionKind.Gcd or
             ConditionalFormulaScalarFunctionKind.Lcm => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
@@ -2020,6 +2024,7 @@ public static partial class AccessibilityCheckerService
         EDate,
         EOMonth,
         Days,
+        Datedif,
         Days360,
         Na,
         Row,
@@ -2663,6 +2668,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.EDate:
                 case ConditionalFormulaScalarFunctionKind.EOMonth:
                 case ConditionalFormulaScalarFunctionKind.Days:
+                case ConditionalFormulaScalarFunctionKind.Datedif:
                 case ConditionalFormulaScalarFunctionKind.Days360:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Na:
@@ -3497,6 +3503,12 @@ public static partial class AccessibilityCheckerService
 
                     value = new NumberValue(FormulaDateToExcelSerial(endDate) - FormulaDateToExcelSerial(startDate));
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Datedif:
+                    if (!TryEvaluateFormulaDatedif(function, rowOffset, colOffset, out var datedif))
+                        return false;
+
+                    value = new NumberValue(datedif);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Days360:
                     if (!TryEvaluateFormulaDays360(function, rowOffset, colOffset, out var days360))
                         return false;
@@ -3507,6 +3519,95 @@ public static partial class AccessibilityCheckerService
                     return false;
             }
         }
+
+        private bool TryEvaluateFormulaDatedif(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out double result)
+        {
+            result = 0;
+            if (!TryResolveFormulaFunctionDate(function.Arguments[0], rowOffset, colOffset, out var startDate) ||
+                !TryResolveFormulaFunctionDate(function.Arguments[1], rowOffset, colOffset, out var endDate) ||
+                !TryResolveFormulaFunctionText(function.Arguments[2], rowOffset, colOffset, out var unit))
+            {
+                return false;
+            }
+
+            var start = startDate.Date;
+            var end = endDate.Date;
+            if (end < start)
+                return false;
+
+            switch (unit.ToUpperInvariant())
+            {
+                case "D":
+                    result = FormulaDateToExcelSerial(end) - FormulaDateToExcelSerial(start);
+                    return double.IsFinite(result);
+                case "M":
+                    result = FormulaDatedifMonthDiff(start, end);
+                    return true;
+                case "Y":
+                    result = FormulaDatedifYearDiff(start, end);
+                    return true;
+                case "YM":
+                    result = FormulaDatedifMonthDiff(start, end) % 12;
+                    return true;
+                case "YD":
+                    return TryEvaluateFormulaDatedifYD(start, end, out result);
+                case "MD":
+                    result = FormulaDatedifMD(start, end);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static int FormulaDatedifMonthDiff(DateTime start, DateTime end)
+        {
+            var months = (end.Year - start.Year) * 12 + (end.Month - start.Month);
+            if (end.Day < start.Day)
+                months--;
+
+            return months;
+        }
+
+        private static int FormulaDatedifYearDiff(DateTime start, DateTime end)
+        {
+            var years = end.Year - start.Year;
+            if (end.Month < start.Month || (end.Month == start.Month && end.Day < start.Day))
+                years--;
+
+            return years;
+        }
+
+        private static bool TryEvaluateFormulaDatedifYD(DateTime start, DateTime end, out double result)
+        {
+            result = 0;
+            try
+            {
+                var anchor = new DateTime(end.Year, start.Month, start.Day);
+                var adjustedStart = anchor > end ? anchor.AddYears(-1) : anchor;
+                result = FormulaDateToExcelSerial(end) - FormulaDateToExcelSerial(adjustedStart);
+                return double.IsFinite(result);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
+        private static int FormulaDatedifMD(DateTime start, DateTime end)
+        {
+            if (end.Day >= start.Day)
+                return end.Day - start.Day;
+
+            var previousMonth = end.AddMonths(-1);
+            return FormulaDaysInExcelMonth(previousMonth.Year, previousMonth.Month) + end.Day - start.Day;
+        }
+
+        private static int FormulaDaysInExcelMonth(int year, int month) =>
+            year == 1900 && month == 2 ? 29 : DateTime.DaysInMonth(year, month);
 
         private bool TryEvaluateFormulaDays360(
             ConditionalFormulaScalarFunction function,
