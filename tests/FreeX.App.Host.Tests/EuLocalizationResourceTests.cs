@@ -154,7 +154,7 @@ public sealed partial class EuLocalizationResourceTests
     }
 
     private static string ResourceDirectory =>
-        Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("Resources", "Strings.resx"))!;
+        DialogSourceTestSupport.FindHostSourceDirectory("Resources", "Strings.resx");
 
     private static Dictionary<string, string> ReadResxValues(string fileName)
     {
