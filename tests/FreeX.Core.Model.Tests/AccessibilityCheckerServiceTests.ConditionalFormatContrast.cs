@@ -2800,6 +2800,14 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM($A1)=11", "B1", "B2");
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(DATE(2021,1,1))=53", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("WEEKNUM(DATE(2021,1,1),21)=53", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("EDATE($A1,1)>=DATE(2023,4,16)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("EDATE(DATE(2023,1,31),1)=DATE(2023,2,28)", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("EDATE($A1,-1)<DATE(2023,3,1)", "B1", "B2");
+        AssertFormulaDateFunctionContrastLocations("EDATE($A1,1.9)=EDATE($A1,1)", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("EOMONTH($A1,0)=DATE(2023,3,31)", "B1", "B2");
+        AssertFormulaDateFunctionContrastLocations("EOMONTH($A1,-1)=DATE(2023,2,28)", "B1", "B2");
+        AssertFormulaDateFunctionContrastLocations("DAYS($A1,DATE(2023,3,15))>0", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS(DATE(2023,3,16),$A1)=1", "B1");
         AssertFormulaDateFunctionContrastLocations("HOUR($D1)=12", "B2");
         AssertFormulaDateFunctionContrastLocations("MINUTE($D1)=5", "B3");
         AssertFormulaDateFunctionContrastLocations("SECOND($D1)=59", "B4");
@@ -2825,6 +2833,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("ISNUMBER(ISOWEEKNUM($A1))", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEAR($A1)-2023", "B3");
         AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1)+WEEKDAY($A1)=15", "B1");
+        AssertFormulaDateFunctionContrastLocations("IF(EDATE($A1,1)>=DATE(2023,4,16),TRUE,FALSE)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(DAYS($A1,DATE(2023,3,15))),DAYS($A1,DATE(2023,3,15))>=36)", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNUMBER(EOMONTH($A1,0))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("EDATE($A1,1)-DATE(2023,4,15)>0", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("IF(HOUR($D1)>=12,TRUE,FALSE)", "B2", "B4");
         AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(MINUTE($D1)),SECOND($D1)>=7)", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("ISNUMBER(HOUR($D1))", "B1", "B2", "B3", "B4");
@@ -2838,6 +2850,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("SUM(DAY($A1),MONTH($A1))>=19", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("SUM(DAY(TODAY()),MONTH(TODAY()))>=2", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("SUM(WEEKDAY($A1),WEEKNUM($A1))=15", "B1");
+        AssertFormulaDateFunctionContrastLocations("SUM(DAYS($A1,DATE(2023,3,15)),1)>=37", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SUM(EOMONTH($A1,0),1)=45017", "B1", "B2");
         AssertFormulaDateFunctionContrastLocations("SUM(HOUR($D1),MINUTE($D1),SECOND($D1))=141", "B4");
     }
 
@@ -2866,6 +2880,22 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(\"2021-01-01\")>0");
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM($A1,1)>0");
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(2958466)>0");
+        AssertFormulaDateFunctionContrastLocations("EDATE($A1)>0");
+        AssertFormulaDateFunctionContrastLocations("EDATE($A1,1,1)>0");
+        AssertFormulaDateFunctionContrastLocations("EDATE(\"2023-03-15\",1)>0");
+        AssertFormulaDateFunctionContrastLocations("EDATE($A1,1E308)>0");
+        AssertFormulaDateFunctionContrastLocations("EDATE($A1,2147483648)>0");
+        AssertFormulaDateFunctionContrastLocations("EDATE(2958466,1)>0");
+        AssertFormulaDateFunctionContrastLocations("EDATE(A0,1)>0");
+        AssertFormulaDateFunctionContrastLocations("EOMONTH($A1)>0");
+        AssertFormulaDateFunctionContrastLocations("EOMONTH($A1,1,1)>0");
+        AssertFormulaDateFunctionContrastLocations("EOMONTH(\"2023-03-15\",1)>0");
+        AssertFormulaDateFunctionContrastLocations("EOMONTH($A1,2147483647)>0");
+        AssertFormulaDateFunctionContrastLocations("EOMONTH(2958466,1)>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS($A1)>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS($A1,DATE(2023,3,15),1)>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS(\"2023-03-16\",DATE(2023,3,15))>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS($A1,2958466)>0");
         AssertFormulaDateFunctionContrastLocations("HOUR(\"0.5\")>0");
         AssertFormulaDateFunctionContrastLocations("MINUTE(-1)>0");
         AssertFormulaDateFunctionContrastLocations("SECOND(2958465.1)>0");
