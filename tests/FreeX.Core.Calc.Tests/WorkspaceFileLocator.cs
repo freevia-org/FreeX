@@ -7,4 +7,10 @@ internal static class WorkspaceFileLocator
 
     public static string FindFromCurrentDirectoryOrFallback(params string[] relativeParts) =>
         global::TestWorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(relativeParts);
+
+    public static string ReadAllText(params string[] relativeParts) =>
+        global::TestWorkspaceFileLocator.ReadAllText(relativeParts);
+
+    public static string ReadAllTextFromCurrentDirectoryOrFallback(params string[] relativeParts) =>
+        global::TestWorkspaceFileLocator.ReadAllTextFromCurrentDirectoryOrFallback(relativeParts);
 }

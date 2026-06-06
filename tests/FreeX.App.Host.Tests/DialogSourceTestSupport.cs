@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -51,8 +50,8 @@ internal static class DialogSourceTestSupport
     }
 
     private static string ReadHostSource(string fileName) =>
-        File.ReadAllText(FindHostSourceFile(fileName));
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", fileName);
 
     private static string ReadAppUiSource(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", fileName));
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.UI", fileName);
 }
