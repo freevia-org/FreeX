@@ -9,11 +9,11 @@ public sealed partial class MainWindowSourceHygieneTests
     public void ViewportAndScrollbarController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var viewportSourcePath = Path.Combine(appHostDirectory, "MainWindow.Viewport.cs");
 
         File.Exists(viewportSourcePath).Should().BeTrue();
-        var viewportSource = File.ReadAllText(viewportSourcePath);
+        var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
         mainSource.Should().NotContain("private void UpdateViewport()");
         mainSource.Should().NotContain("private ViewportModel CreateViewport(");
@@ -31,7 +31,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ViewportScrollbarMaximums_UsesUsedRangeWithoutMaterializingUsedCells()
     {
-        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+        var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
         viewportSource.Should().Contain("GetUsedRange()");
         viewportSource.Should().NotContain("sheet.GetUsedCells()");
@@ -75,7 +75,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void ScreenshotTour_CapturesFullRibbonBandAndGridSliver()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScreenshotTour.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.cs");
 
         source.Should().Contain("ScreenshotTourCaptureHeight = 300");
         source.Should().Contain("rtb.Render(this)");
@@ -119,7 +119,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
     {
-        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+        var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
         const string assignment = "SheetGrid.SparklineValues = sheet is null";
         const string cacheRoute = "_sparklineValueCache.GetOrCreate(";
         const string directRoute = "SheetGrid.SparklineValues = SparklineValuePlanner.BuildValues(sheet)";
@@ -139,7 +139,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void UpdateViewport_UsesCombinedNativeSlicerTimelinePlanning()
     {
-        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+        var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
         viewportSource.Should().Contain("SlicerTimelinePlanner.GetNativeVisualFilters(_workbook, sheet)");
         viewportSource.Should().Contain("SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;");
@@ -151,7 +151,7 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindow_DoesNotKeepLegacyZoomConversionHelpers()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         source.Should().NotContain("SliderToZoomPct(");
         source.Should().NotContain("ZoomPctToSlider(");
@@ -161,11 +161,11 @@ public sealed partial class MainWindowSourceHygieneTests
     public void StartupController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var startupSourcePath = Path.Combine(appHostDirectory, "MainWindow.Startup.cs");
 
         File.Exists(startupSourcePath).Should().BeTrue();
-        var startupSource = File.ReadAllText(startupSourcePath);
+        var startupSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Startup.cs");
 
         mainSource.Should().NotContain("private void MainWindow_Loaded(");
         mainSource.Should().NotContain("HomeNumberFormatDropdownPlanner");
@@ -179,11 +179,10 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void MultiWindow_RegistersFirstWindowBroadcastsEditsAndAdoptsSharedWorkbookForSecondaryWindows()
     {
-        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
-        var multiWindowSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.MultiWindow.cs"));
-        var startupSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Startup.cs"));
-        var commandExecutionSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.CommandExecution.cs"));
-        var appSource = File.ReadAllText(Path.Combine(appHostDirectory, "App.xaml.cs"));
+        var multiWindowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.MultiWindow.cs");
+        var startupSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Startup.cs");
+        var commandExecutionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.CommandExecution.cs");
+        var appSource = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
 
         // Registry is a DI singleton and the live window contract is implemented by MainWindow.
         appSource.Should().Contain("services.AddSingleton<WorkbookWindowRegistry>();");
