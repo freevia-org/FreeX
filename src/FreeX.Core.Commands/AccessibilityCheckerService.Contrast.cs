@@ -920,6 +920,9 @@ public static partial class AccessibilityCheckerService
             case "LOG10":
                 kind = ConditionalFormulaScalarFunctionKind.Log10;
                 return true;
+            case "LOG":
+                kind = ConditionalFormulaScalarFunctionKind.Log;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1009,6 +1012,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Year or
             ConditionalFormulaScalarFunctionKind.Month or
             ConditionalFormulaScalarFunctionKind.Day => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Log => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.Round or
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Power or
@@ -1551,6 +1555,7 @@ public static partial class AccessibilityCheckerService
         Exp,
         Ln,
         Log10,
+        Log,
         Pi,
         Value,
         Len,
@@ -2060,6 +2065,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Exp:
                 case ConditionalFormulaScalarFunctionKind.Ln:
                 case ConditionalFormulaScalarFunctionKind.Log10:
+                case ConditionalFormulaScalarFunctionKind.Log:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
@@ -2231,6 +2237,21 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = Math.Log10(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Log:
+                    if (first <= 0)
+                        return false;
+
+                    var logBase = 10d;
+                    if (function.Arguments.Count == 2 &&
+                        (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out logBase) ||
+                         logBase <= 0 ||
+                         logBase == 1))
+                    {
+                        return false;
+                    }
+
+                    result = Math.Log(first, logBase);
                     break;
                 default:
                     return false;
