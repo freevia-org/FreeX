@@ -1,7 +1,7 @@
 using FluentAssertions;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Services.Tests;
 
 public sealed class CellEntryParserTests
 {
@@ -65,5 +65,4 @@ public sealed class CellEntryParserTests
         cell.Value.Should().BeOfType<NumberValue>()
             .Which.Value.Should().Be(expected);
     }
-
 }

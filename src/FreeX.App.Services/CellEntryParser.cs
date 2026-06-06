@@ -2,7 +2,7 @@ using System.Globalization;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public static class CellEntryParser
 {
