@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -74,7 +73,7 @@ public sealed class ReviewCommandSourceTests
     [Fact]
     public void ReviewCommandHandlers_RouteThroughExpectedPlannersDialogsAndServices()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
