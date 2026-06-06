@@ -540,6 +540,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorksheetAdditionalViews_SanitizesInvalidSheetViewAttributesForSchemaValidity()
+    {
+        var workbook = CreateWorksheetAdditionalViewsSourceWorkbook();
+        var additionalView = workbook.GetSheetAt(0).AdditionalViews!.Views[0];
+        additionalView.NativeXml = """
+            <sheetView xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" workbookViewId="1" view="invalid" showGridLines="maybe" zoomScale="not-a-number" topLeftCell="BAD">
+              <pane xSplit="not-a-number" topLeftCell="BAD" activePane="badPane" state="badState" />
+              <selection pane="badPane" activeCell="BAD" activeCellId="not-a-number" sqref="BAD" />
+            </sheetView>
+            """;
+
+        using var saved = Save(workbook);
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var sheetViews = ReadWorksheetChildElement(saved, "sheetViews");
+        var sheetView = sheetViews.Elements(sheetViews.Name.Namespace + "sheetView")
+            .Single(view => string.Equals(view.Attribute("workbookViewId")?.Value, "1", StringComparison.Ordinal));
+        var pane = sheetView.Element(sheetView.Name.Namespace + "pane")!;
+        var selection = sheetView.Element(sheetView.Name.Namespace + "selection")!;
+        sheetView.Attribute("view").Should().BeNull();
+        sheetView.Attribute("showGridLines").Should().BeNull();
+        sheetView.Attribute("zoomScale").Should().BeNull();
+        sheetView.Attribute("topLeftCell").Should().BeNull();
+        pane.Attribute("xSplit").Should().BeNull();
+        pane.Attribute("topLeftCell").Should().BeNull();
+        pane.Attribute("activePane").Should().BeNull();
+        pane.Attribute("state").Should().BeNull();
+        selection.Attribute("pane").Should().BeNull();
+        selection.Attribute("activeCell").Should().BeNull();
+        selection.Attribute("activeCellId").Should().BeNull();
+        selection.Attribute("sqref").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithWorksheetAdditionalViews_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateWorksheetAdditionalViewsSourceWorkbook());
@@ -809,6 +843,46 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .ToString(SaveOptions.DisableFormatting)
             .Should()
             .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidSheetViewAttributesForSchemaValidity()
+    {
+        using var source = Save(CreateFreezePaneSourceWorkbook());
+        SetWorksheetSheetViewInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var sheetViews = ReadWorksheetChildElement(saved, "sheetViews");
+        var sheetView = sheetViews.Elements(sheetViews.Name.Namespace + "sheetView")
+            .Single(view => string.Equals(view.Attribute("workbookViewId")?.Value, "0", StringComparison.Ordinal));
+        var pane = sheetView.Element(sheetView.Name.Namespace + "pane")!;
+        var selection = sheetView.Element(sheetView.Name.Namespace + "selection")!;
+        sheetView.Attribute("view").Should().BeNull();
+        sheetView.Attribute("showGridLines").Should().BeNull();
+        sheetView.Attribute("zoomScale").Should().BeNull();
+        sheetView.Attribute("topLeftCell").Should().BeNull();
+        pane.Attribute("xSplit").Should().BeNull();
+        pane.Attribute("topLeftCell").Should().BeNull();
+        pane.Attribute("activePane").Should().BeNull();
+        pane.Attribute("state").Should().BeNull();
+        selection.Attribute("pane").Should().BeNull();
+        selection.Attribute("activeCell").Should().BeNull();
+        selection.Attribute("activeCellId").Should().BeNull();
+        selection.Attribute("sqref").Should().BeNull();
     }
 
 
@@ -1455,6 +1529,39 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.ViewTopRow = 1;
         sheet.ViewLeftCol = 1;
         return workbook;
+    }
+
+    private static void SetWorksheetSheetViewInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetView = worksheetXml.Root!
+            .Element(workbookNs + "sheetViews")!
+            .Elements(workbookNs + "sheetView")
+            .Single(view => string.Equals(view.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal));
+        sheetView.SetAttributeValue("view", "invalid");
+        sheetView.SetAttributeValue("showGridLines", "maybe");
+        sheetView.SetAttributeValue("zoomScale", "not-a-number");
+        sheetView.SetAttributeValue("topLeftCell", "BAD");
+        var pane = sheetView.Element(workbookNs + "pane")!;
+        pane.SetAttributeValue("xSplit", "not-a-number");
+        pane.SetAttributeValue("topLeftCell", "BAD");
+        pane.SetAttributeValue("activePane", "badPane");
+        pane.SetAttributeValue("state", "badState");
+        var selection = sheetView.Element(workbookNs + "selection");
+        if (selection is null)
+        {
+            selection = new XElement(workbookNs + "selection");
+            sheetView.Add(selection);
+        }
+
+        selection.SetAttributeValue("pane", "badPane");
+        selection.SetAttributeValue("activeCell", "BAD");
+        selection.SetAttributeValue("activeCellId", "not-a-number");
+        selection.SetAttributeValue("sqref", "BAD");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
     }
 
     private static Workbook CreatePhoneticPropertiesSourceWorkbook()

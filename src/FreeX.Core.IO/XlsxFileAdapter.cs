@@ -700,6 +700,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             hasClosedXmlUnsupportedConditionalFormatting,
             hasWorksheetDynamicFilters,
             null,
+            null,
             mergeCellWorksheetPathsToStrip);
     }
 
