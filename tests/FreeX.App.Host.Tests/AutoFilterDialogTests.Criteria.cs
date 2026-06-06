@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -131,7 +130,7 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void CriteriaPartial_DelegatesPureCriteriaBehaviorToPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialog.Criteria.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterDialog.Criteria.cs");
 
         source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildResult");
         source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildCriteriaText");
@@ -190,7 +189,7 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void CriteriaPlanner_ChecklistHotPathsAvoidLinqMaterialization()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialogCriteriaPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterDialogCriteriaPlanner.cs");
         var checklistBlock = source[
             source.IndexOf("public static IReadOnlyList<AutoFilterDialogItem> FilterItems", StringComparison.Ordinal)..
             source.IndexOf("public static string GetFilterFamilyHeader", StringComparison.Ordinal)];
