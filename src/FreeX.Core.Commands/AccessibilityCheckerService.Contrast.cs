@@ -710,6 +710,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaPermutationAInput = int.MaxValue;
     private const int MaxFormulaGcdArgumentCount = 255;
     private const int MaxFormulaMultinomialArgumentCount = 255;
+    private const int MaxFormulaSumProductArgumentCount = 255;
     private const double MaxFormulaGcdInputExclusive = 9_223_372_036_854_775_808d;
     private const int MaxFormulaTextSliceLength = 32_767;
     private const double FormulaSecZeroCosineTolerance = 1E-15d;
@@ -1266,9 +1267,12 @@ public static partial class AccessibilityCheckerService
     private static bool IsFormulaAggregateArgumentCountSupported(
         ConditionalFormulaAggregateKind aggregateKind,
         int argumentCount) =>
-        IsFormulaPairwiseAggregate(aggregateKind)
-            ? argumentCount == 2
-            : argumentCount > 0;
+        aggregateKind switch
+        {
+            ConditionalFormulaAggregateKind.SumProduct => argumentCount is >= 1 and <= MaxFormulaSumProductArgumentCount,
+            _ when IsFormulaPairwiseAggregate(aggregateKind) => argumentCount == 2,
+            _ => argumentCount > 0
+        };
 
     private static bool TryGetFormulaAggregateKind(
         string functionName,
@@ -1281,6 +1285,9 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "SUMSQ":
                 kind = ConditionalFormulaAggregateKind.SumSq;
+                return true;
+            case "SUMPRODUCT":
+                kind = ConditionalFormulaAggregateKind.SumProduct;
                 return true;
             case "SUMXMY2":
                 kind = ConditionalFormulaAggregateKind.SumXMy2;
@@ -1857,6 +1864,7 @@ public static partial class AccessibilityCheckerService
     {
         Sum,
         SumSq,
+        SumProduct,
         SumXMy2,
         SumX2My2,
         SumX2Py2,
@@ -3925,6 +3933,76 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
+        private bool TryEvaluateFormulaSumProductAggregate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (operand.AggregateArguments is not { Count: > 0 } arguments ||
+                arguments.Count > MaxFormulaSumProductArgumentCount)
+            {
+                return false;
+            }
+
+            var arrays = new ConditionalFormulaPairwiseAggregateValues[arguments.Count];
+            for (var i = 0; i < arguments.Count; i++)
+            {
+                if (!TryResolveFormulaPairwiseAggregateValues(arguments[i], rowOffset, colOffset, out arrays[i]))
+                    return false;
+
+                if (i > 0 &&
+                    (arrays[i].RowCount != arrays[0].RowCount ||
+                     arrays[i].ColCount != arrays[0].ColCount ||
+                     arrays[i].Values.Count != arrays[0].Values.Count))
+                {
+                    return false;
+                }
+            }
+
+            var total = 0d;
+            for (var valueIndex = 0; valueIndex < arrays[0].Values.Count; valueIndex++)
+            {
+                var product = 1d;
+                for (var arrayIndex = 0; arrayIndex < arrays.Length; arrayIndex++)
+                {
+                    if (!TryGetFormulaSumProductNumber(arrays[arrayIndex].Values[valueIndex].Value, out var number))
+                        return false;
+
+                    product *= number;
+                    if (!double.IsFinite(product))
+                        return false;
+                }
+
+                total += product;
+                if (!double.IsFinite(total))
+                    return false;
+            }
+
+            value = new NumberValue(total);
+            return true;
+        }
+
+        private static bool TryGetFormulaSumProductNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue numeric when double.IsFinite(numeric.Value):
+                    number = numeric.Value;
+                    return true;
+                case DateTimeValue dateTime when double.IsFinite(dateTime.Value):
+                    number = dateTime.Value;
+                    return true;
+                case ErrorValue:
+                    number = 0d;
+                    return false;
+                default:
+                    number = 0d;
+                    return true;
+            }
+        }
+
         private bool TryResolveFormulaPairwiseAggregateValues(
             ConditionalFormulaAggregateArgument argument,
             int rowOffset,
@@ -4050,6 +4128,9 @@ public static partial class AccessibilityCheckerService
             out ScalarValue value)
         {
             value = ErrorValue.Value;
+            if (operand.AggregateKind == ConditionalFormulaAggregateKind.SumProduct)
+                return TryEvaluateFormulaSumProductAggregate(operand, rowOffset, colOffset, out value);
+
             if (IsFormulaPairwiseAggregate(operand.AggregateKind))
                 return TryEvaluateFormulaPairwiseAggregate(operand, rowOffset, colOffset, out value);
 
