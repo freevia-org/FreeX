@@ -1049,6 +1049,9 @@ public static partial class AccessibilityCheckerService
             case "AVERAGE":
                 kind = ConditionalFormulaAggregateKind.Average;
                 return true;
+            case "MEDIAN":
+                kind = ConditionalFormulaAggregateKind.Median;
+                return true;
             case "MIN":
                 kind = ConditionalFormulaAggregateKind.Min;
                 return true;
@@ -1510,6 +1513,7 @@ public static partial class AccessibilityCheckerService
         Sum,
         Product,
         Average,
+        Median,
         Min,
         Max,
         Count,
@@ -2520,6 +2524,7 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.Sum => new NumberValue(numericValues.Sum()),
                 ConditionalFormulaAggregateKind.Product => new NumberValue(numericValues.Aggregate(1d, (product, number) => product * number)),
                 ConditionalFormulaAggregateKind.Average when numericValues.Count > 0 => new NumberValue(numericValues.Average()),
+                ConditionalFormulaAggregateKind.Median when numericValues.Count > 0 => new NumberValue(MedianFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Min when numericValues.Count > 0 => new NumberValue(numericValues.Min()),
                 ConditionalFormulaAggregateKind.Max when numericValues.Count > 0 => new NumberValue(numericValues.Max()),
                 ConditionalFormulaAggregateKind.Count => new NumberValue(numericValues.Count),
@@ -2529,6 +2534,15 @@ public static partial class AccessibilityCheckerService
             };
 
             return value is not ErrorValue && TryGetNumber(value, out var number) && double.IsFinite(number);
+        }
+
+        private static double MedianFormulaNumbers(List<double> numericValues)
+        {
+            numericValues.Sort();
+            var middle = numericValues.Count / 2;
+            return numericValues.Count % 2 == 1
+                ? numericValues[middle]
+                : (numericValues[middle - 1] + numericValues[middle]) / 2d;
         }
 
         private bool AppendFormulaAggregateValues(
@@ -2690,6 +2704,7 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.Sum or
                 ConditionalFormulaAggregateKind.Product or
                 ConditionalFormulaAggregateKind.Average or
+                ConditionalFormulaAggregateKind.Median or
                 ConditionalFormulaAggregateKind.Min or
                 ConditionalFormulaAggregateKind.Max;
 
