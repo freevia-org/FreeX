@@ -1043,6 +1043,9 @@ public static partial class AccessibilityCheckerService
             case "SUM":
                 kind = ConditionalFormulaAggregateKind.Sum;
                 return true;
+            case "PRODUCT":
+                kind = ConditionalFormulaAggregateKind.Product;
+                return true;
             case "AVERAGE":
                 kind = ConditionalFormulaAggregateKind.Average;
                 return true;
@@ -1505,6 +1508,7 @@ public static partial class AccessibilityCheckerService
     private enum ConditionalFormulaAggregateKind
     {
         Sum,
+        Product,
         Average,
         Min,
         Max,
@@ -2514,6 +2518,7 @@ public static partial class AccessibilityCheckerService
             value = operand.AggregateKind switch
             {
                 ConditionalFormulaAggregateKind.Sum => new NumberValue(numericValues.Sum()),
+                ConditionalFormulaAggregateKind.Product => new NumberValue(numericValues.Aggregate(1d, (product, number) => product * number)),
                 ConditionalFormulaAggregateKind.Average when numericValues.Count > 0 => new NumberValue(numericValues.Average()),
                 ConditionalFormulaAggregateKind.Min when numericValues.Count > 0 => new NumberValue(numericValues.Min()),
                 ConditionalFormulaAggregateKind.Max when numericValues.Count > 0 => new NumberValue(numericValues.Max()),
@@ -2683,6 +2688,7 @@ public static partial class AccessibilityCheckerService
         private static bool IsFormulaNumericAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
             aggregateKind is
                 ConditionalFormulaAggregateKind.Sum or
+                ConditionalFormulaAggregateKind.Product or
                 ConditionalFormulaAggregateKind.Average or
                 ConditionalFormulaAggregateKind.Min or
                 ConditionalFormulaAggregateKind.Max;
