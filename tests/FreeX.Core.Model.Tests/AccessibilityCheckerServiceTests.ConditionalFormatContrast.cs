@@ -520,6 +520,27 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMedianAggregate()
+    {
+        AssertFormulaAggregateContrastLocations("MEDIAN($A1:$A3)=75", "B1");
+        AssertFormulaAggregateContrastLocations("MEDIAN($A1:$A2)=87.5", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("MEDIAN($D1:$D3)=12", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("MEDIAN(25,$A1,125)=75", "B1", "B3");
+        AssertFormulaAggregateContrastLocations("MEDIAN(\"25\",$A1,125)=75", "B1", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatMedianWrappersPredicatesAndNestedAggregates()
+    {
+        AssertFormulaAggregateContrastLocations("AND(MEDIAN($A1:$A2)>=87.5,$C1=\"Closed\")", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("IF(MEDIAN($A1:$A3)>100,TRUE,FALSE)", "B4");
+        AssertFormulaAggregateContrastLocations("ISNUMBER(MEDIAN($A1:$A3))", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("MEDIAN($A1:$A2)+12.5=100", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("SUM(MEDIAN($A1:$A2),12.5)=100", "B1", "B2");
+        AssertFormulaAggregateContrastLocations("MEDIAN(SUM($A1:$A2),$A1^2)>5000", "B2", "B4");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatProductAggregate()
     {
         AssertFormulaAggregateContrastLocations("PRODUCT($A1)>100", "B4");
@@ -561,6 +582,13 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaAggregateContrastLocations("SUM($A1:$A20000)>0");
         AssertFormulaAggregateContrastLocations("SUM(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("MEDIAN()>0");
+        AssertFormulaAggregateContrastLocations("MEDIAN($A1:$A20000)>0");
+        AssertFormulaAggregateContrastLocations("MEDIAN(\"n/a\",$A1)>0");
+        AssertFormulaAggregateContrastLocations("MEDIAN($D3:$D5)>0");
+        AssertFormulaAggregateContrastLocations("MEDIAN($A1/0)>0");
+        AssertFormulaAggregateContrastLocations("MEDIAN(1E308,1E308)>0");
+        AssertFormulaAggregateContrastLocations("MEDIAN(A0)>0");
     }
 
     [Fact]
@@ -598,18 +626,18 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("COUNTA($D1&\"x\")>0");
         AssertFormulaAggregateContrastLocations("SUM($A1/0)>0");
         AssertFormulaAggregateContrastLocations("SUM(1E308*1E308)>0");
-        AssertFormulaAggregateContrastLocations("SUM(MEDIAN($A1)+1)>0");
+        AssertFormulaAggregateContrastLocations("SUM(STDEV($A1)+1)>0");
         AssertFormulaAggregateContrastLocations("SUM(\"n/a\"+$A1)>0");
         AssertFormulaAggregateContrastLocations("SUM(SUM($A1:$A20000))>0");
         AssertFormulaAggregateContrastLocations("PRODUCT($A1:$A20000)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("PRODUCT(1E308,1E308)>0");
-        AssertFormulaAggregateContrastLocations("PRODUCT(MEDIAN($A1))>0");
+        AssertFormulaAggregateContrastLocations("PRODUCT(STDEV($A1))>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK()>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK($D1:$D20000)>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK($D1&\"x\")>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK($A1/0)>0");
-        AssertFormulaAggregateContrastLocations("COUNTBLANK(MEDIAN($A1))>0");
+        AssertFormulaAggregateContrastLocations("COUNTBLANK(STDEV($A1))>0");
         AssertFormulaAggregateContrastLocations("COUNTBLANK(A0)>0");
     }
 
@@ -946,12 +974,12 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("$A1/0>0");
         AssertFormulaArithmeticContrastLocations("\"5\"+$A1>80");
         AssertFormulaArithmeticContrastLocations("1E308*1E308>0");
-        AssertFormulaArithmeticContrastLocations("MEDIAN($A1)+1>0");
+        AssertFormulaArithmeticContrastLocations("STDEV($A1)+1>0");
         AssertFormulaArithmeticContrastLocations("$A1&1>0");
         AssertFormulaArithmeticContrastLocations("A0+1>0");
         AssertFormulaArithmeticContrastLocations("(($A1-$A1)^-1)>0");
         AssertFormulaArithmeticContrastLocations("-\"5\">0");
-        AssertFormulaArithmeticContrastLocations("MEDIAN($A1)^2>0");
+        AssertFormulaArithmeticContrastLocations("STDEV($A1)^2>0");
         AssertFormulaArithmeticContrastLocations("$A1^\"2\">0");
     }
 
@@ -1028,7 +1056,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideLogicalWrapper()
     {
         var workbook = CreateFormulaLogicalContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
-        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,MEDIAN($A1)>0)");
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "AND($A1>=100,STDEV($A1)>0)");
 
         FindLowContrastCellTextIssues(workbook).Should().BeEmpty();
     }
@@ -1036,26 +1064,26 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideIfWrapper()
     {
-        AssertFormulaIfContrastLocations("IF(MEDIAN($A1)>0,TRUE,FALSE)");
-        AssertFormulaIfContrastLocations("IF($A1>=100,MEDIAN($A1),FALSE)");
+        AssertFormulaIfContrastLocations("IF(STDEV($A1)>0,TRUE,FALSE)");
+        AssertFormulaIfContrastLocations("IF($A1>=100,STDEV($A1),FALSE)");
     }
 
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideXorWrapper()
     {
-        AssertFormulaXorContrastLocations("XOR($A1>=100,MEDIAN($A1)>0)");
+        AssertFormulaXorContrastLocations("XOR($A1>=100,STDEV($A1)>0)");
         AssertFormulaXorContrastLocations("XOR()");
     }
 
     [Fact]
     public void FindIssues_DoesNotMatchUnsupportedFormulaConditionalFormatInsideIsPredicate()
     {
-        AssertFormulaPredicateContrastLocations("ISNUMBER(MEDIAN($A1))");
-        AssertFormulaParityContrastLocations("ISEVEN(MEDIAN($A1))");
-        AssertFormulaParityContrastLocations("ISODD(MEDIAN($A1))");
-        AssertFormulaReferencePredicateContrastLocations("ISREF(MEDIAN($A1))");
-        AssertFormulaReferencePredicateContrastLocations("ISFORMULA(MEDIAN($A1))");
-        AssertFormulaPredicateContrastLocations("MEDIAN($A1)>0");
+        AssertFormulaPredicateContrastLocations("ISNUMBER(STDEV($A1))");
+        AssertFormulaParityContrastLocations("ISEVEN(STDEV($A1))");
+        AssertFormulaParityContrastLocations("ISODD(STDEV($A1))");
+        AssertFormulaReferencePredicateContrastLocations("ISREF(STDEV($A1))");
+        AssertFormulaReferencePredicateContrastLocations("ISFORMULA(STDEV($A1))");
+        AssertFormulaPredicateContrastLocations("STDEV($A1)>0");
     }
 
     [Fact]
