@@ -146,6 +146,9 @@ internal static class XlsxSlicerTimelineWriter
                         new XAttribute("rowHeight", "228600")))));
             XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, new XDocument(
                 new XElement(SlicerNs + "slicerCacheDefinition",
+                    slicer.SelectedItems.Count == 0
+                        ? null
+                        : new XAttribute(XNamespace.Xmlns + "x", WorkbookNs.NamespaceName),
                     new XAttribute("name", cacheName),
                     OptionalAttribute("sourceName", slicer.SourceFieldName),
                     new XElement(SlicerNs + "pivotTables",
@@ -156,7 +159,7 @@ internal static class XlsxSlicerTimelineWriter
                     slicer.SelectedItems.Count == 0
                         ? null
                         : new XElement(SlicerNs + "extLst",
-                            new XElement(SlicerNs + "ext",
+                            new XElement(WorkbookNs + "ext",
                                 new XAttribute("uri", "{9F2C6F77-9A06-4E1E-AF41-4DB3CB03A6A6}"),
                                 new XElement(freexNs + "selectedItems",
                                     slicer.SelectedItems.Select(item =>
