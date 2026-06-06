@@ -84,7 +84,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_redoMenuItem.Click += (_, _) => RedoLastEdit();");
         source.Should().Contain("_copyMenuItem.Header = \"Copy\";");
         source.Should().Contain("_copyMenuItem.Gesture = new KeyGesture(Key.C, KeyModifiers.Meta);");
-        source.Should().Contain("_copyMenuItem.Click += async (_, _) => await CopyActiveCellToClipboardAsync();");
+        source.Should().Contain("_copyMenuItem.Click += async (_, _) => await CopySelectedRangeToClipboardAsync();");
         source.Should().Contain("_pasteMenuItem.Header = \"Paste\";");
         source.Should().Contain("_pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);");
         source.Should().Contain("_pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();");
@@ -272,20 +272,25 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_pasteButton.Click += PasteButton_Click;");
         source.Should().Contain("_copyButton.IsEnabled = isIdle;");
         source.Should().Contain("_pasteButton.IsEnabled = isIdle;");
-        source.Should().Contain("private async Task CopyActiveCellToClipboardAsync()");
+        source.Should().Contain("private async Task CopySelectedRangeToClipboardAsync()");
         source.Should().Contain("private async Task PasteClipboardTextAsync()");
         source.Should().Contain("using Avalonia.Input.Platform;");
         source.Should().Contain("TopLevel.GetTopLevel(this)?.Clipboard");
-        source.Should().Contain("await clipboard.SetTextAsync(_session.CopyActiveCellText());");
+        source.Should().Contain("await clipboard.SetTextAsync(_session.CopySelectedRangeText());");
         source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
-        source.Should().Contain("string.IsNullOrEmpty(text)");
-        source.Should().Contain("_session.PasteExternalTextAtActiveCell(text)");
+        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text)");
+        source.Should().Contain("_session.SelectedRange.Contains(address)");
+        source.Should().Contain("private bool IsSelectedColumn(uint col)");
+        source.Should().Contain("private bool IsSelectedRow(uint row)");
+        source.Should().Contain("args.KeyModifiers.HasFlag(KeyModifiers.Shift)");
+        source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
+        source.Should().Contain("private static string FormatRangeReference(GridRange range)");
         source.Should().Contain("if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.C or Key.V)");
         source.Should().Contain("else if (e.Key == Key.C)");
-        source.Should().Contain("await CopyActiveCellToClipboardAsync();");
+        source.Should().Contain("await CopySelectedRangeToClipboardAsync();");
         source.Should().Contain("else if (e.Key == Key.V)");
         source.Should().Contain("await PasteClipboardTextAsync();");
         source.Should().Contain("ShowEditIssue(\"Clipboard unavailable on this platform.\");");
-        source.Should().Contain("ShowEditIssue(\"Clipboard does not contain text.\");");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Paste failed.\");");
     }
 }

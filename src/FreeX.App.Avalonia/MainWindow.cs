@@ -203,7 +203,7 @@ public sealed class MainWindow : Window
 
         _copyMenuItem.Header = "Copy";
         _copyMenuItem.Gesture = new KeyGesture(Key.C, KeyModifiers.Meta);
-        _copyMenuItem.Click += async (_, _) => await CopyActiveCellToClipboardAsync();
+        _copyMenuItem.Click += async (_, _) => await CopySelectedRangeToClipboardAsync();
 
         _pasteMenuItem.Header = "Paste";
         _pasteMenuItem.Gesture = new KeyGesture(Key.V, KeyModifiers.Meta);
@@ -482,14 +482,14 @@ public sealed class MainWindow : Window
         for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
         {
             var col = viewport.ColMetrics[colIndex].Col;
-            var selected = col == _session.ActiveCell.Col;
+            var selected = IsSelectedColumn(col);
             AddGridChild(grid, CreateHeaderCell(CellAddress.NumberToColumnName(col), selected), 0, colIndex + 1);
         }
 
         for (var rowIndex = 0; rowIndex < viewport.RowMetrics.Count; rowIndex++)
         {
             var row = viewport.RowMetrics[rowIndex].Row;
-            var selectedRow = row == _session.ActiveCell.Row;
+            var selectedRow = IsSelectedRow(row);
             AddGridChild(grid, CreateHeaderCell(row.ToString(), selectedRow), rowIndex + 1, 0);
 
             for (var colIndex = 0; colIndex < viewport.ColMetrics.Count; colIndex++)
@@ -674,6 +674,12 @@ public sealed class MainWindow : Window
     private static double GetDisplayedRowHeight(RowMetric metric) =>
         Math.Max(MinimumDisplayedRowHeight, metric.Height);
 
+    private bool IsSelectedColumn(uint col) =>
+        _session.SelectedRange.Start.Col <= col && col <= _session.SelectedRange.End.Col;
+
+    private bool IsSelectedRow(uint row) =>
+        _session.SelectedRange.Start.Row <= row && row <= _session.SelectedRange.End.Row;
+
     private Border CreateHeaderCell(string text, bool selected = false) =>
         CreateCellBorder(
             text,
@@ -686,8 +692,8 @@ public sealed class MainWindow : Window
     private Border CreateCell(DisplayCell cell, uint row, uint col)
     {
         var hasCell = cell.Row != 0 && cell.Col != 0;
-        var selected = row == _session.ActiveCell.Row && col == _session.ActiveCell.Col;
         var address = new CellAddress(_session.ActiveSheet.Id, row, col);
+        var selected = _session.SelectedRange.Contains(address);
 
         if (!hasCell)
             return CreateInteractiveCellBorder(
@@ -734,7 +740,10 @@ public sealed class MainWindow : Window
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
-            SelectCell(address);
+            if (args.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                SelectRange(address);
+            else
+                SelectCell(address);
             args.Handled = true;
         };
         border.DoubleTapped += (_, args) =>
@@ -778,6 +787,15 @@ public sealed class MainWindow : Window
             return;
 
         _session.SelectCell(address);
+        RefreshShell("Ready");
+    }
+
+    private void SelectRange(CellAddress address)
+    {
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        _session.SelectRange(new GridRange(_session.ActiveCell, address));
         RefreshShell("Ready");
     }
 
@@ -913,7 +931,7 @@ public sealed class MainWindow : Window
 
     private async void CopyButton_Click(object? sender, RoutedEventArgs e)
     {
-        await CopyActiveCellToClipboardAsync();
+        await CopySelectedRangeToClipboardAsync();
     }
 
     private async void PasteButton_Click(object? sender, RoutedEventArgs e)
@@ -954,7 +972,7 @@ public sealed class MainWindow : Window
         RefreshShell(successStatus);
     }
 
-    private async Task CopyActiveCellToClipboardAsync()
+    private async Task CopySelectedRangeToClipboardAsync()
     {
         if (_isOpening || _isSaving)
             return;
@@ -969,9 +987,9 @@ public sealed class MainWindow : Window
             return;
         }
 
-        var cellReference = FormatCellReference(_session.ActiveCell);
-        await clipboard.SetTextAsync(_session.CopyActiveCellText());
-        RefreshShell($"Copied {cellReference}");
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        await clipboard.SetTextAsync(_session.CopySelectedRangeText());
+        RefreshShell($"Copied {rangeReference}");
     }
 
     private async Task PasteClipboardTextAsync()
@@ -990,14 +1008,8 @@ public sealed class MainWindow : Window
         }
 
         var text = await clipboard.TryGetTextAsync();
-        if (string.IsNullOrEmpty(text))
-        {
-            ShowEditIssue("Clipboard does not contain text.");
-            return;
-        }
-
         var destination = _session.ActiveCell;
-        var result = _session.PasteExternalTextAtActiveCell(text);
+        var result = _session.PasteClipboardTextAtActiveCell(text);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Paste failed.");
@@ -1106,7 +1118,7 @@ public sealed class MainWindow : Window
         else if (e.Key == Key.C)
         {
             e.Handled = true;
-            await CopyActiveCellToClipboardAsync();
+            await CopySelectedRangeToClipboardAsync();
         }
         else if (e.Key == Key.V)
         {
@@ -1660,6 +1672,15 @@ public sealed class MainWindow : Window
 
     private static string FormatCellReference(CellAddress address) =>
         CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string FormatRangeReference(GridRange range)
+    {
+        var start = FormatCellReference(range.Start);
+        var end = FormatCellReference(range.End);
+        return string.Equals(start, end, StringComparison.Ordinal)
+            ? start
+            : $"{start}:{end}";
+    }
 
     private static string FormatEditText(Cell? cell, CellAddress address)
     {

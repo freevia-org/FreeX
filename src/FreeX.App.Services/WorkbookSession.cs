@@ -6,12 +6,18 @@ namespace FreeX.App.Services;
 
 public sealed class WorkbookSession
 {
+    private sealed record InternalClipboard(
+        GridRange SourceRange,
+        IReadOnlyList<(CellAddress Source, Cell Cell)> Cells,
+        string Text);
+
     private readonly IReadOnlyList<IFileAdapter> _adapters;
     private readonly StartupWorkbookLoadResult _source;
     private readonly WorkbookCellEditService _cellEditService;
     private readonly WorkbookSheetSelectionService _sheetSelectionService;
     private readonly IViewportService _viewportService;
     private readonly bool _includeObjects;
+    private InternalClipboard? _internalClipboard;
     private double _viewportHeight;
     private double _viewportWidth;
 
@@ -50,6 +56,7 @@ public sealed class WorkbookSession
         ActiveSheet = selection.Sheet;
         SheetTabs = selection.Tabs;
         ActiveCell = GetInitialActiveCell(ActiveSheet);
+        SelectedRange = new GridRange(ActiveCell, ActiveCell);
         Viewport = BuildViewport();
     }
 
@@ -64,6 +71,8 @@ public sealed class WorkbookSession
     public double ViewportWidth => _viewportWidth;
 
     public CellAddress ActiveCell { get; private set; }
+
+    public GridRange SelectedRange { get; private set; }
 
     public CellAddress? FormulaEditAddress { get; private set; }
 
@@ -97,6 +106,22 @@ public sealed class WorkbookSession
         ActiveCell = address;
         ActiveSheet.ActiveRow = address.Row;
         ActiveSheet.ActiveCol = address.Col;
+        SelectedRange = new GridRange(address, address);
+        FormulaEditAddress = null;
+        EnsureActiveCellVisible();
+    }
+
+    public void SelectRange(GridRange range)
+    {
+        if (!range.Start.Sheet.Equals(ActiveSheet.Id))
+            throw new ArgumentException("Selected range must be on the active sheet.", nameof(range));
+        if (!IsValidAddress(range.Start) || !IsValidAddress(range.End))
+            throw new ArgumentOutOfRangeException(nameof(range), "Selected range must be inside the worksheet bounds.");
+
+        SelectedRange = range;
+        ActiveCell = range.Start;
+        ActiveSheet.ActiveRow = ActiveCell.Row;
+        ActiveSheet.ActiveCol = ActiveCell.Col;
         FormulaEditAddress = null;
         EnsureActiveCellVisible();
     }
@@ -155,6 +180,7 @@ public sealed class WorkbookSession
 
         ActiveSheet = selection.Sheet;
         ActiveCell = GetInitialActiveCell(ActiveSheet);
+        SelectedRange = new GridRange(ActiveCell, ActiveCell);
         FormulaEditAddress = null;
         RefreshViewport();
         return true;
@@ -163,6 +189,9 @@ public sealed class WorkbookSession
     public void BeginFormulaEdit(CellAddress address)
     {
         ActiveCell = address;
+        ActiveSheet.ActiveRow = address.Row;
+        ActiveSheet.ActiveCol = address.Col;
+        SelectedRange = new GridRange(address, address);
         FormulaEditAddress = address;
     }
 
@@ -194,12 +223,42 @@ public sealed class WorkbookSession
         return ClipboardSerializer.Serialize(Viewport, range);
     }
 
+    public string CopySelectedRangeText()
+    {
+        var text = ClipboardSerializer.Serialize(Viewport, SelectedRange);
+        _internalClipboard = CaptureInternalClipboard(SelectedRange, text);
+        return text;
+    }
+
+    public WorkbookCellEditResult PasteClipboardTextAtActiveCell(string? text, bool preserveText = false)
+    {
+        if (_internalClipboard is { } internalClipboard)
+        {
+            if (text is null || string.Equals(internalClipboard.Text, text, StringComparison.Ordinal))
+                return PasteInternalClipboardAtActiveCell(internalClipboard);
+
+            _internalClipboard = null;
+        }
+
+        if (string.IsNullOrEmpty(text))
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Clipboard does not contain text.",
+                [],
+                RecalcReport: null);
+        }
+
+        return PasteExternalTextAtActiveCell(text, preserveText);
+    }
+
     public WorkbookCellEditResult PasteExternalTextAtActiveCell(string text, bool preserveText = false)
     {
         ArgumentNullException.ThrowIfNull(text);
 
         var destination = ActiveCell;
         var rows = ClipboardSerializer.Deserialize(text);
+        var columnCount = rows.Length == 0 ? 0 : rows.Max(static row => row.Length);
         var command = PasteCommandFactory.CreateExternalTextPasteCommand(
             ActiveSheet.Id,
             destination,
@@ -210,6 +269,7 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulEditResult(result, destination);
+        SelectPastedRange(destination, (ulong)rows.Length, (ulong)columnCount);
         return result;
     }
 
@@ -349,10 +409,57 @@ public sealed class WorkbookSession
         }
 
         ActiveCell = address;
+        ActiveSheet.ActiveRow = address.Row;
+        ActiveSheet.ActiveCol = address.Col;
+        SelectedRange = new GridRange(address, address);
         FormulaEditAddress = null;
         IsDirty = true;
         RefreshViewport();
         EnsureActiveCellVisible();
+    }
+
+    private WorkbookCellEditResult PasteInternalClipboardAtActiveCell(InternalClipboard clipboard)
+    {
+        var destination = ActiveCell;
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            Workbook,
+            ActiveSheet.Id,
+            clipboard.SourceRange,
+            clipboard.Cells,
+            destination,
+            PasteCellsMode.All,
+            default);
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulEditResult(result, destination);
+        SelectPastedRange(destination, clipboard.SourceRange.RowCount, clipboard.SourceRange.ColCount);
+        return result;
+    }
+
+    private InternalClipboard CaptureInternalClipboard(GridRange range, string text)
+    {
+        var sheet = Workbook.GetSheet(range.Start.Sheet);
+        var cells = new List<(CellAddress Source, Cell Cell)>();
+        foreach (var address in range.AllCells())
+        {
+            var cell = sheet?.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
+            cells.Add((address, cell));
+        }
+
+        return new InternalClipboard(range, cells, text);
+    }
+
+    private void SelectPastedRange(CellAddress start, ulong rowCount, ulong colCount)
+    {
+        if (rowCount == 0 || colCount == 0)
+            return;
+
+        if (!TryGetRectangleEnd(start, rowCount, colCount, out var end))
+            return;
+
+        SelectedRange = new GridRange(start, end);
     }
 
     private void EnsureActiveCellVisible()
@@ -472,6 +579,36 @@ public sealed class WorkbookSession
     {
         var candidate = (long)value + delta;
         return (uint)Math.Clamp(candidate, 1, max);
+    }
+
+    private static bool IsValidAddress(CellAddress address) =>
+        address.Row is >= 1 and <= CellAddress.MaxRow &&
+        address.Col is >= 1 and <= CellAddress.MaxCol;
+
+    private static bool TryGetRectangleEnd(
+        CellAddress start,
+        ulong rowCount,
+        ulong colCount,
+        out CellAddress end)
+    {
+        end = default;
+        if (!IsValidAddress(start))
+            return false;
+
+        try
+        {
+            var endRow = checked((ulong)start.Row + rowCount - 1UL);
+            var endCol = checked((ulong)start.Col + colCount - 1UL);
+            if (endRow > CellAddress.MaxRow || endCol > CellAddress.MaxCol)
+                return false;
+
+            end = new CellAddress(start.Sheet, (uint)endRow, (uint)endCol);
+            return true;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
     }
 
     private static double NormalizeViewportDimension(double value, double fallback)

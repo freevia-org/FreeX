@@ -270,6 +270,125 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void CopySelectedRangeText_SerializesSelectedRangeAndCapturesInternalClipboard()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var c2 = new CellAddress(sheet.Id, 2, 3);
+        var b3 = new CellAddress(sheet.Id, 3, 2);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(b2, new TextValue("North"));
+        sheet.SetCell(c2, new TextValue("West"));
+        sheet.SetCell(b3, new NumberValue(10));
+        sheet.SetCell(c3, new NumberValue(20));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(c3, b2));
+
+        var text = session.CopySelectedRangeText();
+
+        text.Should().Be("North\tWest\r\n10\t20");
+        session.SelectedRange.Should().Be(new GridRange(b2, c3));
+        session.ActiveCell.Should().Be(b2);
+    }
+
+    [Fact]
+    public void PasteClipboardTextAtActiveCell_UsesInternalClipboardAndRebasesFormulas()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d3 = new CellAddress(sheet.Id, 3, 4);
+        var e3 = new CellAddress(sheet.Id, 3, 5);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetFormula(b1, "A1+1");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CopySelectedRangeText();
+        session.SelectCell(d3);
+
+        var result = session.PasteClipboardTextAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(d3, e3);
+        session.SelectedRange.Should().Be(new GridRange(d3, e3));
+        sheet.GetCell(d3)!.Value.Should().Be(new NumberValue(1));
+        sheet.GetCell(e3)!.FormulaText.Should().Be("D3+1");
+    }
+
+    [Fact]
+    public void PasteClipboardTextAtActiveCell_UsesInternalClipboardWhenPlatformTextCannotBeRead()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("North"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.CopySelectedRangeText();
+        session.SelectCell(c1);
+
+        var result = session.PasteClipboardTextAtActiveCell(null);
+
+        result.Success.Should().BeTrue();
+        sheet.GetValue(c1).Should().Be(new TextValue("North"));
+    }
+
+    [Fact]
+    public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetFormula(a1, "B1+1");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.CopySelectedRangeText();
+        session.SelectCell(c1);
+
+        var result = session.PasteClipboardTextAtActiveCell("100");
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(c1)!.FormulaText.Should().BeNull();
+        sheet.GetValue(c1).Should().Be(new NumberValue(100));
+    }
+
+    [Fact]
+    public void PasteClipboardTextAtActiveCell_RejectsEmptyExternalClipboardText()
+    {
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            CreateWorkbook(),
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.PasteClipboardTextAtActiveCell(null);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("Clipboard does not contain text.");
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void PasteExternalTextAtActiveCell_PastesTabularTextAndMarksDirty()
     {
         var workbook = CreateWorkbook();
@@ -291,6 +410,7 @@ public sealed class WorkbookSessionTests
             new CellAddress(sheet.Id, 4, 2));
         session.IsDirty.Should().BeTrue();
         session.ActiveCell.Should().Be(b3);
+        session.SelectedRange.Should().Be(new GridRange(b3, new CellAddress(sheet.Id, 4, 3)));
         session.CanUndo.Should().BeTrue();
         sheet.GetValue(b3).Should().Be(new NumberValue(10));
         sheet.GetValue(new CellAddress(sheet.Id, 3, 3)).Should().Be(new TextValue("West"));
@@ -394,6 +514,7 @@ public sealed class WorkbookSessionTests
         session.ActiveSheet.Should().BeSameAs(details);
         workbook.ActiveSheetIndex.Should().Be(1);
         session.ActiveCell.Should().Be(new CellAddress(details.Id, 1, 1));
+        session.SelectedRange.Should().Be(new GridRange(session.ActiveCell, session.ActiveCell));
         session.SheetTabs.Should().Equal(
             new WorkbookSheetTab(summary.Id, "Sheet1", IsActive: false),
             new WorkbookSheetTab(details.Id, "Details", IsActive: true));
@@ -489,6 +610,7 @@ public sealed class WorkbookSessionTests
         session.SelectCell(target);
 
         session.ActiveCell.Should().Be(target);
+        session.SelectedRange.Should().Be(new GridRange(target, target));
         session.ActiveSheet.ActiveRow.Should().Be(25);
         session.ActiveSheet.ActiveCol.Should().Be(8);
         session.Viewport.RowMetrics.Select(row => row.Row).Should().Contain(25);
