@@ -21,6 +21,7 @@ namespace FreeX.App.Avalonia;
 
 public sealed class MainWindow : Window
 {
+    private const double CellIndentLevelWidth = 12;
     private const double DoubleUnderlineSecondStrokeOffset = 2;
     private const double HeaderColumnWidth = 58;
     private const double HeaderRowHeight = 28;
@@ -76,6 +77,8 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _alignMiddleButton = new();
     private readonly ToggleButton _alignBottomButton = new();
     private readonly ToggleButton _wrapTextButton = new();
+    private readonly Button _decreaseIndentButton = new();
+    private readonly Button _increaseIndentButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
     private readonly NativeMenuItem _saveAsMenuItem = new();
@@ -97,6 +100,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _alignMiddleMenuItem = new();
     private readonly NativeMenuItem _alignBottomMenuItem = new();
     private readonly NativeMenuItem _wrapTextMenuItem = new();
+    private readonly NativeMenuItem _decreaseIndentMenuItem = new();
+    private readonly NativeMenuItem _increaseIndentMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
     private WorkbookSession _session;
@@ -280,6 +285,12 @@ public sealed class MainWindow : Window
         _wrapTextMenuItem.Header = "Wrap Text";
         _wrapTextMenuItem.Click += (_, _) => ToggleSelectedRangeWrapText();
 
+        _decreaseIndentMenuItem.Header = "Decrease Indent";
+        _decreaseIndentMenuItem.Click += (_, _) => DecreaseSelectedRangeIndent();
+
+        _increaseIndentMenuItem.Header = "Increase Indent";
+        _increaseIndentMenuItem.Click += (_, _) => IncreaseSelectedRangeIndent();
+
         _alignLeftMenuItem.Header = "Align Left";
         _alignLeftMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);
 
@@ -321,6 +332,8 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_alignMiddleMenuItem);
         formatMenu.Items.Add(_alignBottomMenuItem);
         formatMenu.Items.Add(_wrapTextMenuItem);
+        formatMenu.Items.Add(_decreaseIndentMenuItem);
+        formatMenu.Items.Add(_increaseIndentMenuItem);
         formatMenu.Items.Add(_alignLeftMenuItem);
         formatMenu.Items.Add(_alignCenterMenuItem);
         formatMenu.Items.Add(_alignRightMenuItem);
@@ -502,6 +515,16 @@ public sealed class MainWindow : Window
         _wrapTextButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _wrapTextButton.Click += WrapTextButton_Click;
 
+        _decreaseIndentButton.Content = "Out";
+        _decreaseIndentButton.Padding = new Thickness(10, 4);
+        _decreaseIndentButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _decreaseIndentButton.Click += DecreaseIndentButton_Click;
+
+        _increaseIndentButton.Content = "In";
+        _increaseIndentButton.Padding = new Thickness(10, 4);
+        _increaseIndentButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _increaseIndentButton.Click += IncreaseIndentButton_Click;
+
         _alignLeftButton.Content = "L";
         _alignLeftButton.Padding = new Thickness(10, 4);
         _alignLeftButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -563,6 +586,8 @@ public sealed class MainWindow : Window
                     _alignMiddleButton,
                     _alignBottomButton,
                     _wrapTextButton,
+                    _decreaseIndentButton,
+                    _increaseIndentButton,
                     _alignLeftButton,
                     _alignCenterButton,
                     _alignRightButton,
@@ -671,6 +696,8 @@ public sealed class MainWindow : Window
         _alignMiddleButton.IsEnabled = isIdle;
         _alignBottomButton.IsEnabled = isIdle;
         _wrapTextButton.IsEnabled = isIdle;
+        _decreaseIndentButton.IsEnabled = isIdle;
+        _increaseIndentButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
         _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
@@ -693,6 +720,8 @@ public sealed class MainWindow : Window
         _alignMiddleMenuItem.IsEnabled = _alignMiddleButton.IsEnabled;
         _alignBottomMenuItem.IsEnabled = _alignBottomButton.IsEnabled;
         _wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;
+        _decreaseIndentMenuItem.IsEnabled = _decreaseIndentButton.IsEnabled;
+        _increaseIndentMenuItem.IsEnabled = _increaseIndentButton.IsEnabled;
     }
 
     private Control BuildSheetTabs()
@@ -998,6 +1027,7 @@ public sealed class MainWindow : Window
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
         var textDecorations = BuildTextDecorations(style);
+        var indentPadding = GetCellIndentPadding(style);
 
         return CreateInteractiveCellBorder(
             cell.DisplayText,
@@ -1010,7 +1040,8 @@ public sealed class MainWindow : Window
             fontStyle,
             textDecorations,
             selected,
-            address);
+            address,
+            indentPadding);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -1024,9 +1055,21 @@ public sealed class MainWindow : Window
         FontStyle fontStyle,
         TextDecorationCollection? textDecorations,
         bool selected,
-        CellAddress address)
+        CellAddress address,
+        double indentPadding = 0)
     {
-        var border = CreateCellBorder(text, background, foreground, textAlignment, verticalAlignment, textWrapping, fontWeight, fontStyle, textDecorations, selected);
+        var border = CreateCellBorder(
+            text,
+            background,
+            foreground,
+            textAlignment,
+            verticalAlignment,
+            textWrapping,
+            fontWeight,
+            fontStyle,
+            textDecorations,
+            selected,
+            indentPadding);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -1054,14 +1097,15 @@ public sealed class MainWindow : Window
         FontWeight fontWeight,
         FontStyle fontStyle,
         TextDecorationCollection? textDecorations,
-        bool selected)
+        bool selected,
+        double indentPadding = 0)
     {
         return new Border
         {
             Background = background,
             BorderBrush = selected ? SelectionBorder : GridLine,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 0),
+            Padding = new Thickness(8 + indentPadding, 0, 8, 0),
             Child = new TextBlock
             {
                 Text = text,
@@ -1079,6 +1123,9 @@ public sealed class MainWindow : Window
             },
         };
     }
+
+    private static double GetCellIndentPadding(CellStyle? style) =>
+        style is null ? 0 : Math.Clamp(style.IndentLevel, 0, 15) * CellIndentLevelWidth;
 
     private static TextDecorationCollection? BuildTextDecorations(CellStyle? style)
     {
@@ -1344,6 +1391,16 @@ public sealed class MainWindow : Window
         ApplySelectedRangeWrapText(_wrapTextButton.IsChecked == true);
     }
 
+    private void DecreaseIndentButton_Click(object? sender, RoutedEventArgs e)
+    {
+        DecreaseSelectedRangeIndent();
+    }
+
+    private void IncreaseIndentButton_Click(object? sender, RoutedEventArgs e)
+    {
+        IncreaseSelectedRangeIndent();
+    }
+
     private void AlignLeftButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);
@@ -1506,6 +1563,46 @@ public sealed class MainWindow : Window
     private void ToggleSelectedRangeWrapText()
     {
         ApplySelectedRangeWrapText(!_session.IsSelectedRangeStartWrapText);
+    }
+
+    private void DecreaseSelectedRangeIndent()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.DecreaseSelectedRangeIndent();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Decrease Indent failed.");
+            return;
+        }
+
+        RefreshShell($"Decreased indent for {rangeReference}");
+    }
+
+    private void IncreaseSelectedRangeIndent()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.IncreaseSelectedRangeIndent();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Increase Indent failed.");
+            return;
+        }
+
+        RefreshShell($"Increased indent for {rangeReference}");
     }
 
     private void ApplySelectedRangeBold(bool enabled)
@@ -1743,6 +1840,8 @@ public sealed class MainWindow : Window
             HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, "Align Middle", requireGesture: false),
             HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, "Align Bottom", requireGesture: false),
             HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, "Wrap Text", requireGesture: false),
+            HasNativeDecreaseIndentMenuItem: HasNativeMenuItem(_decreaseIndentMenuItem, "Decrease Indent", requireGesture: false),
+            HasNativeIncreaseIndentMenuItem: HasNativeMenuItem(_increaseIndentMenuItem, "Increase Indent", requireGesture: false),
             HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, "Align Left", requireGesture: false),
             HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, "Align Center", requireGesture: false),
             HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, "Align Right", requireGesture: false),

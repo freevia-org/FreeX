@@ -86,6 +86,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeAlignMiddleMenuItem,
     bool HasNativeAlignBottomMenuItem,
     bool HasNativeWrapTextMenuItem,
+    bool HasNativeDecreaseIndentMenuItem,
+    bool HasNativeIncreaseIndentMenuItem,
     bool HasNativeAlignLeftMenuItem,
     bool HasNativeAlignCenterMenuItem,
     bool HasNativeAlignRightMenuItem,
@@ -118,6 +120,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeAlignMiddleMenuItem &&
         HasNativeAlignBottomMenuItem &&
         HasNativeWrapTextMenuItem &&
+        HasNativeDecreaseIndentMenuItem &&
+        HasNativeIncreaseIndentMenuItem &&
         HasNativeAlignLeftMenuItem &&
         HasNativeAlignCenterMenuItem &&
         HasNativeAlignRightMenuItem &&
@@ -198,6 +202,8 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}",
                 $"native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}",
                 $"native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}",
+                $"native_decrease_indent_menu_item={FormatBool(snapshot.HasNativeDecreaseIndentMenuItem)}",
+                $"native_increase_indent_menu_item={FormatBool(snapshot.HasNativeIncreaseIndentMenuItem)}",
                 $"native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}",
                 $"native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}",
                 $"native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}",

@@ -1196,6 +1196,132 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeIndentLevel_AppliesClampedStylePreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.SetSelectedRangeIndentLevel(99);
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartIndentLevel.Should().Be(15);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).IndentLevel.Should().Be(15);
+        var b1StyleOnly = sheet.GetStyleOnly(b1.Row, b1.Col);
+        b1StyleOnly.Should().NotBeNull();
+        workbook.GetStyle(b1StyleOnly!.Value).IndentLevel.Should().Be(15);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).IndentLevel.Should().Be(0);
+        sheet.GetStyleOnly(b1.Row, b1.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void IncreaseSelectedRangeIndent_IncrementsFromSelectedRangeStartAndClampsAtFifteen()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { IndentLevel = 15 });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.IncreaseSelectedRangeIndent();
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartIndentLevel.Should().Be(15);
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).IndentLevel.Should().Be(15);
+    }
+
+    [Fact]
+    public void DecreaseSelectedRangeIndent_DecrementsFromSelectedRangeStartAndClampsAtZero()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { IndentLevel = 1 });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var firstDecrease = session.DecreaseSelectedRangeIndent();
+        var secondDecrease = session.DecreaseSelectedRangeIndent();
+
+        firstDecrease.Success.Should().BeTrue();
+        secondDecrease.Success.Should().BeTrue();
+        session.SelectedRangeStartIndentLevel.Should().Be(0);
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).IndentLevel.Should().Be(0);
+    }
+
+    [Fact]
+    public void SelectedRangeStartIndentLevel_UsesStyleOnlyFormattingForEmptyCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        session.SetSelectedRangeIndentLevel(4);
+
+        sheet.GetCell(a1).Should().BeNull();
+        sheet.GetStyleOnly(a1.Row, a1.Col).Should().NotBeNull();
+        session.SelectedRangeStartIndentLevel.Should().Be(4);
+    }
+
+    [Fact]
+    public void IncreaseSelectedRangeIndent_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { IndentLevel = 2 });
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.IncreaseSelectedRangeIndent();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).IndentLevel.Should().Be(2);
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();

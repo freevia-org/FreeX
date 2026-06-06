@@ -129,6 +129,9 @@ public sealed class WorkbookSession
     public VerticalAlignment SelectedRangeStartVerticalAlignment =>
         GetCellStyle(SelectedRange.Start).VerticalAlignment;
 
+    public int SelectedRangeStartIndentLevel =>
+        GetCellStyle(SelectedRange.Start).IndentLevel;
+
     public WorkbookSelectionStats SelectionStats =>
         _selectionStatsCache.GetOrCalculate(ActiveSheet, SelectedRange, _selectionStatsRevision);
 
@@ -424,6 +427,28 @@ public sealed class WorkbookSession
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(WrapText: enabled)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult IncreaseSelectedRangeIndent() =>
+        SetSelectedRangeIndentLevel(Math.Min(15, SelectedRangeStartIndentLevel + 1));
+
+    public WorkbookCellEditResult DecreaseSelectedRangeIndent() =>
+        SetSelectedRangeIndentLevel(Math.Max(0, SelectedRangeStartIndentLevel - 1));
+
+    public WorkbookCellEditResult SetSelectedRangeIndentLevel(int indentLevel)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(
+                ActiveSheet.Id,
+                range,
+                new StyleDiff(IndentLevel: Math.Clamp(indentLevel, 0, 15))));
         if (!result.Success)
             return result;
 

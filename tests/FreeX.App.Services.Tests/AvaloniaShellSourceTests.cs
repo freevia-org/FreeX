@@ -81,6 +81,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _alignMiddleMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _alignBottomMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _wrapTextMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _decreaseIndentMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _increaseIndentMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
@@ -130,6 +132,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_alignBottomMenuItem.Click += (_, _) => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom);");
         source.Should().Contain("_wrapTextMenuItem.Header = \"Wrap Text\";");
         source.Should().Contain("_wrapTextMenuItem.Click += (_, _) => ToggleSelectedRangeWrapText();");
+        source.Should().Contain("_decreaseIndentMenuItem.Header = \"Decrease Indent\";");
+        source.Should().Contain("_decreaseIndentMenuItem.Click += (_, _) => DecreaseSelectedRangeIndent();");
+        source.Should().Contain("_increaseIndentMenuItem.Header = \"Increase Indent\";");
+        source.Should().Contain("_increaseIndentMenuItem.Click += (_, _) => IncreaseSelectedRangeIndent();");
         source.Should().Contain("_alignLeftMenuItem.Header = \"Align Left\";");
         source.Should().Contain("_alignLeftMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left);");
         source.Should().Contain("_alignCenterMenuItem.Header = \"Align Center\";");
@@ -154,6 +160,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_alignMiddleMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignBottomMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_wrapTextMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_decreaseIndentMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_increaseIndentMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignLeftMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignCenterMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_alignRightMenuItem);");
@@ -179,6 +187,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_alignMiddleMenuItem.IsEnabled = _alignMiddleButton.IsEnabled;");
         source.Should().Contain("_alignBottomMenuItem.IsEnabled = _alignBottomButton.IsEnabled;");
         source.Should().Contain("_wrapTextMenuItem.IsEnabled = _wrapTextButton.IsEnabled;");
+        source.Should().Contain("_decreaseIndentMenuItem.IsEnabled = _decreaseIndentButton.IsEnabled;");
+        source.Should().Contain("_increaseIndentMenuItem.IsEnabled = _increaseIndentButton.IsEnabled;");
         source.Should().Contain("_alignLeftMenuItem.IsEnabled = _alignLeftButton.IsEnabled;");
         source.Should().Contain("_alignCenterMenuItem.IsEnabled = _alignCenterButton.IsEnabled;");
         source.Should().Contain("_alignRightMenuItem.IsEnabled = _alignRightButton.IsEnabled;");
@@ -229,6 +239,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_align_middle_menu_item={FormatBool(snapshot.HasNativeAlignMiddleMenuItem)}");
         smokeSource.Should().Contain("native_align_bottom_menu_item={FormatBool(snapshot.HasNativeAlignBottomMenuItem)}");
         smokeSource.Should().Contain("native_wrap_text_menu_item={FormatBool(snapshot.HasNativeWrapTextMenuItem)}");
+        smokeSource.Should().Contain("native_decrease_indent_menu_item={FormatBool(snapshot.HasNativeDecreaseIndentMenuItem)}");
+        smokeSource.Should().Contain("native_increase_indent_menu_item={FormatBool(snapshot.HasNativeIncreaseIndentMenuItem)}");
         smokeSource.Should().Contain("native_align_left_menu_item={FormatBool(snapshot.HasNativeAlignLeftMenuItem)}");
         smokeSource.Should().Contain("native_align_center_menu_item={FormatBool(snapshot.HasNativeAlignCenterMenuItem)}");
         smokeSource.Should().Contain("native_align_right_menu_item={FormatBool(snapshot.HasNativeAlignRightMenuItem)}");
@@ -257,6 +269,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, \"Align Middle\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, \"Align Bottom\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, \"Wrap Text\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeDecreaseIndentMenuItem: HasNativeMenuItem(_decreaseIndentMenuItem, \"Decrease Indent\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeIncreaseIndentMenuItem: HasNativeMenuItem(_increaseIndentMenuItem, \"Increase Indent\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, \"Align Left\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, \"Align Center\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, \"Align Right\", requireGesture: false)");
@@ -586,6 +600,36 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("TextTrimming = textWrapping == TextWrapping.Wrap");
         source.Should().Contain("? TextTrimming.None");
         source.Should().Contain(": TextTrimming.CharacterEllipsis");
+    }
+
+    [Fact]
+    public void MainWindow_WiresIndentThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private const double CellIndentLevelWidth = 12;");
+        source.Should().Contain("private readonly Button _decreaseIndentButton = new();");
+        source.Should().Contain("private readonly Button _increaseIndentButton = new();");
+        source.Should().Contain("_decreaseIndentButton.Content = \"Out\";");
+        source.Should().Contain("_increaseIndentButton.Content = \"In\";");
+        source.Should().Contain("_decreaseIndentButton.Click += DecreaseIndentButton_Click;");
+        source.Should().Contain("_increaseIndentButton.Click += IncreaseIndentButton_Click;");
+        source.Should().Contain("_decreaseIndentButton.IsEnabled = isIdle;");
+        source.Should().Contain("_increaseIndentButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void DecreaseIndentButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void IncreaseIndentButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void DecreaseSelectedRangeIndent()");
+        source.Should().Contain("var result = _session.DecreaseSelectedRangeIndent();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Decrease Indent failed.\");");
+        source.Should().Contain("RefreshShell($\"Decreased indent for {rangeReference}\");");
+        source.Should().Contain("private void IncreaseSelectedRangeIndent()");
+        source.Should().Contain("var result = _session.IncreaseSelectedRangeIndent();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Increase Indent failed.\");");
+        source.Should().Contain("RefreshShell($\"Increased indent for {rangeReference}\");");
+        source.Should().Contain("var indentPadding = GetCellIndentPadding(style);");
+        source.Should().Contain("private static double GetCellIndentPadding(CellStyle? style)");
+        source.Should().Contain("Math.Clamp(style.IndentLevel, 0, 15) * CellIndentLevelWidth;");
+        source.Should().Contain("Padding = new Thickness(8 + indentPadding, 0, 8, 0),");
     }
 
     [Fact]
