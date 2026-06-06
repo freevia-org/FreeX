@@ -1186,6 +1186,15 @@ public static partial class AccessibilityCheckerService
             case "DAY":
                 kind = ConditionalFormulaScalarFunctionKind.Day;
                 return true;
+            case "HOUR":
+                kind = ConditionalFormulaScalarFunctionKind.Hour;
+                return true;
+            case "MINUTE":
+                kind = ConditionalFormulaScalarFunctionKind.Minute;
+                return true;
+            case "SECOND":
+                kind = ConditionalFormulaScalarFunctionKind.Second;
+                return true;
             case "TODAY":
                 kind = ConditionalFormulaScalarFunctionKind.Today;
                 return true;
@@ -1293,6 +1302,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Year or
             ConditionalFormulaScalarFunctionKind.Month or
             ConditionalFormulaScalarFunctionKind.Day or
+            ConditionalFormulaScalarFunctionKind.Hour or
+            ConditionalFormulaScalarFunctionKind.Minute or
+            ConditionalFormulaScalarFunctionKind.Second or
             ConditionalFormulaScalarFunctionKind.IsoWeeknum => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
@@ -1976,6 +1988,9 @@ public static partial class AccessibilityCheckerService
         Year,
         Month,
         Day,
+        Hour,
+        Minute,
+        Second,
         Today,
         Now,
         Weekday,
@@ -2611,6 +2626,9 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Year:
                 case ConditionalFormulaScalarFunctionKind.Month:
                 case ConditionalFormulaScalarFunctionKind.Day:
+                case ConditionalFormulaScalarFunctionKind.Hour:
+                case ConditionalFormulaScalarFunctionKind.Minute:
+                case ConditionalFormulaScalarFunctionKind.Second:
                 case ConditionalFormulaScalarFunctionKind.Today:
                 case ConditionalFormulaScalarFunctionKind.Now:
                 case ConditionalFormulaScalarFunctionKind.Weekday:
@@ -3366,6 +3384,28 @@ public static partial class AccessibilityCheckerService
                         _ => ErrorValue.Value
                     };
                     return value is NumberValue;
+                case ConditionalFormulaScalarFunctionKind.Hour:
+                case ConditionalFormulaScalarFunctionKind.Minute:
+                case ConditionalFormulaScalarFunctionKind.Second:
+                    if (!TryResolveFormulaFunctionTimeParts(
+                            function.Arguments[0],
+                            rowOffset,
+                            colOffset,
+                            out var hour,
+                            out var minute,
+                            out var second))
+                    {
+                        return false;
+                    }
+
+                    value = function.Kind switch
+                    {
+                        ConditionalFormulaScalarFunctionKind.Hour => new NumberValue(hour),
+                        ConditionalFormulaScalarFunctionKind.Minute => new NumberValue(minute),
+                        ConditionalFormulaScalarFunctionKind.Second => new NumberValue(second),
+                        _ => ErrorValue.Value
+                    };
+                    return value is NumberValue;
                 case ConditionalFormulaScalarFunctionKind.Weekday:
                     if (!TryResolveFormulaFunctionDateSerial(function.Arguments[0], rowOffset, colOffset, out var weekdaySerial) ||
                         !TryResolveFormulaOptionalReturnType(function, 1, rowOffset, colOffset, defaultValue: 1, out var weekdayReturnType) ||
@@ -3560,6 +3600,32 @@ public static partial class AccessibilityCheckerService
                 IsValidFormulaWeekDateSerial(serial);
         }
 
+        private bool TryResolveFormulaFunctionTimeParts(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out int hour,
+            out int minute,
+            out int second)
+        {
+            hour = 0;
+            minute = 0;
+            second = 0;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value) ||
+                !TryGetFormulaArithmeticNumber(value, out var serial) ||
+                !IsValidFormulaTimeSerial(serial))
+            {
+                return false;
+            }
+
+            var fraction = serial - Math.Floor(serial);
+            var totalSeconds = (int)Math.Floor(fraction * 86400.0 + 1e-9) % 86400;
+            hour = totalSeconds / 3600;
+            minute = totalSeconds % 3600 / 60;
+            second = totalSeconds % 60;
+            return true;
+        }
+
         private bool TryResolveFormulaOptionalReturnType(
             ConditionalFormulaScalarFunction function,
             int argumentIndex,
@@ -3665,6 +3731,9 @@ public static partial class AccessibilityCheckerService
 
         private static bool IsValidFormulaWeekDateSerial(double serial) =>
             double.IsFinite(serial) && serial >= 0 && serial < 2958466.0;
+
+        private static bool IsValidFormulaTimeSerial(double serial) =>
+            double.IsFinite(serial) && serial >= 0 && serial <= 2958465.0;
 
         private static int FormulaExcelDowToMonIndex(DateTime date)
         {

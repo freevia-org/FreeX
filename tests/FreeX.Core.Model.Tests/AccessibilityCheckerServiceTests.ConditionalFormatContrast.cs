@@ -2800,6 +2800,15 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM($A1)=11", "B1", "B2");
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(DATE(2021,1,1))=53", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("WEEKNUM(DATE(2021,1,1),21)=53", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("HOUR($D1)=12", "B2");
+        AssertFormulaDateFunctionContrastLocations("MINUTE($D1)=5", "B3");
+        AssertFormulaDateFunctionContrastLocations("SECOND($D1)=59", "B4");
+        AssertFormulaDateFunctionContrastLocations("HOUR(1.25)=6", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("MINUTE(1.5242592592592593)=34", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SECOND(1.5242592592592593)=56", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("HOUR($A1)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("MINUTE(45000)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SECOND(2958465)=0", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -2816,6 +2825,11 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("ISNUMBER(ISOWEEKNUM($A1))", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEAR($A1)-2023", "B3");
         AssertFormulaDateFunctionContrastLocations("WEEKNUM($A1)+WEEKDAY($A1)=15", "B1");
+        AssertFormulaDateFunctionContrastLocations("IF(HOUR($D1)>=12,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(MINUTE($D1)),SECOND($D1)>=7)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNUMBER(HOUR($D1))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("HOUR($D1)", "B1", "B2", "B4");
+        AssertFormulaDateFunctionContrastLocations("HOUR($D1)+MINUTE($D1)=46", "B2");
     }
 
     [Fact]
@@ -2824,6 +2838,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("SUM(DAY($A1),MONTH($A1))>=19", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("SUM(DAY(TODAY()),MONTH(TODAY()))>=2", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("SUM(WEEKDAY($A1),WEEKNUM($A1))=15", "B1");
+        AssertFormulaDateFunctionContrastLocations("SUM(HOUR($D1),MINUTE($D1),SECOND($D1))=141", "B4");
     }
 
     [Fact]
@@ -2851,6 +2866,12 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(\"2021-01-01\")>0");
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM($A1,1)>0");
         AssertFormulaDateFunctionContrastLocations("ISOWEEKNUM(2958466)>0");
+        AssertFormulaDateFunctionContrastLocations("HOUR(\"0.5\")>0");
+        AssertFormulaDateFunctionContrastLocations("MINUTE(-1)>0");
+        AssertFormulaDateFunctionContrastLocations("SECOND(2958465.1)>0");
+        AssertFormulaDateFunctionContrastLocations("HOUR($D1,1)>0");
+        AssertFormulaDateFunctionContrastLocations("MINUTE(A0)>0");
+        AssertFormulaDateFunctionContrastLocations("SECOND(1E308)>0");
     }
 
     [Fact]
@@ -3455,10 +3476,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         firstLabel = new CellAddress(sheet.Id, 1, 2);
         lastLabel = new CellAddress(sheet.Id, 4, 2);
 
-        SetFormulaDateFunctionContrastRow(sheet, 1, new DateTime(2023, 3, 15), "Closed", "March midpoint");
-        SetFormulaDateFunctionContrastRow(sheet, 2, new DateTime(2023, 3, 16), "Closed", "March second half");
-        SetFormulaDateFunctionContrastRow(sheet, 3, new DateTime(2024, 3, 20), "Open", "Next March");
-        SetFormulaDateFunctionContrastRow(sheet, 4, new DateTime(2023, 4, 20), "Open", "April second half");
+        SetFormulaDateFunctionContrastRow(sheet, 1, new DateTime(2023, 3, 15), "Closed", "March midpoint", 45000.25);
+        SetFormulaDateFunctionContrastRow(sheet, 2, new DateTime(2023, 3, 16), "Closed", "March second half", 1.5242592592592593);
+        SetFormulaDateFunctionContrastRow(sheet, 3, new DateTime(2024, 3, 20), "Open", "Next March", 2.0035532407407406);
+        SetFormulaDateFunctionContrastRow(sheet, 4, new DateTime(2023, 4, 20), "Open", "April second half", 3.999988425925926);
 
         return workbook;
     }
@@ -3468,11 +3489,13 @@ public sealed partial class AccessibilityCheckerServiceTests
         uint row,
         DateTime date,
         string status,
-        string label)
+        string label,
+        double timeSerial)
     {
         sheet.SetCell(new CellAddress(sheet.Id, row, 1), DateTimeValue.FromDateTime(date));
         sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue(status));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(timeSerial));
     }
 
     private static Workbook CreateFormulaDateBooleanArithmeticContrastWorkbook(
