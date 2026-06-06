@@ -165,6 +165,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookCalculationPropertySchemaIssues: false,
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -230,6 +231,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookCalculationPropertySchemaIssues: false,
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -267,6 +269,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookCalculationPropertySchemaIssues: false,
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -300,6 +303,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookCalculationPropertySchemaIssues: false,
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -362,6 +366,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookCalculationPropertySchemaIssues: false,
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -440,6 +445,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasWorkbookCalculationPropertySchemaIssues: false,
             HasWorkbookFileSharingSchemaIssues: false,
             HasWorkbookFileRecoveryPropertySchemaIssues: false,
+            HasWorkbookProtectionSchemaIssues: false,
             MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "xl/worksheets/sheet1.xml"

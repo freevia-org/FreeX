@@ -396,6 +396,7 @@ internal static class XlsxWorkbookMetadataWriter
             protection.SetAttributeValue("lockStructure", "1");
         if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
             protection.SetAttributeValue("workbookPassword", XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(workbook.StructureProtectionPassword));
+        XlsxWorkbookProtectionNormalizer.NormalizeElement(protection);
 
         InsertWorkbookProtectionInOrder(root, protection);
 

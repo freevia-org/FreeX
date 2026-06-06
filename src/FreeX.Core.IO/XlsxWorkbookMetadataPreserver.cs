@@ -276,13 +276,19 @@ internal static class XlsxWorkbookMetadataPreserver
         var targetWorkbookProtection = targetRoot.Element(workbookNs + "workbookProtection");
         if (targetWorkbookProtection is null)
         {
-            targetRoot.AddFirst(new XElement(sourceWorkbookProtection));
+            var clone = new XElement(sourceWorkbookProtection);
+            XlsxWorkbookProtectionNormalizer.NormalizeElement(clone);
+            targetRoot.AddFirst(clone);
             return true;
         }
 
-        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+        var changed = XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
             sourceWorkbookProtection,
             targetWorkbookProtection);
+        if (XlsxWorkbookProtectionNormalizer.NormalizeElement(targetWorkbookProtection))
+            changed = true;
+
+        return changed;
     }
 
     private static bool MergeCalculationProperties(XElement? sourceCalculationProperties, XElement targetRoot, XNamespace workbookNs)
