@@ -137,7 +137,7 @@ public sealed partial class ChartDialogTests
             var picker = WpfTestTree.FindLogicalDescendants<Button>(dialog)
                 .Single(button => AutomationProperties.GetName(button) == "Select chart data range");
 
-            picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            DialogSourceTestSupport.ClickButton(picker);
 
             requests.Should().Equal(new SelectDataSourceRangeSelectionRequest("A1:D12", CollapseDialog: true));
             dialog.RangeSelectionRequest.Should().Be(requests[0]);

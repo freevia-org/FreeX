@@ -402,7 +402,7 @@ public sealed class NamedRangeDialogXamlTests
             try
             {
                 var picker = DialogSourceTestSupport.GetPrivateField<Button>(dialog, "_rangePickerButton");
-                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                DialogSourceTestSupport.ClickButton(picker);
 
                 requests.Should().Equal(new NamedRangeSelectionRequest(
                     NamedRangeSelectionTarget.DefinitionRefersTo,

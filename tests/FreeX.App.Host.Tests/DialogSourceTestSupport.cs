@@ -89,6 +89,24 @@ internal static class DialogSourceTestSupport
             RoutedEvent = Control.MouseDoubleClickEvent
         };
 
+    public static RoutedEventArgs CreateButtonClickEvent() =>
+        new(Button.ClickEvent);
+
+    public static void ClickButton(Button button) =>
+        button.RaiseEvent(CreateButtonClickEvent());
+
+    public static void ClickButtonAllowingNonModalDialogResult(Button button)
+    {
+        try
+        {
+            ClickButton(button);
+        }
+        catch (InvalidOperationException invalidOperation)
+            when (invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+        }
+    }
+
     private static string ReadHostSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", fileName);
 
