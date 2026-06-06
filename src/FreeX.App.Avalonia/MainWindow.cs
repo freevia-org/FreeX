@@ -64,6 +64,7 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _boldButton = new();
     private readonly ToggleButton _italicButton = new();
     private readonly ToggleButton _underlineButton = new();
+    private readonly ToggleButton _doubleUnderlineButton = new();
     private readonly ToggleButton _strikethroughButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
     private readonly NativeMenuItem _saveMenuItem = new();
@@ -77,6 +78,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
     private readonly NativeMenuItem _underlineMenuItem = new();
+    private readonly NativeMenuItem _doubleUnderlineMenuItem = new();
     private readonly NativeMenuItem _strikethroughMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
     private NativeMenu? _nativeMenu;
@@ -242,6 +244,9 @@ public sealed class MainWindow : Window
         _underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);
         _underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline();
 
+        _doubleUnderlineMenuItem.Header = "Double Underline";
+        _doubleUnderlineMenuItem.Click += (_, _) => ToggleSelectedRangeDoubleUnderline();
+
         _strikethroughMenuItem.Header = "Strikethrough";
         _strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);
         _strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();
@@ -271,6 +276,7 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_boldMenuItem);
         formatMenu.Items.Add(_italicMenuItem);
         formatMenu.Items.Add(_underlineMenuItem);
+        formatMenu.Items.Add(_doubleUnderlineMenuItem);
         formatMenu.Items.Add(_strikethroughMenuItem);
 
         _nativeMenu = new NativeMenu();
@@ -393,6 +399,34 @@ public sealed class MainWindow : Window
         _underlineButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _underlineButton.Click += UnderlineButton_Click;
 
+        _doubleUnderlineButton.Content = new StackPanel
+        {
+            Spacing = 1,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "U",
+                    FontWeight = FontWeight.SemiBold,
+                },
+                new Border
+                {
+                    Height = 1,
+                    Width = 12,
+                    Background = Brush(25, 31, 40),
+                },
+                new Border
+                {
+                    Height = 1,
+                    Width = 12,
+                    Background = Brush(25, 31, 40),
+                },
+            },
+        };
+        _doubleUnderlineButton.Padding = new Thickness(10, 3);
+        _doubleUnderlineButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _doubleUnderlineButton.Click += DoubleUnderlineButton_Click;
+
         _strikethroughButton.Content = new TextBlock
         {
             Text = "S",
@@ -442,6 +476,7 @@ public sealed class MainWindow : Window
                     _boldButton,
                     _italicButton,
                     _underlineButton,
+                    _doubleUnderlineButton,
                     _strikethroughButton,
                     _cellAddressText,
                     _formulaBox,
@@ -471,6 +506,7 @@ public sealed class MainWindow : Window
         _boldButton.IsChecked = _session.IsSelectedRangeStartBold;
         _italicButton.IsChecked = _session.IsSelectedRangeStartItalic;
         _underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;
+        _doubleUnderlineButton.IsChecked = _session.IsSelectedRangeStartDoubleUnderline;
         _strikethroughButton.IsChecked = _session.IsSelectedRangeStartStrikethrough;
         if (preserveFormulaEdit)
         {
@@ -531,6 +567,7 @@ public sealed class MainWindow : Window
         _boldButton.IsEnabled = isIdle;
         _italicButton.IsEnabled = isIdle;
         _underlineButton.IsEnabled = isIdle;
+        _doubleUnderlineButton.IsEnabled = isIdle;
         _strikethroughButton.IsEnabled = isIdle;
 
         _openMenuItem.IsEnabled = _openButton.IsEnabled;
@@ -545,6 +582,7 @@ public sealed class MainWindow : Window
         _boldMenuItem.IsEnabled = _boldButton.IsEnabled;
         _italicMenuItem.IsEnabled = _italicButton.IsEnabled;
         _underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;
+        _doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;
         _strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;
     }
 
@@ -1122,6 +1160,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeUnderline(_underlineButton.IsChecked == true);
     }
 
+    private void DoubleUnderlineButton_Click(object? sender, RoutedEventArgs e)
+    {
+        ApplySelectedRangeDoubleUnderline(_doubleUnderlineButton.IsChecked == true);
+    }
+
     private void StrikethroughButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeStrikethrough(_strikethroughButton.IsChecked == true);
@@ -1261,6 +1304,11 @@ public sealed class MainWindow : Window
         ApplySelectedRangeUnderline(!_session.IsSelectedRangeStartUnderline);
     }
 
+    private void ToggleSelectedRangeDoubleUnderline()
+    {
+        ApplySelectedRangeDoubleUnderline(!_session.IsSelectedRangeStartDoubleUnderline);
+    }
+
     private void ToggleSelectedRangeStrikethrough()
     {
         ApplySelectedRangeStrikethrough(!_session.IsSelectedRangeStartStrikethrough);
@@ -1324,6 +1372,26 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell($"{(enabled ? "Underlined" : "Removed underline from")} {rangeReference}");
+    }
+
+    private void ApplySelectedRangeDoubleUnderline(bool enabled)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeDoubleUnderline(enabled);
+        if (!result.Success)
+        {
+            _doubleUnderlineButton.IsChecked = _session.IsSelectedRangeStartDoubleUnderline;
+            ShowEditIssue(result.ErrorMessage ?? "Double Underline failed.");
+            return;
+        }
+
+        RefreshShell($"{(enabled ? "Double underlined" : "Removed double underline from")} {rangeReference}");
     }
 
     private void ApplySelectedRangeStrikethrough(bool enabled)
@@ -1414,13 +1482,14 @@ public sealed class MainWindow : Window
             HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, "Bold"),
             HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, "Italic"),
             HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, "Underline"),
+            HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, "Double Underline", requireGesture: false),
             HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, "Strikethrough"),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
     }
 
-    private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader) =>
+    private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
-        item.Gesture is not null;
+        (!requireGesture || item.Gesture is not null);
 
     private static bool HasOnlyCommandModifier(KeyModifiers modifiers)
     {

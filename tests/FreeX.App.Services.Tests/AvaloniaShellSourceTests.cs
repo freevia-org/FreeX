@@ -72,6 +72,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _boldMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _italicMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _underlineMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _doubleUnderlineMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _strikethroughMenuItem = new();");
         source.Should().Contain("_openMenuItem.Header = \"Open...\";");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
@@ -109,6 +110,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_underlineMenuItem.Header = \"Underline\";");
         source.Should().Contain("_underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);");
         source.Should().Contain("_underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline();");
+        source.Should().Contain("_doubleUnderlineMenuItem.Header = \"Double Underline\";");
+        source.Should().Contain("_doubleUnderlineMenuItem.Click += (_, _) => ToggleSelectedRangeDoubleUnderline();");
         source.Should().Contain("_strikethroughMenuItem.Header = \"Strikethrough\";");
         source.Should().Contain("_strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);");
         source.Should().Contain("_strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();");
@@ -124,6 +127,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_boldMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_italicMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_underlineMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_doubleUnderlineMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_strikethroughMenuItem);");
         source.Should().Contain("Header = \"Edit\"");
         source.Should().Contain("Header = \"Format\"");
@@ -141,6 +145,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_boldMenuItem.IsEnabled = _boldButton.IsEnabled;");
         source.Should().Contain("_italicMenuItem.IsEnabled = _italicButton.IsEnabled;");
         source.Should().Contain("_underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;");
+        source.Should().Contain("_doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;");
         source.Should().Contain("_strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;");
         source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("await SaveWorkbookAsAsync();");
@@ -183,6 +188,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}");
         smokeSource.Should().Contain("native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}");
         smokeSource.Should().Contain("native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}");
+        smokeSource.Should().Contain("native_double_underline_menu_item={FormatBool(snapshot.HasNativeDoubleUnderlineMenuItem)}");
         smokeSource.Should().Contain("native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}");
         smokeSource.Should().Contain("desktop.TryShutdown(exitCode);");
         windowSource.Should().Contain("private readonly NativeMenuItem _quitMenuItem = new();");
@@ -203,6 +209,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, \"Bold\")");
         windowSource.Should().Contain("HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, \"Italic\")");
         windowSource.Should().Contain("HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, \"Underline\")");
+        windowSource.Should().Contain("HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, \"Double Underline\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, \"Strikethrough\")");
         windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
     }
@@ -446,6 +453,31 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("else if (e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers))");
         source.Should().Contain("else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeUnderline();");
+    }
+
+    [Fact]
+    public void MainWindow_WiresDoubleUnderlineThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly ToggleButton _doubleUnderlineButton = new();");
+        source.Should().Contain("_doubleUnderlineButton.Content = new StackPanel");
+        source.Should().Contain("Text = \"U\",");
+        source.Should().Contain("new Border");
+        source.Should().Contain("_doubleUnderlineButton.Click += DoubleUnderlineButton_Click;");
+        source.Should().Contain("_doubleUnderlineButton.IsChecked = _session.IsSelectedRangeStartDoubleUnderline;");
+        source.Should().Contain("_doubleUnderlineButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void DoubleUnderlineButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("ApplySelectedRangeDoubleUnderline(_doubleUnderlineButton.IsChecked == true);");
+        source.Should().Contain("private void ToggleSelectedRangeDoubleUnderline()");
+        source.Should().Contain("private void ApplySelectedRangeDoubleUnderline(bool enabled)");
+        source.Should().Contain("var result = _session.SetSelectedRangeDoubleUnderline(enabled);");
+        source.Should().Contain("_doubleUnderlineButton.IsChecked = _session.IsSelectedRangeStartDoubleUnderline;");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Double Underline failed.\");");
+        source.Should().Contain("RefreshShell($\"{(enabled ? \"Double underlined\" : \"Removed double underline from\")} {rangeReference}\");");
+        source.Should().Contain("var textDecorations = BuildTextDecorations(style);");
+        source.Should().Contain("if (style.Underline || style.DoubleUnderline)");
+        source.Should().Contain("ToggleSelectedRangeDoubleUnderline();");
     }
 
     [Fact]

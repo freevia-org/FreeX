@@ -80,6 +80,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeBoldMenuItem,
     bool HasNativeItalicMenuItem,
     bool HasNativeUnderlineMenuItem,
+    bool HasNativeDoubleUnderlineMenuItem,
     bool HasNativeStrikethroughMenuItem,
     bool HasNativeQuitMenuItem)
 {
@@ -104,6 +105,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeBoldMenuItem &&
         HasNativeItalicMenuItem &&
         HasNativeUnderlineMenuItem &&
+        HasNativeDoubleUnderlineMenuItem &&
         HasNativeStrikethroughMenuItem &&
         HasNativeQuitMenuItem;
 }
@@ -176,6 +178,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_bold_menu_item={FormatBool(snapshot.HasNativeBoldMenuItem)}",
                 $"native_italic_menu_item={FormatBool(snapshot.HasNativeItalicMenuItem)}",
                 $"native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}",
+                $"native_double_underline_menu_item={FormatBool(snapshot.HasNativeDoubleUnderlineMenuItem)}",
                 $"native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}",
                 $"native_quit_menu_item={FormatBool(snapshot.HasNativeQuitMenuItem)}",
             ]);

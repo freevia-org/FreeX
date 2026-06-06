@@ -840,6 +840,125 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeDoubleUnderline_AppliesStyleClearsUnderlineAndStrikethroughPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("value"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle
+        {
+            Underline = true,
+            Strikethrough = true
+        });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.SetSelectedRangeDoubleUnderline(true);
+
+        result.Success.Should().BeTrue();
+        session.IsSelectedRangeStartDoubleUnderline.Should().BeTrue();
+        session.IsSelectedRangeStartUnderline.Should().BeFalse();
+        session.IsSelectedRangeStartStrikethrough.Should().BeFalse();
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        var a1Style = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
+        a1Style.DoubleUnderline.Should().BeTrue();
+        a1Style.Underline.Should().BeFalse();
+        a1Style.Strikethrough.Should().BeFalse();
+        var b1StyleOnly = sheet.GetStyleOnly(b1.Row, b1.Col);
+        b1StyleOnly.Should().NotBeNull();
+        var b1Style = workbook.GetStyle(b1StyleOnly!.Value);
+        b1Style.DoubleUnderline.Should().BeTrue();
+        b1Style.Underline.Should().BeFalse();
+        b1Style.Strikethrough.Should().BeFalse();
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        var restoredA1Style = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
+        restoredA1Style.DoubleUnderline.Should().BeFalse();
+        restoredA1Style.Underline.Should().BeTrue();
+        restoredA1Style.Strikethrough.Should().BeTrue();
+        sheet.GetStyleOnly(b1.Row, b1.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void IsSelectedRangeStartDoubleUnderline_UsesStyleOnlyFormattingForEmptyCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        session.SetSelectedRangeDoubleUnderline(true);
+
+        sheet.GetCell(a1).Should().BeNull();
+        sheet.GetStyleOnly(a1.Row, a1.Col).Should().NotBeNull();
+        session.IsSelectedRangeStartDoubleUnderline.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsSelectedRangeStartDoubleUnderline_IsTrueForImportedDoubleUnderlineAndStrikethroughCombination()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("styled"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle
+        {
+            DoubleUnderline = true,
+            Strikethrough = true
+        });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        session.IsSelectedRangeStartDoubleUnderline.Should().BeTrue();
+        session.IsSelectedRangeStartStrikethrough.Should().BeTrue();
+        session.IsSelectedRangeStartUnderline.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetSelectedRangeDoubleUnderline_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeDoubleUnderline(true);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).DoubleUnderline.Should().BeFalse();
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();
