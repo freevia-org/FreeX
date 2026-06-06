@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -401,7 +400,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void EscapeFromVisibleBackstage_ReturnsToWorkbookBeforeTransientCancellation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         source.Should().Contain("IsStartScreenVisible()");
         source.Should().Contain("HideStartScreen();");
