@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -8,8 +7,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void MouseDownSelectionIgnoresNonLeftButtonsBeforeHitTesting()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseDown = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
@@ -25,8 +23,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void MouseDownSelectionHandlesSuccessfulGridSelectionPaths()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseDown = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..

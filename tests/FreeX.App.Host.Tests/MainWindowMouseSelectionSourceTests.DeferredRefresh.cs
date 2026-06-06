@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -8,8 +7,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void MouseDownUpdatesActiveSplitPaneRegionOnlyAfterCellHit()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var mouseDown = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
@@ -26,10 +24,8 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void DragSelectionDefersStatusRefreshUntilMouseUp()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var extendSelection = selectionSource[
             selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
@@ -56,10 +52,8 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void AdditionalDragSelectionDefersToolbarRefreshUntilMouseUp()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var addSelection = selectionSource[
             selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
@@ -83,10 +77,8 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void LostMouseCaptureClearsDragSelectionStateAndCompletesDeferredRefreshes()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var lostCapture = selectionSource[
             selectionSource.IndexOf("private void SheetGrid_LostMouseCapture", StringComparison.Ordinal)..
@@ -109,8 +101,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void AdditionalDragSelectionReusesOwnedRangesInsteadOfCloningList()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var addSelection = selectionSource[
             selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
@@ -124,8 +115,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     [Fact]
     public void SelectionHotPathsUpdateTextBoxesWithoutBuildingUndoHistory()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var setActiveCell = selectionSource[
             selectionSource.IndexOf("private void SetActiveCell", StringComparison.Ordinal)..
