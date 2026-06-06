@@ -1,6 +1,5 @@
 using FreeX.Core.Commands;
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -25,10 +24,9 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void WorkbookStatisticsDialogOpenedFromKeyboard_FocusesOkButton()
     {
-        var source = string.Join(
-            Environment.NewLine,
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookStatisticsDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "StatusDialogKeyboardFocus.cs")));
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "WorkbookStatisticsDialog.cs",
+            "StatusDialogKeyboardFocus.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -41,7 +39,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void WorkbookStatisticsDialog_UsesSingleExcelLikeOkButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookStatisticsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");
 
         source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
         source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
@@ -50,7 +48,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void WorkbookStatisticsDialog_StatisticsSummaryExposesAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookStatisticsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(statisticsBlock, UiText.Get(\"WorkbookStatistics_WorkbookStatistics\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, \"WorkbookStatisticsSummary\");");

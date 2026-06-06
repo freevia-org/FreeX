@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -77,7 +76,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartAreaLegendDialogOpenedFromKeyboard_FocusesChartAreaFillBox()
     {
-        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartFormatDialogs.cs"));
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("ChartFormatDialogs.cs");
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -89,7 +88,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartAreaLegendDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartFormatDialogs.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartFormatDialogs.cs");
 
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _chartAreaFillBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _plotAreaFillBox);");
@@ -169,7 +168,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartDataLabelsDialogOpenedFromKeyboard_FocusesShowDataLabelsChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartDataLabelsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartDataLabelsDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -180,7 +179,7 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartDataLabelsDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartDataLabelsDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ChartDataLabelsDialog.cs");
 
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _borderBox);");
