@@ -1,17 +1,13 @@
 using System.Globalization;
 using System.Resources;
-using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.App.Host;
+using static FreeX.App.Host.Tests.LocalizationResourceTestSupport;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed class BulgarianLocalizationTests
 {
-    private static readonly Regex PlaceholderPattern = new(@"\{[^{}]+\}", RegexOptions.Compiled);
-    private static readonly Regex AccessKeyPattern = new(@"(?<!_)_(?!_)", RegexOptions.Compiled);
-
     [Fact]
     public void BulgarianSatelliteResource_ProvidesTranslatedSmokeTestKeys()
     {
@@ -105,8 +101,8 @@ public sealed class BulgarianLocalizationTests
         blankValues.Should().BeEmpty();
 
         var placeholderMismatches = neutral
-            .Where(entry => !TokenSet(entry.Value, PlaceholderPattern)
-                .SetEquals(TokenSet(bulgarian[entry.Key], PlaceholderPattern)))
+            .Where(entry => !CompositePlaceholderTokens(entry.Value)
+                .SetEquals(CompositePlaceholderTokens(bulgarian[entry.Key])))
             .Select(entry => entry.Key)
             .ToArray();
         placeholderMismatches.Should().BeEmpty();
@@ -117,24 +113,5 @@ public sealed class BulgarianLocalizationTests
             .ToArray();
         accessKeyMismatches.Should().BeEmpty();
     }
-
-    private static Dictionary<string, string> ReadResxValues(string fileName)
-    {
-        var path = DialogSourceTestSupport.FindHostSourceFile("Resources", fileName);
-        return XDocument.Load(path)
-            .Descendants("data")
-            .ToDictionary(
-                element => element.Attribute("name")!.Value,
-                element => element.Element("value")?.Value ?? string.Empty,
-                StringComparer.Ordinal);
-    }
-
-    private static HashSet<string> TokenSet(string value, Regex pattern) =>
-        pattern.Matches(value)
-            .Select(match => match.Value)
-            .ToHashSet(StringComparer.Ordinal);
-
-    private static int AccessKeyCount(string value) =>
-        AccessKeyPattern.Matches(value).Count;
 
 }

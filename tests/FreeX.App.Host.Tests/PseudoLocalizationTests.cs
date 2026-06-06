@@ -1,8 +1,7 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.App.Host;
+using static FreeX.App.Host.Tests.LocalizationResourceTestSupport;
 
 namespace FreeX.App.Host.Tests;
 
@@ -42,9 +41,9 @@ public sealed partial class PseudoLocalizationTests
 
         pseudo.Should().Be("[[_PPrriinntt PPrreevviieeww - {0:N2}]]");
         AccessKeyCount(pseudo).Should().Be(AccessKeyCount(neutral));
-        TokenSet(pseudo, CompositeFormatPlaceholderPattern())
+        CompositePlaceholderTokens(pseudo)
             .Should()
-            .BeEquivalentTo(TokenSet(neutral, CompositeFormatPlaceholderPattern()));
+            .BeEquivalentTo(CompositePlaceholderTokens(neutral));
 
         string.Format(CultureInfo.InvariantCulture, pseudo, 12.3)
             .Should()
@@ -66,43 +65,13 @@ public sealed partial class PseudoLocalizationTests
 
         pseudo.Should().NotBe(neutral);
         pseudo.Length.Should().BeGreaterThanOrEqualTo(
-            neutral.Length + CountExpandableLettersOutsidePlaceholders(neutral) + 4);
+            neutral.Length + CountAsciiLettersOutsideCompositePlaceholders(neutral) + 4);
         AccessKeyCount(pseudo).Should().Be(AccessKeyCount(neutral));
-        TokenSet(pseudo, CompositeFormatPlaceholderPattern())
+        CompositePlaceholderTokens(pseudo)
             .Should()
-            .BeEquivalentTo(TokenSet(neutral, CompositeFormatPlaceholderPattern()));
+            .BeEquivalentTo(CompositePlaceholderTokens(neutral));
     }
 
-    private static Dictionary<string, string> ReadNeutralValues()
-    {
-        var path = DialogSourceTestSupport.FindHostSourceFile("Resources", "Strings.resx");
-        return XDocument.Load(path)
-            .Descendants("data")
-            .ToDictionary(
-                element => element.Attribute("name")!.Value,
-                element => element.Element("value")?.Value ?? string.Empty,
-                StringComparer.Ordinal);
-    }
-
-    private static HashSet<string> TokenSet(string value, Regex pattern) =>
-        pattern.Matches(value)
-            .Select(match => match.Value)
-            .ToHashSet(StringComparer.Ordinal);
-
-    private static int AccessKeyCount(string value) =>
-        AccessKeyPattern().Matches(value).Count;
-
-    private static int CountExpandableLettersOutsidePlaceholders(string value) =>
-        CompositeFormatPlaceholderPattern()
-            .Replace(value, string.Empty)
-            .Count(IsAsciiLetter);
-
-    private static bool IsAsciiLetter(char character) =>
-        character is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
-
-    [GeneratedRegex(@"\{[^{}]+\}", RegexOptions.CultureInvariant)]
-    private static partial Regex CompositeFormatPlaceholderPattern();
-
-    [GeneratedRegex(@"(?<!_)_(?!_)", RegexOptions.CultureInvariant)]
-    private static partial Regex AccessKeyPattern();
+    private static Dictionary<string, string> ReadNeutralValues() =>
+        ReadResxValues("Strings.resx");
 }
