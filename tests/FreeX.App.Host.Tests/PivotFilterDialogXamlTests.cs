@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -63,7 +62,7 @@ public sealed class PivotFilterDialogXamlTests
     [Fact]
     public void PivotFieldFilterDialogOpenedFromKeyboard_FocusesSearchBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotFieldFilterDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotFieldFilterDialog.xaml.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -97,7 +96,7 @@ public sealed class PivotFilterDialogXamlTests
     [InlineData("PivotValueFilterDialog.xaml.cs", "ValueFilterKindBox")]
     public void PivotConditionDialogOpenedFromKeyboard_FocusesOperatorChoice(string sourceFile, string target)
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", sourceFile));
+        var source = DialogSourceTestSupport.ReadHostSources(sourceFile);
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -110,7 +109,7 @@ public sealed class PivotFilterDialogXamlTests
     [InlineData("PivotValueFilterDialog.xaml.cs", "FocusInvalidValueFilterInput")]
     public void PivotConditionDialogInvalidCriteria_RefocusesAndSelectsValueBox(string sourceFile, string helperName)
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", sourceFile));
+        var source = DialogSourceTestSupport.ReadHostSources(sourceFile);
 
         source.Should().Contain($"{helperName}(");
         source.Should().Contain("target.Focus();");
@@ -144,7 +143,7 @@ public sealed class PivotFilterDialogXamlTests
         string endingValueName,
         string endingValueAutomationId)
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", xamlFile));
+        var document = XDocument.Parse(DialogSourceTestSupport.ReadHostSources(xamlFile));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -287,7 +286,7 @@ public sealed class PivotFilterDialogXamlTests
     [Fact]
     public void PivotValueFieldSettingsDialogOpenedFromKeyboard_FocusesCustomName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialog.xaml.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -298,7 +297,7 @@ public sealed class PivotFilterDialogXamlTests
     public void PivotValueFieldSettingsDialogInvalidInputs_SelectRelevantTabAndField()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PivotValueFieldSettingsDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialog.xaml.cs");
 
         xaml.Should().Contain("<TabControl x:Name=\"ValueFieldTabs\"");
         xaml.Should().Contain("<TabItem x:Name=\"ShowValuesAsTab\" Header=\"Show Values _As\"");
@@ -319,7 +318,7 @@ public sealed class PivotFilterDialogXamlTests
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotValueFieldSettingsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialog.xaml.cs");
 
         var baseFieldPanel = document.Descendants(presentation + "StackPanel")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "BaseFieldPanel");
@@ -347,7 +346,7 @@ public sealed class PivotFilterDialogXamlTests
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotValueFieldSettingsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialog.xaml.cs");
 
         document.Descendants(presentation + "Button")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "NumberFormatButton")
@@ -405,7 +404,7 @@ public sealed class PivotFilterDialogXamlTests
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotFieldFilterDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotFieldFilterDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotFieldFilterDialog.xaml.cs");
 
         document.Descendants(presentation + "TabItem")
             .Select(element => element.Attribute("Header")?.Value)
