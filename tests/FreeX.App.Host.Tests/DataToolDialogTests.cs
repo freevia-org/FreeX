@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.Core.Commands;
@@ -29,7 +28,7 @@ public sealed partial class DataToolDialogTests
             var button = DialogReferencePicker.CreateButton(box, "Select table range");
             button.ToolTip.Should().Be(UiText.Get("DialogReferencePicker_ToolTip"));
 
-            var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DialogReferencePicker.cs"));
+            var pickerSource = DialogSourceTestSupport.ReadHostSources("DialogReferencePicker.cs");
             pickerSource.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
         });
     }
@@ -37,7 +36,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void DataValidationNoSelectionWarning_UsesOwnedMessage()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
         source.Should().Contain("UiText.Get(\"MainWindowMessage_SelectRangeFirst\")");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_DataValidationTitle\")");
