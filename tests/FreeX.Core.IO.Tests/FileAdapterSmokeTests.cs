@@ -14849,8 +14849,7 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
         sheetViews.Should().NotBeNull();
-        sheetViews!.Attribute("nativeSheetViewsAttr").Should().NotBeNull();
-        sheetViews.Attribute("nativeSheetViewsAttr")!.Value.Should().Be("kept");
+        sheetViews!.Attribute("nativeSheetViewsAttr").Should().BeNull();
     }
 
     [Fact]

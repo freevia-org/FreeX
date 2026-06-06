@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -7,6 +8,7 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetSheetViewNormalizer
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly IReadOnlySet<string> EmptyAttributes = new HashSet<string>(StringComparer.Ordinal);
 
     private static readonly HashSet<string> ValidViewModes =
     [
@@ -56,11 +58,25 @@ internal static class XlsxWorksheetSheetViewNormalizer
 
     public static bool NormalizeSheetViewsElement(XElement sheetViews)
     {
-        var changed = false;
+        var changed = RemoveUnknownAttributes(sheetViews, EmptyAttributes);
         foreach (var sheetView in sheetViews.Elements(WorksheetNs + "sheetView"))
             changed |= NormalizeSheetViewElement(sheetView);
 
         return changed;
+    }
+
+    public static void NormalizeWorksheets(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root?.Element(WorksheetNs + "sheetViews") is not { } sheetViews)
+                continue;
+
+            if (NormalizeSheetViewsElement(sheetViews))
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+        }
     }
 
     public static bool NormalizeSheetViewElement(XElement sheetView)
@@ -197,5 +213,31 @@ internal static class XlsxWorksheetSheetViewNormalizer
         return parts.Length == 2 &&
                CellAddress.TryParse(parts[0], SheetId.New(), out _) &&
                CellAddress.TryParse(parts[1], SheetId.New(), out _);
+    }
+
+    private static bool RemoveUnknownAttributes(XElement element, IReadOnlySet<string> allowedNames)
+    {
+        var changed = false;
+        foreach (var attribute in element.Attributes().ToList())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                (attribute.Name.NamespaceName.Length == 0 && allowedNames.Contains(attribute.Name.LocalName)))
+            {
+                continue;
+            }
+
+            attribute.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool IsWorksheetXmlEntry(ZipArchiveEntry entry)
+    {
+        var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        return path.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+               path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+               !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
     }
 }

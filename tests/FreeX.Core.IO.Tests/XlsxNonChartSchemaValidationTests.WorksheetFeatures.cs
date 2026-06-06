@@ -1015,6 +1015,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetSheetViewsForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetAdditionalViewsSourceWorkbook());
+        SetWorksheetSheetViewsInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.AdditionalViews!.Views.Add(new WorksheetAdditionalViewModel { WorkbookViewId = "2" });
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSheetViewsSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetSheetViewsForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetAdditionalViewsSourceWorkbook());
+        SetWorksheetSheetViewsInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetSheetViewsSanitized(saved);
+    }
+
 
     [Fact]
     public void NamedRanges_ProducesSchemaValidWorkbook()
@@ -2775,6 +2820,24 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         selection.SetAttributeValue("activeCellId", "not-a-number");
         selection.SetAttributeValue("sqref", "BAD");
         ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void SetWorksheetSheetViewsInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.Root!
+            .Element(workbookNs + "sheetViews")!
+            .SetAttributeValue("nativeSheetViewsAttr", "kept");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetSheetViewsSanitized(MemoryStream stream)
+    {
+        var sheetViews = ReadWorksheetChildElement(stream, "sheetViews");
+        sheetViews.Attribute("nativeSheetViewsAttr").Should().BeNull();
     }
 
     private static Workbook CreatePhoneticPropertiesSourceWorkbook()
