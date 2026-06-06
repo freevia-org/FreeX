@@ -106,6 +106,7 @@ jobs:
             printf 'Name,Amount\nFreeX,42\n' > "$smoke_file"
             "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$smoke_file" | tee "$smoke_log"
             grep -q "Packaging smoke opened" "$smoke_log"
+            grep -q "edited, saved, and reopened" "$smoke_log"
           else
             echo "Skipping launch smoke for $runtime on $host_arch host."
           fi

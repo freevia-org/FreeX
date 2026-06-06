@@ -70,6 +70,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("codesign --verify --deep --strict \"$unzip_root/FreeX.app\"");
         workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke \"$smoke_file\"");
         workflow.Should().Contain("grep -q \"Packaging smoke opened\" \"$smoke_log\"");
+        workflow.Should().Contain("grep -q \"edited, saved, and reopened\" \"$smoke_log\"");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256");
         workflow.Should().Contain("if-no-files-found: error");

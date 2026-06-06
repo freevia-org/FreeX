@@ -14,6 +14,7 @@ public sealed class WorkbookStartupSmokeServiceTests
         result.Message.Should().Contain("Packaging smoke opened");
         result.Message.Should().Contain("macOS Preview Workbook");
         result.Message.Should().Contain("Port Plan");
+        result.Message.Should().Contain("edited, saved, and reopened");
     }
 
     [Fact]
@@ -28,6 +29,7 @@ public sealed class WorkbookStartupSmokeServiceTests
         result.Success.Should().BeTrue();
         result.Message.Should().Contain("Smoke.csv");
         result.Message.Should().Contain("Smoke");
+        result.Message.Should().Contain("edited, saved, and reopened");
     }
 
     [Fact]
@@ -74,6 +76,7 @@ public sealed class WorkbookStartupSmokeServiceTests
         handled.Should().BeTrue();
         exitCode.Should().Be(0);
         output.ToString().Should().Contain("Packaging smoke opened");
+        output.ToString().Should().Contain("edited, saved, and reopened");
         error.ToString().Should().BeEmpty();
     }
 

@@ -1,4 +1,5 @@
 using FreeX.Core.IO;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
 
@@ -11,16 +12,25 @@ public sealed class WorkbookStartupSmokeService
 {
     private const double SmokeViewportHeight = 240;
     private const double SmokeViewportWidth = 320;
+    private const string RoundTripExtension = ".fxl";
+    private const uint SmokeEditRow = 2;
+    private const uint SmokeEditColumn = 2;
 
+    private readonly IReadOnlyList<IFileAdapter> _adapters;
     private readonly StartupWorkbookLoader _loader;
     private readonly WorkbookSessionFactory _sessionFactory;
+    private readonly WorkbookSaveService _saveService;
 
     public WorkbookStartupSmokeService(
         StartupWorkbookLoader? loader = null,
-        WorkbookSessionFactory? sessionFactory = null)
+        WorkbookSessionFactory? sessionFactory = null,
+        WorkbookSaveService? saveService = null,
+        IEnumerable<IFileAdapter>? adapters = null)
     {
-        _loader = loader ?? new StartupWorkbookLoader();
+        _adapters = (adapters ?? WorkbookFileAdapterCatalog.CreateDefaultAdapters()).ToList();
+        _loader = loader ?? new StartupWorkbookLoader(adapters: _adapters);
         _sessionFactory = sessionFactory ?? new WorkbookSessionFactory();
+        _saveService = saveService ?? new WorkbookSaveService();
     }
 
     public WorkbookStartupSmokeResult Run(IReadOnlyList<string> startupArguments)
@@ -47,14 +57,94 @@ public sealed class WorkbookStartupSmokeService
             if (session.Viewport.RowMetrics.Count == 0 || session.Viewport.ColMetrics.Count == 0)
                 return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: viewport is empty.");
 
+            var openedDisplayName = session.DisplayName;
+            var openedSheetName = session.ActiveSheet.Name;
+            var openedRowCount = session.Viewport.RowMetrics.Count;
+            var openedColumnCount = session.Viewport.ColMetrics.Count;
+            var roundTripResult = VerifyEditSaveReopen(session);
+            if (roundTripResult is not null)
+                return roundTripResult;
+
             return new WorkbookStartupSmokeResult(
                 true,
-                $"Packaging smoke opened {session.DisplayName} on {session.ActiveSheet.Name} with {session.Viewport.RowMetrics.Count} rows and {session.Viewport.ColMetrics.Count} columns.");
+                $"Packaging smoke opened {openedDisplayName} on {openedSheetName} with {openedRowCount} rows and {openedColumnCount} columns; edited, saved, and reopened a native workbook roundtrip.");
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
         {
             return new WorkbookStartupSmokeResult(false, $"Packaging smoke failed: {ex.Message}");
         }
+    }
+
+    private WorkbookStartupSmokeResult? VerifyEditSaveReopen(WorkbookSession session)
+    {
+        session.SelectCell(new CellAddress(session.ActiveSheet.Id, 1, 1));
+        session.MoveActiveCell(1, 1);
+        var editAddress = session.ActiveCell;
+        if (editAddress.Row != SmokeEditRow || editAddress.Col != SmokeEditColumn)
+            return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: workbook navigation did not reach the edit marker cell.");
+
+        var marker = $"FreeX packaging smoke {Guid.NewGuid():N}";
+        var edit = session.CommitCellText(marker);
+        if (!edit.Success)
+        {
+            return new WorkbookStartupSmokeResult(
+                false,
+                $"Packaging smoke failed: edit failed: {edit.ErrorMessage ?? "unknown error"}");
+        }
+
+        if (session.ActiveSheet.GetCell(SmokeEditRow, SmokeEditColumn)?.Value is not TextValue editedText ||
+            !string.Equals(editedText.Value, marker, StringComparison.Ordinal))
+        {
+            return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: edited marker was not stored.");
+        }
+
+        var saveAdapter = FileFormatResolver.FindSaveAdapter(_adapters, RoundTripExtension, out _);
+        if (saveAdapter is null)
+            return new WorkbookStartupSmokeResult(false, $"Packaging smoke failed: no {RoundTripExtension} save adapter.");
+
+        var roundTripPath = Path.Combine(
+            Path.GetTempPath(),
+            $"freex-packaging-smoke-{Guid.NewGuid():N}{RoundTripExtension}");
+        try
+        {
+            _saveService
+                .SaveAsync(roundTripPath, saveAdapter, session.Workbook)
+                .GetAwaiter()
+                .GetResult();
+            session.MarkSaved(roundTripPath);
+            if (session.IsDirty)
+                return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: session remained dirty after save.");
+
+            var reopenedSource = new StartupWorkbookLoader(adapters: _adapters).Load([roundTripPath]);
+            if (reopenedSource.IsFallback ||
+                string.IsNullOrWhiteSpace(reopenedSource.SourcePath) ||
+                !PathsMatch(roundTripPath, reopenedSource.SourcePath))
+            {
+                return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: saved roundtrip did not reopen.");
+            }
+
+            var reopenedSession = _sessionFactory.Create(
+                reopenedSource,
+                SmokeViewportHeight,
+                SmokeViewportWidth,
+                adapters: _adapters);
+            if (reopenedSession.Viewport.RowMetrics.Count == 0 || reopenedSession.Viewport.ColMetrics.Count == 0)
+                return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: reopened roundtrip viewport is empty.");
+
+            var reopenedCell = reopenedSession.Workbook.Sheets.FirstOrDefault()?.GetCell(SmokeEditRow, SmokeEditColumn);
+            if (reopenedCell?.Value is not TextValue reopenedText ||
+                !string.Equals(reopenedText.Value, marker, StringComparison.Ordinal))
+            {
+                return new WorkbookStartupSmokeResult(false, "Packaging smoke failed: saved edit marker was not reopened.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(roundTripPath))
+                File.Delete(roundTripPath);
+        }
+
+        return null;
     }
 
     private static bool PathsMatch(string expectedPath, string actualPath)
