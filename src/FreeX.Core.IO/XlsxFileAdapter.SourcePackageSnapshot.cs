@@ -5825,7 +5825,7 @@ public sealed partial class XlsxFileAdapter
             ScalarValue value,
             string? sourceStyleIndex)
         {
-            if (cell.Elements().Any())
+            if (cell.Elements().Any(child => child.Name != worksheetNs + "extLst"))
                 return false;
 
             ApplyCellStyle(cell, sourceStyleIndex);
@@ -5886,7 +5886,11 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
-            rowElement.Add(cellElement);
+            var extensionList = rowElement.Element(worksheetNs + "extLst");
+            if (extensionList is null)
+                rowElement.Add(cellElement);
+            else
+                extensionList.AddBeforeSelf(cellElement);
         }
 
         private static void UpdateDimension(

@@ -102,7 +102,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
 
         foreach (var scriptName in new[] { "screenshot_excel.ps1", "screenshot_ribbon.ps1" })
         {
-            var source = File.ReadAllText(WorkspaceFileLocator.Find("tools", scriptName));
+            var source = WorkspaceFileLocator.ReadAllText("tools", scriptName);
             var widthBlock = Regex.Match(
                 source,
                 @"\$defaultCaptureWidths\s*=\s*@\((?<widths>.*?)\)\s*function Resolve-CaptureWidths",

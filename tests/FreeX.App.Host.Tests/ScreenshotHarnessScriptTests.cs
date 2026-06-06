@@ -193,5 +193,5 @@ public sealed class ScreenshotHarnessScriptTests
     }
 
     private static string ReadScript(string scriptName) =>
-        File.ReadAllText(WorkspaceFileLocator.Find("tools", scriptName));
+        WorkspaceFileLocator.ReadAllText("tools", scriptName);
 }
