@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -26,7 +25,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialog_ExposesKeyboardAccessKeysForButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekStatusDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoalSeekStatusDialog.cs");
 
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_KeepResult\")");
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_RestoreOriginalValues\")");
@@ -37,7 +36,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialog_ExposesAutomationMetadataForStatusAndActions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekStatusDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoalSeekStatusDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetAutomationId(statusBlock, \"GoalSeekStatusSummary\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(keepButton, \"GoalSeekKeepResultButton\");");
@@ -49,7 +48,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialogOpenedFromKeyboard_FocusesDefaultButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekStatusDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("GoalSeekStatusDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -59,7 +58,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialog_ReceivesRequestedTargetValueFromWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("new GoalSeekStatusDialog(result, targetValue)");
     }
