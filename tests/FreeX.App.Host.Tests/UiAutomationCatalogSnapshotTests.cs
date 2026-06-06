@@ -106,7 +106,7 @@ internal static class UiAutomationCatalogSnapshotHarness
 
     private static IReadOnlyList<string> ReadExpectedVisibleAutomationIdsFromXaml()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var dynamicQuickAccessToolbarIds = QuickAccessToolbarCatalog.DefaultCommandIds
             .Select(id => QuickAccessToolbarCatalog.TryGet(id, out var command) ? command.AutomationId : null)

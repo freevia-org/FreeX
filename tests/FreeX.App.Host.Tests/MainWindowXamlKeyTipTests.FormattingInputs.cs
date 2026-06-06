@@ -10,7 +10,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void EditableFontSizeBox_CommitsTypedKeyboardInputWithEnter()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -32,7 +32,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void EditableFontNameBox_CommitsTypedKeyboardInputWithEnter()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -54,7 +54,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void EditableFontBoxes_CommitTypedKeyboardInputWhenFocusLeaves()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";

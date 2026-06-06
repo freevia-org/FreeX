@@ -75,7 +75,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ShortcutAndKeyTipRoutingSnapshot_CoversRepresentativeEntryPoints()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var cellsCommandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
         var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
         var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");

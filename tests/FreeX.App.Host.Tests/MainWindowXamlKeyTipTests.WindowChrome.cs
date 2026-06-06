@@ -10,7 +10,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void TitleBarWindowChrome_ExposesMinimizeMaximizeRestoreAndCloseButtons()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace local = "clr-namespace:FreeX.App.Host";
@@ -92,8 +92,8 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void GreenSurfaceButtons_UseCustomHoverChromeInsteadOfNativeBlueHover()
     {
-        var mainWindow = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "MainWindowResources.xaml"));
+        var mainWindow = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
+        var resources = DialogSourceTestSupport.LoadHostXamlDocument("Resources", "MainWindowResources.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
