@@ -990,6 +990,9 @@ public static partial class AccessibilityCheckerService
             case "SIN":
                 kind = ConditionalFormulaScalarFunctionKind.Sin;
                 return true;
+            case "CSC":
+                kind = ConditionalFormulaScalarFunctionKind.Csc;
+                return true;
             case "SINH":
                 kind = ConditionalFormulaScalarFunctionKind.Sinh;
                 return true;
@@ -1010,6 +1013,9 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "ACOTH":
                 kind = ConditionalFormulaScalarFunctionKind.Acoth;
+                return true;
+            case "COTH":
+                kind = ConditionalFormulaScalarFunctionKind.Coth;
                 return true;
             case "ASIN":
                 kind = ConditionalFormulaScalarFunctionKind.Asin;
@@ -1124,6 +1130,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Degrees or
             ConditionalFormulaScalarFunctionKind.Radians or
             ConditionalFormulaScalarFunctionKind.Sin or
+            ConditionalFormulaScalarFunctionKind.Csc or
             ConditionalFormulaScalarFunctionKind.Sinh or
             ConditionalFormulaScalarFunctionKind.Asinh or
             ConditionalFormulaScalarFunctionKind.Acosh or
@@ -1131,6 +1138,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Tanh or
             ConditionalFormulaScalarFunctionKind.Atanh or
             ConditionalFormulaScalarFunctionKind.Acoth or
+            ConditionalFormulaScalarFunctionKind.Coth or
             ConditionalFormulaScalarFunctionKind.Asin or
             ConditionalFormulaScalarFunctionKind.Acos or
             ConditionalFormulaScalarFunctionKind.Acot or
@@ -1721,6 +1729,7 @@ public static partial class AccessibilityCheckerService
         Degrees,
         Radians,
         Sin,
+        Csc,
         Sinh,
         Asinh,
         Acosh,
@@ -1728,6 +1737,7 @@ public static partial class AccessibilityCheckerService
         Tanh,
         Atanh,
         Acoth,
+        Coth,
         Asin,
         Acos,
         Acot,
@@ -2265,6 +2275,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Degrees:
                 case ConditionalFormulaScalarFunctionKind.Radians:
                 case ConditionalFormulaScalarFunctionKind.Sin:
+                case ConditionalFormulaScalarFunctionKind.Csc:
                 case ConditionalFormulaScalarFunctionKind.Sinh:
                 case ConditionalFormulaScalarFunctionKind.Asinh:
                 case ConditionalFormulaScalarFunctionKind.Acosh:
@@ -2272,6 +2283,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Tanh:
                 case ConditionalFormulaScalarFunctionKind.Atanh:
                 case ConditionalFormulaScalarFunctionKind.Acoth:
+                case ConditionalFormulaScalarFunctionKind.Coth:
                 case ConditionalFormulaScalarFunctionKind.Asin:
                 case ConditionalFormulaScalarFunctionKind.Acos:
                 case ConditionalFormulaScalarFunctionKind.Acot:
@@ -2599,6 +2611,13 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Sin:
                     result = Math.Sin(first);
                     break;
+                case ConditionalFormulaScalarFunctionKind.Csc:
+                    var sine = Math.Sin(first);
+                    if (sine == 0d || !double.IsFinite(sine))
+                        return false;
+
+                    result = 1d / sine;
+                    break;
                 case ConditionalFormulaScalarFunctionKind.Sinh:
                     result = Math.Sinh(first);
                     break;
@@ -2632,6 +2651,13 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = 0.5d * Math.Log(acothRatio);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Coth:
+                    var hyperbolicTangent = Math.Tanh(first);
+                    if (hyperbolicTangent == 0d || !double.IsFinite(hyperbolicTangent))
+                        return false;
+
+                    result = 1d / hyperbolicTangent;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Asin:
                     if (first < -1d || first > 1d)
