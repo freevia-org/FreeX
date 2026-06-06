@@ -898,6 +898,9 @@ public static partial class AccessibilityCheckerService
             case "INT":
                 kind = ConditionalFormulaScalarFunctionKind.Int;
                 return true;
+            case "EVEN":
+                kind = ConditionalFormulaScalarFunctionKind.Even;
+                return true;
             case "ROUND":
                 kind = ConditionalFormulaScalarFunctionKind.Round;
                 return true;
@@ -1058,6 +1061,7 @@ public static partial class AccessibilityCheckerService
         {
             ConditionalFormulaScalarFunctionKind.Abs or
             ConditionalFormulaScalarFunctionKind.Int or
+            ConditionalFormulaScalarFunctionKind.Even or
             ConditionalFormulaScalarFunctionKind.Fact or
             ConditionalFormulaScalarFunctionKind.FactDouble or
             ConditionalFormulaScalarFunctionKind.Sqrt or
@@ -1625,6 +1629,7 @@ public static partial class AccessibilityCheckerService
     {
         Abs,
         Int,
+        Even,
         Round,
         RoundUp,
         RoundDown,
@@ -2154,6 +2159,7 @@ public static partial class AccessibilityCheckerService
             {
                 case ConditionalFormulaScalarFunctionKind.Abs:
                 case ConditionalFormulaScalarFunctionKind.Int:
+                case ConditionalFormulaScalarFunctionKind.Even:
                 case ConditionalFormulaScalarFunctionKind.Round:
                 case ConditionalFormulaScalarFunctionKind.RoundUp:
                 case ConditionalFormulaScalarFunctionKind.RoundDown:
@@ -2299,6 +2305,9 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Int:
                     result = Math.Floor(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Even:
+                    result = EvenFormulaNumber(first);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Round:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var digitsNumber) ||
@@ -2859,6 +2868,18 @@ public static partial class AccessibilityCheckerService
 
             var factor = Math.Pow(10d, -digits);
             return Math.Round(value / factor, 0, MidpointRounding.AwayFromZero) * factor;
+        }
+
+        private static double EvenFormulaNumber(double value)
+        {
+            if (value == 0d)
+                return 0d;
+
+            var magnitude = Math.Abs(value);
+            var evenMagnitude = magnitude <= 2d
+                ? 2d
+                : Math.Ceiling(magnitude / 2d) * 2d;
+            return Math.Sign(value) * evenMagnitude;
         }
 
         private static double RoundUpFormulaNumber(double value, int digits)
