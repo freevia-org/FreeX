@@ -128,7 +128,7 @@ Functions that return multiple values (FILTER, SORT, UNIQUE, SEQUENCE, RANDARRAY
 
 ### Supported Functions
 
-FreeX implements **487 in-scope Excel functions**, including:
+FreeX implements **488 in-scope Excel functions**, including:
 
 | Category | Examples |
 |---|---|
