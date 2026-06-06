@@ -899,6 +899,9 @@ public static partial class AccessibilityCheckerService
             case "ROUND":
                 kind = ConditionalFormulaScalarFunctionKind.Round;
                 return true;
+            case "ROUNDUP":
+                kind = ConditionalFormulaScalarFunctionKind.RoundUp;
+                return true;
             case "MOD":
                 kind = ConditionalFormulaScalarFunctionKind.Mod;
                 return true;
@@ -1065,6 +1068,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Day => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Log => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.Round or
+            ConditionalFormulaScalarFunctionKind.RoundUp or
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Power or
             ConditionalFormulaScalarFunctionKind.Atan2 or
@@ -1600,6 +1604,7 @@ public static partial class AccessibilityCheckerService
         Abs,
         Int,
         Round,
+        RoundUp,
         Mod,
         Sqrt,
         SqrtPi,
@@ -2123,6 +2128,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Abs:
                 case ConditionalFormulaScalarFunctionKind.Int:
                 case ConditionalFormulaScalarFunctionKind.Round:
+                case ConditionalFormulaScalarFunctionKind.RoundUp:
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
@@ -2270,6 +2276,15 @@ public static partial class AccessibilityCheckerService
                     }
 
                     result = RoundFormulaNumber(first, digits);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.RoundUp:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var roundUpDigitsNumber) ||
+                        !TryGetFormulaRoundDigits(roundUpDigitsNumber, out var roundUpDigits))
+                    {
+                        return false;
+                    }
+
+                    result = RoundUpFormulaNumber(first, roundUpDigits);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Mod:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var divisor) ||
@@ -2762,6 +2777,36 @@ public static partial class AccessibilityCheckerService
 
             var factor = Math.Pow(10d, -digits);
             return Math.Round(value / factor, 0, MidpointRounding.AwayFromZero) * factor;
+        }
+
+        private static double RoundUpFormulaNumber(double value, int digits)
+        {
+            if (value == 0)
+                return value;
+
+            var magnitude = Math.Abs(value);
+            var factor = Math.Pow(10d, Math.Abs(digits));
+            if (digits >= 0)
+            {
+                if (magnitude > double.MaxValue / factor)
+                    return value;
+
+                return Math.Sign(value) * RoundUpFormulaScaledMagnitude(magnitude * factor) / factor;
+            }
+
+            return Math.Sign(value) * RoundUpFormulaScaledMagnitude(magnitude / factor) * factor;
+        }
+
+        private static double RoundUpFormulaScaledMagnitude(double value)
+        {
+            var nearest = Math.Round(value, 0, MidpointRounding.AwayFromZero);
+            if (double.IsFinite(nearest) &&
+                Math.Abs(value - nearest) <= 1e-12 * Math.Max(1d, Math.Abs(value)))
+            {
+                return nearest;
+            }
+
+            return Math.Ceiling(value);
         }
 
         private bool TryEvaluateFormulaAggregate(
