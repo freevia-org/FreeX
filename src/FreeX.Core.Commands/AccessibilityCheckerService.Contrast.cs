@@ -944,6 +944,9 @@ public static partial class AccessibilityCheckerService
             case "ATAN":
                 kind = ConditionalFormulaScalarFunctionKind.Atan;
                 return true;
+            case "ATAN2":
+                kind = ConditionalFormulaScalarFunctionKind.Atan2;
+                return true;
             case "COS":
                 kind = ConditionalFormulaScalarFunctionKind.Cos;
                 return true;
@@ -1052,6 +1055,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Round or
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Power or
+            ConditionalFormulaScalarFunctionKind.Atan2 or
             ConditionalFormulaScalarFunctionKind.Left or
             ConditionalFormulaScalarFunctionKind.Right or
             ConditionalFormulaScalarFunctionKind.Exact => argumentCount == 2,
@@ -1599,6 +1603,7 @@ public static partial class AccessibilityCheckerService
         Asin,
         Acos,
         Atan,
+        Atan2,
         Cos,
         Tan,
         Pi,
@@ -2118,6 +2123,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Asin:
                 case ConditionalFormulaScalarFunctionKind.Acos:
                 case ConditionalFormulaScalarFunctionKind.Atan:
+                case ConditionalFormulaScalarFunctionKind.Atan2:
                 case ConditionalFormulaScalarFunctionKind.Cos:
                 case ConditionalFormulaScalarFunctionKind.Tan:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
@@ -2336,6 +2342,15 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Atan:
                     result = Math.Atan(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Atan2:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var second) ||
+                        first == 0d && second == 0d)
+                    {
+                        return false;
+                    }
+
+                    result = Math.Atan2(second, first);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cos:
                     result = Math.Cos(first);
