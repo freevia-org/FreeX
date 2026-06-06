@@ -2636,8 +2636,7 @@ public partial class FileAdapterSmokeTests
         formula.Attribute("ref")!.Value.Should().Be("A2:A2");
         formula.Attribute("ca").Should().NotBeNull();
         formula.Attribute("ca")!.Value.Should().Be("1");
-        formula.Attribute("customAttr").Should().NotBeNull();
-        formula.Attribute("customAttr")!.Value.Should().Be("formula-native");
+        formula.Attribute("customAttr").Should().BeNull();
     }
 
     [Fact]
@@ -15880,21 +15879,11 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "sheetData")!
             .Attribute("nativeSheetDataAttr")
             .Should()
-            .NotBeNull();
-        worksheetXml.Root!
-            .Element(worksheetNs + "sheetData")!
-            .Attribute("nativeSheetDataAttr")!
-            .Value
-            .Should()
-            .Be("kept");
+            .BeNull();
         row.Attribute("thickTop")!.Value.Should().Be("1");
         row.Attribute("ph")!.Value.Should().Be("1");
-        row.Attribute("customAttr")!.Value.Should().Be("row-native");
-        row.Element(XName.Get("rowNativeChild", "urn:freex:test"))!
-            .Attribute("value")!
-            .Value
-            .Should()
-            .Be("kept");
+        row.Attribute("customAttr").Should().BeNull();
+        row.Element(XName.Get("rowNativeChild", "urn:freex:test")).Should().BeNull();
     }
 
     [Fact]
@@ -15925,15 +15914,11 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "sheetData")!
             .Descendants(worksheetNs + "c")
             .Single(element => element.Attribute("r")?.Value == "A2");
-        cell.Attribute("cm")!.Value.Should().Be("2");
-        cell.Attribute("vm")!.Value.Should().Be("1");
+        cell.Attribute("cm").Should().BeNull();
+        cell.Attribute("vm").Should().BeNull();
         cell.Attribute("ph")!.Value.Should().Be("1");
-        cell.Attribute("customAttr")!.Value.Should().Be("cell-native");
-        cell.Element(XName.Get("cellNativeChild", "urn:freex:test"))!
-            .Attribute("value")!
-            .Value
-            .Should()
-            .Be("kept");
+        cell.Attribute("customAttr").Should().BeNull();
+        cell.Element(XName.Get("cellNativeChild", "urn:freex:test")).Should().BeNull();
     }
 
     [Fact]
@@ -16013,16 +15998,10 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "cols")!
             .Attribute("nativeColsAttr")
             .Should()
-            .NotBeNull();
-        worksheetXml.Root!
-            .Element(worksheetNs + "cols")!
-            .Attribute("nativeColsAttr")!
-            .Value
-            .Should()
-            .Be("kept");
+            .BeNull();
         column.Attribute("bestFit")!.Value.Should().Be("1");
         column.Attribute("phonetic")!.Value.Should().Be("1");
-        column.Attribute("customAttr")!.Value.Should().Be("column-native");
+        column.Attribute("customAttr").Should().BeNull();
     }
 
     [Fact]

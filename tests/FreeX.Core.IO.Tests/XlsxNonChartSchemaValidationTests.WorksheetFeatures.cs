@@ -1290,6 +1290,51 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceRow4.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookFullSave_SanitizesInvalidWorksheetGridXmlForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetGridXmlSourceWorkbook());
+        SetWorksheetGridXmlInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("full-save edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetGridXmlSanitized(saved);
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorksheetGridXmlForSchemaValidity()
+    {
+        using var source = Save(CreateWorksheetGridXmlSourceWorkbook());
+        SetWorksheetGridXmlInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(5));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertWorksheetGridXmlSanitized(saved);
+    }
+
 
     [Fact]
     public void PageLayout_ProducesSchemaValidWorkbook()
@@ -2300,6 +2345,123 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             "sheetFormatPr",
             """<e baseColWidth="12" zeroHeight="0" thickTop="1" thickBottom="0" outlineLevelRow="2" outlineLevelCol="2" />""");
         return bag;
+    }
+
+    private static Workbook CreateWorksheetGridXmlSourceWorkbook()
+    {
+        var workbook = new Workbook("WorksheetGridXmlSchema");
+        var sheet = workbook.AddSheet("Data");
+        sheet.ColumnWidths[2] = 14.0;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        var formulaCell = Cell.FromFormula("A1*2");
+        formulaCell.Value = new NumberValue(2);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), formulaCell);
+        return workbook;
+    }
+
+    private static void SetWorksheetGridXmlInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var root = worksheetXml.Root!;
+
+        var columns = root.Element(worksheetNs + "cols")!;
+        columns.SetAttributeValue("nativeColsAttr", "kept");
+        var column = columns.Elements(worksheetNs + "col")
+            .Single(element => element.Attribute("min")?.Value == "2" && element.Attribute("max")?.Value == "2");
+        column.SetAttributeValue("bestFit", "1");
+        column.SetAttributeValue("phonetic", "1");
+        column.SetAttributeValue("customAttr", "column-native");
+
+        var sheetData = root.Element(worksheetNs + "sheetData")!;
+        sheetData.SetAttributeValue("nativeSheetDataAttr", "kept");
+        var row = sheetData.Elements(worksheetNs + "row")
+            .Single(element => element.Attribute("r")?.Value == "2");
+        row.SetAttributeValue("thickTop", "1");
+        row.SetAttributeValue("ph", "1");
+        row.SetAttributeValue("customAttr", "row-native");
+        row.Add(
+            new XElement(freexNs + "rowNativeChild", new XAttribute("value", "kept")),
+            new XElement(
+                worksheetNs + "extLst",
+                new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{FREEX-ROW-GRID-EXT}"),
+                    new XElement(freexNs + "rowExt", new XAttribute("value", "row-extension")))));
+
+        var cell = row.Elements(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A2");
+        cell.SetAttributeValue("cm", "2");
+        cell.SetAttributeValue("vm", "1");
+        cell.SetAttributeValue("ph", "1");
+        cell.SetAttributeValue("customAttr", "cell-native");
+        cell.Add(
+            new XElement(freexNs + "cellNativeChild", new XAttribute("value", "kept")),
+            new XElement(
+                worksheetNs + "extLst",
+                new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{FREEX-CELL-GRID-EXT}"),
+                    new XElement(freexNs + "cellExt", new XAttribute("value", "cell-extension")))));
+
+        var formula = cell.Element(worksheetNs + "f")!;
+        formula.SetAttributeValue("t", "array");
+        formula.SetAttributeValue("ref", "A2:A2");
+        formula.SetAttributeValue("ca", "1");
+        formula.SetAttributeValue("customAttr", "formula-native");
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+    }
+
+    private static void AssertWorksheetGridXmlSanitized(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexNs = "urn:freex:test";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var root = worksheetXml.Root!;
+
+        var columns = root.Element(worksheetNs + "cols")!;
+        columns.Attribute("nativeColsAttr").Should().BeNull();
+        var column = columns.Elements(worksheetNs + "col")
+            .Single(element => element.Attribute("min")?.Value == "2" && element.Attribute("max")?.Value == "2");
+        column.Attribute("bestFit")!.Value.Should().Be("1");
+        column.Attribute("phonetic")!.Value.Should().Be("1");
+        column.Attribute("customAttr").Should().BeNull();
+
+        var sheetData = root.Element(worksheetNs + "sheetData")!;
+        sheetData.Attribute("nativeSheetDataAttr").Should().BeNull();
+        var row = sheetData.Elements(worksheetNs + "row")
+            .Single(element => element.Attribute("r")?.Value == "2");
+        row.Attribute("thickTop")!.Value.Should().Be("1");
+        row.Attribute("ph")!.Value.Should().Be("1");
+        row.Attribute("customAttr").Should().BeNull();
+        row.Element(freexNs + "rowNativeChild").Should().BeNull();
+        row.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Element(freexNs + "rowExt")!
+            .Attribute("value")!.Value.Should().Be("row-extension");
+
+        var cell = row.Elements(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A2");
+        cell.Attribute("cm").Should().BeNull();
+        cell.Attribute("vm").Should().BeNull();
+        cell.Attribute("ph")!.Value.Should().Be("1");
+        cell.Attribute("customAttr").Should().BeNull();
+        cell.Element(freexNs + "cellNativeChild").Should().BeNull();
+        cell.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Element(freexNs + "cellExt")!
+            .Attribute("value")!.Value.Should().Be("cell-extension");
+
+        var formula = cell.Element(worksheetNs + "f")!;
+        formula.Attribute("t")!.Value.Should().Be("array");
+        formula.Attribute("ref")!.Value.Should().Be("A2:A2");
+        formula.Attribute("ca")!.Value.Should().Be("1");
+        formula.Attribute("customAttr").Should().BeNull();
     }
 
     private static Workbook CreatePageLayoutSourceWorkbook()
