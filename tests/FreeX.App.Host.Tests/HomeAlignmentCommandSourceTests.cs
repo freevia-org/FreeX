@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -68,7 +67,7 @@ public sealed class HomeAlignmentCommandSourceTests
     [Fact]
     public void AlignmentCommandHandlers_RouteThroughStyleDiffsAndRepeatableMergeCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Left))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Center))");
