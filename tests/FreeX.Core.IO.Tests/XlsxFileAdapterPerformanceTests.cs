@@ -408,6 +408,8 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         snapshotSource.Should().NotContain("new Dictionary<(uint Row, uint Col), XlsxPatchCell>");
         snapshotSource.Should().Contain("sheet.TryGetCompressedStyleOnlyRuns(out var runs)");
         snapshotSource.Should().Contain("ReadCompressedSourceStyleOnlyCells(");
+        snapshotSource.Should().Contain("XlsxSourceStyleOnlyCellCollection.FromRuns");
+        snapshotSource.Should().Contain("XlsxSourceStyleOnlyRunEntry");
         snapshotSource.Should().Contain("StyleOnlyRunIsBeforeCell");
         snapshotSource.Should().Contain("IsCellPatchBaselineLazy: true");
         snapshotSource.Should().Contain("patch_blocked_deferred_baseline_not_materialized");
