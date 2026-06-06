@@ -920,6 +920,9 @@ public static partial class AccessibilityCheckerService
             case "LOG10":
                 kind = ConditionalFormulaScalarFunctionKind.Log10;
                 return true;
+            case "PI":
+                kind = ConditionalFormulaScalarFunctionKind.Pi;
+                return true;
             case "VALUE":
                 kind = ConditionalFormulaScalarFunctionKind.Value;
                 return true;
@@ -1018,7 +1021,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Today or
             ConditionalFormulaScalarFunctionKind.Now or
-            ConditionalFormulaScalarFunctionKind.Na => argumentCount == 0,
+            ConditionalFormulaScalarFunctionKind.Na or
+            ConditionalFormulaScalarFunctionKind.Pi => argumentCount == 0,
             ConditionalFormulaScalarFunctionKind.Row or
             ConditionalFormulaScalarFunctionKind.Column => argumentCount is 0 or 1,
             _ => false
@@ -1547,6 +1551,7 @@ public static partial class AccessibilityCheckerService
         Exp,
         Ln,
         Log10,
+        Pi,
         Value,
         Len,
         Upper,
@@ -2056,6 +2061,9 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Ln:
                 case ConditionalFormulaScalarFunctionKind.Log10:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Pi:
+                    value = new NumberValue(Math.PI);
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Value:
                     return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Len:
