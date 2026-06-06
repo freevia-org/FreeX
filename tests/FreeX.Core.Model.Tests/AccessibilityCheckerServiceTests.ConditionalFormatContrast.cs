@@ -2817,6 +2817,21 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("HOUR($A1)=0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("MINUTE(45000)=0", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("SECOND(2958465)=0", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("HOUR(TIME(12,5,59))=12", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("MINUTE(TIME(12,5,59))=5", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SECOND(TIME(12,5,59))=59", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("TIME(12,5,59)>0.5", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("ABS(TIME(25,0,0)-TIME(1,0,0))<0.000000000001", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("TIME(48,0,1)<TIME(0,0,2)", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("TIME(1.9,2.9,3.9)=TIME(1,2,3)", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,3,15),$A1)>30", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,2,28),DATE(2023,3,31))=30", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(1900,2,28),DATE(1900,3,31))=33", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(1900,1,30),DATE(1900,2,28))=28", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,1,31),DATE(2023,2,28))=28", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,4,30),DATE(2023,5,31))=30", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,1,31),DATE(2023,2,28),TRUE)=28", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,1,31),DATE(2023,3,31),1)=60", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -2842,6 +2857,12 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("ISNUMBER(HOUR($D1))", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("HOUR($D1)", "B1", "B2", "B4");
         AssertFormulaDateFunctionContrastLocations("HOUR($D1)+MINUTE($D1)=46", "B2");
+        AssertFormulaDateFunctionContrastLocations("IF(TIME(HOUR($D1),MINUTE($D1),SECOND($D1))>=0.5,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(TIME(12,0,0)),TIME(12,0,0))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("TIME(1,0,0)*24=1", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("IF(DAYS360(DATE(2023,3,15),$A1)>=30,TRUE,FALSE)", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(ISNUMBER(DAYS360(DATE(2023,3,15),$A1)),DAYS360(DATE(2023,3,15),$A1)>=30)", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,3,15),$A1)+1>31", "B3", "B4");
     }
 
     [Fact]
@@ -2853,6 +2874,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("SUM(DAYS($A1,DATE(2023,3,15)),1)>=37", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("SUM(EOMONTH($A1,0),1)=45017", "B1", "B2");
         AssertFormulaDateFunctionContrastLocations("SUM(HOUR($D1),MINUTE($D1),SECOND($D1))=141", "B4");
+        AssertFormulaDateFunctionContrastLocations("SUM(TIME(12,0,0),0.5)=1", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("AVERAGE(TIME(6,0,0),TIME(18,0,0))=0.5", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("SUM(DAYS360(DATE(2023,3,15),$A1),1)>31", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("AVERAGE(DAYS360(DATE(2023,3,15),$A1),1)>15", "B3", "B4");
     }
 
     [Fact]
@@ -2896,12 +2921,26 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("DAYS($A1,DATE(2023,3,15),1)>0");
         AssertFormulaDateFunctionContrastLocations("DAYS(\"2023-03-16\",DATE(2023,3,15))>0");
         AssertFormulaDateFunctionContrastLocations("DAYS($A1,2958466)>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS360($A1)>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS360($A1,DATE(2023,3,15),0,1)>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(\"2023-03-16\",DATE(2023,3,15))>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS360($A1,2958466)>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS360($A1,DATE(2023,3,15),\"TRUE\")>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS360($A1,DATE(2023,3,15),1E308*1E308)>0");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(A0,DATE(2023,3,15))>0");
         AssertFormulaDateFunctionContrastLocations("HOUR(\"0.5\")>0");
         AssertFormulaDateFunctionContrastLocations("MINUTE(-1)>0");
         AssertFormulaDateFunctionContrastLocations("SECOND(2958465.1)>0");
         AssertFormulaDateFunctionContrastLocations("HOUR($D1,1)>0");
         AssertFormulaDateFunctionContrastLocations("MINUTE(A0)>0");
         AssertFormulaDateFunctionContrastLocations("SECOND(1E308)>0");
+        AssertFormulaDateFunctionContrastLocations("TIME(1,2)>0");
+        AssertFormulaDateFunctionContrastLocations("TIME(1,2,3,4)>0");
+        AssertFormulaDateFunctionContrastLocations("TIME(\"1\",2,3)>0");
+        AssertFormulaDateFunctionContrastLocations("TIME(-1,0,0)>0");
+        AssertFormulaDateFunctionContrastLocations("TIME(32768,0,0)>0");
+        AssertFormulaDateFunctionContrastLocations("TIME(1E308*1E308,0,0)>0");
+        AssertFormulaDateFunctionContrastLocations("TIME(A0,0,0)>0");
     }
 
     [Fact]

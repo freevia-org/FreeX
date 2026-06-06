@@ -1177,6 +1177,9 @@ public static partial class AccessibilityCheckerService
             case "DATE":
                 kind = ConditionalFormulaScalarFunctionKind.Date;
                 return true;
+            case "TIME":
+                kind = ConditionalFormulaScalarFunctionKind.Time;
+                return true;
             case "YEAR":
                 kind = ConditionalFormulaScalarFunctionKind.Year;
                 return true;
@@ -1218,6 +1221,9 @@ public static partial class AccessibilityCheckerService
                 return true;
             case "DAYS":
                 kind = ConditionalFormulaScalarFunctionKind.Days;
+                return true;
+            case "DAYS360":
+                kind = ConditionalFormulaScalarFunctionKind.Days360;
                 return true;
             case "NA":
                 kind = ConditionalFormulaScalarFunctionKind.Na;
@@ -1350,10 +1356,12 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.EDate or
             ConditionalFormulaScalarFunctionKind.EOMonth or
             ConditionalFormulaScalarFunctionKind.Days => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Days360 => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
-            ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
+            ConditionalFormulaScalarFunctionKind.Date or
+            ConditionalFormulaScalarFunctionKind.Time => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Multinomial => argumentCount is >= 1 and <= MaxFormulaMultinomialArgumentCount,
             ConditionalFormulaScalarFunctionKind.Gcd or
             ConditionalFormulaScalarFunctionKind.Lcm => argumentCount is >= 1 and <= MaxFormulaGcdArgumentCount,
@@ -1997,6 +2005,7 @@ public static partial class AccessibilityCheckerService
         Search,
         Exact,
         Date,
+        Time,
         Year,
         Month,
         Day,
@@ -2011,6 +2020,7 @@ public static partial class AccessibilityCheckerService
         EDate,
         EOMonth,
         Days,
+        Days360,
         Na,
         Row,
         Column,
@@ -2638,6 +2648,7 @@ public static partial class AccessibilityCheckerService
                     value = new BoolValue(string.Equals(firstText, secondText, StringComparison.Ordinal));
                     return true;
                 case ConditionalFormulaScalarFunctionKind.Date:
+                case ConditionalFormulaScalarFunctionKind.Time:
                 case ConditionalFormulaScalarFunctionKind.Year:
                 case ConditionalFormulaScalarFunctionKind.Month:
                 case ConditionalFormulaScalarFunctionKind.Day:
@@ -2652,6 +2663,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.EDate:
                 case ConditionalFormulaScalarFunctionKind.EOMonth:
                 case ConditionalFormulaScalarFunctionKind.Days:
+                case ConditionalFormulaScalarFunctionKind.Days360:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Na:
                     value = ErrorValue.NA;
@@ -3388,6 +3400,17 @@ public static partial class AccessibilityCheckerService
 
                     value = dateValue;
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Time:
+                    if (!TryResolveFormulaTimePart(function.Arguments[0], rowOffset, colOffset, out var timeHour) ||
+                        !TryResolveFormulaTimePart(function.Arguments[1], rowOffset, colOffset, out var timeMinute) ||
+                        !TryResolveFormulaTimePart(function.Arguments[2], rowOffset, colOffset, out var timeSecond))
+                    {
+                        return false;
+                    }
+
+                    var timeFraction = (timeHour * 3600d + timeMinute * 60d + timeSecond) / 86400d;
+                    value = new NumberValue(timeFraction - Math.Floor(timeFraction));
+                    return true;
                 case ConditionalFormulaScalarFunctionKind.Year:
                 case ConditionalFormulaScalarFunctionKind.Month:
                 case ConditionalFormulaScalarFunctionKind.Day:
@@ -3474,9 +3497,70 @@ public static partial class AccessibilityCheckerService
 
                     value = new NumberValue(FormulaDateToExcelSerial(endDate) - FormulaDateToExcelSerial(startDate));
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Days360:
+                    if (!TryEvaluateFormulaDays360(function, rowOffset, colOffset, out var days360))
+                        return false;
+
+                    value = new NumberValue(days360);
+                    return true;
                 default:
                     return false;
             }
+        }
+
+        private bool TryEvaluateFormulaDays360(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out int days)
+        {
+            days = 0;
+            if (!TryResolveFormulaFunctionDate(function.Arguments[0], rowOffset, colOffset, out var startDate) ||
+                !TryResolveFormulaFunctionDate(function.Arguments[1], rowOffset, colOffset, out var endDate))
+            {
+                return false;
+            }
+
+            var european = false;
+            if (function.Arguments.Count == 3)
+            {
+                if (!TryResolveFormulaFunctionNumber(function.Arguments[2], rowOffset, colOffset, out var method) ||
+                    !double.IsFinite(method))
+                {
+                    return false;
+                }
+
+                european = method != 0;
+            }
+
+            var start = startDate.Date;
+            var end = endDate.Date;
+            var startDay = start.Day;
+            var endDay = end.Day;
+
+            if (european)
+            {
+                if (startDay == 31)
+                    startDay = 30;
+                if (endDay == 31)
+                    endDay = 30;
+            }
+            else
+            {
+                if (IsLastDayOfFebruary(start))
+                    startDay = 30;
+                if (IsLastDayOfFebruary(end) && startDay == 30)
+                    endDay = 30;
+                if (startDay == 31)
+                    startDay = 30;
+                if (endDay == 31 && startDay == 30)
+                    endDay = 30;
+            }
+
+            days = 360 * (end.Year - start.Year) +
+                30 * (end.Month - start.Month) +
+                (endDay - startDay);
+            return true;
         }
 
         private bool TryEvaluateFormulaEDate(
@@ -3654,6 +3738,25 @@ public static partial class AccessibilityCheckerService
             }
 
             return TryGetFormulaInteger(number.Value, out part);
+        }
+
+        private bool TryResolveFormulaTimePart(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out int part)
+        {
+            part = 0;
+            if (!TryResolveFormulaFunctionNumber(operand, rowOffset, colOffset, out var number) ||
+                !double.IsFinite(number) ||
+                number < 0 ||
+                number > 32767)
+            {
+                return false;
+            }
+
+            part = (int)Math.Truncate(number);
+            return true;
         }
 
         private bool TryResolveFormulaFunctionDate(
@@ -3915,6 +4018,11 @@ public static partial class AccessibilityCheckerService
                 return false;
             }
         }
+
+        private static bool IsLastDayOfFebruary(DateTime date) =>
+            date.Year != 1900 &&
+            date.Month == 2 &&
+            date.Day == DateTime.DaysInMonth(date.Year, date.Month);
 
         private static bool TryGetFormulaInteger(double value, out int integer)
         {
