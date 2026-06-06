@@ -15228,8 +15228,8 @@ public partial class FileAdapterSmokeTests
         var root = worksheetXml.Root!;
 
         root.Element(worksheetNs + "sheetProtection")!.Attribute("algorithmName")!.Value.Should().Be("SHA-512");
-        root.Element(worksheetNs + "printOptions")!.Attribute("customPrintOptionsAttr")!.Value.Should().Be("kept");
-        root.Element(worksheetNs + "dimension")!.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept");
+        root.Element(worksheetNs + "printOptions")!.Attribute("customPrintOptionsAttr").Should().BeNull();
+        root.Element(worksheetNs + "dimension")?.Attribute("nativeDimensionAttr").Should().BeNull();
         root.Element(worksheetNs + "sheetPr")!.Attribute("filterMode")!.Value.Should().Be("1");
         root.Element(worksheetNs + "sheetViews")!
             .Element(worksheetNs + "sheetView")!
@@ -15237,7 +15237,7 @@ public partial class FileAdapterSmokeTests
             .Value
             .Should()
             .Be("1");
-        root.Element(worksheetNs + "pageMargins")!.Attribute("customMarginsAttr")!.Value.Should().Be("kept");
+        root.Element(worksheetNs + "pageMargins")!.Attribute("customMarginsAttr").Should().BeNull();
         root.Element(worksheetNs + "rowBreaks")!
             .Elements(worksheetNs + "brk")
             .Single(element => element.Attribute("id")?.Value == "20")
@@ -15250,7 +15250,7 @@ public partial class FileAdapterSmokeTests
             .Attribute("customAttr")
             .Should()
             .BeNull();
-        root.Element(worksheetNs + "headerFooter")!.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept");
+        root.Element(worksheetNs + "headerFooter")!.Attribute("nativeHeaderFooterAttr").Should().BeNull();
     }
 
     [Fact]
@@ -15597,7 +15597,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetDimensionNativeAttributes()
+    public void XlsxAdapter_LoadedWorkbookSave_DropsWorksheetDimensionNativeAttributesFromSavedXml()
     {
         var workbook = new Workbook("DimensionNativeMetadata");
         var sheet = workbook.AddSheet("Data");
@@ -15628,8 +15628,7 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension");
         dimension.Should().NotBeNull();
-        dimension!.Attribute("nativeDimensionAttr").Should().NotBeNull();
-        dimension.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept");
+        dimension!.Attribute("nativeDimensionAttr").Should().BeNull();
         dimension.Attribute("ref")!.Value.Should().Be("A1:A2");
         dimension.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
