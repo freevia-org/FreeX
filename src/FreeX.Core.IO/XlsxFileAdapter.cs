@@ -273,6 +273,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             {
                 var addr = new CellAddress(sheet.Id, (uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber);
 
+                // Legacy multi-cell array formula (CSE / Ctrl+Shift+Enter): Excel stores one formula on the
+                // top-left anchor with a declared <f t="array" ref="..."> range and propagates it to every
+                // covered cell. Load only the anchor as the formula cell — its evaluation spills across the
+                // ref range. Covered (non-anchor) cells must not become independent formula cells, or they
+                // mutually block each other's spill and the whole range collapses to #SPILL!.
+                if (xlCell.HasArrayFormula && xlCell.FormulaReference is { } arrayRef &&
+                    (arrayRef.FirstAddress.RowNumber != xlCell.Address.RowNumber ||
+                     arrayRef.FirstAddress.ColumnNumber != xlCell.Address.ColumnNumber))
+                {
+                    continue;
+                }
+
                 Cell cell;
                 if (xlCell.HasFormula)
                 {
