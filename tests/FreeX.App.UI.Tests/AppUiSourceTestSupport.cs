@@ -11,5 +11,9 @@ internal static class AppUiSourceTestSupport
         string.Join(separator, fileNames.Select(ReadAppUiSource));
 
     private static string ReadAppUiSource(string fileName) =>
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", fileName));
+        File.ReadAllText(WorkspaceFileLocator.FindWithFailureMessage(
+            "Unable to locate workspace file",
+            "src",
+            "FreeX.App.UI",
+            fileName));
 }
