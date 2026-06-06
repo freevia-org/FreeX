@@ -12,8 +12,7 @@ public partial class XlsxCorpusRunnerTests
 {
     private static IReadOnlyList<ManifestRow> ReadManifestRows()
     {
-        var manifestPath = CorpusPath("manifest.csv");
-        return File.ReadAllLines(manifestPath)
+        return TestWorkspaceFiles.ReadWorkspaceLines("test-corpus", "manifest.csv")
             .Skip(1)
             .Where(line => !string.IsNullOrWhiteSpace(line))
             .Select(ParseManifestRow)

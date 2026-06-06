@@ -8,7 +8,7 @@ public sealed class XmlFilesPreflightTests
     [Fact]
     public void XmlFilesPreflight_ValidatesXmlBackedRepositoryFiles()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-XmlFiles.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-XmlFiles.ps1");
 
         script.Should().Contain("[string[]]$XmlRoots = @(\"Directory.Build.props\", \"FreeX.slnx\", \"FreeX.DefaultTests.slnx\", \"FreeX.UiTests.slnx\", \"src\", \"tests\")");
         script.Should().Contain("\".slnx\"");

@@ -65,7 +65,11 @@ internal static class XlsxWorkbookThemeWriter
             {
                 var fontScheme = XElement.Parse(theme.NativeFontSchemeXml);
                 if (fontScheme.Name == drawingNs + "fontScheme")
-                    return new XElement(fontScheme);
+                {
+                    var sanitizedFontScheme = new XElement(fontScheme);
+                    XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(sanitizedFontScheme);
+                    return sanitizedFontScheme;
+                }
             }
             catch
             {
@@ -84,7 +88,7 @@ internal static class XlsxWorkbookThemeWriter
     // the theme part schema-invalid and Excel refuses to open the whole workbook.
     private static XElement CreateFontCollectionElement(string collectionName, string latinTypeface, XNamespace drawingNs) =>
         new(drawingNs + collectionName,
-            new XElement(drawingNs + "latin", new XAttribute("typeface", latinTypeface)),
+            new XElement(drawingNs + "latin", new XAttribute("typeface", XlsxFontNameSanitizer.NormalizeFontName(latinTypeface))),
             new XElement(drawingNs + "ea", new XAttribute("typeface", string.Empty)),
             new XElement(drawingNs + "cs", new XAttribute("typeface", string.Empty)));
 
@@ -151,10 +155,14 @@ internal static class XlsxWorkbookThemeWriter
                     XmlResolver = null
                 });
             var document = XDocument.Load(xmlReader);
-            elements.AddRange(document.Root!
-                .Elements()
-                .Where(element => IsSupportedThemeSupplementElement(element, drawingNs))
-                .Select(element => new XElement(element)));
+            foreach (var element in document.Root!
+                         .Elements()
+                         .Where(element => IsSupportedThemeSupplementElement(element, drawingNs)))
+            {
+                var clone = new XElement(element);
+                XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(clone);
+                elements.Add(clone);
+            }
         }
         catch
         {
@@ -232,7 +240,11 @@ internal static class XlsxWorkbookThemeWriter
             {
                 var objectDefaults = XElement.Parse(defaults.NativeObjectDefaultsXml);
                 if (objectDefaults.Name == drawingNs + "objectDefaults")
-                    return [new XElement(objectDefaults)];
+                {
+                    var sanitizedObjectDefaults = new XElement(objectDefaults);
+                    XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(sanitizedObjectDefaults);
+                    return [sanitizedObjectDefaults];
+                }
             }
             catch
             {
@@ -294,7 +306,9 @@ internal static class XlsxWorkbookThemeWriter
         if (fill is not null)
             runPropertiesChildren.Add(fill);
         if (!string.IsNullOrWhiteSpace(text.Typeface))
-            runPropertiesChildren.Add(new XElement(drawingNs + "latin", new XAttribute("typeface", text.Typeface)));
+            runPropertiesChildren.Add(new XElement(
+                drawingNs + "latin",
+                new XAttribute("typeface", XlsxFontNameSanitizer.NormalizeFontName(text.Typeface))));
 
         return runPropertiesChildren.Count == 0
             ? null
@@ -376,4 +390,5 @@ internal static class XlsxWorkbookThemeWriter
             WorkbookThemeColorSlot.FollowedHyperlink => "folHlink",
             _ => "accent1"
         };
+
 }
