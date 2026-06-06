@@ -704,6 +704,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaDoubleFactorialInput = 300;
     private const int MaxFormulaCombinInput = 1_000_000;
     private const int MaxFormulaCombinIterations = 10_000;
+    private const int MaxFormulaCombinaCombinationInput = 1_029;
     private const int MaxFormulaPermutInput = 1_000_000;
     private const int MaxFormulaPermutIterations = 10_000;
     private const int MaxFormulaTextSliceLength = 32_767;
@@ -938,6 +939,9 @@ public static partial class AccessibilityCheckerService
             case "COMBIN":
                 kind = ConditionalFormulaScalarFunctionKind.Combin;
                 return true;
+            case "COMBINA":
+                kind = ConditionalFormulaScalarFunctionKind.Combina;
+                return true;
             case "PERMUT":
                 kind = ConditionalFormulaScalarFunctionKind.Permut;
                 return true;
@@ -1134,6 +1138,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Quotient or
             ConditionalFormulaScalarFunctionKind.Combin or
+            ConditionalFormulaScalarFunctionKind.Combina or
             ConditionalFormulaScalarFunctionKind.Permut or
             ConditionalFormulaScalarFunctionKind.Power or
             ConditionalFormulaScalarFunctionKind.Atan2 or
@@ -1681,6 +1686,7 @@ public static partial class AccessibilityCheckerService
         Mod,
         Quotient,
         Combin,
+        Combina,
         Permut,
         Sqrt,
         SqrtPi,
@@ -2220,6 +2226,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Quotient:
                 case ConditionalFormulaScalarFunctionKind.Combin:
+                case ConditionalFormulaScalarFunctionKind.Combina:
                 case ConditionalFormulaScalarFunctionKind.Permut:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
@@ -2459,6 +2466,14 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Combin:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var numberChosen) ||
                         !TryCombinFormulaNumber(first, numberChosen, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Combina:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var combinaNumberChosen) ||
+                        !TryCombinaFormulaNumber(first, combinaNumberChosen, out result))
                     {
                         return false;
                     }
@@ -3134,6 +3149,53 @@ public static partial class AccessibilityCheckerService
                 return false;
             }
 
+            return TryCombinFormulaIntegers(n, k, out result);
+        }
+
+        private static bool TryCombinaFormulaNumber(double number, double numberChosen, out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaCombinInteger(number, out var n) ||
+                !TryGetFormulaCombinInteger(numberChosen, out var k))
+            {
+                return false;
+            }
+
+            if (n == 0 && k > 0)
+                return false;
+
+            if (k == 0)
+            {
+                result = 1d;
+                return true;
+            }
+
+            if (k == 1)
+            {
+                result = n;
+                return true;
+            }
+
+            if (n > int.MaxValue - k + 1)
+                return false;
+
+            var repetitionsN = n + k - 1;
+            if (repetitionsN > MaxFormulaCombinaCombinationInput)
+                return false;
+
+            return TryCombinFormulaIntegers(repetitionsN, k, out result);
+        }
+
+        private static bool TryCombinFormulaIntegers(int n, int k, out double result)
+        {
+            result = 0d;
+            if (n < 0 ||
+                k < 0 ||
+                k > n)
+            {
+                return false;
+            }
+
             k = Math.Min(k, n - k);
             if (k > MaxFormulaCombinIterations)
                 return false;
@@ -3141,15 +3203,18 @@ public static partial class AccessibilityCheckerService
             result = 1d;
             for (var i = 1; i <= k; i++)
             {
-                var factor = (double)(n - k + i) / i;
-                if (!double.IsFinite(factor) ||
-                    factor <= 0d ||
-                    result > double.MaxValue / factor)
+                var numerator = n - k + i;
+                if (numerator <= 0 ||
+                    result > double.MaxValue / numerator)
                 {
                     return false;
                 }
 
-                result *= factor;
+                result *= numerator;
+                if (!double.IsFinite(result))
+                    return false;
+
+                result /= i;
                 if (!double.IsFinite(result))
                     return false;
             }
