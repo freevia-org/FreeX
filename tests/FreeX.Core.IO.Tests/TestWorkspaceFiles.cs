@@ -8,12 +8,21 @@ internal static class TestWorkspaceFiles
     internal static string FindRepoFile(params string[] relativeParts) =>
         TestWorkspaceFileLocator.FindFromCurrentDirectoryOrFallback(relativeParts);
 
+    internal static string ReadWorkspaceText(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
+
+    internal static string[] ReadWorkspaceLines(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllLines(relativeParts);
+
+    internal static string ReadRepoText(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllTextFromCurrentDirectoryOrFallback(relativeParts);
+
     internal static string ReadCoreIoSource(string fileName) =>
-        File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", fileName));
+        ReadWorkspaceText("src", "FreeX.Core.IO", fileName);
 
     internal static string ReadCoreIoRepoSource(string fileName) =>
-        File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", fileName));
+        ReadRepoText("src", "FreeX.Core.IO", fileName);
 
     internal static string ReadCoreModelRepoSource(string fileName) =>
-        File.ReadAllText(FindRepoFile("src", "FreeX.Core.Model", fileName));
+        ReadRepoText("src", "FreeX.Core.Model", fileName);
 }

@@ -7,8 +7,7 @@ public sealed class NativeJsonSchemaDocumentationTests
     [Fact]
     public void NativeJsonSchemaReference_DocumentsCurrentHeaderAndDtoFamilies()
     {
-        var path = TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/native-json-schema.md");
-        var doc = File.ReadAllText(path);
+        var doc = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/native-json-schema.md");
 
         doc.Should().Contain("FileFormat");
         doc.Should().Contain("FreeX.NativeJsonWorkbook");
@@ -56,7 +55,7 @@ public sealed class NativeJsonSchemaDocumentationTests
     [Fact]
     public void NativeJsonSchemaReference_DocumentsMigrationPolicy()
     {
-        var doc = File.ReadAllText(TestWorkspaceFiles.FindWorkspaceFile("docs", "formats/native-json-schema.md"));
+        var doc = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/native-json-schema.md");
 
         doc.Should().Contain("Legacy unversioned files");
         doc.Should().Contain("unsupported future versions");
