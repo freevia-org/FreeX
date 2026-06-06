@@ -700,6 +700,7 @@ public static partial class AccessibilityCheckerService
 
     private const ulong MaxFormulaAggregateRangeCells = 10_000;
     private const int MaxFormulaRoundDigits = 15;
+    private const int MaxFormulaFactorialInput = 170;
     private const int MaxFormulaTextSliceLength = 32_767;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
@@ -908,6 +909,9 @@ public static partial class AccessibilityCheckerService
             case "TRUNC":
                 kind = ConditionalFormulaScalarFunctionKind.Trunc;
                 return true;
+            case "FACT":
+                kind = ConditionalFormulaScalarFunctionKind.Fact;
+                return true;
             case "MOD":
                 kind = ConditionalFormulaScalarFunctionKind.Mod;
                 return true;
@@ -1047,6 +1051,7 @@ public static partial class AccessibilityCheckerService
         {
             ConditionalFormulaScalarFunctionKind.Abs or
             ConditionalFormulaScalarFunctionKind.Int or
+            ConditionalFormulaScalarFunctionKind.Fact or
             ConditionalFormulaScalarFunctionKind.Sqrt or
             ConditionalFormulaScalarFunctionKind.SqrtPi or
             ConditionalFormulaScalarFunctionKind.Sign or
@@ -1615,6 +1620,7 @@ public static partial class AccessibilityCheckerService
         RoundUp,
         RoundDown,
         Trunc,
+        Fact,
         Mod,
         Sqrt,
         SqrtPi,
@@ -2141,6 +2147,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.RoundUp:
                 case ConditionalFormulaScalarFunctionKind.RoundDown:
                 case ConditionalFormulaScalarFunctionKind.Trunc:
+                case ConditionalFormulaScalarFunctionKind.Fact:
                 case ConditionalFormulaScalarFunctionKind.Mod:
                 case ConditionalFormulaScalarFunctionKind.Sqrt:
                 case ConditionalFormulaScalarFunctionKind.SqrtPi:
@@ -2317,6 +2324,16 @@ public static partial class AccessibilityCheckerService
                     }
 
                     result = RoundDownFormulaNumber(first, truncDigits);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Fact:
+                    if (first < 0)
+                        return false;
+
+                    var factorialInput = Math.Truncate(first);
+                    if (factorialInput > MaxFormulaFactorialInput)
+                        return false;
+
+                    result = FactorialFormulaNumber((int)factorialInput);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Mod:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var divisor) ||
@@ -2869,6 +2886,17 @@ public static partial class AccessibilityCheckerService
             }
 
             return Math.Floor(value);
+        }
+
+        private static double FactorialFormulaNumber(int value)
+        {
+            var result = 1d;
+            for (var factor = 2; factor <= value; factor++)
+            {
+                result *= factor;
+            }
+
+            return result;
         }
 
         private bool TryEvaluateFormulaAggregate(
