@@ -1309,14 +1309,23 @@ public static partial class AccessibilityCheckerService
             case "AVERAGE":
                 kind = ConditionalFormulaAggregateKind.Average;
                 return true;
+            case "AVERAGEA":
+                kind = ConditionalFormulaAggregateKind.AverageA;
+                return true;
             case "MEDIAN":
                 kind = ConditionalFormulaAggregateKind.Median;
                 return true;
             case "MIN":
                 kind = ConditionalFormulaAggregateKind.Min;
                 return true;
+            case "MINA":
+                kind = ConditionalFormulaAggregateKind.MinA;
+                return true;
             case "MAX":
                 kind = ConditionalFormulaAggregateKind.Max;
+                return true;
+            case "MAXA":
+                kind = ConditionalFormulaAggregateKind.MaxA;
                 return true;
             case "COUNT":
                 kind = ConditionalFormulaAggregateKind.Count;
@@ -1836,9 +1845,12 @@ public static partial class AccessibilityCheckerService
         HarMean,
         Product,
         Average,
+        AverageA,
         Median,
         Min,
+        MinA,
         Max,
+        MaxA,
         Count,
         CountA,
         CountBlank
@@ -3875,9 +3887,12 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.HarMean when AreFormulaNumbersPositive(numericValues) => new NumberValue(HarMeanFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Product => new NumberValue(numericValues.Aggregate(1d, (product, number) => product * number)),
                 ConditionalFormulaAggregateKind.Average when numericValues.Count > 0 => new NumberValue(numericValues.Average()),
+                ConditionalFormulaAggregateKind.AverageA when numericValues.Count > 0 => new NumberValue(numericValues.Average()),
                 ConditionalFormulaAggregateKind.Median when numericValues.Count > 0 => new NumberValue(MedianFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Min when numericValues.Count > 0 => new NumberValue(numericValues.Min()),
+                ConditionalFormulaAggregateKind.MinA => new NumberValue(numericValues.Count > 0 ? numericValues.Min() : 0d),
                 ConditionalFormulaAggregateKind.Max when numericValues.Count > 0 => new NumberValue(numericValues.Max()),
+                ConditionalFormulaAggregateKind.MaxA => new NumberValue(numericValues.Count > 0 ? numericValues.Max() : 0d),
                 ConditionalFormulaAggregateKind.Count => new NumberValue(numericValues.Count),
                 ConditionalFormulaAggregateKind.CountA => new NumberValue(nonBlankCount),
                 ConditionalFormulaAggregateKind.CountBlank => new NumberValue(blankCount),
@@ -4063,36 +4078,28 @@ public static partial class AccessibilityCheckerService
             else
                 nonBlankCount++;
 
-            if (isDirectArgument &&
-                IsFormulaNumericAggregate(aggregateKind) &&
-                value is TextValue directText &&
-                !double.TryParse(
-                    directText.Value,
-                    System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out _))
-            {
-                return false;
-            }
-
             if (TryGetFormulaAggregateNumber(
                     value,
                     aggregateKind,
                     isDirectArgument,
-                    out var number))
+                    out var number,
+                    out var unsupported))
             {
                 numericValues.Add(number);
+                return true;
             }
 
-            return true;
+            return !unsupported;
         }
 
         private static bool TryGetFormulaAggregateNumber(
             ScalarValue value,
             ConditionalFormulaAggregateKind aggregateKind,
             bool isDirectArgument,
-            out double number)
+            out double number,
+            out bool unsupported)
         {
+            unsupported = false;
             switch (value)
             {
                 case NumberValue numeric:
@@ -4101,8 +4108,24 @@ public static partial class AccessibilityCheckerService
                 case DateTimeValue dateTime:
                     number = dateTime.Value;
                     break;
-                case BoolValue boolean when isDirectArgument:
+                case BoolValue boolean when isDirectArgument || IsFormulaAValueAggregate(aggregateKind):
                     number = boolean.Value ? 1 : 0;
+                    break;
+                case TextValue text when IsFormulaAValueAggregate(aggregateKind):
+                    if (TryParseFormulaValueText(text.Value, out var parsedA))
+                    {
+                        number = parsedA;
+                        break;
+                    }
+
+                    if (isDirectArgument && text.Value.Length > 0)
+                    {
+                        number = 0;
+                        unsupported = true;
+                        return false;
+                    }
+
+                    number = 0;
                     break;
                 case TextValue text when isDirectArgument &&
                     double.TryParse(
@@ -4112,13 +4135,27 @@ public static partial class AccessibilityCheckerService
                         out var parsed):
                     number = parsed;
                     break;
+                case TextValue when isDirectArgument && IsFormulaNumericAggregate(aggregateKind):
+                    number = 0;
+                    unsupported = true;
+                    return false;
                 default:
                     number = 0;
                     return false;
             }
 
-            return double.IsFinite(number);
+            if (double.IsFinite(number))
+                return true;
+
+            unsupported = true;
+            return false;
         }
+
+        private static bool IsFormulaAValueAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
+            aggregateKind is
+                ConditionalFormulaAggregateKind.AverageA or
+                ConditionalFormulaAggregateKind.MinA or
+                ConditionalFormulaAggregateKind.MaxA;
 
         private static bool IsFormulaNumericAggregate(ConditionalFormulaAggregateKind aggregateKind) =>
             aggregateKind is
@@ -4134,9 +4171,12 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.HarMean or
                 ConditionalFormulaAggregateKind.Product or
                 ConditionalFormulaAggregateKind.Average or
+                ConditionalFormulaAggregateKind.AverageA or
                 ConditionalFormulaAggregateKind.Median or
                 ConditionalFormulaAggregateKind.Min or
-                ConditionalFormulaAggregateKind.Max;
+                ConditionalFormulaAggregateKind.MinA or
+                ConditionalFormulaAggregateKind.Max or
+                ConditionalFormulaAggregateKind.MaxA;
 
         private bool TryResolveFormulaReference(
             ConditionalFormulaOperand operand,
