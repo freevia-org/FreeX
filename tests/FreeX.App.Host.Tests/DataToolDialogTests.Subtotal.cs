@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -172,7 +171,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void SubtotalDialog_ExposesKeyboardAccessKeysForStaticOptions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SubtotalDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
 
         foreach (var key in new[]
         {
@@ -194,7 +193,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void SubtotalDialog_ExposesExcelStyleFunctionDropdownAndSubtotalChecklist()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SubtotalDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
 
         source.Should().Contain("ComboBox _functionBox = new()");
         source.Should().Contain("CreateSubtotalFunctionChoices");
@@ -208,7 +207,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void SubtotalDialogOpenedFromKeyboard_FocusesGroupColumnChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SubtotalDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -219,7 +218,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void SubtotalDialogInvalidInputs_FocusInvalidControl()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SubtotalDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
 
         source.Should().Contain("FocusInvalidInput(ex.Message);");
         source.Should().Contain("private void FocusInvalidInput(string message)");
@@ -237,7 +236,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void SubtotalDialog_OrdersControlsLikeExcelSubtotalDialog()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SubtotalDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
 
         source.IndexOf("UiText.Get(\"Subtotal_AtEachChangeIn\")", StringComparison.Ordinal).Should()
             .BeLessThan(source.IndexOf("UiText.Get(\"Subtotal_UseFunction\")", StringComparison.Ordinal));
@@ -251,7 +250,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void SubtotalCommandSurface_RoutesRemoveAllToRemoveSubtotalRowsCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("SubtotalDialogAction.RemoveAll");
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");

@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -60,7 +59,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void PivotTableShowDetailsGesture_IsAttemptedBeforeDoubleClickEdit()
     {
         var source =
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs")) +
+            DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs") +
             ReadPivotCommandSource();
 
         source.Should().Contain("e.ClickCount == 2");
@@ -233,8 +232,8 @@ public sealed partial class MainWindowXamlKeyTipTests
 
         mainWindowSource.Should().Contain("new PivotValueFieldSettingsDialog(current, headers)");
         mainWindowSource.Should().NotContain("Value Field Settings: name,function,show-values-as");
-        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialogPlanner.cs"));
-        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialogPlanner.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("PivotValueFieldSettingsDialog.xaml.cs");
         var expectedShowValuesAsKeys = new[]
         {
             "PivotValueFieldSettings_ShowPercentOfGrandTotal",
@@ -367,14 +366,14 @@ public sealed partial class MainWindowXamlKeyTipTests
 
         labelDialog.Descendants().Select(element => element.Attribute(xaml + "Name")?.Value)
             .Should().Contain(["LabelFilterKindBox", "LabelFilterValueBox", "LabelFilterValue2Box"]);
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotLabelFilterDialog.xaml.cs"))
+        DialogSourceTestSupport.ReadHostSources("PivotLabelFilterDialog.xaml.cs")
             .Should()
             .Contain("PivotLabelFilterKind.Between")
             .And.Contain("PivotLabelFilterKind.GreaterThan")
             .And.Contain("PivotLabelFilterKind.LessThan");
         valueDialog.Descendants().Select(element => element.Attribute(xaml + "Name")?.Value)
             .Should().Contain(["ValueFilterKindBox", "ValueFilterValueBox", "ValueFilterValue2Box"]);
-        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFilterDialog.xaml.cs"))
+        DialogSourceTestSupport.ReadHostSources("PivotValueFilterDialog.xaml.cs")
             .Should()
             .Contain("PivotValueFilterKind.Between")
             .And.Contain("PivotValueFilterKind.NotBetween")
@@ -386,7 +385,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void PivotChartFieldButtons_RouteToPivotFieldMenus()
     {
         var source =
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs")) +
+            DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs") +
             ReadPivotCommandSource();
 
         source.Should().Contain("SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested");
