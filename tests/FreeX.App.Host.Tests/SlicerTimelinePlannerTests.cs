@@ -331,7 +331,7 @@ public sealed class SlicerTimelinePlannerTests
     [Fact]
     public void NativeVisualFilters_AvoidNestedPivotScans()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SlicerTimelinePlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SlicerTimelinePlanner.cs");
 
         source.Should().Contain("BuildActivePivotNameSet(activeSheet)");
         source.Should().Contain("public static NativeVisualFilters GetNativeVisualFilters(Workbook workbook, Sheet activeSheet)");
@@ -355,7 +355,7 @@ public sealed class SlicerTimelinePlannerTests
     [Fact]
     public void BuildSlicerTiles_AvoidsLinqMaterializationScaffolding()
     {
-        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SlicerTimelinePlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SlicerTimelinePlanner.cs");
         var buildSlicerTiles = source[
             source.IndexOf("public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles", StringComparison.Ordinal)..
             source.IndexOf("public static IReadOnlyList<string> ToggleSlicerSelection", StringComparison.Ordinal)];

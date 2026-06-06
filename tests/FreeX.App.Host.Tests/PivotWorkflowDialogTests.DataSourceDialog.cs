@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -85,7 +84,7 @@ public sealed partial class PivotWorkflowDialogTests
             "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
-        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotCommands.cs"));
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
         source.Should().Contain("if (!ValidateInputs())");
         source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sheetId, _sourceBox.Text, ResolveSheetIdByName, out _)");
@@ -147,7 +146,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void MainWindow_WiresPivotTableDataSourceRangePickerToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
         source.Should().Contain("new PivotTableDataSourceDialog(");
         source.Should().Contain("request => ApplyPivotTableDataSourceRangeSelection(dialog, request)");
