@@ -54,8 +54,7 @@ public sealed class MainWindowUiaPropertiesTests
     [Fact]
     public void FormulaBarExpandButton_UpdatesAutomationTextForExpandedState()
     {
-        var source = File.ReadAllText(
-            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
 
         source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationName_CollapseFormulaBar\"))");
         source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationHelpText_CollapseTheFormulaBarToASingleLineEditor\"))");
