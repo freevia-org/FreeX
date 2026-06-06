@@ -71,7 +71,7 @@ public sealed class ShortcutParityMatrixTests
     public void NewestStatusReport_ShortcutSnapshotMatchesShortcutMatrixSummary()
     {
         var matrix = WorkspaceFileLocator.ReadAllLines("docs", "parity/shortcuts.md");
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var newestStatusReport = Directory
             .GetFiles(Path.Combine(docsDirectory, "history"), "status-*.md")
             .Order(StringComparer.Ordinal)

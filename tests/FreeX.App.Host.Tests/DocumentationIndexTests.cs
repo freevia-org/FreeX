@@ -12,7 +12,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void DocsReadme_LinksNewestStatusReportAndCurrentPlanningSources()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var readme = WorkspaceFileLocator.ReadAllText("docs", "README.md");
         var newestStatusReport = NewestStatusReportRelativePath(docsDirectory);
 
@@ -42,7 +42,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void NewestStatusReport_NamesCurrentPlanningSources()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
 
@@ -61,7 +61,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void NewestStatusReport_UsesBranchNeutralMainlineMetadata()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
 
@@ -80,7 +80,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void NewestStatusReport_ReleaseProgressMetadataMatchesJson()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
         using var progressDocument = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("release", "progress.json"));
@@ -96,7 +96,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void ReleaseFacingDocs_UseTesterReleaseStreamFromProgressMetadata()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         using var progressDocument = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("release", "progress.json"));
         var expectedReleaseStream = GetExpectedTesterReleaseStream(progressDocument.RootElement.GetProperty("overallCompletion").GetInt32());
         var newestStatusReport = NewestStatusReportRelativePath(docsDirectory);
@@ -124,7 +124,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void NewestStatusReport_RepositoryMetricsMatchTrackedSources()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var repositoryRoot = Directory.GetParent(docsDirectory)!.FullName;
         var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var report = File.ReadAllText(newestStatusReport);
@@ -172,7 +172,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void NewestStatusReport_KeyOpenItemsMatchOutstandingBuildHighestPriorityItems()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var outstandingBuild = WorkspaceFileLocator.ReadAllLines("docs", "planning/outstanding-build.md");
         var report = File.ReadAllLines(newestStatusReport);
@@ -186,7 +186,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void CurrentPlanningDocs_ConditionalFormattingRemainingScopeStaysAligned()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var newestStatusReport = NewestStatusReportPath(docsDirectory);
         var outstandingBuild = WorkspaceFileLocator.ReadAllText("docs", "planning/outstanding-build.md");
         var nextPhasesPlan = WorkspaceFileLocator.ReadAllText("docs", "planning/next-phases.md");
@@ -202,7 +202,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void DocsReadme_LinksReleaseFacingUserDocs()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var readme = WorkspaceFileLocator.ReadAllText("docs", "README.md");
 
         readme.Should().Contain("[user/guide.md](user/guide.md)");
@@ -214,7 +214,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void UiTestCatalog_EvidenceScreenshotCountMatchesArtifacts()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
         var screenshotCount = Directory.GetFiles(Path.Combine(docsDirectory, "ui-test-artifacts"), "*.png").Length;
         var declaredCount = int.Parse(UiEvidenceScreenshotCount().Match(catalog).Groups["count"].Value);
@@ -246,7 +246,7 @@ public sealed partial class DocumentationIndexTests
     [Fact]
     public void CurrentPlanningDocs_LocalMarkdownLinksResolve()
     {
-        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
         var newestStatusReport = NewestStatusReportRelativePath(docsDirectory);
         var currentDocs = new[]
         {
