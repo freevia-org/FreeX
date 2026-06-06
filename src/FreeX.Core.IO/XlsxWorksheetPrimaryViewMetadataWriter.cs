@@ -83,6 +83,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 }
             }
 
+            XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(sheetView);
             session.MarkDirty(worksheetEdit);
         }
     }

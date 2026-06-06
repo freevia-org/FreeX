@@ -840,6 +840,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchInlineStringFonts(archive);
                 NormalizePatchThemeTypefaces(archive);
                 NormalizePatchLegacyCommentFonts(archive);
+                NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
                 NormalizePatchWorksheetSortStates(archive);
                 NormalizePatchWorksheetDataConsolidation(archive);
@@ -1152,6 +1153,25 @@ public sealed partial class XlsxFileAdapter
                 var phoneticPr = root.Element(workbookNs + "phoneticPr");
                 if (phoneticPr is not null &&
                     XlsxWorksheetPhoneticPropertyNormalizer.NormalizeElement(phoneticPr))
+                {
+                    XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+                }
+            }
+        }
+
+        private static void NormalizePatchWorksheetSheetViews(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                var sheetViews = root.Element(workbookNs + "sheetViews");
+                if (sheetViews is not null &&
+                    XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewsElement(sheetViews))
                 {
                     XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
                 }

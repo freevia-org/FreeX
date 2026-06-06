@@ -99,7 +99,10 @@ internal static class XlsxWorksheetAdditionalViewMapper
             {
                 var nativeElement = XElement.Parse(model.NativeXml);
                 if (nativeElement.Name == WorksheetNs + "sheetView")
-                    return nativeElement;
+                {
+                    XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(nativeElement);
+                    return IsAdditionalView(nativeElement) ? nativeElement : null;
+                }
             }
             catch
             {
@@ -113,7 +116,8 @@ internal static class XlsxWorksheetAdditionalViewMapper
         var element = new XElement(WorksheetNs + "sheetView");
         ApplyNativeAttributes(element, model.NativeAttributes, ["workbookViewId"]);
         element.SetAttributeValue("workbookViewId", model.WorkbookViewId);
-        return element;
+        XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(element);
+        return IsAdditionalView(element) ? element : null;
     }
 
     private static bool IsAdditionalView(XElement element) =>

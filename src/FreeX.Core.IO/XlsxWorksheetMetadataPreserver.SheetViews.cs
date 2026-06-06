@@ -82,6 +82,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         var sourceViews = sourceSheetViews
             .Elements(workbookNs + "sheetView")
             .Where(view => ShouldPreserveWorksheetSheetView(view, modeledAdditionalViewIds))
+            .Select(CloneSheetViewForPreservation)
             .ToList();
         if (sourceViews.Count == 0)
             return false;
@@ -89,7 +90,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         var targetSheetViews = targetRoot.Element(workbookNs + "sheetViews");
         if (targetSheetViews is null)
         {
-            targetRoot.AddFirst(new XElement(sourceSheetViews.Name, sourceSheetViews.Attributes(), sourceViews.Select(view => new XElement(view))));
+            targetRoot.AddFirst(new XElement(sourceSheetViews.Name, sourceSheetViews.Attributes(), sourceViews));
             return true;
         }
 
@@ -118,10 +119,12 @@ internal static partial class XlsxWorksheetMetadataPreserver
             {
                 if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView))
                     changed = true;
+                if (XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(targetView))
+                    changed = true;
                 continue;
             }
 
-            targetSheetViews.Add(new XElement(sourceView));
+            targetSheetViews.Add(sourceView);
             if (!string.IsNullOrWhiteSpace(viewId))
                 existingViewIds.Add(viewId);
             changed = true;
@@ -140,6 +143,13 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return modeledAdditionalViewIds?.Contains(workbookViewId) == true;
+    }
+
+    private static XElement CloneSheetViewForPreservation(XElement sourceView)
+    {
+        var clone = new XElement(sourceView);
+        XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(clone);
+        return clone;
     }
 
 }
