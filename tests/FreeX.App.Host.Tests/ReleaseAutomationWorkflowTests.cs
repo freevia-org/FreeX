@@ -29,8 +29,10 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("actions/checkout@v6");
         workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("name: Validate latest release source");
-        workflow.Should().Contain("$env:GITHUB_REF -ne \"refs/heads/main\"");
-        workflow.Should().Contain("Tester releases publish stable latest assets and must run from refs/heads/main.");
+        workflow.Should().Contain("$isMainRelease = $env:GITHUB_REF -eq \"refs/heads/main\"");
+        workflow.Should().Contain("$isDailyReleaseBranch = $env:GITHUB_REF -like \"refs/heads/codex/daily-tester-release-*\"");
+        workflow.Should().Contain("-not ($isMainRelease -or $isDailyReleaseBranch)");
+        workflow.Should().Contain("Tester releases publish stable latest assets and must run from refs/heads/main or a codex/daily-tester-release-* branch.");
         workflow.Should().Contain("actions/setup-dotnet@v5");
         workflow.Should().Contain("timeout-minutes: 60");
         workflow.Should().Contain("name: Repository preflight");

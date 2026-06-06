@@ -498,7 +498,9 @@ public partial class MainWindow
         if (layout is not (RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium) &&
             TryGetRibbonDropdownChevronBounds(button, out _))
         {
-            bounds = GetRibbonTrailingDropdownZoneBounds(width, height, GetRibbonSplitButtonDropdownColumnWidth(layout));
+            bounds = ShouldUseIconAdjacentDropdownZone(button, layout)
+                ? GetRibbonIconAdjacentDropdownZoneBounds(button, width, height)
+                : GetRibbonTrailingDropdownZoneBounds(width, height, GetRibbonSplitButtonDropdownColumnWidth(layout));
             return bounds is { Width: > 0, Height: > 0 };
         }
 
