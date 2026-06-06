@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -59,7 +58,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void NameBox_CommitsTypedReferenceWithEnter()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -78,7 +77,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void NameBox_EscapeCancelsTypedReferenceAndReturnsToGrid()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
 
         source.Should().Contain("if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)");
         source.Should().Contain("RestoreCellAddressBoxText();");

@@ -17,7 +17,7 @@ public partial class MainWindow
     private const string RibbonDropdownContentPartName = "PART_RibbonDropdownContent";
     private const double RibbonSplitButtonIconColumnWidth = 24;
     private const double RibbonSplitButtonDropdownColumnWidth = 14;
-    private const double RibbonSplitButtonLabeledDropdownColumnWidth = 18;
+    private const double RibbonSplitButtonLabeledDropdownColumnWidth = 20;
     private const double RibbonSplitButtonFallbackDropdownZoneWidth = RibbonSplitButtonLabeledDropdownColumnWidth;
     private const double RibbonSplitButtonIconOnlyContentWidth =
         RibbonSplitButtonIconColumnWidth + RibbonSplitButtonDropdownColumnWidth;
@@ -219,12 +219,12 @@ public partial class MainWindow
         if (buttonWidth <= 0 || double.IsNaN(buttonWidth) || double.IsInfinity(buttonWidth))
             return;
 
+        // The split lane owns the right padding so the glyph and hover strip share one right edge.
         var horizontalInset = 0.0;
         if (button is Control control)
         {
             horizontalInset =
                 control.Padding.Left +
-                control.Padding.Right +
                 control.BorderThickness.Left +
                 control.BorderThickness.Right;
         }

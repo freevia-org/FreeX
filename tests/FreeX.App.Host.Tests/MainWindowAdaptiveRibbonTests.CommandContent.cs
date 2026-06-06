@@ -151,7 +151,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth).Should().BeTrue();
             fullWidth.Should().Be(128);
             compactWidth.Should().Be(38);
-            content.ColumnDefinitions[^1].Width.Value.Should().Be(18);
+            content.ColumnDefinitions[^1].Width.Value.Should().Be(20);
         });
     }
 
@@ -190,9 +190,14 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                     .TransformBounds(new Rect(0, 0, chevron.ActualWidth, chevron.ActualHeight));
                 var dropdownBounds = GetRibbonDropdownZoneBounds(button);
 
-                dropdownBounds.Width.Should().BeApproximately(18, 0.5);
+                var chevronCenterX = chevronBounds.Left + chevronBounds.Width / 2;
+                var dropdownCenterX = dropdownBounds.Left + dropdownBounds.Width / 2;
+
+                dropdownBounds.Width.Should().BeApproximately(20, 0.5);
                 dropdownBounds.Height.Should().BeApproximately(button.ActualHeight, 0.5);
                 dropdownBounds.Right.Should().BeApproximately(button.ActualWidth, 0.5);
+                chevronCenterX.Should().BeApproximately(dropdownCenterX, 0.75,
+                    "the chevron should be centered inside the right-hand split hover lane");
                 dropdownBounds.Left.Should().BeLessThanOrEqualTo(chevronBounds.Left + 0.5);
                 dropdownBounds.Right.Should().BeGreaterThanOrEqualTo(chevronBounds.Right - 0.5);
                 chevronBounds.Right.Should().BeGreaterThan(button.ActualWidth - button.Padding.Right - 12,
