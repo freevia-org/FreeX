@@ -1,6 +1,5 @@
 using FreeX.Core.Model;
 using FluentAssertions;
-using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Xml.Linq;
@@ -87,7 +86,7 @@ public sealed partial class ColorPickerDialogTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesFirstThemeSwatch()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ColorPickerDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ColorPickerDialog.xaml.cs");
 
         source.Should().Contain("ColorPickerPalettePlanner.BuildThemePalette");
         source.Should().Contain("private Button? _initialFocusButton;");
