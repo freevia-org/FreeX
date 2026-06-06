@@ -162,6 +162,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasDocumentPropertiesPackageGraphIssues: false,
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -224,6 +225,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasDocumentPropertiesPackageGraphIssues: false,
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -258,6 +260,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasDocumentPropertiesPackageGraphIssues: false,
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -288,6 +291,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasDocumentPropertiesPackageGraphIssues: false,
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         using var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -347,6 +351,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasDocumentPropertiesPackageGraphIssues: false,
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: null);
 
         var sanitized = XlsxClosedXmlLoadPackageSanitizer.Create(
@@ -422,6 +427,7 @@ public sealed class XlsxLoadPackageStreamTests
             HasDocumentPropertiesPackageGraphIssues: false,
             HasWorksheetSheetViewSchemaIssues: false,
             HasWorkbookViewSchemaIssues: false,
+            HasWorkbookCalculationPropertySchemaIssues: false,
             MergeCellWorksheetPathsToStrip: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "xl/worksheets/sheet1.xml"
