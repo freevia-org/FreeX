@@ -45,8 +45,7 @@ public sealed class ReleaseProgressMetadataTests
 
     private static ReleaseProgress LoadProgress()
     {
-        var path = WorkspaceFileLocator.Find("release", "progress.json");
-        var json = File.ReadAllText(path);
+        var json = WorkspaceFileLocator.ReadAllText("release", "progress.json");
         return JsonSerializer.Deserialize<ReleaseProgress>(
             json,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
