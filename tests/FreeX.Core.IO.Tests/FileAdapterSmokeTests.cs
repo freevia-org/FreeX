@@ -15043,7 +15043,7 @@ public partial class FileAdapterSmokeTests
         rowBreak.Attribute("max")!.Value.Should().Be("16383");
         rowBreak.Attribute("man")!.Value.Should().Be("1");
         rowBreak.Attribute("pt")!.Value.Should().Be("1");
-        rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native");
+        rowBreak.Attribute("customAttr").Should().BeNull();
         rowBreak.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
 
         var columnBreak = worksheetXml.Root!.Element(worksheetNs + "colBreaks")!
@@ -15052,7 +15052,7 @@ public partial class FileAdapterSmokeTests
         columnBreak.Attribute("max")!.Value.Should().Be("1048575");
         columnBreak.Attribute("man")!.Value.Should().Be("1");
         columnBreak.Attribute("pt")!.Value.Should().Be("1");
-        columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native");
+        columnBreak.Attribute("customAttr").Should().BeNull();
         columnBreak.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         worksheetXml.Root.Element(worksheetNs + "rowBreaks")!
             .ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
@@ -15122,7 +15122,7 @@ public partial class FileAdapterSmokeTests
         rowBreak.Attribute("max")!.Value.Should().Be("16383");
         rowBreak.Attribute("man")!.Value.Should().Be("1");
         rowBreak.Attribute("pt")!.Value.Should().Be("1");
-        rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native");
+        rowBreak.Attribute("customAttr").Should().BeNull();
 
         var columnBreaks = worksheetXml.Root!.Element(worksheetNs + "colBreaks");
         columnBreaks.Should().NotBeNull();
@@ -15132,7 +15132,7 @@ public partial class FileAdapterSmokeTests
         columnBreak.Attribute("max")!.Value.Should().Be("1048575");
         columnBreak.Attribute("man")!.Value.Should().Be("1");
         columnBreak.Attribute("pt")!.Value.Should().Be("1");
-        columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native");
+        columnBreak.Attribute("customAttr").Should().BeNull();
     }
 
     [Fact]
@@ -15244,17 +15244,15 @@ public partial class FileAdapterSmokeTests
         root.Element(worksheetNs + "rowBreaks")!
             .Elements(worksheetNs + "brk")
             .Single(element => element.Attribute("id")?.Value == "20")
-            .Attribute("customAttr")!
-            .Value
+            .Attribute("customAttr")
             .Should()
-            .Be("row-native");
+            .BeNull();
         root.Element(worksheetNs + "colBreaks")!
             .Elements(worksheetNs + "brk")
             .Single(element => element.Attribute("id")?.Value == "5")
-            .Attribute("customAttr")!
-            .Value
+            .Attribute("customAttr")
             .Should()
-            .Be("col-native");
+            .BeNull();
         root.Element(worksheetNs + "headerFooter")!.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept");
     }
 
@@ -15294,7 +15292,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_RetainsMalformedNativeOnlyWorksheetPageBreaks()
+    public void XlsxAdapter_LoadedWorkbookSave_RetainsNativeOnlyWorksheetPageBreaksAndStripsInvalidAttributes()
     {
         var workbook = new Workbook("WorksheetNativeOnlyPageBreaks");
         var sheet = workbook.AddSheet("Sheet1");
@@ -15325,13 +15323,15 @@ public partial class FileAdapterSmokeTests
             .Elements(worksheetNs + "brk")
             .ToList();
         rowBreaks.Select(element => (string?)element.Attribute("id")).Should().NotContain("20");
-        rowBreaks.Select(element => (string?)element.Attribute("customAttr")).Should().ContainSingle("row-native-only");
+        rowBreaks.Select(element => (string?)element.Attribute("id")).Should().ContainSingle("0");
+        rowBreaks.Select(element => (string?)element.Attribute("customAttr")).Should().OnlyContain(value => value == null);
 
         var columnBreaks = worksheetXml.Root!.Element(worksheetNs + "colBreaks")!
             .Elements(worksheetNs + "brk")
             .ToList();
         columnBreaks.Select(element => (string?)element.Attribute("id")).Should().NotContain("5");
-        columnBreaks.Select(element => (string?)element.Attribute("customAttr")).Should().ContainSingle("col-native-only");
+        columnBreaks.Select(element => (string?)element.Attribute("id")).Should().ContainSingle("0");
+        columnBreaks.Select(element => (string?)element.Attribute("customAttr")).Should().OnlyContain(value => value == null);
     }
 
     [Fact]

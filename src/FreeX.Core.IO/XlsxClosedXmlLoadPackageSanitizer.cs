@@ -11,6 +11,7 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasConditionalFormattingBlocks,
     bool? HasUnsupportedConditionalFormattingBlocks,
     bool? HasWorksheetDynamicFilters,
+    bool? HasWorksheetPageBreakSchemaIssues,
     bool? HasWorksheetAutoFilterSchemaIssues,
     bool? HasStructuredTableAutoFilterSchemaIssues,
     bool? HasStructuredTableSortStateSchemaIssues,
@@ -85,6 +86,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 RemoveUnsupportedConditionalFormattingBlocks(archive);
             if (requirements.HasWorksheetDynamicFilters)
                 RemoveWorksheetDynamicFilters(archive);
+            if (requirements.HasWorksheetPageBreakSchemaIssues)
+                NormalizeWorksheetPageBreaks(archive);
             if (requirements.HasWorksheetAutoFilterSchemaIssues)
                 NormalizeWorksheetAutoFilters(archive);
             if (requirements.HasStructuredTableAutoFilterSchemaIssues)
@@ -212,6 +215,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 scanUnsupportedConditionalFormatting &&
                 ResolveKnownOrScan(knownHints.HasUnsupportedConditionalFormattingBlocks, archive, HasUnsupportedConditionalFormattingBlocks),
                 ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters, archive, HasWorksheetDynamicFilters),
+                ResolveKnownOrScan(knownHints.HasWorksheetPageBreakSchemaIssues, archive, HasWorksheetPageBreakSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorksheetAutoFilterSchemaIssues, archive, HasWorksheetAutoFilterSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasStructuredTableAutoFilterSchemaIssues, archive, HasStructuredTableAutoFilterSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasStructuredTableSortStateSchemaIssues, archive, HasStructuredTableSortStateSchemaIssues),
@@ -227,7 +231,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null);
         }
         finally
         {
@@ -247,6 +251,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hints.HasChartExChartParts is not { } hasChartExChartParts ||
             hints.HasDrawingPackageParts is not { } hasDrawingPackageParts ||
             hints.HasWorksheetDynamicFilters is not { } hasWorksheetDynamicFilters ||
+            hints.HasWorksheetPageBreakSchemaIssues is not { } hasWorksheetPageBreakSchemaIssues ||
             hints.HasWorksheetAutoFilterSchemaIssues is not { } hasWorksheetAutoFilterSchemaIssues ||
             hints.HasStructuredTableAutoFilterSchemaIssues is not { } hasStructuredTableAutoFilterSchemaIssues ||
             hints.HasStructuredTableSortStateSchemaIssues is not { } hasStructuredTableSortStateSchemaIssues ||
@@ -281,6 +286,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             scanAllConditionalFormatting && hints.HasConditionalFormattingBlocks.GetValueOrDefault(),
             scanUnsupportedConditionalFormatting && hints.HasUnsupportedConditionalFormattingBlocks.GetValueOrDefault(),
             hasWorksheetDynamicFilters,
+            hasWorksheetPageBreakSchemaIssues,
             hasWorksheetAutoFilterSchemaIssues,
             hasStructuredTableAutoFilterSchemaIssues,
             hasStructuredTableSortStateSchemaIssues,
@@ -402,6 +408,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasAllConditionalFormattingBlocks,
         bool HasUnsupportedConditionalFormattingBlocks,
         bool HasWorksheetDynamicFilters,
+        bool HasWorksheetPageBreakSchemaIssues,
         bool HasWorksheetAutoFilterSchemaIssues,
         bool HasStructuredTableAutoFilterSchemaIssues,
         bool HasStructuredTableSortStateSchemaIssues,
@@ -422,6 +429,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasAllConditionalFormattingBlocks ||
             HasUnsupportedConditionalFormattingBlocks ||
             HasWorksheetDynamicFilters ||
+            HasWorksheetPageBreakSchemaIssues ||
             HasWorksheetAutoFilterSchemaIssues ||
             HasStructuredTableAutoFilterSchemaIssues ||
             HasStructuredTableSortStateSchemaIssues ||
@@ -608,6 +616,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         requirements.HasAllConditionalFormattingBlocks ||
         requirements.HasUnsupportedConditionalFormattingBlocks ||
         requirements.HasWorksheetDynamicFilters ||
+        requirements.HasWorksheetPageBreakSchemaIssues ||
         requirements.HasWorksheetAutoFilterSchemaIssues ||
         requirements.HasWorksheetSheetViewSchemaIssues ||
         ShouldStripMergeCells(requirements, normalizedPath);
@@ -760,6 +769,14 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         if (requirements.HasWorksheetDynamicFilters)
         {
             changed |= RemoveElements(root.Descendants(worksheetNs + "dynamicFilter").ToList());
+        }
+
+        if (requirements.HasWorksheetPageBreakSchemaIssues)
+        {
+            if (root.Element(worksheetNs + "rowBreaks") is { } rowBreaks)
+                changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(rowBreaks);
+            if (root.Element(worksheetNs + "colBreaks") is { } columnBreaks)
+                changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(columnBreaks);
         }
 
         if (requirements.HasWorksheetAutoFilterSchemaIssues &&
@@ -1459,6 +1476,63 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection))
         {
             XlsxPackageXmlEditor.ReplaceXml(archive, workbookEntry.FullName, workbookXml);
+        }
+    }
+
+    private static bool HasWorksheetPageBreakSchemaIssues(ZipArchive archive)
+    {
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry)
+                     .ToList())
+        {
+            try
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                if (root.Element(XName.Get("rowBreaks", "http://schemas.openxmlformats.org/spreadsheetml/2006/main")) is { } rowBreaks &&
+                    XlsxWorksheetPageBreakNormalizer.NormalizeElement(rowBreaks))
+                {
+                    return true;
+                }
+
+                if (root.Element(XName.Get("colBreaks", "http://schemas.openxmlformats.org/spreadsheetml/2006/main")) is { } columnBreaks &&
+                    XlsxWorksheetPageBreakNormalizer.NormalizeElement(columnBreaks))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void NormalizeWorksheetPageBreaks(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry)
+                     .ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            var changed = false;
+            if (root.Element(worksheetNs + "rowBreaks") is { } rowBreaks)
+                changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(rowBreaks);
+            if (root.Element(worksheetNs + "colBreaks") is { } columnBreaks)
+                changed |= XlsxWorksheetPageBreakNormalizer.NormalizeElement(columnBreaks);
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
         }
     }
 
