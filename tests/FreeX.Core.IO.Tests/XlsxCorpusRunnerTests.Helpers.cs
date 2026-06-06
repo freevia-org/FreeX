@@ -28,9 +28,7 @@ public partial class XlsxCorpusRunnerTests
 
     private static string CorpusPath(string relativePath)
     {
-        var manifestPath = TestWorkspaceFiles.FindWorkspaceFile("test-corpus", "manifest.csv");
-        var corpusDirectory = Path.GetDirectoryName(manifestPath)
-            ?? throw new DirectoryNotFoundException("Could not locate test-corpus directory.");
+        var corpusDirectory = TestWorkspaceFiles.FindWorkspaceFileDirectory("test-corpus", "manifest.csv");
         return Path.Combine(corpusDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
     }
 

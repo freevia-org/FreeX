@@ -496,7 +496,7 @@ public class XlsxCorpusScaffoldTests
     public void RegressionFormulaCachedWorkbooks_AreAllRepresentedInCorpusManifest()
     {
         var manifestRows = ReadManifestRows();
-        var corpusDirectory = Path.GetDirectoryName(TestWorkspaceFiles.FindWorkspaceFile("test-corpus", "manifest.csv"))!;
+        var corpusDirectory = TestWorkspaceFiles.FindWorkspaceFileDirectory("test-corpus", "manifest.csv");
         var regressionDirectory = Path.Combine(corpusDirectory, "regressions", "formula-cached");
         var regressionWorkbookPaths = Directory
             .EnumerateFiles(regressionDirectory, "*.xlsx", SearchOption.TopDirectoryOnly)
@@ -516,7 +516,7 @@ public class XlsxCorpusScaffoldTests
     public void NewestStatusReport_StatesCurrentCorpusManifestCount()
     {
         var manifestRows = ReadManifestRows();
-        var docsDirectory = Path.GetDirectoryName(TestWorkspaceFiles.FindWorkspaceFile("docs", "README.md"))!;
+        var docsDirectory = TestWorkspaceFiles.FindWorkspaceFileDirectory("docs", "README.md");
         var newestStatusReport = Directory.GetFiles(Path.Combine(docsDirectory, "history"), "status-*.md")
             .Order(StringComparer.Ordinal)
             .Last();
