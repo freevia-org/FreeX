@@ -67,7 +67,7 @@ internal static class XlsxWorkbookThemeWriter
                 if (fontScheme.Name == drawingNs + "fontScheme")
                 {
                     var sanitizedFontScheme = new XElement(fontScheme);
-                    SanitizeNonEmptyTypefaceAttributes(sanitizedFontScheme);
+                    XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(sanitizedFontScheme);
                     return sanitizedFontScheme;
                 }
             }
@@ -160,7 +160,7 @@ internal static class XlsxWorkbookThemeWriter
                          .Where(element => IsSupportedThemeSupplementElement(element, drawingNs)))
             {
                 var clone = new XElement(element);
-                SanitizeNonEmptyTypefaceAttributes(clone);
+                XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(clone);
                 elements.Add(clone);
             }
         }
@@ -242,7 +242,7 @@ internal static class XlsxWorkbookThemeWriter
                 if (objectDefaults.Name == drawingNs + "objectDefaults")
                 {
                     var sanitizedObjectDefaults = new XElement(objectDefaults);
-                    SanitizeNonEmptyTypefaceAttributes(sanitizedObjectDefaults);
+                    XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(sanitizedObjectDefaults);
                     return [sanitizedObjectDefaults];
                 }
             }
@@ -391,14 +391,4 @@ internal static class XlsxWorkbookThemeWriter
             _ => "accent1"
         };
 
-    private static void SanitizeNonEmptyTypefaceAttributes(XElement element)
-    {
-        foreach (var typeface in element.DescendantsAndSelf().Attributes("typeface"))
-        {
-            if (typeface.Value.Length == 0)
-                continue;
-
-            typeface.Value = XlsxFontNameSanitizer.NormalizeFontName(typeface.Value);
-        }
-    }
 }
