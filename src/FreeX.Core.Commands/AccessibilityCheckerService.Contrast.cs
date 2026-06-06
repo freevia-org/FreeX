@@ -1068,6 +1068,12 @@ public static partial class AccessibilityCheckerService
             case "AVEDEV":
                 kind = ConditionalFormulaAggregateKind.AveDev;
                 return true;
+            case "GEOMEAN":
+                kind = ConditionalFormulaAggregateKind.GeoMean;
+                return true;
+            case "HARMEAN":
+                kind = ConditionalFormulaAggregateKind.HarMean;
+                return true;
             case "PRODUCT":
                 kind = ConditionalFormulaAggregateKind.Product;
                 return true;
@@ -1543,6 +1549,8 @@ public static partial class AccessibilityCheckerService
         VarianceSample,
         VariancePopulation,
         AveDev,
+        GeoMean,
+        HarMean,
         Product,
         Average,
         Median,
@@ -2561,6 +2569,8 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.VarianceSample when numericValues.Count > 1 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: true)),
                 ConditionalFormulaAggregateKind.VariancePopulation when numericValues.Count > 0 => new NumberValue(VarianceFormulaNumbers(numericValues, sample: false)),
                 ConditionalFormulaAggregateKind.AveDev when numericValues.Count > 0 => new NumberValue(AveDevFormulaNumbers(numericValues)),
+                ConditionalFormulaAggregateKind.GeoMean when AreFormulaNumbersPositive(numericValues) => new NumberValue(GeoMeanFormulaNumbers(numericValues)),
+                ConditionalFormulaAggregateKind.HarMean when AreFormulaNumbersPositive(numericValues) => new NumberValue(HarMeanFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Product => new NumberValue(numericValues.Aggregate(1d, (product, number) => product * number)),
                 ConditionalFormulaAggregateKind.Average when numericValues.Count > 0 => new NumberValue(numericValues.Average()),
                 ConditionalFormulaAggregateKind.Median when numericValues.Count > 0 => new NumberValue(MedianFormulaNumbers(numericValues)),
@@ -2607,6 +2617,42 @@ public static partial class AccessibilityCheckerService
                 sum += Math.Abs(numericValues[i] - average);
 
             return sum / numericValues.Count;
+        }
+
+        private static bool AreFormulaNumbersPositive(List<double> numericValues)
+        {
+            if (numericValues.Count == 0)
+                return false;
+
+            for (var i = 0; i < numericValues.Count; i++)
+            {
+                if (numericValues[i] <= 0d || !double.IsFinite(numericValues[i]))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static double GeoMeanFormulaNumbers(List<double> numericValues)
+        {
+            var product = 1d;
+            for (var i = 0; i < numericValues.Count; i++)
+                product *= numericValues[i];
+
+            return Math.Pow(product, 1d / numericValues.Count);
+        }
+
+        private static double HarMeanFormulaNumbers(List<double> numericValues)
+        {
+            var reciprocalSum = 0d;
+            for (var i = 0; i < numericValues.Count; i++)
+            {
+                reciprocalSum += 1d / numericValues[i];
+                if (!double.IsFinite(reciprocalSum))
+                    return double.PositiveInfinity;
+            }
+
+            return numericValues.Count / reciprocalSum;
         }
 
         private static double MedianFormulaNumbers(List<double> numericValues)
@@ -2782,6 +2828,8 @@ public static partial class AccessibilityCheckerService
                 ConditionalFormulaAggregateKind.VarianceSample or
                 ConditionalFormulaAggregateKind.VariancePopulation or
                 ConditionalFormulaAggregateKind.AveDev or
+                ConditionalFormulaAggregateKind.GeoMean or
+                ConditionalFormulaAggregateKind.HarMean or
                 ConditionalFormulaAggregateKind.Product or
                 ConditionalFormulaAggregateKind.Average or
                 ConditionalFormulaAggregateKind.Median or
