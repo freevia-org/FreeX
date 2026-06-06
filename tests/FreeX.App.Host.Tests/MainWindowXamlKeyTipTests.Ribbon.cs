@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -52,7 +51,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void CellStylesGallery_ExposesExpandedPresetLabelsAndRoutesThroughPlanner()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -128,7 +127,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void ConditionalFormattingIconSets_ExposeGroupedPresetGalleryAndMoreRules()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -523,7 +522,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ViewWindowState_UsesLocalizedLiveCommandTooltips()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ViewCommands.cs");
 
         source.Should().Contain("UiText.Get(\"MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook\")");
         source.Should().Contain("UiText.Get(canSwitchWindows");
