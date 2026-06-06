@@ -79,6 +79,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _fillColorMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _clearFillMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _fontColorMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _horizontalTextMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _angleCounterclockwiseMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _angleClockwiseMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _verticalTextMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _rotateTextUpMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _rotateTextDownMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _currencyFormatMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _percentFormatMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _commaStyleMenuItem = new();");
@@ -144,6 +150,18 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_clearFillMenuItem.Click += (_, _) => ClearSelectedRangeFill();");
         source.Should().Contain("_fontColorMenuItem.Header = \"Font Color\";");
         source.Should().Contain("_fontColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFontColor();");
+        source.Should().Contain("_horizontalTextMenuItem.Header = \"Horizontal\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(0, \"Set horizontal text for\", \"Horizontal Text failed.\");");
+        source.Should().Contain("_angleCounterclockwiseMenuItem.Header = \"Angle Counterclockwise\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(45, \"Angled text counterclockwise for\", \"Angle Counterclockwise failed.\");");
+        source.Should().Contain("_angleClockwiseMenuItem.Header = \"Angle Clockwise\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(-45, \"Angled text clockwise for\", \"Angle Clockwise failed.\");");
+        source.Should().Contain("_verticalTextMenuItem.Header = \"Vertical Text\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(255, \"Set vertical text for\", \"Vertical Text failed.\");");
+        source.Should().Contain("_rotateTextUpMenuItem.Header = \"Rotate Text Up\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(90, \"Rotated text up for\", \"Rotate Text Up failed.\");");
+        source.Should().Contain("_rotateTextDownMenuItem.Header = \"Rotate Text Down\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(-90, \"Rotated text down for\", \"Rotate Text Down failed.\");");
         source.Should().Contain("_currencyFormatMenuItem.Header = \"Accounting Number Format\";");
         source.Should().Contain("_currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();");
         source.Should().Contain("_percentFormatMenuItem.Header = \"Percent Style\";");
@@ -191,6 +209,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_fillColorMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_clearFillMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_fontColorMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_horizontalTextMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_angleCounterclockwiseMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_angleClockwiseMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_verticalTextMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_rotateTextUpMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_rotateTextDownMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_currencyFormatMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_percentFormatMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_commaStyleMenuItem);");
@@ -228,6 +252,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_fillColorMenuItem.IsEnabled = _fillColorButton.IsEnabled;");
         source.Should().Contain("_clearFillMenuItem.IsEnabled = _fillColorButton.IsEnabled;");
         source.Should().Contain("_fontColorMenuItem.IsEnabled = _fontColorButton.IsEnabled;");
+        source.Should().Contain("_horizontalTextMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_angleCounterclockwiseMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_angleClockwiseMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_verticalTextMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_rotateTextUpMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("_rotateTextDownMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_currencyFormatMenuItem.IsEnabled = _currencyFormatButton.IsEnabled;");
         source.Should().Contain("_percentFormatMenuItem.IsEnabled = _percentFormatButton.IsEnabled;");
         source.Should().Contain("_commaStyleMenuItem.IsEnabled = _commaStyleButton.IsEnabled;");
@@ -290,6 +320,12 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_fill_color_menu_item={FormatBool(snapshot.HasNativeFillColorMenuItem)}");
         smokeSource.Should().Contain("native_clear_fill_menu_item={FormatBool(snapshot.HasNativeClearFillMenuItem)}");
         smokeSource.Should().Contain("native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}");
+        smokeSource.Should().Contain("native_horizontal_text_menu_item={FormatBool(snapshot.HasNativeHorizontalTextMenuItem)}");
+        smokeSource.Should().Contain("native_angle_counterclockwise_menu_item={FormatBool(snapshot.HasNativeAngleCounterclockwiseMenuItem)}");
+        smokeSource.Should().Contain("native_angle_clockwise_menu_item={FormatBool(snapshot.HasNativeAngleClockwiseMenuItem)}");
+        smokeSource.Should().Contain("native_vertical_text_menu_item={FormatBool(snapshot.HasNativeVerticalTextMenuItem)}");
+        smokeSource.Should().Contain("native_rotate_text_up_menu_item={FormatBool(snapshot.HasNativeRotateTextUpMenuItem)}");
+        smokeSource.Should().Contain("native_rotate_text_down_menu_item={FormatBool(snapshot.HasNativeRotateTextDownMenuItem)}");
         smokeSource.Should().Contain("native_currency_format_menu_item={FormatBool(snapshot.HasNativeCurrencyFormatMenuItem)}");
         smokeSource.Should().Contain("native_percent_format_menu_item={FormatBool(snapshot.HasNativePercentFormatMenuItem)}");
         smokeSource.Should().Contain("native_comma_style_menu_item={FormatBool(snapshot.HasNativeCommaStyleMenuItem)}");
@@ -330,6 +366,12 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, \"Fill Color\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, \"No Fill\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, \"Font Color\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, \"Horizontal\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeAngleCounterclockwiseMenuItem: HasNativeMenuItem(_angleCounterclockwiseMenuItem, \"Angle Counterclockwise\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeAngleClockwiseMenuItem: HasNativeMenuItem(_angleClockwiseMenuItem, \"Angle Clockwise\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeVerticalTextMenuItem: HasNativeMenuItem(_verticalTextMenuItem, \"Vertical Text\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeRotateTextUpMenuItem: HasNativeMenuItem(_rotateTextUpMenuItem, \"Rotate Text Up\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeRotateTextDownMenuItem: HasNativeMenuItem(_rotateTextDownMenuItem, \"Rotate Text Down\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, \"Accounting Number Format\", requireGesture: false)");
         windowSource.Should().Contain("HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, \"Percent Style\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, \"Comma Style\", requireGesture: false)");
@@ -709,6 +751,62 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_WiresTextRotationThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly NativeMenuItem _horizontalTextMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _angleCounterclockwiseMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _angleClockwiseMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _verticalTextMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _rotateTextUpMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _rotateTextDownMenuItem = new();");
+        source.Should().Contain("private readonly DropDownButton _orientationButton = new();");
+        source.Should().Contain("_orientationButton.Content = \"Orient\";");
+        source.Should().Contain("_orientationButton.Flyout = CreateTextRotationFlyout();");
+        source.Should().Contain("_orientationButton.IsEnabled = isIdle;");
+        source.Should().Contain("_orientationButton,");
+        source.Should().Contain("_horizontalTextMenuItem.Header = \"Horizontal\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(0, \"Set horizontal text for\", \"Horizontal Text failed.\");");
+        source.Should().Contain("_angleCounterclockwiseMenuItem.Header = \"Angle Counterclockwise\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(45, \"Angled text counterclockwise for\", \"Angle Counterclockwise failed.\");");
+        source.Should().Contain("_angleClockwiseMenuItem.Header = \"Angle Clockwise\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(-45, \"Angled text clockwise for\", \"Angle Clockwise failed.\");");
+        source.Should().Contain("_verticalTextMenuItem.Header = \"Vertical Text\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(255, \"Set vertical text for\", \"Vertical Text failed.\");");
+        source.Should().Contain("_rotateTextUpMenuItem.Header = \"Rotate Text Up\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(90, \"Rotated text up for\", \"Rotate Text Up failed.\");");
+        source.Should().Contain("_rotateTextDownMenuItem.Header = \"Rotate Text Down\";");
+        source.Should().Contain("ApplySelectedRangeTextRotation(-90, \"Rotated text down for\", \"Rotate Text Down failed.\");");
+        source.Should().Contain("private void ApplySelectedRangeTextRotation(int textRotation, string successAction, string failureMessage)");
+        source.Should().Contain("var result = _session.SetSelectedRangeTextRotation(textRotation);");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? failureMessage);");
+        source.Should().Contain("RefreshShell($\"{successAction} {rangeReference}\");");
+        source.Should().Contain("var textRotation = style?.TextRotation ?? CellStyle.Default.TextRotation;");
+        source.Should().Contain("textRotation);");
+        source.Should().Contain("private static string FormatTextForRotation(string text, int textRotation)");
+        source.Should().Contain("textRotation == 255");
+        source.Should().Contain("string.Join(Environment.NewLine, text.ToCharArray())");
+        source.Should().Contain("private static int NormalizeTextRotationForDisplay(int textRotation)");
+        source.Should().Contain("textRotation is >= -90 and <= 90 ? textRotation : 0;");
+        source.Should().Contain("private static RotateTransform? CreateTextRotationTransform(int textRotation)");
+        source.Should().Contain("var displayRotation = NormalizeTextRotationForDisplay(textRotation);");
+        source.Should().Contain("return displayRotation == 0 ? null : new RotateTransform(-displayRotation);");
+        source.Should().Contain("textBlock.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);");
+        source.Should().Contain("textBlock.RenderTransform = transform;");
+        source.Should().Contain("ClipToBounds = true,");
+        source.Should().Contain("private MenuFlyout CreateTextRotationFlyout()");
+        source.Should().Contain("CreateTextRotationMenuItem(\"Horizontal\", 0, \"Set horizontal text for\", \"Horizontal Text failed.\")");
+        source.Should().Contain("CreateTextRotationMenuItem(\"Angle Counterclockwise\", 45, \"Angled text counterclockwise for\", \"Angle Counterclockwise failed.\")");
+        source.Should().Contain("CreateTextRotationMenuItem(\"Angle Clockwise\", -45, \"Angled text clockwise for\", \"Angle Clockwise failed.\")");
+        source.Should().Contain("CreateTextRotationMenuItem(\"Vertical Text\", 255, \"Set vertical text for\", \"Vertical Text failed.\")");
+        source.Should().Contain("CreateTextRotationMenuItem(\"Rotate Text Up\", 90, \"Rotated text up for\", \"Rotate Text Up failed.\")");
+        source.Should().Contain("CreateTextRotationMenuItem(\"Rotate Text Down\", -90, \"Rotated text down for\", \"Rotate Text Down failed.\")");
+        source.Should().Contain("private MenuItem CreateTextRotationMenuItem(");
+        source.Should().Contain("menuItem.Click += (_, _) => ApplySelectedRangeTextRotation(textRotation, successAction, failureMessage);");
+    }
+
+    [Fact]
     public void MainWindow_WiresNumberFormatsThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -782,8 +880,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Wrap Text failed.\");");
         source.Should().Contain("RefreshShell($\"{(enabled ? \"Wrapped\" : \"Unwrapped\")} {rangeReference}\");");
         source.Should().Contain("var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;");
-        source.Should().Contain("TextWrapping = textWrapping,");
-        source.Should().Contain("TextTrimming = textWrapping == TextWrapping.Wrap");
+        source.Should().Contain("var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;");
+        source.Should().Contain("TextWrapping = effectiveTextWrapping,");
+        source.Should().Contain("TextTrimming = effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255");
         source.Should().Contain("? TextTrimming.None");
         source.Should().Contain(": TextTrimming.CharacterEllipsis");
     }

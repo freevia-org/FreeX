@@ -1762,6 +1762,121 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeTextRotation_AppliesStylePreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.SetSelectedRangeTextRotation(45);
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartTextRotation.Should().Be(45);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).TextRotation.Should().Be(45);
+        var b1StyleOnly = sheet.GetStyleOnly(b1.Row, b1.Col);
+        b1StyleOnly.Should().NotBeNull();
+        workbook.GetStyle(b1StyleOnly!.Value).TextRotation.Should().Be(45);
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .Style!.TextRotation.Should().Be(45);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        session.CanRedo.Should().BeTrue();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).TextRotation.Should().Be(0);
+        sheet.GetStyleOnly(b1.Row, b1.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void SetSelectedRangeTextRotation_UsesStyleOnlyFormattingForEmptyCell()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetStyleOnly(a1.Row, a1.Col, workbook.RegisterStyle(new CellStyle { Bold = true }));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeTextRotation(255);
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(a1).Should().BeNull();
+        var styleOnly = sheet.GetStyleOnly(a1.Row, a1.Col);
+        styleOnly.Should().NotBeNull();
+        var style = workbook.GetStyle(styleOnly!.Value);
+        style.Bold.Should().BeTrue();
+        style.TextRotation.Should().Be(255);
+        session.SelectedRangeStartTextRotation.Should().Be(255);
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .Style!.TextRotation.Should().Be(255);
+    }
+
+    [Fact]
+    public void SetSelectedRangeTextRotation_RejectsUnsupportedRotationWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { TextRotation = 45 });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeTextRotation(91);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("Text rotation");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).TextRotation.Should().Be(45);
+    }
+
+    [Fact]
+    public void SetSelectedRangeTextRotation_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { TextRotation = -45 });
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.SetSelectedRangeTextRotation(90);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).TextRotation.Should().Be(-45);
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();

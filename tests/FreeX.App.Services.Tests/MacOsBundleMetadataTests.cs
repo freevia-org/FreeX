@@ -142,6 +142,12 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_fill_color_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_clear_fill_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_font_color_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_horizontal_text_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_angle_counterclockwise_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_angle_clockwise_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_vertical_text_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_rotate_text_up_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_rotate_text_down_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_currency_format_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_percent_format_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_comma_style_menu_item=true\" \"$launch_smoke_report\"");

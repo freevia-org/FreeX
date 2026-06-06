@@ -21,6 +21,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("dotnet-version: 10.0.x");
         script.Should().Contain("--framework net10.0");
         script.Should().Contain("--output \"$app/Contents/MacOS\"");
+        script.Should().Contain("native_horizontal_text_menu_item=true");
+        script.Should().Contain("native_rotate_text_down_menu_item=");
         script.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
         script.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
         script.Should().Contain("IActivatableLifetime");

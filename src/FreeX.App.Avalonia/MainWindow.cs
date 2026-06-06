@@ -79,6 +79,7 @@ public sealed class MainWindow : Window
     private readonly Button _decreaseFontSizeButton = new();
     private readonly Button _fillColorButton = new();
     private readonly Button _fontColorButton = new();
+    private readonly DropDownButton _orientationButton = new();
     private readonly Button _currencyFormatButton = new();
     private readonly Button _percentFormatButton = new();
     private readonly Button _commaStyleButton = new();
@@ -112,6 +113,12 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _fillColorMenuItem = new();
     private readonly NativeMenuItem _clearFillMenuItem = new();
     private readonly NativeMenuItem _fontColorMenuItem = new();
+    private readonly NativeMenuItem _horizontalTextMenuItem = new();
+    private readonly NativeMenuItem _angleCounterclockwiseMenuItem = new();
+    private readonly NativeMenuItem _angleClockwiseMenuItem = new();
+    private readonly NativeMenuItem _verticalTextMenuItem = new();
+    private readonly NativeMenuItem _rotateTextUpMenuItem = new();
+    private readonly NativeMenuItem _rotateTextDownMenuItem = new();
     private readonly NativeMenuItem _currencyFormatMenuItem = new();
     private readonly NativeMenuItem _percentFormatMenuItem = new();
     private readonly NativeMenuItem _commaStyleMenuItem = new();
@@ -312,6 +319,30 @@ public sealed class MainWindow : Window
         _fontColorMenuItem.Header = "Font Color";
         _fontColorMenuItem.Click += (_, _) => ApplyDefaultSelectedRangeFontColor();
 
+        _horizontalTextMenuItem.Header = "Horizontal";
+        _horizontalTextMenuItem.Click += (_, _) =>
+            ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed.");
+
+        _angleCounterclockwiseMenuItem.Header = "Angle Counterclockwise";
+        _angleCounterclockwiseMenuItem.Click += (_, _) =>
+            ApplySelectedRangeTextRotation(45, "Angled text counterclockwise for", "Angle Counterclockwise failed.");
+
+        _angleClockwiseMenuItem.Header = "Angle Clockwise";
+        _angleClockwiseMenuItem.Click += (_, _) =>
+            ApplySelectedRangeTextRotation(-45, "Angled text clockwise for", "Angle Clockwise failed.");
+
+        _verticalTextMenuItem.Header = "Vertical Text";
+        _verticalTextMenuItem.Click += (_, _) =>
+            ApplySelectedRangeTextRotation(255, "Set vertical text for", "Vertical Text failed.");
+
+        _rotateTextUpMenuItem.Header = "Rotate Text Up";
+        _rotateTextUpMenuItem.Click += (_, _) =>
+            ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed.");
+
+        _rotateTextDownMenuItem.Header = "Rotate Text Down";
+        _rotateTextDownMenuItem.Click += (_, _) =>
+            ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed.");
+
         _currencyFormatMenuItem.Header = "Accounting Number Format";
         _currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();
 
@@ -386,6 +417,13 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_fillColorMenuItem);
         formatMenu.Items.Add(_clearFillMenuItem);
         formatMenu.Items.Add(_fontColorMenuItem);
+        formatMenu.Items.Add(new NativeMenuItemSeparator());
+        formatMenu.Items.Add(_horizontalTextMenuItem);
+        formatMenu.Items.Add(_angleCounterclockwiseMenuItem);
+        formatMenu.Items.Add(_angleClockwiseMenuItem);
+        formatMenu.Items.Add(_verticalTextMenuItem);
+        formatMenu.Items.Add(_rotateTextUpMenuItem);
+        formatMenu.Items.Add(_rotateTextDownMenuItem);
         formatMenu.Items.Add(new NativeMenuItemSeparator());
         formatMenu.Items.Add(_currencyFormatMenuItem);
         formatMenu.Items.Add(_percentFormatMenuItem);
@@ -580,6 +618,11 @@ public sealed class MainWindow : Window
         _fontColorButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _fontColorButton.Click += FontColorButton_Click;
 
+        _orientationButton.Content = "Orient";
+        _orientationButton.Padding = new Thickness(10, 4);
+        _orientationButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _orientationButton.Flyout = CreateTextRotationFlyout();
+
         _currencyFormatButton.Content = "$";
         _currencyFormatButton.Padding = new Thickness(10, 4);
         _currencyFormatButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -696,6 +739,7 @@ public sealed class MainWindow : Window
                     _decreaseFontSizeButton,
                     _fillColorButton,
                     _fontColorButton,
+                    _orientationButton,
                     _currencyFormatButton,
                     _percentFormatButton,
                     _commaStyleButton,
@@ -812,6 +856,7 @@ public sealed class MainWindow : Window
         _decreaseFontSizeButton.IsEnabled = isIdle;
         _fillColorButton.IsEnabled = isIdle;
         _fontColorButton.IsEnabled = isIdle;
+        _orientationButton.IsEnabled = isIdle;
         _currencyFormatButton.IsEnabled = isIdle;
         _percentFormatButton.IsEnabled = isIdle;
         _commaStyleButton.IsEnabled = isIdle;
@@ -846,6 +891,12 @@ public sealed class MainWindow : Window
         _fillColorMenuItem.IsEnabled = _fillColorButton.IsEnabled;
         _clearFillMenuItem.IsEnabled = _fillColorButton.IsEnabled;
         _fontColorMenuItem.IsEnabled = _fontColorButton.IsEnabled;
+        _horizontalTextMenuItem.IsEnabled = isIdle;
+        _angleCounterclockwiseMenuItem.IsEnabled = isIdle;
+        _angleClockwiseMenuItem.IsEnabled = isIdle;
+        _verticalTextMenuItem.IsEnabled = isIdle;
+        _rotateTextUpMenuItem.IsEnabled = isIdle;
+        _rotateTextDownMenuItem.IsEnabled = isIdle;
         _currencyFormatMenuItem.IsEnabled = _currencyFormatButton.IsEnabled;
         _percentFormatMenuItem.IsEnabled = _percentFormatButton.IsEnabled;
         _commaStyleMenuItem.IsEnabled = _commaStyleButton.IsEnabled;
@@ -1169,6 +1220,7 @@ public sealed class MainWindow : Window
         var fontSize = style?.FontSize ?? CellStyle.Default.FontSize;
         var textDecorations = BuildTextDecorations(style);
         var indentPadding = GetCellIndentPadding(style);
+        var textRotation = style?.TextRotation ?? CellStyle.Default.TextRotation;
 
         return CreateInteractiveCellBorder(
             cell.DisplayText,
@@ -1183,7 +1235,8 @@ public sealed class MainWindow : Window
             textDecorations,
             selected,
             address,
-            indentPadding);
+            indentPadding,
+            textRotation);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -1199,7 +1252,8 @@ public sealed class MainWindow : Window
         TextDecorationCollection? textDecorations,
         bool selected,
         CellAddress address,
-        double indentPadding = 0)
+        double indentPadding = 0,
+        int textRotation = 0)
     {
         var border = CreateCellBorder(
             text,
@@ -1213,7 +1267,8 @@ public sealed class MainWindow : Window
             fontSize,
             textDecorations,
             selected,
-            indentPadding);
+            indentPadding,
+            textRotation);
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
@@ -1243,30 +1298,80 @@ public sealed class MainWindow : Window
         double fontSize,
         TextDecorationCollection? textDecorations,
         bool selected,
-        double indentPadding = 0)
+        double indentPadding = 0,
+        int textRotation = 0)
     {
+        var effectiveText = FormatTextForRotation(text, textRotation);
+        var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
+        var textBlock = new TextBlock
+        {
+            Text = effectiveText,
+            FontSize = fontSize,
+            FontWeight = fontWeight,
+            FontStyle = fontStyle,
+            TextDecorations = textDecorations,
+            Foreground = foreground,
+            TextAlignment = textRotation == 255 ? TextAlignment.Center : textAlignment,
+            TextWrapping = effectiveTextWrapping,
+            TextTrimming = effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255
+                ? TextTrimming.None
+                : TextTrimming.CharacterEllipsis,
+            VerticalAlignment = verticalAlignment,
+        };
+        if (CreateTextRotationTransform(textRotation) is { } transform)
+        {
+            textBlock.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+            textBlock.RenderTransform = transform;
+        }
+
         return new Border
         {
             Background = background,
             BorderBrush = selected ? SelectionBorder : GridLine,
             BorderThickness = new Thickness(1),
+            ClipToBounds = true,
             Padding = new Thickness(8 + indentPadding, 0, 8, 0),
-            Child = new TextBlock
+            Child = textBlock,
+        };
+    }
+
+    private static string FormatTextForRotation(string text, int textRotation) =>
+        textRotation == 255 && text.Length > 1
+            ? string.Join(Environment.NewLine, text.ToCharArray())
+            : text;
+
+    private static int NormalizeTextRotationForDisplay(int textRotation) =>
+        textRotation is >= -90 and <= 90 ? textRotation : 0;
+
+    private static RotateTransform? CreateTextRotationTransform(int textRotation)
+    {
+        var displayRotation = NormalizeTextRotationForDisplay(textRotation);
+        return displayRotation == 0 ? null : new RotateTransform(-displayRotation);
+    }
+
+    private MenuFlyout CreateTextRotationFlyout() =>
+        new()
+        {
+            ItemsSource = new[]
             {
-                Text = text,
-                FontSize = fontSize,
-                FontWeight = fontWeight,
-                FontStyle = fontStyle,
-                TextDecorations = textDecorations,
-                Foreground = foreground,
-                TextAlignment = textAlignment,
-                TextWrapping = textWrapping,
-                TextTrimming = textWrapping == TextWrapping.Wrap
-                    ? TextTrimming.None
-                    : TextTrimming.CharacterEllipsis,
-                VerticalAlignment = verticalAlignment,
+                CreateTextRotationMenuItem("Horizontal", 0, "Set horizontal text for", "Horizontal Text failed."),
+                CreateTextRotationMenuItem("Angle Counterclockwise", 45, "Angled text counterclockwise for", "Angle Counterclockwise failed."),
+                CreateTextRotationMenuItem("Angle Clockwise", -45, "Angled text clockwise for", "Angle Clockwise failed."),
+                CreateTextRotationMenuItem("Vertical Text", 255, "Set vertical text for", "Vertical Text failed."),
+                CreateTextRotationMenuItem("Rotate Text Up", 90, "Rotated text up for", "Rotate Text Up failed."),
+                CreateTextRotationMenuItem("Rotate Text Down", -90, "Rotated text down for", "Rotate Text Down failed."),
             },
         };
+
+    private MenuItem CreateTextRotationMenuItem(
+        string header,
+        int textRotation,
+        string successAction,
+        string failureMessage)
+    {
+        var menuItem = new MenuItem { Header = header };
+        menuItem.Click += (_, _) => ApplySelectedRangeTextRotation(textRotation, successAction, failureMessage);
+        return menuItem;
     }
 
     private static double GetCellIndentPadding(CellStyle? style) =>
@@ -2040,6 +2145,26 @@ public sealed class MainWindow : Window
         RefreshShell($"{successAction} {rangeReference}");
     }
 
+    private void ApplySelectedRangeTextRotation(int textRotation, string successAction, string failureMessage)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.SetSelectedRangeTextRotation(textRotation);
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? failureMessage);
+            return;
+        }
+
+        RefreshShell($"{successAction} {rangeReference}");
+    }
+
     private void IncreaseSelectedRangeDecimalPlaces()
     {
         if (_isOpening || _isSaving)
@@ -2216,6 +2341,12 @@ public sealed class MainWindow : Window
             HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, "Fill Color", requireGesture: false),
             HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, "No Fill", requireGesture: false),
             HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, "Font Color", requireGesture: false),
+            HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, "Horizontal", requireGesture: false),
+            HasNativeAngleCounterclockwiseMenuItem: HasNativeMenuItem(_angleCounterclockwiseMenuItem, "Angle Counterclockwise", requireGesture: false),
+            HasNativeAngleClockwiseMenuItem: HasNativeMenuItem(_angleClockwiseMenuItem, "Angle Clockwise", requireGesture: false),
+            HasNativeVerticalTextMenuItem: HasNativeMenuItem(_verticalTextMenuItem, "Vertical Text", requireGesture: false),
+            HasNativeRotateTextUpMenuItem: HasNativeMenuItem(_rotateTextUpMenuItem, "Rotate Text Up", requireGesture: false),
+            HasNativeRotateTextDownMenuItem: HasNativeMenuItem(_rotateTextDownMenuItem, "Rotate Text Down", requireGesture: false),
             HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, "Accounting Number Format", requireGesture: false),
             HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, "Percent Style", requireGesture: false),
             HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, "Comma Style", requireGesture: false),

@@ -137,6 +137,9 @@ public sealed class WorkbookSession
     public double SelectedRangeStartFontSize =>
         GetCellStyle(SelectedRange.Start).FontSize;
 
+    public int SelectedRangeStartTextRotation =>
+        GetCellStyle(SelectedRange.Start).TextRotation;
+
     public CellColor SelectedRangeStartFontColor =>
         GetCellStyle(SelectedRange.Start).FontColor;
 
@@ -478,6 +481,19 @@ public sealed class WorkbookSession
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(NumberFormat: numberFormat)));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    public WorkbookCellEditResult SetSelectedRangeTextRotation(int textRotation)
+    {
+        var range = SelectedRange;
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(TextRotation: textRotation)));
         if (!result.Success)
             return result;
 

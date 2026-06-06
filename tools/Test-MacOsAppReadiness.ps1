@@ -419,6 +419,12 @@ function Test-MacOsWorkflow {
         "native_paste_menu_item=true",
         "native_clear_contents_menu_item=true",
         "native_bold_menu_item=true",
+        "native_horizontal_text_menu_item=true",
+        "native_angle_counterclockwise_menu_item=true",
+        "native_angle_clockwise_menu_item=true",
+        "native_vertical_text_menu_item=true",
+        "native_rotate_text_up_menu_item=true",
+        "native_rotate_text_down_menu_item=true",
         'bundle_icon=$('
     )
 
@@ -475,7 +481,13 @@ function Test-SourceWiring {
                 "native_cut_menu_item=",
                 "native_copy_menu_item=",
                 "native_clear_contents_menu_item=",
-                "native_bold_menu_item="
+                "native_bold_menu_item=",
+                "native_horizontal_text_menu_item=",
+                "native_angle_counterclockwise_menu_item=",
+                "native_angle_clockwise_menu_item=",
+                "native_vertical_text_menu_item=",
+                "native_rotate_text_up_menu_item=",
+                "native_rotate_text_down_menu_item="
             )
             OrderedPairs = @()
         },

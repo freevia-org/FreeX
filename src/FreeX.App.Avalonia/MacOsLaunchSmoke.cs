@@ -87,6 +87,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeFillColorMenuItem,
     bool HasNativeClearFillMenuItem,
     bool HasNativeFontColorMenuItem,
+    bool HasNativeHorizontalTextMenuItem,
+    bool HasNativeAngleCounterclockwiseMenuItem,
+    bool HasNativeAngleClockwiseMenuItem,
+    bool HasNativeVerticalTextMenuItem,
+    bool HasNativeRotateTextUpMenuItem,
+    bool HasNativeRotateTextDownMenuItem,
     bool HasNativeCurrencyFormatMenuItem,
     bool HasNativePercentFormatMenuItem,
     bool HasNativeCommaStyleMenuItem,
@@ -131,6 +137,12 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeFillColorMenuItem &&
         HasNativeClearFillMenuItem &&
         HasNativeFontColorMenuItem &&
+        HasNativeHorizontalTextMenuItem &&
+        HasNativeAngleCounterclockwiseMenuItem &&
+        HasNativeAngleClockwiseMenuItem &&
+        HasNativeVerticalTextMenuItem &&
+        HasNativeRotateTextUpMenuItem &&
+        HasNativeRotateTextDownMenuItem &&
         HasNativeCurrencyFormatMenuItem &&
         HasNativePercentFormatMenuItem &&
         HasNativeCommaStyleMenuItem &&
@@ -223,6 +235,12 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_fill_color_menu_item={FormatBool(snapshot.HasNativeFillColorMenuItem)}",
                 $"native_clear_fill_menu_item={FormatBool(snapshot.HasNativeClearFillMenuItem)}",
                 $"native_font_color_menu_item={FormatBool(snapshot.HasNativeFontColorMenuItem)}",
+                $"native_horizontal_text_menu_item={FormatBool(snapshot.HasNativeHorizontalTextMenuItem)}",
+                $"native_angle_counterclockwise_menu_item={FormatBool(snapshot.HasNativeAngleCounterclockwiseMenuItem)}",
+                $"native_angle_clockwise_menu_item={FormatBool(snapshot.HasNativeAngleClockwiseMenuItem)}",
+                $"native_vertical_text_menu_item={FormatBool(snapshot.HasNativeVerticalTextMenuItem)}",
+                $"native_rotate_text_up_menu_item={FormatBool(snapshot.HasNativeRotateTextUpMenuItem)}",
+                $"native_rotate_text_down_menu_item={FormatBool(snapshot.HasNativeRotateTextDownMenuItem)}",
                 $"native_currency_format_menu_item={FormatBool(snapshot.HasNativeCurrencyFormatMenuItem)}",
                 $"native_percent_format_menu_item={FormatBool(snapshot.HasNativePercentFormatMenuItem)}",
                 $"native_comma_style_menu_item={FormatBool(snapshot.HasNativeCommaStyleMenuItem)}",
