@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -169,7 +168,7 @@ public sealed class DrawingTargetResolverTests
     [Fact]
     public void ResolverScansVisibleItemsWithoutAllocatingFilteredLists()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DrawingTargetResolver.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("DrawingTargetResolver.cs");
 
         source.Should().NotContain(".Where(");
         source.Should().NotContain(".ToList()");
