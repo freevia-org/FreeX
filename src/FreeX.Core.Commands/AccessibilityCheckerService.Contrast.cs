@@ -920,6 +920,9 @@ public static partial class AccessibilityCheckerService
             case "RIGHT":
                 kind = ConditionalFormulaScalarFunctionKind.Right;
                 return true;
+            case "MID":
+                kind = ConditionalFormulaScalarFunctionKind.Mid;
+                return true;
             case "FIND":
                 kind = ConditionalFormulaScalarFunctionKind.Find;
                 return true;
@@ -974,6 +977,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Exact => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.Mid or
             ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
             ConditionalFormulaScalarFunctionKind.Today or
             ConditionalFormulaScalarFunctionKind.Now => argumentCount == 0,
@@ -1463,6 +1467,7 @@ public static partial class AccessibilityCheckerService
         Trim,
         Left,
         Right,
+        Mid,
         Find,
         Search,
         Exact,
@@ -1974,6 +1979,8 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Left:
                 case ConditionalFormulaScalarFunctionKind.Right:
                     return TryEvaluateFormulaTextSliceFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Mid:
+                    return TryEvaluateFormulaTextMidFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Find:
                 case ConditionalFormulaScalarFunctionKind.Search:
                     return TryEvaluateFormulaTextSearchFunction(function, rowOffset, colOffset, out value);
@@ -2109,6 +2116,33 @@ public static partial class AccessibilityCheckerService
             value = function.Kind == ConditionalFormulaScalarFunctionKind.Left
                 ? new TextValue(text[..actualLength])
                 : new TextValue(text[(text.Length - actualLength)..]);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaTextMidFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var text) ||
+                !TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var startNumber) ||
+                !TryGetFormulaTextSearchStart(startNumber, out var startIndex) ||
+                !TryResolveFormulaFunctionNumber(function.Arguments[2], rowOffset, colOffset, out var lengthNumber) ||
+                !TryGetFormulaTextSliceLength(lengthNumber, out var length))
+            {
+                return false;
+            }
+
+            if (startIndex >= text.Length || length == 0)
+            {
+                value = new TextValue(string.Empty);
+                return true;
+            }
+
+            var actualLength = Math.Min(length, text.Length - startIndex);
+            value = new TextValue(text.Substring(startIndex, actualLength));
             return true;
         }
 
