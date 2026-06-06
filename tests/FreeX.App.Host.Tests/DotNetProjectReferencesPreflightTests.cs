@@ -9,7 +9,7 @@ public sealed class DotNetProjectReferencesPreflightTests
     [Fact]
     public void DotNetProjectReferencesPreflight_ValidatesProjectReferenceTargets()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-DotNetProjectReferences.ps1");
 
         script.Should().Contain("Get-ProjectFiles -Directory");
         script.Should().Contain("Test-IsIgnoredDirectoryName");

@@ -9,7 +9,7 @@ public sealed class RepositoryPreflightTests
     [Fact]
     public void RepositoryPreflight_RunsStructuralPreflightScripts()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-RepositoryPreflight.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-RepositoryPreflight.ps1");
 
         script.Should().Contain("Test-JsonFiles.ps1");
         script.Should().Contain("Test-XmlFiles.ps1");

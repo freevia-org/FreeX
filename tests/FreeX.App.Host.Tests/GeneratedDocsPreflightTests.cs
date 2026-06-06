@@ -8,7 +8,7 @@ public sealed class GeneratedDocsPreflightTests
     [Fact]
     public void GeneratedDocsPreflight_RunsAllGeneratedDocumentationChecks()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-GeneratedDocs.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-GeneratedDocs.ps1");
 
         script.Should().Contain("Generate-CommandInventoryDocs.ps1");
         script.Should().Contain("& $resolvedScriptPath -Check");

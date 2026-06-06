@@ -9,7 +9,7 @@ public sealed class SolutionProjectsPreflightTests
     [Fact]
     public void SolutionProjectsPreflight_ValidatesSolutionMembership()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-SolutionProjects.ps1");
 
         script.Should().Contain("FreeX.slnx");
         script.Should().Contain("SelectNodes(\"//*[local-name()='Project']\")");
@@ -25,7 +25,7 @@ public sealed class SolutionProjectsPreflightTests
         script.Should().Contain("Solution references missing project");
         script.Should().Contain("Validated $($solutionProjectPaths.Count) solution project entry(s).");
 
-        var solution = File.ReadAllText(WorkspaceFileLocator.Find("FreeX.slnx"));
+        var solution = WorkspaceFileLocator.ReadAllText("FreeX.slnx");
         solution.Should().Contain("<Folder Name=\"/tools/\">");
         solution.Should().Contain("tools/FreeX.ChartInteropCompare/FreeX.ChartInteropCompare.csproj");
         solution.Should().Contain("tools/FreeX.ExcelOpenSmoke/FreeX.ExcelOpenSmoke.csproj");

@@ -8,7 +8,7 @@ public sealed class JsonFilesPreflightTests
     [Fact]
     public void JsonFilesPreflight_ValidatesTrackedJsonFiles()
     {
-        var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-JsonFiles.ps1"));
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-JsonFiles.ps1");
 
         script.Should().Contain("[string[]]$JsonRoots = @(\"global.json\", \"docs\", \"release\")");
         script.Should().Contain("JSON path was not found");
