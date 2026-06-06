@@ -398,6 +398,46 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void CustomSheetViews_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateCustomSheetViewsSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithCustomSheetViews_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateCustomSheetViewsSourceWorkbook());
+        var sourceWorkbookViews = ReadWorkbookChildElement(source, "customWorkbookViews");
+        var sourceSheetViews = ReadWorksheetChildElement(source, "customSheetViews");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "customWorkbookViews")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceWorkbookViews.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "customSheetViews")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceSheetViews.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void NamedRanges_ProducesSchemaValidWorkbook()
     {
         var workbook = new Workbook("NamedRanges");
@@ -1087,6 +1127,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calc"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         sheet.FullCalculationOnLoad = true;
+        return workbook;
+    }
+
+    private static Workbook CreateCustomSheetViewsSourceWorkbook()
+    {
+        var workbook = new Workbook("CustomSheetViewsPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "Review",
+            [
+                new WorksheetCustomViewState(
+                    "Data",
+                    WorksheetViewMode.PageLayout,
+                    FrozenRows: 1,
+                    FrozenCols: 1,
+                    SplitRow: null,
+                    SplitColumn: null,
+                    ShowGridlines: false,
+                    ShowHeadings: false,
+                    ShowRulers: false,
+                    ZoomPercent: 125,
+                    ShowFormulas: true)
+            ],
+            Id: "{33333333-3333-3333-3333-333333333333}"));
         return workbook;
     }
 
