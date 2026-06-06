@@ -928,6 +928,9 @@ public static partial class AccessibilityCheckerService
             case "CEILING":
                 kind = ConditionalFormulaScalarFunctionKind.Ceiling;
                 return true;
+            case "FLOOR":
+                kind = ConditionalFormulaScalarFunctionKind.Floor;
+                return true;
             case "TRUNC":
                 kind = ConditionalFormulaScalarFunctionKind.Trunc;
                 return true;
@@ -1176,6 +1179,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.RoundDown or
             ConditionalFormulaScalarFunctionKind.MRound or
             ConditionalFormulaScalarFunctionKind.Ceiling or
+            ConditionalFormulaScalarFunctionKind.Floor or
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Quotient or
             ConditionalFormulaScalarFunctionKind.Combin or
@@ -1725,6 +1729,7 @@ public static partial class AccessibilityCheckerService
         RoundDown,
         MRound,
         Ceiling,
+        Floor,
         Trunc,
         Fact,
         FactDouble,
@@ -2275,6 +2280,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.RoundDown:
                 case ConditionalFormulaScalarFunctionKind.MRound:
                 case ConditionalFormulaScalarFunctionKind.Ceiling:
+                case ConditionalFormulaScalarFunctionKind.Floor:
                 case ConditionalFormulaScalarFunctionKind.Trunc:
                 case ConditionalFormulaScalarFunctionKind.Fact:
                 case ConditionalFormulaScalarFunctionKind.FactDouble:
@@ -2478,6 +2484,14 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Ceiling:
                     if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var significance) ||
                         !TryCeilingFormulaNumber(first, significance, out result))
+                    {
+                        return false;
+                    }
+
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Floor:
+                    if (!TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var floorSignificance) ||
+                        !TryFloorFormulaNumber(first, floorSignificance, out result))
                     {
                         return false;
                     }
@@ -3260,6 +3274,22 @@ public static partial class AccessibilityCheckerService
                 return false;
 
             result = Math.Ceiling(number / significance) * significance;
+            return double.IsFinite(result);
+        }
+
+        private static bool TryFloorFormulaNumber(double number, double significance, out double result)
+        {
+            result = 0d;
+            if (!double.IsFinite(number) || !double.IsFinite(significance))
+                return false;
+
+            if (significance == 0d)
+                return true;
+
+            if (number * significance < 0d)
+                return false;
+
+            result = Math.Floor(number / significance) * significance;
             return double.IsFinite(result);
         }
 

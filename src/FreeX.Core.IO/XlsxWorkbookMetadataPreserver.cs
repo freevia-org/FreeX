@@ -66,7 +66,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeFileSharing(sourceFileSharing, targetRoot, workbookNs, workbook.FileSharing is not null))
             changed = true;
-        if (MergeChildBlocks(sourceFileRecoveryProperties, targetRoot, workbookNs + "fileRecoveryPr"))
+        if (MergeFileRecoveryProperties(sourceFileRecoveryProperties, targetRoot, workbookNs + "fileRecoveryPr"))
             changed = true;
         if (MergeChildBlock(sourceSmartTagProperties, targetRoot, workbookNs + "smartTagPr"))
             changed = true;
@@ -115,6 +115,21 @@ internal static class XlsxWorkbookMetadataPreserver
 
         foreach (var sourceBlock in sourceBlocks)
             targetRoot.Add(new XElement(sourceBlock));
+        return true;
+    }
+
+    private static bool MergeFileRecoveryProperties(IReadOnlyCollection<XElement> sourceBlocks, XElement targetRoot, XName blockName)
+    {
+        if (sourceBlocks.Count == 0 || targetRoot.Element(blockName) is not null)
+            return false;
+
+        foreach (var sourceBlock in sourceBlocks)
+        {
+            var clone = new XElement(sourceBlock);
+            XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(clone);
+            targetRoot.Add(clone);
+        }
+
         return true;
     }
 

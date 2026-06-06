@@ -215,6 +215,7 @@ internal static class XlsxWorkbookMetadataWriter
             SetBooleanAttribute(element, "crashSave", item.CrashSave);
             SetBooleanAttribute(element, "dataExtractLoad", item.DataExtractLoad);
             SetBooleanAttribute(element, "repairLoad", item.RepairLoad);
+            XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(element);
             return element;
         }).ToArray();
 
