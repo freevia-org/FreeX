@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
@@ -48,7 +47,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDialog_ExposesReferencePickersForSourceAndExistingLocation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableDialog.cs");
 
         source.Should().Contain("AddLabeledReferenceEditor(");
         source.Should().Contain("_sourceRangeBox,");
@@ -65,7 +64,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDialog_ExposesOnlySupportedSourceAndPlacementChoices()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableDialog.cs");
 
         source.Should().Contain("UiText.Get(\"PivotTable_ChooseDataHeader\")");
         source.Should().Contain("_selectTableRangeButton");
@@ -80,7 +79,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDialog_ExposesKeyboardAccessKeysForChoicesAndButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableDialog.cs");
 
         source.Should().Contain("Content = UiText.Get(\"PivotTable_Create\")");
         source.Should().Contain("Content = UiText.Cancel");
@@ -94,7 +93,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDialog_LabelsRangeEditorsWithAccessKeyTargets()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableDialog.cs");
 
         foreach (var content in new[]
         {
@@ -114,7 +113,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDialog_RangeEditorsExposeAutomationNames()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableDialog.cs");
 
         source.Should().Contain("AutomationProperties.SetName(_sourceRangeBox, UiText.Get(\"PivotTable_PivotTableSourceRange\"));");
         source.Should().Contain("AutomationProperties.SetName(_destinationRangeBox, UiText.Get(\"PivotTable_PivotTableLocation\"));");
@@ -123,7 +122,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDialogOpenedFromKeyboard_FocusesSourceRange()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableDialog.cs");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -133,7 +132,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDialogRangePicker_RefocusesSelectedInputAfterRequest()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableDialog.cs");
         var handlerSource = source[
             source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
             source.IndexOf("private void UpdateDestinationState", StringComparison.Ordinal)];
@@ -146,7 +145,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDialogInvalidRanges_ShowOwnedWarningAndRefocusBadInput()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotTableDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("PivotTableDialog.cs");
 
         source.Should().Contain("if (!ValidateInputs())");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTable_EnterValidSourceRange\"), _sourceRangeBox);");
@@ -200,7 +199,7 @@ public sealed partial class PivotWorkflowDialogTests
     [Fact]
     public void MainWindow_WiresPivotTableRangePickersToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
         source.Should().Contain("new PivotTableDialog(");
         source.Should().Contain("request => ApplyPivotTableRangeSelection(dialog, request)");
