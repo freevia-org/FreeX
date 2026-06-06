@@ -395,6 +395,7 @@ public sealed partial class XlsxFileAdapter
         private const string PivotCacheRecordsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
         private const string CommentsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
         private const string VmlDrawingRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+        private const string SingleCellTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableSingleCells";
 
         public static XlsxSourcePackage Capture(Stream stream, Workbook workbook)
             => Capture(stream, workbook, allowBufferReuse: false);
@@ -847,9 +848,12 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchLegacyCommentFonts(archive);
                 NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
+                NormalizePatchWorksheetSingleXmlCells(archive);
+                NormalizePatchSingleCellTableParts(archive);
                 NormalizePatchWorksheetAutoFilters(archive);
                 NormalizePatchStructuredTableAutoFilters(archive);
                 NormalizePatchStructuredTableSortStates(archive);
+                NormalizePatchStructuredTableMetadata(archive);
                 NormalizePatchWorksheetSortStates(archive);
                 NormalizePatchWorksheetDataConsolidation(archive);
                 if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
@@ -941,6 +945,9 @@ public sealed partial class XlsxFileAdapter
 
                     XlsxPackageXmlEditor.ReplaceXml(archive, commentPartPath, commentsXml);
                 }
+
+                NormalizePatchWorksheetSingleXmlCells(archive);
+                NormalizePatchSingleCellTableParts(archive);
 
                 if (invalidatesCalcChain)
                 {
@@ -1247,6 +1254,88 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
+        private static void NormalizePatchWorksheetSingleXmlCells(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var worksheetEntry in archive.Entries.Where(IsWorksheetXmlEntry).ToList())
+            {
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+                var root = worksheetXml.Root;
+                if (root is null)
+                    continue;
+
+                var singleXmlCells = root.Elements(workbookNs + "singleXmlCells").ToList();
+                if (singleXmlCells.Count == 0 ||
+                    !HasPartBackedSingleXmlCells(archive, worksheetEntry.FullName))
+                {
+                    continue;
+                }
+
+                foreach (var element in singleXmlCells)
+                    element.Remove();
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetEntry.FullName, worksheetXml);
+            }
+        }
+
+        private static bool HasPartBackedSingleXmlCells(ZipArchive archive, string worksheetPath)
+        {
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var relationshipsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+            if (relationshipsEntry is null)
+                return false;
+
+            try
+            {
+                var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
+                return relationshipsXml.Root?
+                    .Elements(packageRelNs + "Relationship")
+                    .Any(relationship =>
+                    {
+                        if (!string.Equals(
+                                relationship.Attribute("Type")?.Value,
+                                SingleCellTableRelationshipType,
+                                StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(
+                                relationship.Attribute("TargetMode")?.Value,
+                                "External",
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            return false;
+                        }
+
+                        var target = relationship.Attribute("Target")?.Value;
+                        return !string.IsNullOrWhiteSpace(target) &&
+                               archive.GetEntry(XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target)) is not null;
+                    }) == true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void NormalizePatchSingleCellTableParts(ZipArchive archive)
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var singleCellTableEntry in archive.Entries.Where(IsSingleCellTableXmlEntry).ToList())
+            {
+                var tableXml = XlsxPackageXmlEditor.LoadXml(singleCellTableEntry);
+                var root = tableXml.Root;
+                if (root is null || root.Name != workbookNs + "singleXmlCells")
+                    continue;
+
+                var attributes = root.Attributes()
+                    .Where(attribute => !attribute.IsNamespaceDeclaration)
+                    .ToList();
+                if (attributes.Count == 0)
+                    continue;
+
+                foreach (var attribute in attributes)
+                    attribute.Remove();
+                XlsxPackageXmlEditor.ReplaceXml(archive, singleCellTableEntry.FullName, tableXml);
+            }
+        }
+
         private static void NormalizePatchWorksheetSheetViews(ZipArchive archive)
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -1336,6 +1425,20 @@ public sealed partial class XlsxFileAdapter
                 var sortState = root.Element(workbookNs + "sortState");
                 if (sortState is not null &&
                     XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState))
+                {
+                    XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
+                }
+            }
+        }
+
+        private static void NormalizePatchStructuredTableMetadata(ZipArchive archive)
+        {
+            foreach (var tableEntry in archive.Entries.Where(IsStructuredTableXmlEntry).ToList())
+            {
+                var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
+                var root = tableXml.Root;
+                if (root is not null &&
+                    XlsxStructuredTableSchemaNormalizer.NormalizeElement(root, tableEntry.FullName))
                 {
                     XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
                 }
@@ -3277,6 +3380,15 @@ public sealed partial class XlsxFileAdapter
         {
             var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
             return path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) &&
+                   path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                   !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase) &&
+                   !path.StartsWith("xl/tables/tableSingleCells", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsSingleCellTableXmlEntry(ZipArchiveEntry entry)
+        {
+            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            return path.StartsWith("xl/tables/tableSingleCells", StringComparison.OrdinalIgnoreCase) &&
                    path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                    !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
         }

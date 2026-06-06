@@ -90,6 +90,15 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void StructuredTableMetadata_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidStructuredTableMetadataSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertStructuredTableMetadataSanitized(saved);
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithStructuredTable_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateStructuredTableSourceWorkbook());
@@ -192,6 +201,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         condition.Attribute("sortBy").Should().BeNull();
         condition.Attribute("dxfId").Should().BeNull();
         condition.Attribute("iconId").Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidStructuredTableMetadataForSchemaValidity()
+    {
+        using var source = Save(CreateStructuredTableSourceWorkbook());
+        SetStructuredTableMetadataInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        AssertStructuredTableMetadataSanitized(saved);
     }
 
 
@@ -1520,6 +1553,72 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateInvalidStructuredTableMetadataSourceWorkbook()
+    {
+        var workbook = new Workbook("StructuredTableMetadataInvalidSchema");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = Range(sheet, 1, 1, 3, 2),
+            HasAutoFilter = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["tableType"] = "invalid",
+                ["headerRowDxfId"] = "not-a-number",
+                ["connectionId"] = "not-a-number"
+            }
+        };
+        table.Columns.Add(new StructuredTableColumnModel(
+            1,
+            "Name",
+            TotalsRowFunction: "invalid"));
+        table.Columns.Add(new StructuredTableColumnModel(
+            2,
+            "Value",
+            NativeAttributes: new Dictionary<string, string>
+            {
+                ["queryTableFieldId"] = "not-a-number",
+                ["dataDxfId"] = "not-a-number"
+            }));
+        sheet.StructuredTables.Add(table);
+        return workbook;
+    }
+
+    private static void AssertStructuredTableMetadataSanitized(MemoryStream stream)
+    {
+        var table = ReadPackageRootElement(stream, "xl/tables/table1.xml");
+        var workbookNs = table.Name.Namespace;
+        table.Attribute("tableType").Should().BeNull();
+        table.Attribute("headerRowDxfId").Should().BeNull();
+        table.Attribute("connectionId").Should().BeNull();
+
+        var tableColumns = table.Element(workbookNs + "tableColumns")!;
+        tableColumns.Attribute("count")!.Value.Should().Be("2");
+        var columns = tableColumns.Elements(workbookNs + "tableColumn").ToArray();
+        columns.Should().HaveCount(2);
+        columns[0].Attribute("id")!.Value.Should().Be("1");
+        columns[0].Attribute("totalsRowFunction").Should().BeNull();
+        (columns[0].Element(workbookNs + "calculatedColumnFormula")?.Attribute("array")).Should().BeNull();
+        columns[1].Attribute("queryTableFieldId").Should().BeNull();
+        columns[1].Attribute("dataDxfId").Should().BeNull();
+
+        var styleInfo = table.Element(workbookNs + "tableStyleInfo")!;
+        styleInfo.Attribute("showFirstColumn")?.Value.Should().NotBe("maybe");
+        styleInfo.Attribute("showRowStripes")?.Value.Should().NotBe("maybe");
+    }
+
     private static Workbook CreateAutoFilterSourceWorkbook()
     {
         var workbook = new Workbook("AutoFilterPatchSave");
@@ -1768,6 +1867,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             autoFilter.AddAfterSelf(sortState);
         else
             tableXml.Root.AddFirst(sortState);
+        ReplacePackageXml(archive, "xl/tables/table1.xml", tableXml);
+    }
+
+    private static void SetStructuredTableMetadataInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+        var root = tableXml.Root!;
+        root.SetAttributeValue("tableType", "invalid");
+        root.SetAttributeValue("headerRowDxfId", "not-a-number");
+
+        var tableColumns = root.Element(workbookNs + "tableColumns")!;
+        tableColumns.SetAttributeValue("count", "not-a-number");
+        var columns = tableColumns.Elements(workbookNs + "tableColumn").ToArray();
+        columns[0].SetAttributeValue("id", "not-a-number");
+        columns[0].SetAttributeValue("totalsRowFunction", "invalid");
+        columns[0].AddFirst(new XElement(
+            workbookNs + "calculatedColumnFormula",
+            new XAttribute("array", "maybe"),
+            "[Value]*2"));
+        columns[1].SetAttributeValue("queryTableFieldId", "not-a-number");
+        columns[1].SetAttributeValue("dataDxfId", "not-a-number");
+
+        var styleInfo = root.Element(workbookNs + "tableStyleInfo")!;
+        styleInfo.SetAttributeValue("showFirstColumn", "maybe");
+        styleInfo.SetAttributeValue("showRowStripes", "maybe");
         ReplacePackageXml(archive, "xl/tables/table1.xml", tableXml);
     }
 
