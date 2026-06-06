@@ -1,4 +1,3 @@
-using System.IO;
 using System.Text.Json;
 using FluentAssertions;
 using FreeX.App.Host;
@@ -83,7 +82,7 @@ public sealed class BackstageRecentFileListPlannerTests
     [Fact]
     public void Build_AvoidsLinqPipelinesForRecentFileHotPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "BackstageRecentFileListPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("BackstageRecentFileListPlanner.cs");
 
         source.Should().NotContain(".Where(");
         source.Should().NotContain(".OrderByDescending(");
@@ -133,7 +132,7 @@ public sealed class BackstageRecentFileListPlannerTests
     [Fact]
     public void RecentFilesStore_UsesUtcClockForPersistedTimestamps()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RecentFilesStore.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("RecentFilesStore.cs");
 
         source.Should().Contain("LastOpened = DateTimeOffset.UtcNow");
         source.Should().NotContain("LastOpened = DateTime.Now");
