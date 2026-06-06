@@ -5283,26 +5283,16 @@ public sealed partial class XlsxFileAdapter
                     sourceStyleIndex);
             }
 
-            foreach (var (row, col, styleIndex) in explicitStyleOnlyCells)
-            {
-                if (styleIndex < 0)
-                    continue;
-
-                if (sheet.GetStyleOnly(row, col) is not { } styleOnlyStyleId)
-                    continue;
-
-                AddSourceStyleIndex(
-                    sourceStyleIndexesByStyleId,
-                    ambiguousStyleIds,
-                    styleOnlyStyleId,
-                    GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex));
-            }
-
             return new XlsxSourceCellStyleInfo(
                 new XlsxExplicitSourceCellStyleIndexLookup(
                     explicitPopulatedCellStyles,
                     sourceStyleIndexCache),
-                ReadSourceStyleOnlyCells(explicitStyleOnlyCells, sheet, sourceStyleIndexCache));
+                ReadSourceStyleOnlyCells(
+                    explicitStyleOnlyCells,
+                    sheet,
+                    sourceStyleIndexCache,
+                    sourceStyleIndexesByStyleId,
+                    ambiguousStyleIds));
         }
 
         private static string? GetCachedSourceStyleIndex(Dictionary<int, string?> cache, int styleIndex)
@@ -5318,8 +5308,20 @@ public sealed partial class XlsxFileAdapter
         private static XlsxSourceStyleOnlyCellEntry[] ReadSourceStyleOnlyCells(
             IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
             Sheet sheet,
-            Dictionary<int, string?> sourceStyleIndexCache)
+            Dictionary<int, string?> sourceStyleIndexCache,
+            Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
+            HashSet<StyleId> ambiguousStyleIds)
         {
+            if (sheet.TryGetCompressedStyleOnlyRuns(out var runs) && runs.Count > 0)
+            {
+                return ReadCompressedSourceStyleOnlyCells(
+                    explicitStyleOnlyCells,
+                    runs,
+                    sourceStyleIndexCache,
+                    sourceStyleIndexesByStyleId,
+                    ambiguousStyleIds);
+            }
+
             List<XlsxSourceStyleOnlyCellEntry>? result = null;
             foreach (var (row, col, styleIndex) in explicitStyleOnlyCells)
             {
@@ -5330,15 +5332,68 @@ public sealed partial class XlsxFileAdapter
                 }
 
                 result ??= [];
+                var sourceStyleIndex = GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex);
+                AddSourceStyleIndex(
+                    sourceStyleIndexesByStyleId,
+                    ambiguousStyleIds,
+                    styleOnlyStyleId,
+                    sourceStyleIndex);
                 result.Add(new XlsxSourceStyleOnlyCellEntry(
                     row,
                     col,
                     styleOnlyStyleId,
-                    GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex)));
+                    sourceStyleIndex));
             }
 
             return SortSourceStyleOnlyCells(result);
         }
+
+        private static XlsxSourceStyleOnlyCellEntry[] ReadCompressedSourceStyleOnlyCells(
+            IReadOnlyList<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
+            IReadOnlyList<StyleOnlyRun> runs,
+            Dictionary<int, string?> sourceStyleIndexCache,
+            Dictionary<StyleId, string?> sourceStyleIndexesByStyleId,
+            HashSet<StyleId> ambiguousStyleIds)
+        {
+            List<XlsxSourceStyleOnlyCellEntry>? result = null;
+            var runIndex = 0;
+            foreach (var (row, col, styleIndex) in explicitStyleOnlyCells)
+            {
+                if (styleIndex < 0)
+                    continue;
+
+                while (runIndex < runs.Count && StyleOnlyRunIsBeforeCell(runs[runIndex], row, col))
+                    runIndex++;
+
+                if (runIndex >= runs.Count)
+                    break;
+
+                var run = runs[runIndex];
+                if (!StyleOnlyRunContainsCell(run, row, col))
+                    continue;
+
+                result ??= new List<XlsxSourceStyleOnlyCellEntry>();
+                var sourceStyleIndex = GetCachedSourceStyleIndex(sourceStyleIndexCache, styleIndex);
+                AddSourceStyleIndex(
+                    sourceStyleIndexesByStyleId,
+                    ambiguousStyleIds,
+                    run.StyleId,
+                    sourceStyleIndex);
+                result.Add(new XlsxSourceStyleOnlyCellEntry(
+                    row,
+                    col,
+                    run.StyleId,
+                    sourceStyleIndex));
+            }
+
+            return result is { Count: > 0 } ? result.ToArray() : [];
+        }
+
+        private static bool StyleOnlyRunIsBeforeCell(StyleOnlyRun run, uint row, uint col) =>
+            run.Row < row || run.Row == row && run.EndCol < col;
+
+        private static bool StyleOnlyRunContainsCell(StyleOnlyRun run, uint row, uint col) =>
+            run.Row == row && col >= run.StartCol && col <= run.EndCol;
 
         private static XlsxSourceStyleOnlyCellEntry[] SortSourceStyleOnlyCells(List<XlsxSourceStyleOnlyCellEntry>? entries)
         {
