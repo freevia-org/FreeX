@@ -993,6 +993,9 @@ public static partial class AccessibilityCheckerService
             case "CSC":
                 kind = ConditionalFormulaScalarFunctionKind.Csc;
                 return true;
+            case "CSCH":
+                kind = ConditionalFormulaScalarFunctionKind.Csch;
+                return true;
             case "SINH":
                 kind = ConditionalFormulaScalarFunctionKind.Sinh;
                 return true;
@@ -1131,6 +1134,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Radians or
             ConditionalFormulaScalarFunctionKind.Sin or
             ConditionalFormulaScalarFunctionKind.Csc or
+            ConditionalFormulaScalarFunctionKind.Csch or
             ConditionalFormulaScalarFunctionKind.Sinh or
             ConditionalFormulaScalarFunctionKind.Asinh or
             ConditionalFormulaScalarFunctionKind.Acosh or
@@ -1730,6 +1734,7 @@ public static partial class AccessibilityCheckerService
         Radians,
         Sin,
         Csc,
+        Csch,
         Sinh,
         Asinh,
         Acosh,
@@ -2276,6 +2281,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Radians:
                 case ConditionalFormulaScalarFunctionKind.Sin:
                 case ConditionalFormulaScalarFunctionKind.Csc:
+                case ConditionalFormulaScalarFunctionKind.Csch:
                 case ConditionalFormulaScalarFunctionKind.Sinh:
                 case ConditionalFormulaScalarFunctionKind.Asinh:
                 case ConditionalFormulaScalarFunctionKind.Acosh:
@@ -2617,6 +2623,13 @@ public static partial class AccessibilityCheckerService
                         return false;
 
                     result = 1d / sine;
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Csch:
+                    var hyperbolicSine = Math.Sinh(first);
+                    if (hyperbolicSine == 0d || !double.IsFinite(hyperbolicSine))
+                        return false;
+
+                    result = 1d / hyperbolicSine;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Sinh:
                     result = Math.Sinh(first);
