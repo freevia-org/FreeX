@@ -78,6 +78,33 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidWorkbookFileSharingForSchemaValidity()
+    {
+        using var source = Save(CreateWorkbookFileSharingSourceWorkbook());
+        SetWorkbookFileSharingInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "fileSharing")
+            .Attribute("readOnlyRecommended")
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void WorkbookFileRecoveryProperties_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreateWorkbookFileRecoveryPropertiesSourceWorkbook()).Should().BeEmpty();
@@ -448,6 +475,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sharing"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
+    }
+
+    private static void SetWorkbookFileSharingInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing")!;
+        fileSharing.SetAttributeValue("readOnlyRecommended", "maybe");
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
     }
 
     private static Workbook CreateWorkbookFileRecoveryPropertiesSourceWorkbook()
