@@ -301,6 +301,61 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
+    public void PageLayout_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreatePageLayoutSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithPageLayout_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreatePageLayoutSourceWorkbook());
+        var sourceSheetProperties = ReadWorksheetChildElement(source, "sheetPr");
+        var sourcePrintOptions = ReadWorksheetChildElement(source, "printOptions");
+        var sourcePageMargins = ReadWorksheetChildElement(source, "pageMargins");
+        var sourcePageSetup = ReadWorksheetChildElement(source, "pageSetup");
+        var sourceHeaderFooter = ReadWorksheetChildElement(source, "headerFooter");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "sheetPr")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceSheetProperties.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "printOptions")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourcePrintOptions.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "pageMargins")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourcePageMargins.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "pageSetup")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourcePageSetup.ToString(SaveOptions.DisableFormatting));
+        ReadWorksheetChildElement(saved, "headerFooter")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceHeaderFooter.ToString(SaveOptions.DisableFormatting));
+    }
+
+
+    [Fact]
     public void ManualPageBreaks_UseExcelCompatibleSpanBounds()
     {
         var workbook = new Workbook("ManualPageBreaks");
@@ -434,6 +489,46 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         sheet.SplitColumn = 2;
         sheet.ViewTopRow = 1;
         sheet.ViewLeftCol = 1;
+        return workbook;
+    }
+
+    private static Workbook CreatePageLayoutSourceWorkbook()
+    {
+        var workbook = new Workbook("PageLayoutPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Legal;
+        sheet.PageMargins = new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1);
+        sheet.HeaderMargin = 0.25;
+        sheet.FooterMargin = 0.35;
+        sheet.PrintGridlines = true;
+        sheet.PrintHeadings = true;
+        sheet.CenterHorizontallyOnPage = true;
+        sheet.CenterVerticallyOnPage = true;
+        sheet.PageOrder = WorksheetPageOrder.OverThenDown;
+        sheet.FirstPageNumber = 3;
+        sheet.UsePrinterDefaults = false;
+        sheet.PrintCopies = 2;
+        sheet.PrintBlackAndWhite = true;
+        sheet.PrintDraftQuality = true;
+        sheet.PrintQualityDpi = 600;
+        sheet.PrintQualityVerticalDpi = 300;
+        sheet.PrintErrorValue = WorksheetPrintErrorValue.Dash;
+        sheet.PrintComments = WorksheetPrintComments.AtEnd;
+        sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, 2);
+        sheet.FitToPage = true;
+        sheet.AutoPageBreaks = false;
+        sheet.PageHeader = new WorksheetHeaderFooter("Left header", "Center header", "Right header");
+        sheet.PageFooter = new WorksheetHeaderFooter("Left footer", "Page &[Page] of &[Pages]", "Right footer");
+        sheet.FirstPageHeader = new WorksheetHeaderFooter("First header left", "First header center", "First header right");
+        sheet.FirstPageFooter = new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right");
+        sheet.EvenPageHeader = new WorksheetHeaderFooter("Even header left", "Even header center", "Even header right");
+        sheet.EvenPageFooter = new WorksheetHeaderFooter("Even footer left", "Even footer center", "Even footer right");
+        sheet.DifferentFirstPageHeaderFooter = true;
+        sheet.DifferentOddEvenHeaderFooter = true;
+        sheet.HeaderFooterScaleWithDocument = false;
+        sheet.HeaderFooterAlignWithMargins = false;
         return workbook;
     }
 
