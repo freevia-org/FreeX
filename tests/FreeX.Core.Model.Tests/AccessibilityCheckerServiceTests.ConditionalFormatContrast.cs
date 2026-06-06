@@ -863,6 +863,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("LN($A1)>4.7", "B4");
         AssertFormulaArithmeticContrastLocations("LOG10($A1)>2", "B4");
         AssertFormulaArithmeticContrastLocations("LOG10($A1)>=2", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("PI()>3", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("PI()*$A1>300", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ROUND(PI(),0)=3", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
@@ -889,6 +892,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("IF(LOG10($A1)>2,TRUE,FALSE)", "B4");
         AssertFormulaArithmeticContrastLocations("AND(LOG10($A1)>=2,$C1=\"Closed\")", "B2");
         AssertFormulaArithmeticContrastLocations("ISNUMBER(LOG10($A1))", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("IF(PI()>3,TRUE,FALSE)", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(PI()*$A1>300,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(PI())", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("MOD($A1,2)", "B1", "B3", "B4");
     }
 
@@ -903,6 +909,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("SUM(EXP($A1/100),1)>4", "B4");
         AssertFormulaAggregateContrastLocations("SUM(LN($A1),1)>5.7", "B4");
         AssertFormulaAggregateContrastLocations("SUM(LOG10($A1),1)>3", "B4");
+        AssertFormulaAggregateContrastLocations("SUM(PI(),$A1)>103", "B2", "B4");
     }
 
     [Fact]
@@ -959,6 +966,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("LOG10(KURT($A1))>0");
         AssertFormulaArithmeticContrastLocations("LOG10(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("LOG10(EXP(1000))>0");
+        AssertFormulaArithmeticContrastLocations("PI(1)>0");
+        AssertFormulaArithmeticContrastLocations("PI($A1)>0");
         AssertFormulaArithmeticContrastLocations("KURT($A1)>0");
     }
 
