@@ -34,7 +34,7 @@ public sealed class SolutionProjectsPreflightTests
     [Fact]
     public void SolutionProjectsPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-SolutionProjects.ps1");
         using var temp = new TestTemporaryDirectory();
         var tempDirectory = temp.Path;
 
@@ -79,7 +79,7 @@ public sealed class SolutionProjectsPreflightTests
             """);
         File.WriteAllText(Path.Combine(tempDirectory, "src", "Nested", "Nested.csproj"), "<Project />");
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-SolutionProjects.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
@@ -112,7 +112,7 @@ public sealed class SolutionProjectsPreflightTests
         File.WriteAllText(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project />");
         File.WriteAllText(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project />");
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-SolutionProjects.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
@@ -140,7 +140,7 @@ public sealed class SolutionProjectsPreflightTests
             """);
         File.WriteAllText(Path.Combine(tempDirectory, "src", "Duplicate", "Duplicate.csproj"), "<Project />");
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-SolutionProjects.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
@@ -170,7 +170,7 @@ public sealed class SolutionProjectsPreflightTests
             """);
         File.WriteAllText(Path.Combine(temp.Path, "external", "Outside.csproj"), "<Project />");
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-SolutionProjects.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{solutionRoot}\" -SolutionPath \"{Path.Combine(solutionRoot, "FreeX.slnx")}\"");
 
@@ -201,7 +201,7 @@ public sealed class SolutionProjectsPreflightTests
         File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
         File.WriteAllText(Path.Combine(tempDirectory, "tools", "MissingTool", "MissingTool.csproj"), "<Project />");
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-SolutionProjects.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
@@ -232,7 +232,7 @@ public sealed class SolutionProjectsPreflightTests
         File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
         File.WriteAllText(Path.Combine(tempDirectory, "src", "Missing", "Missing.csproj"), "<Project />");
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-SolutionProjects.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
@@ -262,7 +262,7 @@ public sealed class SolutionProjectsPreflightTests
             """);
         File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
 
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-SolutionProjects.ps1");
 
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 

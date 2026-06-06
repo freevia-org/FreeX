@@ -363,7 +363,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
         foreach (var script in scripts)
         {
-            File.Exists(WorkspaceFileLocator.Find("tools", script)).Should().BeTrue();
+            File.Exists(WorkspaceFileLocator.FindToolScript(script)).Should().BeTrue();
         }
 
         return scripts;

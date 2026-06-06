@@ -21,7 +21,7 @@ public sealed class JsonFilesPreflightTests
     [Fact]
     public void JsonFilesPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-JsonFiles.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-JsonFiles.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, "");
@@ -37,7 +37,7 @@ public sealed class JsonFilesPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.json"), "{ \"name\": ");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-JsonFiles.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-JsonFiles.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-JsonRoots \"{temp.Path}\"");

@@ -40,7 +40,7 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_PassesForInternalTesterBuild()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-TesterReleaseReadiness.ps1");
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
         var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42");
 
@@ -54,7 +54,7 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_BlocksPublicPreviewWhenAccessibilityGateIsIncomplete()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-TesterReleaseReadiness.ps1");
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
         var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42 -PublicPreviewCandidate");
 
@@ -69,7 +69,7 @@ public sealed class TesterReleaseReadinessPreflightTests
     [Fact]
     public void ReadinessPreflight_AllowsPublicPreviewWhenAccessibilityGateIsComplete()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-TesterReleaseReadiness.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-TesterReleaseReadiness.ps1");
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
         var result = PowerShellScriptRunner.Run(scriptPath, repoRoot, "-RunNumber 42 -PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues");
 

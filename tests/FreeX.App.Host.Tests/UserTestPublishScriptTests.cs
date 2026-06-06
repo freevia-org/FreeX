@@ -82,7 +82,7 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_RejectsUnsignedMsixUnlessExplicitlyAllowedBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
         using var workingDirectory = new TestTemporaryDirectory();
 
@@ -96,7 +96,7 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_RejectsMsixSigningOptionsWithoutCertificatePathBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
         using var workingDirectory = new TestTemporaryDirectory();
 
@@ -110,7 +110,7 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_RejectsDirectoryMsixCertificatePathBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
         var outputDirectory = Path.Combine(temp.Path, "out");
         var certificateDirectory = Path.Combine(temp.Path, "certificate");
@@ -128,7 +128,7 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_RejectsUnsafeMsixTimestampUrlBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
         using var workingDirectory = new TestTemporaryDirectory();
 
@@ -142,7 +142,7 @@ public sealed class UserTestPublishScriptTests
     [Fact]
     public void PublishScript_RejectsRuntimeIdentifierPathSegmentsBeforePublishing()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Publish-UserTestBuild.ps1");
         using var temp = new TestTemporaryDirectory();
         using var workingDirectory = new TestTemporaryDirectory();
 

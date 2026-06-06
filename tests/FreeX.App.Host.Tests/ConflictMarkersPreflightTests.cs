@@ -25,7 +25,7 @@ public sealed class ConflictMarkersPreflightTests
     [Fact]
     public void ConflictMarkersPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, "");
@@ -44,7 +44,7 @@ public sealed class ConflictMarkersPreflightTests
         File.WriteAllText(Path.Combine(temp.Path, "untracked.cs"), $"<<<<<<< HEAD{Environment.NewLine}");
         TestProcessRunner.Run("git", "init", temp.Path).ExitCode.Should().Be(0);
         AddGitIndexEntry(temp.Path, "tracked.cs");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-ProjectRoot \"{temp.Path}\"");
@@ -61,7 +61,7 @@ public sealed class ConflictMarkersPreflightTests
         File.WriteAllText(Path.Combine(temp.Path, "broken.cs"), $"namespace Scratch;{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}");
         TestProcessRunner.Run("git", "init", temp.Path).ExitCode.Should().Be(0);
         AddGitIndexEntry(temp.Path, "broken.cs");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-ProjectRoot \"{temp.Path}\"");
@@ -80,7 +80,7 @@ public sealed class ConflictMarkersPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.cs"), $"namespace Scratch;{Environment.NewLine}{marker}{Environment.NewLine}");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-SearchRoots \"{temp.Path}\"");
@@ -96,7 +96,7 @@ public sealed class ConflictMarkersPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.slnx"), $"<Solution>{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}</Solution>");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ConflictMarkers.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-SearchRoots \"{temp.Path}\"");

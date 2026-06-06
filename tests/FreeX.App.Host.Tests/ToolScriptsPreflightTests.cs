@@ -24,7 +24,7 @@ public sealed class ToolScriptsPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "Test-MissingFailFast.ps1"), "Write-Host \"ok\"");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ToolScripts.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-ScriptDirectory \"{temp.Path}\"");
@@ -40,7 +40,7 @@ public sealed class ToolScriptsPreflightTests
     [Fact]
     public void ToolScriptsPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ToolScripts.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, "");
@@ -56,7 +56,7 @@ public sealed class ToolScriptsPreflightTests
         using var temp = new TestTemporaryDirectory();
 
         File.WriteAllText(Path.Combine(temp.Path, "broken.ps1"), "param(`nif (`n");
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-ToolScripts.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, $"-ScriptDirectory \"{temp.Path}\"");

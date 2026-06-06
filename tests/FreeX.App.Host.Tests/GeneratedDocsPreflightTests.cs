@@ -18,7 +18,7 @@ public sealed class GeneratedDocsPreflightTests
     [Fact]
     public void GeneratedDocsPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GeneratedDocs.ps1");
+        var scriptPath = WorkspaceFileLocator.FindToolScript("Test-GeneratedDocs.ps1");
         using var workingDirectory = new TestTemporaryDirectory();
 
         var result = PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path);
