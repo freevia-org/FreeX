@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.Core.Model;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -52,7 +51,7 @@ public sealed partial class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_ObjectListExposesAutomationName()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SelectionPaneDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.cs");
 
         foreach (var key in new[]
         {
@@ -91,7 +90,7 @@ public sealed partial class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_ExposesStableAutomationIds()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SelectionPaneDialog.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.cs");
 
         foreach (var expected in new[]
         {
@@ -139,11 +138,7 @@ public sealed partial class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_ObjectListHelpTextDocumentsKeyboardShortcuts()
     {
-        var resources = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
-            "Resources",
-            "Strings.resx"));
+        var resources = DialogSourceTestSupport.ReadHostSources("Resources\\Strings.resx");
 
         resources.Should().Contain("Ctrl+Up or Ctrl+Down");
         resources.Should().Contain("Press F2 to rename");
