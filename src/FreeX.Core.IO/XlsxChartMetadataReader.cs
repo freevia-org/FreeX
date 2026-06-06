@@ -176,13 +176,18 @@ internal static class XlsxChartMetadataReader
 
         return new ChartProtectionModel
         {
-            ChartObject = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("chartObject")?.Value),
-            Data = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("data")?.Value),
-            Formatting = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("formatting")?.Value),
-            Selection = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("selection")?.Value),
-            UserInterface = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("userInterface")?.Value)
+            ChartObject = ReadProtectionFlag(protection, "chartObject"),
+            Data = ReadProtectionFlag(protection, "data"),
+            Formatting = ReadProtectionFlag(protection, "formatting"),
+            Selection = ReadProtectionFlag(protection, "selection"),
+            UserInterface = ReadProtectionFlag(protection, "userInterface")
         };
     }
+
+    private static bool? ReadProtectionFlag(XElement protection, string name) =>
+        XlsxChartScalarReader.ReadOptionalBool(
+            protection.Element(ChartNs + name)?.Attribute("val")?.Value ??
+            protection.Attribute(name)?.Value);
 
     private static ChartPrintSettingsModel? ReadPrintSettings(XElement? printSettings)
     {
