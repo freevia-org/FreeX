@@ -60,6 +60,7 @@ internal static class XlsxLegacyCommentPreserver
             if (!CanRestoreLegacyCommentPart(sourceCommentsXml, targetCommentsXml, workbookNs))
                 continue;
 
+            XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(sourceCommentsXml);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetCommentsPath, sourceCommentsXml);
         }
     }
