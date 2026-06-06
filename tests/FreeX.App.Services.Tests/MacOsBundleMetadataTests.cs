@@ -44,13 +44,26 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleExecutable'");
         workflow.Should().Contain("lipo -archs");
         workflow.Should().Contain("codesign --verify --deep --strict");
+        workflow.Should().Contain("host_arch=\"$(uname -m)\"");
         workflow.Should().Contain("unzip -q");
         workflow.Should().Contain("test -x \"$unzip_root/FreeX.app/Contents/MacOS/FreeX\"");
         workflow.Should().Contain("(cd \"$artifact_root\" && shasum -a 256 \"$zip_name\" > \"$zip_name.sha256\")");
         workflow.Should().Contain("codesign --verify --deep --strict \"$unzip_root/FreeX.app\"");
+        workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke \"$smoke_file\"");
+        workflow.Should().Contain("grep -q \"Packaging smoke opened\" \"$smoke_log\"");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256");
         workflow.Should().Contain("if-no-files-found: error");
+    }
+
+    [Fact]
+    public void Program_RunsPackagingSmokeBeforeAvaloniaLifetime()
+    {
+        var program = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
+
+        program.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
+        program.Should().Contain("return smokeExitCode;");
+        program.Should().Contain("StartWithClassicDesktopLifetime(args)");
     }
 
     private static string? PlistString(XDocument plist, string key) =>

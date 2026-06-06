@@ -93,6 +93,16 @@ jobs:
           test -x "$unzip_root/FreeX.app/Contents/MacOS/FreeX"
           test -f "$unzip_root/FreeX.app/Contents/MacOS/FreeX.dll"
           codesign --verify --deep --strict "$unzip_root/FreeX.app"
+          host_arch="$(uname -m)"
+          if [[ ("$runtime" == "osx-arm64" && "$host_arch" == "arm64") || ("$runtime" == "osx-x64" && "$host_arch" == "x86_64") ]]; then
+            smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
+            smoke_log="$RUNNER_TEMP/freex-$runtime-smoke.log"
+            printf 'Name,Amount\nFreeX,42\n' > "$smoke_file"
+            "$unzip_root/FreeX.app/Contents/MacOS/FreeX" --packaging-smoke "$smoke_file" | tee "$smoke_log"
+            grep -q "Packaging smoke opened" "$smoke_log"
+          else
+            echo "Skipping launch smoke for $runtime on $host_arch host."
+          fi
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v7
