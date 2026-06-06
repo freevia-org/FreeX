@@ -131,6 +131,34 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         SchemaErrors(workbook).Should().BeEmpty();
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithMergedCells_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateMergedCellSourceWorkbook());
+        var sourceMergeCells = ReadWorksheetChildElement(source, "mergeCells");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorksheetChildElement(saved, "mergeCells")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceMergeCells.ToString(SaveOptions.DisableFormatting));
+    }
+
 
     [Fact]
     public void Comments_ProducesSchemaValidWorkbook()
@@ -295,6 +323,17 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         table.Columns.Add(new StructuredTableColumnModel(2, "Value"));
         sheet.StructuredTables.Add(table);
 
+        return workbook;
+    }
+
+    private static Workbook CreateMergedCellSourceWorkbook()
+    {
+        var workbook = new Workbook("MergedCellPatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Merged Header"));
+        SeedNumericGrid(sheet);
+        sheet.AddMergedRegion(Range(sheet, 1, 1, 1, 3));
+        sheet.AddMergedRegion(Range(sheet, 2, 4, 4, 4));
         return workbook;
     }
 
