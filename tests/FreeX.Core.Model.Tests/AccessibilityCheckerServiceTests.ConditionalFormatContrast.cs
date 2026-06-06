@@ -636,6 +636,45 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateFunctionOperands()
+    {
+        AssertFormulaDateFunctionContrastLocations("YEAR($A1)=2023", "B1", "B2", "B4");
+        AssertFormulaDateFunctionContrastLocations("MONTH($A1)=3", "B1", "B2", "B3");
+        AssertFormulaDateFunctionContrastLocations("DAY($A1)>=16", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("DATE(2023,3,15)=$A1", "B1");
+        AssertFormulaDateFunctionContrastLocations("YEAR(DATE(2023,3,15))=2023", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateFunctionWrappers()
+    {
+        AssertFormulaDateFunctionContrastLocations("IF(DAY($A1)>=16,TRUE,FALSE)", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("AND(YEAR($A1)=2023,$C1=\"Open\")", "B4");
+        AssertFormulaDateFunctionContrastLocations("ISNUMBER(YEAR($A1))", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("YEAR($A1)-2023", "B3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatAggregateDateFunctionArguments()
+    {
+        AssertFormulaDateFunctionContrastLocations("SUM(DAY($A1),MONTH($A1))>=19", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatDateFunctionUnsupportedOperands()
+    {
+        AssertFormulaDateFunctionContrastLocations("DATE(2023,2,30)=$A1");
+        AssertFormulaDateFunctionContrastLocations("DATE(2023,1.5,1)=$A1");
+        AssertFormulaDateFunctionContrastLocations("DATE(2023,3)=$A1");
+        AssertFormulaDateFunctionContrastLocations("DATE(10000,1,1)=$A1");
+        AssertFormulaDateFunctionContrastLocations("YEAR(\"2023-03-15\")=2023");
+        AssertFormulaDateFunctionContrastLocations("YEAR($A1,1)=2023");
+        AssertFormulaDateFunctionContrastLocations("YEAR(1E308)>0");
+        AssertFormulaDateFunctionContrastLocations("TODAY()=$A1");
+        AssertFormulaDateFunctionContrastLocations("YEAR(A0)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArithmeticComparison()
     {
         AssertFormulaArithmeticContrastLocations("($A1+25-50)*2/5>=40", "B4");
@@ -1124,6 +1163,36 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue(status));
     }
 
+    private static Workbook CreateFormulaDateFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 4, 2);
+
+        SetFormulaDateFunctionContrastRow(sheet, 1, new DateTime(2023, 3, 15), "Closed", "March midpoint");
+        SetFormulaDateFunctionContrastRow(sheet, 2, new DateTime(2023, 3, 16), "Closed", "March second half");
+        SetFormulaDateFunctionContrastRow(sheet, 3, new DateTime(2024, 3, 20), "Open", "Next March");
+        SetFormulaDateFunctionContrastRow(sheet, 4, new DateTime(2023, 4, 20), "Open", "April second half");
+
+        return workbook;
+    }
+
+    private static void SetFormulaDateFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        DateTime date,
+        string status,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), DateTimeValue.FromDateTime(date));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), new TextValue(status));
+    }
+
     private static Workbook CreateFormulaDateBooleanArithmeticContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -1268,6 +1337,19 @@ public sealed partial class AccessibilityCheckerServiceTests
         params string[] expectedLocations)
     {
         var workbook = CreateFormulaPaddedTextFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
+    private static void AssertFormulaDateFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaDateFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
 
         FindLowContrastCellTextIssues(workbook)

@@ -920,6 +920,18 @@ public static partial class AccessibilityCheckerService
             case "RIGHT":
                 kind = ConditionalFormulaScalarFunctionKind.Right;
                 return true;
+            case "DATE":
+                kind = ConditionalFormulaScalarFunctionKind.Date;
+                return true;
+            case "YEAR":
+                kind = ConditionalFormulaScalarFunctionKind.Year;
+                return true;
+            case "MONTH":
+                kind = ConditionalFormulaScalarFunctionKind.Month;
+                return true;
+            case "DAY":
+                kind = ConditionalFormulaScalarFunctionKind.Day;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -936,11 +948,15 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
             ConditionalFormulaScalarFunctionKind.Lower or
-            ConditionalFormulaScalarFunctionKind.Trim => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.Trim or
+            ConditionalFormulaScalarFunctionKind.Year or
+            ConditionalFormulaScalarFunctionKind.Month or
+            ConditionalFormulaScalarFunctionKind.Day => argumentCount == 1,
             ConditionalFormulaScalarFunctionKind.Round or
             ConditionalFormulaScalarFunctionKind.Mod or
             ConditionalFormulaScalarFunctionKind.Left or
             ConditionalFormulaScalarFunctionKind.Right => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Date => argumentCount == 3,
             _ => false
         };
 
@@ -1426,7 +1442,11 @@ public static partial class AccessibilityCheckerService
         Lower,
         Trim,
         Left,
-        Right
+        Right,
+        Date,
+        Year,
+        Month,
+        Day
     }
 
     private enum ConditionalFormulaAggregateKind
@@ -1929,6 +1949,11 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Left:
                 case ConditionalFormulaScalarFunctionKind.Right:
                     return TryEvaluateFormulaTextSliceFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.Date:
+                case ConditionalFormulaScalarFunctionKind.Year:
+                case ConditionalFormulaScalarFunctionKind.Month:
+                case ConditionalFormulaScalarFunctionKind.Day:
+                    return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
                 default:
                     return false;
             }
@@ -1982,6 +2007,45 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
+        private bool TryEvaluateFormulaDateScalarFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            switch (function.Kind)
+            {
+                case ConditionalFormulaScalarFunctionKind.Date:
+                    if (!TryResolveFormulaDatePart(function.Arguments[0], rowOffset, colOffset, out var year) ||
+                        !TryResolveFormulaDatePart(function.Arguments[1], rowOffset, colOffset, out var month) ||
+                        !TryResolveFormulaDatePart(function.Arguments[2], rowOffset, colOffset, out var day) ||
+                        !TryCreateFormulaDateValue(year, month, day, out var dateValue))
+                    {
+                        return false;
+                    }
+
+                    value = dateValue;
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Year:
+                case ConditionalFormulaScalarFunctionKind.Month:
+                case ConditionalFormulaScalarFunctionKind.Day:
+                    if (!TryResolveFormulaFunctionDate(function.Arguments[0], rowOffset, colOffset, out var date))
+                        return false;
+
+                    value = function.Kind switch
+                    {
+                        ConditionalFormulaScalarFunctionKind.Year => new NumberValue(date.Year),
+                        ConditionalFormulaScalarFunctionKind.Month => new NumberValue(date.Month),
+                        ConditionalFormulaScalarFunctionKind.Day => new NumberValue(date.Day),
+                        _ => ErrorValue.Value
+                    };
+                    return value is NumberValue;
+                default:
+                    return false;
+            }
+        }
+
         private bool TryEvaluateFormulaTextSliceFunction(
             ConditionalFormulaScalarFunction function,
             int rowOffset,
@@ -2028,6 +2092,108 @@ public static partial class AccessibilityCheckerService
             }
 
             text = textValue.Value;
+            return true;
+        }
+
+        private bool TryResolveFormulaDatePart(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out int part)
+        {
+            part = 0;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value) ||
+                value is not NumberValue number)
+            {
+                return false;
+            }
+
+            return TryGetFormulaInteger(number.Value, out part);
+        }
+
+        private bool TryResolveFormulaFunctionDate(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out DateTime date)
+        {
+            date = default;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value))
+                return false;
+
+            return value switch
+            {
+                DateTimeValue dateTime => TrySerialToDate(dateTime.Value, out date),
+                NumberValue number => TrySerialToDate(number.Value, out date),
+                _ => false
+            };
+        }
+
+        private static bool TryCreateFormulaDateValue(
+            int year,
+            int month,
+            int day,
+            out DateTimeValue value)
+        {
+            value = default!;
+            if (year is < 1 or > 9999 ||
+                month is < 1 or > 12 ||
+                day < 1 ||
+                day > DateTime.DaysInMonth(year, month))
+            {
+                return false;
+            }
+
+            var date = new DateTime(year, month, day);
+            try
+            {
+                var serial = date.ToOADate();
+                if (!double.IsFinite(serial))
+                    return false;
+
+                value = new DateTimeValue(serial);
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+            catch (OverflowException)
+            {
+                return false;
+            }
+        }
+
+        private static bool TrySerialToDate(double serial, out DateTime date)
+        {
+            date = default;
+            if (!double.IsFinite(serial))
+                return false;
+
+            try
+            {
+                date = DateTime.FromOADate(serial).Date;
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryGetFormulaInteger(double value, out int integer)
+        {
+            integer = 0;
+            var rounded = Math.Round(value);
+            if (!double.IsFinite(rounded) ||
+                Math.Abs(value - rounded) > 1e-9 ||
+                rounded < int.MinValue ||
+                rounded > int.MaxValue)
+            {
+                return false;
+            }
+
+            integer = (int)rounded;
             return true;
         }
 
