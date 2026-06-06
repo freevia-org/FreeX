@@ -47,6 +47,13 @@ jobs:
 
       - name: Publish app bundle
         shell: bash
+        env:
+          MACOS_CODESIGN_CERTIFICATE_P12: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_P12 }}
+          MACOS_CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -59,9 +66,58 @@ jobs:
           evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
           smoke_log="$artifact_root/freex-$runtime-macos-packaging-smoke.log"
           launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
+          notary_log="$artifact_root/freex-$runtime-macos-notarization.log"
+          signing_mode="ad-hoc"
+          notarization_status="skipped_not_developer_id_signed"
+          stapler_validated="false"
+          keychain_path=""
+          certificate_path=""
+          cleanup_signing_keychain() {
+            if [[ -n "$keychain_path" ]]; then
+              security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
+            fi
+            if [[ -n "$certificate_path" ]]; then
+              rm -f "$certificate_path"
+            fi
+          }
+          trap cleanup_signing_keychain EXIT
 
           rm -rf "$output_root"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root"
+          : > "$notary_log"
+
+          has_any_signing_secret=false
+          for signing_secret in \
+            "$MACOS_CODESIGN_CERTIFICATE_P12" \
+            "$MACOS_CODESIGN_CERTIFICATE_PASSWORD" \
+            "$MACOS_DEVELOPER_ID_APPLICATION"; do
+            if [[ -n "$signing_secret" ]]; then
+              has_any_signing_secret=true
+            fi
+          done
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" && "$has_any_signing_secret" == "true" ]]; then
+            echo "Developer ID signing is disabled for pull_request events; using ad-hoc signing."
+          elif [[ "$has_any_signing_secret" == "true" ]]; then
+            if [[ -z "$MACOS_CODESIGN_CERTIFICATE_P12" ||
+                  -z "$MACOS_CODESIGN_CERTIFICATE_PASSWORD" ||
+                  -z "$MACOS_DEVELOPER_ID_APPLICATION" ]]; then
+              echo "Developer ID signing requires MACOS_CODESIGN_CERTIFICATE_P12, MACOS_CODESIGN_CERTIFICATE_PASSWORD, and MACOS_DEVELOPER_ID_APPLICATION." >&2
+              exit 1
+            fi
+
+            signing_mode="developer-id"
+            keychain_password="$(uuidgen)"
+            keychain_path="$RUNNER_TEMP/freex-$runtime-signing.keychain-db"
+            certificate_path="$RUNNER_TEMP/freex-$runtime-developer-id.p12"
+            printf '%s' "$MACOS_CODESIGN_CERTIFICATE_P12" | base64 -D > "$certificate_path"
+            security create-keychain -p "$keychain_password" "$keychain_path"
+            security set-keychain-settings -lut 21600 "$keychain_path"
+            security unlock-keychain -p "$keychain_password" "$keychain_path"
+            security import "$certificate_path" -P "$MACOS_CODESIGN_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
+            security list-keychains -d user -s "$keychain_path" $(security list-keychains -d user | tr -d '"')
+            security find-identity -v -p codesigning "$keychain_path" | grep -F "$MACOS_DEVELOPER_ID_APPLICATION"
+          fi
 
           dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
             --configuration Release \
@@ -92,9 +148,49 @@ jobs:
           else
             echo "$binary_archs" | grep -qw x86_64
           fi
-          codesign --force --deep --sign - "$app"
+          if [[ "$signing_mode" == "developer-id" ]]; then
+            codesign --force --deep --options runtime --timestamp --sign "$MACOS_DEVELOPER_ID_APPLICATION" "$app"
+          else
+            codesign --force --deep --sign - "$app"
+          fi
           codesign --verify --deep --strict "$app"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
+          has_any_notary_secret=false
+          for notary_secret in \
+            "$MACOS_NOTARY_APPLE_ID" \
+            "$MACOS_NOTARY_TEAM_ID" \
+            "$MACOS_NOTARY_PASSWORD"; do
+            if [[ -n "$notary_secret" ]]; then
+              has_any_notary_secret=true
+            fi
+          done
+          if [[ "$has_any_notary_secret" == "true" ]]; then
+            if [[ "$signing_mode" != "developer-id" ]]; then
+              notarization_status="skipped_missing_developer_id_signature"
+              echo "notarization_status=skipped_missing_developer_id_signature" | tee "$notary_log"
+            elif [[ -z "$MACOS_NOTARY_APPLE_ID" ||
+                    -z "$MACOS_NOTARY_TEAM_ID" ||
+                    -z "$MACOS_NOTARY_PASSWORD" ]]; then
+              echo "Notarization requires MACOS_NOTARY_APPLE_ID, MACOS_NOTARY_TEAM_ID, and MACOS_NOTARY_PASSWORD." >&2
+              exit 1
+            else
+              xcrun notarytool submit "$zip_path" \
+                --apple-id "$MACOS_NOTARY_APPLE_ID" \
+                --team-id "$MACOS_NOTARY_TEAM_ID" \
+                --password "$MACOS_NOTARY_PASSWORD" \
+                --wait \
+                --output-format json | tee "$notary_log"
+              grep -q '"status": *"Accepted"' "$notary_log"
+              xcrun stapler staple "$app"
+              xcrun stapler validate "$app"
+              stapler_validated="true"
+              ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
+              notarization_status="accepted"
+            fi
+          else
+            notarization_status="skipped_missing_credentials"
+            echo "notarization_status=skipped_missing_credentials" | tee "$notary_log"
+          fi
           (cd "$artifact_root" && shasum -a 256 "$zip_name" > "$zip_name.sha256")
           unzip_root="$RUNNER_TEMP/freex-$runtime-unzip"
           rm -rf "$unzip_root"
@@ -117,6 +213,9 @@ jobs:
             echo "imported_document_extension=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:CFBundleTypeExtensions:0' "$app/Contents/Info.plist")"
             echo "imported_document_handler_rank=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:1:LSHandlerRank' "$app/Contents/Info.plist")"
             echo "codesign_verified=true"
+            echo "codesign_mode=$signing_mode"
+            echo "notarization_status=$notarization_status"
+            echo "stapler_validated=$stapler_validated"
           } > "$evidence_path"
           if [[ ("$runtime" == "osx-arm64" && "$host_arch" == "arm64") || ("$runtime" == "osx-x64" && "$host_arch" == "x86_64") ]]; then
             smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
@@ -176,4 +275,5 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-evidence.txt
             artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log
             artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt
+            artifacts/freex-${{ matrix.runtime }}-macos-notarization.log
           if-no-files-found: error

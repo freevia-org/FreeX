@@ -57,6 +57,12 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj");
         workflow.Should().Contain("--self-contained true");
         workflow.Should().Contain("-p:UseAppHost=true");
+        workflow.Should().Contain("MACOS_CODESIGN_CERTIFICATE_P12: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_P12 }}");
+        workflow.Should().Contain("MACOS_CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_PASSWORD }}");
+        workflow.Should().Contain("MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}");
+        workflow.Should().Contain("MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}");
+        workflow.Should().Contain("MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}");
+        workflow.Should().Contain("MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}");
         workflow.Should().Contain("plutil -lint");
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleExecutable'");
         workflow.Should().Contain("PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0'");
@@ -65,8 +71,32 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("evidence_path=\"$artifact_root/freex-$runtime-macos-evidence.txt\"");
         workflow.Should().Contain("smoke_log=\"$artifact_root/freex-$runtime-macos-packaging-smoke.log\"");
         workflow.Should().Contain("launch_smoke_report=\"$artifact_root/freex-$runtime-macos-launch-smoke.txt\"");
+        workflow.Should().Contain("notary_log=\"$artifact_root/freex-$runtime-macos-notarization.log\"");
+        workflow.Should().Contain("signing_mode=\"ad-hoc\"");
+        workflow.Should().Contain("signing_mode=\"developer-id\"");
+        workflow.Should().Contain("stapler_validated=\"false\"");
+        workflow.Should().Contain("[[ \"$GITHUB_EVENT_NAME\" == \"pull_request\" && \"$has_any_signing_secret\" == \"true\" ]]");
+        workflow.Should().Contain("Developer ID signing is disabled for pull_request events; using ad-hoc signing.");
+        workflow.Should().Contain("base64 -D > \"$certificate_path\"");
+        workflow.Should().Contain("security create-keychain");
+        workflow.Should().Contain("security import \"$certificate_path\"");
+        workflow.Should().Contain("security set-key-partition-list");
+        workflow.Should().Contain("security find-identity -v -p codesigning \"$keychain_path\" | grep -F \"$MACOS_DEVELOPER_ID_APPLICATION\"");
+        workflow.Should().Contain("codesign --force --deep --options runtime --timestamp --sign \"$MACOS_DEVELOPER_ID_APPLICATION\" \"$app\"");
+        workflow.Should().Contain("codesign --force --deep --sign - \"$app\"");
+        workflow.Should().Contain("xcrun notarytool submit \"$zip_path\"");
+        workflow.Should().Contain("--output-format json | tee \"$notary_log\"");
+        workflow.Should().Contain("grep -q '\"status\": *\"Accepted\"' \"$notary_log\"");
+        workflow.Should().Contain("xcrun stapler staple \"$app\"");
+        workflow.Should().Contain("xcrun stapler validate \"$app\"");
+        workflow.Should().Contain("stapler_validated=\"true\"");
+        workflow.Should().Contain("notarization_status=\"accepted\"");
+        workflow.Should().Contain("notarization_status=\"skipped_missing_credentials\"");
         workflow.Should().Contain("echo \"binary_archs=$binary_archs\"");
         workflow.Should().Contain("echo \"codesign_verified=true\"");
+        workflow.Should().Contain("echo \"codesign_mode=$signing_mode\"");
+        workflow.Should().Contain("echo \"notarization_status=$notarization_status\"");
+        workflow.Should().Contain("echo \"stapler_validated=$stapler_validated\"");
         workflow.Should().Contain("echo \"smoke_status=passed\" >> \"$evidence_path\"");
         workflow.Should().Contain("echo \"smoke_status=skipped_host_arch_mismatch\" >> \"$evidence_path\"");
         workflow.Should().Contain("codesign --verify --deep --strict");
@@ -94,6 +124,7 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-evidence.txt");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-packaging-smoke.log");
         workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-launch-smoke.txt");
+        workflow.Should().Contain("artifacts/freex-${{ matrix.runtime }}-macos-notarization.log");
         workflow.Should().Contain("if-no-files-found: error");
     }
 
