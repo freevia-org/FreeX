@@ -10,7 +10,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ConditionalFormattingTopBottomRules_ExposeExcelParityMenuChoices()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var menuItems = document
@@ -30,7 +30,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void DataTab_ExposesFlashFillCommand()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -50,7 +50,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void CellStylesGallery_ExposesExpandedPresetLabelsAndRoutesThroughPlanner()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -126,7 +126,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ConditionalFormattingIconSets_ExposeGroupedPresetGalleryAndMoreRules()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -161,7 +161,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonCheckBoxCommands_HaveTooltipTitlesDescriptionsAndKeyTips()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -184,7 +184,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonComboBoxCommands_HaveAccessibleNamesMatchingTooltipTitles()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -203,7 +203,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void DataTabCommandTooltips_DoNotAdvertiseExcludedConnectors()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -230,7 +230,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void HomePasteButton_ExposesPasteSpecialMenuChoices()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -267,7 +267,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         string clickHandler,
         string expectedIconKind)
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace local = "clr-namespace:FreeX.App.Host";
 
@@ -291,7 +291,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void MainRibbon_DoesNotUseTextBlockIconPlaceholders()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var placeholders = document
@@ -306,7 +306,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void NestedRibbonMenuItems_HaveStagedKeyTips()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -325,7 +325,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonMenus_DoNotReuseKeyTipsWithinTheSameMenu()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -347,7 +347,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonMenus_DoNotUseKeyTipPrefixesWithinTheSameMenu()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -379,7 +379,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutBreaksButton_OpensExcelStyleBreaksMenu()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -407,7 +407,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ViewWindowCommands_AreAllLiveWithDedicatedHandlersOnTheRibbon()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -437,7 +437,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void ViewWindowLiveCommands_RouteEveryWindowCommandToRegistryAndPlannerBackedHandlers()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -547,7 +547,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutThemesButton_OpensWorkbookThemeMenu()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -568,7 +568,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutThemeColorsButton_OpensColorSchemeMenu()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -589,7 +589,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutThemeFontsButton_OpensFontPairMenu()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -610,7 +610,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutThemeEffectsButton_OpensEffectSetMenu()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -631,7 +631,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutThemeCommands_ExposeStableAutomationMetadata()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -693,7 +693,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void DrawFormatCropGradientEffectsButtons_ExposeAccessibleCommandsAndMenus()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
