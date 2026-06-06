@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.App.Host;
 
@@ -9,7 +8,7 @@ public sealed class SentryCrashAnalyticsSourceTests
     [Fact]
     public void HostProject_ReferencesSentrySdk()
     {
-        var project = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeX.App.Host.csproj"));
+        var project = DialogSourceTestSupport.ReadHostSources("FreeX.App.Host.csproj");
 
         project.Should().Contain("<PackageReference Include=\"Sentry\" Version=\"6.5.0\"");
     }
@@ -17,7 +16,7 @@ public sealed class SentryCrashAnalyticsSourceTests
     [Fact]
     public void AppStartup_RegistersCrashAnalyticsAndInitializesIt()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
 
         source.Should().Contain("AppCrashAnalyticsOptions.CreateDefault(options.CrashAnalyticsEnabled)");
         source.Should().Contain("PromptForCrashAnalyticsConsentIfNeeded(options, crashAnalyticsOptions)");
@@ -31,7 +30,7 @@ public sealed class SentryCrashAnalyticsSourceTests
     [Fact]
     public void SentryCrashAnalytics_ConfiguresPrivacySafeCrashEvents()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SentryCrashAnalytics.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SentryCrashAnalytics.cs");
 
         source.Should().Contain("options.SendDefaultPii = false");
         source.Should().Contain("options.Dsn = crashAnalyticsOptions.Dsn");
