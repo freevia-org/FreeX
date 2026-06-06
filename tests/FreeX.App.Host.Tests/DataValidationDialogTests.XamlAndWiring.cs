@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -92,7 +91,7 @@ public sealed partial class DataValidationDialogTests
     [Fact]
     public void DataValidationDialogOpenedFromKeyboard_FocusesAllowTypeSelector()
     {
-        var codeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml.cs"));
+        var codeBehind = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.xaml.cs");
 
         codeBehind.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         codeBehind.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -104,7 +103,7 @@ public sealed partial class DataValidationDialogTests
     public void DataValidationDialogInvalidCriteria_ReturnsToSettingsTabAndKeyboardFocusesInvalidFormula()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
-        var codeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml.cs"));
+        var codeBehind = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.xaml.cs");
 
         xaml.Should().Contain("<TabControl x:Name=\"ValidationTabs\"");
         xaml.Should().Contain("<TabItem x:Name=\"SettingsTab\" Header=\"_Settings\"");
@@ -155,7 +154,7 @@ public sealed partial class DataValidationDialogTests
     [Fact]
     public void DataValidationDialog_UpdatesDynamicCaptionContent()
     {
-        var codeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml.cs"));
+        var codeBehind = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.xaml.cs");
 
         codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(\"DataValidation_Source\")");
         codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(\"DataValidation_Formula\")");
@@ -167,7 +166,7 @@ public sealed partial class DataValidationDialogTests
     [Fact]
     public void DataValidationViolationMessages_UseOwnedMainWindowMessageHelper()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
         var method = source[
             source.IndexOf("private bool TryCreateCellFromEntryText(", StringComparison.Ordinal)..
             source.IndexOf("private bool CommitPreparedEdits(", StringComparison.Ordinal)];
@@ -179,7 +178,7 @@ public sealed partial class DataValidationDialogTests
     [Fact]
     public void MainWindow_AppliesDataValidationToMatchingSettingsWhenRequested()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
         source.Should().Contain("new DataValidationDialog(existingRule, request => ApplyDataValidationRangeSelection(dlg, request))");
         source.Should().Contain("dlg.ApplyToSameSettings");
@@ -190,7 +189,7 @@ public sealed partial class DataValidationDialogTests
     [Fact]
     public void MainWindow_WiresDataValidationRangePickerToCurrentSelection()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
         source.Should().Contain("private void ApplyDataValidationRangeSelection(");
         source.Should().Contain("DataValidationRangeSelectionRequest request");
