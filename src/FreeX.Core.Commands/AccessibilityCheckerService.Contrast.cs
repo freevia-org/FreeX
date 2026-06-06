@@ -712,6 +712,8 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaMultinomialArgumentCount = 255;
     private const int MaxFormulaSumProductArgumentCount = 255;
     private const double MaxFormulaGcdInputExclusive = 9_223_372_036_854_775_808d;
+    private const ulong MaxFormulaBitwiseInput = 281_474_976_710_655UL;
+    private const int MaxFormulaBitwiseShift = 53;
     private const int MaxFormulaTextSliceLength = 32_767;
     private const double FormulaSecZeroCosineTolerance = 1E-15d;
 
@@ -1138,6 +1140,27 @@ public static partial class AccessibilityCheckerService
             case "COLUMN":
                 kind = ConditionalFormulaScalarFunctionKind.Column;
                 return true;
+            case "DELTA":
+                kind = ConditionalFormulaScalarFunctionKind.Delta;
+                return true;
+            case "GESTEP":
+                kind = ConditionalFormulaScalarFunctionKind.GeStep;
+                return true;
+            case "BITAND":
+                kind = ConditionalFormulaScalarFunctionKind.BitAnd;
+                return true;
+            case "BITOR":
+                kind = ConditionalFormulaScalarFunctionKind.BitOr;
+                return true;
+            case "BITXOR":
+                kind = ConditionalFormulaScalarFunctionKind.BitXor;
+                return true;
+            case "BITLSHIFT":
+                kind = ConditionalFormulaScalarFunctionKind.BitLShift;
+                return true;
+            case "BITRSHIFT":
+                kind = ConditionalFormulaScalarFunctionKind.BitRShift;
+                return true;
             default:
                 kind = default;
                 return false;
@@ -1194,7 +1217,9 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
             ConditionalFormulaScalarFunctionKind.FloorPrecise or
-            ConditionalFormulaScalarFunctionKind.Trunc => argumentCount is 1 or 2,
+            ConditionalFormulaScalarFunctionKind.Trunc or
+            ConditionalFormulaScalarFunctionKind.Delta or
+            ConditionalFormulaScalarFunctionKind.GeStep => argumentCount is 1 or 2,
             ConditionalFormulaScalarFunctionKind.CeilingMath or
             ConditionalFormulaScalarFunctionKind.FloorMath => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Round or
@@ -1213,7 +1238,12 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Atan2 or
             ConditionalFormulaScalarFunctionKind.Left or
             ConditionalFormulaScalarFunctionKind.Right or
-            ConditionalFormulaScalarFunctionKind.Exact => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.Exact or
+            ConditionalFormulaScalarFunctionKind.BitAnd or
+            ConditionalFormulaScalarFunctionKind.BitOr or
+            ConditionalFormulaScalarFunctionKind.BitXor or
+            ConditionalFormulaScalarFunctionKind.BitLShift or
+            ConditionalFormulaScalarFunctionKind.BitRShift => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
@@ -1857,7 +1887,14 @@ public static partial class AccessibilityCheckerService
         Now,
         Na,
         Row,
-        Column
+        Column,
+        Delta,
+        GeStep,
+        BitAnd,
+        BitOr,
+        BitXor,
+        BitLShift,
+        BitRShift
     }
 
     private enum ConditionalFormulaAggregateKind
@@ -2407,7 +2444,15 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Atan2:
                 case ConditionalFormulaScalarFunctionKind.Cos:
                 case ConditionalFormulaScalarFunctionKind.Sec:
+                case ConditionalFormulaScalarFunctionKind.Cot:
                 case ConditionalFormulaScalarFunctionKind.Tan:
+                case ConditionalFormulaScalarFunctionKind.Delta:
+                case ConditionalFormulaScalarFunctionKind.GeStep:
+                case ConditionalFormulaScalarFunctionKind.BitAnd:
+                case ConditionalFormulaScalarFunctionKind.BitOr:
+                case ConditionalFormulaScalarFunctionKind.BitXor:
+                case ConditionalFormulaScalarFunctionKind.BitLShift:
+                case ConditionalFormulaScalarFunctionKind.BitRShift:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
@@ -2942,6 +2987,55 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Tan:
                     result = Math.Tan(first);
                     break;
+                case ConditionalFormulaScalarFunctionKind.Delta:
+                    var deltaSecond = 0d;
+                    if (function.Arguments.Count == 2 &&
+                        !TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out deltaSecond))
+                    {
+                        return false;
+                    }
+
+                    result = first == deltaSecond ? 1d : 0d;
+                    break;
+                case ConditionalFormulaScalarFunctionKind.GeStep:
+                    var step = 0d;
+                    if (function.Arguments.Count == 2 &&
+                        !TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out step))
+                    {
+                        return false;
+                    }
+
+                    result = first >= step ? 1d : 0d;
+                    break;
+                case ConditionalFormulaScalarFunctionKind.BitAnd:
+                case ConditionalFormulaScalarFunctionKind.BitOr:
+                case ConditionalFormulaScalarFunctionKind.BitXor:
+                    if (!TryEvaluateFormulaBitwiseBinaryFunction(
+                            function,
+                            first,
+                            rowOffset,
+                            colOffset,
+                            out var bitwiseBinaryResult))
+                    {
+                        return false;
+                    }
+
+                    result = bitwiseBinaryResult;
+                    break;
+                case ConditionalFormulaScalarFunctionKind.BitLShift:
+                case ConditionalFormulaScalarFunctionKind.BitRShift:
+                    if (!TryEvaluateFormulaBitwiseShiftFunction(
+                            function,
+                            first,
+                            rowOffset,
+                            colOffset,
+                            out var bitwiseShiftResult))
+                    {
+                        return false;
+                    }
+
+                    result = bitwiseShiftResult;
+                    break;
                 default:
                     return false;
             }
@@ -2950,6 +3044,97 @@ public static partial class AccessibilityCheckerService
                 return false;
 
             value = new NumberValue(result);
+            return true;
+        }
+
+        private bool TryEvaluateFormulaBitwiseBinaryFunction(
+            ConditionalFormulaScalarFunction function,
+            double first,
+            int rowOffset,
+            int colOffset,
+            out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaBitwiseInteger(first, out var left) ||
+                !TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var second) ||
+                !TryGetFormulaBitwiseInteger(second, out var right))
+            {
+                return false;
+            }
+
+            var bitwiseResult = function.Kind switch
+            {
+                ConditionalFormulaScalarFunctionKind.BitAnd => left & right,
+                ConditionalFormulaScalarFunctionKind.BitOr => left | right,
+                ConditionalFormulaScalarFunctionKind.BitXor => left ^ right,
+                _ => 0UL
+            };
+
+            result = bitwiseResult;
+            return true;
+        }
+
+        private bool TryEvaluateFormulaBitwiseShiftFunction(
+            ConditionalFormulaScalarFunction function,
+            double first,
+            int rowOffset,
+            int colOffset,
+            out double result)
+        {
+            result = 0d;
+            if (!TryGetFormulaBitwiseInteger(first, out var value) ||
+                !TryResolveFormulaFunctionNumber(function.Arguments[1], rowOffset, colOffset, out var shiftNumber) ||
+                !TryGetFormulaBitwiseShift(shiftNumber, out var shift))
+            {
+                return false;
+            }
+
+            var shiftLeft = function.Kind == ConditionalFormulaScalarFunctionKind.BitLShift;
+            if (shift < 0)
+            {
+                shiftLeft = !shiftLeft;
+                shift = -shift;
+            }
+
+            if (shiftLeft)
+            {
+                if (shift > 0 && value > (MaxFormulaBitwiseInput >> shift))
+                    return false;
+
+                result = value << shift;
+                return true;
+            }
+
+            result = value >> shift;
+            return true;
+        }
+
+        private static bool TryGetFormulaBitwiseInteger(double value, out ulong integer)
+        {
+            integer = 0;
+            if (!double.IsFinite(value) ||
+                Math.Truncate(value) != value ||
+                value < 0d ||
+                value > MaxFormulaBitwiseInput)
+            {
+                return false;
+            }
+
+            integer = (ulong)value;
+            return true;
+        }
+
+        private static bool TryGetFormulaBitwiseShift(double value, out int shift)
+        {
+            shift = 0;
+            if (!double.IsFinite(value) ||
+                Math.Truncate(value) != value ||
+                Math.Abs(value) > MaxFormulaBitwiseShift)
+            {
+                return false;
+            }
+
+            shift = (int)value;
             return true;
         }
 
