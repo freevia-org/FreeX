@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using FreeX.Core.Commands;
@@ -58,18 +57,16 @@ public partial class MainWindow
             return true;
         }
 
-        IWorkbookCommand CreateCommand(SheetId sheetId)
-        {
-            var sheetTargetRange = new GridRange(
-                new CellAddress(sheetId, targetRange.Start.Row, targetRange.Start.Col),
-                new CellAddress(sheetId, targetRange.End.Row, targetRange.End.Col));
-            return FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, sheetTargetRange);
-        }
-
-        var targetSheetIds = CurrentGroupedEditSheetIds();
-        var command = targetSheetIds.Count > 1
-            ? new CompositeWorkbookCommand("Format Painter", targetSheetIds.Select(CreateCommand).ToList())
-            : FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, targetRange);
+        var targetRanges = GetCurrentSelectionRanges(targetRange);
+        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
+            CurrentGroupedEditSheetIds(),
+            targetRanges,
+            (sheetId, sheetTargetRange) => FormatPainterCommandFactory.Create(
+                _workbook,
+                sourceSheet,
+                sourceRange,
+                sheetTargetRange),
+            "Format Painter");
         if (!TryExecuteCommand(command, "Format Painter"))
         {
             if (!_formatPainterPersistent)

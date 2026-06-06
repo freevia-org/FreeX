@@ -179,6 +179,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void WorkbookProtection_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorkbookProtectionSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorkbookProtection_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookProtectionSourceWorkbook());
+        var sourceWorkbookProtection = ReadWorkbookChildElement(source, "workbookProtection");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "workbookProtection")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceWorkbookProtection.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
     public void WorkbookCalculationProperties_ProducesSchemaValidWorkbook()
     {
         SchemaErrors(CreateWorkbookCalculationPropertiesSourceWorkbook()).Should().BeEmpty();
@@ -303,6 +337,19 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var bag = new NativeXmlPreserveBag();
         bag.Set("workbookPr", """<e defaultThemeVersion="166925" />""");
         return bag;
+    }
+
+    private static Workbook CreateWorkbookProtectionSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookProtectionPatchSave")
+        {
+            IsStructureProtected = true,
+            StructureProtectionPassword = "password"
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("protection"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        return workbook;
     }
 
     private static Workbook CreateWorkbookCalculationPropertiesSourceWorkbook()

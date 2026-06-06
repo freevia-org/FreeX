@@ -243,11 +243,7 @@ public partial class MainWindow
             FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
         };
 
-        if (!TryExecuteGroupedSheetCommand(
-                "Conditional Formatting",
-                sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(cf, sheetId))))
-            return;
-        UpdateViewport();
+        ApplyConditionalFormatPreset(cf);
     }
 
     private void ValidationButton_Click(object sender, RoutedEventArgs e)
@@ -276,9 +272,10 @@ public partial class MainWindow
 
         if (dlg.ClearRequested)
         {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
+            if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                     "Clear Data Validation",
-                    sheetId => new ClearDataValidationCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+                    range,
+                    (sheetId, currentRange) => new ClearDataValidationCommand(sheetId, currentRange)))
                 return;
 
             UpdateViewport();
@@ -288,14 +285,16 @@ public partial class MainWindow
         if (dlg.Result == null) return;
 
         var dv = dlg.Result;
-        dv.AppliesTo = range;
+        var ranges = GetCurrentSelectionRanges(range);
+        dv.AppliesTo = ranges[0];
+        dv.AdditionalRanges.Clear();
+        dv.AdditionalRanges.AddRange(ranges.Skip(1));
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Data Validation",
                 sheetId =>
                 {
                     var rule = GroupedSheetRangePlanner.CloneDataValidationForSheet(dv, sheetId);
-                    rule.AppliesTo = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
                     return CreateDataValidationCommand(
                         sheetId,
                         rule,
