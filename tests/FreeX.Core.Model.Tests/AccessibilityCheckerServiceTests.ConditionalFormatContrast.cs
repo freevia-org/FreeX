@@ -381,6 +381,24 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNaFunctionPredicatesAndWrappers()
+    {
+        AssertFormulaPredicateContrastLocations("ISNA(NA())", FormulaPredicateAllLocations);
+        AssertFormulaPredicateContrastLocations("ISERROR(NA())", FormulaPredicateAllLocations);
+        AssertFormulaPredicateContrastLocations("ISERR(NA())");
+        AssertFormulaPredicateContrastLocations("NOT(ISNA(NA()))");
+        AssertFormulaPredicateContrastLocations("IF(ISNA(NA()),TRUE,FALSE)", FormulaPredicateAllLocations);
+        AssertFormulaPredicateContrastLocations("XOR(ISNA(NA()),$C1)", "B1", "B2", "B3", "B4", "B6", "B7");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatNaFunctionAsConditionOrWrongArity()
+    {
+        AssertFormulaPredicateContrastLocations("NA()");
+        AssertFormulaPredicateContrastLocations("NA(1)");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNestedIsPredicates()
     {
         AssertFormulaPredicateContrastLocations("AND(ISNUMBER($A1),$A1>=40)", "B2", "B3");
