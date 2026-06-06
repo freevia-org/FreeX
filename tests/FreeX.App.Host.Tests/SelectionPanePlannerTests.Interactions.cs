@@ -1,5 +1,4 @@
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -52,7 +51,7 @@ public sealed partial class SelectionPanePlannerTests
     public void SelectionPaneDialog_AccumulatesMoveChangesInsteadOfClosingOnMove()
     {
         var source = ReadSelectionPaneDialogSources();
-        var hostSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
+        var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         source.Should().Contain("private readonly List<SelectionPaneMoveChange> _moveChanges = [];");
         source.Should().Contain("SelectionPaneDialogStatePlanner.PlanMove");
