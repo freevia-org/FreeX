@@ -1046,6 +1046,9 @@ public static partial class AccessibilityCheckerService
             case "SUMSQ":
                 kind = ConditionalFormulaAggregateKind.SumSq;
                 return true;
+            case "DEVSQ":
+                kind = ConditionalFormulaAggregateKind.DevSq;
+                return true;
             case "PRODUCT":
                 kind = ConditionalFormulaAggregateKind.Product;
                 return true;
@@ -1515,6 +1518,7 @@ public static partial class AccessibilityCheckerService
     {
         Sum,
         SumSq,
+        DevSq,
         Product,
         Average,
         Median,
@@ -2527,6 +2531,7 @@ public static partial class AccessibilityCheckerService
             {
                 ConditionalFormulaAggregateKind.Sum => new NumberValue(numericValues.Sum()),
                 ConditionalFormulaAggregateKind.SumSq => new NumberValue(numericValues.Sum(number => number * number)),
+                ConditionalFormulaAggregateKind.DevSq when numericValues.Count > 0 => new NumberValue(DevSqFormulaNumbers(numericValues)),
                 ConditionalFormulaAggregateKind.Product => new NumberValue(numericValues.Aggregate(1d, (product, number) => product * number)),
                 ConditionalFormulaAggregateKind.Average when numericValues.Count > 0 => new NumberValue(numericValues.Average()),
                 ConditionalFormulaAggregateKind.Median when numericValues.Count > 0 => new NumberValue(MedianFormulaNumbers(numericValues)),
@@ -2539,6 +2544,19 @@ public static partial class AccessibilityCheckerService
             };
 
             return value is not ErrorValue && TryGetNumber(value, out var number) && double.IsFinite(number);
+        }
+
+        private static double DevSqFormulaNumbers(List<double> numericValues)
+        {
+            var average = numericValues.Average();
+            var sum = 0d;
+            for (var i = 0; i < numericValues.Count; i++)
+            {
+                var deviation = numericValues[i] - average;
+                sum += deviation * deviation;
+            }
+
+            return sum;
         }
 
         private static double MedianFormulaNumbers(List<double> numericValues)
@@ -2708,6 +2726,7 @@ public static partial class AccessibilityCheckerService
             aggregateKind is
                 ConditionalFormulaAggregateKind.Sum or
                 ConditionalFormulaAggregateKind.SumSq or
+                ConditionalFormulaAggregateKind.DevSq or
                 ConditionalFormulaAggregateKind.Product or
                 ConditionalFormulaAggregateKind.Average or
                 ConditionalFormulaAggregateKind.Median or
