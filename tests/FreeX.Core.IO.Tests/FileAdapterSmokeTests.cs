@@ -17648,7 +17648,7 @@ public partial class FileAdapterSmokeTests
         customProperty.Attribute("name")!.Value.Should().Be("FreeXNativeProperty");
         customProperty.Attribute("id").Should().BeNull();
         customProperty.Attribute(relNs + "id")!.Value.Should().NotBeNullOrWhiteSpace();
-        customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept");
+        customProperty.Attribute("unsupportedAttr").Should().BeNull();
         AssertWorksheetCustomPropertyRelationship(archive, customProperty, "sheet1-1-FreeXNativeProperty.bin");
     }
 
@@ -17714,8 +17714,8 @@ public partial class FileAdapterSmokeTests
         customProperty.Attribute("name")!.Value.Should().Be("FreeXModeledProperty");
         customProperty.Attribute("id").Should().BeNull();
         customProperty.Attribute(relNs + "id")!.Value.Should().NotBeNullOrWhiteSpace();
-        customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept");
-        customProperty.Elements(XName.Get("customPrChild", "urn:freex:test")).Should().ContainSingle();
+        customProperty.Attribute("unsupportedAttr").Should().BeNull();
+        customProperty.Elements(XName.Get("customPrChild", "urn:freex:test")).Should().BeEmpty();
         AssertWorksheetCustomPropertyRelationship(archive, customProperty, "sheet1-7-FreeXModeledProperty.bin");
         worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
     }
