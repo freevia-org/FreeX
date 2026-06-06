@@ -2880,6 +2880,63 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumberValueFunctionOperands()
+    {
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1)=1234.56", "B1");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1,$D1,$E1)=1234.56", "B1", "B2");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"1;25\",\";\")=1.25", FormulaNumberValueAllLocations);
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"1 234.5\",\".\",\" \")=1234.5", FormulaNumberValueAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumberValueFunctionPercentAccountingAndWhitespace()
+    {
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1)=0.5", "B3");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1)<0", "B4");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1)=1234", "B5");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"10%%\")>0", FormulaNumberValueAllLocations);
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\" ( 1,234.5%) \")<0", FormulaNumberValueAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumberValueFunctionWrappersPredicatesAndAggregates()
+    {
+        AssertFormulaNumberValueFunctionContrastLocations("IF(NUMBERVALUE($C1,$D1,$E1)>0,TRUE,FALSE)", "B1", "B2", "B3", "B5", "B6");
+        AssertFormulaNumberValueFunctionContrastLocations("AND(NUMBERVALUE($C1,$D1,$E1)>0,$A1)", "B1", "B2", "B5", "B6");
+        AssertFormulaNumberValueFunctionContrastLocations("ISNUMBER(NUMBERVALUE($C1,$D1,$E1))", "B1", "B2", "B3", "B4", "B5", "B6");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1)+1=76", "B6");
+        AssertFormulaNumberValueFunctionContrastLocations("SUM(NUMBERVALUE($C1,$D1,$E1),1)>1235", "B1", "B2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumberValueFunctionErrorPredicates()
+    {
+        AssertFormulaNumberValueFunctionContrastLocations("ISERROR(NUMBERVALUE(\"Open\"))", FormulaNumberValueAllLocations);
+        AssertFormulaNumberValueFunctionContrastLocations("ISERROR(NUMBERVALUE(\"1234\",\".\",\".\"))", FormulaNumberValueAllLocations);
+        AssertFormulaNumberValueFunctionContrastLocations("ISERROR(NUMBERVALUE($C1,$D1,$E1))", "B7", "B8");
+        AssertFormulaNumberValueFunctionContrastLocations("ISNA(NUMBERVALUE(NA()))", FormulaNumberValueAllLocations);
+        AssertFormulaNumberValueFunctionContrastLocations("ISNA(NUMBERVALUE(\"123\",NA(),\",\"))", FormulaNumberValueAllLocations);
+        AssertFormulaNumberValueFunctionContrastLocations("ISNA(NUMBERVALUE(\"123\",\".\",NA()))", FormulaNumberValueAllLocations);
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatNumberValueFunctionUnsupportedOperandsOrErrorComparisons()
+    {
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE()>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1,$D1,$E1,1)>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"Open\")>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"1.234,56\",\".\",\",\")>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"1234\",\".\",\".\")>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"1234\",\"\",\",\")>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"1234\",\".\",\"\")>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"1E309\")>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(NA())>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"123\",NA(),\",\")>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"123\",\".\",NA())>0");
+        AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1:$C2)>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatArabicFunctionOperands()
     {
         AssertFormulaArabicRomanFunctionContrastLocations("ARABIC($C1)=12", "B1");
@@ -3757,6 +3814,44 @@ public sealed partial class AccessibilityCheckerServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, row, 3), source);
     }
 
+    private static Workbook CreateFormulaNumberValueFunctionContrastWorkbook(
+        out Sheet sheet,
+        out CellAddress firstLabel,
+        out CellAddress lastLabel)
+    {
+        var workbook = new Workbook("Accessibility");
+        sheet = workbook.AddSheet("Sales");
+        firstLabel = new CellAddress(sheet.Id, 1, 2);
+        lastLabel = new CellAddress(sheet.Id, 8, 2);
+
+        SetFormulaNumberValueFunctionContrastRow(sheet, 1, new TextValue("1,234.56"), ".", ",", flag: true, "Default separators");
+        SetFormulaNumberValueFunctionContrastRow(sheet, 2, new TextValue("1.234,56"), ",", ".", flag: true, "Localized separators");
+        SetFormulaNumberValueFunctionContrastRow(sheet, 3, new TextValue("50%"), ".", ",", flag: false, "Percent text");
+        SetFormulaNumberValueFunctionContrastRow(sheet, 4, new TextValue(" (1,234.5%) "), ".", ",", flag: true, "Accounting percent");
+        SetFormulaNumberValueFunctionContrastRow(sheet, 5, new TextValue("1\t234"), ".", ",", flag: true, "Ascii spacing");
+        SetFormulaNumberValueFunctionContrastRow(sheet, 6, new NumberValue(75), ".", ",", flag: true, "Numeric source");
+        SetFormulaNumberValueFunctionContrastRow(sheet, 7, new TextValue("Open"), ".", ",", flag: true, "Invalid source");
+        SetFormulaNumberValueFunctionContrastRow(sheet, 8, new TextValue("1.234,56"), ".", ".", flag: true, "Invalid separators");
+
+        return workbook;
+    }
+
+    private static void SetFormulaNumberValueFunctionContrastRow(
+        Sheet sheet,
+        uint row,
+        ScalarValue source,
+        string decimalSeparator,
+        string groupSeparator,
+        bool flag,
+        string label)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), new BoolValue(flag));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 3), source);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 4), new TextValue(decimalSeparator));
+        sheet.SetCell(new CellAddress(sheet.Id, row, 5), new TextValue(groupSeparator));
+    }
+
     private static Workbook CreateFormulaBaseConversionFunctionContrastWorkbook(
         out Sheet sheet,
         out CellAddress firstLabel,
@@ -4123,6 +4218,19 @@ public sealed partial class AccessibilityCheckerServiceTests
             .Equal(expectedLocations);
     }
 
+    private static void AssertFormulaNumberValueFunctionContrastLocations(
+        string formulaText,
+        params string[] expectedLocations)
+    {
+        var workbook = CreateFormulaNumberValueFunctionContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, formulaText);
+
+        FindLowContrastCellTextIssues(workbook)
+            .Select(issue => issue.Location)
+            .Should()
+            .Equal(expectedLocations);
+    }
+
     private static void AssertFormulaArabicRomanFunctionContrastLocations(
         string formulaText,
         params string[] expectedLocations)
@@ -4232,6 +4340,9 @@ public sealed partial class AccessibilityCheckerServiceTests
 
     private static string[] FormulaBaseConversionAllLocations =>
         ["B1", "B2", "B3", "B4", "B5", "B6", "B7"];
+
+    private static string[] FormulaNumberValueAllLocations =>
+        ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8"];
 
     private static void AddFormulaContrastRule(
         Sheet sheet,
