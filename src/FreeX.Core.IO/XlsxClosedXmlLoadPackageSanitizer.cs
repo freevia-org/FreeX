@@ -13,6 +13,7 @@ internal readonly record struct XlsxClosedXmlLoadSanitizationHints(
     bool? HasWorksheetDynamicFilters,
     bool? HasWorksheetAutoFilterSchemaIssues,
     bool? HasStructuredTableAutoFilterSchemaIssues,
+    bool? HasStructuredTableSortStateSchemaIssues,
     bool? HasDocumentPropertiesPackageGraphIssues,
     bool? HasWorksheetSheetViewSchemaIssues,
     bool? HasWorkbookViewSchemaIssues,
@@ -87,6 +88,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 NormalizeWorksheetAutoFilters(archive);
             if (requirements.HasStructuredTableAutoFilterSchemaIssues)
                 NormalizeStructuredTableAutoFilters(archive);
+            if (requirements.HasStructuredTableSortStateSchemaIssues)
+                NormalizeStructuredTableSortStates(archive);
             if (requirements.HasWorksheetSheetViewSchemaIssues)
                 NormalizeWorksheetSheetViews(archive);
             if (requirements.HasWorkbookViewSchemaIssues)
@@ -208,6 +211,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasWorksheetDynamicFilters, archive, HasWorksheetDynamicFilters),
                 ResolveKnownOrScan(knownHints.HasWorksheetAutoFilterSchemaIssues, archive, HasWorksheetAutoFilterSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasStructuredTableAutoFilterSchemaIssues, archive, HasStructuredTableAutoFilterSchemaIssues),
+                ResolveKnownOrScan(knownHints.HasStructuredTableSortStateSchemaIssues, archive, HasStructuredTableSortStateSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasDocumentPropertiesPackageGraphIssues, archive, HasDocumentPropertiesPackageGraphIssues),
                 ResolveKnownOrScan(knownHints.HasWorksheetSheetViewSchemaIssues, archive, HasWorksheetSheetViewSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorkbookViewSchemaIssues, archive, HasWorkbookViewSchemaIssues),
@@ -219,7 +223,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, null);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, null);
         }
         finally
         {
@@ -241,6 +245,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hints.HasWorksheetDynamicFilters is not { } hasWorksheetDynamicFilters ||
             hints.HasWorksheetAutoFilterSchemaIssues is not { } hasWorksheetAutoFilterSchemaIssues ||
             hints.HasStructuredTableAutoFilterSchemaIssues is not { } hasStructuredTableAutoFilterSchemaIssues ||
+            hints.HasStructuredTableSortStateSchemaIssues is not { } hasStructuredTableSortStateSchemaIssues ||
             hints.HasDocumentPropertiesPackageGraphIssues is not { } hasDocumentPropertiesPackageGraphIssues ||
             hints.HasWorksheetSheetViewSchemaIssues is not { } hasWorksheetSheetViewSchemaIssues ||
             hints.HasWorkbookViewSchemaIssues is not { } hasWorkbookViewSchemaIssues ||
@@ -273,6 +278,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasWorksheetDynamicFilters,
             hasWorksheetAutoFilterSchemaIssues,
             hasStructuredTableAutoFilterSchemaIssues,
+            hasStructuredTableSortStateSchemaIssues,
             hasDocumentPropertiesPackageGraphIssues,
             hasWorksheetSheetViewSchemaIssues,
             hasWorkbookViewSchemaIssues,
@@ -392,6 +398,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasWorksheetDynamicFilters,
         bool HasWorksheetAutoFilterSchemaIssues,
         bool HasStructuredTableAutoFilterSchemaIssues,
+        bool HasStructuredTableSortStateSchemaIssues,
         bool HasDocumentPropertiesPackageGraphIssues,
         bool HasWorksheetSheetViewSchemaIssues,
         bool HasWorkbookViewSchemaIssues,
@@ -410,6 +417,7 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             HasWorksheetDynamicFilters ||
             HasWorksheetAutoFilterSchemaIssues ||
             HasStructuredTableAutoFilterSchemaIssues ||
+            HasStructuredTableSortStateSchemaIssues ||
             HasDocumentPropertiesPackageGraphIssues ||
             HasWorksheetSheetViewSchemaIssues ||
             HasWorkbookViewSchemaIssues ||
@@ -545,10 +553,11 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             return WriteTransformedChartsheetEntry(sourceEntry, targetArchive);
         }
 
-        if (requirements.HasStructuredTableAutoFilterSchemaIssues &&
+        if ((requirements.HasStructuredTableAutoFilterSchemaIssues ||
+             requirements.HasStructuredTableSortStateSchemaIssues) &&
             IsStructuredTableXml(normalizedPath))
         {
-            return WriteTransformedStructuredTableEntry(sourceEntry, targetArchive);
+            return WriteTransformedStructuredTableEntry(sourceEntry, targetArchive, requirements);
         }
 
         if ((requirements.HasPivotPackageMetadata ||
@@ -664,13 +673,26 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static bool WriteTransformedStructuredTableEntry(
         ZipArchiveEntry sourceEntry,
-        ZipArchive targetArchive)
+        ZipArchive targetArchive,
+        SanitizationRequirements requirements)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var tableXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
-        var autoFilter = tableXml.Root?.Element(worksheetNs + "autoFilter");
-        if (autoFilter is null ||
-            !XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
+        var changed = false;
+
+        if (requirements.HasStructuredTableAutoFilterSchemaIssues &&
+            tableXml.Root?.Element(worksheetNs + "autoFilter") is { } autoFilter)
+        {
+            changed |= XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter);
+        }
+
+        if (requirements.HasStructuredTableSortStateSchemaIssues &&
+            tableXml.Root?.Element(worksheetNs + "sortState") is { } sortState)
+        {
+            changed |= XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState);
+        }
+
+        if (!changed)
         {
             return false;
         }
@@ -1510,6 +1532,50 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             var autoFilter = tableXml.Root?.Element(worksheetNs + "autoFilter");
             if (autoFilter is not null &&
                 XlsxWorksheetAutoFilterNormalizer.NormalizeElement(autoFilter))
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
+            }
+        }
+    }
+
+    private static bool HasStructuredTableSortStateSchemaIssues(ZipArchive archive)
+    {
+        foreach (var tableEntry in archive.Entries
+                     .Where(entry => IsStructuredTableXml(NormalizeEntryPath(entry.FullName)))
+                     .ToList())
+        {
+            try
+            {
+                var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
+                var sortState = tableXml.Root?.Element(XName.Get(
+                    "sortState",
+                    "http://schemas.openxmlformats.org/spreadsheetml/2006/main"));
+                if (sortState is not null &&
+                    XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void NormalizeStructuredTableSortStates(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var tableEntry in archive.Entries
+                     .Where(entry => IsStructuredTableXml(NormalizeEntryPath(entry.FullName)))
+                     .ToList())
+        {
+            var tableXml = XlsxPackageXmlEditor.LoadXml(tableEntry);
+            var sortState = tableXml.Root?.Element(worksheetNs + "sortState");
+            if (sortState is not null &&
+                XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState))
             {
                 XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
             }

@@ -71,6 +71,25 @@ public sealed partial class XlsxNonChartSchemaValidationTests
     }
 
     [Fact]
+    public void StructuredTableSortState_SanitizesInvalidAttributesForSchemaValidity()
+    {
+        using var saved = Save(CreateInvalidStructuredTableSortStateSourceWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var sortState = ReadPackageRootElement(saved, "xl/tables/table1.xml")
+            .Element(XName.Get("sortState", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"))!;
+        var workbookNs = sortState.Name.Namespace;
+        var condition = sortState.Element(workbookNs + "sortCondition")!;
+        sortState.Attribute("columnSort").Should().BeNull();
+        sortState.Attribute("caseSensitive").Should().BeNull();
+        sortState.Attribute("sortMethod").Should().BeNull();
+        condition.Attribute("descending").Should().BeNull();
+        condition.Attribute("sortBy").Should().BeNull();
+        condition.Attribute("dxfId").Should().BeNull();
+        condition.Attribute("iconId").Should().BeNull();
+    }
+
+    [Fact]
     public void LoadedWorkbookPatchSave_WithStructuredTable_ProducesSchemaValidWorkbook()
     {
         using var source = Save(CreateStructuredTableSourceWorkbook());
@@ -139,6 +158,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Element(workbookNs + "customFilters")!;
         customFilters.Attribute("and").Should().BeNull();
         customFilters.Element(workbookNs + "customFilter")!.Attribute("operator").Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesInvalidStructuredTableSortStateForSchemaValidity()
+    {
+        using var source = Save(CreateStructuredTableSourceWorkbook());
+        SetStructuredTableSortStateInvalidAttributes(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 5), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        var sortState = ReadPackageRootElement(saved, "xl/tables/table1.xml")
+            .Element(XName.Get("sortState", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"))!;
+        var workbookNs = sortState.Name.Namespace;
+        var condition = sortState.Element(workbookNs + "sortCondition")!;
+        sortState.Attribute("columnSort").Should().BeNull();
+        sortState.Attribute("caseSensitive").Should().BeNull();
+        sortState.Attribute("sortMethod").Should().BeNull();
+        condition.Attribute("descending").Should().BeNull();
+        condition.Attribute("sortBy").Should().BeNull();
+        condition.Attribute("dxfId").Should().BeNull();
+        condition.Attribute("iconId").Should().BeNull();
     }
 
 
@@ -1435,6 +1488,38 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         return workbook;
     }
 
+    private static Workbook CreateInvalidStructuredTableSortStateSourceWorkbook()
+    {
+        var workbook = new Workbook("StructuredTableSortStateInvalidSchema");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = Range(sheet, 1, 1, 3, 2),
+            HasAutoFilter = true,
+            NativeSortStateXml = """
+                <sortState xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ref="A1:B3" columnSort="maybe" caseSensitive="maybe" sortMethod="invalid">
+                  <sortCondition ref="A2:A3" descending="maybe" sortBy="invalid" dxfId="not-a-number" iconId="not-a-number" />
+                </sortState>
+                """,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Name"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Value"));
+        sheet.StructuredTables.Add(table);
+        return workbook;
+    }
+
     private static Workbook CreateAutoFilterSourceWorkbook()
     {
         var workbook = new Workbook("AutoFilterPatchSave");
@@ -1657,6 +1742,32 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                         workbookNs + "customFilter",
                         new XAttribute("operator", "invalid"),
                         new XAttribute("val", "1")))));
+        ReplacePackageXml(archive, "xl/tables/table1.xml", tableXml);
+    }
+
+    private static void SetStructuredTableSortStateInvalidAttributes(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+        var sortState = new XElement(
+            workbookNs + "sortState",
+            new XAttribute("ref", "A1:B3"),
+            new XAttribute("columnSort", "maybe"),
+            new XAttribute("caseSensitive", "maybe"),
+            new XAttribute("sortMethod", "invalid"),
+            new XElement(
+                workbookNs + "sortCondition",
+                new XAttribute("ref", "A2:A3"),
+                new XAttribute("descending", "maybe"),
+                new XAttribute("sortBy", "invalid"),
+                new XAttribute("dxfId", "not-a-number"),
+                new XAttribute("iconId", "not-a-number")));
+        if (tableXml.Root!.Element(workbookNs + "autoFilter") is { } autoFilter)
+            autoFilter.AddAfterSelf(sortState);
+        else
+            tableXml.Root.AddFirst(sortState);
         ReplacePackageXml(archive, "xl/tables/table1.xml", tableXml);
     }
 

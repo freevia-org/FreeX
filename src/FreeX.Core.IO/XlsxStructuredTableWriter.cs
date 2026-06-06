@@ -148,7 +148,10 @@ internal static class XlsxStructuredTableWriter
             {
                 var sortState = XElement.Parse(table.NativeSortStateXml);
                 if (sortState.Name == workbookNs + "sortState")
+                {
+                    XlsxWorksheetSortStateNormalizer.NormalizeElement(sortState);
                     root.Add(sortState);
+                }
             }
             catch
             {
