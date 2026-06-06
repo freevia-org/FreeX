@@ -49,6 +49,7 @@ public sealed class MainWindow : Window
     private readonly TextBlock _titleText = new();
     private readonly TextBlock _detailText = new();
     private readonly TextBlock _statusText = new();
+    private readonly TextBlock _selectionStatsText = new();
     private readonly TextBlock _cellAddressText = new();
     private readonly TextBox _formulaBox = new();
     private readonly Button _openButton = new();
@@ -295,7 +296,15 @@ public sealed class MainWindow : Window
         _detailText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
 
         _statusText.FontSize = 12;
+        _statusText.MaxWidth = 180;
+        _statusText.TextTrimming = TextTrimming.CharacterEllipsis;
         _statusText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+
+        _selectionStatsText.FontSize = 12;
+        _selectionStatsText.Foreground = Brush(73, 80, 93);
+        _selectionStatsText.MaxWidth = 420;
+        _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
+        _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
 
         _openButton.Content = "Open";
         _openButton.Padding = new Thickness(10, 4);
@@ -389,6 +398,7 @@ public sealed class MainWindow : Window
                     _cellAddressText,
                     _formulaBox,
                     _statusText,
+                    _selectionStatsText,
                 },
             },
         };
@@ -419,6 +429,7 @@ public sealed class MainWindow : Window
         }
 
         _statusText.Text = status;
+        _selectionStatsText.Text = _session.SelectionStatsText;
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
             ? Brush(143, 74, 18)
             : Brush(67, 113, 83);

@@ -18,9 +18,11 @@ public sealed class WorkbookSession
     private readonly WorkbookSheetSelectionService _sheetSelectionService;
     private readonly IViewportService _viewportService;
     private readonly bool _includeObjects;
+    private readonly WorkbookSelectionStatsCache _selectionStatsCache = new();
     private InternalClipboard? _internalClipboard;
     private double _viewportHeight;
     private double _viewportWidth;
+    private ulong _selectionStatsRevision;
 
     internal WorkbookSession(
         StartupWorkbookLoadResult source,
@@ -103,6 +105,12 @@ public sealed class WorkbookSession
     public bool CanRedo => _cellEditService.CanRedo(Workbook.Id);
 
     public bool IsSelectedRangeStartBold => GetCellStyle(SelectedRange.Start).Bold;
+
+    public WorkbookSelectionStats SelectionStats =>
+        _selectionStatsCache.GetOrCalculate(ActiveSheet, SelectedRange, _selectionStatsRevision);
+
+    public string SelectionStatsText =>
+        WorkbookSelectionStatsFormatter.Format(SelectionStats);
 
     public void SelectCell(CellAddress address)
     {
@@ -450,6 +458,7 @@ public sealed class WorkbookSession
         SelectedRange = new GridRange(address, address);
         FormulaEditAddress = null;
         IsDirty = true;
+        _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
     }
@@ -462,6 +471,7 @@ public sealed class WorkbookSession
         SelectedRange = selectedRange;
         FormulaEditAddress = null;
         IsDirty = true;
+        _selectionStatsRevision++;
         RefreshViewport();
         EnsureActiveCellVisible();
     }

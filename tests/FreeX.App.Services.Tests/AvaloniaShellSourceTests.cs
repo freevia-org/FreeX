@@ -370,4 +370,21 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeBold();");
     }
+
+    [Fact]
+    public void MainWindow_RendersSelectedRangeStatsThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly TextBlock _selectionStatsText = new();");
+        source.Should().Contain("_selectionStatsText.FontSize = 12;");
+        source.Should().Contain("_selectionStatsText.MaxWidth = 420;");
+        source.Should().Contain("_selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;");
+        source.Should().Contain("_statusText,");
+        source.Should().Contain("_selectionStatsText,");
+        source.Should().Contain("_statusText.Text = status;");
+        source.Should().Contain("_selectionStatsText.Text = _session.SelectionStatsText;");
+        source.Should().Contain("_session.SelectRange(new GridRange(_session.ActiveCell, address));");
+        source.Should().Contain("RefreshShell(\"Ready\");");
+    }
 }
