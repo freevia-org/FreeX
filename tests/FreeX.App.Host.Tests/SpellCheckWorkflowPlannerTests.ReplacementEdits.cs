@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -92,10 +91,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     [Fact]
     public void BuildReplaceAllEdits_UsesSinglePassAddressDeduplication()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src",
-            "FreeX.App.Host",
-            "SpellCheckWorkflowPlanner.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("SpellCheckWorkflowPlanner.cs");
 
         source.Should().Contain("var filtered = new List<SpellingIssue>();");
         source.Should().Contain("var editedAddresses = new HashSet<CellAddress>();");

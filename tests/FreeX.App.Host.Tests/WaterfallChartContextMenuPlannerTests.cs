@@ -1,7 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.Core.Model;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -37,10 +36,8 @@ public sealed class WaterfallChartContextMenuPlannerTests
     [Fact]
     public void MainWindowWaterfallContextMenu_RoutesThroughUndoableCommand()
     {
-        var constructorSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.xaml.cs"));
-        var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var constructorSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+        var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         constructorSource.Should().Contain("SheetGrid.WaterfallChartPointContextMenuRequested += OnWaterfallChartPointContextMenuRequested;");
         contextMenuSource.Should().Contain("private void OnWaterfallChartPointContextMenuRequested(ChartModel chart, int pointIndex, System.Windows.Point gridPos)");

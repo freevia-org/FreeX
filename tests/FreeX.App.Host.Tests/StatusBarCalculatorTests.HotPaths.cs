@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -8,8 +7,7 @@ public sealed partial class StatusBarCalculatorTests
     [Fact]
     public void Calculate_SingleCellStatusBypassesRangeScanSetup()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "StatusBarCalculator.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("StatusBarCalculator.cs");
 
         source.Should().Contain("range.Start == range.End");
         source.Should().Contain("CalculateSingleCell(sheet.GetValue(range.Start.Row, range.Start.Col))");
@@ -18,8 +16,7 @@ public sealed partial class StatusBarCalculatorTests
     [Fact]
     public void Calculate_LargeSelections_ScansSparseCellsWithoutCopyingUsedCellDictionary()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find(
-            "src", "FreeX.App.Host", "StatusBarCalculator.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("StatusBarCalculator.cs");
 
         source.Should().Contain(
             "GetUsedRange()",
