@@ -839,6 +839,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchSharedStrings(archive);
                 NormalizePatchInlineStringFonts(archive);
                 NormalizePatchThemeTypefaces(archive);
+                NormalizePatchLegacyCommentFonts(archive);
                 if (SourceOfficeRevisionAttributes is { HasAny: true } officeRevisionAttributes)
                     NormalizePatchOfficeRevisionAttributes(archive, officeRevisionAttributes);
 
@@ -1122,6 +1123,16 @@ public sealed partial class XlsxFileAdapter
 
                 if (XlsxThemeTypefaceNormalizer.SanitizeNonEmptyTypefaceAttributes(themeXml.Root))
                     XlsxPackageXmlEditor.ReplaceXml(archive, themeEntry.FullName, themeXml);
+            }
+        }
+
+        private static void NormalizePatchLegacyCommentFonts(ZipArchive archive)
+        {
+            foreach (var commentsEntry in archive.Entries.Where(IsLegacyCommentXmlEntry).ToList())
+            {
+                var commentsXml = XlsxPackageXmlEditor.LoadXml(commentsEntry);
+                if (XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(commentsXml))
+                    XlsxPackageXmlEditor.ReplaceXml(archive, commentsEntry.FullName, commentsXml);
             }
         }
 
@@ -3041,6 +3052,14 @@ public sealed partial class XlsxFileAdapter
         {
             var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
             return path.StartsWith("xl/theme/", StringComparison.OrdinalIgnoreCase) &&
+                   path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+                   !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsLegacyCommentXmlEntry(ZipArchiveEntry entry)
+        {
+            var path = XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+            return path.StartsWith("xl/comments", StringComparison.OrdinalIgnoreCase) &&
                    path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
                    !path.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
         }

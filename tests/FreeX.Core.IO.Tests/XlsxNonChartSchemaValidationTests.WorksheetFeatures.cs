@@ -615,6 +615,30 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceLegacyDrawing.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void LoadedWorkbookPatchSave_SanitizesRichCommentFontFamiliesForSchemaValidity()
+    {
+        using var source = CreateLegacyCommentSourcePackage();
+        AddCssFontFamilyRichComment(source);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadLegacyCommentRunFont(saved, "C2").Should().Be("Google Sans");
+    }
+
 
     [Fact]
     public void SheetProtection_ProducesSchemaValidWorkbook()
@@ -1496,6 +1520,43 @@ public sealed partial class XlsxNonChartSchemaValidationTests
                   </v:shape>
                 </xml>
                 """));
+
+    private static void AddCssFontFamilyRichComment(MemoryStream stream)
+    {
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var commentsXml = LoadPackageXml(archive.GetEntry("xl/comments1.xml")!);
+        var text = commentsXml.Root!
+            .Element(workbookNs + "commentList")!
+            .Elements(workbookNs + "comment")
+            .Single(comment => comment.Attribute("ref")?.Value == "C2")
+            .Element(workbookNs + "text")!;
+
+        text.ReplaceNodes(new XElement(
+            workbookNs + "r",
+            new XElement(
+                workbookNs + "rPr",
+                new XElement(workbookNs + "rFont", new XAttribute("val", "\"Google Sans\", Roboto, sans-serif")),
+                new XElement(workbookNs + "sz", new XAttribute("val", "9"))),
+            new XElement(workbookNs + "t", "Original note")));
+        ReplacePackageXml(archive, "xl/comments1.xml", commentsXml);
+    }
+
+    private static string ReadLegacyCommentRunFont(Stream stream, string reference)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return ReadPackageRootElement(stream, "xl/comments1.xml")
+            .Element(workbookNs + "commentList")!
+            .Elements(workbookNs + "comment")
+            .Single(comment => comment.Attribute("ref")?.Value == reference)
+            .Element(workbookNs + "text")!
+            .Element(workbookNs + "r")!
+            .Element(workbookNs + "rPr")!
+            .Element(workbookNs + "rFont")!
+            .Attribute("val")!
+            .Value;
+    }
 
     private static XElement ReadPackageRootElement(Stream stream, string entryName)
     {
