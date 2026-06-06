@@ -634,7 +634,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("VARP($D1:$D3)=0", "B1", "B2");
         AssertFormulaAggregateContrastLocations("VAR(25,$A1,125)=2500", "B1", "B3");
         AssertFormulaAggregateContrastLocations("VAR.S(\"25\",$A1,125)=2500", "B1", "B3");
-        AssertFormulaAggregateContrastLocations("VAR.P(25,$A1,125)>1600", "B1", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("VAR.P(25,$A1,125)>1600", "B1", "B2", "B3", "B4");
     }
 
     [Fact]
