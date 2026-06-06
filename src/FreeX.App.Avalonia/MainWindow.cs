@@ -56,6 +56,7 @@ public sealed class MainWindow : Window
     private readonly Button _saveAsButton = new();
     private readonly Button _undoButton = new();
     private readonly Button _redoButton = new();
+    private readonly Button _cutButton = new();
     private readonly Button _copyButton = new();
     private readonly Button _pasteButton = new();
     private readonly NativeMenuItem _openMenuItem = new();
@@ -63,6 +64,7 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _saveAsMenuItem = new();
     private readonly NativeMenuItem _undoMenuItem = new();
     private readonly NativeMenuItem _redoMenuItem = new();
+    private readonly NativeMenuItem _cutMenuItem = new();
     private readonly NativeMenuItem _copyMenuItem = new();
     private readonly NativeMenuItem _pasteMenuItem = new();
     private readonly NativeMenuItem _quitMenuItem = new();
@@ -201,6 +203,10 @@ public sealed class MainWindow : Window
         _redoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);
         _redoMenuItem.Click += (_, _) => RedoLastEdit();
 
+        _cutMenuItem.Header = "Cut";
+        _cutMenuItem.Gesture = new KeyGesture(Key.X, KeyModifiers.Meta);
+        _cutMenuItem.Click += async (_, _) => await CutSelectedRangeToClipboardAsync();
+
         _copyMenuItem.Header = "Copy";
         _copyMenuItem.Gesture = new KeyGesture(Key.C, KeyModifiers.Meta);
         _copyMenuItem.Click += async (_, _) => await CopySelectedRangeToClipboardAsync();
@@ -224,6 +230,7 @@ public sealed class MainWindow : Window
         editMenu.Items.Add(_undoMenuItem);
         editMenu.Items.Add(_redoMenuItem);
         editMenu.Items.Add(new NativeMenuItemSeparator());
+        editMenu.Items.Add(_cutMenuItem);
         editMenu.Items.Add(_copyMenuItem);
         editMenu.Items.Add(_pasteMenuItem);
 
@@ -293,6 +300,11 @@ public sealed class MainWindow : Window
         _redoButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _redoButton.Click += RedoButton_Click;
 
+        _cutButton.Content = "Cut";
+        _cutButton.Padding = new Thickness(10, 4);
+        _cutButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _cutButton.Click += CutButton_Click;
+
         _copyButton.Content = "Copy";
         _copyButton.Padding = new Thickness(10, 4);
         _copyButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -336,6 +348,7 @@ public sealed class MainWindow : Window
                     _saveAsButton,
                     _undoButton,
                     _redoButton,
+                    _cutButton,
                     _copyButton,
                     _pasteButton,
                     _cellAddressText,
@@ -413,6 +426,7 @@ public sealed class MainWindow : Window
         _saveAsButton.IsEnabled = isIdle && StorageProvider.CanSave;
         _undoButton.IsEnabled = isIdle && _session.CanUndo;
         _redoButton.IsEnabled = isIdle && _session.CanRedo;
+        _cutButton.IsEnabled = isIdle;
         _copyButton.IsEnabled = isIdle;
         _pasteButton.IsEnabled = isIdle;
 
@@ -421,6 +435,7 @@ public sealed class MainWindow : Window
         _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
         _undoMenuItem.IsEnabled = _undoButton.IsEnabled;
         _redoMenuItem.IsEnabled = _redoButton.IsEnabled;
+        _cutMenuItem.IsEnabled = _cutButton.IsEnabled;
         _copyMenuItem.IsEnabled = _copyButton.IsEnabled;
         _pasteMenuItem.IsEnabled = _pasteButton.IsEnabled;
     }
@@ -929,6 +944,11 @@ public sealed class MainWindow : Window
         RedoLastEdit();
     }
 
+    private async void CutButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await CutSelectedRangeToClipboardAsync();
+    }
+
     private async void CopyButton_Click(object? sender, RoutedEventArgs e)
     {
         await CopySelectedRangeToClipboardAsync();
@@ -970,6 +990,26 @@ public sealed class MainWindow : Window
         }
 
         RefreshShell(successStatus);
+    }
+
+    private async Task CutSelectedRangeToClipboardAsync()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        await clipboard.SetTextAsync(_session.CutSelectedRangeText());
+        RefreshShell($"Cut {rangeReference}");
     }
 
     private async Task CopySelectedRangeToClipboardAsync()
@@ -1076,6 +1116,7 @@ public sealed class MainWindow : Window
             HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, "Save As..."),
             HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, "Undo"),
             HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, "Redo"),
+            HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, "Cut"),
             HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, "Copy"),
             HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, "Paste"),
             HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
@@ -1097,7 +1138,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.C or Key.V)
+        if (_formulaBox.IsFocused && e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V)
             return;
 
         if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
@@ -1114,6 +1155,11 @@ public sealed class MainWindow : Window
         {
             e.Handled = true;
             RedoLastEdit();
+        }
+        else if (e.Key == Key.X)
+        {
+            e.Handled = true;
+            await CutSelectedRangeToClipboardAsync();
         }
         else if (e.Key == Key.C)
         {

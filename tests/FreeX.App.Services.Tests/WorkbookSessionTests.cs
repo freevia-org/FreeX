@@ -349,6 +349,98 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void PasteClipboardTextAtActiveCell_ClearsCutSourceAfterNonOverlappingInternalPaste()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var d3 = new CellAddress(sheet.Id, 3, 4);
+        var e3 = new CellAddress(sheet.Id, 3, 5);
+        sheet.SetCell(a1, new NumberValue(10));
+        sheet.SetFormula(b1, "A1+1");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CutSelectedRangeText();
+        session.SelectCell(d3);
+
+        var paste = session.PasteClipboardTextAtActiveCell(clipboardText);
+
+        paste.Success.Should().BeTrue();
+        paste.AffectedCells.Should().Contain([d3, e3, a1, b1]);
+        session.SelectedRange.Should().Be(new GridRange(d3, e3));
+        sheet.GetCell(a1)!.Value.Should().Be(BlankValue.Instance);
+        sheet.GetCell(b1)!.FormulaText.Should().BeNull();
+        sheet.GetCell(b1)!.Value.Should().Be(BlankValue.Instance);
+        sheet.GetCell(d3)!.Value.Should().Be(new NumberValue(10));
+        sheet.GetCell(e3)!.FormulaText.Should().Be("D3+1");
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().Be(new NumberValue(10));
+        sheet.GetCell(b1)!.FormulaText.Should().Be("A1+1");
+        sheet.GetCell(d3).Should().BeNull();
+        sheet.GetCell(e3).Should().BeNull();
+    }
+
+    [Fact]
+    public void PasteClipboardTextAtActiveCell_DoesNotClearCutSourceWhenPasteOverlaps()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("left"));
+        sheet.SetCell(b1, new TextValue("right"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+        var clipboardText = session.CutSelectedRangeText();
+        session.SelectCell(b1);
+
+        var result = session.PasteClipboardTextAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().Equal(b1, c1);
+        sheet.GetValue(a1).Should().Be(new TextValue("left"));
+        sheet.GetValue(b1).Should().Be(new TextValue("left"));
+        sheet.GetValue(c1).Should().Be(new TextValue("right"));
+    }
+
+    [Fact]
+    public void PasteClipboardTextAtActiveCell_DoesNotClearCutSourceWhenClipboardTextChanges()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new TextValue("source"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.CutSelectedRangeText();
+        session.SelectCell(c1);
+
+        var result = session.PasteClipboardTextAtActiveCell("external");
+
+        result.Success.Should().BeTrue();
+        sheet.GetValue(a1).Should().Be(new TextValue("source"));
+        sheet.GetValue(c1).Should().Be(new TextValue("external"));
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_FallsBackToExternalTextWhenClipboardTextChanges()
     {
         var workbook = CreateWorkbook();

@@ -9,7 +9,8 @@ public sealed class WorkbookSession
     private sealed record InternalClipboard(
         GridRange SourceRange,
         IReadOnlyList<(CellAddress Source, Cell Cell)> Cells,
-        string Text);
+        string Text,
+        bool IsCut);
 
     private readonly IReadOnlyList<IFileAdapter> _adapters;
     private readonly StartupWorkbookLoadResult _source;
@@ -226,7 +227,14 @@ public sealed class WorkbookSession
     public string CopySelectedRangeText()
     {
         var text = ClipboardSerializer.Serialize(Viewport, SelectedRange);
-        _internalClipboard = CaptureInternalClipboard(SelectedRange, text);
+        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: false);
+        return text;
+    }
+
+    public string CutSelectedRangeText()
+    {
+        var text = ClipboardSerializer.Serialize(Viewport, SelectedRange);
+        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: true);
         return text;
     }
 
@@ -429,16 +437,28 @@ public sealed class WorkbookSession
             destination,
             PasteCellsMode.All,
             default);
+        if (ShouldClearCutSourceAfterPaste(clipboard, destination))
+        {
+            command = new CompositeWorkbookCommand(
+                "Cut and Paste",
+                [
+                    command,
+                    new ClearContentsCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange)
+                ]);
+        }
+
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
 
         ApplySuccessfulEditResult(result, destination);
         SelectPastedRange(destination, clipboard.SourceRange.RowCount, clipboard.SourceRange.ColCount);
+        if (clipboard.IsCut)
+            _internalClipboard = null;
         return result;
     }
 
-    private InternalClipboard CaptureInternalClipboard(GridRange range, string text)
+    private InternalClipboard CaptureInternalClipboard(GridRange range, string text, bool isCut)
     {
         var sheet = Workbook.GetSheet(range.Start.Sheet);
         var cells = new List<(CellAddress Source, Cell Cell)>();
@@ -448,7 +468,24 @@ public sealed class WorkbookSession
             cells.Add((address, cell));
         }
 
-        return new InternalClipboard(range, cells, text);
+        return new InternalClipboard(range, cells, text, isCut);
+    }
+
+    private static bool ShouldClearCutSourceAfterPaste(InternalClipboard clipboard, CellAddress destination)
+    {
+        if (!clipboard.IsCut)
+            return false;
+
+        if (!TryGetRectangleEnd(
+                destination,
+                clipboard.SourceRange.RowCount,
+                clipboard.SourceRange.ColCount,
+                out var pastedEnd))
+        {
+            return false;
+        }
+
+        return !clipboard.SourceRange.Overlaps(new GridRange(destination, pastedEnd));
     }
 
     private void SelectPastedRange(CellAddress start, ulong rowCount, ulong colCount)

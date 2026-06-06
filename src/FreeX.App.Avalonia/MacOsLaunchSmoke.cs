@@ -72,6 +72,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasNativeSaveAsMenuItem,
     bool HasNativeUndoMenuItem,
     bool HasNativeRedoMenuItem,
+    bool HasNativeCutMenuItem,
     bool HasNativeCopyMenuItem,
     bool HasNativePasteMenuItem,
     bool HasNativeQuitMenuItem)
@@ -89,6 +90,7 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasNativeSaveAsMenuItem &&
         HasNativeUndoMenuItem &&
         HasNativeRedoMenuItem &&
+        HasNativeCutMenuItem &&
         HasNativeCopyMenuItem &&
         HasNativePasteMenuItem &&
         HasNativeQuitMenuItem;
@@ -154,6 +156,7 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"native_save_as_menu_item={FormatBool(snapshot.HasNativeSaveAsMenuItem)}",
                 $"native_undo_menu_item={FormatBool(snapshot.HasNativeUndoMenuItem)}",
                 $"native_redo_menu_item={FormatBool(snapshot.HasNativeRedoMenuItem)}",
+                $"native_cut_menu_item={FormatBool(snapshot.HasNativeCutMenuItem)}",
                 $"native_copy_menu_item={FormatBool(snapshot.HasNativeCopyMenuItem)}",
                 $"native_paste_menu_item={FormatBool(snapshot.HasNativePasteMenuItem)}",
                 $"native_quit_menu_item={FormatBool(snapshot.HasNativeQuitMenuItem)}",
