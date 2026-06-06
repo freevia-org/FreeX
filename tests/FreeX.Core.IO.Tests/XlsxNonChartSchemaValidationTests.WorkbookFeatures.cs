@@ -110,6 +110,40 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Be(sourceFileRecoveryProperties.ToString(SaveOptions.DisableFormatting));
     }
 
+    [Fact]
+    public void WorkbookFunctionGroups_ProducesSchemaValidWorkbook()
+    {
+        SchemaErrors(CreateWorkbookFunctionGroupsSourceWorkbook()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadedWorkbookPatchSave_WithWorkbookFunctionGroups_ProducesSchemaValidWorkbook()
+    {
+        using var source = Save(CreateWorkbookFunctionGroupsSourceWorkbook());
+        var sourceFunctionGroups = ReadWorkbookChildElement(source, "functionGroups");
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(workbook, out var blockReason)
+            .Should()
+            .BeTrue(blockReason);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+        adapter.LastSaveDiagnostics.Reason.Should().Be("patch_applied");
+        SchemaErrors(saved).Should().BeEmpty();
+        ReadWorkbookChildElement(saved, "functionGroups")
+            .ToString(SaveOptions.DisableFormatting)
+            .Should()
+            .Be(sourceFunctionGroups.ToString(SaveOptions.DisableFormatting));
+    }
+
     private static Workbook CreateWorkbookFileVersionSourceWorkbook()
     {
         var workbook = new Workbook("WorkbookFileVersionPatchSave")
@@ -157,6 +191,28 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         });
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
+        return workbook;
+    }
+
+    private static Workbook CreateWorkbookFunctionGroupsSourceWorkbook()
+    {
+        var workbook = new Workbook("WorkbookFunctionGroupsPatchSave")
+        {
+            FunctionGroups = new WorkbookFunctionGroupsModel
+            {
+                BuiltInGroupCount = "16",
+                Groups =
+                {
+                    new WorkbookFunctionGroupModel
+                    {
+                        Name = "FreeXNativeFunctions"
+                    }
+                }
+            }
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("functions"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(24));
         return workbook;
     }
