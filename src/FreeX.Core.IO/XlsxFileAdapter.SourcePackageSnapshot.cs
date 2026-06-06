@@ -849,6 +849,7 @@ public sealed partial class XlsxFileAdapter
                 NormalizePatchWorksheetGridXml(archive);
                 NormalizePatchWorksheetMergeCells(archive);
                 NormalizePatchWorksheetDimension(archive);
+                NormalizePatchWorksheetCalculationProperties(archive);
                 NormalizePatchWorksheetSheetViews(archive);
                 NormalizePatchWorksheetPhoneticProperties(archive);
                 NormalizePatchWorksheetPageLayout(archive);
@@ -1304,6 +1305,9 @@ public sealed partial class XlsxFileAdapter
 
         private static void NormalizePatchWorksheetDimension(ZipArchive archive) =>
             XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(archive);
+
+        private static void NormalizePatchWorksheetCalculationProperties(ZipArchive archive) =>
+            XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(archive);
 
         private static void NormalizePatchWorksheetPageBreaks(ZipArchive archive)
         {

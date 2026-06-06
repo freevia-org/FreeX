@@ -16,6 +16,7 @@ internal static class XlsxWorkbookSchemaNormalizer
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XlsxWorksheetDimensionNormalizer.NormalizeWorksheets(archive);
+        XlsxWorksheetCalculationPropertyNormalizer.NormalizeWorksheets(archive);
         NormalizeWorksheets(archive, workbookNs);
 
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
