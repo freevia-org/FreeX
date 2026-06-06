@@ -27,11 +27,7 @@ public sealed partial class ConditionalFormatDialogTests
 
     private static T GetControl<T>(ConditionalFormatDialog dialog, string name)
         where T : class
-    {
-        var field = typeof(ConditionalFormatDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, name);
 
     private static TextBlock? FindText(object? root, string text) =>
         root is DependencyObject dependencyObject

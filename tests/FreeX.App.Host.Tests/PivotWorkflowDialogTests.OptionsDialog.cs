@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -287,9 +286,7 @@ public sealed partial class PivotWorkflowDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new PivotTableOptionsDialog(pivotTable);
-            var styleBox = (ComboBox)typeof(PivotTableOptionsDialog)
-                .GetField("_styleBox", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .GetValue(dialog)!;
+            var styleBox = DialogSourceTestSupport.GetPrivateField<ComboBox>(dialog, "_styleBox");
             var styleNames = styleBox.Items.Cast<object>().Select(item => item.ToString()).ToList();
 
             styleNames.Should().Contain(["PivotStyleLight16", "PivotStyleMedium10", "PivotStyleDark7"]);
@@ -328,9 +325,7 @@ public sealed partial class PivotWorkflowDialogTests
         StaTestRunner.Run(() =>
         {
             var dialog = new PivotStyleGalleryDialog("CustomPivotStyle");
-            var styleGallery = (ListBox)typeof(PivotStyleGalleryDialog)
-                .GetField("_styleGallery", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .GetValue(dialog)!;
+            var styleGallery = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_styleGallery");
             var styleNames = styleGallery.Items.Cast<object>().Select(item => item.ToString()).ToList();
 
             styleNames.Should().HaveCount(85);

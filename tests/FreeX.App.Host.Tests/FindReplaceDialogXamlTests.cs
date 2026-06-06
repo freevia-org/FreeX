@@ -457,11 +457,7 @@ public sealed class FindReplaceDialogXamlTests
 
     private static T GetPrivateControl<T>(FindReplaceDialog dialog, string fieldName)
         where T : class
-    {
-        var field = typeof(FindReplaceDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-        field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
-    }
+        => DialogSourceTestSupport.GetPrivateField<T>(dialog, fieldName);
 
     private static void AssertNamedElement(
         XDocument document,
