@@ -1,4 +1,3 @@
-﻿using System.IO;
 using System.Windows.Controls;
 using FreeX.App.Host;
 using FluentAssertions;
@@ -11,7 +10,7 @@ public sealed partial class OptionsDialogSourceTests
     public void OptionsDialog_ExposesPersistedViewOptions()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         xaml.Should().Contain("<ListBoxItem Content=\"View\"/>");
         xaml.Should().Contain("x:Name=\"PanelView\"");
@@ -26,8 +25,8 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_ShowFormulaBarToggleControlsExpandedState()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         xaml.Should().Contain("Checked=\"ShowFormulaBar_Changed\"");
         xaml.Should().Contain("Unchecked=\"ShowFormulaBar_Changed\"");
@@ -76,8 +75,8 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_AppliesWorksheetViewOptionsThroughUndoableCommand()
     {
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
-        var workbookUiSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var workbookUiSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
 
         backstageSource.Should().Contain("ApplyOptionsWorksheetViewSettings()");
         backstageSource.Should().Contain("new SetWorksheetViewOptionsCommand(");
