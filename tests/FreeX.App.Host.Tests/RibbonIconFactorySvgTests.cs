@@ -218,7 +218,7 @@ public sealed class RibbonIconFactorySvgTests
     public void HomeRibbonLargeCommandArtwork_UsesDistinctSvgFiles()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
+            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -272,7 +272,7 @@ public sealed class RibbonIconFactorySvgTests
     public void SizeSpecificSvgCommandIcons_DoNotUseDocumentPlaceholderArtwork()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
+            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -302,7 +302,7 @@ public sealed class RibbonIconFactorySvgTests
     public void CommandIconAssets_OnlyUseSizeVariantsForPixelCrispAlignmentLines()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
+            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
             "Resources",
             "CommandIconsSvg");
 
@@ -347,7 +347,7 @@ public sealed class RibbonIconFactorySvgTests
     public void CommandIconAssets_DoNotContainEmptyShellSvgs()
     {
         var iconDirectory = Path.Combine(
-            Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("FreeX.App.Host.csproj"))!,
+            DialogSourceTestSupport.FindHostSourceDirectory("FreeX.App.Host.csproj"),
             "Resources",
             "CommandIconsSvg");
 

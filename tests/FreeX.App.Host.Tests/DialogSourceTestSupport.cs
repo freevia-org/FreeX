@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -25,6 +26,10 @@ internal static class DialogSourceTestSupport
     public static string FindHostSourceFile(params string[] relativeParts) =>
         WorkspaceFileLocator.Find(
             new[] { "src", "FreeX.App.Host" }.Concat(relativeParts).ToArray());
+
+    public static string FindHostSourceDirectory(params string[] relativeParts) =>
+        Path.GetDirectoryName(FindHostSourceFile(relativeParts))
+        ?? throw new DirectoryNotFoundException("Could not locate FreeX.App.Host source directory.");
 
     public static XDocument LoadHostXamlDocument(params string[] relativeParts) =>
         XDocument.Load(FindHostSourceFile(relativeParts));

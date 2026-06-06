@@ -307,8 +307,7 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> ReadDialogTypeNames()
     {
-        var hostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))
-            ?? throw new DirectoryNotFoundException("Could not locate FreeX.App.Host.");
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var dialogNames = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var sourceFile in Directory.EnumerateFiles(hostDirectory, "*.cs", SearchOption.TopDirectoryOnly))

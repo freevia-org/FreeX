@@ -83,7 +83,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void DialogEntryPointHandlers_UseOwnedActivatedDialogs()
     {
-        var appHostDirectory = Path.GetDirectoryName(DialogSourceTestSupport.FindHostSourceFile("MainWindow.xaml"))!;
+        var appHostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var source = DialogSourceTestSupport.ReadHostSources(
             Directory.GetFiles(appHostDirectory, "MainWindow*.cs")
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
