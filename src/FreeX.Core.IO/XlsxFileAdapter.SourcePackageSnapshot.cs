@@ -5707,25 +5707,25 @@ public sealed partial class XlsxFileAdapter
                     break;
                 case TextValue text:
                     cell.SetAttributeValue("t", "inlineStr");
-                    cell.Add(new XElement(
+                    AddCellValueElement(cell, worksheetNs, new XElement(
                         worksheetNs + "is",
                         CreateInlineTextElement(worksheetNs, text.Value)));
                     break;
                 case BoolValue boolean:
                     cell.SetAttributeValue("t", "b");
-                    cell.Add(new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
                     break;
                 case ErrorValue error:
                     cell.SetAttributeValue("t", "e");
-                    cell.Add(new XElement(worksheetNs + "v", error.Code));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", error.Code));
                     break;
                 case DateTimeValue dateTime:
                     cell.Attribute("t")?.Remove();
-                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(dateTime.Value)));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", FormatNumber(dateTime.Value)));
                     break;
                 case NumberValue number:
                     cell.Attribute("t")?.Remove();
-                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(number.Value)));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", FormatNumber(number.Value)));
                     break;
             }
         }
@@ -5770,25 +5770,34 @@ public sealed partial class XlsxFileAdapter
                     break;
                 case TextValue text:
                     cell.SetAttributeValue("t", "str");
-                    cell.Add(new XElement(worksheetNs + "v", text.Value));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", text.Value));
                     break;
                 case BoolValue boolean:
                     cell.SetAttributeValue("t", "b");
-                    cell.Add(new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", boolean.Value ? "1" : "0"));
                     break;
                 case ErrorValue error:
                     cell.SetAttributeValue("t", "e");
-                    cell.Add(new XElement(worksheetNs + "v", error.Code));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", error.Code));
                     break;
                 case DateTimeValue dateTime:
                     cell.Attribute("t")?.Remove();
-                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(dateTime.Value)));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", FormatNumber(dateTime.Value)));
                     break;
                 case NumberValue number:
                     cell.Attribute("t")?.Remove();
-                    cell.Add(new XElement(worksheetNs + "v", FormatNumber(number.Value)));
+                    AddCellValueElement(cell, worksheetNs, new XElement(worksheetNs + "v", FormatNumber(number.Value)));
                     break;
             }
+        }
+
+        private static void AddCellValueElement(XElement cell, XNamespace worksheetNs, XElement valueElement)
+        {
+            var extensionList = cell.Element(worksheetNs + "extLst");
+            if (extensionList is null)
+                cell.Add(valueElement);
+            else
+                extensionList.AddBeforeSelf(valueElement);
         }
 
         private static bool InsertLiteralCell(
