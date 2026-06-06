@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Reflection;
 using FreeX.App.UI;
 using FreeX.Core.Model;
@@ -13,7 +12,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_UsesMetricDictionariesForExplicitBorderCells()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var borderPass = source[
             source.IndexOf("// Pass 2: explicit cell borders", StringComparison.Ordinal)..
             source.IndexOf("// Pass 2b: comment/note indicators", StringComparison.Ordinal)];
@@ -27,7 +26,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_BuildsResizeLookupsWithoutLinqPipelines()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var setup = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
@@ -47,7 +46,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_LazilyAllocatesStyleLookupForDefaultStyledViewports()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var buildStyleLookup = source[
             source.IndexOf("private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup", StringComparison.Ordinal)..
             source.IndexOf("private RenderCellLookupCache GetRenderCellLookups", StringComparison.Ordinal)];
@@ -87,7 +86,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ReusesPixelsPerDipAcrossFormattedTextCalls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
@@ -100,7 +99,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ClipsTextOnlyWhenLaidOutBoundsOverflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var shouldClipText = source[
             source.IndexOf("private static bool ShouldClipText(", StringComparison.Ordinal)..
             source.IndexOf("private static Pen UnderlinePenForTextBrush", StringComparison.Ordinal)];
@@ -114,7 +113,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_SkipsOffscreenCellsBeforeTextLayout()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)];
@@ -142,7 +141,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderHeaders_ReusesPixelsPerDipAcrossFormattedTextCalls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
         var renderHeaders = source[
             source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("internal static string FormatColumnHeader", StringComparison.Ordinal)];
@@ -154,7 +153,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderHeaders_CachesA1ColumnLabelsAcrossRenderPasses()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
         var formatColumnHeader = source[
             source.IndexOf("internal static string FormatColumnHeader", StringComparison.Ordinal)..];
 
@@ -166,7 +165,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderHeaders_CachesRowLabelsAcrossRenderPasses()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
         var drawRowHeader = source[
             source.IndexOf("private void DrawRowHeader", StringComparison.Ordinal)..
             source.IndexOf("private static IReadOnlyList<HeaderSelectionInterval>", StringComparison.Ordinal)];
@@ -191,7 +190,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderHeaders_CachesHeaderTextDrawingAcrossSelectionRepaints()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
         var drawColumnHeader = source[
             source.IndexOf("private void DrawColumnHeader", StringComparison.Ordinal)..
             source.IndexOf("private void DrawRowHeader", StringComparison.Ordinal)];
@@ -215,7 +214,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderHeaders_WalksSelectionIntervalsInsteadOfScanningRangesPerHeader()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
         var renderSelectedHeaders = source[
             source.IndexOf("private void RenderSelectedHeaders(", StringComparison.Ordinal)..
             source.IndexOf("private void DrawColumnHeader(", StringComparison.Ordinal)];
@@ -247,7 +246,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderHeaders_CachesUnselectedHeaderLayerAcrossSelectionRepaints()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
         var renderHeaders = source[
             source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void RenderHeaderBaseLayer(", StringComparison.Ordinal)];
@@ -296,7 +295,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void CalculateRowHeaderWidth_UsesLastVisibleRowWithoutMetricScan()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
         var calculateRowHeaderWidth = source[
             source.IndexOf("public static double CalculateRowHeaderWidth", StringComparison.Ordinal)..
             source.IndexOf("private const double ResizeHitZone", StringComparison.Ordinal)];
@@ -319,7 +318,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderSparklines_AvoidsEmptyRenderAllocations()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Overlays.Sparklines.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.Sparklines.cs");
         var renderSparklines = source[
             source.IndexOf("private void RenderSparklines(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private static SolidColorBrush FrozenBrush", StringComparison.Ordinal)];
@@ -361,8 +360,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void OnRender_SkipsHeavyVisualLayersDuringLiveResize()
     {
-        var properties = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var properties = AppUiSourceTestSupport.ReadAppUiSources("GridView.Properties.cs");
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderDispatch.cs");
         var onRender = source[
             source.IndexOf("protected override void OnRender", StringComparison.Ordinal)..];
 
@@ -386,7 +385,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void LiveResizeContinuation_PaintsExpandedGridWithoutViewportRefresh()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var continuation = rendering[
             rendering.IndexOf("private void RenderLiveResizeContinuation", StringComparison.Ordinal)..
             rendering.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)];
@@ -405,7 +404,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void LiveResizeContinuation_ReusesPixelsPerDipForSyntheticHeaders()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var continuation = rendering[
             rendering.IndexOf("private void RenderLiveResizeContinuation", StringComparison.Ordinal)..
             rendering.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)];
@@ -422,7 +421,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCaches_AreClassLevelFieldsNotLocalAllocations()
     {
-        var gridViewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
+        var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
 
         gridViewSource.Should().Contain("private readonly Dictionary<CellColor, SolidColorBrush> _brushCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<CellBorder, Pen> _borderPenCache = new();");
@@ -442,8 +441,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ReusesCommentIndicatorGeometriesAcrossRenderPasses()
     {
-        var gridViewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var drawCommentIndicator = rendering[
             rendering.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)..
             rendering.IndexOf("private static bool ShouldClipText", StringComparison.Ordinal)];
@@ -463,9 +462,9 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void DefaultTextLayouts_AreCachedAcrossRenderPasses()
     {
-        var cacheSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.TextLayoutCache.cs"));
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
-        var headers = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var cacheSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.TextLayoutCache.cs");
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+        var headers = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.Headers.cs");
 
         cacheSource.Should().Contain("private FormattedText GetDefaultFormattedText");
         cacheSource.Should().Contain("private FormattedText GetDefaultWrappedFormattedText");
@@ -487,8 +486,8 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void ShrinkToFitTextWidthMeasurements_AreCachedAcrossRenderPasses()
     {
-        var cacheSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.TextLayoutCache.cs"));
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var cacheSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.TextLayoutCache.cs");
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
 
         cacheSource.Should().Contain("private double MeasureCellTextWidth");
         cacheSource.Should().Contain("private double ResolveCachedShrinkFontSize");
@@ -505,7 +504,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ClearsCachesAtStartOfEachPass()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
@@ -523,9 +522,9 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_CachesStableViewportLookupsAcrossRepaints()
     {
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
-        var cacheSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.RenderLookupCache.cs"));
-        var propertiesSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+        var cacheSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.RenderLookupCache.cs");
+        var propertiesSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.Properties.cs");
         var renderCells = rendering[
             rendering.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
@@ -574,7 +573,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_LazilyBuildsOverflowOccupancyLookup()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var textPass = source[
             source.IndexOf("// Pass 3: text", StringComparison.Ordinal)..
             source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)];
@@ -598,7 +597,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_BatchesDefaultBackgroundAndGridLines()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("// Pass 2: explicit cell borders", StringComparison.Ordinal)];
@@ -640,7 +639,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_SkipsDefaultLookingStyleBordersBeforeMetricLookup()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var borderPass = source[
             source.IndexOf("// Pass 2: explicit cell borders", StringComparison.Ordinal)..
             source.IndexOf("// Pass 2b: comment/note indicators", StringComparison.Ordinal)];
@@ -663,7 +662,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ReusesCellColorBrushesWithinRenderPass()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
@@ -676,7 +675,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ReusesBorderPensWithinRenderPass()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
@@ -687,9 +686,9 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ReusesFillPatternPensWithinRenderPass()
     {
-        var gridViewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.cs"));
-        var rendering = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
-        var cellStyles = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.CellStyles.cs"));
+        var gridViewSource = AppUiSourceTestSupport.ReadAppUiSources("GridView.cs");
+        var rendering = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
+        var cellStyles = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.CellStyles.cs");
         var renderCells = rendering[
             rendering.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("// Pass 1: non-default backgrounds and merged-cell surfaces", StringComparison.Ordinal)];
@@ -709,7 +708,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ReusesTypefacesWithinRenderPass()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
@@ -721,7 +720,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_DelaysCustomTextResourcesUntilCustomLayoutIsNeeded()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)];
@@ -738,7 +737,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void RenderCells_ReusesDoubleUnderlinePensWithinRenderPass()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");
         var renderCells = source[
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
@@ -753,7 +752,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void ConditionalIconGlyphRenderer_ReusesFrozenBrushesAndPens()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "ConditionalIconGlyphRenderer.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ConditionalIconGlyphRenderer.cs");
         var drawMethod = source[
             source.IndexOf("public static void Draw", StringComparison.Ordinal)..
             source.IndexOf("private static ConditionalIconAppearance ResolveAppearance", StringComparison.Ordinal)];
@@ -779,7 +778,7 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void ConditionalIconLayoutPlanner_CachesStyleTraitClassification()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "ConditionalIconLayoutPlanner.cs"));
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ConditionalIconLayoutPlanner.cs");
         var resolveGlyphKind = source[
             source.IndexOf("public static ConditionalIconGlyphKind ResolveGlyphKind", StringComparison.Ordinal)..
             source.IndexOf("private static ConditionalIconStyleTraits ResolveStyleTraits", StringComparison.Ordinal)];
