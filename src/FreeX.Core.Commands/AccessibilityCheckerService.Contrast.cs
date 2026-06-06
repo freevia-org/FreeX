@@ -989,6 +989,9 @@ public static partial class AccessibilityCheckerService
             case "TANH":
                 kind = ConditionalFormulaScalarFunctionKind.Tanh;
                 return true;
+            case "ATANH":
+                kind = ConditionalFormulaScalarFunctionKind.Atanh;
+                return true;
             case "ASIN":
                 kind = ConditionalFormulaScalarFunctionKind.Asin;
                 return true;
@@ -1101,6 +1104,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Acosh or
             ConditionalFormulaScalarFunctionKind.Cosh or
             ConditionalFormulaScalarFunctionKind.Tanh or
+            ConditionalFormulaScalarFunctionKind.Atanh or
             ConditionalFormulaScalarFunctionKind.Asin or
             ConditionalFormulaScalarFunctionKind.Acos or
             ConditionalFormulaScalarFunctionKind.Atan or
@@ -1686,6 +1690,7 @@ public static partial class AccessibilityCheckerService
         Acosh,
         Cosh,
         Tanh,
+        Atanh,
         Asin,
         Acos,
         Atan,
@@ -2222,6 +2227,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Acosh:
                 case ConditionalFormulaScalarFunctionKind.Cosh:
                 case ConditionalFormulaScalarFunctionKind.Tanh:
+                case ConditionalFormulaScalarFunctionKind.Atanh:
                 case ConditionalFormulaScalarFunctionKind.Asin:
                 case ConditionalFormulaScalarFunctionKind.Acos:
                 case ConditionalFormulaScalarFunctionKind.Atan:
@@ -2537,6 +2543,12 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Tanh:
                     result = Math.Tanh(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Atanh:
+                    if (first <= -1d || first >= 1d)
+                        return false;
+
+                    result = Math.Atanh(first);
                     break;
                 case ConditionalFormulaScalarFunctionKind.Asin:
                     if (first < -1d || first > 1d)
