@@ -1,4 +1,3 @@
-using System.IO;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -39,8 +38,8 @@ public sealed class TableStyleGalleryPlannerTests
     [Fact]
     public void MainWindow_PopulatesFormatAsTableMenuFromGalleryPlanner()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
 
         xaml.Should().Contain("x:Name=\"FormatTableGalleryMenu\"");
         xaml.Should().NotContain("Header=\"Light 1\"  Tag=\"0\"");
