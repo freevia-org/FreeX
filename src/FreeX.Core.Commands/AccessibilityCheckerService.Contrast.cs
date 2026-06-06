@@ -711,6 +711,7 @@ public static partial class AccessibilityCheckerService
     private const int MaxFormulaGcdArgumentCount = 255;
     private const double MaxFormulaGcdInputExclusive = 9_223_372_036_854_775_808d;
     private const int MaxFormulaTextSliceLength = 32_767;
+    private const double FormulaSecZeroCosineTolerance = 1E-15d;
 
     private static bool IsFormulaPredicateOperand(FormulaNode ast) =>
         ast is (BooleanNode
@@ -1038,6 +1039,9 @@ public static partial class AccessibilityCheckerService
             case "COS":
                 kind = ConditionalFormulaScalarFunctionKind.Cos;
                 return true;
+            case "SEC":
+                kind = ConditionalFormulaScalarFunctionKind.Sec;
+                return true;
             case "COT":
                 kind = ConditionalFormulaScalarFunctionKind.Cot;
                 return true;
@@ -1148,6 +1152,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Acot or
             ConditionalFormulaScalarFunctionKind.Atan or
             ConditionalFormulaScalarFunctionKind.Cos or
+            ConditionalFormulaScalarFunctionKind.Sec or
             ConditionalFormulaScalarFunctionKind.Cot or
             ConditionalFormulaScalarFunctionKind.Tan or
             ConditionalFormulaScalarFunctionKind.Value or
@@ -1749,6 +1754,7 @@ public static partial class AccessibilityCheckerService
         Atan,
         Atan2,
         Cos,
+        Sec,
         Cot,
         Tan,
         Pi,
@@ -2296,6 +2302,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Atan:
                 case ConditionalFormulaScalarFunctionKind.Atan2:
                 case ConditionalFormulaScalarFunctionKind.Cos:
+                case ConditionalFormulaScalarFunctionKind.Sec:
                 case ConditionalFormulaScalarFunctionKind.Tan:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
@@ -2714,6 +2721,13 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cos:
                     result = Math.Cos(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Sec:
+                    var cosine = Math.Cos(first);
+                    if (Math.Abs(cosine) <= FormulaSecZeroCosineTolerance || !double.IsFinite(cosine))
+                        return false;
+
+                    result = 1d / cosine;
                     break;
                 case ConditionalFormulaScalarFunctionKind.Cot:
                     var tangent = Math.Tan(first);

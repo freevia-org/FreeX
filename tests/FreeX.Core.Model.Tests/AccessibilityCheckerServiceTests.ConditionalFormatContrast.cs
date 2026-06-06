@@ -1595,6 +1595,44 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSecScalarFunctionComparisons()
+    {
+        AssertFormulaArithmeticContrastLocations("SEC($A1/100)>1.5", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("SEC(RADIANS($A1))<0", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("ABS(SEC(1)-1.8508157176809255)<0.000000000001", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("ABS(SEC(0)-1)<0.000000000001", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSecScalarFunctionWrappersAndPredicates()
+    {
+        AssertFormulaArithmeticContrastLocations("IF(SEC($A1/100)>1.5,TRUE,FALSE)", "B2", "B4");
+        AssertFormulaArithmeticContrastLocations("AND(SEC($A1/100)>1.5,$C1=\"Open\")", "B4");
+        AssertFormulaArithmeticContrastLocations("ISNUMBER(SEC($A1/100))", "B1", "B2", "B3", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatSecScalarFunctionAggregateArguments()
+    {
+        AssertFormulaAggregateContrastLocations("SUM(SEC($A1/100),1)>2.5", "B2", "B4");
+        AssertFormulaAggregateContrastLocations("AVERAGE(SEC($A1/100),$A1)>50", "B2", "B4");
+    }
+
+    [Fact]
+    public void FindIssues_DoesNotMatchFormulaConditionalFormatSecScalarFunctionUnsupportedOperands()
+    {
+        AssertFormulaArithmeticContrastLocations("SEC()>0");
+        AssertFormulaArithmeticContrastLocations("SEC($A1,1)>0");
+        AssertFormulaArithmeticContrastLocations("SEC(\"1\")>0");
+        AssertFormulaArithmeticContrastLocations("SEC($A1&\"x\")>0");
+        AssertFormulaArithmeticContrastLocations("SEC(KURT($A1))>0");
+        AssertFormulaArithmeticContrastLocations("SEC(PI()/2)>0");
+        AssertFormulaArithmeticContrastLocations("SEC(RADIANS(90))>0");
+        AssertFormulaArithmeticContrastLocations("SEC(1E308*1E308)>0");
+        AssertFormulaArithmeticContrastLocations("SEC(EXP(1000))>0");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatScalarFunctionWrappers()
     {
         AssertFormulaArithmeticContrastLocations("IF(ABS($A1-100)>=25,TRUE,FALSE)", "B1", "B3", "B4");
