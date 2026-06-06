@@ -1228,6 +1228,9 @@ public static partial class AccessibilityCheckerService
             case "DAYS360":
                 kind = ConditionalFormulaScalarFunctionKind.Days360;
                 return true;
+            case "YEARFRAC":
+                kind = ConditionalFormulaScalarFunctionKind.Yearfrac;
+                return true;
             case "NA":
                 kind = ConditionalFormulaScalarFunctionKind.Na;
                 return true;
@@ -1359,7 +1362,8 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.EDate or
             ConditionalFormulaScalarFunctionKind.EOMonth or
             ConditionalFormulaScalarFunctionKind.Days => argumentCount == 2,
-            ConditionalFormulaScalarFunctionKind.Days360 => argumentCount is 2 or 3,
+            ConditionalFormulaScalarFunctionKind.Days360 or
+            ConditionalFormulaScalarFunctionKind.Yearfrac => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
@@ -2026,6 +2030,7 @@ public static partial class AccessibilityCheckerService
         Days,
         Datedif,
         Days360,
+        Yearfrac,
         Na,
         Row,
         Column,
@@ -2670,6 +2675,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Days:
                 case ConditionalFormulaScalarFunctionKind.Datedif:
                 case ConditionalFormulaScalarFunctionKind.Days360:
+                case ConditionalFormulaScalarFunctionKind.Yearfrac:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Na:
                     value = ErrorValue.NA;
@@ -3515,6 +3521,12 @@ public static partial class AccessibilityCheckerService
 
                     value = new NumberValue(days360);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.Yearfrac:
+                    if (!TryEvaluateFormulaYearfrac(function, rowOffset, colOffset, out var yearfrac))
+                        return false;
+
+                    value = new NumberValue(yearfrac);
+                    return true;
                 default:
                     return false;
             }
@@ -3662,6 +3674,97 @@ public static partial class AccessibilityCheckerService
                 30 * (end.Month - start.Month) +
                 (endDay - startDay);
             return true;
+        }
+
+        private bool TryEvaluateFormulaYearfrac(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out double result)
+        {
+            result = 0;
+            if (!TryResolveFormulaFunctionDate(function.Arguments[0], rowOffset, colOffset, out var startDate) ||
+                !TryResolveFormulaFunctionDate(function.Arguments[1], rowOffset, colOffset, out var endDate))
+            {
+                return false;
+            }
+
+            var basis = 0;
+            if (function.Arguments.Count == 3)
+            {
+                if (!TryResolveFormulaFunctionNumber(function.Arguments[2], rowOffset, colOffset, out var rawBasis) ||
+                    !double.IsFinite(rawBasis))
+                {
+                    return false;
+                }
+
+                basis = (int)rawBasis;
+                if (basis is < 0 or > 4)
+                    return false;
+            }
+
+            var start = startDate.Date;
+            var end = endDate.Date;
+            var totalDays = FormulaDateToExcelSerial(end) - FormulaDateToExcelSerial(start);
+            result = basis switch
+            {
+                1 => totalDays / FormulaActualActualYearfracDenominator(start, end),
+                2 => totalDays / 360.0,
+                3 => totalDays / 365.0,
+                4 => FormulaDays30E360(start, end) / 360.0,
+                _ => FormulaDays30US360(start, end) / 360.0
+            };
+
+            return double.IsFinite(result);
+        }
+
+        private static double FormulaActualActualYearfracDenominator(DateTime start, DateTime end)
+        {
+            if (start > end)
+                (start, end) = (end, start);
+
+            if (start.Year == end.Year)
+                return DateTime.IsLeapYear(start.Year) ? 366.0 : 365.0;
+
+            var total = 0.0;
+            for (var year = start.Year; year <= end.Year; year++)
+                total += DateTime.IsLeapYear(year) ? 366.0 : 365.0;
+
+            return total / (end.Year - start.Year + 1);
+        }
+
+        private static double FormulaDays30US360(DateTime start, DateTime end)
+        {
+            var startDay = start.Day;
+            var endDay = end.Day;
+
+            if (IsFormulaYearfracNasdLastDayOfFebruary(start))
+                startDay = 30;
+            if (IsFormulaYearfracNasdLastDayOfFebruary(end) && startDay == 30)
+                endDay = 30;
+            if (startDay == 31)
+                startDay = 30;
+            if (endDay == 31 && startDay == 30)
+                endDay = 30;
+
+            return 360.0 * (end.Year - start.Year) +
+                30.0 * (end.Month - start.Month) +
+                (endDay - startDay);
+        }
+
+        private static bool IsFormulaYearfracNasdLastDayOfFebruary(DateTime date) =>
+            date.Year != 1900 &&
+            date.Month == 2 &&
+            date.Day == DateTime.DaysInMonth(date.Year, date.Month);
+
+        private static double FormulaDays30E360(DateTime start, DateTime end)
+        {
+            var startDay = start.Day == 31 ? 30 : start.Day;
+            var endDay = end.Day == 31 ? 30 : end.Day;
+
+            return 360.0 * (end.Year - start.Year) +
+                30.0 * (end.Month - start.Month) +
+                (endDay - startDay);
         }
 
         private bool TryEvaluateFormulaEDate(
