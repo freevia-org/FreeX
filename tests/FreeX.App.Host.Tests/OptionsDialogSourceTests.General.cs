@@ -56,7 +56,7 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_UsesProofingEditorForCustomDictionaryWhenSavingOptions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         source.Should().Contain("PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage)");
         source.Should().Contain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
@@ -125,7 +125,7 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_DefaultFormatUsesNativeFreexWorkbookExtension()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         UiText.Get("Options_DefaultFormatJson").Should().Be("FreeX Workbook (.fxl)");
         source.Should().Contain("FreeXOptions.NormalizeDefaultFormat(_opts.DefaultFormat)");
@@ -137,7 +137,7 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialogOpenedFromKeyboard_FocusesCategoryList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         source.Should().Contain("Loaded += (_, _) =>");
         source.Should().Contain("FocusInitialKeyboardTarget();");
@@ -166,9 +166,9 @@ public sealed partial class OptionsDialogSourceTests
     public void OptionsDialog_ExposesPersistedAppLanguageSwitcher()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
-        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
-        var appSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var appSource = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
 
         xaml.Should().Contain("x:Name=\"PanelLanguage\"");
         xaml.Should().Contain("Choose display language");
@@ -194,7 +194,7 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialogInvalidGeneralInputs_ShowOwnedWarningsAndRefocusEditors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         source.Should().Contain("OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize)");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidDefaultFontSizeMessage\"), OptDefaultFontSize);");
@@ -214,7 +214,7 @@ public sealed partial class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_SurfacePersistenceFailuresInsteadOfClosingSilently()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         source.Should().Contain("if (!opts.Save())");
         source.Should().Contain("DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);");

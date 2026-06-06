@@ -614,6 +614,7 @@ public partial class GridView : FrameworkElement
         return !string.IsNullOrEmpty(displayText) &&
             style?.WrapText != true &&
             style?.ShrinkToFit != true &&
+            !HasCellTextOrientation(style?.TextRotation ?? 0) &&
             rawValue is not NumberValue and not DateTimeValue &&
             !merge.HasValue &&
             (hAlign == CellHAlign.Left || hAlign == CellHAlign.General);
