@@ -1149,6 +1149,9 @@ public static partial class AccessibilityCheckerService
             case "VALUE":
                 kind = ConditionalFormulaScalarFunctionKind.Value;
                 return true;
+            case "NUMBERVALUE":
+                kind = ConditionalFormulaScalarFunctionKind.NumberValue;
+                return true;
             case "LEN":
                 kind = ConditionalFormulaScalarFunctionKind.Len;
                 return true;
@@ -1369,6 +1372,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Bin2Dec or
             ConditionalFormulaScalarFunctionKind.Hex2Dec or
             ConditionalFormulaScalarFunctionKind.Oct2Dec => argumentCount == 1,
+            ConditionalFormulaScalarFunctionKind.NumberValue => argumentCount is >= 1 and <= 3,
             ConditionalFormulaScalarFunctionKind.Log or
             ConditionalFormulaScalarFunctionKind.Roman or
             ConditionalFormulaScalarFunctionKind.IsoCeiling or
@@ -2051,6 +2055,7 @@ public static partial class AccessibilityCheckerService
         Arabic,
         Roman,
         Value,
+        NumberValue,
         Len,
         Upper,
         Lower,
@@ -2678,6 +2683,8 @@ public static partial class AccessibilityCheckerService
                     return TryEvaluateFormulaRomanFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Value:
                     return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
+                case ConditionalFormulaScalarFunctionKind.NumberValue:
+                    return TryEvaluateFormulaNumberValueFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Len:
                     if (!TryResolveFormulaFunctionText(function.Arguments[0], rowOffset, colOffset, out var lenText))
                     {
@@ -3816,6 +3823,170 @@ public static partial class AccessibilityCheckerService
             }
 
             return true;
+        }
+
+        private bool TryEvaluateFormulaNumberValueFunction(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            value = ErrorValue.Value;
+            if (!TryResolveFormulaNumberValueArgument(
+                    function.Arguments[0],
+                    rowOffset,
+                    colOffset,
+                    out var text,
+                    out var argumentError))
+            {
+                return false;
+            }
+
+            if (argumentError is not null)
+            {
+                value = argumentError;
+                return true;
+            }
+
+            var decimalSeparator = ".";
+            if (function.Arguments.Count > 1 &&
+                !TryResolveFormulaNumberValueArgument(
+                    function.Arguments[1],
+                    rowOffset,
+                    colOffset,
+                    out decimalSeparator,
+                    out argumentError))
+            {
+                return false;
+            }
+
+            if (argumentError is not null)
+            {
+                value = argumentError;
+                return true;
+            }
+
+            var groupSeparator = ",";
+            if (function.Arguments.Count > 2 &&
+                !TryResolveFormulaNumberValueArgument(
+                    function.Arguments[2],
+                    rowOffset,
+                    colOffset,
+                    out groupSeparator,
+                    out argumentError))
+            {
+                return false;
+            }
+
+            if (argumentError is not null)
+            {
+                value = argumentError;
+                return true;
+            }
+
+            if (!TryParseFormulaNumberValueText(text, decimalSeparator, groupSeparator, out var number))
+            {
+                value = ErrorValue.Value;
+                return true;
+            }
+
+            value = new NumberValue(number);
+            return true;
+        }
+
+        private bool TryResolveFormulaNumberValueArgument(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out string text,
+            out ErrorValue? error)
+        {
+            text = string.Empty;
+            error = null;
+            if (!TryResolveFormulaOperand(operand, rowOffset, colOffset, out var value))
+                return false;
+
+            if (value is ErrorValue valueError)
+            {
+                error = valueError;
+                return true;
+            }
+
+            text = value switch
+            {
+                TextValue textValue => textValue.Value,
+                NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                DateTimeValue dateTime => dateTime.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+                BlankValue => string.Empty,
+                _ => value.ToString() ?? string.Empty
+            };
+            return true;
+        }
+
+        private static bool TryParseFormulaNumberValueText(
+            string text,
+            string decimalSeparator,
+            string groupSeparator,
+            out double number)
+        {
+            number = 0;
+            var candidate = text.Trim();
+            if (decimalSeparator.Length == 0 || groupSeparator.Length == 0)
+                return false;
+
+            decimalSeparator = decimalSeparator[..1];
+            groupSeparator = groupSeparator[..1];
+            if (decimalSeparator == groupSeparator)
+                return false;
+
+            candidate = candidate
+                .Replace(" ", string.Empty)
+                .Replace("\t", string.Empty)
+                .Replace("\n", string.Empty)
+                .Replace("\r", string.Empty);
+
+            var accountingNegative = candidate.StartsWith('(') && candidate.EndsWith(')');
+            if (accountingNegative)
+                candidate = candidate[1..^1];
+
+            var percentCount = 0;
+            while (candidate.EndsWith('%'))
+            {
+                percentCount++;
+                candidate = candidate[..^1];
+            }
+
+            var decimalIndex = candidate.IndexOf(decimalSeparator, StringComparison.Ordinal);
+            if (decimalIndex >= 0 &&
+                candidate.IndexOf(groupSeparator, decimalIndex + decimalSeparator.Length, StringComparison.Ordinal) >= 0)
+            {
+                return false;
+            }
+
+            candidate = candidate.Replace(groupSeparator, string.Empty, StringComparison.Ordinal);
+            if (decimalSeparator != ".")
+                candidate = candidate.Replace(decimalSeparator, ".", StringComparison.Ordinal);
+
+            if (candidate.Length == 0)
+                return true;
+
+            if (!double.TryParse(
+                    candidate,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out number))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < percentCount; i++)
+                number /= 100d;
+
+            if (accountingNegative)
+                number = -number;
+
+            return double.IsFinite(number);
         }
 
         private bool TryEvaluateFormulaDateScalarFunction(
