@@ -914,6 +914,9 @@ public static partial class AccessibilityCheckerService
             case "EXP":
                 kind = ConditionalFormulaScalarFunctionKind.Exp;
                 return true;
+            case "LN":
+                kind = ConditionalFormulaScalarFunctionKind.Ln;
+                return true;
             case "VALUE":
                 kind = ConditionalFormulaScalarFunctionKind.Value;
                 return true;
@@ -990,6 +993,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Sqrt or
             ConditionalFormulaScalarFunctionKind.Sign or
             ConditionalFormulaScalarFunctionKind.Exp or
+            ConditionalFormulaScalarFunctionKind.Ln or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -1537,6 +1541,7 @@ public static partial class AccessibilityCheckerService
         Sign,
         Power,
         Exp,
+        Ln,
         Value,
         Len,
         Upper,
@@ -2043,6 +2048,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Sign:
                 case ConditionalFormulaScalarFunctionKind.Power:
                 case ConditionalFormulaScalarFunctionKind.Exp:
+                case ConditionalFormulaScalarFunctionKind.Ln:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Value:
                     return TryEvaluateFormulaValueFunction(function, rowOffset, colOffset, out value);
@@ -2199,6 +2205,12 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Exp:
                     result = Math.Exp(first);
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Ln:
+                    if (first <= 0)
+                        return false;
+
+                    result = Math.Log(first);
                     break;
                 default:
                     return false;
