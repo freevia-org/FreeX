@@ -1210,6 +1210,15 @@ public static partial class AccessibilityCheckerService
             case "ISOWEEKNUM":
                 kind = ConditionalFormulaScalarFunctionKind.IsoWeeknum;
                 return true;
+            case "EDATE":
+                kind = ConditionalFormulaScalarFunctionKind.EDate;
+                return true;
+            case "EOMONTH":
+                kind = ConditionalFormulaScalarFunctionKind.EOMonth;
+                return true;
+            case "DAYS":
+                kind = ConditionalFormulaScalarFunctionKind.Days;
+                return true;
             case "NA":
                 kind = ConditionalFormulaScalarFunctionKind.Na;
                 return true;
@@ -1337,7 +1346,10 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.BitOr or
             ConditionalFormulaScalarFunctionKind.BitXor or
             ConditionalFormulaScalarFunctionKind.BitLShift or
-            ConditionalFormulaScalarFunctionKind.BitRShift => argumentCount == 2,
+            ConditionalFormulaScalarFunctionKind.BitRShift or
+            ConditionalFormulaScalarFunctionKind.EDate or
+            ConditionalFormulaScalarFunctionKind.EOMonth or
+            ConditionalFormulaScalarFunctionKind.Days => argumentCount == 2,
             ConditionalFormulaScalarFunctionKind.Find or
             ConditionalFormulaScalarFunctionKind.Search => argumentCount is 2 or 3,
             ConditionalFormulaScalarFunctionKind.Mid or
@@ -1996,6 +2008,9 @@ public static partial class AccessibilityCheckerService
         Weekday,
         Weeknum,
         IsoWeeknum,
+        EDate,
+        EOMonth,
+        Days,
         Na,
         Row,
         Column,
@@ -2634,6 +2649,9 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Weekday:
                 case ConditionalFormulaScalarFunctionKind.Weeknum:
                 case ConditionalFormulaScalarFunctionKind.IsoWeeknum:
+                case ConditionalFormulaScalarFunctionKind.EDate:
+                case ConditionalFormulaScalarFunctionKind.EOMonth:
+                case ConditionalFormulaScalarFunctionKind.Days:
                     return TryEvaluateFormulaDateScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Na:
                     value = ErrorValue.NA;
@@ -3435,8 +3453,76 @@ public static partial class AccessibilityCheckerService
 
                     value = new NumberValue(isoWeeknum);
                     return true;
+                case ConditionalFormulaScalarFunctionKind.EDate:
+                    if (!TryEvaluateFormulaEDate(function, rowOffset, colOffset, out var eDateSerial))
+                        return false;
+
+                    value = new NumberValue(eDateSerial);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.EOMonth:
+                    if (!TryEvaluateFormulaEOMonth(function, rowOffset, colOffset, out var eoMonthSerial))
+                        return false;
+
+                    value = new NumberValue(eoMonthSerial);
+                    return true;
+                case ConditionalFormulaScalarFunctionKind.Days:
+                    if (!TryResolveFormulaFunctionDate(function.Arguments[0], rowOffset, colOffset, out var endDate) ||
+                        !TryResolveFormulaFunctionDate(function.Arguments[1], rowOffset, colOffset, out var startDate))
+                    {
+                        return false;
+                    }
+
+                    value = new NumberValue(FormulaDateToExcelSerial(endDate) - FormulaDateToExcelSerial(startDate));
+                    return true;
                 default:
                     return false;
+            }
+        }
+
+        private bool TryEvaluateFormulaEDate(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out double serial)
+        {
+            serial = 0;
+            if (!TryResolveFormulaFunctionDate(function.Arguments[0], rowOffset, colOffset, out var startDate) ||
+                !TryResolveFormulaFunctionMonthOffset(function.Arguments[1], rowOffset, colOffset, int.MaxValue, out var months))
+            {
+                return false;
+            }
+
+            try
+            {
+                return TryGetFormulaDateSerial(startDate.AddMonths(months), out serial);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
+        private bool TryEvaluateFormulaEOMonth(
+            ConditionalFormulaScalarFunction function,
+            int rowOffset,
+            int colOffset,
+            out double serial)
+        {
+            serial = 0;
+            if (!TryResolveFormulaFunctionDate(function.Arguments[0], rowOffset, colOffset, out var startDate) ||
+                !TryResolveFormulaFunctionMonthOffset(function.Arguments[1], rowOffset, colOffset, int.MaxValue - 1d, out var months))
+            {
+                return false;
+            }
+
+            try
+            {
+                var monthStart = new DateTime(startDate.Year, startDate.Month, 1);
+                return TryGetFormulaDateSerial(monthStart.AddMonths(months + 1).AddDays(-1), out serial);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
             }
         }
 
@@ -3600,6 +3686,26 @@ public static partial class AccessibilityCheckerService
                 IsValidFormulaWeekDateSerial(serial);
         }
 
+        private bool TryResolveFormulaFunctionMonthOffset(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            double maxValue,
+            out int months)
+        {
+            months = 0;
+            if (!TryResolveFormulaFunctionNumber(operand, rowOffset, colOffset, out var number) ||
+                !double.IsFinite(number) ||
+                number < int.MinValue ||
+                number > maxValue)
+            {
+                return false;
+            }
+
+            months = (int)number;
+            return true;
+        }
+
         private bool TryResolveFormulaFunctionTimeParts(
             ConditionalFormulaOperand operand,
             int rowOffset,
@@ -3750,6 +3856,12 @@ public static partial class AccessibilityCheckerService
         {
             var serial = (date - new DateTime(1899, 12, 30)).TotalDays;
             return date < new DateTime(1900, 3, 1) ? serial - 1 : serial;
+        }
+
+        private static bool TryGetFormulaDateSerial(DateTime date, out double serial)
+        {
+            serial = FormulaDateToExcelSerial(date.Date);
+            return double.IsFinite(serial);
         }
 
         private static bool TryCreateFormulaDateValue(
