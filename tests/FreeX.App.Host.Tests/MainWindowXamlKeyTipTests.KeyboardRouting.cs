@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -11,8 +10,8 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonKeyboardFocus_IsNotHijackedByWorksheetNavigation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
 
         const string callSite = "if (TryHandleFocusedRibbonKeyboardNavigation(e))";
 
@@ -30,9 +29,9 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void F6ShellFocusCycle_IsHandledBeforeTextBoxPreviewKeyFiltering()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
-        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         const string previewHandler = "private void MainWindow_PreviewKeyDown";
         const string f6PreviewCall = "if (TryHandleShellFocusCyclePreview(e))";
@@ -54,8 +53,8 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void F10KeyTips_AreHandledBeforeTextBoxPreviewKeyFiltering()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         const string previewHandler = "private void MainWindow_PreviewKeyDown";
         const string f10PreviewCall = "if (TryHandleShowKeyTipsPreview(e, sender))";
@@ -77,12 +76,12 @@ public sealed partial class MainWindowXamlKeyTipTests
     public void ShortcutAndKeyTipRoutingSnapshot_CoversRepresentativeEntryPoints()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var cellsCommandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CellsCommands.cs"));
-        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
-        var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
-        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
-        var worksheetContextSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var cellsCommandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
+        var formattingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeFormatting.cs");
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var worksheetContextSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace local = "clr-namespace:FreeX.App.Host";
 
@@ -150,7 +149,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void StandaloneAltKeyTips_AreNotSuppressedByTextBoxFocus()
     {
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
         var keyUpStart = keyboardFocusSource.IndexOf(
             "private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)",
             StringComparison.Ordinal);
@@ -170,7 +169,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void F6ShellFocusCycle_ContinuesWhenRegionRejectsFocus()
     {
-        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
 
         keyboardFocusSource.Should().Contain("if (FocusShellRegion(current))");
         keyboardFocusSource.Should().Contain("return FormulaBar.Focus();");
@@ -181,10 +180,11 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void MainWindowPreviewKeys_HandleWorksheetKeytipAndContextMenuEntryPoints()
     {
-        var source =
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var source = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
+            "",
+            "MainWindow.xaml.cs",
+            "MainWindow.Selection.cs",
+            "MainWindow.KeyboardCommands.cs");
 
         source.Should().Contain("this.PreviewKeyDown += MainWindow_PreviewKeyDown;");
         source.Should().Contain("KeyboardCommandShortcut.ShowKeyTips");
