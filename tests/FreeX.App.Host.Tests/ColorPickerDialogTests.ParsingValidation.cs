@@ -1,6 +1,5 @@
 using FreeX.Core.Model;
 using FluentAssertions;
-using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -10,7 +9,7 @@ public sealed partial class ColorPickerDialogTests
     public void InvalidCustomColor_SelectsCustomTabAndFocusesHexInput()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("ColorPickerDialog.xaml");
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ColorPickerDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ColorPickerDialog.xaml.cs");
 
         xaml.Should().Contain("<TabControl x:Name=\"ColorTabs\"");
         xaml.Should().Contain("<TabItem x:Name=\"CustomTab\" Header=\"_Custom\"");
@@ -78,7 +77,7 @@ public sealed partial class ColorPickerDialogTests
     [Fact]
     public void OkButton_RejectsInvalidRgbComponentBeforeAcceptingStaleHexText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ColorPickerDialog.xaml.cs"));
+        var source = DialogSourceTestSupport.ReadHostSources("ColorPickerDialog.xaml.cs");
 
         source.Should().Contain("TryParseRgbComponents(");
         source.Should().Contain("if (!TryParseCustomRgbFields(out _, out var invalidRgbInput))");
