@@ -61,6 +61,7 @@ public sealed class MainWindow : Window
         MinHeight = 520;
         Background = WindowBackground;
         Content = BuildContent();
+        ConfigureWorkbookDropTarget();
         KeyDown += MainWindow_KeyDown;
         RefreshShell(_session.StartupStatus);
     }
@@ -103,6 +104,13 @@ public sealed class MainWindow : Window
                 Content = _sheetTabsHost,
             },
         };
+    }
+
+    private void ConfigureWorkbookDropTarget()
+    {
+        DragDrop.SetAllowDrop(this, true);
+        DragDrop.AddDragOverHandler(this, MainWindow_DragOver);
+        DragDrop.AddDropHandler(this, MainWindow_Drop);
     }
 
     private Control BuildToolbar()
@@ -461,6 +469,27 @@ public sealed class MainWindow : Window
         await OpenWorkbookAsync();
     }
 
+    private void MainWindow_DragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = TrySelectDroppedWorkbookPath(e, out _, out _)
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void MainWindow_Drop(object? sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (!TrySelectDroppedWorkbookPath(e, out var path, out var message))
+        {
+            ShowOpenIssue(message);
+            return;
+        }
+
+        e.DragEffects = DragDropEffects.Copy;
+        await OpenWorkbookPathAsync(path!);
+    }
+
     private async void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
@@ -610,14 +639,82 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            if (!_session.TryResolveOpenTarget(path, out var target, out var message))
-            {
-                ShowOpenIssue(message);
-                return;
-            }
-
-            await OpenWorkbookFromTargetAsync(target!);
+            await OpenWorkbookPathAsync(path);
         }
+    }
+
+    private async Task OpenWorkbookPathAsync(string path)
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (_session.IsDirty)
+        {
+            ShowOpenIssue("Save changes before opening another workbook.");
+            return;
+        }
+
+        if (!_session.TryResolveOpenTarget(path, out var target, out var message))
+        {
+            ShowOpenIssue(message);
+            return;
+        }
+
+        await OpenWorkbookFromTargetAsync(target!);
+    }
+
+    private bool TrySelectDroppedWorkbookPath(DragEventArgs e, out string? path, out string message)
+    {
+        path = null;
+        if (_isOpening || _isSaving)
+        {
+            message = "Open is busy.";
+            return false;
+        }
+
+        if (_session.IsDirty)
+        {
+            message = "Save changes before opening another workbook.";
+            return false;
+        }
+
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null)
+        {
+            message = "Drop a supported local workbook file.";
+            return false;
+        }
+
+        var sawLocalPath = false;
+        var sawFileCandidate = false;
+        var unsupportedMessage = "Drop a supported workbook file.";
+        foreach (var file in files)
+        {
+            var candidate = file.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(candidate))
+                continue;
+
+            sawLocalPath = true;
+            if (Directory.Exists(candidate))
+                continue;
+            if (!File.Exists(candidate))
+                continue;
+
+            sawFileCandidate = true;
+            if (_session.TryResolveOpenTarget(candidate, out _, out unsupportedMessage))
+            {
+                path = candidate;
+                message = "";
+                return true;
+            }
+        }
+
+        message = sawFileCandidate
+            ? unsupportedMessage
+            : sawLocalPath
+                ? "Drop a supported workbook file."
+                : "Open requires a local file path.";
+        return false;
     }
 
     private async Task OpenWorkbookFromTargetAsync(WorkbookOpenTarget target)
