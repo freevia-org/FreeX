@@ -74,6 +74,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _underlineMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _doubleUnderlineMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _strikethroughMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _increaseFontSizeMenuItem = new();");
+        source.Should().Contain("private readonly NativeMenuItem _decreaseFontSizeMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _currencyFormatMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _percentFormatMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _commaStyleMenuItem = new();");
@@ -129,6 +131,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_strikethroughMenuItem.Header = \"Strikethrough\";");
         source.Should().Contain("_strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);");
         source.Should().Contain("_strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();");
+        source.Should().Contain("_increaseFontSizeMenuItem.Header = \"Increase Font Size\";");
+        source.Should().Contain("_increaseFontSizeMenuItem.Click += (_, _) => IncreaseSelectedRangeFontSize();");
+        source.Should().Contain("_decreaseFontSizeMenuItem.Header = \"Decrease Font Size\";");
+        source.Should().Contain("_decreaseFontSizeMenuItem.Click += (_, _) => DecreaseSelectedRangeFontSize();");
         source.Should().Contain("_currencyFormatMenuItem.Header = \"Accounting Number Format\";");
         source.Should().Contain("_currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();");
         source.Should().Contain("_percentFormatMenuItem.Header = \"Percent Style\";");
@@ -171,6 +177,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("formatMenu.Items.Add(_underlineMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_doubleUnderlineMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_strikethroughMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_increaseFontSizeMenuItem);");
+        source.Should().Contain("formatMenu.Items.Add(_decreaseFontSizeMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_currencyFormatMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_percentFormatMenuItem);");
         source.Should().Contain("formatMenu.Items.Add(_commaStyleMenuItem);");
@@ -203,6 +211,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;");
         source.Should().Contain("_doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;");
         source.Should().Contain("_strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;");
+        source.Should().Contain("_increaseFontSizeMenuItem.IsEnabled = _increaseFontSizeButton.IsEnabled;");
+        source.Should().Contain("_decreaseFontSizeMenuItem.IsEnabled = _decreaseFontSizeButton.IsEnabled;");
         source.Should().Contain("_currencyFormatMenuItem.IsEnabled = _currencyFormatButton.IsEnabled;");
         source.Should().Contain("_percentFormatMenuItem.IsEnabled = _percentFormatButton.IsEnabled;");
         source.Should().Contain("_commaStyleMenuItem.IsEnabled = _commaStyleButton.IsEnabled;");
@@ -260,6 +270,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_underline_menu_item={FormatBool(snapshot.HasNativeUnderlineMenuItem)}");
         smokeSource.Should().Contain("native_double_underline_menu_item={FormatBool(snapshot.HasNativeDoubleUnderlineMenuItem)}");
         smokeSource.Should().Contain("native_strikethrough_menu_item={FormatBool(snapshot.HasNativeStrikethroughMenuItem)}");
+        smokeSource.Should().Contain("native_increase_font_size_menu_item={FormatBool(snapshot.HasNativeIncreaseFontSizeMenuItem)}");
+        smokeSource.Should().Contain("native_decrease_font_size_menu_item={FormatBool(snapshot.HasNativeDecreaseFontSizeMenuItem)}");
         smokeSource.Should().Contain("native_currency_format_menu_item={FormatBool(snapshot.HasNativeCurrencyFormatMenuItem)}");
         smokeSource.Should().Contain("native_percent_format_menu_item={FormatBool(snapshot.HasNativePercentFormatMenuItem)}");
         smokeSource.Should().Contain("native_comma_style_menu_item={FormatBool(snapshot.HasNativeCommaStyleMenuItem)}");
@@ -295,6 +307,8 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, \"Underline\")");
         windowSource.Should().Contain("HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, \"Double Underline\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, \"Strikethrough\")");
+        windowSource.Should().Contain("HasNativeIncreaseFontSizeMenuItem: HasNativeMenuItem(_increaseFontSizeMenuItem, \"Increase Font Size\", requireGesture: false)");
+        windowSource.Should().Contain("HasNativeDecreaseFontSizeMenuItem: HasNativeMenuItem(_decreaseFontSizeMenuItem, \"Decrease Font Size\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, \"Accounting Number Format\", requireGesture: false)");
         windowSource.Should().Contain("HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, \"Percent Style\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, \"Comma Style\", requireGesture: false)");
@@ -609,6 +623,33 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("foreach (var decoration in TextDecorations.Strikethrough)");
         source.Should().Contain("else if (e.Key is Key.D5 or Key.NumPad5 && HasOnlyControlModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeStrikethrough();");
+    }
+
+    [Fact]
+    public void MainWindow_WiresFontSizeThroughSharedWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private readonly Button _increaseFontSizeButton = new();");
+        source.Should().Contain("private readonly Button _decreaseFontSizeButton = new();");
+        source.Should().Contain("_increaseFontSizeButton.Content = \"A+\";");
+        source.Should().Contain("_decreaseFontSizeButton.Content = \"A-\";");
+        source.Should().Contain("_increaseFontSizeButton.Click += IncreaseFontSizeButton_Click;");
+        source.Should().Contain("_decreaseFontSizeButton.Click += DecreaseFontSizeButton_Click;");
+        source.Should().Contain("_increaseFontSizeButton.IsEnabled = isIdle;");
+        source.Should().Contain("_decreaseFontSizeButton.IsEnabled = isIdle;");
+        source.Should().Contain("private void IncreaseFontSizeButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void DecreaseFontSizeButton_Click(object? sender, RoutedEventArgs e)");
+        source.Should().Contain("private void IncreaseSelectedRangeFontSize()");
+        source.Should().Contain("var result = _session.IncreaseSelectedRangeFontSize();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Increase Font Size failed.\");");
+        source.Should().Contain("RefreshShell($\"Increased font size for {rangeReference}\");");
+        source.Should().Contain("private void DecreaseSelectedRangeFontSize()");
+        source.Should().Contain("var result = _session.DecreaseSelectedRangeFontSize();");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Decrease Font Size failed.\");");
+        source.Should().Contain("RefreshShell($\"Decreased font size for {rangeReference}\");");
+        source.Should().Contain("var fontSize = style?.FontSize ?? CellStyle.Default.FontSize;");
+        source.Should().Contain("FontSize = fontSize,");
     }
 
     [Fact]

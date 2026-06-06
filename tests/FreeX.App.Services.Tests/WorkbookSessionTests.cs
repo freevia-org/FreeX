@@ -1322,6 +1322,118 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SetSelectedRangeFontSize_AppliesStyleFitsRowsPreservesSelectionAndUndo()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("value"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, b1));
+
+        var result = session.SetSelectedRangeFontSize(24);
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartFontSize.Should().Be(24);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(a1);
+        session.SelectedRange.Should().Be(new GridRange(a1, b1));
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FontSize.Should().Be(24);
+        var b1StyleOnly = sheet.GetStyleOnly(b1.Row, b1.Col);
+        b1StyleOnly.Should().NotBeNull();
+        workbook.GetStyle(b1StyleOnly!.Value).FontSize.Should().Be(24);
+        sheet.RowHeights[1].Should().Be(37);
+        session.Viewport.RowMetrics.Single(metric => metric.Row == 1).Height.Should().Be(37);
+        session.Viewport.Cells.Single(cell => cell.Row == 1 && cell.Col == 1)
+            .Style!.FontSize.Should().Be(24);
+
+        var undo = session.UndoLastEdit();
+
+        undo.Success.Should().BeTrue();
+        session.CanRedo.Should().BeTrue();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FontSize.Should().Be(11);
+        sheet.GetStyleOnly(b1.Row, b1.Col).Should().BeNull();
+        sheet.RowHeights.Should().NotContainKey(1);
+    }
+
+    [Fact]
+    public void IncreaseSelectedRangeFontSize_UsesSelectedRangeStartStyleOnlyFormat()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+        session.SetSelectedRangeFontSize(10);
+
+        var result = session.IncreaseSelectedRangeFontSize();
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(a1).Should().BeNull();
+        sheet.GetStyleOnly(a1.Row, a1.Col).Should().NotBeNull();
+        session.SelectedRangeStartFontSize.Should().Be(12);
+        sheet.RowHeights[1].Should().Be(21);
+    }
+
+    [Fact]
+    public void DecreaseSelectedRangeFontSize_DecrementsFromSelectedRangeStartAndClampsAtOne()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("value"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { FontSize = 1 });
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.DecreaseSelectedRangeFontSize();
+
+        result.Success.Should().BeTrue();
+        session.SelectedRangeStartFontSize.Should().Be(1);
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FontSize.Should().Be(1);
+    }
+
+    [Fact]
+    public void IncreaseSelectedRangeFontSize_RejectsProtectedSheetWithoutMarkingDirty()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("locked"));
+        sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { FontSize = 11 });
+        sheet.IsProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(a1);
+
+        var result = session.IncreaseSelectedRangeFontSize();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+        workbook.GetStyle(sheet.GetCell(a1)!.StyleId).FontSize.Should().Be(11);
+        sheet.RowHeights.Should().BeEmpty();
+    }
+
+    [Fact]
     public void SetSelectedRangeNumberFormat_AppliesStylePreservesSelectionUndoAndViewportText()
     {
         var workbook = CreateWorkbook();

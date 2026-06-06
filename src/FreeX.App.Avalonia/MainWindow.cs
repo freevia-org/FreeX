@@ -73,6 +73,8 @@ public sealed class MainWindow : Window
     private readonly ToggleButton _underlineButton = new();
     private readonly ToggleButton _doubleUnderlineButton = new();
     private readonly ToggleButton _strikethroughButton = new();
+    private readonly Button _increaseFontSizeButton = new();
+    private readonly Button _decreaseFontSizeButton = new();
     private readonly Button _currencyFormatButton = new();
     private readonly Button _percentFormatButton = new();
     private readonly Button _commaStyleButton = new();
@@ -101,6 +103,8 @@ public sealed class MainWindow : Window
     private readonly NativeMenuItem _underlineMenuItem = new();
     private readonly NativeMenuItem _doubleUnderlineMenuItem = new();
     private readonly NativeMenuItem _strikethroughMenuItem = new();
+    private readonly NativeMenuItem _increaseFontSizeMenuItem = new();
+    private readonly NativeMenuItem _decreaseFontSizeMenuItem = new();
     private readonly NativeMenuItem _currencyFormatMenuItem = new();
     private readonly NativeMenuItem _percentFormatMenuItem = new();
     private readonly NativeMenuItem _commaStyleMenuItem = new();
@@ -286,6 +290,12 @@ public sealed class MainWindow : Window
         _strikethroughMenuItem.Gesture = new KeyGesture(Key.D5, KeyModifiers.Control);
         _strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();
 
+        _increaseFontSizeMenuItem.Header = "Increase Font Size";
+        _increaseFontSizeMenuItem.Click += (_, _) => IncreaseSelectedRangeFontSize();
+
+        _decreaseFontSizeMenuItem.Header = "Decrease Font Size";
+        _decreaseFontSizeMenuItem.Click += (_, _) => DecreaseSelectedRangeFontSize();
+
         _currencyFormatMenuItem.Header = "Accounting Number Format";
         _currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();
 
@@ -355,6 +365,8 @@ public sealed class MainWindow : Window
         formatMenu.Items.Add(_underlineMenuItem);
         formatMenu.Items.Add(_doubleUnderlineMenuItem);
         formatMenu.Items.Add(_strikethroughMenuItem);
+        formatMenu.Items.Add(_increaseFontSizeMenuItem);
+        formatMenu.Items.Add(_decreaseFontSizeMenuItem);
         formatMenu.Items.Add(new NativeMenuItemSeparator());
         formatMenu.Items.Add(_currencyFormatMenuItem);
         formatMenu.Items.Add(_percentFormatMenuItem);
@@ -529,6 +541,16 @@ public sealed class MainWindow : Window
         _strikethroughButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _strikethroughButton.Click += StrikethroughButton_Click;
 
+        _increaseFontSizeButton.Content = "A+";
+        _increaseFontSizeButton.Padding = new Thickness(10, 4);
+        _increaseFontSizeButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _increaseFontSizeButton.Click += IncreaseFontSizeButton_Click;
+
+        _decreaseFontSizeButton.Content = "A-";
+        _decreaseFontSizeButton.Padding = new Thickness(10, 4);
+        _decreaseFontSizeButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _decreaseFontSizeButton.Click += DecreaseFontSizeButton_Click;
+
         _currencyFormatButton.Content = "$";
         _currencyFormatButton.Padding = new Thickness(10, 4);
         _currencyFormatButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -641,6 +663,8 @@ public sealed class MainWindow : Window
                     _underlineButton,
                     _doubleUnderlineButton,
                     _strikethroughButton,
+                    _increaseFontSizeButton,
+                    _decreaseFontSizeButton,
                     _currencyFormatButton,
                     _percentFormatButton,
                     _commaStyleButton,
@@ -753,6 +777,8 @@ public sealed class MainWindow : Window
         _underlineButton.IsEnabled = isIdle;
         _doubleUnderlineButton.IsEnabled = isIdle;
         _strikethroughButton.IsEnabled = isIdle;
+        _increaseFontSizeButton.IsEnabled = isIdle;
+        _decreaseFontSizeButton.IsEnabled = isIdle;
         _currencyFormatButton.IsEnabled = isIdle;
         _percentFormatButton.IsEnabled = isIdle;
         _commaStyleButton.IsEnabled = isIdle;
@@ -782,6 +808,8 @@ public sealed class MainWindow : Window
         _underlineMenuItem.IsEnabled = _underlineButton.IsEnabled;
         _doubleUnderlineMenuItem.IsEnabled = _doubleUnderlineButton.IsEnabled;
         _strikethroughMenuItem.IsEnabled = _strikethroughButton.IsEnabled;
+        _increaseFontSizeMenuItem.IsEnabled = _increaseFontSizeButton.IsEnabled;
+        _decreaseFontSizeMenuItem.IsEnabled = _decreaseFontSizeButton.IsEnabled;
         _currencyFormatMenuItem.IsEnabled = _currencyFormatButton.IsEnabled;
         _percentFormatMenuItem.IsEnabled = _percentFormatButton.IsEnabled;
         _commaStyleMenuItem.IsEnabled = _commaStyleButton.IsEnabled;
@@ -1063,6 +1091,7 @@ public sealed class MainWindow : Window
             TextWrapping.NoWrap,
             FontWeight.SemiBold,
             FontStyle.Normal,
+            fontSize: 12,
             textDecorations: null,
             selected: false);
 
@@ -1082,6 +1111,7 @@ public sealed class MainWindow : Window
                 TextWrapping.NoWrap,
                 FontWeight.Normal,
                 FontStyle.Normal,
+                fontSize: 12,
                 textDecorations: null,
                 selected,
                 address);
@@ -1100,6 +1130,7 @@ public sealed class MainWindow : Window
         var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;
         var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
+        var fontSize = style?.FontSize ?? CellStyle.Default.FontSize;
         var textDecorations = BuildTextDecorations(style);
         var indentPadding = GetCellIndentPadding(style);
 
@@ -1112,6 +1143,7 @@ public sealed class MainWindow : Window
             textWrapping,
             weight,
             fontStyle,
+            fontSize,
             textDecorations,
             selected,
             address,
@@ -1127,6 +1159,7 @@ public sealed class MainWindow : Window
         TextWrapping textWrapping,
         FontWeight fontWeight,
         FontStyle fontStyle,
+        double fontSize,
         TextDecorationCollection? textDecorations,
         bool selected,
         CellAddress address,
@@ -1141,6 +1174,7 @@ public sealed class MainWindow : Window
             textWrapping,
             fontWeight,
             fontStyle,
+            fontSize,
             textDecorations,
             selected,
             indentPadding);
@@ -1170,6 +1204,7 @@ public sealed class MainWindow : Window
         TextWrapping textWrapping,
         FontWeight fontWeight,
         FontStyle fontStyle,
+        double fontSize,
         TextDecorationCollection? textDecorations,
         bool selected,
         double indentPadding = 0)
@@ -1183,7 +1218,7 @@ public sealed class MainWindow : Window
             Child = new TextBlock
             {
                 Text = text,
-                FontSize = 12,
+                FontSize = fontSize,
                 FontWeight = fontWeight,
                 FontStyle = fontStyle,
                 TextDecorations = textDecorations,
@@ -1443,6 +1478,16 @@ public sealed class MainWindow : Window
     private void StrikethroughButton_Click(object? sender, RoutedEventArgs e)
     {
         ApplySelectedRangeStrikethrough(_strikethroughButton.IsChecked == true);
+    }
+
+    private void IncreaseFontSizeButton_Click(object? sender, RoutedEventArgs e)
+    {
+        IncreaseSelectedRangeFontSize();
+    }
+
+    private void DecreaseFontSizeButton_Click(object? sender, RoutedEventArgs e)
+    {
+        DecreaseSelectedRangeFontSize();
     }
 
     private void CurrencyFormatButton_Click(object? sender, RoutedEventArgs e)
@@ -1804,6 +1849,46 @@ public sealed class MainWindow : Window
         RefreshShell($"{(enabled ? "Struck through" : "Removed strikethrough from")} {rangeReference}");
     }
 
+    private void IncreaseSelectedRangeFontSize()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.IncreaseSelectedRangeFontSize();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Increase Font Size failed.");
+            return;
+        }
+
+        RefreshShell($"Increased font size for {rangeReference}");
+    }
+
+    private void DecreaseSelectedRangeFontSize()
+    {
+        if (_isOpening || _isSaving)
+            return;
+
+        if (!TryCommitPendingFormulaEdit())
+            return;
+
+        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var result = _session.DecreaseSelectedRangeFontSize();
+        if (!result.Success)
+        {
+            RefreshShell(_statusText.Text ?? "Ready");
+            ShowEditIssue(result.ErrorMessage ?? "Decrease Font Size failed.");
+            return;
+        }
+
+        RefreshShell($"Decreased font size for {rangeReference}");
+    }
+
     private void ApplySelectedRangeCurrencyFormat()
     {
         ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
@@ -2010,6 +2095,8 @@ public sealed class MainWindow : Window
             HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, "Underline"),
             HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, "Double Underline", requireGesture: false),
             HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, "Strikethrough"),
+            HasNativeIncreaseFontSizeMenuItem: HasNativeMenuItem(_increaseFontSizeMenuItem, "Increase Font Size", requireGesture: false),
+            HasNativeDecreaseFontSizeMenuItem: HasNativeMenuItem(_decreaseFontSizeMenuItem, "Decrease Font Size", requireGesture: false),
             HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, "Accounting Number Format", requireGesture: false),
             HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, "Percent Style", requireGesture: false),
             HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, "Comma Style", requireGesture: false),

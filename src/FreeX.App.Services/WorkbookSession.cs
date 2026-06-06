@@ -12,6 +12,8 @@ public sealed class WorkbookSession
         string Text,
         bool IsCut);
 
+    private const double MaximumRowHeight = 409.5;
+
     private readonly IReadOnlyList<IFileAdapter> _adapters;
     private readonly StartupWorkbookLoadResult _source;
     private readonly WorkbookCellEditService _cellEditService;
@@ -131,6 +133,9 @@ public sealed class WorkbookSession
 
     public int SelectedRangeStartIndentLevel =>
         GetCellStyle(SelectedRange.Start).IndentLevel;
+
+    public double SelectedRangeStartFontSize =>
+        GetCellStyle(SelectedRange.Start).FontSize;
 
     public string SelectedRangeStartNumberFormat =>
         GetCellStyle(SelectedRange.Start).NumberFormat;
@@ -479,6 +484,31 @@ public sealed class WorkbookSession
 
     public WorkbookCellEditResult DecreaseSelectedRangeDecimalPlaces() =>
         SetSelectedRangeNumberFormat(NumberFormatDecimalAdjuster.RemoveDecimalPlace(SelectedRangeStartNumberFormat));
+
+    public WorkbookCellEditResult IncreaseSelectedRangeFontSize() =>
+        SetSelectedRangeFontSize(FontSizePlanner.Increase(SelectedRangeStartFontSize));
+
+    public WorkbookCellEditResult DecreaseSelectedRangeFontSize() =>
+        SetSelectedRangeFontSize(FontSizePlanner.Decrease(SelectedRangeStartFontSize));
+
+    public WorkbookCellEditResult SetSelectedRangeFontSize(double fontSize)
+    {
+        var range = SelectedRange;
+        var rowHeight = Math.Min(MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new CompositeWorkbookCommand(
+                "Set Font Size",
+                [
+                    new ApplyStyleCommand(ActiveSheet.Id, range, new StyleDiff(FontSize: fontSize)),
+                    new SetRowHeightCommand(ActiveSheet.Id, range.Start.Row, range.End.Row, rowHeight)
+                ]));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
 
     public WorkbookCellEditResult UndoLastEdit()
     {
