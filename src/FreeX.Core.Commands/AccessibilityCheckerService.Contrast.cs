@@ -932,6 +932,9 @@ public static partial class AccessibilityCheckerService
             case "RADIANS":
                 kind = ConditionalFormulaScalarFunctionKind.Radians;
                 return true;
+            case "SIN":
+                kind = ConditionalFormulaScalarFunctionKind.Sin;
+                return true;
             case "PI":
                 kind = ConditionalFormulaScalarFunctionKind.Pi;
                 return true;
@@ -1016,6 +1019,7 @@ public static partial class AccessibilityCheckerService
             ConditionalFormulaScalarFunctionKind.Log10 or
             ConditionalFormulaScalarFunctionKind.Degrees or
             ConditionalFormulaScalarFunctionKind.Radians or
+            ConditionalFormulaScalarFunctionKind.Sin or
             ConditionalFormulaScalarFunctionKind.Value or
             ConditionalFormulaScalarFunctionKind.Len or
             ConditionalFormulaScalarFunctionKind.Upper or
@@ -1571,6 +1575,7 @@ public static partial class AccessibilityCheckerService
         Log,
         Degrees,
         Radians,
+        Sin,
         Pi,
         Value,
         Len,
@@ -2084,6 +2089,7 @@ public static partial class AccessibilityCheckerService
                 case ConditionalFormulaScalarFunctionKind.Log:
                 case ConditionalFormulaScalarFunctionKind.Degrees:
                 case ConditionalFormulaScalarFunctionKind.Radians:
+                case ConditionalFormulaScalarFunctionKind.Sin:
                     return TryEvaluateFormulaNumericScalarFunction(function, rowOffset, colOffset, out value);
                 case ConditionalFormulaScalarFunctionKind.Pi:
                     value = new NumberValue(Math.PI);
@@ -2282,6 +2288,9 @@ public static partial class AccessibilityCheckerService
                     break;
                 case ConditionalFormulaScalarFunctionKind.Radians:
                     result = first * Math.PI / 180d;
+                    break;
+                case ConditionalFormulaScalarFunctionKind.Sin:
+                    result = Math.Sin(first);
                     break;
                 default:
                     return false;
